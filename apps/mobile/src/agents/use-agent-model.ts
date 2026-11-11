@@ -11,7 +11,9 @@
  * (`runtimeModels`); a pick of a model keeps the agent's effort where the
  * model lists it, else the nearest it lists (`effortFor`), its fast version
  * where the agent runs fast and the model has one, and its context window
- * where the model still offers a choice of one.
+ * where the model still offers a choice of one. Fast, the menu's switch, moves
+ * the agent onto its model's fast version or back, offered only where the
+ * harness runs one and the catalog lists one beside the model.
  */
 
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
@@ -48,6 +50,8 @@ export interface AgentModelPick {
   readonly note: string | undefined;
   readonly pickModel: (model: string) => void;
   readonly pickEffort: (effort: string) => void;
+  /** Fast: whether the agent runs its model's fast version, and the switch; none where the model has none it may run. */
+  readonly fast: { readonly on: boolean; readonly toggle: () => void } | undefined;
 }
 
 /** The catalog id a pick of a model sends: its version at the speed the agent runs, where the catalog offers one, else the model's own. */
@@ -87,6 +91,11 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
     });
   };
 
+  // Note that the fast version is the catalog's, listed beside the model, so a model with none offers no switch.
+  const fastId =
+    model === undefined ? undefined : `${model}${MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST]}`;
+  const fastOffered = fastId !== undefined && offered.some(({ id }) => id === fastId);
+
   return {
     models,
     efforts: effortOptions(offered, model),
@@ -115,5 +124,24 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
         ...(agent.contextWindow === undefined ? undefined : { contextWindow: agent.contextWindow }),
       });
     },
+    fast:
+      agent === undefined || model === undefined || fastId === undefined || !fastOffered
+        ? undefined
+        : {
+            on: agent.model === fastId,
+            toggle: () => {
+              const id = agent.model === fastId ? model : fastId;
+              const effort = effortFor(effortsOf(offered, id), agent.effort);
+              if (effort === undefined) return;
+              const windows = offered.find((each) => each.id === id)?.contextWindows;
+              choose({
+                model: id,
+                effort,
+                ...(windows === undefined || agent.contextWindow === undefined
+                  ? undefined
+                  : { contextWindow: agent.contextWindow }),
+              });
+            },
+          },
   };
 }

@@ -25,7 +25,7 @@ import {
 import { actRefusalSentence } from "@repo/host/contract";
 import { BUZZ, type Buzz, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 
@@ -96,7 +96,8 @@ export function useWrite(): Write {
   const { data: mark } = useQuery({ ...appStateQuery, select: selectLiveMark });
   // Note that the mark is read as the answer lands, not as the press was made, since a write waits on the service for as long as its call does.
   const markNow = useRef(mark);
-  useEffect(() => {
+  // Note that it is written as the render commits, before any answer that lands after it reads it.
+  useLayoutEffect(() => {
     markNow.current = mark;
   }, [mark]);
   const write: Write = useCallback(

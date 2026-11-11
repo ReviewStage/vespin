@@ -1,5 +1,5 @@
+import { namedServers } from "@repo/features/agent-servers-model";
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
-import { namedServers } from "@repo/ui/agent-servers-model";
 import type { ReactNode, RefObject } from "react";
 import type {
   ComposerChip,

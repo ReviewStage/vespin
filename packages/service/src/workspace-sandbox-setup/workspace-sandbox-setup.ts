@@ -6,11 +6,16 @@
  * these, so one rule holds for each: a workspace the account is not a
  * member of is not found, a save by a member who is no owner or admin is
  * not permitted, and a save whose script is empty, or only whitespace,
- * removes the script. Every answer is the setup as it then stands. Each
+ * removes the script. Every answer is the setup as it then stands, each
+ * script with how it last ran in a sandbox (`../agents/script-runs.ts`). Each
  * door reads its own input and answers in its own words.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import {
+  listScriptRuns,
+  type WorkspaceScriptRun,
+} from "@repo/database/models/workspace-sandbox-script-run-store";
 import {
   listRepositorySetups,
   listRunActions,
@@ -22,7 +27,11 @@ import {
   setRunActions,
   type WorkspaceRunAction,
 } from "@repo/database/models/workspace-sandbox-script-store";
+import { agentName } from "@repo/features/model-label";
 import {
+  CLOUD_SETUP_SCRIPT,
+  type CloudSetupScript,
+  type CloudSetupScriptRun,
   REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
   type RepositoryScriptKind,
@@ -61,15 +70,36 @@ function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActio
   return lists;
 }
 
-/** The workspace's sandbox setup as it stands, for the wire. */
+/** A script's last run as the wire says it, its agent by the name every place gives it; none where it never ran. */
+function lastRunOf(
+  runs: readonly WorkspaceScriptRun[],
+  script: CloudSetupScript,
+  repository: string | null,
+): { readonly lastRun?: CloudSetupScriptRun } {
+  const run = runs.find(
+    (each) => each.script === script && each.repository === (repository?.toLowerCase() ?? null),
+  );
+  if (run === undefined) return {};
+  const { agent } = run;
+  return {
+    lastRun: {
+      ranAt: run.ranAt.getTime(),
+      exitCode: run.exitCode,
+      agent: { id: agent.id, taskId: agent.taskId, name: agentName(agent) },
+    },
+  };
+}
+
+/** The workspace's sandbox setup as it stands, for the wire, each script with how it last ran. */
 const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
   workspaceId: string,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
-  const [install, scripts, runActions] = yield* hostedStoreOrUnavailable(
+  const [install, scripts, runActions, runs] = yield* hostedStoreOrUnavailable(
     Effect.all([
       readInstallScript(workspaceId),
       listRepositorySetups(workspaceId),
       listRunActions(workspaceId),
+      listScriptRuns(workspaceId),
     ]),
   );
   const ofKind = (kind: RepositoryScriptKind) =>
@@ -79,11 +109,16 @@ const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
         repository: row.repository,
         script: row.script,
         updatedAt: row.updatedAt.getTime(),
+        ...lastRunOf(runs, kind, row.repository),
       }));
   return {
     install: Option.match(install, {
       onNone: () => null,
-      onSome: (row) => ({ script: row.script, updatedAt: row.updatedAt.getTime() }),
+      onSome: (row) => ({
+        script: row.script,
+        updatedAt: row.updatedAt.getTime(),
+        ...lastRunOf(runs, CLOUD_SETUP_SCRIPT.INSTALL, null),
+      }),
     }),
     setups: ofKind(REPOSITORY_SCRIPT_KIND.SETUP),
     archives: ofKind(REPOSITORY_SCRIPT_KIND.ARCHIVE),

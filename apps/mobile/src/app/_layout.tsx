@@ -14,6 +14,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -33,7 +34,9 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * once a launch (`push-device.ts`), a tapped
  * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
- * (`live-activity/`), and its crash reports name it (`crash-reports.ts`).
+ * (`live-activity/`), its crash reports name it (`crash-reports.ts`), its
+ * tasks and threads stand in Spotlight, and a Spotlight item tapped or a
+ * screen handed over from another device opens (`system-activity/`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers.
  */
@@ -49,6 +52,7 @@ function GuardedScreens() {
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
+  useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
   // Note that Settings opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs, and as the modal sheet in a compact one.
@@ -66,7 +70,7 @@ function GuardedScreens() {
         />
         <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
         <Stack.Screen name="start-agent" options={{ presentation: "modal", title: "New agent" }} />
-        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
+        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Options" }} />
         <Stack.Screen
           name="new-workspace"
           options={{ presentation: "modal", title: "New workspace" }}

@@ -1,3 +1,4 @@
+import type { ServerRow } from "@repo/features/agent-servers-model";
 import { CONNECTION_HEALTH, type ConnectionHealth } from "@repo/features/integration-health";
 import {
   SIGN_IN,
@@ -43,7 +44,6 @@ import {
   Stack,
   useConfirmDialog,
 } from "@repo/ui";
-import type { ServerRow } from "@repo/ui/agent-servers-model";
 import { GLYPH, PlusIcon, RefreshCwIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useInlineRename } from "@repo/ui/use-inline-rename";

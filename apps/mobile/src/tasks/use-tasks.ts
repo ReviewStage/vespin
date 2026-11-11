@@ -171,20 +171,27 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
   const setStatus: SetStatus = (taskId, status, stopAgents) => {
     const letGo = () => holdStatuses(new Map([...heldStatuses].filter(([id]) => id !== taskId)));
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
-    // Note that Try again draws the status again before it sends it, as the first press did.
+    // Note that each attempt, Try again's among them, draws the status before it sends it and lets it go once it is not kept.
     write(
       () => {
         holdStatuses(new Map(heldStatuses).set(taskId, status));
-        return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping });
+        return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
+          (landed) => {
+            if (!landed) letGo();
+            return landed;
+          },
+          (error: unknown) => {
+            letGo();
+            throw error;
+          },
+        );
       },
       {
         refused: (landed) => (landed ? undefined : settleFailedNote(status, 1)),
         retry: true,
         went: BUZZ.SUCCESS,
       },
-    ).then((landed) => {
-      if (!landed) letGo();
-    });
+    );
   };
   return { held, setStatus };
 }

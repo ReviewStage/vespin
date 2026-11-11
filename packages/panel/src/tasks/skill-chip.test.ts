@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import type { AgentAttachment, AgentTranscriptMessage } from "@repo/features/agent-wire";
+import type { SkillOption } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
-import type { SkillOption } from "@repo/ui/skill-mention";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useState } from "react";

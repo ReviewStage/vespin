@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, and the pictures attached to the message, each taken off on a press.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
@@ -163,6 +163,106 @@ export function AttachedPictures({
           />
         ))}
       </HStack>
+    </ScrollView>
+  );
+}
+
+/** One skill a `/` offers: its word, and what it is for. */
+export type SkillSuggestion = {
+  readonly name: string;
+  readonly word: string;
+  readonly detail: string;
+};
+
+/** The most suggestions the head stands at once before it scrolls them, so the field stays in sight over the keyboard. */
+const SUGGESTIONS_SHOWN = 4;
+
+/** How tall one suggestion stands, in points: a press's least, as Apple's guidelines ask. */
+const SUGGESTION_HEIGHT = PRESS_FRAME + 6;
+
+/**
+ * The skills a `/` being typed offers, as a list over the field inside the
+ * composer's glass, right above the keyboard, as Messages offers its
+ * suggestions: each its `/name` and a muted line of what it is for, written
+ * into the message on a press; what stands in their place where there are
+ * none, such as why they could not be read, said in the muted ink. It
+ * scrolls past a few, so the field stays in sight.
+ */
+export function SkillSuggestions({
+  skills,
+  empty,
+  onPick,
+}: {
+  readonly skills: readonly SkillSuggestion[];
+  /** What stands where no skill is offered: still reading, none matching, or why none were read. */
+  readonly empty: string | undefined;
+  readonly onPick: (name: string) => void;
+}) {
+  const colors = useColors();
+  if (skills.length === 0) {
+    if (empty === undefined) return null;
+    return (
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {empty}
+      </Text>
+    );
+  }
+  const rows = (
+    <VStack alignment="leading" spacing={0}>
+      {skills.map((skill) => (
+        <Button
+          key={skill.name}
+          onPress={() => onPick(skill.name)}
+          modifiers={[
+            buttonStyle("plain"),
+            contentShape(shapes.rectangle()),
+            accessibilityLabel(skill.word),
+          ]}
+        >
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[
+              frame({
+                minHeight: SUGGESTION_HEIGHT,
+                maxWidth: Number.POSITIVE_INFINITY,
+                alignment: "leading",
+              }),
+            ]}
+          >
+            <Image systemName="book.closed" size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+            <VStack alignment="leading" spacing={1}>
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+                  foregroundStyle(colors.TEXT),
+                  lineLimit(1),
+                ]}
+              >
+                {skill.word}
+              </Text>
+              {skill.detail === "" ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                    lineLimit(1),
+                  ]}
+                >
+                  {skill.detail}
+                </Text>
+              )}
+            </VStack>
+          </HStack>
+        </Button>
+      ))}
+    </VStack>
+  );
+  if (skills.length <= SUGGESTIONS_SHOWN) return rows;
+  return (
+    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
+      {rows}
     </ScrollView>
   );
 }

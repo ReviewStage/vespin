@@ -24,6 +24,7 @@ import type {
 } from "@repo/host/contract";
 import {
   type AgentChoices,
+  agentChangeOf,
   chosenTasksView,
   type InboxReminders,
   inboxActAnswer,
@@ -69,10 +70,10 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
 
-/** The models and efforts each run chose for the fixture's agents, by the store the run stages, each map replaced whole as one is chosen. */
+/** What each run changed of the fixture's agents, by the store the run stages, each map replaced whole as one is changed. */
 const CHOICES = new WeakMap<object, AgentChoices>();
 
-/** No model chosen yet. */
+/** Nothing changed yet. */
 const NO_CHOICES: AgentChoices = new Map();
 
 /** What the store is handed: whole slices of the document. */
@@ -136,16 +137,17 @@ function keepReminder(
   stageFixture(state);
 }
 
-/** Keeps a change of an agent's model the fixture took, and lays it over the document at once, as the host draws one; nothing for any other act. */
+/** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, or pin, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
   state: Pick<AppStateStore, "snapshot" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_CHOOSE) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
-  CHOICES.set(state, new Map(CHOICES.get(state) ?? NO_CHOICES).set(agentId, { model, effort }));
+  const changed = agentChangeOf(kind, payload);
+  if (changed === undefined) return;
+  const held = CHOICES.get(state) ?? NO_CHOICES;
+  const change = { ...held.get(changed.agentId), ...changed.change };
+  CHOICES.set(state, new Map(held).set(changed.agentId, change));
   stageFixture(state);
 }
 
@@ -209,10 +211,10 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
- * puts it away under Reminders, and a change of an agent's model moves the
- * agent onto it there, as the host draws one. Where `refusesWrites`, the
- * writes `REFUSED_WRITES` names are refused before anything else answers
- * them, so a flow sees the failure notice.
+ * puts it away under Reminders, and a change of an agent's model, permission
+ * mode, servers, name, or pin moves the agent there, as the host draws one.
+ * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
+ * before anything else answers them, so a flow sees the failure notice.
  */
 export function fixtureActs(
   acts: ActPortClient,

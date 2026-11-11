@@ -200,7 +200,11 @@ export function useLiveActivity(signedIn: boolean): void {
     const module = liveActivityModule;
     const subscription = module.addListener("onStop", ({ request, agentId }) => {
       write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
-        refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+        refused: (answer) => {
+          if (!("failure" in answer)) return undefined;
+          console.error(`The stop was refused: ${answer.failure}.`);
+          return STOP_FAILED;
+        },
         unanswered: STOP_FAILED,
       }).finally(() => module.answerStop(request));
     });

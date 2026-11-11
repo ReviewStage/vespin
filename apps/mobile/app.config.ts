@@ -489,6 +489,12 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
         NSSupportsLiveActivities: true,
+        // A screen handed over from another of the member's devices arrives
+        // as our own activity type, spelled again in Swift
+        // (`modules/system-activity/`) and in
+        // `@repo/features/ios-system-activity`'s header, since this file
+        // reaches no module that loads Effect.
+        NSUserActivityTypes: ["dev.vespin.viewing"],
       },
     },
     plugins: [

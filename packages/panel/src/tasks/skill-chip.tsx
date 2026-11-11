@@ -1,14 +1,14 @@
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
-import { skillWord } from "@repo/features/skill-word";
-import { isSlashCommand } from "@repo/features/slash-command";
-import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
   holdsSlashWord,
   leadingCommandToken,
   type SkillOption,
   skillTokens,
   type TextRange,
-} from "@repo/ui/skill-mention";
+} from "@repo/features/skill-mention";
+import { skillWord } from "@repo/features/skill-word";
+import { isSlashCommand } from "@repo/features/slash-command";
+import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
   createContext,
   type ReactNode,

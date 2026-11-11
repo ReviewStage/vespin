@@ -26,6 +26,7 @@ import {
 import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FullWindowOverlay } from "react-native-screens";
+import { useReduceMotion } from "./accessibility.js";
 import {
   NO_NOTICE,
   NOTICE_KIND,
@@ -89,24 +90,6 @@ export function useFailureNotices(): FailureNotices {
   const notices = useContext(Notices);
   if (notices === undefined) throw new Error("A screen asked for a notice outside its provider.");
   return notices;
-}
-
-/** Whether the reader asked the system to reduce motion, which the banner reads as it arrives. */
-function useReduceMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    let live = true;
-    AccessibilityInfo.isReduceMotionEnabled().then(
-      (on) => live && setReduced(on),
-      () => undefined,
-    );
-    const watch = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduced);
-    return () => {
-      live = false;
-      watch.remove();
-    };
-  }, []);
-  return reduced;
 }
 
 /** The banner's words, its glyph, and Try again, in the system's glass. */
@@ -257,6 +240,7 @@ function NoticeBanner({
       <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
         <Animated.View
           style={[styles.lane, arriving]}
+          pointerEvents="box-none"
           accessibilityLiveRegion="polite"
           {...swipe.panHandlers}
         >

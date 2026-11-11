@@ -1,4 +1,5 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -21,7 +22,6 @@ import {
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import { absurd } from "effect";
 import {

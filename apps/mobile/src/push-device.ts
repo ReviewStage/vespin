@@ -254,8 +254,8 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
         }
       };
       write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
+        // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
         refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
-        retry: true,
       }).then((went) => {
         if (went) confirmed.current = notify;
         else putBack();

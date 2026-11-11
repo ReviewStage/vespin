@@ -94,9 +94,8 @@ export default function AccountScreen() {
                 label="Share usage data"
                 on={settings.usageData === true}
                 onChange={(on) => {
-                  write(() => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }), {
-                    retry: true,
-                  });
+                  // Note that a toggle offers no Try again, which could replay an older choice over a newer one; flipping it again is the retry.
+                  write(() => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }));
                 }}
               />
             )}
