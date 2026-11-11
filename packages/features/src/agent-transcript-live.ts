@@ -24,8 +24,8 @@ import { transcriptWindowPartRowSchema, transcriptWindowRowSchema } from "./tran
  * cursor is read from, which move where the service's held read would wake
  * (`packages/service/src/agents/coder-host/transcript-live.ts`): its
  * messages, its turns, its conversation's journal revision and title, the
- * agent's title, its workers' titles and delegations, its queue, and a
- * device agent's newest launch line; and its newest
+ * agent's title, its workers' titles and delegations, its queue, a
+ * device agent's newest launch line, and its first launch's boot; and its newest
  * messages themselves as rows (`window`, `windowParts`), which the reader
  * draws as they arrive; to a reader that names a cursor, only those written
  * or amended past it, which it joins by message id onto the ones it holds.
@@ -125,9 +125,20 @@ export const AGENT_TRANSCRIPT_READ = liveRead({
       order: [["id", ORDER.ASC]],
       optional: true,
     }),
+    /** The agent's first launch while its boot record stands, a row at most: its attempt, phase, and why it failed; none once its first turn settled, on a worker's transcript, and absent from a service older than it. */
+    boot: liveRows({
+      row: EffectSchema.Struct({
+        attempt: countedNumber,
+        phase: EffectSchema.String,
+        failure: EffectSchema.NullOr(EffectSchema.String),
+      }),
+      key: "attempt",
+      order: [["attempt", ORDER.ASC]],
+      optional: true,
+    }),
   },
   /** A desktop that follows the window's own rows drops the count of its messages (`transcript-follow.ts`'s `followedRead`), so the digest it sends is over these alone. */
-  olderParts: ["turns", "conversation", "agent", "workers", "queueRevision", "launch"],
+  olderParts: ["turns", "conversation", "agent", "workers", "queueRevision", "launch", "boot"],
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
 });
 

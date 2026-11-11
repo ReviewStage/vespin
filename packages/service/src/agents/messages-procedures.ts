@@ -248,6 +248,7 @@ function transcriptAnswer(
     ...(page.queue === undefined ? undefined : { queue: page.queue }),
     ...(page.launch === undefined ? undefined : { launch: page.launch }),
     ...(page.launchUnstarted === undefined ? undefined : { launchUnstarted: page.launchUnstarted }),
+    ...(page.boot === undefined ? undefined : { boot: page.boot }),
   };
 }
 

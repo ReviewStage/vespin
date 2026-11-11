@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { beginAgentBoot, failAgentBoot } from "@repo/database/models/agent-boot-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { BOOT_FAILURE, BOOT_PHASE } from "@repo/features/agent-boot";
+import { AGENT_FAILURE, AGENT_PAYER, AGENT_STATUS } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TOOL_CALL_SETTLEMENT } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
@@ -119,6 +121,46 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
             ["tool-reply_inbox", TOOL_PART_STATE.OUTPUT_AVAILABLE],
             ["tool-close_inbox_item", TOOL_PART_STATE.OUTPUT_AVAILABLE],
           ],
+        );
+      }),
+  );
+
+  it.effect(
+    "an agent past its grace with no turn reads never started on its own transcript, and one whose first launch failed says so by its boot alone",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const started = yield* createAgent(owner, {
+          taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
+          descriptionSnapshot: null,
+          prompt: "Fix the tile.",
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+        });
+        const agent = Option.getOrThrow(started).agent;
+        const target = { userId: owner, conversationId: agent.conversationId };
+        // Note that the agent was made a day before the test clock's now, long past the grace it gets to start in.
+        const longAgo = { createdAt: new Date(-86_400_000), blank: false };
+        const read = transcriptPast(target, CODER_TOOL_SET, CURSOR_START, longAgo, agent).pipe(
+          Effect.provide(modelCatalogOf(CATALOG)),
+        );
+
+        const unstarted = yield* read;
+        yield* beginAgentBoot(agent.id, new Date(0), undefined);
+        yield* failAgentBoot(agent.id, BOOT_FAILURE.MACHINE_UNAVAILABLE, new Date(0));
+        const bootFailed = yield* read;
+
+        assert.deepEqual(
+          [unstarted.status, unstarted.failureReason],
+          [AGENT_STATUS.FAILED, AGENT_FAILURE.NOT_STARTED],
+        );
+        assert.deepEqual(
+          [bootFailed.status, bootFailed.failureReason, bootFailed.boot?.phase],
+          [AGENT_STATUS.FAILED, undefined, BOOT_PHASE.FAILED],
         );
       }),
   );

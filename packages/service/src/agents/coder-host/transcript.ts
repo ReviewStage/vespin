@@ -1,4 +1,5 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { type AgentBootRow, agentBootOf } from "@repo/database/models/agent-boot-store";
 import {
   type Agent,
   type AgentDelegation,
@@ -35,6 +36,7 @@ import {
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
+import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import {
   AGENT_BOUNDS,
@@ -188,6 +190,8 @@ export interface TranscriptPage {
   readonly queue?: AgentQueue;
   /** Where the launch it waits on stands, on its own transcript while it runs on a device and that launch's turn has not opened; absent otherwise and on a worker's. */
   readonly launch?: AgentLaunch;
+  /** Its first launch while its boot record stands, on its own transcript; absent otherwise and on a worker's. */
+  readonly boot?: AgentBoot;
   /** Why a failed launch never started, where its host said a reason beside the step in `launch`; absent otherwise. */
   readonly launchUnstarted?: DeviceLaunchUnstarted;
 }
@@ -215,19 +219,45 @@ const WAITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 /** When an agent was started, and whether blank, which is what its status is read by beside its turns (`AgentStanding`). */
 type AgentStart = Pick<AgentStanding, "createdAt" | "blank">;
 
-/** The agent's status now, read from its newest turn, when that run began, why where that turn failed, and the instant the clock alone would move it, where one stands. */
-const statusNow = (target: ConversationTarget, { createdAt, blank }: AgentStart) =>
+/** The agent's first launch as its own transcript carries it, while its boot record stands. */
+const bootOnPage = (row: AgentBootRow): AgentBoot => ({
+  phase: row.phase,
+  since: row.phaseAt.getTime(),
+  ...(row.failure === undefined ? undefined : { failure: row.failure }),
+});
+
+/**
+ * The agent's status now, read from its newest turn and, on its own
+ * transcript, its first launch's boot, when that run began, why where that
+ * turn failed, and the instant the clock alone would move it, where one
+ * stands. Note that a failed boot is said by the boot, never as a turn that
+ * never started.
+ */
+const statusNow = (target: ConversationTarget, { createdAt, blank }: AgentStart, own?: OwnAgent) =>
   Effect.gen(function* () {
-    const turns = yield* latestTurnsOf(target.userId, [target.conversationId]);
+    const { turns, booted } = yield* Effect.all(
+      {
+        turns: latestTurnsOf(target.userId, [target.conversationId]),
+        booted:
+          own === undefined ? Effect.succeed(Option.none<AgentBootRow>()) : agentBootOf(own.id),
+      },
+      { concurrency: CODER.READ_CONCURRENCY },
+    );
     const now = yield* Clock.currentTimeMillis;
     const turn = turns.get(target.conversationId);
-    const status = agentStatusOf(turn, { createdAt, now, blank });
+    const bootRow = Option.getOrUndefined(booted);
+    const standing = { createdAt, now, blank, boot: bootRow?.phase };
+    const status = agentStatusOf(turn, standing);
     const runStartedAt = agentRunStartedAt(turn, { createdAt });
-    const failed = status === AGENT_STATUS.FAILED;
+    // Note that a failed first launch is said by its boot, so it names no turn that never started; an agent that never started otherwise still does.
+    const failed =
+      status === AGENT_STATUS.FAILED &&
+      (turn !== undefined || bootRow?.phase !== BOOT_PHASE.FAILED);
     const failureReason = failed ? agentFailureOf(turn) : undefined;
     const hostLost = failed ? hostLostOf(turn) : undefined;
-    const graceEdge = statusClockEdge(turn, { createdAt, now, blank });
-    return { status, runStartedAt, failureReason, hostLost, turn, graceEdge };
+    const graceEdge = statusClockEdge(turn, standing);
+    const boot = bootRow === undefined ? undefined : bootOnPage(bootRow);
+    return { status, runStartedAt, failureReason, hostLost, turn, graceEdge, boot };
   });
 
 /**
@@ -605,6 +635,7 @@ function pagePast(
   tools: ToolSet,
   after: MessageCursor,
   agent: AgentStart,
+  own?: OwnAgent,
 ): TranscriptEffect<{
   readonly page: TranscriptPage;
   readonly turn: NewestTurn;
@@ -620,12 +651,12 @@ function pagePast(
           after,
           AGENT_BOUNDS.MESSAGES_PAGE,
         ),
-        standing: statusNow(target, agent),
+        standing: statusNow(target, agent, own),
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
     const { read, cursor } = past;
-    const { status, runStartedAt, failureReason, hostLost, turn, graceEdge } = standing;
+    const { status, runStartedAt, failureReason, hostLost, turn, graceEdge, boot } = standing;
     return {
       page: {
         messages: yield* transcriptMessagesOf(target, read.ok ? read.value : []),
@@ -634,6 +665,7 @@ function pagePast(
         runStartedAt,
         ...(failureReason === undefined ? undefined : { failureReason }),
         ...(hostLost === undefined ? undefined : { hostLost }),
+        ...(boot === undefined ? undefined : { boot }),
       },
       turn,
       graceEdge,
@@ -848,7 +880,7 @@ export function transcriptPast(
   poll: Duration.Duration = CODER.MESSAGES_POLL,
 ): TranscriptEffect<TranscriptPage, ModelCatalog> {
   const look = Effect.gen(function* () {
-    const read = yield* pagePast(target, tools, after, agent);
+    const read = yield* pagePast(target, tools, after, agent, own);
     if (!(yield* holdsFor(read.page, titleAwaited))) return { read, holds: false, edge: undefined };
     return { read, holds: true, edge: yield* holdEdgeOf(read.page, read.graceEdge, titleEdge) };
   });
@@ -863,7 +895,7 @@ export function transcriptPast(
     Effect.flatMap((held) =>
       Option.isSome(held)
         ? Effect.succeed(held.value.read.read)
-        : pagePast(target, tools, after, agent),
+        : pagePast(target, tools, after, agent, own),
     ),
     Effect.flatMap(({ page, turn }) => withUsage(target, tools, page, turn, own)),
   );
@@ -893,7 +925,7 @@ export function transcriptNow(
   titleEdge: TitleEdge = NO_TITLE_EDGE,
 ): TranscriptEffect<TranscriptNow, ModelCatalog> {
   return Effect.gen(function* () {
-    const { page, turn, graceEdge } = yield* pagePast(target, tools, after, agent);
+    const { page, turn, graceEdge } = yield* pagePast(target, tools, after, agent, own);
     const holds = yield* holdsFor(page, titleAwaited);
     const read = { page: yield* withUsage(target, tools, page, turn, own), holds };
     if (!holds) return read;
@@ -964,12 +996,12 @@ export function transcriptNewest(
           cursor.seq + 1,
           AGENT_BOUNDS.MESSAGES_PAGE,
         ),
-        standing: statusNow(target, agent),
+        standing: statusNow(target, agent, own),
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
     const { messages, before } = yield* olderPageOf(target, read);
-    const { status, runStartedAt, failureReason, hostLost, turn } = standing;
+    const { status, runStartedAt, failureReason, hostLost, turn, boot } = standing;
     const page: TranscriptPage = {
       messages,
       cursor,
@@ -977,6 +1009,7 @@ export function transcriptNewest(
       runStartedAt,
       ...(failureReason === undefined ? undefined : { failureReason }),
       ...(hostLost === undefined ? undefined : { hostLost }),
+      ...(boot === undefined ? undefined : { boot }),
     };
     return {
       page: yield* withUsage(target, tools, page, turn, own),
