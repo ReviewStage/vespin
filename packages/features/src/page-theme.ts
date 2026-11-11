@@ -34,6 +34,9 @@ const PAGE_THEME_ASK_TYPE = "app-page-theme-ask";
 /** The mark the window's answer wears. */
 const PAGE_THEME_TYPE = "app-page-theme";
 
+/** The event the page's own window hears once it wears a theme the window handed it, which the height it reports waits on (`PAGE_SIZE_SCRIPT`). */
+export const PAGE_THEME_WORN_EVENT = "app-page-theme-worn";
+
 /** The class a page gives an element, or its body, to stand across the frame rather than at reading width. */
 export const PAGE_WIDE_CLASS = "page-wide";
 
@@ -138,7 +141,8 @@ export function pageThemeMessage(theme: PageTheme): {
  * narrower than the frame would otherwise hug its left edge under a centered
  * column of words; it centers safely, falling back to the start where it
  * overflows so its scroll still reaches the first item, and by `:where`, so
- * any `justify-content` of the page's own outweighs it.
+ * any `justify-content` of the page's own outweighs it. Once it wears a
+ * theme, it tells the page's own window (`PAGE_THEME_WORN_EVENT`).
  */
 export const PAGE_THEME_SCRIPT = `(() => {
   "use strict";
@@ -149,6 +153,7 @@ export const PAGE_THEME_SCRIPT = `(() => {
   const NAME = /^--app-[a-z0-9-]+$/;
   const VALUE = /^[^;{}<>\\\\]*$/;
   const WIDE = ${JSON.stringify(PAGE_WIDE_CLASS)};
+  const WORN = ${JSON.stringify(PAGE_THEME_WORN_EVENT)};
   const READING =
     "html{container-type:inline-size}" +
     "body{max-width:var(${PAGE_THEME_VARIABLE.READING_WIDTH})}html>body{margin-inline:auto}" +
@@ -173,6 +178,7 @@ export const PAGE_THEME_SCRIPT = `(() => {
     let room = length(inset) ? "html{padding:" + inset + "}" : "";
     if (room !== "" && length(narrowInset)) room += "@media (max-width:479.98px){html{padding:" + narrowInset + "}}";
     sheet.textContent = ":root{" + rules + "}" + room + READING;
+    dispatchEvent(new Event(WORN));
   };
 
   addEventListener("message", (event) => {
