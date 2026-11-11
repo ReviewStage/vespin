@@ -53,7 +53,7 @@ export { ACCOUNT_ASK_ACTS, ACCOUNT_ASK_FOLLOWS } from "./account-asks.js";
 export { AGENT_INBOX_ACTS, AGENT_INBOX_FOLLOWS } from "./agent-inbox.js";
 export { AGENT_ACTS, AGENT_FOLLOWS } from "./agents.js";
 export { AUTOMATION_ACTS, AUTOMATION_FOLLOWS } from "./automations.js";
-export { ACT_ERROR } from "./base.js";
+export { ACT_ERROR, actRefusalSentence } from "./base.js";
 export { CHAPTERS_ACTS, CHAPTERS_FOLLOWS } from "./chapters.js";
 export { CLI_INSTALL_OUTCOME, type CliInstallAnswer } from "./cli.js";
 export {

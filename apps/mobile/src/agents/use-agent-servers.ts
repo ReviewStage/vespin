@@ -18,7 +18,6 @@ import {
   handedServers,
   switchedServers,
 } from "@repo/features/agent-servers-model";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount, selectIntegrations } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
@@ -27,6 +26,7 @@ import { useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
 
 /** Why a switch did not take, said under the servers. */
@@ -49,6 +49,7 @@ export interface AgentServers {
 /** The servers of the agent `agentId` names, followed while the screen that reads them stands. */
 export function useAgentServers(agentId: string): AgentServers {
   const acts = useHostActs();
+  const send = useWrite();
   const agent = useFollowedAgent(agentId);
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.INTEGRATIONS_FOLLOW]());
@@ -72,16 +73,17 @@ export function useAgentServers(agentId: string): AgentServers {
       setNote(undefined);
       buzz(BUZZ.SELECTION);
       const disabledServers = switchedServers(disabled, connection, on);
-      acts[ACT_KIND.AGENTS_SERVERS]({ agentId, disabledServers: [...disabledServers] })
-        .catch((error: unknown) => {
-          console.error("The agent's MCP servers were not switched.", error);
-          return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
-        })
-        .then((answered) => {
-          if (write !== writes.current || !("failure" in answered)) return;
-          setNote(SWITCH_FAILED);
-          buzz(BUZZ.ERROR);
-        });
+      send(
+        () => acts[ACT_KIND.AGENTS_SERVERS]({ agentId, disabledServers: [...disabledServers] }),
+        {
+          refused: (answered) => ("failure" in answered ? SWITCH_FAILED : undefined),
+          unanswered: SWITCH_FAILED,
+          // Note that only the latest switch's refusal is said.
+          inPlace: (words) => {
+            if (write === writes.current) setNote(words);
+          },
+        },
+      );
     },
   };
 }

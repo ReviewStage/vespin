@@ -3,6 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { FailureNoticeProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -11,10 +12,12 @@ import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
+import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -34,7 +37,11 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * the Live Activity of its running agents goes through the host
  * (`live-activity/`), its crash reports name it (`crash-reports.ts`), its
  * tasks and threads stand in Spotlight, and a Spotlight item tapped or a
- * screen handed over from another device opens (`system-activity/`).
+ * screen handed over from another device opens (`system-activity/`). The
+ * iPad's menu bar acts on whatever stands in front, its account's commands
+ * enabled while one is signed in (`menu-commands/`).
+ * Over every screen stands the one notice of a write that did not go
+ * (`use-write.ts`), which lets its offline word go once the service answers.
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -50,43 +57,47 @@ function GuardedScreens() {
   useLiveActivity(signedIn);
   useSystemActivity(signedIn);
   useCrashReportAccount();
+  useOfflineNotice();
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={signedIn && !updateNeeded}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-        {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
-        <Stack.Screen
-          name="settings"
-          options={{ presentation: sheetPresentation, title: "Settings" }}
-        />
-        <Stack.Screen
-          name="start-task"
-          options={{ presentation: sheetPresentation, title: "New task" }}
-        />
-        <Stack.Screen
-          name="start-agent"
-          options={{ presentation: sheetPresentation, title: "New agent" }}
-        />
-        <Stack.Screen
-          name="agent-model"
-          options={{ presentation: sheetPresentation, title: "Options" }}
-        />
-        <Stack.Screen
-          name="new-workspace"
-          options={{ presentation: sheetPresentation, title: "New workspace" }}
-        />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn && !updateNeeded}>
-        <Stack.Screen name="sign-in" />
-      </Stack.Protected>
-      <Stack.Protected guard={updateNeeded}>
-        <Stack.Screen name="update-needed" options={{ gestureEnabled: false }} />
-      </Stack.Protected>
-    </Stack>
+    <>
+      <MenuCommands signedIn={signedIn && !updateNeeded} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={signedIn && !updateNeeded}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" />
+          {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
+          <Stack.Screen
+            name="settings"
+            options={{ presentation: sheetPresentation, title: "Settings" }}
+          />
+          <Stack.Screen
+            name="start-task"
+            options={{ presentation: sheetPresentation, title: "New task" }}
+          />
+          <Stack.Screen
+            name="start-agent"
+            options={{ presentation: sheetPresentation, title: "New agent" }}
+          />
+          <Stack.Screen
+            name="agent-model"
+            options={{ presentation: sheetPresentation, title: "Options" }}
+          />
+          <Stack.Screen
+            name="new-workspace"
+            options={{ presentation: sheetPresentation, title: "New workspace" }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn && !updateNeeded}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+        <Stack.Protected guard={updateNeeded}>
+          <Stack.Screen name="update-needed" options={{ gestureEnabled: false }} />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 
@@ -102,7 +113,9 @@ export default function RootLayout() {
   useEffect(() => hideSplash(), []);
   return (
     <HostProvider>
-      <GuardedScreens />
+      <FailureNoticeProvider>
+        <GuardedScreens />
+      </FailureNoticeProvider>
     </HostProvider>
   );
 }

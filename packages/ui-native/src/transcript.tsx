@@ -6,7 +6,7 @@ import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/gl
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -817,7 +817,9 @@ export function AgentTranscript({
   }, []);
   // The older pages as they stand now, which the scroll reads without being made anew for each.
   const olderNow = useRef(older);
-  olderNow.current = older;
+  useEffect(() => {
+    olderNow.current = older;
+  }, [older]);
   // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
@@ -866,6 +868,8 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
+        keyboardDismissMode="interactive"
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}

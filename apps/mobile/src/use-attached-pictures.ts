@@ -20,7 +20,7 @@ import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -84,7 +84,9 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
-  held.current = pictures;
+  useEffect(() => {
+    held.current = pictures;
+  }, [pictures]);
   // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
   const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {
     const now = held.current;

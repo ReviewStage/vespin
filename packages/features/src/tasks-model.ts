@@ -1,5 +1,11 @@
 import { PRODUCT_NAME } from "./product-name.js";
-import { TASK_STATUS, type Task, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import {
+  TASK_BOUNDS,
+  TASK_STATUS,
+  type Task,
+  type TaskStatus,
+  type TaskSummary,
+} from "./task-wire.js";
 import {
   type HeldDescriptionDocument,
   type RepositoryCallFailure,
@@ -8,6 +14,7 @@ import {
   TASK_PARENT_FAILURE,
   type TasksView,
 } from "./tasks-view.js";
+import { IRREVERSIBLE_WORDS } from "./words.js";
 import type { Workspace } from "./workspace-wire.js";
 
 /**
@@ -229,6 +236,9 @@ export function startFailureNote(failure: StartCallFailure): string {
 /** What a task's name says, where it was edited, when the service refused the rename. */
 export const RENAME_FAILED_NOTE = "The task could not be renamed. Try again.";
 
+/** What a task's delete says, where it was asked, when the service refused it. */
+export const DELETE_FAILED_NOTE = "The task could not be deleted. Try again.";
+
 /** Names drawn over the ones a view carries, by task id: a name being typed. */
 export type TaskNames = ReadonlyMap<string, string>;
 
@@ -300,6 +310,47 @@ export function settleStopWords(status: SettledStatus): StopAgentsWords {
 /** What archiving a running agent asks, or several at once. */
 export function archiveStopWords(several: boolean): StopAgentsWords {
   return { title: several ? "Archive agents?" : "Archive agent?", ...STOP_AGENTS };
+}
+
+/**
+ * What Permanently delete asks of a task named `name`: what goes, and, on a
+ * task not yet out of the way, that marking it done keeps it out of the way
+ * instead. Every client's confirm asks it in these words.
+ */
+export function deleteTaskWords(
+  name: string,
+  task: Pick<TaskSummary, "status"> | undefined,
+): StopAgentsWords {
+  const lost = `“${name}” and its board and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+  const settled =
+    task !== undefined &&
+    (!settleOffered(task, SETTLED_STATUS.DONE) || !settleOffered(task, SETTLED_STATUS.CANCELED));
+  return {
+    title: "Permanently delete task?",
+    body: settled ? lost : `${lost} To keep it out of the way instead, mark it done.`,
+    verb: "Permanently delete task",
+  };
+}
+
+/** A task filed for later from words typed: its name, and its brief where the words say more than the name. */
+export interface FiledTask {
+  readonly name: string;
+  readonly brief?: string;
+}
+
+/**
+ * The task File for later files from the words a New task holds: named by
+ * their first line, cut to the bound a name takes, and handed the words
+ * whole as its brief where they say more than that name, so the agent a
+ * member starts on it later reads all of them; none where they are blank.
+ */
+export function filedTaskOf(words: string): FiledTask | undefined {
+  const kept = words.trim();
+  if (kept === "") return undefined;
+  const line = kept.split("\n", 1)[0]?.trim() ?? "";
+  const name = line.slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
+  if (name === kept) return { name };
+  return { name, brief: kept.slice(0, TASK_BOUNDS.MAX_BRIEF_CHARS) };
 }
 
 /** One task's status as a press asks for it, or as its Undo puts it back. */

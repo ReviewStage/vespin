@@ -19,14 +19,13 @@
  * pressed anything.
  */
 
-import { ORPCError } from "@orpc/client";
 import type { AGENT_CALL_FAILURE, AgentAgentAnswer } from "@repo/features/agent-view";
 import type { SendTrace } from "@repo/features/sentry-tracing";
 import { FAILURE_CONDITION, FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import {
-  ACT_ERROR,
   type ActPortCallContext,
+  actRefusalSentence,
   type PortActKind,
   type PortActPayload,
   type PortActResult,
@@ -111,9 +110,8 @@ async function portAct(
     ) => Promise<PortActResult<PortActKind>>;
     return await call(payload, trace === undefined ? undefined : { context: { trace } });
   } catch (error) {
-    if (error instanceof ORPCError && error.code === ACT_ERROR.REFUSED) {
-      throw new ActRefusal(error.message, { cause: error });
-    }
+    const refusal = actRefusalSentence(error);
+    if (refusal !== undefined) throw new ActRefusal(refusal, { cause: error });
     // Note that the failure's own text goes to the log, where a fault is diagnosed, and never to a person.
     console.error(`The act ${kind} failed on its way to the service.`, error);
     throw new ActRefusal(ACT_UNREACHED_WORDS, { cause: error });

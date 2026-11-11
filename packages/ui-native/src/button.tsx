@@ -11,6 +11,7 @@ import {
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHint,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -170,6 +171,8 @@ type ChipProps = {
   readonly count?: number | undefined;
   /** Whether the chip stands chosen, which fills it with the ink. */
   readonly selected?: boolean | undefined;
+  /** What a press does, heard after the chip's words where they leave it unsaid, such as a picture's × taking it off a message. */
+  readonly hint?: string | undefined;
   readonly onPress: () => void;
 };
 
@@ -179,7 +182,7 @@ type ChipProps = {
  * and on the surface inside a hairline otherwise. VoiceOver hears the chosen
  * one as selected, since its fill alone says so on screen.
  */
-export function Chip({ label, symbol, count, selected = false, onPress }: ChipProps) {
+export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
   const colors = useColors();
   const ink = selected ? colors.GROUND : colors.TEXT_BODY;
   return (
@@ -190,6 +193,7 @@ export function Chip({ label, symbol, count, selected = false, onPress }: ChipPr
         contentShape(shapes.capsule(), "hoverEffect"),
         hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
+        ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
     >
       <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, selected)}>

@@ -214,6 +214,11 @@ export function replyFromWords(agent: string, lead?: string): string {
 /** What a refresh that failed says beside the last good read, which stays drawn; Retry stands with it. */
 export const REFRESH_FAILED_WORDS = "Could not refresh";
 
+/** What a client says of the changes made while the service could not be reached that it refused once they were sent again. */
+export function offlineRefusedWords(count: number): string {
+  return `Couldn't save ${countWords(count, { one: "change", many: "changes" })} you made offline.`;
+}
+
 /** What an act that failed on its way to the service says, as the reader's connection, whatever the failure's own text: a person reads this, and the text goes to the log. */
 export const ACT_UNREACHED_WORDS =
   "Could not connect. Check your internet connection and try again.";

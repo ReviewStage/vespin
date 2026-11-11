@@ -4,7 +4,9 @@ import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swi
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   contentShape,
@@ -17,6 +19,7 @@ import {
   onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollDismissesKeyboard,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
@@ -27,6 +30,12 @@ import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+
+/** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
+const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** What a press on a foldable section's header is heard to do. */
+const FOLD_HINT = "Shows or hides the rows it holds";
 
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
@@ -89,6 +98,8 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         background(listGround(colors, look)),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
+        scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
@@ -203,9 +214,9 @@ export function ListSection({
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
           hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-          accessibilityLabel(
-            `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
-          ),
+          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
+          accessibilityHint(FOLD_HINT),
         ]}
       >
         {label}

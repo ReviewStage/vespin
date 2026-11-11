@@ -3,9 +3,11 @@
  */
 
 import {
+  TASK_CREATE_RELATION_KIND,
   TASK_PRIORITY,
   TASK_RELATION_KIND,
   TASK_STATUS,
+  type TaskCreateRelationKind,
   type TaskPriority,
   type TaskRelationKind,
   type TaskStatus,
@@ -39,3 +41,11 @@ export const TASK_RELATION_WORDS = {
   [TASK_RELATION_KIND.BLOCKED_BY]: "Blocked by",
   [TASK_RELATION_KIND.BLOCKS]: "Blocks",
 } as const satisfies Record<TaskRelationKind, string>;
+
+/** Each relation a new task may start in, named from the new task's side, as New task's rows and menus name it. */
+export const TASK_CREATE_RELATION_WORDS = {
+  [TASK_CREATE_RELATION_KIND.SUB_TASK_OF]: "Sub-task of",
+  [TASK_CREATE_RELATION_KIND.PARENT_OF]: "Parent of",
+  [TASK_CREATE_RELATION_KIND.BLOCKED_BY]: "Blocked by",
+  [TASK_CREATE_RELATION_KIND.BLOCKS]: "Blocks",
+} as const satisfies Record<TaskCreateRelationKind, string>;

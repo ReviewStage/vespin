@@ -26,6 +26,7 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { acknowledgedNote } from "@repo/features/inbox-write-words";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
@@ -36,7 +37,6 @@ import { useCallback, useRef } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
-
 import {
   type Send,
   type Settles,
@@ -45,7 +45,6 @@ import {
   tookBack,
   untakenSettles,
 } from "./inbox-close.js";
-import { acknowledgedNote } from "./inbox-writes.js";
 
 /** What a nod the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);

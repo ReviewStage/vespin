@@ -185,6 +185,20 @@ function olderRead(
 }
 
 /**
+ * The writes `-refuseWrites true` refuses, each answered as the host
+ * answers once the service has refused it: a task's status and its pin
+ * not kept, so the screens put the row back and say why, as they would
+ * of a live refusal.
+ */
+const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
+  PortActKind,
+  () => PortActResult<PortActKind>
+>([
+  [ACT_KIND.TASKS_SET_STANDING, () => false],
+  [ACT_KIND.TASKS_PIN, () => false],
+]);
+
+/**
  * The act port a fixture run's screens act through: each act the profile
  * answers, such as a mark, a thread's file read, or a reply or a resolve on
  * a thread, one of them refused (`inboxActAnswer`),
@@ -199,17 +213,23 @@ function olderRead(
  * set or cleared moves its item there, as the host draws one, so the Inbox
  * puts it away under Reminders, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one.
+ * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
+ * before anything else answers them, so a flow sees the failure notice.
  */
 export function fixtureActs(
   acts: ActPortClient,
   profile: RunProfile,
   state: Pick<AppStateStore, "snapshot" | "update">,
+  refusesWrites = false,
 ): ActPortClient {
   return new Proxy(acts, {
     get(target, kind, receiver) {
       const sent: unknown = Reflect.get(target, kind, receiver);
       if (typeof kind !== "string" || typeof sent !== "function") return sent;
       return (payload: unknown, ...rest: unknown[]) => {
+        // SAFETY: the port is keyed by act kind.
+        const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
+        if (refused !== undefined) return Promise.resolve(refused());
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const asked = payload as PortActPayload<PortActKind>;
         const older = olderRead(state, profile, kind as PortActKind, asked);

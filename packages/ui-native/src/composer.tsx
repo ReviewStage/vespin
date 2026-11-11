@@ -17,6 +17,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  contentShape,
   disabled,
   font,
   frame,
@@ -27,16 +28,36 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
+import { BAR_EDGE, BAR_HEAD_INSET, BAR_RADIUS, BAR_ROW_SPACING, GlassBar } from "./glass-bar.js";
 import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
+
+/**
+ * A press's frame in the composer's row: Apple's least target, its mark
+ * centered in it, the whole frame taking the press. The bar's edge is thin
+ * (`BAR_EDGE`) by as much as the frame stands past its mark, so the bar
+ * draws as it did with its marks alone.
+ */
+const PRESS_FRAME = [
+  frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+  contentShape(shapes.rectangle()),
+];
+
+/** How far the field's words stand from the bar's edge above and below, its own room inside the thin edge. */
+const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
+
+/** How far the field stands in from the bar's leading edge where no + leads it. */
+const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
+
+/** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
+const FIELD_TRAILING = SPACE.TIGHT;
 
 /** The most lines the field grows to before it scrolls its words. */
 const FIELD_LINES = 6;
@@ -107,6 +128,7 @@ function SendButton({
       <ProgressView
         modifiers={[
           frame({ width: SEND_SIZE, height: SEND_SIZE }),
+          ...PRESS_FRAME,
           tint(colors.TEXT_MUTED),
           accessibilityLabel("Stopping"),
         ]}
@@ -119,6 +141,7 @@ function SendButton({
         onPress={onStop}
         modifiers={[
           buttonStyle("plain"),
+          ...PRESS_FRAME,
           hoverEffect(HOVER_EFFECT.HIGHLIGHT),
           accessibilityLabel("Stop"),
         ]}
@@ -141,6 +164,7 @@ function SendButton({
         onPress={onDictate}
         modifiers={[
           buttonStyle("plain"),
+          ...PRESS_FRAME,
           hoverEffect(HOVER_EFFECT.HIGHLIGHT),
           accessibilityLabel("Dictate"),
         ]}
@@ -154,6 +178,7 @@ function SendButton({
       onPress={() => onSend?.()}
       modifiers={[
         buttonStyle("plain"),
+        ...PRESS_FRAME,
         hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         disabled(empty || onSend === undefined),
         accessibilityLabel("Send"),
@@ -180,7 +205,11 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
   return (
     <Menu
       label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
-      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier("composer-add")]}
+      modifiers={[
+        ...PRESS_FRAME,
+        accessibilityLabel(ADD_LABEL),
+        accessibilityIdentifier("composer-add"),
+      ]}
     >
       {menu.actions.map((action) => (
         <Button
@@ -255,6 +284,7 @@ function ComposerPieces(props: ComposerProps) {
           onPress={onAdd}
           modifiers={[
             buttonStyle("plain"),
+            ...PRESS_FRAME,
             hoverEffect(HOVER_EFFECT.HIGHLIGHT),
             accessibilityLabel(ADD_LABEL),
           ]}
@@ -270,6 +300,11 @@ function ComposerPieces(props: ComposerProps) {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           lineLimit(FIELD_LINES),
+          padding({
+            vertical: FIELD_INSET,
+            trailing: FIELD_TRAILING,
+            ...(addMenu === undefined && onAdd === undefined ? { leading: FIELD_LEADING } : {}),
+          }),
           accessibilityIdentifier("composer-field"),
         ]}
       />
@@ -313,7 +348,7 @@ export function Composer(props: ComposerProps) {
  */
 export function ComposerFoot(props: ComposerProps) {
   const glass = [
-    padding({ leading: SPACE.ROW + 4, trailing: SPACE.TIGHT * 2, vertical: SPACE.TIGHT * 2 }),
+    padding({ all: BAR_EDGE }),
     glassEffect({
       glass: { variant: "regular", interactive: true },
       shape: "roundedRectangle",
@@ -323,15 +358,17 @@ export function ComposerFoot(props: ComposerProps) {
   ];
   if (props.head === undefined) {
     return (
-      <HStack spacing={SPACE.ROW} modifiers={glass}>
+      <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
         <ComposerPieces {...props} />
       </HStack>
     );
   }
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-      {props.head}
-      <HStack spacing={SPACE.ROW}>
+      <VStack alignment="leading" modifiers={[padding(BAR_HEAD_INSET)]}>
+        {props.head}
+      </VStack>
+      <HStack spacing={BAR_ROW_SPACING}>
         <ComposerPieces {...props} />
       </HStack>
     </VStack>

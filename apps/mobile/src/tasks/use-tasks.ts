@@ -22,7 +22,11 @@ import {
 } from "@repo/features/task-agents-model";
 import { ASSIGNED_TO, NO_REPOSITORY, TASKS_HEAD_WORDS } from "@repo/features/task-list-model";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
-import { NO_TASK_SECTIONS, sectionOfTask } from "@repo/features/task-sections-model";
+import {
+  NO_TASK_SECTIONS,
+  SECTION_WRITE_FAILED_NOTE,
+  sectionOfTask,
+} from "@repo/features/task-sections-model";
 import {
   searchedTasks,
   type TaskRowLook,
@@ -36,7 +40,16 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { type StopAgentsWords, settleStopWords } from "@repo/features/tasks-model";
+import {
+  DELETE_FAILED_NOTE,
+  deleteTaskWords,
+  MARK_FAILED_NOTES,
+  RENAME_FAILED_NOTE,
+  type StopAgentsWords,
+  settleFailedNote,
+  settleStopWords,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -47,13 +60,14 @@ import {
   selectTasks,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ, buzz } from "@repo/ui-native";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No task list read yet. */
 const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
@@ -153,6 +167,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
   readonly setStatus: SetStatus;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   const held = useSyncExternalStore(watchStatuses, () => heldStatuses);
   // A status the document now holds is its own, and stands without the press's.
   useEffect(() => {
@@ -163,22 +178,68 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     holdStatuses(new Map([...heldStatuses].filter(([id]) => !drawn.some(([at]) => at === id))));
   }, [tasks, held]);
   const setStatus: SetStatus = (taskId, status, stopAgents) => {
-    holdStatuses(new Map(heldStatuses).set(taskId, status));
     const letGo = () => holdStatuses(new Map([...heldStatuses].filter(([id]) => id !== taskId)));
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
-    acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
-      (landed) => {
-        buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
-        if (!landed) letGo();
+    // Note that each attempt, Try again's among them, draws the status before it sends it and lets it go once it is not kept.
+    write(
+      () => {
+        holdStatuses(new Map(heldStatuses).set(taskId, status));
+        return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
+          (landed) => {
+            if (!landed) letGo();
+            return landed;
+          },
+          (error: unknown) => {
+            letGo();
+            throw error;
+          },
+        );
       },
-      (error: unknown) => {
-        refused("The status")(error);
-        buzz(BUZZ.ERROR);
-        letGo();
+      {
+        refused: (landed) => (landed ? undefined : settleFailedNote(status, 1)),
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_STATUS, id: taskId },
+        went: BUZZ.SUCCESS,
       },
     );
   };
   return { held, setStatus };
+}
+
+/** A task's rename and its delete, as the panel's menu sends them. */
+export interface TaskWrites {
+  /** Renames a task, as the panel's Rename does (`TASKS_RENAME`): the host draws the name at once and puts it back where the service refused it. */
+  readonly rename: (taskId: string, name: string) => void;
+  /** Deletes a task for good, as the panel's Permanently delete does once asked (`TASKS_DELETE`), the host taking its row at once. */
+  readonly remove: (taskId: string) => void;
+}
+
+/** A task's rename and delete, sent on the host's port. */
+export function useTaskWrites(): TaskWrites {
+  const acts = useHostActs();
+  const write = useWrite();
+  return useMemo(
+    () => ({
+      rename: (taskId, name) => {
+        write(() => acts[ACT_KIND.TASKS_RENAME]({ taskId, name }), {
+          refused: (landed) => (landed ? undefined : RENAME_FAILED_NOTE),
+          unanswered: RENAME_FAILED_NOTE,
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.TASK_NAME, id: taskId },
+          went: BUZZ.SUCCESS,
+        });
+      },
+      remove: (taskId) => {
+        write(() => acts[ACT_KIND.TASKS_DELETE]({ taskId }), {
+          refused: (landed) => (landed ? undefined : DELETE_FAILED_NOTE),
+          unanswered: DELETE_FAILED_NOTE,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+    }),
+    [acts, write],
+  );
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
@@ -198,6 +259,9 @@ export interface TasksListing {
   readonly sectionOf: (taskId: string) => string | undefined;
   /** Puts a task in one of the member's sections, or under null in none, as the panel's Move to section does, answering whether the service took it. */
   readonly place: (taskId: string, sectionId: string | null) => Promise<boolean>;
+  readonly rename: TaskWrites["rename"];
+  /** Asks first whether to delete a task for good, as the panel's Permanently delete does. */
+  readonly askDelete: (task: TaskSummary) => void;
   /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
   readonly glanceOf: (taskId: string) => TaskGlance;
 }
@@ -233,19 +297,24 @@ function taskAgentsInOrder(
   );
 }
 
+/** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
+export type ReadListing = Omit<TasksListing, "askDelete">;
+
 /**
  * The chosen workspace's tasks as the panel's phone Tasks lists them, under
  * `search` where one is typed, with each status a press set drawn at once;
  * every workspace's before the account's workspaces are read.
  */
-export function useTasksListing(search: string): TasksListing {
+export function useTasksListing(search: string): ReadListing {
   const acts = useHostActs();
+  const write = useWrite();
   const workspace = useTasksWorkspace();
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const waiting = useWaiting(workspace?.id);
   const listed = view?.tasks ?? NO_TASKS;
   const { held, setStatus } = useStatusWrites(listed);
+  const { rename } = useTaskWrites();
   return useMemo(() => {
     const tasks = withHeld(listed, held);
     const tree = taskTree({
@@ -266,31 +335,31 @@ export function useTasksListing(search: string): TasksListing {
     // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
     const markRead = (taskId: string, unread: boolean) => {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
-      acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }).catch(refused("The mark"));
+      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), {
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_READ, id: taskId },
+      });
     };
-    // Note that a pin taps as a toggle does, lighter than a status's buzz, and a refused one buzzes as any refusal does.
+    // Note that a pin taps as a toggle does, lighter than a status's buzz.
     const pin = (taskId: string, pinned: boolean) => {
-      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).then(
-        (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
-        (error: unknown) => {
-          refused("The pin")(error);
-          buzz(BUZZ.ERROR);
-        },
-      );
+      write(() => acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }), {
+        refused: (landed) =>
+          landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_PIN, id: taskId },
+        went: BUZZ.SELECTION,
+      });
     };
-    // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it.
+    // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it, which the failure notice says.
     const place = (taskId: string, sectionId: string | null) =>
-      acts[ACT_KIND.TASKS_WRITE_SECTION]({
-        writes: [{ kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId }],
-      }).then(
-        (landed) => {
-          buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
-          return landed;
-        },
-        (error: unknown) => {
-          refused("The move")(error);
-          buzz(BUZZ.ERROR);
-          return false;
+      write(
+        () =>
+          acts[ACT_KIND.TASKS_WRITE_SECTION]({
+            writes: [{ kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId }],
+          }),
+        {
+          refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+          went: BUZZ.SUCCESS,
         },
       );
     const agentsWorking = agentsWorkingIn(view, tasks);
@@ -311,9 +380,10 @@ export function useTasksListing(search: string): TasksListing {
       pin,
       place,
       sectionOf: (taskId: string) => sectionOfTask(view?.taskSections ?? NO_TASK_SECTIONS, taskId),
+      rename,
       glanceOf,
     };
-  }, [acts, listed, held, view, workspace, readerId, waiting, search]);
+  }, [acts, write, listed, held, view, workspace, readerId, waiting, search, rename]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
@@ -352,6 +422,7 @@ export interface TaskOverview {
   readonly tasks: readonly TaskSummary[];
   readonly setStatus: SetStatus;
   readonly agentsWorking: (taskId: string) => boolean;
+  readonly rename: TaskWrites["rename"];
 }
 
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
@@ -371,6 +442,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const waiting = useWaiting(workspace?.id);
   const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
+  const { rename } = useTaskWrites();
   const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
   const task = named === undefined ? undefined : listed.find((each) => namesTask(each, named));
   const taskId = task?.id;
@@ -403,8 +475,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       tasks: listed,
       setStatus,
       agentsWorking: agentsWorkingIn(view, listed),
+      rename,
     };
-  }, [task, view, waiting, held, workspace, listed]);
+  }, [task, view, waiting, held, workspace, listed, rename]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
@@ -485,4 +558,65 @@ export function useStatusAsk(doors: Pick<TasksListing, "setStatus" | "agentsWork
     dismiss: letGo,
   };
   return { setStatus, question };
+}
+
+/** A delete held for its question, kept past its answer so the alert keeps its words as it goes. */
+interface HeldDelete {
+  readonly taskId: string;
+  readonly words: StopAgentsWords;
+  readonly presented: boolean;
+}
+
+/**
+ * Deletes a task for good as the panel does, asking first in the panel's
+ * words (`deleteTaskWords`), since nothing brings it back. Answers the
+ * asking `askDelete` and its question, which the screen draws; `onDeleted`
+ * runs as the delete goes, such as the task's own page giving way.
+ */
+export function useDeleteAsk(
+  remove: TaskWrites["remove"],
+  onDeleted?: () => void,
+): {
+  readonly askDelete: (task: TaskSummary) => void;
+  readonly question: StatusQuestion;
+} {
+  const [held, setHeld] = useState<HeldDelete>();
+  const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
+  const question: StatusQuestion = {
+    words: held?.words ?? NO_WORDS,
+    presented: held?.presented === true,
+    confirm: () => {
+      if (held === undefined || !held.presented) return;
+      letGo();
+      remove(held.taskId);
+      onDeleted?.();
+    },
+    dismiss: letGo,
+  };
+  return {
+    askDelete: (task) =>
+      setHeld({ taskId: task.id, words: deleteTaskWords(task.name, task), presented: true }),
+    question,
+  };
+}
+
+/**
+ * A list's acts that ask first, as every list of tasks offers them: its
+ * status set, asking where it stops agents, and its delete, asking always.
+ * Answers the listing its rows act through and the two questions, which the
+ * screen draws.
+ */
+export function useListingAsks(read: ReadListing): {
+  readonly listing: TasksListing;
+  readonly status: StatusQuestion;
+  readonly deletion: StatusQuestion;
+} {
+  const { setStatus, question } = useStatusAsk(read);
+  const { remove } = useTaskWrites();
+  const deletion = useDeleteAsk(remove);
+  return {
+    listing: { ...read, setStatus, askDelete: deletion.askDelete },
+    status: question,
+    deletion: deletion.question,
+  };
 }

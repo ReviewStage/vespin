@@ -38,7 +38,9 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // (`screens/app-sidebar.tsx`) as its split view's first column instead, as
 // Mail does: the places, Pinned and the member's sections, the workspace
 // switcher, and Settings. Tabs stay mounted across the switch, so a fold, a
-// rotation, or a resize keeps the open thread or task.
+// rotation, or a resize keeps the open thread or task. Nor is it on wherever
+// the app sidebar stands, so a phone-idiom window that wide never shows the
+// system's tab sidebar beside it.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
@@ -49,7 +51,7 @@ export default function TabsLayout() {
     <NativeTabs
       hidden={appSidebar}
       minimizeBehavior="onScrollDown"
-      sidebarAdaptable={!(Platform.OS === "ios" && Platform.isPad)}
+      sidebarAdaptable={!appSidebar && !(Platform.OS === "ios" && Platform.isPad)}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
     >

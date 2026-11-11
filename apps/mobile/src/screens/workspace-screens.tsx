@@ -1,12 +1,12 @@
 // workspace-screens.tsx -- New workspace, as a sheet over the tabs: the team's name and Create, which makes the workspace and moves the phone to it.
 
+import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   ListSection,
-  rejectionWords,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** The sheet's words, as the panel's team step says them (`setup-team.tsx`). */
 const WORDS = {
@@ -54,10 +55,11 @@ export function NewWorkspaceScreen() {
   const colors = useColors();
   const router = useRouter();
   const acts = useHostActs();
+  const write = useWrite();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { choose } = useChosenWorkspace(workspaces);
   const [name, setName] = useState("");
-  const create = useAsyncAction(rejectionWords);
+  const create = useAsyncAction(() => ACT_UNREACHED_WORDS);
   // The workspace made, until the account's list holds it.
   const [made, setMade] = useState<string | undefined>(undefined);
   const listed = made !== undefined && workspaces.some((workspace) => workspace.id === made);
@@ -66,13 +68,22 @@ export function NewWorkspaceScreen() {
   }, [listed, router]);
   const waiting = create.running || made !== undefined;
   const make = () => {
-    void create.run(() =>
-      acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
-        choose(workspace.id);
-        setMade(workspace.id);
-        return undefined;
-      }),
-    );
+    // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
+    void create.run(() => {
+      const said: { words?: string } = {};
+      return write(
+        () =>
+          acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
+            choose(workspace.id);
+            setMade(workspace.id);
+          }),
+        {
+          inPlace: (words) => {
+            said.words = words;
+          },
+        },
+      ).then(() => said.words);
+    });
   };
   return (
     <>
