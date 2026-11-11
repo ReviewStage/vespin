@@ -492,6 +492,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
             const mark = editor.current?.mark();
             return mark === undefined ? undefined : (names) => mark.insertFiles(names);
           },
+          remove: (names) => editor.current?.removeFiles(names),
         }
       : undefined,
   });
