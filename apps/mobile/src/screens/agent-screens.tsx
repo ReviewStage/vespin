@@ -1,5 +1,6 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, and a page it showed, opened whole.
 
+import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
@@ -157,7 +158,9 @@ function AgentComposerBar({
     composer.attached.length === 0 &&
     composer.note === undefined ? undefined : (
       <>
-        {banner === undefined ? null : <HeldCallBanner {...banner} />}
+        {banner === undefined ? null : (
+          <HeldCallBanner {...banner} denies={composer.sendQueues ? undefined : DENIES_WAITING} />
+        )}
         <QueuedLines
           lines={composer.queued}
           paused={composer.paused}
@@ -197,7 +200,8 @@ function AgentComposerBar({
  * whole, and a pull request it opened opens its own screen, its card
  * offering Review, which opens it on GitHub, and Merge where it may merge
  * now, which asks first. Its composer floats over the transcript's foot:
- * while a call waits, a banner over its field answers the oldest, and a
+ * while a call waits, a banner over its field answers the oldest, and says
+ * that a message sent now denies it where Send would not queue it, and a
  * follow-up, with the photos the + attaches, steers the turn under way or
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works.

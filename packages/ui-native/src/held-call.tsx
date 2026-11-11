@@ -97,15 +97,25 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
   readonly waiting: string;
   /** What the oldest call waiting asks, as the agent's CLI put it. */
   readonly asks: string;
+  /** That a message sent now denies the calls waiting, said under what is asked; none where Send would queue it instead. */
+  readonly denies?: string | undefined;
 };
 
 /**
  * What stands over the composer's field, inside its glass, while a call
  * waits, so a held agent is never missed however far the transcript has
  * scrolled: a raised hand and how many wait in the attention ink, what the
- * oldest asks, and Deny and Allow, which answer it.
+ * oldest asks, that a message sent now denies it where one would, and Deny
+ * and Allow, which answer it.
  */
-export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
+export function HeldCallBanner({
+  waiting,
+  asks,
+  denies,
+  answering,
+  note,
+  onAnswer,
+}: HeldCallBannerProps) {
   const colors = useColors();
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
@@ -130,6 +140,13 @@ export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: Hel
       >
         {asks}
       </Text>
+      {denies === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {denies}
+        </Text>
+      )}
       {note === undefined ? null : <AskNote words={note} />}
       <ApprovalPresses answering={answering} onAnswer={onAnswer} />
     </VStack>
