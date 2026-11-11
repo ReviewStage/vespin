@@ -195,35 +195,63 @@ function setupQuery(workspaceId: string) {
   });
 }
 
-/** Which part of the setup a save writes: the scripts, or the run actions. */
-const SETUP_PART = {
-  SCRIPTS: "scripts",
-  RUN_ACTIONS: "run-actions",
-} as const;
+/** What a save wrote: a script, or one repository's run actions. */
+type SetupWrite = { readonly runActionsOf?: undefined } | { readonly runActionsOf: string };
 
-type SetupPart = (typeof SETUP_PART)[keyof typeof SETUP_PART];
+/**
+ * Every repository's run actions as the page holds them with an answer laid
+ * over them: each repository's list taken from whichever of the two was saved
+ * later, by its `updatedAt`, and the repository a save of run actions wrote
+ * taken from its answer whatever it says, gone where the answer holds none.
+ */
+function newerRunActions(
+  held: RunActionLists,
+  answered: RunActionLists,
+  saved: string | undefined,
+): RepositoryRunActions[] {
+  const byName = new Map(held.map((list) => [list.repository.toLowerCase(), list]));
+  for (const list of answered) {
+    const name = list.repository.toLowerCase();
+    const standing = byName.get(name);
+    const ours = saved !== undefined && sameRepository(saved, list.repository);
+    if (standing === undefined || ours || list.updatedAt >= standing.updatedAt) {
+      byName.set(name, list);
+    }
+  }
+  if (saved !== undefined && !answered.some((list) => sameRepository(list.repository, saved))) {
+    byName.delete(saved.toLowerCase());
+  }
+  // Note that the lists stand in the order of their names, as the service answers them.
+  return [...byName.entries()]
+    .sort(([one], [other]) => (one < other ? -1 : one > other ? 1 : 0))
+    .map(([, list]) => list);
+}
 
 /**
  * A save's answer drawn over the page, a read still under way canceled first
- * so its older setup cannot land over it. Note that only the part the save
- * wrote is taken from its answer, the rest kept as the page holds it, because
- * a script's save answering after a run action's would otherwise put back the
- * run actions it read before that save, and the next run action's save, which
- * writes the whole list as the page holds it, would write them back.
+ * so its older setup cannot land over it. Note that its run actions are laid
+ * over the page's rather than replacing them (`newerRunActions`), because an
+ * answer from a save sent earlier can land after one sent later, and the next
+ * save of run actions writes a repository's whole list as the page holds it,
+ * so an older list drawn back would be saved back.
  */
 async function drawAnswer(
   queries: QueryClient,
   workspaceId: string,
   answer: WorkspaceSandboxSetupAnswer,
-  part: SetupPart,
+  write: SetupWrite,
 ): Promise<void> {
   const { queryKey } = setupQuery(workspaceId);
   await queries.cancelQueries({ queryKey, exact: true });
   queries.setQueryData(queryKey, (held) => {
     if (held === undefined) return answer;
-    return part === SETUP_PART.RUN_ACTIONS
-      ? { ...held, runActions: answer.runActions ?? [] }
-      : { ...answer, runActions: held.runActions ?? answer.runActions ?? [] };
+    const runActions = newerRunActions(
+      held.runActions ?? [],
+      answer.runActions ?? [],
+      write.runActionsOf,
+    );
+    // A script's save takes the scripts from its answer; a save of run actions leaves them as the page holds them.
+    return write.runActionsOf === undefined ? { ...answer, runActions } : { ...held, runActions };
   });
 }
 
@@ -240,7 +268,7 @@ function useSaveScript(workspaceId: string) {
             script,
             kind: target.kind,
           }),
-    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, SETUP_PART.SCRIPTS),
+    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, {}),
   });
 }
 
@@ -726,7 +754,8 @@ function useSaveRunActions(workspaceId: string) {
           ...(isDefault ? { isDefault: true } : undefined),
         })),
       }),
-    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, SETUP_PART.RUN_ACTIONS),
+    onSuccess: (answer, { repository }) =>
+      drawAnswer(queries, workspaceId, answer, { runActionsOf: repository }),
   });
 }
 
