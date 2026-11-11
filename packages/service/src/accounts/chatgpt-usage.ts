@@ -13,8 +13,9 @@
  * answer that is not what Codex reads, a refusal, or no answer within the
  * time any call to OpenAI is given (`OPENAI_CALL_TIMEOUT`) changes nothing,
  * and the plan keeps what it last heard.
- * Its windows replace all the plan held. The access token goes to ChatGPT
- * alone and is never logged; nothing of an answer is but the windows.
+ * Its windows replace all the plan held, beside the rate-limit reset
+ * credits it counts. The access token goes to ChatGPT alone and is never
+ * logged; nothing of an answer is kept but the windows and the count.
  */
 
 import type { KeyRing } from "@repo/database/models/provider-key-seal";
@@ -72,7 +73,16 @@ const UsageAnswerSchema = Schema.Struct({
       }),
     ),
   ),
+  rate_limit_reset_credits: Schema.optionalKey(
+    Schema.NullOr(Schema.Struct({ available_count: Schema.Int })),
+  ),
 });
+
+/** What a read of a plan's usage keeps: its windows, and its reset credits where counted. */
+interface PlanUsageRead {
+  readonly windows: readonly StoredUsageWindow[];
+  readonly resetCredits: number | null;
+}
 
 /** A window as the plan's row keeps it, its length rounded up to whole minutes as Codex rounds it. */
 function storedWindow(window: typeof WindowAnswerSchema.Type): StoredUsageWindow {
@@ -108,14 +118,14 @@ function due(row: ProviderKeyRow, since: Date): boolean {
   );
 }
 
-/** The plan's windows as ChatGPT answers them now; none where it answered nothing Codex would read. */
+/** The plan's windows and reset credits as ChatGPT answers them now; none where it answered nothing Codex would read. */
 const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
   row: ProviderKeyRow,
 ) {
   const access = yield* refreshChatGptAccess(userId, ring, undefined, row.id, true);
-  if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<StoredUsageWindow[]>();
+  if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<PlanUsageRead>();
   const client = yield* HttpClient.HttpClient;
   const request = asPlan(HttpClientRequest.get(CHATGPT_USAGE_URL), access);
   // A request that failed or timed out is no answer, and its cause is dropped unread, since it may quote the token.
@@ -130,12 +140,28 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.orElseSucceed(() => Option.none()),
   );
   return Option.flatMap(answered, (body) =>
-    Option.map(Schema.decodeUnknownOption(UsageAnswerSchema)(body), ({ rate_limit }) =>
-      [rate_limit?.primary_window, rate_limit?.secondary_window].flatMap((window) =>
-        window == null ? [] : [storedWindow(window)],
-      ),
+    Option.map(
+      Schema.decodeUnknownOption(UsageAnswerSchema)(body),
+      ({ rate_limit, rate_limit_reset_credits }): PlanUsageRead => ({
+        windows: [rate_limit?.primary_window, rate_limit?.secondary_window].flatMap((window) =>
+          window == null ? [] : [storedWindow(window)],
+        ),
+        resetCredits: rate_limit_reset_credits?.available_count ?? null,
+      }),
     ),
   );
+});
+
+/** Asks ChatGPT for the plan's usage now and keeps what it answered. */
+const askAndKeep = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  ring: KeyRing,
+  row: ProviderKeyRow,
+  now: Date,
+) {
+  const read = yield* askUsage(userId, ring, row);
+  if (Option.isNone(read) || read.value.windows.length === 0) return;
+  yield* setPlanUsageWindows(userId, row.id, read.value.windows, now, read.value.resetCredits);
 });
 
 /** Asks ChatGPT for the usage of each of the account's ChatGPT plans whose reading is due, all at once, and keeps what each answered. */
@@ -149,10 +175,7 @@ const askDue = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, ring
       Effect.gen(function* () {
         // Note that the ask is claimed before it is made, so it counts though ChatGPT never answers it.
         if (!(yield* claimPlanUsageAsk(userId, row.id, now, since))) return;
-        const windows = yield* askUsage(userId, ring, row);
-        if (Option.isSome(windows) && windows.value.length > 0) {
-          yield* setPlanUsageWindows(userId, row.id, windows.value, now);
-        }
+        yield* askAndKeep(userId, ring, row, now);
       }),
     { concurrency: "unbounded", discard: true },
   );
@@ -165,4 +188,11 @@ const askDue = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, ring
  */
 export function readChatGptUsage(userId: string, ring: KeyRing) {
   return Effect.ignore(askDue(userId, ring));
+}
+
+/** The plan's usage asked of ChatGPT now, however fresh its reading, as a reset credit spent on it moves it; never fails. */
+export function rereadPlanUsage(userId: string, ring: KeyRing, row: ProviderKeyRow) {
+  return Effect.ignore(
+    Effect.flatMap(DateTime.nowAsDate, (now) => askAndKeep(userId, ring, row, now)),
+  );
 }

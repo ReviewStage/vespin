@@ -598,8 +598,6 @@ function fakeService() {
     warm: () => Effect.succeed({ warm: true as const }),
     runAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     stopRunAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
-    resetCredits: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
-    useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -698,6 +696,7 @@ function fakeService() {
         asked.push(`forAgents:${change.kind}:${String(change.forAgents)}`);
         return { keys: [] };
       }),
+    useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);

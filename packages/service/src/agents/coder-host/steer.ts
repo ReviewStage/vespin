@@ -725,7 +725,7 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
  * does: a queued turn published for its pickup, and a running one handed to
  * a launch as a limited turn's retry (`turnRetried`), past the answer, since
  * a launch may take most of a minute. Both the sweep, once a reset passes,
- * and a reset credit spent before it (`reset-credit.ts`) hand theirs on so.
+ * and a reset credit spent before it (`chatgpt-reset-credits.ts`) hand theirs on so.
  */
 export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
   released: readonly WaitedTurn[],

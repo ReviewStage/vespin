@@ -58,6 +58,7 @@ import {
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   providerKeysAnswerSchema,
   subscriptionIdSchema,
@@ -125,6 +126,11 @@ export const accountContract = {
   setProviderKeyForAgents: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.PATCH, path: HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS }))
     .input(exactInput(providerKeyForAgentsRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  /** One of a ChatGPT plan's reset credits spent under the press's key, its limit lifted and its waiting agents carried on, answering the keys as they then stand and how the spend went, which is absent where the account holds no such plan or ChatGPT answered nothing, so the press may be sent again under the same key. */
+  useResetCredit: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_RESET_CREDIT }))
+    .input(exactInput(providerKeyResetCreditRequestSchema))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
   renameSubscription: declaredProcedure
     .meta(bodyCap(PROVIDER_KEY_BODY_BYTES))

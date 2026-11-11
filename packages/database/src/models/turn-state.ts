@@ -38,7 +38,7 @@
  * its instant.
  */
 
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import {
   TURN_OPEN,
@@ -70,7 +70,7 @@ import { agentTable } from "../schemas/agent.js";
 import { agentRunnerRecord } from "../schemas/agent-runner-record.js";
 import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { messages, turns } from "../schemas/storage.js";
-import { InstantColumnSchema, TurnUsageColumnSchema } from "./columns.js";
+import { TurnUsageColumnSchema } from "./columns.js";
 
 type TurnStateEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -462,29 +462,6 @@ const findQueued = SqlSchema.findOneOption({
     ),
 });
 
-/** The conversation's open turn no Stop was asked of that waits on a limit's reset, the soonest reset first. */
-const findWaiting = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String, waitsUntil: InstantColumnSchema }),
-  execute: ({ userId, conversationId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: turns.id, waitsUntil: turns.waitsUntil })
-        .from(turns)
-        .where(
-          and(
-            eq(turns.userId, userId),
-            eq(turns.conversationId, conversationId),
-            inArray(turns.status, [...TURN_OPEN]),
-            isNull(turns.cancelRequestedAt),
-            isNotNull(turns.waitsUntil),
-          ),
-        )
-        .orderBy(asc(turns.waitsUntil), asc(turns.id))
-        .limit(1),
-    ),
-});
-
 const findStatus = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
   Result: Schema.Struct({ status: TurnStatusSchema }),
@@ -704,26 +681,43 @@ const releaseWaited = SqlSchema.findAll({
     ),
 });
 
-/** The conversation's running and queued turns no Stop was asked of that wait on the reset given, their wait cleared now. */
-const releaseConversationWaits = SqlSchema.findAll({
+/** The running and queued turns no Stop was asked of that wait on a limit's reset, of the account's agents its ChatGPT plan named pays for, their wait cleared now. */
+const releasePlanWaits = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
-    conversationId: Schema.String,
-    until: Schema.Date,
+    subscriptionId: Schema.String,
+    first: Schema.Boolean,
   }),
   Result: WaitedTurnSchema,
-  execute: ({ userId, conversationId, until }) =>
+  execute: ({ userId, subscriptionId, first }) =>
     Database.use((db) =>
       db
         .update(turns)
         .set({ waitsUntil: null })
         .where(
           and(
-            eq(turns.userId, userId),
-            eq(turns.conversationId, conversationId),
             inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
             isNull(turns.cancelRequestedAt),
-            eq(turns.waitsUntil, until),
+            isNotNull(turns.waitsUntil),
+            inArray(
+              turns.conversationId,
+              db
+                .select({ id: agentTable.conversationId })
+                .from(agentTable)
+                .where(
+                  and(
+                    eq(agentTable.userId, userId),
+                    eq(agentTable.payer, AGENT_PAYER.CHATGPT_SUBSCRIPTION),
+                    // Note that an agent naming no subscription runs on the account's first of its kind.
+                    first
+                      ? or(
+                          eq(agentTable.subscriptionId, subscriptionId),
+                          isNull(agentTable.subscriptionId),
+                        )
+                      : eq(agentTable.subscriptionId, subscriptionId),
+                  ),
+                ),
+            ),
           ),
         )
         .returning({
@@ -1188,16 +1182,6 @@ export function turnAwaitedByLine(
   );
 }
 
-/** The conversation's open turn, no Stop asked of, that waits on a usage limit's reset, and when that reset is; none where no turn waits. */
-export function waitingTurnOf(
-  target: TurnTarget,
-): TurnStateEffect<Option.Option<{ readonly turnId: string; readonly waitsUntil: Date }>> {
-  return Effect.map(
-    findWaiting({ userId: target.userId, conversationId: target.conversationId }),
-    Option.map((row) => ({ turnId: row.id, waitsUntil: row.waitsUntil })),
-  );
-}
-
 /** Where the conversation's turn named stands; none where no such turn does. */
 export function turnStatusOf(
   conversationId: string,
@@ -1305,22 +1289,19 @@ export function releaseWaitedTurns(
 }
 
 /**
- * The conversation's running and queued turns, no Stop asked of, that wait
- * on the limit whose reset is `until`, their wait cleared before it, as a
- * reset credit spent on that limit clears it: answers them, for a launch now
- * as the sweep's release has, and none where no turn waits on it any longer,
- * so of two releases at once only one hands a turn on, and a release late for
- * its limit leaves a later wait standing.
+ * The waiting turns of the account's agents its ChatGPT plan `subscriptionId`
+ * pays for (`first` where it is the account's first, which an agent naming
+ * none runs on), their wait cleared before the reset, as a reset credit spent
+ * on the plan lifts its limit: answers them for a launch now, as the sweep's
+ * release does, and none where none waited, so of two releases at once only
+ * one hands a turn on.
  */
-export function releaseConversationWaitedTurns(
-  target: TurnTarget,
-  until: Date,
+export function releasePlanWaitedTurns(
+  userId: string,
+  subscriptionId: string,
+  first: boolean,
 ): TurnStateEffect<readonly WaitedTurn[]> {
-  return releaseConversationWaits({
-    userId: target.userId,
-    conversationId: target.conversationId,
-    until,
-  });
+  return releasePlanWaits({ userId, subscriptionId, first });
 }
 
 /** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */

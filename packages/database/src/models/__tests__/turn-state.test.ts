@@ -18,15 +18,12 @@ import { settleLapsedTurns } from "../abandoned-turns.js";
 import { writeAgentRunnerRecord } from "../agent-runner-record.js";
 import { createAgent } from "../agent-store.js";
 import {
-  holdTurn,
   lapsedAgents,
   lapsedTurnsOf,
   progressTurns,
-  releaseConversationWaitedTurns,
   runningTurnSandboxes,
   turnAwaitedByLine,
   turnsAwaitingRunner,
-  waitingTurnOf,
 } from "../turn-state.js";
 import { type ConversationTarget, STORE_WRITE_REFUSAL, storeWriter } from "../writer.js";
 
@@ -312,49 +309,6 @@ it.layer(getTestDB())("a turn's one record", (it) => {
             .where(eq(turns.id, opened.id)),
         );
         assert.deepEqual(row, snapshot);
-      }),
-  );
-
-  it.effect(
-    "a turn held for its limit's reset is released before it once, by its own account and for that reset alone, and another account's held turn stays held",
-    () =>
-      Effect.gen(function* () {
-        const until = new Date((yield* Clock.currentTimeMillis) + Duration.toMillis("2 hours"));
-        const held = yield* Effect.forEach([yield* openAgent, yield* openAgent], (agent) =>
-          Effect.gen(function* () {
-            yield* sent(agent.target, "first");
-            const [turn] = yield* turnsOf(agent.target);
-            assert.ok(turn !== undefined);
-            yield* started(agent.target, turn.id, 1);
-            assert.ok(yield* holdTurn(agent.target, { turnId: turn.id, until }));
-            return { ...agent, turnId: turn.id };
-          }),
-        );
-        const [mine, theirs] = held;
-        assert.ok(mine !== undefined && theirs !== undefined);
-
-        const read = yield* waitingTurnOf(mine.target);
-        const byOther = yield* releaseConversationWaitedTurns(
-          { userId: theirs.target.userId, conversationId: mine.target.conversationId },
-          until,
-        );
-        const forAnother = yield* releaseConversationWaitedTurns(
-          mine.target,
-          new Date(until.getTime() + 1),
-        );
-        const first = yield* releaseConversationWaitedTurns(mine.target, until);
-        const second = yield* releaseConversationWaitedTurns(mine.target, until);
-
-        assert.deepEqual(Option.getOrUndefined(read), { turnId: mine.turnId, waitsUntil: until });
-        assert.deepEqual(byOther, []);
-        assert.deepEqual(forAnother, [], "a release for another reset leaves the wait standing");
-        assert.deepEqual(
-          first.map((turn) => [turn.turnId, turn.status]),
-          [[mine.turnId, TURN_STATUS.RUNNING]],
-        );
-        assert.deepEqual(second, [], "a second release hands nothing on");
-        assert.ok(Option.isNone(yield* waitingTurnOf(mine.target)));
-        assert.ok(Option.isSome(yield* waitingTurnOf(theirs.target)));
       }),
   );
 

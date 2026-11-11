@@ -131,7 +131,7 @@ function Banners(): React.JSX.Element {
           />
           <UsageLimitNotice
             notice={{ agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: Date.UTC(2026, 10, 9, 23) }}
-            reset={{ credits: 2, use: () => undefined, busy: false }}
+            reset={{ use: () => undefined, busy: false }}
           />
           <UsageLimitNotice notice={{ agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: null }} />
           <UsageLimitNotice

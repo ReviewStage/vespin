@@ -82,6 +82,7 @@ import {
   type MemoryForgetParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
+  type ProviderKeyResetCreditParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
   type PushDeviceDoneAnswerView,
@@ -191,6 +192,7 @@ import {
   chatGptDeviceLoginRequestSchema,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionLabelRequestSchema,
   subscriptionOrderRequestSchema,
@@ -676,6 +678,15 @@ export class HostedAgentClient {
     const admitted = Result.getOrUndefined(readEither(providerKeyForAgentsRequestSchema)(params));
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
+  }
+
+  /** One of a ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
+  useResetCredit(
+    params: ProviderKeyResetCreditParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(providerKeyResetCreditRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.useResetCredit, admitted);
   }
 
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */
@@ -1173,19 +1184,6 @@ export class HostedAgentClient {
       hostedCall(this.#hosted.agents.stop, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
       unansweredBare,
     );
-  }
-
-  /** How many rate-limit reset credits the plan the agent waits on holds; none where it waits on no plan's limit. */
-  resetCredits(agentId: string) {
-    return hostedCall(this.#hosted.agentResetCredits.read, { id: agentId });
-  }
-
-  /** One reset credit spent on the limit the agent waits on, whose reset its notice showed, at most once for that limit, answering how it went and whether the agent carries on. */
-  useResetCredit(agentId: string, resetsAt: number) {
-    return hostedCall(this.#hosted.agentResetCredits.use, {
-      params: { id: agentId },
-      body: { resetsAt },
-    });
   }
 
   /** Runs one of the agent's repository's run actions in its running sandbox, answering the shell that runs it. */

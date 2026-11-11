@@ -11,20 +11,10 @@ export const USAGE_LIMIT_NOTICE_LOOK = { FULL: "full", TITLE: "title" } as const
 export type UsageLimitNoticeLook =
   (typeof USAGE_LIMIT_NOTICE_LOOK)[keyof typeof USAGE_LIMIT_NOTICE_LOOK];
 
-/**
- * A rate-limit reset credit offered on a pause: how many the plan holds, and
- * Use reset as its caller's mutation stands, which spends one and has the
- * agent carry on at once, as the reset would.
- */
+/** A rate-limit reset credit offered on a pause: Use reset as its caller's press stands. */
 export interface UsageLimitReset {
-  readonly credits: number;
   readonly use: () => void;
   readonly busy: boolean;
-}
-
-/** How the card counts the credits left. */
-function creditWords(credits: number): string {
-  return credits === 1 ? "1 reset credit left" : `${credits} reset credits left`;
 }
 
 /** What the card's muted line says: the payer the turn went on with, when it resumes, or that it waits on the reader. */
@@ -45,11 +35,10 @@ export function UsageLimitNotice({
   notice: Notice;
   /** Its title over what comes next, or its title alone. */
   look?: UsageLimitNoticeLook | undefined;
-  /** The reset credit a pause offers, drawn with its count and Use reset; none where it offers none. */
+  /** The reset credit a pause offers, drawn as Use reset; none where it offers none. */
   reset?: UsageLimitReset | undefined;
 }): React.JSX.Element {
   const on = notice.moved === undefined ? "" : ` on ${notice.moved.from}`;
-  const next = nextWords(notice);
   return (
     <Banner
       look={BANNER_LOOK.CARD}
@@ -74,7 +63,7 @@ export function UsageLimitNotice({
       </Text>
       {look === USAGE_LIMIT_NOTICE_LOOK.TITLE ? null : (
         <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {reset === undefined ? next : `${next} · ${creditWords(reset.credits)}`}
+          {nextWords(notice)}
         </Text>
       )}
     </Banner>

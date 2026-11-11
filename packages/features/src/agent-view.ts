@@ -26,7 +26,6 @@ import {
 } from "./agent-wire.js";
 import { accountContract } from "./contract/account.js";
 import { agentPullRequestsContract } from "./contract/agent-pull-requests.js";
-import { agentResetCreditsContract } from "./contract/agent-reset-credits.js";
 import { agentsContract } from "./contract/agents.js";
 import { dictationContract } from "./contract/dictation.js";
 import { githubTokenContract } from "./contract/github-token.js";
@@ -65,6 +64,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionIdSchema,
   subscriptionLabelRequestSchema,
@@ -132,6 +132,7 @@ const AGENT_ACCOUNT_CALLS = {
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    useResetCredit: accountContract.useResetCredit,
     renameSubscription: accountContract.renameSubscription,
     reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
@@ -506,6 +507,11 @@ export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchem
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
 
+/** Spending one of a ChatGPT plan's reset credits, as the window asks it: the plan, and the press's key. */
+export const providerKeyResetCreditParamsSchema = providerKeyResetCreditRequestSchema;
+
+export type ProviderKeyResetCreditParams = typeof providerKeyResetCreditParamsSchema.Type;
+
 /** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
 export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;
 
@@ -857,18 +863,6 @@ export type AgentPinParams = typeof agentPinParamsSchema.Type;
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
-
-/** How many reset credits the plan an agent waits on holds, as the window hears it read (`reset-credit-wire.ts`), or why not. */
-export const agentResetCreditsAnswerViewSchema = answerView(agentResetCreditsContract.read);
-
-/** The agent a reset credit is spent for, and the reset its notice showed. */
-export const agentResetCreditUseParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  resetsAt: EffectSchema.Number,
-});
-
-/** A reset credit spent on the limit an agent waits on, as the window hears it: how it went and whether the agent carries on, or why not. */
-export const agentResetCreditUseAnswerViewSchema = answerView(agentResetCreditsContract.use);
 
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */
 export const agentRewindParamsSchema = EffectSchema.Struct({

@@ -20,10 +20,15 @@ import {
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
-import { saveProviderKey, setPlanStatus } from "@repo/database/models/provider-key-store";
+import {
+  listProviderKeyRows,
+  saveProviderKey,
+  setPlanStatus,
+} from "@repo/database/models/provider-key-store";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
+import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import {
@@ -47,12 +52,14 @@ import { fixtureToken } from "@repo/sandbox/vercel/testing";
 import { TURN_STATUS, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
+import { spentResetCredit } from "../../accounts/chatgpt-reset-credits.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { NO_GITHUB } from "../../testing/github-app-fake.js";
@@ -65,7 +72,6 @@ import {
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { RUNNER_EVENTS_PATH, runnerEventsApp } from "../native-events/runner-events-app.js";
-import { spentResetCredit } from "../reset-credits.js";
 import { SESSION_SEND_OUTCOME } from "../sessions/agent-sessions.js";
 import { launchUrl } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
@@ -739,64 +745,86 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
   );
 });
 
-it.layer(SUITE)("a Codex turn waiting on its ChatGPT plan's limit", (it) => {
+it.layer(SUITE)("a reset credit spent on a ChatGPT plan at its limit", (it) => {
   it.effect(
-    "carries on before the reset once a reset credit is spent, a retry of a spend ChatGPT did not answer sending the same key, and a later press spending nothing",
+    "carries on the plan's waiting Codex agent before its reset, a retry ChatGPT did not answer sending the same key, and leaves another account's waiting agent waiting",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const spec = HARNESS[CONVERSATION_RUNTIME.CODEX];
-        const { userId, agent, sessions, sequence, launches } = yield* accountWith(
-          CONVERSATION_RUNTIME.CODEX,
-          false,
-          FALLBACK.NONE,
-        );
-        const reached = reaching(userId, sessions);
-        const post = yield* eventsRoute(reached);
-        const sent = yield* writtenLine(agent, "Fix the invitations.");
-        const opened = yield* sessions.open(sent);
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
-        const [first] = yield* launches;
-        assert.ok(first !== undefined);
-        const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
-        const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
-        sequence.next = first.firstSequence + limited.length;
-        assert.equal(yield* post(first, limited), 200);
+        const limitedAgent = Effect.gen(function* () {
+          const { userId, agent, sessions, sequence, launches } = yield* accountWith(
+            CONVERSATION_RUNTIME.CODEX,
+            false,
+            FALLBACK.NONE,
+          );
+          const reached = reaching(userId, sessions);
+          const post = yield* eventsRoute(reached);
+          const sent = yield* writtenLine(agent, "Fix the invitations.");
+          const opened = yield* sessions.open(sent);
+          assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+          yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+          const [first] = yield* launches;
+          assert.ok(first !== undefined);
+          const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
+          const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
+          sequence.next = first.firstSequence + limited.length;
+          assert.equal(yield* post(first, limited), 200);
+          const [plan] = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+          assert.ok(plan !== undefined);
+          return { userId, agent, reached, launches, plan };
+        });
+        const mine = yield* limitedAgent;
+        const theirs = yield* limitedAgent;
 
-        // ChatGPT takes nothing the first time it is asked to spend, and spends one the second.
-        const answers = [
+        // ChatGPT takes nothing the first time it is asked to spend, spends one the second, and then counts what is left.
+        const spends = [
           jsonResponse({}, HTTP_STATUS.SERVER_ERROR),
-          jsonResponse({ code: "reset", windows_reset: 1 }),
+          jsonResponse({ code: "reset" }),
         ];
-        const chatgpt = recordingHttpClient(
-          () => answers.shift() ?? jsonResponse({ code: "already_redeemed" }),
+        const chatgpt = recordingHttpClient((request) =>
+          request.method === "POST"
+            ? (spends.shift() ?? jsonResponse({ code: "already_redeemed" }))
+            : jsonResponse({
+                rate_limit: {
+                  primary_window: { used_percent: 0, limit_window_seconds: 18_000, reset_at: 1 },
+                },
+                rate_limit_reset_credits: { available_count: 1 },
+              }),
         );
-        const spend = spentResetCredit(userId, keyRing(), agent.id, resetsAt).pipe(
-          Effect.provide(Layer.merge(chatgpt.layer, reached)),
-          Effect.result,
+        const key = randomUUID();
+        const spend = spentResetCredit(mine.userId, keyRing(), mine.plan.id, key).pipe(
+          Effect.provide(Layer.merge(chatgpt.layer, mine.reached)),
         );
         const unanswered = yield* spend;
         const retried = yield* spend;
-        const later = yield* spend;
 
-        const keys = chatgpt.requests.map((request) => {
-          const body = request.init.body;
-          return JSON.parse(
-            typeof body === "string" ? body : new TextDecoder().decode(body as Uint8Array),
-          ).redeem_request_id;
-        });
-        assert.ok(Result.isFailure(unanswered));
-        assert.deepEqual(
-          [retried, later].map((each) => Result.getOrUndefined(each)),
-          [
-            { outcome: "reset", resumed: true },
-            { outcome: "nothingToReset", resumed: false },
-          ],
+        const keys = chatgpt.requests
+          .filter((request) => request.method === "POST")
+          .map((request) => {
+            const body = request.init.body;
+            return JSON.parse(
+              typeof body === "string" ? body : new TextDecoder().decode(body as Uint8Array),
+            ).redeem_request_id;
+          });
+        const [plan] = yield* listProviderKeyRows(mine.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        const waits = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ waitsUntil: turns.waitsUntil })
+            .from(turns)
+            .where(eq(turns.conversationId, theirs.agent.conversationId)),
         );
-        assert.equal(keys.length, 2, "the later press asks ChatGPT nothing");
-        assert.equal(keys[0], keys[1]);
-        assert.equal((yield* launches).length, 2, "the turn went on before its reset");
+        assert.deepEqual(
+          [Option.getOrUndefined(unanswered), Option.getOrUndefined(retried)],
+          [undefined, "reset"],
+        );
+        assert.deepEqual(keys, [key, key]);
+        assert.deepEqual([plan?.status, plan?.resetCredits], [PROVIDER_KEY_STATUS.VERIFIED, 1]);
+        assert.equal((yield* mine.launches).length, 2, "the plan's agent went on before its reset");
+        assert.ok(
+          waits.some((turn) => turn.waitsUntil !== null),
+          "another account's agent still waits",
+        );
       }),
   );
 });

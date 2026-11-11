@@ -53,10 +53,6 @@ import {
 } from "../agents/mac-commands-procedures.js";
 import { type MessagesProcedureSeams, messagesProcedures } from "../agents/messages-procedures.js";
 import {
-  type AgentResetCreditsProcedureSeams,
-  agentResetCreditsProcedures,
-} from "../agents/reset-credits.js";
-import {
   type AutomationsProcedureSeams,
   automationsProcedures,
 } from "../automations/automations-procedures.js";
@@ -142,7 +138,6 @@ export type HostedRouterSeams = AccountProcedureSeams &
   AgentBrowserTabsProcedureSeams &
   AgentPagesProcedureSeams &
   AgentPortsProcedureSeams &
-  AgentResetCreditsProcedureSeams &
   AgentPullRequestProcedureSeams &
   AgentsProcedureSeams &
   AutomationsProcedureSeams &
@@ -190,7 +185,6 @@ export function hostedRouter(seams: HostedRouterSeams) {
     agentPages: agentPagesProcedures(seams),
     agentPorts: agentPortsProcedures(seams),
     agentPullRequests: agentPullRequestProcedures(published),
-    agentResetCredits: agentResetCreditsProcedures(seams),
     agents: agentsProcedures(published),
     automations: automationsProcedures(seams),
     dictation: dictationProcedures(seams),

@@ -92,6 +92,7 @@ import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
 import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
+import { type ResetCreditOffer, resetCreditWords, useResetCreditOffer } from "../reset-credit.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -243,6 +244,8 @@ const WORDS = {
   RECONNECT: VERB.RECONNECT,
   SIGN_IN_AGAIN: "Sign in again",
   MANAGE_USAGE: "Manage usage",
+  USE_RESET: "Use reset",
+  USING_RESET: "Using reset",
   API_KEY: "API key",
   CANCEL: "Cancel",
   TOKEN_SHAPE: "sk-ant-oat01-…",
@@ -1022,16 +1025,28 @@ function AddPress({
 function PlanFix({
   provider,
   plan,
+  offer,
   onOpen,
 }: {
   provider: ProviderKeyProvider;
   plan: SubscriptionKeySummary;
+  /** The plan's reset credit offered at its limit, where it holds one. */
+  offer: ResetCreditOffer | undefined;
   onOpen: () => void;
 }): React.JSX.Element | null {
   const openLink = useOpenLink();
   const chatGpt = provider === PROVIDER_KEY_PROVIDER.OPENAI;
   if (chatGpt && plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
-    return (
+    return offer !== undefined ? (
+      <Button
+        variant={BUTTON_VARIANT.OUTLINE}
+        busy={offer.busy}
+        busyLabel={WORDS.USING_RESET}
+        onClick={offer.use}
+      >
+        {WORDS.USE_RESET}
+      </Button>
+    ) : (
       <ButtonLink
         href={CHATGPT_USAGE_URL}
         variant={BUTTON_VARIANT.OUTLINE}
@@ -1121,6 +1136,7 @@ function PlanRow({
   const removal = usePlanRemoval(provider, plan, onUnconfirmed);
   const door = useRef<HTMLButtonElement | null>(null);
   const line = planLine(provider, plan, Date.now());
+  const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
   const own = [
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
@@ -1153,6 +1169,11 @@ function PlanRow({
             ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
+            {claude || (plan.resetCredits ?? 0) === 0 ? null : (
+              <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
+                {resetCreditWords(plan.resetCredits ?? 0)}
+              </SettingsRowStateLine>
+            )}
           </>
         }
         controls={SETTINGS_ROW_CONTROLS.BESIDE}
@@ -1183,11 +1204,17 @@ function PlanRow({
           open === STEPS.REPLACE ? (
             <CancelPress onCancel={onClose} />
           ) : (
-            <PlanFix provider={provider} plan={plan} onOpen={() => onOpen(STEPS.REPLACE)} />
+            <PlanFix
+              provider={provider}
+              plan={plan}
+              offer={offer}
+              onOpen={() => onOpen(STEPS.REPLACE)}
+            />
           )
         }
       </SettingsRow>
       <RemovalQuestion confirm={removal} question={PLAN_DISCONNECT[provider]} />
+      {offer?.dialog}
     </>
   );
 }

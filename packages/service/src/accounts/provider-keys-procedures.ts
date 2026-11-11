@@ -99,6 +99,7 @@ import {
   retiredChatGptRow,
 } from "./chatgpt-credentials.js";
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
+import { spentResetCredit } from "./chatgpt-reset-credits.js";
 import { readChatGptUsage } from "./chatgpt-usage.js";
 
 const SAVE_BRAKE = {
@@ -208,6 +209,7 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
         ...(usage.length === 0 ? undefined : { usage: usage[0], usageWindows: usage }),
         ...(row.usageHeardAt === null ? undefined : { usageHeardAt: row.usageHeardAt.getTime() }),
+        ...(row.resetCredits === null ? undefined : { resetCredits: row.resetCredits }),
       });
     }
   }
@@ -362,6 +364,19 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ),
       );
       return yield* keysAnswer(userId, ring);
+    }),
+
+    /** One of the account's ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
+    useResetCredit: keyed.useResetCredit.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      const outcome = yield* spentResetCredit(
+        userId,
+        ring,
+        input.subscriptionId,
+        input.idempotencyKey,
+      );
+      const keys = yield* keysAnswer(userId, ring);
+      return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
     }),
 
     /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */

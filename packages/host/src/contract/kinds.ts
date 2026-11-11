@@ -41,6 +41,8 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of a ChatGPT plan's rate-limit reset credits spent from Settings or a limit notice's Use reset, under the press's key. */
+  PROVIDER_KEYS_USE_RESET_CREDIT: "providerKeys.useResetCredit",
   /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
   SUBSCRIPTION_RENAME: "providerKeys.rename",
   /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
@@ -241,10 +243,6 @@ export const AGENT_ACT_KIND = {
   AGENTS_CLEAR: "agents.clear",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
-  /** How many rate-limit reset credits the plan a Codex agent waits on holds, asked of the service as its limit notice is drawn (`reset-credit-wire.ts`). */
-  AGENTS_RESET_CREDITS: "agents.resetCredits",
-  /** One reset credit spent on the limit a Codex agent waits on, at most once for that limit, from its notice's Use reset; the agent carries on where it lifted. */
-  AGENTS_USE_RESET_CREDIT: "agents.useResetCredit",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -916,6 +914,7 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  PROVIDER_KEYS_USE_RESET_CREDIT: ACT_USE.WRITE,
   SUBSCRIPTION_RENAME: ACT_USE.WRITE,
   SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
@@ -977,8 +976,6 @@ export const PORT_ACT_USE = {
   AGENTS_REWIND: ACT_USE.WRITE,
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
-  AGENTS_RESET_CREDITS: ACT_USE.FETCH,
-  AGENTS_USE_RESET_CREDIT: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,

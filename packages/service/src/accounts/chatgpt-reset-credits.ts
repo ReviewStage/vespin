@@ -1,43 +1,43 @@
 /**
- * chatgpt-reset-credits.ts -- a ChatGPT plan's rate-limit reset credits, counted and spent at ChatGPT's own backend, as Codex's app-server counts and spends them.
+ * chatgpt-reset-credits.ts -- one of a ChatGPT plan's rate-limit reset credits spent at ChatGPT's own backend, as Codex's app-server spends it, and the plan's waiting agents carried on.
  *
- * Codex's `account/rateLimits/read` counts a plan's credits from the usage
- * endpoint's `rate_limit_reset_credits`, and its
- * `account/rateLimitResetCredit/consume` posts the spend to the credits'
- * consume endpoint under the caller's idempotency key (`redeem_request_id`),
- * which a retry sends again, so ChatGPT spends one credit however often the
- * spend is sent. Both are asked here as Codex's client asks them, with the
- * plan's own access token, renewed under its lock where due, even while its
- * limit stands (`refreshChatGptAccess`'s `evenAtLimit`), and its ChatGPT
- * workspace (`asPlan`). The endpoints are undocumented, so an answer that is
- * not what Codex reads, a refusal, or no answer within the time any call to
- * OpenAI is given answers none. The access token goes to ChatGPT alone and is
- * never logged; nothing of an answer is but the count or the outcome.
+ * Codex's `account/rateLimitResetCredit/consume` posts the spend under the
+ * caller's idempotency key (`redeem_request_id`). Settings and a limit
+ * notice mint one key per confirmed press and send it again on a retry, so
+ * ChatGPT spends one credit however often the press is sent. Where the
+ * plan's limit no longer stands, its status is lifted on the credential the
+ * spend was made with, the turns of the agents it pays for that wait on a
+ * reset are handed on as the minute sweep hands them on, and its usage is
+ * read again so its count moves. The access token goes to ChatGPT alone and
+ * is never logged.
  */
 
 import type { KeyRing } from "@repo/database/models/provider-key-seal";
-import { RESET_CREDIT_OUTCOME, type ResetCreditOutcome } from "@repo/features/reset-credit-wire";
-import { Effect, Option, Schema } from "effect";
+import { listProviderKeyRows, setPlanStatus } from "@repo/database/models/provider-key-store";
+import { releasePlanWaitedTurns } from "@repo/database/models/turn-state";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+  RESET_CREDIT_OUTCOME,
+  type ResetCreditOutcome,
+} from "@repo/features/provider-key-wire";
+import { DateTime, Effect, Option, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { handWaitedTurnsOn } from "../agents/coder-host/steer.js";
+import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 import {
   CHATGPT_ACCESS,
   OPENAI_CALL_TIMEOUT,
   refreshChatGptAccess,
 } from "./chatgpt-credentials.js";
-import { asPlan, CHATGPT_USAGE_URL } from "./chatgpt-usage.js";
+import { asPlan, rereadPlanUsage } from "./chatgpt-usage.js";
 
 /** Where Codex's client spends one of a plan's reset credits. */
 const CONSUME_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume";
 
-/** The status ChatGPT answers a call it took with. */
 const HTTP_OK = 200;
-
-/** What of the usage answer is read: the count of credits the plan holds. */
-const CountAnswerSchema = Schema.Struct({
-  rate_limit_reset_credits: Schema.Struct({ available_count: Schema.Number }),
-});
 
 /** How ChatGPT answers a spend, in its own words, as Codex maps them. */
 const OUTCOME_OF_CODE = {
@@ -51,23 +51,29 @@ const ConsumeAnswerSchema = Schema.Struct({
   code: Schema.Literals(Object.keys(OUTCOME_OF_CODE) as (keyof typeof OUTCOME_OF_CODE)[]),
 });
 
-/**
- * The JSON ChatGPT answered the plan's request with, or none where the plan
- * could not be opened or ChatGPT took nothing in time. A request that
- * failed or timed out is no answer, and its cause is dropped unread, since it
- * may quote the token.
- */
-const askAsPlan = /* @__PURE__ */ Effect.fnUntraced(function* (
+/** The outcomes after which no limit stands on the plan. */
+const LIFTED: ReadonlySet<ResetCreditOutcome> = new Set([
+  RESET_CREDIT_OUTCOME.RESET,
+  RESET_CREDIT_OUTCOME.ALREADY_REDEEMED,
+  RESET_CREDIT_OUTCOME.NOTHING_TO_RESET,
+]);
+
+/** How ChatGPT took the spend, or none where it answered nothing Codex would read, so the press may send it again under the same key. */
+const consumed = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
-  subscriptionId: string | undefined,
-  request: HttpClientRequest.HttpClientRequest,
+  subscriptionId: string,
+  idempotencyKey: string,
 ) {
   const access = yield* refreshChatGptAccess(userId, ring, undefined, subscriptionId, true);
-  if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<unknown>();
+  if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<ResetCreditOutcome>();
   const client = yield* HttpClient.HttpClient;
-  return yield* client.execute(asPlan(request, access)).pipe(
-    Effect.flatMap((response: HttpClientResponse.HttpClientResponse) =>
+  const request = HttpClientRequest.post(CONSUME_URL).pipe(
+    HttpClientRequest.bodyJsonUnsafe({ redeem_request_id: idempotencyKey }),
+  );
+  // A request that failed or timed out is no answer, and its cause is dropped unread, since it may quote the token.
+  const answered = yield* client.execute(asPlan(request, access)).pipe(
+    Effect.flatMap((response) =>
       response.status === HTTP_OK
         ? Effect.map(response.json, Option.some)
         : Effect.succeed(Option.none()),
@@ -76,48 +82,52 @@ const askAsPlan = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.orElseSucceed(() => Option.none<unknown>()),
   );
-});
-
-/** How many reset credits the plan holds, as ChatGPT counts them now; none where it answered nothing Codex would read. */
-export const readResetCredits = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  ring: KeyRing,
-  subscriptionId: string | undefined,
-) {
-  const answered = yield* askAsPlan(
-    userId,
-    ring,
-    subscriptionId,
-    HttpClientRequest.get(CHATGPT_USAGE_URL),
-  );
-  return Option.flatMap(answered, (body) =>
-    Option.map(
-      Schema.decodeUnknownOption(CountAnswerSchema)(body),
-      (read) => read.rate_limit_reset_credits.available_count,
-    ),
-  );
-});
-
-/**
- * One of the plan's reset credits spent under the key given, which a retry
- * of the same spend sends again so ChatGPT spends one credit for it: how
- * ChatGPT took it, or none where it answered nothing Codex would read, so
- * the spend may be sent again under the same key.
- */
-export const consumeResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  ring: KeyRing,
-  subscriptionId: string | undefined,
-  idempotencyKey: string,
-) {
-  const request = HttpClientRequest.post(CONSUME_URL).pipe(
-    HttpClientRequest.bodyJsonUnsafe({ redeem_request_id: idempotencyKey }),
-  );
-  const answered = yield* askAsPlan(userId, ring, subscriptionId, request);
   return Option.flatMap(answered, (body) =>
     Option.map(
       Schema.decodeUnknownOption(ConsumeAnswerSchema)(body),
       (read): ResetCreditOutcome => OUTCOME_OF_CODE[read.code],
     ),
   );
+});
+
+/**
+ * One of the account's ChatGPT plan's reset credits spent under the press's
+ * key, and where no limit then stands, the plan lifted and its agents
+ * carried on; none where the account holds no such plan or ChatGPT answered
+ * nothing, which a retry under the same key settles.
+ */
+export const spentResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  ring: KeyRing,
+  subscriptionId: string,
+  idempotencyKey: string,
+) {
+  const plans = yield* hostedStoreOrUnavailable(
+    listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+  );
+  const plan = plans.find((row) => row.id === subscriptionId);
+  if (plan === undefined) return Option.none<ResetCreditOutcome>();
+  const savedBy = yield* DateTime.nowAsDate;
+  const outcome = yield* consumed(userId, ring, subscriptionId, idempotencyKey);
+  if (Option.isNone(outcome) || !LIFTED.has(outcome.value)) return outcome;
+  const now = yield* DateTime.nowAsDate;
+  // Note that the status is written only where the credential is the one the spend was made with (`savedBy`).
+  yield* hostedStoreOrUnavailable(
+    setPlanStatus(
+      userId,
+      PROVIDER_KEY_PROVIDER.OPENAI,
+      PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+      PROVIDER_KEY_STATUS.VERIFIED,
+      undefined,
+      savedBy,
+      now,
+      subscriptionId,
+    ),
+  );
+  const released = yield* hostedStoreOrUnavailable(
+    releasePlanWaitedTurns(userId, subscriptionId, plans[0]?.id === subscriptionId),
+  );
+  yield* hostedStoreOrUnavailable(handWaitedTurnsOn(released));
+  yield* rereadPlanUsage(userId, ring, plan);
+  return outcome;
 });

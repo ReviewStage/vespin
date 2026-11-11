@@ -11,7 +11,6 @@ import { agentBrowserTabsContract } from "./agent-browser-tabs.js";
 import { agentPagesContract } from "./agent-pages.js";
 import { agentPortsContract } from "./agent-ports.js";
 import { agentPullRequestsContract } from "./agent-pull-requests.js";
-import { agentResetCreditsContract } from "./agent-reset-credits.js";
 import { agentsContract } from "./agents.js";
 import { automationsContract } from "./automations.js";
 import { descriptionCommentsContract } from "./description-comments.js";
@@ -64,7 +63,6 @@ export const hostedContract = {
   agentPages: agentPagesContract,
   agentPorts: agentPortsContract,
   agentPullRequests: agentPullRequestsContract,
-  agentResetCredits: agentResetCreditsContract,
   agents: agentsContract,
   automations: automationsContract,
   dictation: dictationContract,
