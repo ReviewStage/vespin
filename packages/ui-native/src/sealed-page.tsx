@@ -34,7 +34,7 @@ const PAGE_INSET = "16px";
 const styles = StyleSheet.create({ page: { flex: 1 } });
 
 /** The theme a page reads, in the brand's colors for the window's scheme, as the panel hands a page its own. */
-function themeOf(colors: BrandColors, dark: boolean, fontScale: number): PageTheme {
+function themeOf(colors: BrandColors, dark: boolean): PageTheme {
   const [chart1, chart2, chart3, chart4, chart5] = CHART_INKS;
   const variables: Record<PageThemeVariable, string> = {
     [PAGE_THEME_VARIABLE.BACKGROUND]: colors.GROUND,
@@ -56,8 +56,7 @@ function themeOf(colors: BrandColors, dark: boolean, fontScale: number): PageThe
     [PAGE_THEME_VARIABLE.CHART_5]: chart5,
     [PAGE_THEME_VARIABLE.FONT_SANS]: FONT.SANS,
     [PAGE_THEME_VARIABLE.FONT_MONO]: FONT.MONO,
-    // Note that the page's words follow the reader's text size, as the app's own do, since a web view takes no Dynamic Type of its own.
-    [PAGE_THEME_VARIABLE.TEXT_SIZE]: `${String(Math.round(TEXT_SIZE.BODY * fontScale))}px`,
+    [PAGE_THEME_VARIABLE.TEXT_SIZE]: `${String(TEXT_SIZE.BODY)}px`,
     [PAGE_THEME_VARIABLE.TEXT_LEADING]: "1.5",
     [PAGE_THEME_VARIABLE.RADIUS]: "10px",
     [PAGE_THEME_VARIABLE.READING_WIDTH]: "100%",
@@ -68,6 +67,23 @@ function themeOf(colors: BrandColors, dark: boolean, fontScale: number): PageThe
     inset: PAGE_INSET,
     narrowInset: PAGE_INSET,
   };
+}
+
+/**
+ * The script that scales every word on the page by the reader's text size,
+ * run before the page's own: WebKit's text size adjustment, which grows the
+ * page's words whatever size its own styles set them at, the theme's or a
+ * fixed one, and never twice, since the theme's size stands at the body's.
+ * Note that a web view takes no Dynamic Type of its own, and that the root
+ * element may not stand yet as the script runs, so it waits for it.
+ */
+function textScaleScript(fontScale: number): string {
+  const percent = `${String(Math.round(fontScale * 100))}%`;
+  return `(function () {
+  var scale = function () { document.documentElement.style.webkitTextSizeAdjust = ${JSON.stringify(percent)}; };
+  if (document.documentElement) scale(); else document.addEventListener("DOMContentLoaded", scale);
+})();
+true;`;
 }
 
 /**
@@ -109,12 +125,15 @@ export function SealedPage({ html, title }: SealedPageProps) {
   const dark = useColorScheme() === "dark";
   const { fontScale } = useWindowDimensions();
   const document = useMemo(
-    () => sealedPageDocument(html, themeOf(colors, dark, fontScale)),
-    [html, colors, dark, fontScale],
+    () => sealedPageDocument(html, themeOf(colors, dark)),
+    [html, colors, dark],
   );
   return (
     <WebView
+      // Note that the page is drawn anew at a new text size, since its script runs once, before the page.
+      key={fontScale}
       source={{ html: document }}
+      injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
       originWhitelist={EVERY_ADDRESS}
       onShouldStartLoadWithRequest={staysSealed}
       javaScriptEnabled

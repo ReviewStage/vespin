@@ -304,6 +304,16 @@ const OPEN_WORD = "Open";
  */
 function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly LineOpening[] {
   const openings: LineOpening[] = [];
+  collectOpenings(runs, drawing, openings);
+  return openings;
+}
+
+/** Adds each chip and link in `runs` that opens somewhere to `openings`, a link's own first and then any its words hold. */
+function collectOpenings(
+  runs: readonly MarkdownRun[],
+  drawing: Drawing,
+  openings: LineOpening[],
+): void {
   for (const run of runs) {
     if (run.kind === MARKDOWN_RUN.CHIP) {
       const onOpen = open(run.chip.target, drawing);
@@ -320,9 +330,9 @@ function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly 
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
       }
+      collectOpenings(run.runs, drawing, openings);
     }
   }
-  return openings;
 }
 
 /** A run's plain words, as a link's text is heard. */
