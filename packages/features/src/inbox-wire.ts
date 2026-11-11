@@ -14,6 +14,7 @@ import {
   agentMessageRequestSchema,
   hasWordsOrFiles,
 } from "./agent-wire.js";
+import { markersAsNames } from "./file-marker.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
 import { linkLabels } from "./mention-link.js";
@@ -1439,14 +1440,15 @@ function shortTitle(words: string): string {
 /**
  * The title of a thread a member started: the subject they wrote, or,
  * where they wrote none, the first line of their message that says
- * anything, as plain words, or the name of its first file where it holds
+ * anything, as plain words, each file it names by its name, or the name of its first file where it holds
  * no words, each cut to a short line on a word.
  */
 export function inboxStartTitle(
   request: Pick<InboxStartRequest, "title" | "text" | "attachments">,
 ): string {
   if (request.title !== undefined) return request.title;
-  const line = request.text
+  // Note that a file's marker reads as its name, since a title draws no chip.
+  const line = markersAsNames(request.text)
     .split("\n")
     .map(plainLine)
     .find((each) => each !== "");

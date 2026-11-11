@@ -1,5 +1,11 @@
-import { inboxCommentFiles } from "@repo/features/inbox-list-model";
-import { INBOX_MESSAGE_AUTHOR, type InboxMessage, optionFileIds } from "@repo/features/inbox-wire";
+import type { FileChip } from "@repo/features/attachment-model";
+import { inboxCommentFiles, inboxLineFiles } from "@repo/features/inbox-list-model";
+import {
+  INBOX_MESSAGE_AUTHOR,
+  type InboxItem,
+  type InboxMessage,
+  optionFileIds,
+} from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
@@ -174,6 +180,27 @@ function readUrls(reads: ReadonlyMap<string, InboxFileRead>): ReadonlyMap<string
       read.data?.kind === PICTURE_STATE.READY ? [[id, read.data.url] as const] : [],
     ),
   );
+}
+
+/**
+ * The files an item's row's line names (`inboxLineFiles`), as chips its
+ * words draw (`LineWords`): each picture's bytes where the window already
+ * holds them, read by its thread, and its glyph where not. Note that a row
+ * reads no picture of its own, because a long Inbox would read every
+ * picture of every latest message just to list them.
+ */
+export function useInboxLineChips(item: InboxItem): readonly FileChip[] {
+  const files = inboxLineFiles(item);
+  const queries = useQueries({
+    queries: files.map((file) => pictureQuery(item.id, file.attachmentId)),
+  });
+  const urls = new Map(
+    files.flatMap((file, at) => {
+      const read = queries[at]?.data;
+      return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
+    }),
+  );
+  return inboxFileChips(files, urls);
 }
 
 /**

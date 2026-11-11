@@ -1,7 +1,7 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
-import { fileMarkers, isPictureName } from "@repo/features/file-marker";
+import { fileMarkers, isPictureName, writtenMarkers } from "@repo/features/file-marker";
 import { AttachmentRef } from "@repo/ui";
-import { createContext, type ReactNode, useState } from "react";
+import { createContext, Fragment, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
@@ -34,7 +34,7 @@ function namedBy(file: FileChip, name: string): boolean {
   return !isPictureName(name) || file.mediaType.startsWith("image/");
 }
 
-/** A file's pill: a picture's thumbnail, or any other file's type, and its open where its bytes are here. */
+/** A file's pill: a picture's thumbnail, or any other file's type, and its open where its bytes are here; without `onOpen`, an inert pill hanging nothing, as a row's line draws it. */
 export function WordFileChip({
   name,
   file,
@@ -43,10 +43,10 @@ export function WordFileChip({
   name: string;
   /** The file, where the message holds one of that name. */
   file: FileChip | undefined;
-  onOpen: (name: string) => void;
+  onOpen?: ((name: string) => void) | undefined;
 }): React.JSX.Element {
   const here = file !== undefined && (chipBase64(file) !== "" || file.url !== "");
-  const open = here ? () => onOpen(name) : undefined;
+  const open = here && onOpen !== undefined ? () => onOpen(name) : undefined;
   // Note that a file whose type is not here yet is drawn by its name, a picture's as a picture's.
   const picture = file === undefined ? isPictureName(name) : file.mediaType.startsWith("image/");
   return (
@@ -55,8 +55,41 @@ export function WordFileChip({
       image={picture && here ? file.url : undefined}
       glyph={picture ? undefined : <FileTypeIcon name={name} />}
       onOpen={open}
+      hint={onOpen !== undefined}
     />
   );
+}
+
+/**
+ * One line of a message's words as plain words, a row's preview, with each
+ * marker naming one of `files` drawn as its pill, where the thread draws the
+ * same message's: a picture's thumbnail where its bytes are here, else its
+ * glyph, and its name. Note that the pill presses nothing and hangs no
+ * card, because the row it stands in is the press and hangs its own, and
+ * that every marker is read, since plain words keep no code to tell apart.
+ */
+export function LineWords({
+  words,
+  files,
+}: {
+  words: string;
+  files: readonly FileChip[];
+}): ReactNode {
+  if (files.length === 0) return words;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const marker of writtenMarkers(words)) {
+    const file = files.find((each) => namedBy(each, marker.name));
+    if (file === undefined) continue;
+    parts.push(
+      <Fragment key={marker.start}>
+        {words.slice(at, marker.start)}
+        <WordFileChip name={marker.name} file={file} />
+      </Fragment>,
+    );
+    at = marker.end;
+  }
+  return parts.length === 0 ? words : [...parts, words.slice(at)];
 }
 
 /** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */

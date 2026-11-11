@@ -14,6 +14,9 @@ const LINE_MARKS = /^(?:#{1,6}|>|[-*+]|\d+[.)])\s+/u;
  */
 const STRAY_MARKS = /\*\*|`/gu;
 
+/** What opens a markdown picture, `![alt](address)`, before the link it otherwise is. */
+const PICTURE_OPEN = /!\[/gu;
+
 /** A markdown fence's opening or closing line, which plain words leave out. */
 const FENCE_LINE = /^\s*(?:```|~~~)/u;
 
@@ -29,8 +32,8 @@ export function cardTitle(text: string): string {
 }
 
 function plainLine(line: string): string {
-  // A link is said by its name, as its chip names it, never its destination (`linkLabels`).
-  const words = linkLabels(line.trim().replace(LINE_MARKS, ""));
+  // A link is said by its name, as its chip names it, never its destination (`linkLabels`), and a picture by its alt words, without the mark that makes it one.
+  const words = linkLabels(line.trim().replace(LINE_MARKS, "").replace(PICTURE_OPEN, "["));
   // Note that the marks are read as a message box reads them (`composer-markdown.ts`), so a preview says what the box showed: each mark's words without its delimiters or the escapes in them, a code span's words as they are, and words wearing none as typed but for a stray mark.
   return readInline(words, [])
     .map((span) => {

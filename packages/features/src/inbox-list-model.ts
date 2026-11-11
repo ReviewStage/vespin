@@ -15,6 +15,7 @@
 
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
+import { fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
   INBOX_PICTURE_IN_WORDS,
@@ -381,7 +382,12 @@ interface ItemLine {
   readonly byAgent: boolean;
   /** The member who said the latest message, where the agent did not. */
   readonly member: InboxMember | undefined;
+  /** The files of the latest message its words name by their markers, which the row draws as chips where the words name them. */
+  readonly files: readonly InboxMessageFile[];
 }
+
+/** No files, one array so every line naming none hands down the same one. */
+const NO_LINE_FILES: readonly InboxMessageFile[] = [];
 
 /** Each item's line as `itemLine` last read it, kept for as long as the item stands. */
 const itemLines = new WeakMap<InboxItem, ItemLine>();
@@ -415,6 +421,7 @@ function itemLine(item: InboxItem): ItemLine {
         heard: INBOX_SETTLED_STANDING.RESOLVED,
         byAgent: true,
         member: undefined,
+        files: NO_LINE_FILES,
       }
     : asking !== undefined && knownAsk(asking.ask)
       ? {
@@ -424,14 +431,17 @@ function itemLine(item: InboxItem): ItemLine {
           heard: askLine(asking.ask, []),
           byAgent: true,
           member: undefined,
+          files: NO_LINE_FILES,
         }
       : {
           kind: last?.answers === undefined ? INBOX_LINE.SAID : INBOX_LINE.SETTLED,
           ask: undefined,
           words: last === undefined ? "" : lastWords(thread, last, plainWords),
-          heard: last === undefined ? "" : lastWords(thread, last, firstWords),
+          // Note that a reader hears each file the words name by its name, where the eye sees its chip.
+          heard: last === undefined ? "" : lastWords(thread, last, heardWords),
           byAgent: last === undefined || last.author === INBOX_MESSAGE_AUTHOR.AGENT,
           member: last?.member,
+          files: last === undefined ? NO_LINE_FILES : filesNamed(last),
         };
   itemLines.set(item, line);
   return line;
@@ -440,6 +450,30 @@ function itemLine(item: InboxItem): ItemLine {
 /** The open ask an item's row says, where one waits that this build knows; none for a thread its line reads as said, settled, or resolved. */
 export function inboxLineAsk(item: InboxItem): InboxKnownAsk | undefined {
   return itemLine(item).ask;
+}
+
+/**
+ * The files of an item's row's second line its words name, each by the
+ * marker a member's message wrote where it stood (`file-marker.ts`), so the
+ * row draws each marker as the file's chip, as the thread does; none where
+ * the line says an ask or a resolve, or the agent's words, which write no
+ * markers. Note that a marker names a picture only where the file is one,
+ * as the thread reads it (`file-chips.tsx`).
+ */
+export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
+  return itemLine(item).files;
+}
+
+/** A member's message's files its words name outside code. */
+function filesNamed(message: InboxMessage): readonly InboxMessageFile[] {
+  const files = message.files ?? [];
+  if (message.author === INBOX_MESSAGE_AUTHOR.AGENT || files.length === 0) return NO_LINE_FILES;
+  const names = new Set(fileMarkers(message.text).map((marker) => marker.name));
+  const named = files.filter(
+    (file) =>
+      names.has(file.name) && (!isPictureName(file.name) || file.mediaType.startsWith("image/")),
+  );
+  return named.length === 0 ? NO_LINE_FILES : named;
 }
 
 /** An item's second line from its line's `words`: the ask, as the draft ticks it, or the message's words after who said them where the agent did not. */
@@ -453,6 +487,11 @@ function previewOf(
     return ticked === undefined || ticked.length === 0 ? line.words : askLine(line.ask, ticked);
   }
   return line.byAgent ? words : `${nameOf(line.member)}: ${words}`;
+}
+
+/** A message's first line that says anything, each file it names by its name (`markersAsNames`), as a reader hears it. */
+function heardWords(text: string): string {
+  return firstWords(markersAsNames(text));
 }
 
 /** A message's first line that says anything, as plain words (`plainWords`): a fence's line is passed over, and nothing under the first is kept. */
@@ -546,8 +585,9 @@ const itemWords = new WeakMap<InboxItem, readonly string[]>();
 export function inboxItemWords(item: InboxItem): readonly string[] {
   const kept = itemWords.get(item);
   if (kept !== undefined) return kept;
+  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
   const said = (item.thread ?? []).flatMap((message) => [
-    plainWords(message.text),
+    plainWords(markersAsNames(message.text)),
     ...askWords(message.ask),
     ...(message.answers?.choices ?? []),
     ...valueWords(message.answers?.values),
