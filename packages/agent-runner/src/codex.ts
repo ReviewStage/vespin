@@ -717,6 +717,7 @@ function gitFoldersOf(cwd: string): string[] {
     backPointer !== undefined && realPathOf(resolve(own, backPointer)) === realPathOf(dotGit);
   const laidOut =
     basename(dirname(own)) === WORKTREES_FOLDER &&
+    own !== checkout &&
     !own.startsWith(`${checkout}${sep}`) &&
     existsSync(join(clone, "HEAD")) &&
     existsSync(join(clone, "objects"));
