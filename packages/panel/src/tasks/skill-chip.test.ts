@@ -112,7 +112,7 @@ function Composer({ words, commands = false }: { words: string; commands?: boole
       sent: [],
     },
     skills: reading,
-    onClear: commands ? ignore : undefined,
+    onClear: commands ? () => Promise.resolve(true) : undefined,
   });
 }
 

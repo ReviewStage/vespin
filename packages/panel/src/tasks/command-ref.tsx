@@ -78,7 +78,7 @@ export function matchingCommands(query: string): readonly SlashCommand[] {
 export function commandOption(name: SlashCommand): ComboboxOption {
   const entry = COMMANDS[name];
   return {
-    id: `command-${name}`,
+    id: name,
     label: skillWord(name),
     icon: entry.glyph(),
     detail: entry.detail,

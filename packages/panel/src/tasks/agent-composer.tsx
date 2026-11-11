@@ -22,6 +22,7 @@ import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } fro
 import type { Actor } from "@repo/ui/actor-model";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
+import { absurd } from "effect";
 import {
   type ComponentProps,
   type ReactNode,
@@ -399,8 +400,8 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
-  /** Starts the agent's harness on a fresh session (`/clear`); none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
-  onClear?: (() => void) | undefined;
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
+  onClear?: (() => Promise<boolean>) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
@@ -423,6 +424,8 @@ export function AgentComposer({
   const [stopping, setStopping] = useState(false);
   // The newest `/model` the box ran, which the model chip acts on.
   const [modelAsk, setModelAsk] = useState(0);
+  // Whether a `/clear` the box ran waits on its answer, which holds the box.
+  const [clearing, setClearing] = useState(false);
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (stopping && !stoppable) setStopping(false);
@@ -431,7 +434,8 @@ export function AgentComposer({
   const latest = useRef(composer);
   latest.current = composer;
   const closed = composer.closed !== undefined;
-  const held = composer.sending || closed;
+  // Note that a box clearing its session holds, so a message sent at once never reaches the session it ends.
+  const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
   const statuses = useIntegrationStatuses();
   const box = useMessageBox({
@@ -448,7 +452,11 @@ export function AgentComposer({
     pastesTextAsFile: true,
     self: agentId,
     skills,
-    commands: onClear === undefined ? undefined : { onRun: (name) => runCommand(name, true) },
+    // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
+    commands:
+      onClear === undefined || editingQueued
+        ? undefined
+        : { onRun: (name) => runCommand(name, true) },
     keywords,
     // A server's chip in the box says what a send now does with it: opens a turn, or steers the one running.
     servers: {
@@ -611,17 +619,32 @@ export function AgentComposer({
    * compaction (`harness-commands.ts`). Whatever runs empties the box.
    */
   const runCommand = (name: SlashCommand, chosen: boolean) => {
-    const words = leadingCommand(composer.draft)?.words ?? "";
-    if (name === SLASH_COMMAND.COMPACT) {
-      if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
-      return;
+    switch (name) {
+      case SLASH_COMMAND.COMPACT: {
+        const words = leadingCommand(composer.draft)?.words ?? "";
+        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+        return;
+      }
+      case SLASH_COMMAND.MODEL:
+        editor.current?.clear();
+        setModelAsk((was) => was + 1);
+        return;
+      case SLASH_COMMAND.CLEAR:
+      case SLASH_COMMAND.NEW:
+        editor.current?.clear();
+        if (onClear === undefined) return;
+        // The box holds until the answer lands, then hands the caret back as a send's does.
+        refocus.current = frame.current?.contains(document.activeElement) === true;
+        setClearing(true);
+        setSends((count) => count + 1);
+        onClear().then(
+          () => setClearing(false),
+          () => setClearing(false),
+        );
+        return;
+      default:
+        return absurd(name);
     }
-    editor.current?.clear();
-    if (name === SLASH_COMMAND.MODEL) {
-      setModelAsk((was) => was + 1);
-      return;
-    }
-    onClear?.();
   };
   /**
    * The command the box's words run rather than send, typed as their first
@@ -633,9 +656,17 @@ export function AgentComposer({
     if (onClear === undefined || editingQueued) return undefined;
     const typed = leadingCommand(composer.draft);
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
-    if (typed.name === SLASH_COMMAND.MODEL) return typed.name;
-    if (typed.name === SLASH_COMMAND.COMPACT || typed.words !== "") return undefined;
-    return typed.name;
+    switch (typed.name) {
+      case SLASH_COMMAND.MODEL:
+        return typed.name;
+      case SLASH_COMMAND.COMPACT:
+        return undefined;
+      case SLASH_COMMAND.CLEAR:
+      case SLASH_COMMAND.NEW:
+        return typed.words === "" ? typed.name : undefined;
+      default:
+        return absurd(typed.name);
+    }
   };
   /** Send as it stands: an edit saved, the message queued where a send queues now, or sent; one of the box's commands typed runs instead. */
   const submit = () => {

@@ -103,7 +103,7 @@ function Box({
   sender: MessageSender;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
-  onClear?: () => void;
+  onClear?: () => Promise<boolean>;
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
@@ -130,7 +130,7 @@ function Box({
 /** The box mounted, every message it sends written down and answered by `answer`. */
 async function mounted(
   answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore),
-  options: { readonly skills?: SkillSource; readonly onClear?: () => void } = {},
+  options: { readonly skills?: SkillSource; readonly onClear?: () => Promise<boolean> } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
   const sender: MessageSender = (_agentId, text, clientKey) => {
@@ -444,8 +444,9 @@ test("a / opens the repository's skills over the caret, the keys move through th
   );
 });
 
-test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, but /compact, which goes as a message", async () => {
+test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, the box held until a /clear is answered, but /compact, which goes as a message", async () => {
   let cleared = 0;
+  let answerClear: (took: boolean) => void = ignore;
   const box = await mounted(undefined, {
     skills: () =>
       Promise.resolve({
@@ -461,6 +462,9 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
       }),
     onClear: () => {
       cleared += 1;
+      return new Promise((resolve) => {
+        answerClear = resolve;
+      });
     },
   });
   const names = () =>
@@ -480,6 +484,11 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
   await settle();
   assert.equal(cleared, 1);
   assert.equal(box.shown(), "");
+  // Note that the box takes no message until the new session stands, so none reaches the old one.
+  assert.equal(composerEditor(box.container).getAttribute("aria-disabled"), "true");
+  answerClear(true);
+  await settle();
+  assert.equal(composerEditor(box.container).getAttribute("aria-disabled"), null);
 
   // A /model with words after it opens the menu as a bare one does, its words dropped rather than sent.
   typeInComposer(box.container, "/model sonnet");
