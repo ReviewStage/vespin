@@ -11,6 +11,12 @@ import {
 import { FAILURE_REASON, remedyLabel, retriesBesideRemedy } from "@repo/features/failure-remedy";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  isSlashCommand,
+  leadingCommand,
+  SLASH_COMMAND,
+  type SlashCommand,
+} from "@repo/features/slash-command";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
@@ -316,6 +322,7 @@ export function AgentComposer({
   answer,
   mode,
   approvalsWaiting = 0,
+  onClear,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
@@ -392,6 +399,8 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
+  /** Starts the agent's harness on a fresh session (`/clear`); none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
+  onClear?: (() => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
@@ -412,6 +421,8 @@ export function AgentComposer({
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  // The newest `/model` the box ran, which the model chip acts on.
+  const [modelAsk, setModelAsk] = useState(0);
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (stopping && !stoppable) setStopping(false);
@@ -437,6 +448,7 @@ export function AgentComposer({
     pastesTextAsFile: true,
     self: agentId,
     skills,
+    commands: onClear === undefined ? undefined : { onRun: (name) => runCommand(name, true) },
     keywords,
     // A server's chip in the box says what a send now does with it: opens a turn, or steers the one running.
     servers: {
@@ -589,8 +601,46 @@ export function AgentComposer({
   };
   /** The box's message sent now: into the turn under way, or opening one. */
   const steer = () => sentBy(composer.send);
-  /** Send as it stands: an edit saved, the message queued where a send queues now, or sent. */
+  /**
+   * One of the box's own commands, chosen from the `/` list or typed as the
+   * message's first word: `/model` opens the model chip's menu, its search
+   * focused, `/clear` and `/new` start the
+   * agent's harness on a fresh session, and `/compact` chosen from the list
+   * is written into the words, where the developer may add what to keep
+   * before sending it, the service handing it to the harness as its
+   * compaction (`harness-commands.ts`). Whatever runs empties the box.
+   */
+  const runCommand = (name: SlashCommand, chosen: boolean) => {
+    const words = leadingCommand(composer.draft)?.words ?? "";
+    if (name === SLASH_COMMAND.COMPACT) {
+      if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+      return;
+    }
+    editor.current?.clear();
+    if (name === SLASH_COMMAND.MODEL) {
+      setModelAsk((was) => was + 1);
+      return;
+    }
+    onClear?.();
+  };
+  /**
+   * The command the box's words run rather than send, typed as their first
+   * word: `/model`, whatever follows it, which is dropped as the menu opens,
+   * since the agent would only read it as a stray line; or `/clear` and
+   * `/new` typed alone.
+   */
+  const typedCommand = (): SlashCommand | undefined => {
+    if (onClear === undefined || editingQueued) return undefined;
+    const typed = leadingCommand(composer.draft);
+    if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
+    if (typed.name === SLASH_COMMAND.MODEL) return typed.name;
+    if (typed.name === SLASH_COMMAND.COMPACT || typed.words !== "") return undefined;
+    return typed.name;
+  };
+  /** Send as it stands: an edit saved, the message queued where a send queues now, or sent; one of the box's commands typed runs instead. */
   const submit = () => {
+    const command = typedCommand();
+    if (command !== undefined) return runCommand(command, false);
     if (editingQueued) return sentBy(queueing.onSave);
     if (queuesNow) return sentBy(queueing.onQueue);
     steer();
@@ -661,6 +711,7 @@ export function AgentComposer({
                 owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
                 permissions={mode}
+                asked={modelAsk}
               />
             )}
             <AgentContextRing

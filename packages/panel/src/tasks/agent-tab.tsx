@@ -87,6 +87,7 @@ import {
   BUTTON_VARIANT,
   Button,
   CodeCard,
+  CompactedLine,
   ConnectionLostNotice,
   DisclosureChevron,
   DocumentIcon,
@@ -100,6 +101,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  NewSessionLine,
   OneLine,
   STATUS_TONE,
   SUBJECT_FIT,
@@ -1194,6 +1196,10 @@ function AgentPartView({
       return <UsageLimitNotice notice={part.notice} />;
     case AGENT_PART.CONNECTION_LOST:
       return <ConnectionLostNotice notice={part.notice} />;
+    case AGENT_PART.COMPACTED:
+      return <CompactedLine notice={part.notice} />;
+    case AGENT_PART.SESSION_CLEARED:
+      return <NewSessionLine />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -2828,6 +2834,7 @@ function AgentTabView({
   counts,
   delegationStarts,
   onStop,
+  onClear,
   onRetry,
   onUnarchive,
   onOpenSubagent,
@@ -2883,6 +2890,8 @@ function AgentTabView({
   /** When each of its running workers began, as their rows count from it; none while the tab is off screen. */
   delegationStarts: ReadonlyMap<string, number> | undefined;
   onStop: () => Promise<boolean>;
+  /** Starts the agent's harness on a fresh session (`/clear`). */
+  onClear: () => Promise<boolean>;
   /** A failed launch's Retry on the GitHub sign-in card: sends again the lines it lost, answering whether the service took it. */
   onRetry: () => Promise<boolean>;
   /** Brings the agent back from the archive; present exactly while it is archived, when no message is sent. */
@@ -3265,6 +3274,8 @@ function AgentTabView({
               </>
             )}
             onStop={onStop}
+            // Note that only an agent on a harness has a session to clear, and only one the reader controls.
+            onClear={agent.runtime === undefined || !controlsQueue ? undefined : onClear}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
             followsUp
@@ -3633,6 +3644,7 @@ function AgentTabBody({
         counts={shown}
         delegationStarts={shown ? transcript.delegations : undefined}
         onStop={() => control.onStop(agent.id)}
+        onClear={() => control.onClear(agent.id)}
         onRetry={() => control.onRetry(agent.id, RETRY_LINE)}
         onUnarchive={unarchive}
         onOpenSubagent={onOpenSubagent}

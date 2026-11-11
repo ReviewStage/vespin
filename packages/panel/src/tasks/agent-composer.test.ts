@@ -97,8 +97,13 @@ async function settle(): Promise<void> {
 function Box({
   sender,
   messages = [],
+  skills = reading,
+  onClear,
 }: {
   sender: MessageSender;
+  skills?: SkillSource;
+  /** What `/clear` does, where the box runs commands. */
+  onClear?: () => void;
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
@@ -114,7 +119,8 @@ function Box({
     createElement(AgentComposer, {
       ...QUIET_COMPOSER,
       composer,
-      skills: reading,
+      skills,
+      onClear,
     }),
     // What Continue would carry, as the tab hands it on.
     createElement("output", { "data-unsent": composer.unsent.words }),
@@ -122,7 +128,10 @@ function Box({
 }
 
 /** The box mounted, every message it sends written down and answered by `answer`. */
-async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore)) {
+async function mounted(
+  answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore),
+  options: { readonly skills?: SkillSource; readonly onClear?: () => void } = {},
+) {
   const sent: { text: string; clientKey: string }[] = [];
   const sender: MessageSender = (_agentId, text, clientKey) => {
     sent.push({ text, clientKey });
@@ -132,7 +141,7 @@ async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promi
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Box, { sender }))));
+  await act(async () => root.render(withQueryClient(createElement(Box, { sender, ...options }))));
   await settle();
   return {
     container,
@@ -433,6 +442,60 @@ test("a / opens the repository's skills over the caret, the keys move through th
     box.sent.map((each) => each.text),
     ["Ship it with /deploy now"],
   );
+});
+
+test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, but /compact, which goes as a message", async () => {
+  let cleared = 0;
+  const box = await mounted(undefined, {
+    skills: () =>
+      Promise.resolve({
+        skills: [
+          ...SKILLS,
+          {
+            name: "compact",
+            description: "Use to squash commits.",
+            source: TASK_SKILL_SOURCE.REPOSITORY,
+            path: ".agents/skills/compact/SKILL.md",
+          },
+        ],
+      }),
+    onClear: () => {
+      cleared += 1;
+    },
+  });
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model", "/compact", "/clear", "/release", "/deploy"]);
+  typeInComposer(box.container, "new");
+  await settle();
+  // An alias finds its command.
+  assert.deepEqual(names(), ["/clear"]);
+
+  pressInComposer(box.container, "Escape");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.equal(cleared, 1);
+  assert.equal(box.shown(), "");
+
+  // A /model with words after it opens the menu as a bare one does, its words dropped rather than sent.
+  typeInComposer(box.container, "/model sonnet");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.equal(box.shown(), "");
+  assert.equal(box.sent.length, 0);
+
+  typeInComposer(box.container, "/compact keep the plan");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.deepEqual(
+    box.sent.map((each) => each.text),
+    ["/compact keep the plan"],
+  );
+  assert.equal(cleared, 1);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {

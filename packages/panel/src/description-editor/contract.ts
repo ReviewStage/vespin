@@ -494,6 +494,8 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
 /** A chip the composer draws in its words: a skill, written `/name`. */
 export interface ComposerChip {
   readonly name: string;
+  /** Whether the chip is the command the message opens with, rather than a skill named anywhere in it. */
+  readonly command: boolean;
 }
 
 /** What the message box hands its editor as it mounts it. */
@@ -579,6 +581,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly insertMention: (mention: MentionNode) => void;
   /** The skills a `/name` names: each such word is drawn as a chip from now on. */
   readonly setSkills: (skills: ReadonlySet<string>) => void;
+  /** The box's own commands: the message's first word naming one is drawn as its chip from now on. */
+  readonly setCommands: (commands: ReadonlySet<string>) => void;
   /** The files a marker names: each such marker is drawn as its chip from now on. */
   readonly setFiles: (files: ReadonlySet<string>) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */

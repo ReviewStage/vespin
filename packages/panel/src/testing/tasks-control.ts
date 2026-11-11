@@ -302,6 +302,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     },
     onStop: () => Promise.resolve(false),
     onRewind: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    onClear: () => Promise.resolve(true),
     onMessage: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onRetry: () => Promise.resolve(false),
     onChoose: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
