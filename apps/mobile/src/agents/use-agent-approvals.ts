@@ -56,12 +56,9 @@ export interface AgentApprovals {
   readonly messageSent: (taken: Promise<boolean>) => void;
 }
 
-/** Whether an answer came back settling its ask, as `answeredAsk` reads it, which the phone buzzes success for. */
-function settles(answered: AgentApprovalAnswerView): boolean {
-  return (
-    "approval" in answered ||
-    ("approvalStatus" in answered && answered.approvalStatus !== undefined)
-  );
+/** Whether the service took the answer, which the phone buzzes success for. Note that a refusal carrying the status the call already settled to, as when another reader answered it first, still settles the row but buzzes as a refusal, since this press did not land. */
+function took(answered: AgentApprovalAnswerView): boolean {
+  return "approval" in answered;
 }
 
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
@@ -125,7 +122,7 @@ export function useAgentApprovals(
       settle(agentId, approvalId, (ask) => ({ ...ask, answering: press, error: undefined }));
       acts[ACT_KIND.AGENTS_ANSWER_APPROVAL]({ agentId, approvalId, answer: press })
         .then((answered) => {
-          buzz(settles(answered) ? BUZZ.SUCCESS : BUZZ.ERROR);
+          buzz(took(answered) ? BUZZ.SUCCESS : BUZZ.ERROR);
           settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
         })
         .catch((error: unknown) => {
