@@ -186,6 +186,8 @@ export const CODER_REFUSAL = {
     "Not run: the provider refused your own API key for the agent's model. Replace it in Settings.",
   ACCOUNT_KEY_NO_QUOTA:
     "Not run: the provider refused the work for your own API key's billing or quota.",
+  MACHINE_SIGNED_OUT:
+    "Not run: the agent's machine is not signed in to Claude Code or Codex, or its sign-in was refused. Sign in on that machine.",
   NOT_REACHABLE:
     "Not run: the agent's repository is not reachable through the GitHub installation connected to its task's workspace.",
   GITHUB_UNAVAILABLE: "Not run: GitHub could not be asked for the repository's credential.",

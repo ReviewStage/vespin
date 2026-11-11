@@ -102,6 +102,7 @@ const AGENT_FAILURE_LABEL = {
   [AGENT_FAILURE.GITHUB]: "GitHub",
   [AGENT_FAILURE.ABANDONED]: "Abandoned by the sweep",
   [AGENT_FAILURE.PROVIDER_KEY]: "Account's own API key",
+  [AGENT_FAILURE.MACHINE_SIGN_IN]: "Machine not signed in",
   [AGENT_FAILURE.NOT_STARTED]: "Never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]: "Fast on own key",
   [AGENT_FAILURE.FAST_NOT_ENABLED]: "Fast not enabled",

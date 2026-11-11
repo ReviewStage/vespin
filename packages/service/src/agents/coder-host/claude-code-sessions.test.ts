@@ -1170,7 +1170,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a local agent recorded on its Mac's sign-in launches on the plan's refusal with none saved in Vespin, and on the account's key where its subscription is at its limit",
+    "a local agent launches on its machine's own Claude Code login with nothing saved in Vespin, its CLI handed no credential of the account's",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1197,54 +1197,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Option.isSome(started));
         const agent = started.value.agent;
 
-        const signedOut = runnerSandboxApi();
-        const without = yield* sessionsFor(userId, { next: 0 }).pipe(
-          Effect.provide(services(signedOut)),
-        );
-        const refused = yield* deliveredOpen(without, yield* writtenLine(agent, "Go."));
-        assert.equal(refused.outcome, SESSION_SEND_OUTCOME.FAILED);
-        assert.equal("planRefusal" in refused && refused.planRefusal, PLAN_REFUSAL.SIGNED_OUT);
-        assert.deepEqual(signedOut.commands, []);
-
-        // A subscription at its limit stands aside for the account's own key until it resets.
-        yield* savePlan(userId);
-        const now = yield* DateTime.nowAsDate;
-        yield* setPlanStatus(
-          userId,
-          PROVIDER_KEY_PROVIDER.ANTHROPIC,
-          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-          PROVIDER_KEY_STATUS.LIMIT_REACHED,
-          new Date(now.getTime() + 30 * 60_000),
-          now,
-          now,
-        );
-        const ring = parseKeyRing(Redacted.make(RING));
-        assert.ok(Result.isSuccess(ring));
-        const keyOwner = {
-          userId,
-          provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-          kind: PROVIDER_KEY_KIND.API_KEY,
-        };
-        yield* saveProviderKey(
-          userId,
-          keyOwner.provider,
-          keyOwner.kind,
-          sealProviderKey(ring.success, keyOwner, Redacted.make(API_KEY)),
-          "sk-ant-api…-key",
-          null,
-          new Date(0),
-        );
-        const onKey = runnerSandboxApi();
+        const onMac = runnerSandboxApi();
         const machines = agentMachinesLayer({
           run: () => assert.fail("a Mac's launch runs no sandbox checkout"),
-        }).pipe(Layer.provide(onKey.layer));
+        }).pipe(Layer.provide(onMac.layer));
         // Note that the machines are provided innermost, so the Mac's machine answers rather than the fake sandbox's.
-        const keyed = yield* sessionsFor(userId, { next: 0 }).pipe(
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(machines),
-          Effect.provide(services(onKey)),
+          Effect.provide(services(onMac)),
         );
         assert.equal(
-          (yield* deliveredOpen(keyed, yield* writtenLine(agent, "Go."))).outcome,
+          (yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.ACCEPTED,
         );
         const [launch] = yield* deviceAgentLinesWaiting(userId, deviceId);
@@ -1256,13 +1219,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         assert.ok("secrets" in claimed);
         const { env } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
-        // A Mac has no firewall of ours, so its CLI is handed the key itself, and no swap is set.
-        assert.equal(env[RUNNER_ENV.API_KEY], API_KEY);
+        assert.equal(env[RUNNER_ENV.API_KEY], undefined);
         assert.equal(env[RUNNER_ENV.CLAUDE_TOKEN], undefined);
-        assert.deepEqual(onKey.policies, []);
-        // Its fingerprint reads the key in its variable, as warm runners launched before were recorded: the first
-        // 32 hex characters of the SHA-256 of {"env":[["ANTHROPIC_API_KEY",API_KEY]],"names":["linear"]}.
-        assert.equal(launch.payload.fingerprint, "586cbee90aa20b9bb788adc7a378466c");
+        assert.deepEqual(onMac.policies, []);
+        // Its fingerprint reads no credential: the first 32 hex characters of the SHA-256 of
+        // {"env":[],"names":["linear"]}, worked by hand.
+        assert.equal(launch.payload.fingerprint, "bd55028e0351bd98a7a597177af52640");
 
         // A mode that asks is refused by name on a Mac whose runner reads no mode, rather than run with full access,
         // and queues no launch; once the Mac says its runner reads one, the launch is handed it.
@@ -1271,7 +1233,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           Effect.flatMap(
             sessionsFor(userId, { next: 0 }).pipe(
               Effect.provide(machines),
-              Effect.provide(services(onKey)),
+              Effect.provide(services(onMac)),
             ),
             (sessions) =>
               Effect.flatMap(writtenLine(agent, "Go on."), (line) => deliveredOpen(sessions, line)),

@@ -209,11 +209,7 @@ export const HOSTED_SERVICE_PATH = {
    * answer (`agent-wire.ts`).
    */
   AGENTS: "/api/agents",
-  /**
-   * A runner's own token (POST): a Codex runner's ChatGPT access token on
-   * its runner's bearer, and, on a host's device secret, a GitHub token for
-   * one of that host's own agents (`host-wire.ts`'s `hostGithubTokenRequestSchema`).
-   */
+  /** A runner's own token (POST): a cloud Codex runner's ChatGPT access token on its runner's bearer. */
   RUNNER_TOKEN: "/api/agents/runner-token",
   /** A local agent's Mac registered under the account, with its name, home folder, and bundled CLI (POST). `device-agent-wire.ts` declares the bodies. */
   DEVICE_AGENT_DEVICES: "/api/device-agents/devices",

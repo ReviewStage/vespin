@@ -1,6 +1,5 @@
 import { Schema as EffectSchema } from "effect";
 import { checkoutIdentitySchema } from "./checkout-identity.js";
-import type { GitHubAccess } from "./github-repositories-wire.js";
 import { HOST_TARGET } from "./host-release.js";
 import { wireUuidSchema } from "./service-wire.js";
 
@@ -116,16 +115,6 @@ export const DEVICE_LAUNCH_UNSTARTED = {
 export type DeviceLaunchUnstarted =
   (typeof DEVICE_LAUNCH_UNSTARTED)[keyof typeof DEVICE_LAUNCH_UNSTARTED];
 
-/**
- * How a launch's repository is reached where the App's installation does
- * not reach it: on the member's own token, which never leaves the service
- * for a device, so the device reaches the repository on its own GitHub
- * sign-in instead (`deviceAgentLaunchPayloadSchema`'s `githubAccess`).
- */
-export const DEVICE_GITHUB_ACCESS = {
-  TOKEN: "token",
-} as const satisfies Record<string, GitHubAccess>;
-
 /** What one of an agent's tools asks of its Mac. */
 export const DEVICE_AGENT_REQUEST_KIND = {
   /** Read one file, confined to the agent's worktree and temp folder. */
@@ -148,11 +137,10 @@ export const DEVICE_CAPABILITY = {
   /** It takes a discard line (`DEVICE_AGENT_LINE_KIND.DISCARD`). */
   DISCARD: "discard",
   /**
-   * It launches an agent whose repository is reached on its member's own
-   * token on the device's own GitHub sign-in (`DEVICE_GITHUB_ACCESS`),
-   * asking the service for no token. A follower from before it reads such
-   * a launch as the App's and asks for a token the service refuses, so no
-   * such agent is started on, or launched to, a device without it.
+   * It launches every agent in a repository on the device's own GitHub
+   * sign-in, asking the service for no token. A follower from before it asks
+   * for a token the service never hands a device, so no agent in a
+   * repository is started on, or launched to, a device without it.
    */
   GITHUB_SIGN_IN: "github-sign-in",
   /**
@@ -321,8 +309,6 @@ const DEVICE_AGENT_FOLDER = {
   REPOSITORY: "repository",
   /** The files a message carries, one folder per line, made `0700`. */
   ATTACHMENTS: "attachments",
-  /** The skills the member installed into the app, as the harness's local plugin. */
-  INSTALLED_SKILLS: "installed-skills",
   /** The agent's temp folder (`TMPDIR`), made `0700`, which its runner and its commands write to, and where it saves what we read back. */
   TEMP: "tmp",
 } as const;
@@ -332,7 +318,6 @@ export interface DeviceAgentLayout {
   readonly folder: string;
   readonly checkoutPath: string;
   readonly attachments: string;
-  readonly installedSkills: string;
   readonly temp: string;
 }
 
@@ -356,7 +341,6 @@ export function deviceAgentLayoutIn(agentsFolder: string, agentId: string): Devi
     folder,
     checkoutPath: [folder, DEVICE_AGENT_FOLDER.REPOSITORY].join("/"),
     attachments: [folder, DEVICE_AGENT_FOLDER.ATTACHMENTS].join("/"),
-    installedSkills: [folder, DEVICE_AGENT_FOLDER.INSTALLED_SKILLS].join("/"),
     temp: [folder, DEVICE_AGENT_FOLDER.TEMP].join("/"),
   };
 }
@@ -371,8 +355,7 @@ const macPath = EffectSchema.String.check(
  * A launch line's payload: where its worktree goes and what it checks out,
  * the repository as `owner/name` and the branch it starts from, none for an
  * agent with no repository or on the default branch, and who its commits
- * are by, and, for one the App's installation does not reach, that it is
- * reached on the device's own GitHub sign-in. Its environment and
+ * are by, which the device reaches on its own GitHub sign-in. Its environment and
  * its first lines are its secrets, handed over by the claim alone.
  */
 export const deviceAgentLaunchPayloadSchema = EffectSchema.Struct({
@@ -390,16 +373,6 @@ export const deviceAgentLaunchPayloadSchema = EffectSchema.Struct({
    * repository, and from a service before the field, whose launch sets none.
    */
   identity: EffectSchema.optionalKey(checkoutIdentitySchema),
-  /**
-   * That the agent's repository is reached on its member's own token
-   * (`DEVICE_GITHUB_ACCESS.TOKEN`), so the device reaches it on its own
-   * GitHub sign-in and asks the service for no token; absent for one the
-   * App's installation reaches, whose device asks for an installation token
-   * as ever. Only a device that registered `GITHUB_SIGN_IN` is launched one.
-   */
-  githubAccess: EffectSchema.optionalKey(
-    EffectSchema.Literals(Object.values(DEVICE_GITHUB_ACCESS)),
-  ),
 });
 
 export type DeviceAgentLaunchPayload = typeof deviceAgentLaunchPayloadSchema.Type;

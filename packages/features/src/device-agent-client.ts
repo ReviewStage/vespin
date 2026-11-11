@@ -1,8 +1,7 @@
 import type { AnyProcedureContract } from "@orpc/contract";
-import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import { type AccountCallEffects, accountCall, type CallCredential } from "./account-call.js";
+import type { CallCredential } from "./account-call.js";
 import { deviceAgentsContract } from "./contract/device-agents.js";
 import type {
   DeviceAgentAnswer,
@@ -20,18 +19,16 @@ import type {
   HostUpdate,
 } from "./device-agent-wire.js";
 import { DEVICE_AGENT_REQUEST_KIND } from "./device-agent-wire.js";
-import {
-  type HostEnrollAnswer,
-  type HostPairingPollAnswer,
-  type HostPairingStartAnswer,
-  type HostPairingStartRequest,
-  hostGithubTokenAnswerSchema,
-  type OwnDeviceEnrollRequest,
+import type {
+  HostEnrollAnswer,
+  HostPairingPollAnswer,
+  HostPairingStartAnswer,
+  HostPairingStartRequest,
+  OwnDeviceEnrollRequest,
 } from "./host-wire.js";
 import { hostedCall } from "./hosted-call.js";
 import { failureSetOf, type HostedFailed } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
-import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { HOSTED_API_ERROR, type HostedApiError } from "./service-wire.js";
 
 /**
@@ -47,9 +44,7 @@ import { HOSTED_API_ERROR, type HostedApiError } from "./service-wire.js";
  * register, a step, a settle, or an answer not taken is false, and a beat
  * not taken is nothing. A save of an agent's
  * state, or its commit, refused says whether a newer save made it stale,
- * and one unanswered, or refused as unavailable, is nothing. A host also
- * asks the runner token route for a GitHub token for one of its agents
- * (`githubToken`), on the same credential, its device secret. A box with
+ * and one unanswered, or refused as unavailable, is nothing. A box with
  * no secret yet pairs with a code: it starts a pairing with no credential
  * (`startHostPairing`) and polls on the poll secret it was answered
  * (`pollHostPairing`) until a member approves or denies it. A pairing's
@@ -218,29 +213,12 @@ export interface HostedDeviceAgentClientOptions {
 
 export class HostedDeviceAgentClient {
   readonly #hosted: HostedClient;
-  readonly #call: AccountCallEffects;
 
   constructor(options: HostedDeviceAgentClientOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
     });
-    this.#call = accountCall({ baseUrl: options.serviceBaseUrl, credential: options.credential });
-  }
-
-  /** A GitHub token for the host's own agent's repository; nothing where the service refused it or did not answer. */
-  githubToken(agentId: string): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
-    return Effect.map(
-      this.#call.ask(
-        {
-          method: HTTP_METHOD.POST,
-          path: HOSTED_SERVICE_PATH.RUNNER_TOKEN,
-          body: JSON.stringify({ agentId }),
-        },
-        hostGithubTokenAnswerSchema,
-      ),
-      (answer) => answer?.githubToken,
-    );
   }
 
   /**

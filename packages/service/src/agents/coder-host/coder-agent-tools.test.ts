@@ -1316,7 +1316,13 @@ test("start_agent naming a device by its name runs on the caller's member's own 
         [laptop, "Laptop"],
         [oldLaptop, "laptop"],
       ] as const) {
-        yield* registerDevice(agents.caller.userId, { id, name, ...DEVICE_LAYOUT });
+        // Note that each host works in every repository on its own GitHub sign-in, as every host registers it now.
+        yield* registerDevice(agents.caller.userId, {
+          id,
+          name,
+          ...DEVICE_LAYOUT,
+          capabilities: [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
+        });
       }
       // The laptops last beat an hour and a day ago, so they read away, the latest first.
       const db = yield* Database;

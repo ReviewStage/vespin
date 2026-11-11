@@ -2368,7 +2368,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
-    "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, where Vespin's own key refused so opens one",
+    "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, as a local agent's machine's own login refused so reads as a machine to sign in on, where Vespin's own key refused so opens one",
     () =>
       Effect.gen(function* () {
         const reported: Readonly<Record<string, unknown>>[] = [];
@@ -2408,6 +2408,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         ]);
         yield* post(onApp.bearer, refusedLaunch(onApp.lineId, 0, expired));
 
+        const onMachine = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.MAC_SIGN_IN }, [
+          "Fix the test.",
+        ]);
+        yield* post(onMachine.bearer, refusedLaunch(onMachine.lineId, 0, expired));
+
         const keyRows = yield* listProviderKeyRows(onKey.userId, PROVIDER_KEY_KIND.API_KEY);
         assert.deepEqual(
           keyRows.map((row) => row.status),
@@ -2435,6 +2440,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           AGENT_FAILURE.PROVIDER_KEY,
         ]);
         assert.deepEqual(yield* failureOf(onApp.target.conversationId), [AGENT_FAILURE.MODEL]);
+        assert.deepEqual(yield* failureOf(onMachine.target.conversationId), [
+          AGENT_FAILURE.MACHINE_SIGN_IN,
+        ]);
       }),
   );
 

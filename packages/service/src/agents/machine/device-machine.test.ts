@@ -47,7 +47,6 @@ import {
   type DeviceLaunchUnstarted,
   deviceAgentLaunchPayloadSchema,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { SandboxUnavailable } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -290,15 +289,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a launch of an agent on its starter's own token to a host from before it works in one on its own GitHub sign-in is refused, queuing nothing",
+      "a launch of an agent in a repository to a host from before it works in every repository on its own GitHub sign-in is refused, queuing nothing",
       () =>
         Effect.gen(function* () {
           // Note that an installation of its own is linked, since another test linked the first.
           const installation = { ...RELAY_INSTALLATION, id: RELAY_INSTALLATION.id + 1 };
-          const opened = yield* openLocalAgent({
-            installation,
-            githubAccess: GITHUB_ACCESS.TOKEN,
-          });
+          const opened = yield* openLocalAgent({ installation, hostPredatesOwnSignIn: true });
           const github = githubReaching([installation]);
           const refused = yield* Effect.flip(launched(opened).pipe(Effect.provide(github.layer)));
 

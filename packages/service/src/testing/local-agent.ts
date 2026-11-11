@@ -15,9 +15,7 @@ import { conversations, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, startTask } from "@repo/database/testing";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
-import { DEVICE_AGENT_LINE_KIND } from "@repo/features/device-agent-wire";
-import type { GitHubAccess } from "@repo/features/github-repositories-wire";
-import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
@@ -30,19 +28,17 @@ import { deviceMachine } from "../agents/machine/device-machine.js";
 import { SESSION_SEND_OUTCOME } from "../agents/sessions/agent-sessions.js";
 import { HostedEnvironment } from "../environment.js";
 import { LINK_OUTCOME } from "../github/github-installations.js";
-import { AGENT_KEY_RING, connectAgentApiKeys } from "./agent-credentials.js";
+import { AGENT_KEY_RING } from "./agent-credentials.js";
 import { connectWorkspaceGitHub, type InstallationFixture, NO_GITHUB } from "./github-app-fake.js";
 
-/** How a local agent is opened: in the repository the installation given reaches, on the harness given, and on its starter's own Anthropic API key where asked. */
+/** How a local agent is opened: in the repository the installation given reaches, on the harness given, on a host as old as asked. */
 export interface LocalAgentOptions {
   /** The installation reaching the repository it works in, connected to its task's workspace; none for an agent in no repository. */
   readonly installation?: InstallationFixture;
   /** The harness its conversation runs on, as Start records it; the store's own where none is named. */
   readonly runtime?: ConversationRuntime;
-  /** Whether its starter saved an Anthropic API key, and the agent started to run on it, as Start chooses it then. */
-  readonly onApiKey?: boolean;
-  /** How its repository is reached, as Start records it; the App's where none is named. */
-  readonly githubAccess?: GitHubAccess;
+  /** Whether its host is a build from before it works in every repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`), which every host registers now. */
+  readonly hostPredatesOwnSignIn?: boolean;
 }
 
 /**
@@ -56,10 +52,13 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const deviceId = randomUUID();
-    yield* registerDevice(userId, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
-    if (options.onApiKey === true) {
-      yield* connectAgentApiKeys(userId, { providers: [PROVIDER_KEY_PROVIDER.ANTHROPIC] });
-    }
+    yield* registerDevice(userId, {
+      id: deviceId,
+      name: "Studio",
+      ...DEVICE_LAYOUT,
+      capabilities:
+        options.hostPredatesOwnSignIn === true ? [] : [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
+    });
     const { installation } = options;
     const reached = installation?.repositories[0];
     const repository = reached === undefined ? null : `${reached.owner}/${reached.name}`;
@@ -81,8 +80,7 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
       machine: AGENT_MACHINE.DEVICE,
       deviceId,
       runtime: options.runtime ?? CONVERSATION_RUNTIME.CLAUDE_CODE,
-      ...(options.onApiKey === true ? { payer: AGENT_PAYER.API_KEY } : undefined),
-      githubAccess: options.githubAccess,
+      payer: AGENT_PAYER.MAC_SIGN_IN,
     });
     const { agent } = Option.getOrThrow(started);
     const session = `cc-${randomUUID()}`;
@@ -147,17 +145,14 @@ export const typedMessage = (agent: Agent, text: string) => ({
 });
 
 /**
- * A local agent on its starter's API key whose Start launched its runner,
+ * A local agent whose Start launched its runner,
  * which its Mac took, and whose first turn then settled, as its IDLE's
  * batch writes it: the agent, its sessions, the session its Start claimed,
  * the turn that settled, and the launch line its Mac claimed.
  */
 export const warmLocalAgent = Effect.gen(function* () {
   const db = yield* Database;
-  const opened = yield* openLocalAgent({
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-    onApiKey: true,
-  });
+  const opened = yield* openLocalAgent({ runtime: CONVERSATION_RUNTIME.CLAUDE_CODE });
   const { userId, deviceId, agent } = opened;
   const sessions = yield* localAgentSessions(userId);
   const started = yield* sessions.open(typedMessage(agent, "Fix the invitations."));
