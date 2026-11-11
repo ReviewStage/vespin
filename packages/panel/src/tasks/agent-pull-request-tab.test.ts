@@ -5037,8 +5037,9 @@ function writeComment(tab: HTMLElement, words: string): HTMLElement {
 /** The comment box's Comment press. */
 function commentPress(tab: HTMLElement): HTMLButtonElement {
   return (
-    tab.querySelector<HTMLButtonElement>(".pull-request-comment-foot button") ??
-    assert.fail("the box offers Comment")
+    tab.querySelector<HTMLButtonElement>(
+      ".pull-request-comment-box .ui-composer-foot button[aria-label='Comment']",
+    ) ?? assert.fail("the box offers Comment")
   );
 }
 
@@ -5195,9 +5196,20 @@ function writeLineComment(comment: HTMLElement, words: string): void {
 function commentOffer(comment: HTMLElement, label: string): HTMLButtonElement {
   return (
     [...comment.querySelectorAll<HTMLButtonElement>("button")].find(
-      (each) => each.textContent === label,
+      (each) => pressName(each) === label,
     ) ?? assert.fail(`the comment offers ${label}`)
   );
+}
+
+/** What a press is called to a reader: its words, or the name a round press wears in their place. */
+function pressName(press: Element): string | null {
+  const words = press.textContent ?? "";
+  return words === "" ? press.getAttribute("aria-label") : words;
+}
+
+/** What a comment's box offers in its foot, by name, in order. */
+function footOffers(comment: HTMLElement): readonly (string | null)[] {
+  return [...comment.querySelectorAll(".ui-composer-foot button")].map(pressName);
 }
 
 /** Chooses `label` in the ⋯ of the first pending comment in `comment`, as the member would. */
@@ -5232,10 +5244,12 @@ test("the gutter's + opens a comment under the last line picked, however the pic
     [{ path: INVITE_FILE.path, side: DIFF_SELECTION_SIDE.ADDITIONS, line: 13 }],
   );
   assert.equal(lists.at(-1)?.selected?.path, INVITE_FILE.path);
-  assert.deepEqual(
-    [...comment.querySelectorAll(".line-comment-foot button")].map((each) => each.textContent),
-    ["Cancel", "Add single comment", "Start a review"],
-  );
+  assert.deepEqual(footOffers(comment), [
+    "Add a suggestion",
+    "Cancel",
+    "Start a review",
+    "Add single comment",
+  ]);
 
   writeLineComment(comment, "Why **twice**?");
   act(() => commentOffer(comment, "Add single comment").click());
@@ -5554,10 +5568,7 @@ test("a member holding a pending review adds a comment to it and nothing else, a
     end: 12,
     endSide: DIFF_SELECTION_SIDE.DELETIONS,
   });
-  assert.deepEqual(
-    [...comment.querySelectorAll(".line-comment-foot button")].map((each) => each.textContent),
-    ["Cancel", "Add review comment"],
-  );
+  assert.deepEqual(footOffers(comment), ["Cancel", "Add review comment"]);
   writeLineComment(comment, "Gone?");
   act(() => commentOffer(comment, "Add review comment").click());
   await settle();

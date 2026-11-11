@@ -11,7 +11,8 @@ import { Comment } from "./comment.js";
  * wrote, holds what the caller puts at its head's end and what they wrote
  * under it; its face stands the writer's letter where no picture is given,
  * or a glyph a condition left as nothing, and asks for the picture where
- * one is; a draft not yet sent says no time.
+ * one is; a draft not yet sent says no time; and a state it stands in is
+ * read right after the name, before its age and its head's end.
  */
 
 /** Oct 14, 2026, 6:00 PM, on the machine's own clock, and a comment two hours before it. */
@@ -80,4 +81,15 @@ test("a draft not yet sent says no time", () => {
   const markup = drawn({ author: { name: "Ada Lovelace" }, children: "Draft" });
   assert.doesNotMatch(markup, /<time/u);
   assert.equal(wordsOf(markup, "ui-comment-time"), undefined);
+});
+
+test("a state the comment stands in is read right after the name, before its age and its head's end", () => {
+  const markup = drawn({
+    author: { name: "Ada Lovelace" },
+    status: "Pending",
+    at: AT,
+    now: NOW,
+    trailing: "Comment actions",
+  });
+  assert.equal(wordsOf(markup, "ui-comment-head"), "Ada LovelacePending2hComment actions");
 });

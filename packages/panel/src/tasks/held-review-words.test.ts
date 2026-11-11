@@ -133,8 +133,10 @@ function pendingEdit(container: HTMLElement): void {
 /** The button of the given words. */
 function button(container: HTMLElement, words: string): HTMLButtonElement {
   return (
-    [...container.querySelectorAll("button")].find((each) => each.textContent === words) ??
-    assert.fail(`${words} is offered`)
+    // Note that a round send says its name in its label rather than in words.
+    [...container.querySelectorAll("button")].find(
+      (each) => (each.textContent || each.getAttribute("aria-label")) === words,
+    ) ?? assert.fail(`${words} is offered`)
   );
 }
 

@@ -18,7 +18,9 @@ import { TIME_LOOK, Time } from "../time/time.js";
  * `agentName`), on one line cut where the head runs out of room, and
  * after it, in the muted ink, what the writer did where the comment is a
  * line of what happened to its thread (`said`, "resolved this"), which
- * stays whole while a long name is cut before it; the time
+ * stays whole while a long name is cut before it; the state the comment
+ * stands in, Pending, right after the name, so it never drifts with what
+ * the trailing slot holds, as a ⋯ drawn only on hover; the time
  * is `Time`'s age in the caption role, a step quieter, its moment in full
  * on hover; and the trailing slot holds the line's end, its actions or a
  * status, against the head's far edge. What they wrote stands under the
@@ -70,6 +72,7 @@ const NAME = "ui-comment-name min-w-0";
 const NAME_SAYING = "ui-comment-name flex min-w-0 items-baseline";
 const WHO = "ui-comment-who";
 const SAID = "ui-comment-said flex-none whitespace-pre font-ui-regular text-muted-foreground";
+const STATUS = "ui-comment-status inline-flex flex-none items-baseline";
 const TIME = "ui-comment-time flex-none";
 // Note that the trailing slot is the head's line tall, its controls centered on it and standing over its edges, because a control's height would push every comment's words down by a different amount.
 const TRAILING =
@@ -114,6 +117,7 @@ export function Comment({
   author,
   nameRef,
   said,
+  status,
   at,
   now,
   trailing,
@@ -127,6 +131,8 @@ export function Comment({
   nameRef?: ReactNode;
   /** What the writer did, said after their name, for a line of what happened to a thread: "resolved this". */
   said?: string | undefined;
+  /** The state the comment stands in, said right after the name: Pending. */
+  status?: ReactNode;
   /** When it was written; none for a draft not yet sent. */
   at?: number | undefined;
   /** What its age counts from; none counts from the window's minute. */
@@ -168,6 +174,7 @@ export function Comment({
             <span className={SAID}>{` ${said}`}</span>
           </Text>
         )}
+        {status === undefined ? null : <span className={STATUS}>{status}</span>}
         {at === undefined ? null : (
           <Text
             className={TIME}

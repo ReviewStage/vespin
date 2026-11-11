@@ -7,6 +7,7 @@ import {
   COMPOSER_LOOK,
   ComposerBody,
   ComposerFoot,
+  ComposerFootNote,
   ComposerFootSkeleton,
   ComposerFrame,
   type ComposerLook,
@@ -184,6 +185,13 @@ function ComposerFoots(): React.JSX.Element {
                     Continue in new agent
                   </Button>
                 ),
+              }}
+            />
+            {/* A field-only box has no foot, so its note stands alone under the field. */}
+            <ComposerFootNote
+              note={{
+                words: "Only the first 8,000 characters were pasted.",
+                failure: UNREPORTED.INPUT,
               }}
             />
           </Stack>
