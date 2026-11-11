@@ -1,5 +1,8 @@
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
   CloseIcon,
   DisclosureFind,
   Fill,
@@ -8,6 +11,9 @@ import {
   MenuSurface,
   motionHeld,
   SearchField,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   Tooltip,
   useDisclosureFinding,
 } from "@repo/ui";
@@ -16,10 +22,11 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { type StripTab, sameTab } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, WrenchIcon } from "lucide-react";
 import {
   type ComponentProps,
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -29,6 +36,8 @@ import {
 } from "react";
 import { useAppCommand } from "./app-commands.js";
 import {
+  FIND_DETAIL_ATTRIBUTE,
+  FIND_DETAILS_LEFT_OUT,
   type FindPainting,
   findRanges,
   matchFrom,
@@ -38,6 +47,7 @@ import {
   selectedWords,
   watchText,
 } from "./find-matches.js";
+import { keptFlag, keptKey, useKept } from "./use-kept.js";
 
 /**
  * find-in-tab.tsx -- ⌘F inside the tab that holds the window's focus: a find bar at the tab's top right, its matches tinted in the tab's own text and stepped through one at a time.
@@ -68,6 +78,13 @@ import {
  * of it while a bar is open over it (`useFindOpen`): a fold draws what it
  * folds, hidden in its closed `<details>` until a match in it is shown, and
  * a file draws every window of its lines.
+ *
+ * A transcript offers its scope details (`useFindDetails`): its calls and
+ * thoughts, which the bar leaves out unless its toggle says to search them,
+ * as an editor's find bar carries Match Case. Left out, they are neither
+ * searched nor drawn for the find, so no fold opens for one, and the bar
+ * says under its field how many matches they hold, with Include beside.
+ * The choice is the window's, kept across launches and every tab's at once.
  */
 
 /** A tab a find searches, which holds its bar at its top right and answers its own width (`find-scope`'s container queries). */
@@ -87,6 +104,8 @@ export interface FindTally {
   readonly at: number;
   /** Whether there are more matches than the count, which a source that stops counting says. */
   readonly more?: boolean;
+  /** How many matches stand in the details the find leaves out (`useFindDetails`), which it does not count. */
+  readonly left?: number;
 }
 
 /** The pages that stand in the plan's place, each finding in its words as one scope (`PageFind`). */
@@ -159,12 +178,26 @@ export type FindChord =
 interface FindScopeDoors {
   readonly offer: (source: FindSource | undefined) => void;
   readonly press: (chord: FindChord) => void;
+  /** Whether the tab holds details its find may leave out (`useFindDetails`). */
+  readonly offerDetails: (offered: boolean) => void;
 }
 
 const FindScopeContext = createContext<FindScopeDoors>({
   offer: () => undefined,
   press: () => undefined,
+  offerDetails: () => undefined,
 });
+
+/** Whether the find over the tab searches its details: so wherever no scope over it leaves them out. */
+const FindDetailsContext = createContext(true);
+
+/** The window's choice of whether a find searches a transcript's details, kept across launches. */
+const FIND_KEPT = {
+  DETAILS: keptKey("app.find-details", keptFlag),
+} as const;
+
+/** What a transcript's detail wears: a call, a thought, or a run of them under one line, which a find may leave out. */
+export const FIND_DETAIL = { [FIND_DETAIL_ATTRIBUTE]: "" } as const;
 
 /** No matches, and no match the find is at. */
 const NO_TALLY: FindTally = { count: 0, at: -1 };
@@ -185,9 +218,12 @@ function sameSubject(a: FindSubject, b: FindSubject): boolean {
 function useFindMatches(
   root: HTMLElement | null,
   query: string,
+  leftOut: string | undefined,
   kept: { readonly at: number; readonly onAt: (at: number) => void },
 ): FindMatches {
   const painting = useRef<FindPainting>(NO_PAINTING);
+  // The folds the find opened for its matches, closed again as it moves off them.
+  const folds = useRef(new Set<HTMLDetailsElement>());
   const [tally, setTally] = useState<FindTally>({ count: 0, at: -1 });
   const { onAt } = kept;
   const paint = useCallback(
@@ -209,7 +245,7 @@ function useFindMatches(
     }
     const search = (shown: boolean) => {
       const held = painting.current;
-      const ranges = findRanges(root, query);
+      const ranges = findRanges(root, query, leftOut);
       const resume = resumed.current;
       resumed.current = -1;
       // Note that a find drawn again stands where it was without bringing the match into view, since the page keeps where it stood scrolled.
@@ -219,11 +255,11 @@ function useFindMatches(
           : matchFrom(ranges, held.ranges[held.at], root);
       paint({ ranges, at });
       const range = ranges[at];
-      if (shown && resume < 0 && range !== undefined) reveal(range, root);
+      if (shown && resume < 0 && range !== undefined) reveal(range, root, folds.current);
     };
     search(true);
     return watchText(root, () => search(false));
-  }, [root, query, paint]);
+  }, [root, query, leftOut, paint]);
 
   // The highlights are the document's, so a tab that goes takes its matches with it.
   useEffect(() => () => repaint(painting.current, NO_PAINTING), []);
@@ -235,7 +271,7 @@ function useFindMatches(
     const at = (held.at + by + count) % count;
     paint({ ranges: held.ranges, at });
     const range = held.ranges[at];
-    if (range !== undefined) reveal(range, root);
+    if (range !== undefined) reveal(range, root, folds.current);
   };
   return { tally, step };
 }
@@ -282,15 +318,41 @@ function BarButton({
   );
 }
 
+/** What the toggle over a transcript's details says, its name and its hint alike. */
+const DETAILS_LABEL = "Search tool calls and thinking";
+
+/** The bar's choice of whether it searches a transcript's details, where the tab offers them. */
+interface BarDetails {
+  readonly searched: boolean;
+  readonly onSearched: (searched: boolean) => void;
+}
+
+/** The line under the field saying how many matches the details left out hold, and Include, which searches them. */
+function LeftOutLine({ left, onInclude }: { left: number; onInclude: () => void }) {
+  return (
+    <div className="find-bar-left flex basis-full items-center justify-between gap-list-gap pt-tight-gap pl-ui-6">
+      <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {`${left} more in tool calls and thinking`}
+      </Text>
+      <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.SUBTLE} onClick={onInclude}>
+        Include
+      </Button>
+    </div>
+  );
+}
+
 /**
- * The bar: the shared search field with the tally at its end, then the
- * previous and next matches and the close. Each summons puts the caret in
- * the field with its text selected.
+ * The bar: the shared search field with the tally at its end, then, over a
+ * transcript, the toggle that searches its details, then the previous and
+ * next matches and the close; and under them, while the details are left
+ * out and hold matches, how many. Each summons puts the caret in the field
+ * with its text selected.
  */
 function FindBar({
   query,
   onQuery,
   tally,
+  details,
   summons,
   leaving,
   surface,
@@ -300,6 +362,8 @@ function FindBar({
   query: string;
   onQuery: (query: string) => void;
   tally: FindTally;
+  /** Over a transcript, whether the find searches its details; none over a tab with none. */
+  details: BarDetails | undefined;
   summons: number;
   /** The bar is on its way out: fading, inert, and keeping what it last said. */
   leaving: boolean;
@@ -307,6 +371,8 @@ function FindBar({
   onStep: (step: FindStep) => void;
   onClose: () => void;
 }): React.JSX.Element {
+  const left =
+    details === undefined || details.searched || query.length === 0 ? 0 : (tally.left ?? 0);
   const field = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     field.current?.focus({ preventScroll: true });
@@ -346,6 +412,16 @@ function FindBar({
           />
         </ReplayUnmask>
       </div>
+      {details === undefined ? null : (
+        <Tooltip label={DETAILS_LABEL}>
+          <IconButton
+            icon={<WrenchIcon aria-hidden="true" />}
+            label={DETAILS_LABEL}
+            pressed={details.searched}
+            onClick={() => details.onSearched(!details.searched)}
+          />
+        </Tooltip>
+      )}
       <BarButton
         label="Previous match"
         command={APP_COMMAND.FIND_PREVIOUS}
@@ -361,6 +437,11 @@ function FindBar({
         icon={<ChevronDownIcon aria-hidden="true" />}
       />
       <BarButton label="Close find" onPress={onClose} icon={<CloseIcon />} />
+      {left === 0 || details === undefined ? null : (
+        <ReplayUnmask>
+          <LeftOutLine left={left} onInclude={() => details.onSearched(true)} />
+        </ReplayUnmask>
+      )}
     </MenuSurface>
   );
 }
@@ -372,6 +453,31 @@ function FindBar({
  */
 export function useFindOpen(): boolean {
   return useDisclosureFinding();
+}
+
+/**
+ * Offers the find over this tab the tab's details, its calls and thoughts,
+ * for as long as it is drawn, and answers whether the find searches them:
+ * the bar then draws its toggle, and leaves them out while it is off.
+ */
+export function useFindDetails(): boolean {
+  const { offerDetails } = useContext(FindScopeContext);
+  useEffect(() => {
+    offerDetails(true);
+    return () => offerDetails(false);
+  }, [offerDetails]);
+  return useContext(FindDetailsContext);
+}
+
+/**
+ * A detail's folds (`FIND_DETAIL`), drawn for a find open over the tab only
+ * while it searches details, so a find over the conversation alone draws no
+ * body of a call or a thought and opens none.
+ */
+export function FindDetailFolds({ children }: { children: ReactNode }): React.JSX.Element {
+  const finding = useDisclosureFinding();
+  const searched = useContext(FindDetailsContext);
+  return <DisclosureFind finding={finding && searched}>{children}</DisclosureFind>;
 }
 
 /**
@@ -445,10 +551,17 @@ export function FindScope({
   const drawn = useDisclosure(open);
   // A tab that hands a source of its own finds in its words, never the DOM's.
   const [source, setSource] = useState<FindSource | undefined>(undefined);
-  const domMatches = useFindMatches(source === undefined ? root : null, open ? query : "", {
-    at,
-    onAt,
-  });
+  // Whether the tab holds details the find may leave out, and whether the window's find searches them.
+  const [offerings, setOfferings] = useState(0);
+  const offered = offerings > 0;
+  const [detailsSearched, setDetailsSearched] = useKept(FIND_KEPT.DETAILS, false);
+  const searchesDetails = !offered || detailsSearched;
+  const domMatches = useFindMatches(
+    source === undefined ? root : null,
+    open ? query : "",
+    searchesDetails ? undefined : FIND_DETAILS_LEFT_OUT,
+    { at, onAt },
+  );
   const sourceMatches = useSourceMatches(source, open ? query : "");
   const { tally, step } = source === undefined ? domMatches : sourceMatches;
   const [tallied, setTallied] = useState(tally);
@@ -488,6 +601,7 @@ export function FindScope({
   const [doors] = useState<FindScopeDoors>(() => ({
     offer: setSource,
     press: (chord) => pressed.current(chord),
+    offerDetails: (offering) => setOfferings((held) => held + (offering ? 1 : -1)),
   }));
 
   return (
@@ -501,6 +615,9 @@ export function FindScope({
           query={query}
           onQuery={setQuery}
           tally={tallied}
+          details={
+            offered ? { searched: detailsSearched, onSearched: setDetailsSearched } : undefined
+          }
           summons={summons}
           leaving={drawn.leaving}
           surface={drawn.ref}
@@ -509,7 +626,9 @@ export function FindScope({
         />
       )}
       <FindScopeContext.Provider value={doors}>
-        <DisclosureFind finding={open}>{children}</DisclosureFind>
+        <FindDetailsContext.Provider value={searchesDetails}>
+          <DisclosureFind finding={open}>{children}</DisclosureFind>
+        </FindDetailsContext.Provider>
       </FindScopeContext.Provider>
     </Fill>
   );

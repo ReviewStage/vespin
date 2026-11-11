@@ -182,7 +182,7 @@ import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
-import { useFindOpen } from "../find-in-tab.js";
+import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
@@ -328,7 +328,12 @@ import {
   type TranscriptToolProps,
   TranscriptWords,
 } from "./transcript-blocks.js";
-import { drawnMessageWords, drawnRowsWords } from "./transcript-copy.js";
+import {
+  DRAWN_WORDS,
+  type DrawnWords,
+  drawnMessageWords,
+  drawnRowsWords,
+} from "./transcript-copy.js";
 import { TurnFilesOn, TurnFilesRow } from "./turn-files.js";
 import { keptPieces, PIECE_ROWS, pieceKey, type TurnPiece, turnPieces } from "./turn-pieces.js";
 import {
@@ -2156,23 +2161,28 @@ function drawsMessage(row: PlacedRow, messageId: string): boolean {
   return row.message.id === messageId || row.arrived.some((line) => line.id === messageId);
 }
 
-/** Each message's words as a find counts them, kept by the message, so a page that leaves it reads them once. */
-const wordsFound = new WeakMap<AgentTranscriptMessage, string>();
+/** Each message's words of each kind as a find counts them, kept by the message, so a page that leaves it reads them once. */
+const wordsFound = {
+  [DRAWN_WORDS.SAID]: new WeakMap<AgentTranscriptMessage, string>(),
+  [DRAWN_WORDS.DETAILS]: new WeakMap<AgentTranscriptMessage, string>(),
+} as const;
 
-/** The words a message draws that a find counts before its row is drawn: its text, its reasoning, and each call's line, input, answer and error, as its rows draw them (`drawnMessageWords`). */
-function findWordsOf(message: AgentTranscriptMessage): string {
-  const kept = wordsFound.get(message);
+/** The words of a kind a message draws that a find counts before its row is drawn: its text, or its reasoning and each call's line, input, answer and error, as its rows draw them (`drawnMessageWords`). */
+function findWordsOf(message: AgentTranscriptMessage, which: DrawnWords): string {
+  const kept = wordsFound[which].get(message);
   if (kept !== undefined) return kept;
-  const words = drawnMessageWords(message);
-  wordsFound.set(message, words);
+  const words = drawnMessageWords(message, which);
+  wordsFound[which].set(message, words);
   return words;
 }
 
-/** A row as a find reads it before it is drawn: its messages' words. */
+/** A row as a find reads it before it is drawn: its messages' words, its details' apart. */
 function findRowOf(row: PlacedRow): FindRow {
+  const messages = [row.message, ...row.arrived];
   return {
     key: transcriptRowKey(row.message),
-    words: [row.message, ...row.arrived].map(findWordsOf).join("\n"),
+    words: messages.map((message) => findWordsOf(message, DRAWN_WORDS.SAID)).join("\n"),
+    details: messages.map((message) => findWordsOf(message, DRAWN_WORDS.DETAILS)).join("\n"),
   };
 }
 
@@ -2202,22 +2212,32 @@ function heldElsewhere(row: PlacedRow, messageId: string): boolean {
 }
 
 /** Each piece's own words as a find counts them, kept by the piece. */
-const pieceWords = new WeakMap<TurnPiece, string>();
+const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
-/** A row as a find reads it before it is drawn: its messages' words, or a piece's own. */
+/** A piece's words of a kind, its lines' and its rows'. */
+function pieceWordsOf(piece: TurnPiece, which: DrawnWords): string {
+  return piece.stretches
+    .map((stretch) =>
+      stretch.line !== undefined
+        ? findWordsOf(stretch.line, which)
+        : drawnRowsWords(stretch.rows, which),
+    )
+    .join("\n");
+}
+
+/** A row as a find reads it before it is drawn: its messages' words, or a piece's own, its details' apart. */
 function findEntryOf(entry: LogEntry): FindRow {
   const { piece, row } = entry;
   if (piece === undefined) return findRowOf(row);
   let own = pieceWords.get(piece);
   if (own === undefined) {
-    own = piece.stretches
-      .map((stretch) =>
-        stretch.line !== undefined ? findWordsOf(stretch.line) : drawnRowsWords(stretch.rows),
-      )
-      .join("\n");
+    own = {
+      words: pieceWordsOf(piece, DRAWN_WORDS.SAID),
+      details: pieceWordsOf(piece, DRAWN_WORDS.DETAILS),
+    };
     pieceWords.set(piece, own);
   }
-  return { key: entry.key, words: own };
+  return { key: entry.key, ...own };
 }
 
 /** What a long turn's pieces are read from, so a draw that changed none of it reads none of it again. */
@@ -2582,6 +2602,8 @@ function AgentTranscriptView({
   const callIds = useMemo(() => transcriptCallIds(messages), [messages]);
   // Note that the rows' words are read only while a find bar stands open over the tab.
   const finding = useFindOpen();
+  // Whether the find searches the calls and thoughts, which the transcript offers it to leave out.
+  const findsDetails = useFindDetails();
   const findRows = useMemo(
     () => (finding ? entries.map(findEntryOf) : NO_FIND_ROWS),
     [finding, entries],
@@ -2601,6 +2623,7 @@ function AgentTranscriptView({
     rows: findRows,
     handle: rowsHandle,
     findable: rowKeys.length > 0,
+    details: findsDetails,
   });
   useLayoutEffect(() => {
     if (bringIn === undefined) return;

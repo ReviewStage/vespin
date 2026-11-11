@@ -175,6 +175,7 @@ import {
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1517,7 +1518,7 @@ export function TranscriptOpeningCall({
   const { line, chip } = chippedLine(kind, subject, undefined, agent);
   return (
     <Tooltip label={hint} card={card ?? undefined}>
-      <LineButton data-call-id={callId} data-opens="" onClick={onOpen}>
+      <LineButton data-call-id={callId} data-opens="" {...FIND_DETAIL} onClick={onOpen}>
         <ToolLine
           state={state}
           icon={<Icon aria-hidden="true" />}
@@ -1891,7 +1892,7 @@ export function TranscriptSubagent({
       </Tool>
     ) : onOpen === undefined ? (
       // The same line as the one that opens a subagent's tab, pressed by nothing.
-      <LineRow data-subagent-row="" data-call-id={callId}>
+      <LineRow data-subagent-row="" data-call-id={callId} {...FIND_DETAIL}>
         {line}
       </LineRow>
     ) : (
@@ -1937,12 +1938,14 @@ function TurnFold({
   children: ReactNode;
 }): ReactNode {
   return (
-    <Disclosure defaultOpen={open} data-turn-fold="">
-      <DisclosureSummary>
-        {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
-      </DisclosureSummary>
-      <DisclosureBody>{children}</DisclosureBody>
-    </Disclosure>
+    <FindDetailFolds>
+      <Disclosure defaultOpen={open} data-turn-fold="" {...FIND_DETAIL}>
+        <DisclosureSummary>
+          {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
+        </DisclosureSummary>
+        <DisclosureBody>{children}</DisclosureBody>
+      </Disclosure>
+    </FindDetailFolds>
   );
 }
 
