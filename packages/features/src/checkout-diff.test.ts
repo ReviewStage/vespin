@@ -35,6 +35,12 @@ const DIFF = [
   "+++ /dev/null",
   "@@ -1 +0,0 @@",
   "-gone",
+  "diff --git a/src/my file.ts b/src/my file.ts",
+  "--- a/src/my file.ts\t",
+  "+++ b/src/my file.ts\t",
+  "@@ -1 +1 @@",
+  "-old",
+  "+new",
   "diff --git a/src/a.ts b/src/b.ts",
   "similarity index 100%",
   "rename from src/a.ts",
@@ -45,7 +51,7 @@ const DIFF = [
   "",
 ].join("\n");
 
-test("each file of a diff is read with its paths, kind, counts, and hunks, a binary one left out by name", () => {
+test("each file of a diff is read with its paths, a space in one among them, kind, counts, and hunks, a binary one left out by name", () => {
   assert.deepEqual(checkoutDiffFiles(DIFF), {
     truncated: false,
     files: [
@@ -83,6 +89,15 @@ test("each file of a diff is read with its paths, kind, counts, and hunks, a bin
         additions: 0,
         deletions: 1,
         patch: "@@ -1 +0,0 @@\n-gone",
+        omitted: null,
+      },
+      {
+        path: "src/my file.ts",
+        previousPath: null,
+        status: CHANGED_FILE_STATUS.MODIFIED,
+        additions: 1,
+        deletions: 1,
+        patch: "@@ -1 +1 @@\n-old\n+new",
         omitted: null,
       },
       {
@@ -131,8 +146,17 @@ test("a patch past the view's bound is left out as too large with its counts kep
   );
 
   const whole = fileOf("first.ts", 1);
-  const filler = `${whole}\n${fileOf("second.ts", CHECKOUT_DIFF_BOUNDS.MAX_BYTES / 8)}`;
-  const cut = checkoutDiffFiles(filler.slice(0, CHECKOUT_DIFF_BOUNDS.MAX_BYTES));
+  // A diff of two-byte characters reaches the bound at about half the characters, which the reading counts in bytes.
+  const wide = [
+    "diff --git a/second.ts b/second.ts",
+    "--- a/second.ts",
+    "+++ b/second.ts",
+    `@@ -0,0 +1,${CHECKOUT_DIFF_BOUNDS.MAX_BYTES / 64} @@`,
+    ...Array.from({ length: CHECKOUT_DIFF_BOUNDS.MAX_BYTES / 64 }, () => `+${"é".repeat(60)}`),
+  ].join("\n");
+  const cut = checkoutDiffFiles(
+    `${whole}\n${wide}`.slice(0, (CHECKOUT_DIFF_BOUNDS.MAX_BYTES * 17) / 32),
+  );
   assert.deepEqual(
     [cut.truncated, cut.files.map((file) => file.path)],
     [true, ["first.ts"]],

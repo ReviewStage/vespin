@@ -50,7 +50,7 @@ import {
 } from "../agent-wire.js";
 import { modelChoiceSchema } from "../models-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
-import { HOSTED_API_ERROR } from "../service-wire.js";
+import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import {
   sandboxResumedAnswerSchema,
   terminalCreatedAnswerSchema,
@@ -408,7 +408,7 @@ export const agentsContract = {
       ),
     )
     .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/turn-changes` }))
-    .input(EffectSchema.Struct({ id: EffectSchema.String, messageId: EffectSchema.String }))
+    .input(EffectSchema.Struct({ id: EffectSchema.String, messageId: wireUuidSchema }))
     .output(EffectSchema.flip(agentTurnChangesAnswerSchema)),
   /** What the reviewer and label pickers of one agent's Pull request tab offer. */
   reviewOptions: declaredProcedure
