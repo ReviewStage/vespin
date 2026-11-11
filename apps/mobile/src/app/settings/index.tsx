@@ -49,6 +49,7 @@ import {
   usePushDeviceKey,
   usePushDeviceStanding,
 } from "../../push-device.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useSurfaceOpen } from "../../surface-open.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -126,7 +127,7 @@ export default function SettingsScreen() {
                 email={account.email}
                 picture={account.pictureUrl}
                 detail={`Signed in with ${SOCIAL_PROVIDER_LABEL[account.provider]}`}
-                onPress={() => router.push("/settings/account")}
+                onPress={() => router.push(SETTINGS_ROUTE.ACCOUNT)}
               />
             </ListSection>
           ) : null}
@@ -135,7 +136,7 @@ export default function SettingsScreen() {
               <PushRow
                 label={chosen.name}
                 goes={PUSH_ROW_GOES.PAGE}
-                onPress={() => router.push("/settings/workspace")}
+                onPress={() => router.push(SETTINGS_ROUTE.WORKSPACE)}
                 testId="settings-workspace"
               />
               <PickRows
@@ -187,7 +188,7 @@ export default function SettingsScreen() {
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
               symbol="sparkles"
               goes={PUSH_ROW_GOES.PAGE}
-              onPress={() => router.push("/settings/agents")}
+              onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
           </ListSection>
           <ListSection title="About">

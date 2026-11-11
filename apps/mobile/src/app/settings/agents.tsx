@@ -45,6 +45,7 @@ import {
   useAsyncAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
@@ -101,6 +102,11 @@ export default function AgentsScreen() {
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const write = useAsyncAction(rejectionWords);
   const setting = useAsyncAction(rejectionWords);
+  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was dropped or refused redraws its section, which reads the stored choice again.
+  const [defaultRound, setDefaultRound] = useState(0);
+  const [settingRound, setSettingRound] = useState(0);
+  // The setting last written, whose section says why a refusal was given.
+  const [written, setWritten] = useState<AppSettingField | undefined>(undefined);
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -114,26 +120,38 @@ export default function AgentsScreen() {
         };
 
   const choose = (choice: ModelChoice | undefined) => {
-    if (choice === undefined) return;
-    void write.run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined));
+    if (choice === undefined) {
+      setDefaultRound((round) => round + 1);
+      return;
+    }
+    void write
+      .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
+      .then((landed) => {
+        if (!landed) setDefaultRound((round) => round + 1);
+      });
   };
   const atSpeed = (next: ModelSpeed) => {
     if (current === undefined || standard === undefined) return;
     const model = modelIdAtSpeed(standard, next);
     const effort = effortFor(effortsOf(catalog, model), current.effort);
-    if (effort !== undefined) choose({ model, effort });
+    choose(effort === undefined ? undefined : { model, effort });
   };
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
-    void setting.run(() => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined));
+    setWritten(field);
+    void setting
+      .run(() => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
+      .then((landed) => {
+        if (!landed) setSettingRound((round) => round + 1);
+      });
   };
 
   return (
     <Screen>
       <SettingsForm>
         {current === undefined || standard === undefined ? null : (
-          <ListSection title={DEFAULT_WORDS.SECTION} footer={write.refusal}>
+          <ListSection key={defaultRound} title={DEFAULT_WORDS.SECTION} footer={write.refusal}>
             <MenuPickRow
               label={DEFAULT_WORDS.MODEL}
               options={modelOptions(catalog)}
@@ -186,8 +204,16 @@ export default function AgentsScreen() {
                 control === undefined
                   ? []
                   : [
-                      <ListSection key={entry.id} footer={entry.detail}>
+                      <ListSection
+                        key={entry.id}
+                        footer={
+                          written === field && setting.refusal !== undefined
+                            ? setting.refusal
+                            : entry.detail
+                        }
+                      >
                         <MenuPickRow
+                          key={settingRound}
                           label={entry.label}
                           options={control.options.map((option) => ({
                             id: option.value,
@@ -202,9 +228,6 @@ export default function AgentsScreen() {
                     ],
               ),
             )}
-        {setting.refusal === undefined ? null : (
-          <ListSection footer={setting.refusal}>{null}</ListSection>
-        )}
       </SettingsForm>
     </Screen>
   );

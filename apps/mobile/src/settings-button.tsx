@@ -13,6 +13,8 @@ const SETTINGS = "Settings";
 /** Settings' routes: its main list, a sheet over the tabs and a form sheet in a regular window, and the pages a place elsewhere opens it on. */
 export const SETTINGS_ROUTE = {
   MAIN: "/settings",
+  ACCOUNT: "/settings/account",
+  AGENTS: "/settings/agents",
   /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
