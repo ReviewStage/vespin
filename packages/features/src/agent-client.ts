@@ -1197,7 +1197,12 @@ export class HostedAgentClient {
     agentId: string,
     messageId: string,
   ): Effect.Effect<AgentTurnChangesAnswerView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.agents.turnChanges, { id: agentId, messageId });
+    // The diff runs on the agent's machine, a sandbox woken where it stopped, past the usual read's bound.
+    return hostedCall(
+      this.#hosted.agents.turnChanges,
+      { id: agentId, messageId },
+      { deadline: HOSTED_DEADLINE.TURN_CHANGES },
+    );
   }
 
   /** One agent's pull request itself as its overview draws it: its description, branches, mergeability, and people as GitHub holds them now. */
