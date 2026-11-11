@@ -11,8 +11,10 @@ import {
   font,
   foregroundStyle,
   frame,
+  listSectionMargins,
   listStyle,
   monospacedDigit,
+  onGeometryChange,
   refreshable,
   scrollContentBackground,
   shapes,
@@ -22,7 +24,7 @@ import type { MarkLook } from "./glyph.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The fold chevron's size, a little under the header's words. */
@@ -64,10 +66,15 @@ function listGround(colors: BrandColors, look: ListLook): string {
 /**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
- * the row should not stand selected on the way back.
+ * the row should not stand selected on the way back. A plain list wider than
+ * the reading width, such as a pull request's page across an iPad, centers
+ * its sections in it, as iOS's readable content guide does, while the list
+ * still scrolls from either edge.
  */
 export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
   const colors = useColors();
+  const [width, setWidth] = useState(0);
+  const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
@@ -79,6 +86,8 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
+        onGeometryChange(({ width: next }) => setWidth(next)),
+        ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
