@@ -241,6 +241,8 @@ const SHARE_EXTENSION: AppExtension = {
     NSExtensionActivationRule: {
       NSExtensionActivationSupportsText: true,
       NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+      // Note that this is the share sheet's picture count, one per draft picture file (`SHARE_DRAFT_PICTURE_FILES`).
+      NSExtensionActivationSupportsImageWithMaxCount: 4,
     },
   },
   COLORS: { AccentColor: "ACCENT" },

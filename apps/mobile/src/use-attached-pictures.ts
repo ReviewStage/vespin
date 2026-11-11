@@ -20,7 +20,7 @@ import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -79,8 +79,13 @@ export interface AttachedPictures {
 /**
  * The pictures a composer or a sheet attaches, saying what the picker or a
  * bound refused through `onNote`, and nothing once a picture is taken off.
+ * `opensWith` names JPEGs the holder opens holding, such as a share sheet
+ * draft's, read and deleted as a drop's are, once, as it mounts.
  */
-export function useAttachedPictures(onNote: (note: string | undefined) => void): AttachedPictures {
+export function useAttachedPictures(
+  onNote: (note: string | undefined) => void,
+  opensWith?: readonly string[],
+): AttachedPictures {
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
@@ -141,6 +146,10 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
       .then((contents) => add(contents, unreadable))
       .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
   };
+  const opening = useEffectEvent(() => {
+    if (opensWith !== undefined && opensWith.length > 0) drop(opensWith, 0);
+  });
+  useEffect(() => opening(), []);
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
