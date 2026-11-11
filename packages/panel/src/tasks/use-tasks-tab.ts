@@ -1631,24 +1631,10 @@ export function useTasksTab(input: {
     const bound = homeNow.current.boundFor;
     if (!leaveMove() && fixture === undefined && bound !== undefined) unbindTask();
   }, [fixture, leaveMove, unbindTask]);
-  // The agent the column shows while it is live leaves the window for Home once it is archived, by its ⋯ or by its
-  // task marked done or canceled. Note that only the move into archived does, because an archived agent opened from
-  // History is read where it stands.
-  const shownLive = useRef<{ taskId: string; agentId: string } | undefined>(undefined);
-  const shownTaskId = viewed.activeTaskId;
-  const liveIds = agents.agentIds;
-  useEffect(() => {
-    const was = shownLive.current;
-    shownLive.current =
-      shownTaskId !== undefined && columnAgent !== undefined && liveIds?.includes(columnAgent)
-        ? { taskId: shownTaskId, agentId: columnAgent }
-        : undefined;
-    if (was === undefined || was.taskId !== shownTaskId) return;
-    if (archivedIds?.includes(was.agentId) === true) leaveTask();
-  }, [shownTaskId, columnAgent, liveIds, archivedIds, leaveTask]);
   // The open task leaves the window for Home once it is marked done or canceled, or leaves the list read, as a delete
   // takes it, since the sidebar draws it no longer. Note that only the move does, because a settled task opened from
   // the Tasks page or a link is read where it stands.
+  const shownTaskId = viewed.activeTaskId;
   const openRow = tasks.tasks.find((task) => task.id === shownTaskId);
   const openGone =
     openRow === undefined
