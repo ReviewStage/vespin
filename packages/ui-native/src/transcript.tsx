@@ -19,6 +19,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  useAccessibilitySize,
+  useAnnounced,
+  useReduceMotion,
+  useReduceTransparency,
+  useScaledSize,
+} from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { isLucideSymbol } from "./glyph.js";
@@ -32,6 +39,7 @@ import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
+  type CallStanding,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -61,6 +69,29 @@ const JUMP_SIZE = 44;
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
 
+/** Where a call stands, as VoiceOver hears it after the call's line, its mark saying it on screen. */
+const CALL_STANDING_HEARD = {
+  [CALL_STANDING.RUNNING]: "Working",
+  [CALL_STANDING.FAILED]: "Failed",
+  [CALL_STANDING.DONE]: "Done",
+} as const satisfies Record<CallStanding, string>;
+
+/** What a call held for the reader's answer is heard as, in its standing's place. */
+const HELD_HEARD = "Waiting for your answer";
+
+/** What a closed row is heard as, since React Native says "expanded" of an open one alone. */
+const COLLAPSED_HEARD = "Collapsed";
+
+/** What a press on a call's line, or a fold's, is heard to do. */
+const CALL_HINT = "Shows or hides the call's input and output";
+const FOLD_HINT = "Shows or hides the steps it holds";
+
+/** What the spinner over the oldest row is heard as while an older page is read. */
+const READING_OLDER = "Loading earlier messages";
+
+/** How far a row's press reaches past its line, above and below, so a 28 pt line takes a press across the system's least target, 44 pt. */
+const LINE_REACH = { top: 8, bottom: 8 } as const;
+
 /** What a page's card says it opens. */
 const PAGE_WORD = "Page";
 
@@ -89,6 +120,7 @@ const styles = StyleSheet.create({
   },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
+  wrapped: { flexWrap: "wrap" },
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
@@ -154,7 +186,7 @@ function inset(depth: number): { readonly paddingLeft: number } {
   return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
 }
 
-/** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well. */
+/** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
 function StandingMark({
   running,
   failed,
@@ -163,17 +195,16 @@ function StandingMark({
   readonly failed: boolean;
 }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
   if (running)
-    return (
-      <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityLabel="Working" />
-    );
+    return <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />;
   if (!failed) return null;
   return (
     <SymbolView
       name="xmark.circle.fill"
-      size={MARK_SIZE.GLYPH}
+      size={size}
       tintColor={colors.DANGER}
-      accessibilityLabel="Failed"
+      accessibilityElementsHidden
     />
   );
 }
@@ -216,12 +247,13 @@ function BodyBlock({
  */
 function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
   const glyph = CALL_SYMBOL[callKind];
   if (!isLucideSymbol(glyph)) {
     return (
       <SymbolView
         name={glyph}
-        size={MARK_SIZE.GLYPH}
+        size={size}
         tintColor={colors.TEXT_MUTED}
         accessibilityElementsHidden
       />
@@ -246,8 +278,12 @@ function CallRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  // Note that at an accessibility size the line's words wrap rather than cut to a word or two.
+  const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Pressable
@@ -255,12 +291,17 @@ function CallRow({
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
         accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityValue={{
+          text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
+        }}
+        accessibilityHint={CALL_HINT}
+        hitSlop={LINE_REACH}
         style={styles.callLine}
       >
         <CallGlyph callKind={item.callKind} />
-        <View style={styles.callWords}>
+        <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
-            numberOfLines={1}
+            numberOfLines={lines}
             style={{
               flexShrink: 0,
               maxWidth: "70%",
@@ -275,7 +316,7 @@ function CallRow({
               style={[styles.chip, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}
             >
               <Text
-                numberOfLines={1}
+                numberOfLines={lines}
                 style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_BODY, fontWeight: "500" }}
               >
                 {chip}
@@ -284,7 +325,7 @@ function CallRow({
           )}
           {subject === undefined || item.open ? null : (
             <Text
-              numberOfLines={1}
+              numberOfLines={lines}
               style={{
                 flexShrink: 1,
                 fontSize: line.code ? TEXT_SIZE.CAPTION : TEXT_SIZE.FOOTNOTE,
@@ -298,7 +339,7 @@ function CallRow({
         </View>
         {item.runOn === undefined ? null : (
           <Text
-            numberOfLines={1}
+            numberOfLines={lines}
             style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
           >
             {item.runOn}
@@ -338,6 +379,11 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  const heard = [
+    item.running ? CALL_STANDING_HEARD[CALL_STANDING.RUNNING] : undefined,
+    item.open ? undefined : COLLAPSED_HEARD,
+  ].filter((part) => part !== undefined);
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Pressable
@@ -345,6 +391,9 @@ function FoldRow({
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
         accessibilityLabel={item.summary}
+        accessibilityValue={heard.length === 0 ? undefined : { text: heard.join(", ") }}
+        accessibilityHint={FOLD_HINT}
+        hitSlop={LINE_REACH}
         style={styles.callLine}
       >
         <SymbolView
@@ -355,7 +404,7 @@ function FoldRow({
           accessibilityElementsHidden
         />
         <Text
-          numberOfLines={1}
+          numberOfLines={large ? undefined : 1}
           style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
         >
           {item.summary}
@@ -403,6 +452,7 @@ function TranscriptRow({
   readonly drawing: RowDrawing;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
@@ -438,7 +488,7 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.WORKING:
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
-          <ActivityIndicator size="small" color={colors.TEXT_MUTED} />
+          <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />
           <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
@@ -504,7 +554,7 @@ function TranscriptRow({
             />
             <View style={{ flex: 1, gap: 2 }}>
               <Text
-                numberOfLines={2}
+                numberOfLines={large ? undefined : 2}
                 style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "500", color: colors.TEXT }}
               >
                 {item.title}
@@ -579,14 +629,21 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   const said = [words, pressed ? undefined : model]
     .filter((each) => each !== undefined && each !== "")
     .join(" · ");
+  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
+  useAnnounced(words);
   if (said === "" && !pressed) return null;
   const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
   return (
     <View style={[styles.head, styles.headLine]}>
       {state === GLYPH_STATE.WORKING ? (
-        <ActivityIndicator size="small" color={colors.WORKING} />
+        <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
       ) : state === GLYPH_STATE.FAILED ? (
-        <SymbolView name="xmark.circle.fill" size={MARK_SIZE.GLYPH} tintColor={colors.DANGER} />
+        <SymbolView
+          name="xmark.circle.fill"
+          size={MARK_SIZE.GLYPH}
+          tintColor={colors.DANGER}
+          accessibilityElementsHidden
+        />
       ) : null}
       {said === "" ? null : (
         <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
@@ -596,7 +653,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           onPress={onModel}
           accessibilityRole="button"
           accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
-          hitSlop={SPACE.TIGHT}
+          hitSlop={LINE_REACH}
           testID="agent-model"
           style={styles.headModel}
         >
@@ -618,9 +675,9 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
  * The control that brings the newest row into view, as Messages and the
  * chat apps draw it: a round button of Liquid Glass holding a down arrow,
  * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, it is
- * drawn on the surface's ground with its edge rather than a hand-drawn copy
- * of glass.
+ * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * reader turned on Reduce Transparency, it is drawn solid on the surface's
+ * ground inside the strong edge rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
@@ -630,6 +687,7 @@ function JumpToLatest({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
   const arrow = (
     <SymbolView
       name="arrow.down"
@@ -647,23 +705,23 @@ function JumpToLatest({
       hitSlop={SPACE.TIGHT}
       style={[styles.jump, { bottom }]}
     >
-      {isLiquidGlassAvailable() ? (
-        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
-          {arrow}
-        </GlassView>
-      ) : (
+      {solid ? (
         <View
           style={[
             styles.jumpFace,
             {
               backgroundColor: colors.SURFACE,
-              borderColor: colors.CHIP_EDGE,
+              borderColor: colors.CHIP_EDGE_STRONG,
               borderWidth: StyleSheet.hairlineWidth,
             },
           ]}
         >
           {arrow}
         </View>
+      ) : (
+        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
+          {arrow}
+        </GlassView>
       )}
     </Pressable>
   );
@@ -689,7 +747,11 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
   if (older.reading) {
     return (
       <View style={styles.older}>
-        <ActivityIndicator size="small" color={colors.TEXT_MUTED} />
+        <ActivityIndicator
+          size="small"
+          color={colors.TEXT_MUTED}
+          accessibilityLabel={READING_OLDER}
+        />
       </View>
     );
   }
@@ -739,6 +801,7 @@ export function AgentTranscript({
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
+  const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlatList<TranscriptItem>>(null);
   // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
@@ -810,7 +873,8 @@ export function AgentTranscript({
           bottom={foot}
           onPress={() => {
             anchored.current = true;
-            list.current?.getScrollResponder()?.scrollToEnd({ animated: true });
+            // Note that the jump scrolls at once where the reader asked for less motion.
+            list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
           }}
         />
       ) : null}

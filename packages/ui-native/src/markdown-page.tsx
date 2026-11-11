@@ -50,7 +50,13 @@ export function MarkdownPage({
         <PageHeader title={title} summary={summary} status={status} />
         <RNHostView matchContents={{ vertical: true }}>
           <View style={WORDS_FRAME}>
-            <Markdown words={words} repository={repository} onOpenLink={onOpenLink} typed={typed} />
+            <Markdown
+              words={words}
+              repository={repository}
+              onOpenLink={onOpenLink}
+              typed={typed}
+              headings
+            />
           </View>
         </RNHostView>
       </VStack>

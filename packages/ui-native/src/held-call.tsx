@@ -1,9 +1,16 @@
 // held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny and Allow under its line in the transcript, and a banner over the composer while any call waits.
 
 import { HStack, Image, Text, VStack } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, lineLimit } from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityHidden,
+  font,
+  foregroundStyle,
+  frame,
+  lineLimit,
+} from "@expo/ui/swift-ui/modifiers";
 import { APPROVAL_PRESS_WORDS } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
+import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { useColors } from "./tokens/colors.js";
@@ -117,10 +124,18 @@ export function HeldCallBanner({
   onAnswer,
 }: HeldCallBannerProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  // Note that the banner is told to VoiceOver as it stands, since an agent held for an answer waits on the reader wherever they are.
+  useAnnounced(`${waiting}, ${asks}`, true);
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>
-        <Image systemName="hand.raised" size={MARK_SIZE.GLYPH} color={colors.ATTENTION} />
+        <Image
+          systemName="hand.raised"
+          size={MARK_SIZE.GLYPH}
+          color={colors.ATTENTION}
+          modifiers={[accessibilityHidden()]}
+        />
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
@@ -135,7 +150,8 @@ export function HeldCallBanner({
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           foregroundStyle(colors.TEXT_BODY),
-          lineLimit(2),
+          // Note that what is asked is read whole at an accessibility size, since a reader approves what they can read.
+          lineLimit(large ? 8 : 2),
         ]}
       >
         {asks}
