@@ -2654,12 +2654,14 @@ svg.lucide {
   pointer-events: none;
 }
 
-/* The button stands in the gutter past the column's end, centered on its
-   block's first line as a folded line's count is on its words' first line,
-   which stands in its place on a line holding threads. */
+/* The button stands in the gutter past the column's end where a folded
+   line's count stands, its end on the counts' end, and centered on its
+   block's first line as a count is on its words' first line, which stands in
+   its place on a line holding threads. The gutter is as wide as the gap
+   before the margin's cards, so beside them it stands centered in that gap. */
 .comment-block-button {
   position: absolute;
-  left: calc(100% + var(--ui-space-2));
+  right: calc(var(--ui-space-8) - var(--comment-gutter));
   translate: 0 -50%;
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);

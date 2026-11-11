@@ -116,7 +116,6 @@ import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/ui/rep
 import { ReplayUnmask, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { visibleViewport } from "@repo/ui/visible-viewport";
 import { useSelector } from "@tanstack/react-store";
 import { Equal } from "effect";
 import {
@@ -411,9 +410,6 @@ const THREAD_PLACE = {
 } as const;
 
 type ThreadPlace = (typeof THREAD_PLACE)[keyof typeof THREAD_PLACE];
-
-/** The room a finger's bubble needs under the words, its gap past the handle and its own height, short of which it stands over them after all. */
-const BUBBLE_ROOM_TOUCH = FINGER_SELECTION_GAP + 48;
 
 /** The words a thread's controls are named by. */
 const COMMENT_WORDS = {
@@ -2194,7 +2190,7 @@ export function DescriptionCommentLayer({
   const touching = useRef(false);
 
   const [bubble, setBubble] = useState<
-    { top: number; left: number; below: boolean; start: () => void } | undefined
+    { words: () => DOMRect | undefined; coarse: boolean; start: () => void } | undefined
   >(undefined);
 
   const cards = useRef(new Map<string, HTMLDivElement>());
@@ -2608,15 +2604,6 @@ export function DescriptionCommentLayer({
 
         return;
       }
-
-      const box = range.getBoundingClientRect();
-      const own = element.getBoundingClientRect();
-
-      // Note that a finger's bubble stands under the words, because the system's own selection menu stands over them, unless the window ends first.
-      const below =
-        coarsePointerNow() && box.bottom + BUBBLE_ROOM_TOUCH <= visibleViewport().bottom;
-
-      const top = (below ? box.bottom : box.top) - own.top;
       const index = [...element.querySelectorAll(`.${unitClass}`)].indexOf(start);
       const section = sections[index];
       const quote = selection.toString().trim();
@@ -2625,9 +2612,9 @@ export function DescriptionCommentLayer({
       const from = drawnOffset(start, range.startContainer, range.startOffset);
       const to = drawnOffset(start, range.endContainer, range.endOffset);
       setBubble({
-        top,
-        left: box.left - own.left,
-        below,
+        // Note that the editor opening on the words replaces them, which collapses the range, so the bubble stands where it stood for the frame it has left.
+        words: () => (range.collapsed ? undefined : range.getBoundingClientRect()),
+        coarse: coarsePointerNow(),
         start: () => {
           const begun = pendingOf(
             start,
@@ -2799,18 +2786,30 @@ export function DescriptionCommentLayer({
 
   const bubbleDrawn =
     bubble === undefined ? null : (
-      <MenuSurface
-        flow={MENU_SURFACE_FLOW.TOOLBAR}
-        className="comment-bubble absolute z-3 -translate-y-[calc(100%+var(--ui-space-6))] data-below:translate-y-ui-16"
-        data-below={bubble.below ? "" : undefined}
-        style={{ top: bubble.top, left: bubble.left }}
+      // Note that it floats as the editor's format toolbar does (`selection-toolbar.tsx`), which takes its place once the press opens the editor, so the Comment it holds never moves as one gives way to the other; a finger's stands under the words and their handle, because the system's own selection menu stands over them.
+      <RectFloat
+        open
+        anchor={() => {
+          const box = bubble.words();
+          return box === undefined || !bubble.coarse
+            ? box
+            : {
+                left: box.left,
+                top: box.top,
+                right: box.right,
+                bottom: box.bottom + FINGER_SELECTION_GAP,
+              };
+        }}
+        side={bubble.coarse ? POPOVER_SIDE.BELOW : POPOVER_SIDE.ABOVE}
       >
-        <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
-          <Button keepFocus icon={<MessageSquarePlusIcon />} onClick={bubble.start}>
-            <ReplayUnmask>{COMMENT_WORDS.COMMENT}</ReplayUnmask>
-          </Button>
-        </Tooltip>
-      </MenuSurface>
+        <MenuSurface flow={MENU_SURFACE_FLOW.TOOLBAR} className="comment-bubble">
+          <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
+            <Button keepFocus icon={<MessageSquarePlusIcon />} onClick={bubble.start}>
+              <ReplayUnmask>{COMMENT_WORDS.COMMENT}</ReplayUnmask>
+            </Button>
+          </Tooltip>
+        </MenuSurface>
+      </RectFloat>
     );
 
   // Note that an open card stands no taller than the scroller it opens in, its entries scrolling inside it.
