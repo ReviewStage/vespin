@@ -14,6 +14,7 @@
  * where it was opened from, since the agent leaves its task's list.
  */
 
+import { ARCHIVE_FAILED } from "@repo/features/agent-refusal-words";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { archiveStopWords } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -32,7 +33,7 @@ const ACT_FAILED = {
   RENAME: "The agent could not be renamed.",
   PIN: "The agent could not be pinned.",
   UNPIN: "The agent could not be unpinned.",
-  ARCHIVE: "The agent could not be archived.",
+  ARCHIVE: ARCHIVE_FAILED,
   COPY: "The link could not be copied.",
 } as const;
 

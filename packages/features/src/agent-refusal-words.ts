@@ -64,6 +64,9 @@ export const MESSAGE_NOT_SENT = "The message could not be sent.";
 /** What the toast says when the service did not stop an agent. */
 export const STOP_FAILED = "The agent could not be stopped. Try again.";
 
+/** What an agent's archive the service refused says, wherever it was pressed. */
+export const ARCHIVE_FAILED = "The agent could not be archived.";
+
 /** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
 export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
 

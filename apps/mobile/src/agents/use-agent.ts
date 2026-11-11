@@ -9,7 +9,7 @@
  * transcript the host still holds, as one shown lately, draws at once.
  */
 
-import { STOP_FAILED } from "@repo/features/agent-refusal-words";
+import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
@@ -86,8 +86,11 @@ export function useHeldAgentStep(agentId: string, status: AgentStatus): string |
   }, [messages, status]);
 }
 
-/** An agent row's swipe, as the panel's row menu offers it: Stop while it works, buzzing as it lands or is refused. */
-export function useAgentRowActs(): { readonly stop: (agentId: string) => void } {
+/** An agent row's acts, as the panel's row menu offers them: Stop while it works, and Archive, once asked, each buzzing as it lands or is refused. */
+export function useAgentRowActs(): {
+  readonly stop: (agentId: string) => void;
+  readonly archive: (agentId: string) => void;
+} {
   const acts = useHostActs();
   const write = useWrite();
   return useMemo(
@@ -96,6 +99,14 @@ export function useAgentRowActs(): { readonly stop: (agentId: string) => void } 
         write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
           refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
           unanswered: STOP_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      archive: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
+          refused: (answer) => ("failure" in answer ? ARCHIVE_FAILED : undefined),
+          unanswered: ARCHIVE_FAILED,
           retry: true,
           went: BUZZ.SUCCESS,
         });

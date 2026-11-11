@@ -27,6 +27,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { archiveStopWords } from "@repo/features/tasks-model";
 import { provenanceText } from "@repo/features/time-format";
 import { readingWords, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -64,7 +65,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { type ReactElement, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -121,6 +122,7 @@ const WORDS = {
   NO_TASKS: "No tasks to do",
   UNLISTED_TASK: "Task",
   STOP: "Stop",
+  ARCHIVE: "Archive",
 } as const;
 
 /** The statuses the ⋯ menu's Status offers, in the panel's order. */
@@ -499,39 +501,88 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
 }
 
 /**
- * An agent row's swipe: Stop while it works, which a full swipe runs. Note
- * that Archive stays in the agent page's menu, which asks first, as the
- * phone asks of any archive since it has no Undo to offer after.
+ * An agent row's swipe: Stop while it works, which a full swipe runs, or
+ * Archive once it rests, which asks first (`useAgentArchiveAsk`), as the
+ * agent page's menu asks, since the phone has no Undo to offer after; a
+ * destructive act never runs on a full swipe.
  */
 function agentSwipes(
   agent: TaskAgentLine["agent"],
   acts: ReturnType<typeof useAgentRowActs>,
+  onArchive: ((agentId: string) => void) | undefined,
 ): readonly RowSwipe[] {
-  if (!agentStillWriting(agent.status)) return [];
+  if (agentStillWriting(agent.status)) {
+    return [
+      {
+        label: WORDS.STOP,
+        symbol: "stop.circle",
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => acts.stop(agent.id),
+      },
+    ];
+  }
+  if (onArchive === undefined) return [];
   return [
     {
-      label: WORDS.STOP,
-      symbol: "stop.circle",
-      tone: ROW_ACTION_TONE.NEUTRAL,
-      onPress: () => acts.stop(agent.id),
+      label: WORDS.ARCHIVE,
+      symbol: "archivebox",
+      tone: ROW_ACTION_TONE.DESTRUCTIVE,
+      onPress: () => onArchive(agent.id),
     },
   ];
+}
+
+/** What Archive on an agent's row asks first, as the agent page's menu asks of an agent at rest: its title and its act. */
+const ARCHIVE_ROW = { title: archiveStopWords(false).title, act: "Archive agent" } as const;
+
+/**
+ * Archive on an agent's row, asked first: `archive` raises the question for
+ * an agent, and `ask` is the system's alert that asks it, which the screen
+ * stands beside its `<Screen>`, as every list's questions stand.
+ */
+export function useAgentArchiveAsk(): {
+  readonly archive: (agentId: string) => void;
+  readonly ask: ReactElement;
+} {
+  const acts = useAgentRowActs();
+  const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
+  const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
+  return {
+    archive: (agentId) => setAsked({ agentId, presented: true }),
+    ask: (
+      <ConfirmAsk
+        title={ARCHIVE_ROW.title}
+        act={ARCHIVE_ROW.act}
+        destructive
+        presented={asked?.presented === true}
+        onAct={() => {
+          if (asked === undefined || !asked.presented) return;
+          letGo();
+          acts.archive(asked.agentId);
+        }}
+        onDismiss={letGo}
+      />
+    ),
+  };
 }
 
 /**
  * One agent's row, as a task's Agents lists it: its mark, its name, where it
  * runs, its threads that need you, and its pull request's number, which
- * opens its own screen; a swipe stops it while it works, and a long press
- * lifts its preview, its latest step among it where the app holds its
- * transcript.
+ * opens its own screen; a swipe stops it while it works or asks to archive
+ * it once it rests, and a long press lifts its preview, its latest step
+ * among it where the app holds its transcript.
  */
 export function TaskAgentRow({
   line,
   task,
+  onArchive,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
+  /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
+  readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
   const router = useRouter();
   const acts = useAgentRowActs();
@@ -555,7 +606,7 @@ export function TaskAgentRow({
               onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
             }
       }
-      trailingActions={agentSwipes(agent, acts)}
+      trailingActions={agentSwipes(agent, acts, onArchive)}
       preview={
         <AgentPreview
           name={name}
@@ -573,13 +624,19 @@ export function TaskAgentRow({
 }
 
 /** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
-function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
+function OverviewAgents({
+  overview,
+  onArchiveAgent,
+}: {
+  readonly overview: TaskOverview;
+  readonly onArchiveAgent: (agentId: string) => void;
+}) {
   const router = useRouter();
   const { task } = overview;
   return (
     <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
       {overview.agents.map((line) => (
-        <TaskAgentRow key={line.agent.id} line={line} task={task} />
+        <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
       ))}
       <LinkRow
         symbol="plus"
@@ -639,9 +696,12 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
 function OverviewPage({
   overview,
   onRefresh,
+  onArchiveAgent,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
+  /** Asks to archive one of its agents (`useAgentArchiveAsk`), whose question the screen stands beside its `<Screen>`. */
+  readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
   const openLink = useOpenLink();
@@ -664,7 +724,7 @@ function OverviewPage({
         <OverviewHead overview={overview} />
       </ListSection>
       <OverviewRelations overview={overview} />
-      <OverviewAgents overview={overview} />
+      <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
       {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
         <ListSection title={WORDS.DESCRIPTION}>
@@ -744,6 +804,7 @@ function TasksSplitScreen({
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const read = useTasksRead();
   const sidebar = useAppSidebar(SIDEBAR_PLACE.TASKS, useSidebarTasks(), selected);
+  const archiveAsk = useAgentArchiveAsk();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
   return (
@@ -769,7 +830,12 @@ function TasksSplitScreen({
           })}
           detail={
             overview !== undefined ? (
-              <OverviewPage key={overview.task.id} overview={overview} onRefresh={refreshTasks} />
+              <OverviewPage
+                key={overview.task.id}
+                overview={overview}
+                onRefresh={refreshTasks}
+                onArchiveAgent={archiveAsk.archive}
+              />
             ) : selected !== undefined && read ? (
               <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
             ) : (
@@ -790,6 +856,7 @@ function TasksSplitScreen({
         />
       </Screen>
       <StatusQuestionAsk question={question} />
+      {archiveAsk.ask}
       {sidebar.ask}
     </>
   );
@@ -816,6 +883,7 @@ export function TaskScreen() {
   );
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const { refreshTasks } = useInboxActs();
+  const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
   const menu = overview === undefined ? undefined : taskMenu(overview);
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
@@ -864,7 +932,11 @@ export function TaskScreen() {
       )}
       <Screen>
         {overview !== undefined ? (
-          <OverviewPage overview={overview} onRefresh={refreshTasks} />
+          <OverviewPage
+            overview={overview}
+            onRefresh={refreshTasks}
+            onArchiveAgent={archiveAsk.archive}
+          />
         ) : read ? (
           <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
         ) : (
@@ -872,6 +944,7 @@ export function TaskScreen() {
         )}
       </Screen>
       <StatusQuestionAsk question={question} />
+      {archiveAsk.ask}
     </>
   );
 }

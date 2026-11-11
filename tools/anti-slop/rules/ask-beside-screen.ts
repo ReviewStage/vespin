@@ -27,8 +27,9 @@ function memberName(expression: ESTree.Node): string | undefined {
  * its own, so it is drawn beside the screen's `Screen`, never among its
  * children. Note that one drawn inside `Screen`'s own host left the screen
  * taking no press and no key at all: the Tasks list, the task page, and
- * Search, until it moved out. A component that draws an ask inside itself
- * is not seen here; the rule reads only the JSX a `Screen` holds.
+ * Search, until it moved out. The rule reads the JSX a `Screen` holds, its
+ * elements' slot props and arrays among it; a component that draws an ask
+ * inside itself is not seen here.
  */
 export const askBesideScreenRule = defineRule({
   meta: {
@@ -54,9 +55,23 @@ export const askBesideScreenRule = defineRule({
               data: { name },
             });
           }
+          // Note that a slot prop's elements, a split view's `detail` among them, draw inside the host as its children do.
+          for (const attribute of node.openingElement.attributes) {
+            if (
+              attribute.type === "JSXAttribute" &&
+              attribute.value?.type === "JSXExpressionContainer"
+            ) {
+              reportWithin(attribute.value);
+            }
+          }
           for (const child of node.children) reportWithin(child);
           return;
         }
+        case "ArrayExpression":
+          for (const element of node.elements) {
+            if (element !== null && element.type !== "SpreadElement") reportWithin(element);
+          }
+          return;
         case "JSXFragment":
           for (const child of node.children) reportWithin(child);
           return;
