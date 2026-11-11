@@ -121,7 +121,7 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  * the desktop's, the phone at the site's on a phone. The Inbox answers an
  * agent's question in the draft under it; a task's page shows its agent's
  * log, folded calls and all, starting another agent and trading messages
- * with it, the plan's sub-tasks beside it; an automation's page fires a run;
+ * with it, then its Overview of sub-tasks and agents; an automation's page fires a run;
  * the phone holds the same Inbox; and Settings › Agents connects Claude on
  * its plan and Codex on an API key. None is pressed: each plays its story on a clock that
  * runs only while it is on screen (`landing-story.ts`). On a page too narrow
@@ -894,7 +894,7 @@ function AgentsScene(): React.JSX.Element {
   const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
   return (
     <div ref={ref} className="ui-landing-scene">
-      <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
+      <DesktopWindow label="A task's agent starting another agent and the two trading messages, then the task's Overview of its sub-tasks and agents">
         <TaskPage step={step} />
       </DesktopWindow>
     </div>
