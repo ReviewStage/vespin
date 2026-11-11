@@ -1880,6 +1880,8 @@ export function CommandPalette({
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
   const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
+  if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
   const [openings, setOpenings] = useState(0);
   const [query, setQuery] = useState("");

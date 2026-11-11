@@ -198,8 +198,11 @@ function Looker({ looked }: { looked: typeof DOCUMENT_TASK | undefined }): null 
   return null;
 }
 
-/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer. */
-function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
+/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
+function paletteOverTask(): (
+  looked: typeof DOCUMENT_TASK | undefined,
+  over?: TasksControl,
+) => void {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -207,7 +210,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     activeTaskId: DOCUMENT_TASK.id,
   });
-  return (looked) =>
+  return (looked, over = tasks) =>
     act(() =>
       root.render(
         withQueryClient(
@@ -219,7 +222,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
               available: true,
               tab: PANEL_TAB.TASKS,
               onTabChange: () => undefined,
-              tasks: tasks,
+              tasks: over,
               settings: {
                 rows: {
                   settings: settingsView(),
@@ -551,6 +554,18 @@ test("with the field empty, ← and → step through the filters, wrapping at th
   assert.equal(chosenFilter(), "Settings", "stepping back from All wraps to the last filter");
   key(RIGHT);
   assert.equal(chosenFilter(), "All", "stepping on from the last filter wraps to All");
+});
+
+test("a task closed while ⌘K stands on This task turns the palette back to All", () => {
+  const drawn = paletteOverTask();
+  drawn(undefined);
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
+  });
+  chooseFilter("This task");
+
+  drawn(undefined, tasksControl());
+  assert.equal(chosenFilter(), "All");
 });
 
 test("once anything is typed, ← and → only move the caret, even at the text's ends", () => {
