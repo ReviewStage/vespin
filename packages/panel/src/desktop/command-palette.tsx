@@ -1736,8 +1736,9 @@ function PaletteFilters({
 }): React.JSX.Element {
   const band = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
+    // Note that the list changing reveals it too, since a filter gone, as This task is when its task closes, moves the chosen one along the row.
     if (band.current !== null) revealChecked(band.current);
-  }, [filter]);
+  }, [filter, filters]);
   return (
     <div ref={band}>
       <ReplayUnmask>
