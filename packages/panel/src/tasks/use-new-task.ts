@@ -33,7 +33,7 @@ import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { agentTab, draftTab } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useToast } from "../toast.js";
@@ -407,6 +407,8 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
+  // A plain New task pressed while the tab was not shown, read once the window stands where the press brought the tab.
+  const [newTaskAway, setNewTaskAway] = useState(false);
   // New task's own page: an agent's start under way, or a start Home's own composer refused while Home stood.
   const [page, setPage] = useState<NewTaskPage | undefined>(undefined);
   // How many starts Home's own composer had refused, each a new opening it draws afresh.
@@ -641,16 +643,31 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const newTaskWith = (preset: NewTaskPreset | undefined) =>
     setNewTaskAsk((standing) => standing ?? { preset });
   // Home opens on New task's composer, so a plain New task there takes its
-  // caret rather than drawing the same card again in a dialog over it. Note
-  // that the tab need not be shown, because every New task press brings it
-  // forward first.
-  const newTask = () => {
+  // caret rather than drawing the same card again in a dialog over it.
+  const newTaskHere = () => {
     if (place.atHome() && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
     else newTaskWith(undefined);
+  };
+  // Note that a press while Settings holds the window brings the tab forward
+  // first, and the window stands Home only once that lands, so the press is
+  // read once the place it landed on is drawn rather than where it was made.
+  const newTask = () => {
+    if (shown) newTaskHere();
+    else setNewTaskAway(true);
   };
   // The dialog is the Tasks tab's, so Settings taking the window puts it
   // away rather than leaving it to stand again on the way back.
   if (!shown && newTaskAsk !== undefined) setNewTaskAsk(undefined);
+  // Note that a press from Settings is read only once Home's composer is drawn, because the composer takes no ask
+  // standing as it is first drawn, and a phone's first draw takes no caret of its own; and that a press whose move
+  // left the tab unshown, as one kept at a page's ask, opens nothing.
+  const newTaskHereNow = useRef(newTaskHere);
+  newTaskHereNow.current = newTaskHere;
+  useEffect(() => {
+    if (!newTaskAway) return;
+    setNewTaskAway(false);
+    if (shown) newTaskHereNow.current();
+  }, [newTaskAway, shown]);
 
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
