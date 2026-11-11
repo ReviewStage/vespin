@@ -6,7 +6,7 @@ import { ErrorLine } from "../error-line/error-line.js";
 import { GAP, Inline, Stack } from "../layout/layout.js";
 import { dropBelow, Menu, useMenu } from "../menu/menu.js";
 import { SplitButton } from "../split-button/split-button.js";
-import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { TEXT_FONT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { TextField } from "../text-field/text-field.js";
 
 /**
@@ -84,6 +84,8 @@ export interface AlwaysAllowKeeps {
   readonly scopes?: readonly AlwaysAllowScope[] | undefined;
   /** The press's words where they differ from Always allow's. */
   readonly label?: string | undefined;
+  /** The command it keeps, drawn in the press after its words, monospace (prototype). */
+  readonly command?: string | undefined;
 }
 
 /** Always allow with its chevron of places (prototype). */
@@ -229,7 +231,16 @@ export function ApprovalActions({
               busyLabel={WORDS.ALLOWING}
               onClick={() => onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT)}
             >
-              {keeps?.label ?? WORDS.ALLOW_FOR_AGENT}
+              {keeps?.command === undefined ? (
+                (keeps?.label ?? WORDS.ALLOW_FOR_AGENT)
+              ) : (
+                <>
+                  {`${WORDS.ALLOW_FOR_AGENT} `}
+                  <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
+                    {keeps.command}
+                  </Text>
+                </>
+              )}
             </Button>
           ) : (
             <AlwaysAllowSplit

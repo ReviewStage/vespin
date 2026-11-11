@@ -9,22 +9,16 @@
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
-  BUTTON_VARIANT,
-  Button,
-  DIALOG_TONE,
-  Dialog,
-  DialogActions,
-  FormField,
-  PlusIcon,
   SETTINGS_ROW_STATE,
+  SettingsAddRow,
   SettingsLine,
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsSection,
+  TEXT_FIELD_FONT,
   TEXT_FONT,
   TEXT_VARIANT,
   Text,
-  TextField,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
@@ -143,9 +137,12 @@ function keeperOf(rule: KeptRule): Actor {
 /** One command prefix on the account's list: the prefix, who added it when, and Remove in its ⋯, as a machine's row on Hosts. */
 function AccountRuleRow({
   rule,
+  landed,
   onRemove,
 }: {
   rule: KeptRule;
+  /** Whether it was just added, which lights it once. */
+  landed: boolean;
   onRemove: () => void;
 }): React.JSX.Element {
   return (
@@ -153,6 +150,7 @@ function AccountRuleRow({
       thing={rule.rule}
       actions={[{ label: "Remove", icon: <GLYPH.REMOVE />, danger: true, onSelect: onRemove }]}
       row={{
+        landed,
         label: (
           <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
             {`${rule.rule} *`}
@@ -179,115 +177,42 @@ function AccountRuleRow({
   );
 }
 
-/** Add command's card: one field for the prefix, as Add variable's card asks for a name. */
-function AddCommandDialog({
-  open,
-  onAdd,
-  onClose,
-}: {
-  open: boolean;
-  onAdd: (prefix: string) => void;
-  onClose: () => void;
-}): React.JSX.Element {
-  const [typed, setTyped] = useState("");
-  const prefix = typed.trim();
-  const add = () => {
-    if (prefix === "") return;
-    onAdd(prefix);
-    onClose();
-  };
-  return (
-    <Dialog
-      open={open}
-      title="Add command"
-      replayUnmasked
-      onDismiss={onClose}
-      onExited={() => setTyped("")}
-      actions={
-        <DialogActions
-          onCancel={onClose}
-          act={{
-            verb: "Add",
-            tone: DIALOG_TONE.PRIMARY,
-            running: "Adding",
-            disabled: prefix === "",
-            onPress: add,
-          }}
-        />
-      }
-    >
-      <FormField label="Commands that start with">
-        {(control) => (
-          <TextField
-            field={control}
-            autoCorrect={false}
-            spellCheck={false}
-            placeholder="pnpm test"
-            value={typed}
-            onChange={setTyped}
-            onEnter={add}
-          />
-        )}
-      </FormField>
-    </Dialog>
-  );
-}
-
-/** `d`'s list: the account's command prefixes, Add command on its heading, each removable from its ⋯. */
+/** `d`'s list: the account's command prefixes, added in place at its head, each removable from its ⋯. */
 export function AccountRulesSection(): React.JSX.Element {
   const [rules, setRules] = useState<readonly KeptRule[]>(keptRules(ALWAYS_ALLOW_UI.ACCOUNT));
-  const [adding, setAdding] = useState(OPENED_ADDING);
+  const [landed, setLanded] = useState<string>();
   return (
-    <>
-      <SettingsSection
-        title="Always allowed"
-        caption="Commands your agents run without asking."
-        action={
-          <Button
-            variant={BUTTON_VARIANT.OUTLINE}
-            icon={<PlusIcon />}
-            onClick={() => setAdding(true)}
-          >
-            Add command
-          </Button>
-        }
-      >
-        {rules.length === 0 ? (
-          <SettingsLine>No commands yet.</SettingsLine>
-        ) : (
-          rules.map((rule) => (
-            <AccountRuleRow
-              key={rule.id}
-              rule={rule}
-              onRemove={() => setRules((was) => was.filter((each) => each.id !== rule.id))}
-            />
-          ))
-        )}
-      </SettingsSection>
-      <AddCommandDialog
-        open={adding}
-        onClose={() => setAdding(false)}
-        onAdd={(prefix) =>
+    <SettingsSection title="Always allowed" caption="Commands your agents run without asking.">
+      <SettingsAddRow
+        label="Add a command"
+        placeholder="pnpm test"
+        font={TEXT_FIELD_FONT.MONO}
+        onAdd={(prefix) => {
+          const id = `added-${Date.now()}`;
+          setLanded(id);
           setRules((was) => [
             {
-              id: `added-${was.length}`,
+              id,
               harness: ALWAYS_ALLOW_HARNESS.CLAUDE,
-              rule: prefix,
+              rule: prefix.replace(/\s*\*$/, ""),
               says: "",
               scope: RULE_SCOPE.EVERYWHERE,
               addedAt: Date.now(),
               from: "",
               byYou: true,
             },
-            ...was,
-          ])
-        }
+            ...was.filter((each) => each.rule !== prefix),
+          ]);
+        }}
       />
-    </>
+      {rules.map((rule) => (
+        <AccountRuleRow
+          key={rule.id}
+          rule={rule}
+          landed={rule.id === landed}
+          onRemove={() => setRules((was) => was.filter((each) => each.id !== rule.id))}
+        />
+      ))}
+    </SettingsSection>
   );
 }
-
-/** Whether the staged page opens on Add command's card (`&aa-add=open`). */
-const OPENED_ADDING =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("aa-add") === "open";
