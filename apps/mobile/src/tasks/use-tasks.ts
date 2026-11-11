@@ -193,8 +193,8 @@ export interface TasksListing {
   readonly markRead: (taskId: string, unread: boolean) => void;
   /** Pins a task to the list's Pinned group, or unpins it. */
   readonly pin: (taskId: string, pinned: boolean) => void;
-  /** Puts a task in one of the member's sections, or under null in none, as the panel's Move to section does. */
-  readonly place: (taskId: string, sectionId: string | null) => void;
+  /** Puts a task in one of the member's sections, or under null in none, as the panel's Move to section does, answering whether the service took it. */
+  readonly place: (taskId: string, sectionId: string | null) => Promise<boolean>;
   /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
   readonly glanceOf: (taskId: string) => TaskGlance;
 }
@@ -276,17 +276,20 @@ export function useTasksListing(search: string): TasksListing {
       );
     };
     // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it.
-    const place = (taskId: string, sectionId: string | null) => {
+    const place = (taskId: string, sectionId: string | null) =>
       acts[ACT_KIND.TASKS_WRITE_SECTION]({
         writes: [{ kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId }],
       }).then(
-        (landed) => buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR),
+        (landed) => {
+          buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
+          return landed;
+        },
         (error: unknown) => {
           refused("The move")(error);
           buzz(BUZZ.ERROR);
+          return false;
         },
       );
-    };
     const agentsWorking = agentsWorkingIn(view, tasks);
     // Note that the agents are grouped by task once, since every row's preview reads its own.
     const byTask = agentsByTask(view);

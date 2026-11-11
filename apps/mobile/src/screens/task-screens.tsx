@@ -332,11 +332,31 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
   return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
 }
 
-/** What a task dropped on a group's header does there: onto Pinned it is pinned, onto a section it is put in it, and onto a repository group it leaves its section. */
+/** Whether a task stands in one of the member's sections. */
+function inSection(tree: TaskTree, taskId: string): boolean {
+  return tree.sections.some((group) => group.rows.some(({ task }) => task.id === taskId));
+}
+
+/**
+ * What a task dropped on a group's header does there, keeping it in one
+ * place as the panel's drag does: onto Pinned it is pinned and leaves its
+ * section; onto a section it is put in it, and onto a repository group it
+ * leaves its section, each unpinning it once the move is taken, so a
+ * refused move leaves it where it stood.
+ */
 function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
-  if (group.kind === TASK_TREE_GROUP.PINNED) return (task) => listing.pin(task.id, true);
-  if (group.kind === TASK_TREE_GROUP.SECTION) return (task) => listing.place(task.id, group.key);
-  return (task) => listing.place(task.id, null);
+  if (group.kind === TASK_TREE_GROUP.PINNED) {
+    return (task) => {
+      listing.pin(task.id, true);
+      if (inSection(listing.tree, task.id)) void listing.place(task.id, null);
+    };
+  }
+  const sectionId = group.kind === TASK_TREE_GROUP.SECTION ? group.key : null;
+  return (task) => {
+    void listing.place(task.id, sectionId).then((landed) => {
+      if (landed && task.pinnedAt !== undefined) listing.pin(task.id, false);
+    });
+  };
 }
 
 /**

@@ -1524,6 +1524,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../wire
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
       expo-glass-effect:
         specifier: 58.0.5
         version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
