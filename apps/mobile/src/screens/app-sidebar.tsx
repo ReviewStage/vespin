@@ -1,9 +1,10 @@
-// app-sidebar.tsx -- a regular window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
 
 import {
   type ColumnBar,
   GroupRow,
   LIST_LOOK,
+  type ListLook,
   ListSection,
   RowList,
   WorkspaceSwitcherMenu,
@@ -13,6 +14,7 @@ import type { ReactNode } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
+import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The places the sidebar's first rows open, each a tab's root. */
@@ -62,10 +64,15 @@ export type SidebarTasks = {
   readonly ask: ReactNode;
 };
 
-/** What a tab's split view takes from the sidebar. */
-type SidebarSplit = {
+/** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
+type ListColumn = { readonly view: ReactNode; readonly bar: ColumnBar };
+
+/** What a tab's split view takes for its first columns: the app sidebar and the list beside it, or the list alone as its first column. */
+type SidebarColumns = {
   readonly sidebar: ReactNode;
   readonly sidebarBar: ColumnBar;
+  readonly content?: ReactNode | undefined;
+  readonly contentBar?: ColumnBar | undefined;
   readonly sidebarShown: boolean;
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
@@ -76,60 +83,75 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
 }
 
 /**
- * The sidebar every tab's split view stands in a regular window, standing
- * where the system's tab bar would, which a regular window hides: the place
- * the tab is, or the task it has open where the sidebar lists it, drawn
- * selected. A place opens its tab, and a task opens on the Tasks tab beside
- * its list, as a link to it does. The account's photo and Settings both open
- * Settings, the photo where the iPhone stands it and Settings at the foot,
- * where an iPad sidebar stands it; New task opens its sheet.
+ * A tab's first columns in a regular window. Where the window is wide enough
+ * for three, an iPad's in landscape, the app sidebar stands where the
+ * system's tab bar would, which that window hides, with the tab's list
+ * beside it: the place the tab is, or the task it has open where the sidebar
+ * lists it, drawn selected. A place opens its tab, and a task opens on the
+ * Tasks tab beside its list, as a link to it does. The account's photo and
+ * Settings both open Settings, the photo where the iPhone stands it and
+ * Settings at the foot, where an iPad sidebar stands it; New task opens its
+ * sheet. A narrower regular window, a portrait iPad's or the unfolded Duo's,
+ * keeps the system's tab bar, and the list stands first under the photo and
+ * the switcher, as the split view stood before.
  */
 export function useAppSidebar(
   place: SidebarPlace,
   tasks: SidebarTasks,
   openTask?: string | undefined,
-): { readonly split: SidebarSplit; readonly ask: ReactNode } {
+): {
+  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
+  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
+  readonly listLook: ListLook;
+  readonly ask: ReactNode;
+} {
   const router = useRouter();
   const waiting = useInboxBadge();
   const account = useSettingsAccount();
   const openSettings = useOpenSettings();
   const switcher = useWorkspaceSwitcher();
+  const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
+  const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
   const pick = (id: string) => {
     const picked = placeOf(id);
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
   };
-  const sidebar = (
-    <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
-      <ListSection>
-        {PLACES.map((each) => (
-          <GroupRow
-            key={each.id}
-            id={each.id}
-            title={each.title}
-            symbol={each.symbol}
-            testId={each.testId}
-            count={each.id === SIDEBAR_PLACE.INBOX && waiting > 0 ? waiting : undefined}
-          />
-        ))}
-      </ListSection>
-      {tasks.sections}
-    </RowList>
-  );
-  return {
-    split: {
-      sidebar,
+  const columns = (list?: ListColumn | undefined): SidebarColumns => {
+    const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
+    if (!threeColumns && list !== undefined) {
+      return { sidebar: list.view, sidebarBar: { ...list.bar, account, header }, ...visibility };
+    }
+    return {
+      sidebar: (
+        <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
+          <ListSection>
+            {PLACES.map((each) => (
+              <GroupRow
+                key={each.id}
+                id={each.id}
+                title={each.title}
+                symbol={each.symbol}
+                testId={each.testId}
+                count={each.id === SIDEBAR_PLACE.INBOX && waiting > 0 ? waiting : undefined}
+              />
+            ))}
+          </ListSection>
+          {tasks.sections}
+        </RowList>
+      ),
       sidebarBar: {
         account,
-        header: switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />,
+        header,
         action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
         foot: [{ ...SETTINGS, onPress: openSettings }],
       },
-      sidebarShown: shown,
-      onSidebarShownChange: setShown,
-    },
-    ask: tasks.ask,
+      content: list?.view,
+      contentBar: list?.bar,
+      ...visibility,
+    };
   };
+  return { columns, listLook: threeColumns ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR, ask: tasks.ask };
 }

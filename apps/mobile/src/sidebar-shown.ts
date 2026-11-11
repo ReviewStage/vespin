@@ -1,4 +1,4 @@
-// sidebar-shown.ts -- whether a regular window's app sidebar stands beside its other columns, one answer for every tab's split view and the menu bar's Show or Hide Sidebar.
+// sidebar-shown.ts -- whether a regular window's first column stands beside its other columns, one answer for every tab's split view and the menu bar's Show or Hide Sidebar.
 
 import { useSyncExternalStore } from "react";
 import { useThreeColumns } from "./use-window-size-class.js";
@@ -24,13 +24,12 @@ function choose(choice: Choice): void {
 }
 
 /**
- * Whether the app sidebar stands, and how to show, hide, or toggle it. By
- * default it stands where the window is wide enough for three columns, as an
- * iPad's in landscape, and waits behind the system's sidebar button in a
- * narrower regular window, as Mail's does, so the list and the page keep the
- * room. A person's choice, with that button, a swipe, or the menu bar, holds
- * across the tabs, since every tab's split view reads this one answer, until
- * the window is resized past three columns or back.
+ * Whether a regular window's first column stands, the app sidebar in a
+ * window wide enough for three columns or the list in a narrower one, and
+ * how to show, hide, or toggle it. It stands until a person hides it, with
+ * the system's sidebar button, a swipe, or the menu bar, and that choice
+ * holds across the tabs, since every tab's split view reads this one
+ * answer, until the window is resized past three columns or back.
  */
 export function useSidebarShown(): {
   readonly shown: boolean;
@@ -39,7 +38,7 @@ export function useSidebarShown(): {
 } {
   const threeColumns = useThreeColumns();
   const choice = useSyncExternalStore(subscribe, () => held);
-  const shown = choice?.threeColumns === threeColumns ? choice.shown : threeColumns;
+  const shown = choice?.threeColumns === threeColumns ? choice.shown : true;
   const setShown = (next: boolean) => choose({ threeColumns, shown: next });
   return { shown, setShown, toggle: () => setShown(!shown) };
 }

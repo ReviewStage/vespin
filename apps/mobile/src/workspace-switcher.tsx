@@ -58,10 +58,10 @@ function switcherWorkspace(
 /**
  * The switcher's workspaces, the chosen one, and its acts: a choice is kept
  * as the phone's (`chosen-workspace.ts`), which the Inbox, its count, Tasks,
- * and New task follow at once; New workspace opens its sheet, Workspace
- * settings opens Settings, where the workspace is managed, and Settings
- * opens it too, so it is found from the workspace's name as well as from
- * the account's photo. None before the
+ * and New task follow at once; New workspace opens its sheet, and Workspace
+ * settings opens Settings, where the workspace is managed, as Settings does
+ * too, so it is found from the workspace's name as well as from the
+ * account's photo. None before the
  * account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {

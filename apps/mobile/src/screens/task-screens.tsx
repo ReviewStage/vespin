@@ -645,9 +645,10 @@ function TasksStackList() {
   );
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: the app
-// sidebar, the tree, and the picked task side by side, as Mail stands its
-// mailboxes, a mailbox's mail, and a message. The Stack's header steps aside,
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
+// and the picked task side by side, and, where the window is wide enough for
+// three columns, the app sidebar before them, as Mail stands its mailboxes, a
+// mailbox's mail, and a message. The Stack's header steps aside,
 // since the split view draws each column's navigation bar itself.
 function TasksSplitScreen({
   selected,
@@ -668,21 +669,22 @@ function TasksSplitScreen({
       <Stack.Screen options={{ headerShown: false }} />
       <Screen>
         <SplitView
-          {...sidebar.split}
-          content={
-            <TasksTree
-              listing={listing}
-              look={LIST_LOOK.PLAIN}
-              search={search}
-              selected={selected}
-              onSelect={select}
-              onRefresh={refreshTasks}
-            />
-          }
-          contentBar={{
-            title: TASKS_TITLE,
-            search: { placeholder: SEARCH_TASKS, onChange: setSearch },
-          }}
+          {...sidebar.columns({
+            view: (
+              <TasksTree
+                listing={listing}
+                look={sidebar.listLook}
+                search={search}
+                selected={selected}
+                onSelect={select}
+                onRefresh={refreshTasks}
+              />
+            ),
+            bar: {
+              title: TASKS_TITLE,
+              search: { placeholder: SEARCH_TASKS, onChange: setSearch },
+            },
+          })}
           detail={
             overview !== undefined ? (
               <OverviewPage key={overview.task.id} overview={overview} onRefresh={refreshTasks} />

@@ -93,6 +93,14 @@ const DISTANCE_UNITS = [
   [MINUTE_MS, "m"],
 ] as const;
 
+/** The spans a row's age is heard in, longest first, each with its word in the singular. */
+const HEARD_UNITS = [
+  [WEEK_MS, "week"],
+  [DAY_MS, "day"],
+  [HOUR_MS, "hour"],
+  [MINUTE_MS, "minute"],
+] as const;
+
 /** What a line says before a count of how long from now. */
 const AHEAD_WORD = "in ";
 
@@ -138,6 +146,21 @@ export function sinceText(at: number, now: number, { year = true } = {}): string
 export function agoText(at: number, now: number): string {
   const count = sinceCount(Math.max(0, now - at));
   return count === undefined ? sinceText(at, now) : `${count}${AGO_WORD}`;
+}
+
+/**
+ * How long ago `at` was, as a screen reader hears a row's few letters: the
+ * same count with its unit in words, "3 hours ago", "1 minute ago", so
+ * VoiceOver never reads "3h" as letters; "now" inside a minute, and the date
+ * past four weeks, as the row draws them.
+ */
+export function sinceHeard(at: number, now: number): string {
+  const elapsed = Math.max(0, now - at);
+  if (elapsed >= WEEKS_COUNTED) return sinceText(at, now);
+  const unit = HEARD_UNITS.find(([span]) => elapsed >= span);
+  if (unit === undefined) return NOW_WORD;
+  const count = Math.floor(elapsed / unit[0]);
+  return `${count} ${unit[1]}${count === 1 ? "" : "s"}${AGO_WORD}`;
 }
 
 /**

@@ -599,9 +599,10 @@ function InboxStackList() {
   );
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: the app
-// sidebar, the list under its scope pills with its search and ⋯ menu in its
-// bar, and the selected thread beside it, as Mail stands its mailboxes, a
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
+// under its scope pills with its search and ⋯ menu in its bar and the
+// selected thread beside it, and, where the window is wide enough for three
+// columns, the app sidebar before them, as Mail stands its mailboxes, a
 // mailbox's mail, and a message. The Stack's header steps aside, since the
 // split view draws each column's navigation bar itself.
 function InboxSplitScreen({
@@ -619,35 +620,36 @@ function InboxSplitScreen({
       <Stack.Screen options={{ headerShown: false }} />
       <Screen>
         <SplitView
-          {...sidebar.split}
-          content={
-            <ScopePills scopes={scopes}>
-              {listing.listed.length === 0 ? (
-                <InboxEmpty
-                  show={show}
-                  search={search}
-                  feed={listing.feed}
-                  onRetry={() => void acts.refresh()}
-                />
-              ) : (
-                <InboxRows
-                  look={LIST_LOOK.PLAIN}
-                  listed={listing.listed}
-                  readerId={listing.readerId}
-                  selected={selected}
-                  onSelect={select}
-                  onRefresh={acts.refresh}
-                  onMark={acts.mark}
-                  onRemind={remind.open}
-                />
-              )}
-            </ScopePills>
-          }
-          contentBar={{
-            title: INBOX_TITLE,
-            menu,
-            search: { placeholder: SEARCH_INBOX, onChange: setSearch },
-          }}
+          {...sidebar.columns({
+            view: (
+              <ScopePills scopes={scopes}>
+                {listing.listed.length === 0 ? (
+                  <InboxEmpty
+                    show={show}
+                    search={search}
+                    feed={listing.feed}
+                    onRetry={() => void acts.refresh()}
+                  />
+                ) : (
+                  <InboxRows
+                    look={sidebar.listLook}
+                    listed={listing.listed}
+                    readerId={listing.readerId}
+                    selected={selected}
+                    onSelect={select}
+                    onRefresh={acts.refresh}
+                    onMark={acts.mark}
+                    onRemind={remind.open}
+                  />
+                )}
+              </ScopePills>
+            ),
+            bar: {
+              title: INBOX_TITLE,
+              menu,
+              search: { placeholder: SEARCH_INBOX, onChange: setSearch },
+            },
+          })}
           detail={
             selected === undefined ? (
               <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />

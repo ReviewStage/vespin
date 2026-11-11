@@ -110,7 +110,11 @@ export function NewWorkspaceScreen() {
           >
             <WordsField
               placeholder={WORDS.TEAM_NAME}
-              onWords={setName}
+              onWords={(words) => {
+                setName(words);
+                // A refusal speaks of the name it refused, so an edit lets it go.
+                create.clear();
+              }}
               autoFocus
               testId={NAME_FIELD_ID}
             />

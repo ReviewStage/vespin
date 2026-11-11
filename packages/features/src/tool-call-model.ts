@@ -932,15 +932,79 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
 
-/** A memory kept, named by its words, under `save_memory` or the `remember` it was named before. */
-const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => ({
-  ...namedCall(CALL_KIND.REMEMBER, input, output, undefined),
-  subject: cardTitle(stringAt(input, "text") ?? ""),
-});
+/** A memory tool's refusal, which answers `rejected` with its reason. */
+const MEMORY_REJECTED = "rejected";
 
-/** The memory searched, named by its query, under `search_memory` or the `recall` it was named before. */
-const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) =>
-  namedCall(CALL_KIND.RECALL, input, output, "query");
+function markdownBlock(text: string): ToolBlock {
+  return { kind: TOOL_BLOCK.MARKDOWN, text };
+}
+
+/** Why a memory call was refused, where its answer refused it. */
+function memoryRefusal(output: WireValue | undefined): string | undefined {
+  return stringAt(output, "status") === MEMORY_REJECTED ? stringAt(output, "reason") : undefined;
+}
+
+/** The words of each memory a search answered, in its order; nothing where it answered no list, as before it answers or once refused. */
+function recalledMemories(output: WireValue | undefined): readonly string[] | undefined {
+  const memories = isRecord(output) ? output.memories : undefined;
+  if (memories === undefined || !isWireArray(memories)) return undefined;
+  return memories.flatMap((memory) => stringAt(memory, "text") ?? []);
+}
+
+/** One memory as an item of a Markdown list, its later lines set in under the first so they stay in the item. */
+function memoryItem(memory: string): string {
+  return `- ${memory.replaceAll("\n", "\n  ")}`;
+}
+
+/** How many memories a search answered and what it asked: "3 memories about “invitations”", or the count alone for a search with no query. */
+function recalledSubject(count: number, query: string): string {
+  const memories = `${count} ${count === 1 ? "memory" : "memories"}`;
+  return query === "" ? memories : `${memories} about “${query}”`;
+}
+
+/**
+ * A memory kept, under `save_memory` or the `remember` it was named
+ * before: named by its words, which its body draws as Markdown, as a reply
+ * is, in the input card's place; a refusal's reason as its answer, and
+ * nothing for a keep, whose answer only repeats the memory.
+ */
+const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => {
+  const text = stringAt(input, "text") ?? "";
+  const refused = memoryRefusal(output);
+  return {
+    kind: CALL_KIND.REMEMBER,
+    subject: cardTitle(text),
+    input: markdownBlock(text),
+    output: refused === undefined ? undefined : textBlock(refused),
+  };
+};
+
+/**
+ * The memory searched, under `search_memory` or the `recall` it was named
+ * before: named by how many memories it answered and its query, or its
+ * query alone before it answers, so its body shows no input; the memories
+ * a Markdown list, as a reply would list them, a search that found none
+ * saying "No output", and a refusal its reason.
+ */
+const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
+  const query = stringAt(input, "query") ?? "";
+  const memories = recalledMemories(output);
+  const refused = memoryRefusal(output);
+  const answer =
+    memories !== undefined
+      ? markdownBlock(memories.map(memoryItem).join("\n"))
+      : refused !== undefined
+        ? textBlock(refused)
+        : output === undefined
+          ? undefined
+          : jsonBlock(output);
+  return {
+    kind: CALL_KIND.RECALL,
+    subject: memories === undefined ? query : recalledSubject(memories.length, query),
+    input: textBlock(""),
+    output: answer,
+  };
+};
 
 /**
  * How each tool an agent is offered reads on its row, which is the one place

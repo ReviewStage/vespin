@@ -18,8 +18,7 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { useThreeColumns } from "../use-window-size-class.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
@@ -132,7 +131,7 @@ function useSearchScreen() {
 }
 
 /**
- * A compact window's Search, as ⌘K finds things for a phone: the system's
+ * Search under the Stack's bar, as ⌘K finds things for a phone: the system's
  * field in the Stack's bar over what it finds, or what it finds before
  * anything is typed, and that nothing matches where nothing does. The field
  * is focused each time the tab opens on nothing typed, as the system's
@@ -173,7 +172,7 @@ function SearchStackScreen() {
 }
 
 /**
- * A regular window's Search: the app sidebar beside what the query finds,
+ * A wide window's Search: the app sidebar beside what the query finds,
  * under the system's field in the column's bar, as the iPad's Mail searches
  * beside its mailboxes. A row found opens in its own tab, beside its list.
  */
@@ -185,7 +184,7 @@ function SearchSplitScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <Screen>
         <SplitView
-          {...sidebar.split}
+          {...sidebar.columns()}
           detail={results}
           detailBar={{
             title: SEARCH_TITLE,
@@ -200,11 +199,7 @@ function SearchSplitScreen() {
   );
 }
 
-/** The Search tab's root screen, laid out by the window's size class. */
+/** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise. */
 export function SearchScreen() {
-  return useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? (
-    <SearchSplitScreen />
-  ) : (
-    <SearchStackScreen />
-  );
+  return useThreeColumns() ? <SearchSplitScreen /> : <SearchStackScreen />;
 }

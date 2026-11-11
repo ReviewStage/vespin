@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { listMemories, MEMORY_OUTCOME } from "@repo/database/models/memory-store";
 import { user } from "@repo/database/schemas/auth";
 import { memory } from "@repo/database/schemas/memory";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { Duration, Effect } from "effect";
@@ -18,7 +19,9 @@ import { type MemoryCall, runRecall, runRemember } from "./memory-tools.js";
  * functions, over a real dialect: a memory kept is recalled by the words it
  * holds, best match first, a correction leaves only the corrected words to
  * recall, words that look like a credential are never kept, an input that
- * does not read keeps and recalls nothing, and a store that cannot be
+ * does not read keeps and recalls nothing, a coding agent's search logs
+ * each memory it answers as recalled where a member's logs none, a recall
+ * that cannot be logged still answers, and a store that cannot be
  * reached answers the model rather than failing the turn.
  *
  * Synthetic accounts, workspaces, and words throughout.
@@ -51,6 +54,12 @@ function recalledWords(answer: WireRecord): readonly unknown[] {
   assert.ok(Array.isArray(answer.memories));
   return answer.memories.map((memory) => (isRecord(memory) ? memory.text : memory));
 }
+
+/** How often each memory named was recalled in the call's workspace, in order. */
+const recallsOf = (call: MemoryCall, ids: readonly string[]) =>
+  Effect.map(tallyMemoryRecalls(call.workspaceId, ids), (tallies) =>
+    ids.map((id) => tallies.get(id)?.recalls30d),
+  );
 
 /** The id of the memory a remember answer kept. */
 function keptId(answer: WireRecord): string {
@@ -152,6 +161,39 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
         (yield* listMemories(call.workspaceId)).map((kept) => kept.text),
         [fact],
       );
+    }),
+  );
+
+  it.effect(
+    "a coding agent's search logs each memory it answers as recalled, and a member's own search logs none",
+    () =>
+      Effect.gen(function* () {
+        const call = yield* openCall;
+        const tests = keptId(yield* runRemember(call, { text: TESTS_RUN }));
+        const deploys = keptId(yield* runRemember(call, { text: DEPLOYS }));
+        const agentId = yield* openAgentOnOwnTask(call.userId, call.workspaceId);
+        const agents: MemoryCall = { ...call, source: { agentId, messageId: randomUUID() } };
+
+        yield* runRecall(call, { query: "tests deployments" });
+        const byMember = yield* recallsOf(call, [tests, deploys]);
+        yield* runRecall(agents, { query: "tests" });
+
+        assert.deepEqual(byMember, [0, 0]);
+        assert.deepEqual(yield* recallsOf(call, [tests, deploys]), [1, 0]);
+      }),
+  );
+
+  it.effect("a search whose recalls cannot be logged still answers what it found", () =>
+    Effect.gen(function* () {
+      const call = yield* openCall;
+      const tests = keptId(yield* runRemember(call, { text: TESTS_RUN }));
+      // An agent the store holds no row of, so its recall's row is refused.
+      const unlogged: MemoryCall = { ...call, source: { agentId: randomUUID(), messageId: null } };
+
+      const answer = yield* runRecall(unlogged, { query: "tests" });
+
+      assert.deepEqual(recalledWords(answer), [TESTS_RUN]);
+      assert.deepEqual(yield* recallsOf(call, [tests]), [0]);
     }),
   );
 

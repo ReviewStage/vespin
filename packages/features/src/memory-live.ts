@@ -20,8 +20,9 @@ import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
  *
  * The service answers one statement, every memory of the workspace while the
  * reader is a member of it, each with the name of the member whose words it
- * holds and whether the reader may forget it, both worked out in the
- * statement itself. The rows come in no order, so the reader orders them as
+ * holds and whether the reader may forget it, where its words came from as
+ * the reader may see it, and its recalls, all worked out in the statement
+ * itself. The rows come in no order, so the reader orders them as
  * the memories read answers them (`memory-wire.ts`): most recently kept or
  * corrected first.
  */
@@ -29,14 +30,21 @@ import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
 /**
  * One workspace's memories as the host follows them: one part, every memory
  * of the workspace while the reader is a member of it, each with its
- * keeper's id and name, each null once that account is gone, most recently
- * kept or corrected first, then the newest kept, then by id. The service
- * answers `not-found` for a workspace the account is no member of.
+ * keeper's id and name, each null once that account is gone, the agent,
+ * line, and task its words came from, each null where the reader may not
+ * open that task or none stands, and its recalls since `recalledSince`,
+ * which the service serves from its clock, most recently kept or corrected
+ * first, then the newest kept, then by id. The service answers `not-found`
+ * for a workspace the account is no member of.
  */
 export const WORKSPACE_MEMORIES_READ = liveRead({
   name: LIVE_READ.MEMORIES,
   path: HOSTED_SERVICE_PATH.LIVE_WORKSPACE_MEMORIES,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, workspaceId: LIVE_PARAM.TEXT },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceId: LIVE_PARAM.TEXT,
+    recalledSince: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     memories: liveRows({
@@ -48,6 +56,12 @@ export const WORKSPACE_MEMORIES_READ = liveRead({
         forgettable: Schema.Boolean,
         createdAt: countedNumber,
         updatedAt: countedNumber,
+        sourceAgentId: Schema.NullOr(Schema.String),
+        sourceMessageId: Schema.NullOr(Schema.String),
+        sourceTaskId: Schema.NullOr(Schema.String),
+        sourceTaskName: Schema.NullOr(Schema.String),
+        recalls30d: countedNumber,
+        lastRecalledAt: Schema.NullOr(countedNumber),
       }),
       key: "id",
       order: [
@@ -72,6 +86,18 @@ function keeperOf(row: MemoryLiveRow): MemorySummary["keptBy"] {
     : { userId: row.keeperId, name: row.keeperName };
 }
 
+/** Where a row's words came from, as the reader may see it; none where the statement found no agent and task the reader may open. */
+function sourceOf(row: MemoryLiveRow): MemorySummary["source"] {
+  return row.sourceAgentId === null || row.sourceTaskId === null || row.sourceTaskName === null
+    ? null
+    : {
+        agentId: row.sourceAgentId,
+        messageId: row.sourceMessageId,
+        taskId: row.sourceTaskId,
+        taskName: row.sourceTaskName,
+      };
+}
+
 /** A workspace's memories as the held read answers them, most recently kept or corrected first. */
 export function memoriesOfLiveRows(rows: readonly MemoryLiveRow[]): readonly MemorySummary[] {
   return orderedLiveRows(WORKSPACE_MEMORIES_READ.parts.memories, rows).map((row) => ({
@@ -81,5 +107,8 @@ export function memoriesOfLiveRows(rows: readonly MemoryLiveRow[]): readonly Mem
     forgettable: row.forgettable,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    source: sourceOf(row),
+    recalls30d: row.recalls30d,
+    lastRecalledAt: row.lastRecalledAt,
   }));
 }

@@ -22,17 +22,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 - takeScreenshot: tasks-list
 # A group folds under its header, heard with its count and whether it is
-# folded, and opens again. Note that a regular window's sidebar lists the
-# member's sections too, so its task still stands there while the list's
-# group is folded, and the fold is checked in a compact window alone.
-- runFlow:
-    when:
-      notVisible: "Select a task"
-    commands:
-      - tapOn: "Launch, [0-9]+, unfolded"
-      - assertNotVisible: "Launch checklist"
-      - tapOn: "Launch, [0-9]+, folded"
-      - assertVisible: "Launch checklist"
+# folded, and opens again.
+- tapOn: "Launch, [0-9]+, unfolded"
+- assertNotVisible: "Launch checklist"
+- tapOn: "Launch, [0-9]+, folded"
+- assertVisible: "Launch checklist"
 # A long press offers Mark done in the row's menu, and a swipe from the
 # trailing edge marks it done at once; either way the row leaves the list.
 # Note that a row may stand below the fold of a short window, the folded
