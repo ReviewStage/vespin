@@ -39,6 +39,9 @@ const LETTER_SCALE = 0.5;
 /** The tile in a bar, beside the workspace's name. */
 const BAR_TILE_SIZE = 22;
 
+/** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
+const NAME_MAX_WIDTH = 180;
+
 /** The chevron after the name, which says the name opens a menu. */
 const CHEVRON_SIZE = 10;
 
@@ -158,6 +161,7 @@ export function WorkspaceSwitcherMenu({
               font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
               foregroundStyle(colors.TEXT),
               lineLimit(1),
+              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
             ]}
           >
             {chosen.name}
@@ -199,8 +203,10 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as the bar's title, as Notion's iPhone app names its
- * workspace where a plain title would stand.
+ * label, standing as a bar item at the bar's leading edge, as Notion's and
+ * Linear's iPhone apps name their workspace there. Note that it stands as a
+ * bar item rather than the bar's title view, because a host sized to its
+ * contents drew at no size at all in the native stack's title on iOS 27.
  */
 export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (

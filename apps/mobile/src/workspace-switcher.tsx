@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name as the bar's title, opening the menu of every workspace, New workspace, and Workspace settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name at the bar's leading edge, opening the menu of every workspace, New workspace, and Workspace settings.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -9,7 +9,7 @@ import {
   newWorkspaceAction,
   type SwitcherWorkspace,
   settingsAction,
-  WorkspaceSwitcher,
+  type WorkspaceSwitcher,
   workspaceSettingsAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -19,8 +19,8 @@ import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "./settings-button.js";
 
-/** What the switcher is drawn from. */
-type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
+/** What the switcher is drawn from, which a tab's root bar draws it by. */
+export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
 
 /** Each workspace's photo as the host holds it, by the workspace. */
 function selectPhotos(
@@ -88,15 +88,14 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 }
 
 /**
- * The bar's title where a tab's root names its workspace, as Notion's
- * iPhone app does: the switcher in the stack's header, in place of the
- * tab's own name, which still stands as the screen's title, the back
- * button's and the reader's; nothing changes the bar before the account's
- * workspaces are read.
+ * The bar's title where a tab's root names its workspace at its leading
+ * edge (`SettingsBarButton`'s `switcher`): none drawn, since the workspace's
+ * name already says where the reader is, while the tab's own name still
+ * stands as the screen's title, the back button's and the reader's; the
+ * tab's name drawn as before the account's workspaces are read.
  */
 export function switcherTitle(switcher: SwitcherProps | undefined): {
-  readonly headerTitle?: () => React.JSX.Element;
+  readonly headerTitle?: string;
 } {
-  if (switcher === undefined) return {};
-  return { headerTitle: () => <WorkspaceSwitcher {...switcher} /> };
+  return switcher === undefined ? {} : { headerTitle: "" };
 }
