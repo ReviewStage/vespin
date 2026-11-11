@@ -75,7 +75,8 @@ const IMAGE_SETS = [
 
 // The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
 // picture in its own colors, from the files the panel serves, at one, two,
-// and three device pixels to the point, so it is drawn at 16 points.
+// and three device pixels to the point, so it is sharp up to 16 points, as
+// a row's tile draws it (an agent preview's larger tile scales it a little).
 const PICTURE_SETS = [
   {
     NAME: "CodexMark",
