@@ -20,6 +20,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
   type AgentTurn,
+  LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
 import {
   DEVICE_LAUNCH_UNSTARTED,
@@ -216,6 +217,8 @@ async function drawnTab(input: {
   onOpenApiKeys?: (provider: ModelProvider | undefined) => void;
   /** Why the first page says the launch never started, where its host said. */
   launchUnstarted?: DeviceLaunchUnstarted;
+  /** The host the first page says stopped beating while the turn ran. */
+  hostLost?: { readonly host: string };
   /** The repository the agent works in, as what it published says. */
   repository?: string;
   /** Takes each message the tab sends, by its words, answering as the service does; none answers it as unanswered. */
@@ -259,6 +262,7 @@ async function drawnTab(input: {
       ...(input.launchUnstarted === undefined
         ? undefined
         : { launchUnstarted: input.launchUnstarted }),
+      ...(input.hostLost === undefined ? undefined : { hostLost: input.hostLost }),
       ...input.usage,
     },
   ]);
@@ -399,12 +403,12 @@ test("the end line's words and whether it tells of a failure come apart, and nam
     endLineParts(AGENT_STATUS.FAILED, undefined)?.words,
     "Failed: the run ended without saying why",
   );
-  // Note that an agent whose host stopped beating names the host and a message as the way on, rather than reading as the run's own failure.
+  // Note that an agent whose host stopped beating names the host and that its unpushed work stays there, rather than reading as the run's own failure.
   assert.equal(
     endLineParts(AGENT_STATUS.FAILED, AGENT_FAILURE.OTHER, undefined, true, {
       host: "Studio",
     })?.words,
-    "Studio went offline during this turn. Send a message to carry on once it's back.",
+    "Studio went offline. Unpushed changes stay on it.",
   );
   for (const status of [AGENT_STATUS.STARTING, AGENT_STATUS.RUNNING, AGENT_STATUS.COMPLETED]) {
     assert.equal(endLineParts(status, undefined), undefined, status);
@@ -505,6 +509,63 @@ test("the sign-in card's Move to cloud continues the agent in the cloud while Br
   const offCard = signInCard(off.container) ?? assert.fail("the transcript ends on the card");
   assert.match(offCard.textContent ?? "", /^This Mac can't reach the repository on GitHub\./);
   assert.equal(off.named(offCard, "Move to cloud"), undefined);
+});
+
+test("a turn its Mac went offline during ends on Continue in the cloud while Bring your own host is on, which continues the agent in the cloud", async () => {
+  const tab = await drawnTab({
+    status: AGENT_STATUS.FAILED,
+    failure: AGENT_FAILURE.OTHER,
+    hostLost: { host: "Studio" },
+    source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
+    ownHost: true,
+  });
+  const line = tab.endLine() ?? assert.fail("the turn ends on its line");
+  assert.match(line.textContent ?? "", /Studio went offline\. Unpushed changes stay on it\./);
+
+  act(() =>
+    (tab.named(line, "Continue in the cloud") ?? assert.fail("the line offers the cloud")).click(),
+  );
+  await settle();
+  assert.deepEqual(tab.continued, [
+    {
+      agentId: SOURCE,
+      note: undefined,
+      attachments: [],
+      runsOn: { machine: AGENT_MACHINE.VERCEL },
+    },
+  ]);
+});
+
+test("a message its agent's Mac was offline for says so under the box, whose Continue in the cloud carries the message on in the cloud", async () => {
+  const tab = await drawnTab({
+    status: AGENT_STATUS.COMPLETED,
+    source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
+    ownHost: true,
+    seed: { words: "Review 2112 for production readiness", files: [] },
+    onMessage: () =>
+      Promise.resolve({
+        failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+        localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+        refusedDevice: { name: "Studio" },
+      }),
+  });
+  act(() => (tab.sendButton() ?? assert.fail("the box offers Send")).click());
+  await settle();
+  const note = tab.note() ?? assert.fail("the box says why the message did not go");
+  assert.match(note.textContent ?? "", /Studio is offline\. Unpushed changes stay on it\./);
+
+  act(() =>
+    (tab.named(note, "Continue in the cloud") ?? assert.fail("the note offers the cloud")).click(),
+  );
+  await settle();
+  assert.deepEqual(tab.continued, [
+    {
+      agentId: SOURCE,
+      note: "Review 2112 for production readiness",
+      attachments: [],
+      runsOn: { machine: AGENT_MACHINE.VERCEL },
+    },
+  ]);
 });
 
 test("a failed turn's end line names no price, while the model menu's foot still says the whole run's", async () => {
