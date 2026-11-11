@@ -1,4 +1,4 @@
-// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, and videos in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
 
 import {
   HStack,
@@ -29,6 +29,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
@@ -51,10 +52,11 @@ const styles = StyleSheet.create({
   words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
 });
 
-/** What a message's file is drawn as after its words: a picture, or a video in the system's player. */
+/** What a message's file is drawn as after its words: a picture, a video in the system's player, or any other file, such as a PDF, as its chip. */
 export const THREAD_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  FILE: "file",
 } as const;
 
 /** One file a message carried, drawn after its words; its source none while its bytes are on their way. */
@@ -72,6 +74,16 @@ export type ThreadMedia =
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */
       readonly onOpenElsewhere?: (() => void) | undefined;
+    }
+  | {
+      readonly kind: typeof THREAD_MEDIA.FILE;
+      readonly key: string;
+      /** The file's address under the app's caches, which its viewer opens. */
+      readonly source: string | undefined;
+      readonly name: string;
+      readonly mediaType: string;
+      /** Its size in words once its bytes are read. */
+      readonly size: string | undefined;
     };
 
 /** One message of a thread, as its comment draws it. */
@@ -178,11 +190,23 @@ export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "stat
 
 /** A file after a message's words, as its kind draws it. */
 function MediaView({ media }: { readonly media: ThreadMedia }) {
-  return media.kind === THREAD_MEDIA.PICTURE ? (
-    <Picture source={media.source} alt={media.alt} />
-  ) : (
-    <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
-  );
+  switch (media.kind) {
+    case THREAD_MEDIA.PICTURE:
+      return <Picture source={media.source} alt={media.alt} />;
+    case THREAD_MEDIA.VIDEO:
+      return (
+        <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
+      );
+    case THREAD_MEDIA.FILE:
+      return (
+        <FileChip
+          name={media.name}
+          mediaType={media.mediaType}
+          source={media.source}
+          size={media.size}
+        />
+      );
+  }
 }
 
 /** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */

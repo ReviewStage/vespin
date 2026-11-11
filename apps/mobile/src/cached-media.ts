@@ -1,10 +1,10 @@
 /**
- * cached-media.ts -- a video's bytes written once under the app's caches, named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension: an Inbox thread's and an agent's recordings alike.
+ * cached-media.ts -- a video's or a file's bytes written once under the app's caches: a video named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension, an Inbox thread's and an agent's recordings alike; and a file, such as a PDF, under its own name, for the web view that draws it and the share sheet that keeps it.
  */
 
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { File, Paths } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 
 /** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
 const WRITING_SUFFIX = ".writing";
@@ -15,17 +15,36 @@ const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
   [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
 };
 
-/** Each write still under way, by the address of the file it writes, so a second read of one video waits on the first rather than writing over it. */
+/** Each write still under way, by the address of the file it writes, so a second read of one video or file waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
 
-/** A video's bytes written under a name of their own and moved into place as `file`, answering its address once they are all on disk. */
-async function written(file: File, name: string, base64: string): Promise<string> {
-  const partial = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+/** What in a file's name would part a path, which an underscore stands in for. */
+const PATH_PARTS = /[/\\:]/gu;
+
+/** A name of dots alone, which names a folder rather than a file. */
+const DOTS_ALONE = /^\.*$/u;
+
+/** A file's name where none it was attached under can stand. */
+const UNNAMED = "file";
+
+/** Bytes written under a name of their own beside `file` and moved into place as it, answering its address once they are all on disk. */
+async function written(file: File, base64: string): Promise<string> {
+  const partial = new File(file.parentDirectory, `${file.name}${WRITING_SUFFIX}`);
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
   await partial.move(file, { overwrite: true });
   return file.uri;
+}
+
+/** The file written once: the file already written, the write of it still under way, or a write begun now. */
+function once(file: File, base64: string): Promise<string> {
+  if (file.exists) return Promise.resolve(file.uri);
+  const under = writing.get(file.uri);
+  if (under !== undefined) return under;
+  const write = written(file, base64).finally(() => writing.delete(file.uri));
+  writing.set(file.uri, write);
+  return write;
 }
 
 /**
@@ -47,11 +66,25 @@ export async function cachedVideo(
 ): Promise<string> {
   const extension = VIDEO_EXTENSION[contentType];
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
-  const file = new File(Paths.cache, name);
-  if (file.exists) return file.uri;
-  const under = writing.get(file.uri);
-  if (under !== undefined) return under;
-  const write = written(file, name, base64).finally(() => writing.delete(file.uri));
-  writing.set(file.uri, write);
-  return write;
+  return once(new File(Paths.cache, name), base64);
+}
+
+/**
+ * Where a file's bytes were written for its viewer and the share sheet: a
+ * file of the app's caches under the name it was attached with, in a folder
+ * of its own named `<prefix>-<id>`, so two files of one name stand apart and
+ * the share sheet saves it under its own name. Written once, and answered
+ * only once its bytes are all on disk, as a video is (`cachedVideo`). Note
+ * that a name that would part a path, or stands as none, is made safe.
+ */
+export async function cachedFile(
+  prefix: string,
+  id: string,
+  name: string,
+  base64: string,
+): Promise<string> {
+  const folder = new Directory(Paths.cache, `${prefix}-${id}`);
+  folder.create({ intermediates: true, idempotent: true });
+  const safe = name.replace(PATH_PARTS, "_").trim();
+  return once(new File(folder, DOTS_ALONE.test(safe) ? UNNAMED : safe), base64);
 }

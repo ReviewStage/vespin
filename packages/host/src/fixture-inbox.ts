@@ -126,6 +126,7 @@ import {
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
+  FIXTURE_PLAN_PDF,
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
@@ -277,11 +278,12 @@ function item(
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 
-/** The recorded thread's files: a still its words draw, and the recording sent after them, by the attachment each is read by. */
+/** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
   ITEM: fixtureId(10),
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
+  PLAN: "b4058d71-90c2-4dea-85a2-3c4d5e6f7182",
 } as const;
 
 /** The turn-end thread's option files, by the attachment each is read by: a still of the card, one of the dock, and a recording of it. */
@@ -558,6 +560,16 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             attachmentId: RECORDED.VIDEO,
             name: "invite-flow.webm",
             mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+          },
+        ],
+      },
+      {
+        ...agentSaid(117, 23 * MINUTE, "The test plan I followed:"),
+        files: [
+          {
+            attachmentId: RECORDED.PLAN,
+            name: "invite-test-plan.pdf",
+            mediaType: AGENT_ATTACHMENT_TYPE.PDF,
           },
         ],
       },
@@ -1720,6 +1732,9 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+    if (attachmentId === RECORDED.PLAN) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF };
     }
     if (attachmentId === RECORDED.VIDEO) {
       return playable === MP4_TYPE

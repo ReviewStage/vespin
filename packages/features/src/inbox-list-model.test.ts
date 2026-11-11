@@ -12,7 +12,7 @@ import { LINK_DESTINATION } from "./link-grammar.js";
 /**
  * inbox-list-model.test.ts -- a thread's message as a client draws it: what
  * its words name in place is drawn there as what it is, a recording as a
- * video, and only what they do not name stands after them.
+ * video, and only what they do not name stands after them, a PDF among it.
  */
 
 const ITEM = "0b6e2f1a-3c4d-4e5f-8a9b-1c2d3e4f5a60";
@@ -21,6 +21,7 @@ const STILL = "2d804b3c-5e6f-4071-8c1d-3e4f5a6b7c82";
 const CLIP = "3e915c4d-6f70-4182-9d2e-4f5a6b7c8d93";
 const SHOT = "4fa26d5e-7081-4293-8e3f-5a6b7c8d9ea4";
 const MOVIE = "50b37e6f-8192-43a4-9f40-6b7c8d9eafb5";
+const PLAN_PDF = "61c48f70-92a3-44b5-8a51-7c8d9eafb0c6";
 
 /** One of the item's files' addresses, as an agent's post names it in its words. */
 function address(attachmentId: string): string {
@@ -32,7 +33,7 @@ function address(attachmentId: string): string {
 }
 
 describe("inboxThreadMessages", () => {
-  it("plays a recording its words name where they name it, a WebM or an MP4, and draws after them only what they leave unnamed", () => {
+  it("plays a recording its words name where they name it, a WebM or an MP4, and draws after them only what they leave unnamed, a PDF as a file", () => {
     const item: InboxItem = {
       id: ITEM,
       agentId: "agent-1",
@@ -52,6 +53,7 @@ describe("inboxThreadMessages", () => {
             { attachmentId: CLIP, name: "flow.webm", mediaType: "video/webm" },
             { attachmentId: SHOT, name: "after.png", mediaType: "image/png" },
             { attachmentId: MOVIE, name: "export.mp4", mediaType: "video/mp4" },
+            { attachmentId: PLAN_PDF, name: "plan.pdf", mediaType: "application/pdf" },
           ],
           createdAt: 1_000,
         },
@@ -69,6 +71,7 @@ describe("inboxThreadMessages", () => {
     ]);
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
+      { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
     ]);
   });
 });

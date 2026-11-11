@@ -65,6 +65,7 @@ import {
   Screen,
   SplitView,
   THREAD_MEDIA,
+  type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
@@ -455,7 +456,7 @@ function ThreadDetail({
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openInSafari(address);
   };
-  const sources = useThreadMedia(item.id, media);
+  const { sources, sizes } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const answer = useThreadAnswer(listed);
@@ -474,22 +475,31 @@ function ThreadDetail({
       message.stamp === undefined
         ? undefined
         : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
-    media: message.media.map((each) =>
-      each.kind === INBOX_MEDIA.VIDEO
-        ? {
-            kind: THREAD_MEDIA.VIDEO,
-            key: each.attachmentId,
-            source: sources.get(each.attachmentId),
-            label: each.name,
-            onOpenElsewhere: openOnWeb,
-          }
-        : {
-            kind: THREAD_MEDIA.PICTURE,
-            key: each.attachmentId,
-            source: sources.get(each.attachmentId),
-            alt: each.name,
-          },
-    ),
+    media: message.media.map((each): ThreadMedia => {
+      const source = sources.get(each.attachmentId);
+      const key = each.attachmentId;
+      if (each.kind === INBOX_MEDIA.VIDEO) {
+        return {
+          kind: THREAD_MEDIA.VIDEO,
+          key,
+          source,
+          label: each.name,
+          onOpenElsewhere: openOnWeb,
+        };
+      }
+      if (each.kind === INBOX_MEDIA.FILE) {
+        const size = sizes.get(key);
+        return {
+          kind: THREAD_MEDIA.FILE,
+          key,
+          source,
+          name: each.name,
+          mediaType: each.mediaType,
+          size,
+        };
+      }
+      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name };
+    }),
   }));
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
   const pictureSource = (written: string): string | undefined => {
