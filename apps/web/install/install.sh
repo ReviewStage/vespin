@@ -463,7 +463,17 @@ enable_unit() {
 
 # Restarts the systemd user service on the release just installed, once the
 # box is connected, so it follows the box at once.
+# Clears where the host's setup stood, between stopping the host and starting
+# it, so the host started says where its setup stands afresh and no status an
+# earlier run left, or the one it stopped, is read as this run's. Note that
+# the launcher keeps the state root here on Linux and on a Mac alike.
+clear_setup_status() {
+  rm -f "$HOME/.local/state/vespin-host/setup-status.json"
+}
+
 restart_unit() {
+  stop_unit "$UNIT"
+  clear_setup_status
   systemctl --user restart "$UNIT" ||
     fail "Could not start $UNIT. See journalctl --user -u $UNIT"
   ok "Started $UNIT on Vespin host $VERSION"
@@ -492,6 +502,7 @@ load_mac_agent() {
 restart_mac_agent() {
   uid="$(id -u)"
   stop_launch_agent "$uid"
+  clear_setup_status
   start_launch_agent "$uid" "$PLIST" || true
   printf 'It runs while %s is logged in, so on a Mac nobody sits at, turn on automatic login for %s.\n' "$(id -un)" "$(id -un)"
   # Note that the Energy pane's id is unconfirmed; the Battery pane's opened on a MacBook Pro on macOS 27.
@@ -700,8 +711,6 @@ main() {
   fi
 
   connect_box
-  # Note that the host restarted below says where its setup stands afresh, so a status an earlier run left is cleared first.
-  rm -f "$HOME/.local/state/vespin-host/setup-status.json"
   if [ "$kernel" = "Darwin" ]; then
     restart_mac_agent
   else
