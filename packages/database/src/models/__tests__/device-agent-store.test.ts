@@ -576,6 +576,38 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
     }),
   );
 
+  it.effect("a diff's answer, its exit and what it printed, is read back as given", () =>
+    Effect.gen(function* () {
+      const { userId, deviceId, agentId } = yield* openAccount();
+      const answered = (answer: { exit: number; diff: string }) =>
+        Effect.gen(function* () {
+          const id = randomUUID();
+          yield* queueDeviceAgentRequest(userId, {
+            id,
+            agentId,
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            args: { from: "0123", to: null },
+          });
+          yield* claimDeviceAgentRequest(userId, deviceId, id);
+          yield* answerDeviceAgentRequest(userId, deviceId, id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            ...answer,
+          });
+          return yield* deviceAgentRequestAnswer(userId, id);
+        });
+
+      const diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-1\n+2\n";
+      assert.deepEqual(
+        yield* answered({ exit: 0, diff }),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 0, diff }),
+      );
+      assert.deepEqual(
+        yield* answered({ exit: 3, diff: "" }),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 3, diff: "" }),
+      );
+    }),
+  );
+
   it.effect(
     "a waiting request of a kind this build no longer knows is passed over, so the requests after it still reach the Mac",
     () =>

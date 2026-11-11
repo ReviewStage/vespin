@@ -1264,9 +1264,11 @@ export function composeLocalAgents(
             const claimed = yield* asked(client.claimRequest(deviceId, request.id));
             if (claimed === undefined || !("agentId" in claimed)) return;
             const layout = deviceAgentLayout(folder, claimed.agentId);
-            const answer = yield* answeredLocalAgentRequest(layout, claimed).pipe(
-              Effect.provideContext(services),
-            );
+            const answer = yield* answeredLocalAgentRequest(
+              layout,
+              { env: shellVariables, gh: platform.clis.paths.gh },
+              claimed,
+            ).pipe(Effect.provideContext(services));
             yield* asked(client.answerRequest(deviceId, claimed.id, answer));
           });
 

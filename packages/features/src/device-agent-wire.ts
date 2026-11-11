@@ -40,6 +40,8 @@ export const DEVICE_AGENT_BOUNDS = {
    * (`SANDBOX_DOOR_MAX_BYTES`), past every bound a tool holds a file to.
    */
   MAX_ANSWER_BYTES: 8 * 1024 * 1024,
+  /** The most characters of diff one answer carries, past the diff script's own bound (`CHECKOUT_DIFF_BOUNDS.MAX_BYTES`). */
+  MAX_DIFF_CHARS: 8 * 1024 * 1024,
   /**
    * The most bytes of files and their paths, raw, one files line carries:
    * about 4 MB in base64, so its claim answers under the 4.5 MB a Vercel
@@ -128,6 +130,8 @@ export const DEVICE_GITHUB_ACCESS = {
 export const DEVICE_AGENT_REQUEST_KIND = {
   /** Read one file, confined to the agent's worktree and temp folder. */
   READ_FILE: "read_file",
+  /** Diff the agent's worktree between two checkouts its runner recorded, or one and the worktree as it stands (`checkout-diff.ts`). */
+  DIFF_CHECKOUT: "diff_checkout",
 } as const;
 
 export type DeviceAgentRequestKind =
@@ -160,6 +164,8 @@ export const DEVICE_CAPABILITY = {
   PERMISSION_MODES: "permission-modes",
   /** It takes a restore line (`DEVICE_AGENT_LINE_KIND.RESTORE`), its bundled runner recording the snapshot such a line puts the worktree back to; a follower from before it settles the line without acting on it. */
   RESTORE_CHECKOUT: "restore-checkout",
+  /** It answers a diff request (`DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT`); a follower from before it would fail its whole requests read on one, so none is queued to a device without it. */
+  DIFF_CHECKOUT: "diff-checkout",
 } as const;
 
 export type DeviceCapability = (typeof DEVICE_CAPABILITY)[keyof typeof DEVICE_CAPABILITY];
@@ -280,19 +286,30 @@ export const deviceAgentObjectSchema = EffectSchema.Record(
 
 export type DeviceAgentObject = typeof deviceAgentObjectSchema.Type;
 
+/** A diff's answer: how the diff script exited, and what it printed, nothing where it did not exit well. */
+const deviceAgentDiffAnswerSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT),
+  exit: EffectSchema.Int,
+  diff: EffectSchema.String.check(EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_DIFF_CHARS)),
+});
+
 /**
  * What the Mac answered a request: a read's file bytes, read one byte past
  * the bound so the caller still sees a file larger than it, or null where
- * the path names no regular file the agent may read.
+ * the path names no regular file the agent may read; or a diff's exit and
+ * what it printed.
  */
-export const deviceAgentAnswerSchema = EffectSchema.Struct({
-  kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
-  bytes: EffectSchema.NullOr(
-    EffectSchema.Uint8Array.check(
-      EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+export const deviceAgentAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
+    bytes: EffectSchema.NullOr(
+      EffectSchema.Uint8Array.check(
+        EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+      ),
     ),
-  ),
-});
+  }),
+  deviceAgentDiffAnswerSchema,
+]);
 
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
 
@@ -475,6 +492,12 @@ export const deviceAgentReadArgsSchema = EffectSchema.Struct({
   maxBytes: EffectSchema.Int,
 });
 
+/** A diff request's arguments: the commit before, and the commit after, or null for the worktree as it stands. */
+export const deviceAgentDiffArgsSchema = EffectSchema.Struct({
+  from: EffectSchema.String,
+  to: EffectSchema.NullOr(EffectSchema.String),
+});
+
 /** The device a call names, by the id it enrolled under. */
 const deviceField = { deviceId: wireUuidSchema };
 
@@ -585,18 +608,21 @@ export const deviceAgentStepRequestSchema = EffectSchema.Struct({
   step: EffectSchema.Literals(DEVICE_LAUNCH_STEPS),
 });
 
-/** A request answered: its id, and the answer of its kind, a read's bytes in base64. */
+/** A request answered: its id, and the answer of its kind, a read's bytes in base64, or a diff's exit and text. */
 export const deviceAgentAnswerRequestSchema = EffectSchema.Struct({
   ...deviceField,
   id: wireUuidSchema,
-  answer: EffectSchema.Struct({
-    kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
-    bytes: EffectSchema.NullOr(
-      EffectSchema.Uint8ArrayFromBase64.check(
-        EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+  answer: EffectSchema.Union([
+    EffectSchema.Struct({
+      kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
+      bytes: EffectSchema.NullOr(
+        EffectSchema.Uint8ArrayFromBase64.check(
+          EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+        ),
       ),
-    ),
-  }),
+    }),
+    deviceAgentDiffAnswerSchema,
+  ]),
 });
 
 /** That the service kept what the Mac said. */
