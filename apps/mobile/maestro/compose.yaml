@@ -48,7 +48,8 @@ appId: dev.vespin.ios
     id: "ask-note"
 # The + opens a menu, nearest it Photos and Options, then the agent's
 # permission mode, a menu of the three with the one it runs on checked, and
-# Fast, a switch, since Opus 5.5 has a fast version.
+# Fast, a switch, since Opus 5.5 has a fast version; a mode picked there is
+# drawn on the agent at once, as the fixture lays it.
 - tapOn: "Add"
 - assertVisible: "Photos"
 - assertVisible: "Options"
@@ -65,6 +66,13 @@ appId: dev.vespin.ios
 - tapOn: "Approve for me"
 - assertNotVisible:
     id: "ask-note"
+# The mode taken stands picked in the options sheet the + also opens.
+- tapOn: "Add"
+- tapOn: "Options"
+- assertVisible:
+    text: "Approve for me.*"
+    selected: true
+- tapOn: "Done"
 # A `/` typed offers the task's skills over the field, narrowed as the name
 # is typed, and a press writes the skill's word into the message.
 - tapOn:

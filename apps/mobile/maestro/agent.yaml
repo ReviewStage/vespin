@@ -180,7 +180,8 @@ appId: dev.vespin.ios
 - tapOn: ".*Sonnet 5.5"
 - assertVisible: "Effort.*"
 - assertNotVisible: ".*Opus 5.5.*"
-- assertNotVisible: "Fast"
+- assertNotVisible:
+    id: "options-fast"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-model-picked
@@ -213,6 +214,8 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: agent-archive
 - tapOn: "Cancel"
+- assertNotVisible: "Archive agent?"
+- assertVisible: "Invite by email"
 # An agent whose transcript is not read yet, or could not be: the fixture
 # holds none for this id, so the list stands empty and its empty state, which
 # is SwiftUI's, stands in the rows' place in a host of its own, rather than
