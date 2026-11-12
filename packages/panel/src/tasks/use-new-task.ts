@@ -550,6 +550,8 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // Note that only Home's own route draws its composer, once no task is bound there, so a press
     // with no dialog standing over Home was the composer's own.
     const pressedOnHome = newTaskAsk === undefined && place.atHome();
+    // Note that the drafts' account is read as the start is pressed, so an outcome heard after another signed in keeps nothing of it.
+    const pressedBy = writer.owner();
 
     // Note that a refusal keeps what refused it, so the box that shows it reports that in its place,
     // and that an agent's start whose outcome is unknown opens the card on its press, not its words.
@@ -564,7 +566,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
 
       // Note that a start whose outcome is unknown is kept with its card's draft as it is heard, so a
       // card put away meanwhile, as Settings taking the window puts it, loses neither key nor task id.
-      if (unknown && card !== undefined) {
+      if (unknown && card !== undefined && writer.owner() === pressedBy) {
         const kept = keptStartOf(card.press, card.words);
         const purpose = card.purpose ?? NEW_TASK_PURPOSE.TASK;
         writer.update(newTaskPlace(card.press.ask.workspaceId, purpose), (now) => ({

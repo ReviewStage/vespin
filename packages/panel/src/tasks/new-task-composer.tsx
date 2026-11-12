@@ -340,13 +340,27 @@ function settledUnder(key: string): (draft: Draft) => Draft {
 }
 
 /**
- * A draft once a read settled its kept start: the start let go, and the words Edit took back with it
- * where the box still holds them as they were, since a Start of them would make the task again.
+ * A draft once a read settled its kept start: the start let go, and the words and files Edit took back
+ * with it where the box still holds them as they were, since a Start of them would make the task again;
+ * a box changed since keeps what it holds.
  */
 function settledByRead(draft: Draft): Draft {
-  return draft.start?.edited === true && draft.text === draft.start.words
-    ? EMPTY_DRAFT
-    : withoutStart(draft);
+  const { start } = draft;
+
+  const asTaken =
+    start?.edited === true &&
+    draft.text === start.words &&
+    draft.attachments.length === (start.files ?? 0);
+
+  return asTaken ? EMPTY_DRAFT : withoutStart(draft);
+}
+
+/** What the card says where a Start asks a kept start again without the files a relaunch let go. */
+function filesAgain(files: number): Failure {
+  return {
+    reason: FAILURE_REASON.OTHER,
+    text: `Attach this task's ${files === 1 ? "file" : `${files} files`} again to try it once more, or change its words to start another.`,
+  };
 }
 
 /** An agent's press lets the box's words go and keeps whatever start stands kept, until its own outcome is known. */
@@ -833,8 +847,23 @@ export function NewTaskComposer({
       },
     };
 
-    // Note that a press asking what a kept start asked is that start again, after a relaunch too.
+    // Note that a press asking what a kept start asked is that start again, after a relaunch too, and
+    // that one asking it without the files a relaunch let go is held, since a new key could make the
+    // task again.
     const held = pressed.current ?? (keptStart === undefined ? undefined : pressOfKept(keptStart));
+
+    if (
+      held?.filesLost !== undefined &&
+      ask.agent.attachments.length !== held.filesLost &&
+      sameAsk(
+        { ...held.ask, agent: { ...held.ask.agent, attachments: ask.agent.attachments } },
+        ask,
+      )
+    ) {
+      starts.refuse(filesAgain(held.filesLost));
+
+      return;
+    }
 
     const press: NewTaskPress =
       held !== undefined && asksAsHeld(held, ask)

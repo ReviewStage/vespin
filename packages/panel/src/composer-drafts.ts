@@ -1399,6 +1399,8 @@ export interface DraftWriter {
   readonly update: (place: DraftPlace, next: (was: Draft) => Draft) => void;
   readonly drop: (drop: (place: DraftPlace) => boolean) => void;
   readonly heldAt: (find: (place: DraftPlace) => boolean) => KeptDraft | undefined;
+  /** The account the window writes drafts for now, none before its state is read, so a write heard later can tell it is still that account's. */
+  readonly owner: () => string | null;
 }
 
 /** The presses that write any place's draft: the same ones for as long as the window stands. */
@@ -1406,6 +1408,7 @@ const DRAFT_WRITER: DraftWriter = {
   update: (place, next) => changeOwned({ place, next }),
   drop: (drop) => changeOwned({ drop }),
   heldAt: (find) => draftsStore.state.find((kept) => find(kept.place)),
+  owner: () => ownerStore.state,
 };
 
 /** The draft writer, for an owner that reads its drafts on its own, the same one for as long as the window stands. */
