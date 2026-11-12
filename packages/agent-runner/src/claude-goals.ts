@@ -11,7 +11,7 @@
  * read: a subagent's carries no goal of the session's.
  */
 
-import type { SessionStore } from "@anthropic-ai/claude-agent-sdk";
+import type { SessionStore, SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
 import { GOAL_EVENT } from "@repo/wire/ui-messages";
 import { MutableRef, Option, Schema } from "effect";
 import { RUNNER_EVENT, type RunnerGoal } from "./protocol.js";
@@ -37,7 +37,7 @@ const readGoalStatus = Schema.decodeUnknownOption(
 );
 
 /** The GOAL event a transcript entry settles, met or judged impossible; none for any other entry, a verdict that it is not met yet among them. */
-export function settledGoal(entry: unknown): RunnerGoal | undefined {
+export function settledGoal(entry: SessionStoreEntry): RunnerGoal | undefined {
   const read = readGoalStatus(entry);
 
   if (Option.isNone(read)) return undefined;

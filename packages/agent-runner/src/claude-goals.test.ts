@@ -12,7 +12,15 @@ import { RUNNER_EVENT, type RunnerGoal } from "./protocol.js";
 const CONDITION = "every billing test passes";
 
 /** A `goal_status` attachment as Claude Code 2.1.322 wrote it to its transcript. */
-function goalStatus(attachment: Record<string, unknown>) {
+function goalStatus(attachment: {
+  readonly met?: boolean;
+  readonly failed?: boolean;
+  readonly sentinel?: boolean;
+  readonly reason?: string;
+  readonly iterations?: number;
+  readonly durationMs?: number;
+  readonly tokens?: number;
+}) {
   return {
     type: "attachment",
     uuid: "entry",
