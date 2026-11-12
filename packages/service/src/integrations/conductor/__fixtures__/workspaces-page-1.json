@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "id": "workspace-one",
+      "name": "fix-flaky-check",
+      "number": 41,
+      "state": "archived",
+      "repoUrl": "https://github.com/synthetic/synthetic-app.git",
+      "creatorId": "user-synthetic-1",
+      "creatorName": "Sam Example",
+      "createdAt": "2026-10-01T09:00:00.000Z",
+      "lastActivityAt": "2026-10-02T09:00:00.000Z",
+      "deepLink": "conductor://workspace?id=workspace-one"
+    },
+    {
+      "id": "workspace-two",
+      "name": "add-settings-page",
+      "number": 42,
+      "state": "sleeping",
+      "repoUrl": "https://github.com/synthetic/synthetic-app.git",
+      "creatorId": "user-synthetic-2",
+      "creatorName": "Alex Example",
+      "createdAt": "2026-10-03T09:00:00.000Z",
+      "lastActivityAt": "2026-10-04T09:00:00.000Z",
+      "deepLink": "conductor://workspace?id=workspace-two"
+    }
+  ],
+  "offset": 0,
+  "hasMore": true
+}

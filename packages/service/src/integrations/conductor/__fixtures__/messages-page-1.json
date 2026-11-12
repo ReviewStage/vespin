@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "2b0e0f00-0000-4000-8000-000000000001",
+      "type": "userMessage",
+      "receivedAt": "2026-10-01T09:00:00.000Z",
+      "content": {
+        "message": "Please fix the flaky check.",
+        "config": { "harness": "claude", "model": "opus" }
+      }
+    },
+    {
+      "id": "2b0e0f00-0000-4000-8000-000000000002",
+      "type": "agent",
+      "receivedAt": "2026-10-01T09:00:30.000Z",
+      "content": {
+        "rawPayload": {
+          "type": "assistant",
+          "parent_tool_use_id": null,
+          "message": {
+            "content": [
+              { "type": "thinking", "thinking": "Look at the test first." },
+              {
+                "type": "tool_use",
+                "id": "toolu_1",
+                "name": "Bash",
+                "input": { "command": "pnpm test" }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "2b0e0f00-0000-4000-8000-000000000003",
+      "type": "harnessEvent",
+      "receivedAt": "2026-10-01T09:00:40.000Z",
+      "content": { "note": "lifecycle" }
+    }
+  ],
+  "offset": 0,
+  "hasMore": true
+}
