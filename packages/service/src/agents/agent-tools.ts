@@ -2265,9 +2265,11 @@ const runsOnOfStart = Effect.fnUntraced(function* (
   const devices = yield* devicesSeenSince(userId, new Date(0));
   // Note that both sides are read as a machine's name is kept (`cleanMachineName`), so a name typed with its double space, or one kept before names were cleaned, still matches.
   const wanted = cleanMachineName(runsOn.device).toLowerCase();
+
   const matched = devices.filter(
     (device) => cleanMachineName(device.name).toLowerCase() === wanted,
   );
+
   const [only] = matched;
 
   if (matched.length === 1 && only !== undefined) {
