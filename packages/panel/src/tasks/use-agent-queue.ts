@@ -365,9 +365,12 @@ export function useQueueEditing(
       },
     });
 
+  /** The box given back what it held aside for the edit of `stash`, as it stands now, so words a refusal joined to it while a request was out are kept. */
   const giveBack = (stash: Stashed) => {
-    composer.setDraft(stash.text);
-    composer.setAttachments(() => stash.attachments);
+    const now = stashedNow.current?.id === stash.id ? stashedNow.current : stash;
+    composer.setDraft(now.text);
+    composer.setAttachments(() => now.attachments);
+    stashedNow.current = undefined;
     setStashed(undefined);
   };
 

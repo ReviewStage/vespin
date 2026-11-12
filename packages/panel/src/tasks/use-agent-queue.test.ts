@@ -281,6 +281,28 @@ test("a steer refused while another message's edit stands open keeps its words o
   assert.equal(now().composer.draft, "Run tests and fix failures\nmy own words");
 });
 
+test("a refusal joined to an open edit's kept words survives that edit's save landing after it", async () => {
+  act(() =>
+    now().page({ messages: [message("m1", "Run tests"), message("m2", "Deploy")], revision: 1 }),
+  );
+  act(() => now().composer.setDraft("my own words"));
+  act(() => now().editing.edit(message("m1", "Run tests")));
+  await answer({
+    queue: { messages: [message("m1", "Run tests"), message("m2", "Deploy")], revision: 2 },
+  });
+  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().editing.steer());
+  act(() => now().editing.edit(message("m2", "Deploy")));
+  act(() => now().composer.setDraft("Deploy to staging"));
+  act(() => now().editing.save());
+  await answer(refused);
+  await answer({ queue: { messages: [message("m2", "Deploy")], revision: 3 } });
+  await answer({ queue: { messages: [message("m2", "Deploy to staging")], revision: 4 } });
+
+  assert.equal(now().editing.editing, undefined);
+  assert.equal(now().composer.draft, "Run tests and fix failures\nmy own words");
+});
+
 test("an edit whose message left the queue, sent or deleted elsewhere, closes and keeps its words in the box", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().editing.edit(message("m1", "Run tests")));
