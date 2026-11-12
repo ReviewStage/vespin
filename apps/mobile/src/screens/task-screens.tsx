@@ -2,6 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
@@ -51,7 +52,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { readingWords, VERB } from "@repo/features/words";
+import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -103,7 +104,12 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { threadComments, threadOpen, useTaskComments } from "../tasks/use-comments.js";
+import {
+  threadComments,
+  threadOpen,
+  threadsOnBlocks,
+  useTaskComments,
+} from "../tasks/use-comments.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -1227,6 +1233,95 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** What a long press on a block of the description offers, and how its count of open comments is heard. */
+const COMMENT_WORDS = {
+  COMMENT: "Comment",
+  heard: (count: number) => countWords(count, TERM.COMMENT),
+} as const;
+
+/**
+ * The description, read-only, as one row per block (a paragraph, a heading,
+ * a list, a picture, a rule), so a long press on a block that holds words
+ * lifts it over the system's menu with Comment, which opens a new thread on
+ * that block, as a document's block offers one; where open threads stand on
+ * a block, their count stands at its trailing edge and opens the oldest. A
+ * description read as no block stands whole, with nothing to comment on.
+ */
+function OverviewDescription({
+  overview,
+  body,
+}: {
+  readonly overview: TaskOverview;
+  readonly body: string;
+}) {
+  const router = useRouter();
+  const openLink = useOpenLink();
+  const { task } = overview;
+  const threads = useTaskComments(task.id);
+  const blocks = useMemo(() => descriptionBlocks(body), [body]);
+  const onBlocks = threadsOnBlocks(threads, blocks);
+
+  const openThread = (threadId: string) =>
+    router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
+
+  if (blocks.length === 0) {
+    return (
+      <ListSection title={WORDS.DESCRIPTION}>
+        <WordsRow words={body} repository={task.repository} onOpenLink={openLink} />
+      </ListSection>
+    );
+  }
+
+  return (
+    <ListSection title={WORDS.DESCRIPTION}>
+      {blocks.map((block, index) => {
+        const standing = onBlocks.get(block.from) ?? [];
+        const oldest = standing[0];
+
+        return (
+          <WordsRow
+            key={`${block.from}`}
+            words={block.drawn}
+            repository={task.repository}
+            onOpenLink={openLink}
+            last={index === blocks.length - 1}
+            menuActions={
+              block.quote === undefined
+                ? undefined
+                : [
+                    {
+                      label: COMMENT_WORDS.COMMENT,
+                      symbol: "text.bubble",
+                      tone: ROW_ACTION_TONE.NEUTRAL,
+                      onPress: () =>
+                        router.push({
+                          pathname: "/tasks/comments/new",
+                          params: {
+                            task: task.id,
+                            from: `${block.from}`,
+                            to: `${block.to}`,
+                            quote: block.quote,
+                          },
+                        }),
+                    },
+                  ]
+            }
+            comments={
+              oldest === undefined
+                ? undefined
+                : {
+                    count: standing.length,
+                    heard: COMMENT_WORDS.heard(standing.length),
+                    onOpen: () => openThread(oldest.id),
+                  }
+            }
+          />
+        );
+      })}
+    </ListSection>
+  );
+}
+
 /**
  * The description's comment threads that still stand open, as the panel's
  * comments list holds them, the oldest started first: each its first
@@ -1278,7 +1373,6 @@ function OverviewPage({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
-  const openLink = useOpenLink();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1305,13 +1399,7 @@ function OverviewPage({
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
       {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
-        <ListSection title={WORDS.DESCRIPTION}>
-          <WordsRow
-            words={document.document.body}
-            repository={task.repository}
-            onOpenLink={openLink}
-          />
-        </ListSection>
+        <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>

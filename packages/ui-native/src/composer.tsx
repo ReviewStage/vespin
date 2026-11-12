@@ -126,6 +126,8 @@ type ComposerProps = {
   readonly stopping?: boolean | undefined;
   /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
+  /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
+  readonly autoFocus?: boolean | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
@@ -312,6 +314,7 @@ function ComposerPieces(props: ComposerProps) {
         text={text}
         placeholder={placeholder}
         axis="vertical"
+        autoFocus={props.autoFocus === true}
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
