@@ -2334,8 +2334,12 @@ function sameHeldPiece(a: AgentMessageProps, b: AgentMessageProps): boolean {
 /** A transcript's message, drawn again only where `sameMessageDraw` says it changed. */
 const SteadyAgentMessage = memo(AgentMessage, sameMessageDraw);
 
-/** The door that brings a message whose row is not drawn into view, handing its row to `then` once drawn; false where no row draws it. */
-type MessageBringer = (messageId: string, then: (row: HTMLElement) => void) => boolean;
+/** The door that brings a message whose row is not drawn into view, handing its row to `then` once drawn; false where no row draws it. `last` brings a turn's last piece in rather than its first, where what is sought stands at its end. */
+type MessageBringer = (
+  messageId: string,
+  then: (row: HTMLElement) => void,
+  last?: boolean,
+) => boolean;
 
 /** A row placed in a transcript: its message, and the lines that reached it. */
 type PlacedRow = PlacedMessage;
@@ -2874,9 +2878,10 @@ function AgentTranscriptView({
   });
   useLayoutEffect(() => {
     if (bringIn === undefined) return;
-    bringIn.current = (messageId, then) => {
-      const entry = entries.find((each) => entryDraws(each, messageId));
-
+    bringIn.current = (messageId, then, last = false) => {
+      const entry = last
+        ? entries.findLast((each) => each.row.message.id === messageId)
+        : entries.find((each) => entryDraws(each, messageId));
       return entry !== undefined && rowsHandle.current?.bringIn(entry.key, then) === true;
     };
   });
@@ -3633,7 +3638,7 @@ function AgentTabView({
           messages={kept}
           older={transcript.hasOlder}
           working={standing.working}
-          onBringIn={(messageId) => bringIn?.current?.(messageId, centerNewestGoalNotice)}
+          onBringIn={(messageId) => bringIn?.current?.(messageId, centerNewestGoalNotice, true)}
           onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
           // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
           onResume={undefined}

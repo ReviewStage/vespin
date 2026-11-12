@@ -172,7 +172,7 @@ export function GoalDock({
   older: boolean;
   /** Whether the agent is at work now, which a running goal's row counts its time by. */
   working: boolean;
-  /** Takes the transcript to a message, by its id. */
+  /** Takes the transcript to the end of a turn, by its id, where the goal's newest notice stands. */
   onBringIn: (messageId: string) => void;
   onClear: (() => void) | undefined;
   onResume: (() => void) | undefined;
@@ -237,10 +237,10 @@ export function GoalDock({
 }
 
 /**
- * Centers the newest goal notice the transcript draws, once the row of the
- * turn that holds it was brought in: a long turn is drawn in pieces, and the
- * one brought in by the turn's id is its first, while its newest notice may
- * stand in a later one, drawn beside it.
+ * Centers the newest goal notice the transcript draws, once the last piece
+ * of the turn that holds it was brought in: a long turn is drawn in pieces,
+ * and the goal's newest notice stands toward its end, in that piece or one
+ * just before it, drawn beside it.
  */
 export function centerNewestGoalNotice(row: HTMLElement): void {
   const log = row.closest('[role="log"]');
