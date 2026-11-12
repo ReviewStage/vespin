@@ -39,11 +39,11 @@
     "@oxlint/plugins": "1.79.0",
     "effect": "catalog:",
     "husky": "9.1.7",
-    "knip": "6.35.1",
-    "lint-staged": "17.3.0",
+    "knip": "6.45.1",
+    "lint-staged": "17.6.0",
     "oxlint": "1.79.0",
     "tsx": "catalog:",
-    "turbo": "2.11.8",
+    "turbo": "2.11.11",
     "vitest": "catalog:"
   }
 }

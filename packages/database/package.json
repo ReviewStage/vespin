@@ -177,11 +177,11 @@
   "devDependencies": {
     "@effect/sql-pglite": "catalog:",
     "@effect/vitest": "catalog:",
-    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite": "0.5.16",
     "@types/node": "catalog:",
-    "@types/pg": "8.21.0",
+    "@types/pg": "8.23.1",
     "drizzle-kit": "catalog:",
-    "pg": "8.23.0",
+    "pg": "8.23.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

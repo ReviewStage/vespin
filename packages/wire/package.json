@@ -19,7 +19,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@noble/hashes": "2.3.0",
+    "@noble/hashes": "2.4.0",
     "ai": "catalog:",
     "effect": "catalog:"
   },
@@ -27,6 +27,6 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   }
 }
