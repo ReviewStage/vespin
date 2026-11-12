@@ -60,7 +60,7 @@ const namedAgent = (userId: string, agentId: string | null) =>
     const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, agentId));
     return Option.match(agent, {
       onNone: () => null,
-      onSome: (found: Agent) => ({ id: found.id, title: agentName(found) }),
+      onSome: (found: Agent) => ({ id: found.id, taskId: found.taskId, title: agentName(found) }),
     });
   });
 
