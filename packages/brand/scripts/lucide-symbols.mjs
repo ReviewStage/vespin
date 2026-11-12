@@ -296,10 +296,12 @@ function subpathsOf(data) {
         if (current !== undefined) draw(lineSegment(at, start));
         at = start;
         current = undefined;
+
         // Note that a close takes no numbers, so one standing after it is refused, because it would loop here.
         if (index < tokens.length && !/^[a-zA-Z]$/.test(tokens[index])) {
           throw new Error(`lucide-symbols: a number "${tokens[index]}" follows a close`);
         }
+
         break;
       default:
         throw new Error(`lucide-symbols: no outline for the path command "${command}"`);
