@@ -11,6 +11,7 @@ import {
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { SKILLS_LINE } from "@repo/features/skills-settings-words";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -30,7 +31,6 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { ToastHost } from "../toast.js";
 import { AddSkillDialog } from "./add-skill-dialog.js";
-import { SKILLS_LINE } from "./skills-model.js";
 import { SkillsPage } from "./skills-page.js";
 
 /**

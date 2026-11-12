@@ -10,6 +10,17 @@ import {
 import { formatBytes } from "@repo/features/number-format";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SkillOption } from "@repo/features/skill-mention";
+import {
+  failureLine,
+  fencedSkillFile,
+  SKILL_ACTION,
+  SKILLS_LINE,
+  type SkillAction,
+  type SkillRow,
+  skillActions,
+  skillGroups,
+  workspaceGroupTitle,
+} from "@repo/features/skills-settings-words";
 import { readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -68,18 +79,7 @@ import { AddSkillDialog } from "./add-skill-dialog.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
-import {
-  failureLine,
-  fencedSkillFile,
-  removeQuestion,
-  SKILL_ACTION,
-  SKILLS_LINE,
-  type SkillAction,
-  type SkillRow,
-  skillActions,
-  skillGroups,
-  workspaceGroupTitle,
-} from "./skills-model.js";
+import { removeQuestion } from "./skills-model.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**

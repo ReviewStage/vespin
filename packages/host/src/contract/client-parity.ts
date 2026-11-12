@@ -134,6 +134,9 @@ const IOS = {
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
+  SKILL_INSTALL: notYet(
+    "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
+  ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -310,12 +313,12 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
-  [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_RETRY]: panel(IOS.SETTINGS),
