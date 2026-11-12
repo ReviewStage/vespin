@@ -11,7 +11,7 @@
  */
 
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
-import { followerRefusedNote } from "@repo/features/task-followers-model";
+import { FOLLOWING_WORDS, followerRefusedNote } from "@repo/features/task-followers-model";
 import type { FollowerCallFailure } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -41,7 +41,7 @@ import { type FollowOfferInput, followOffer } from "./follow-offer.js";
 
 /** What the row says. */
 const FOLLOW_OFFER_WORDS = {
-  LABEL: "Add a follower",
+  LABEL: FOLLOWING_WORDS.ADD_FOLLOWER,
   NOT_NOW: "Not now",
   ADD: "Add",
   ADDING: "Adding",

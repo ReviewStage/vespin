@@ -1,4 +1,4 @@
-// following-screens.tsx -- the Following sheet over a task: who follows it, the reader first, each with a laptop where its agents may use their machines, then the reader's machines switch and Unfollow, or Follow alone where they don't follow, as the panel's Following popover holds them.
+// following-screens.tsx -- the Following sheet over a task: who follows it, the reader first, each with a laptop where its agents may use their machines, then the reader's machines switch and Unfollow, or Follow alone where they don't follow, as the panel's Following popover holds them, and Add a follower.
 
 import {
   FOLLOWING_FACES,
@@ -19,6 +19,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
 import { type FollowerFace, type TaskFollowing, useTaskFollowing } from "../tasks/use-following.js";
+import { useAddFollowerDoor } from "./follower-screens.js";
 
 /** The sheet's own words beside the panel's (`FOLLOWING_WORDS`). */
 const SHEET_WORDS = {
@@ -103,12 +104,15 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
  * row takes no press. Under it the reader's own Let agents here use my
  * machines switch and Unfollow, dimmed with why for the assignee; where the
  * reader doesn't follow, Follow alone. Follow and Unfollow lead with the
- * eye and the struck eye, as the panel's do.
+ * eye and the struck eye, as the panel's do. Last, Add a follower opens a
+ * sheet of the workspace's members, as the phone's way to the panel's offer
+ * to add a person mentioned.
  */
 export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   const colors = useColors();
   const router = useRouter();
   const following = useTaskFollowing(taskId);
+  const addFollower = useAddFollowerDoor();
 
   const bar = (
     <>
@@ -161,6 +165,13 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
             </ListSection>
           )}
           <OwnRows following={following} />
+          <ListSection>
+            <ActionRow
+              label={FOLLOWING_WORDS.ADD_FOLLOWER}
+              symbol="person.badge.plus"
+              onPress={() => addFollower(taskId)}
+            />
+          </ListSection>
         </SettingsForm>
       </Screen>
     </>

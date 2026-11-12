@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   ContextMenu,
@@ -568,6 +568,73 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
                 modifiers={[font({ size: markSize, weight: "semibold" })]}
               />
             ) : null}
+          </HStack>
+        </SwiftUIButton>
+      ))}
+    </>
+  );
+}
+
+/** A person a `PersonPickRows` picks among: who they are, the line under their name, and whether they may be picked. */
+export type PersonPickOption = {
+  /** Their account's id, which a pick is told. */
+  readonly id: string;
+  readonly name: string;
+  readonly picture?: string | undefined;
+  /** Their address, or why they cannot be picked, such as Following. */
+  readonly line: string | undefined;
+  readonly disabled: boolean;
+};
+
+type PersonPickRowsProps = {
+  readonly options: readonly PersonPickOption[];
+  readonly onPick: (id: string) => void;
+};
+
+/**
+ * A choice among people, each a row with their photo or letters, their name,
+ * and their line under it, a press picking them at once, as a contact
+ * picker does; one that may not be picked stands dimmed, its line saying
+ * why, such as a member who already follows a task.
+ */
+export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
+  const colors = useColors();
+
+  return (
+    <>
+      {options.map(({ id, name, picture, line, disabled: off }) => (
+        <SwiftUIButton
+          key={id}
+          onPress={() => onPick(id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(name),
+            ...(line === undefined ? [] : [accessibilityValue(line)]),
+            disabled(off),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+          >
+            <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+            <VStack alignment="leading" spacing={1}>
+              <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
+                {name}
+              </Text>
+              {line === undefined ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line}
+                </Text>
+              )}
+            </VStack>
+            <Spacer />
           </HStack>
         </SwiftUIButton>
       ))}
