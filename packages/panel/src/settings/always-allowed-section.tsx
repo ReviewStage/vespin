@@ -25,7 +25,6 @@ import {
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
-  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
@@ -71,8 +70,8 @@ import { MenuRow } from "./menu-row.js";
  * every Settings list adds an item, opens a new row at the top of the card,
  * and a row's Edit command turns its words into a field. While one is
  * written its row is ringed in the accent, its words bare in the row's own
- * type, and Cancel and Save stand at its end, Return saving and Escape
- * canceling. What is typed is split into words, a trailing `*` dropped,
+ * type, and Cancel and Save stand at its end with no ⋯, Return saving and
+ * Escape canceling. What is typed is split into words, a trailing `*` dropped,
  * and checked as a prefix before it is sent, so shell syntax is refused
  * under the row unsent; a list that holds all it may refuses it there too.
  * An edit is one write, which puts the words typed in the command's place,
@@ -319,7 +318,7 @@ function CommandEditActions({ doors }: { doors: EditDoors }): React.JSX.Element 
 /**
  * One command: its first words and a `*`, who added it when, and Edit
  * command and Remove in its ⋯. While it is edited the row is ringed, its
- * words a field, and Cancel and Save stand at its end.
+ * words a field, and Cancel and Save stand at its end in place of its ⋯.
  */
 function CommandRow({
   command,
@@ -341,20 +340,15 @@ function CommandRow({
   return (
     <MenuRow
       thing={words}
-      actions={[
-        {
-          label: SECTION.EDIT,
-          icon: <GLYPH.RENAME />,
-          disabled: edit?.saving === true,
-          onSelect: onEdit,
-        },
-        {
-          label: SECTION.REMOVE,
-          icon: <GLYPH.REMOVE />,
-          disabled: edit?.saving === true,
-          onSelect: onRemove,
-        },
-      ]}
+      // Note that a row being edited drops its ⋯, as Cancel and Save are all it offers then.
+      actions={
+        edit === undefined
+          ? [
+              { label: SECTION.EDIT, icon: <GLYPH.RENAME />, onSelect: onEdit },
+              { label: SECTION.REMOVE, icon: <GLYPH.REMOVE />, onSelect: onRemove },
+            ]
+          : []
+      }
       row={{
         landed,
         editing: edit !== undefined,
@@ -385,8 +379,6 @@ function NewCommandRow({ doors }: { doors: EditDoors }): React.JSX.Element {
         controls: SETTINGS_ROW_CONTROLS.BESIDE,
         label: <CommandField doors={doors} label={SECTION.NEW} />,
         control: <CommandEditActions doors={doors} />,
-        // Note that the new row keeps the room of the ⋯ it lacks, so its Cancel and Save stand where an edited row's do.
-        end: <SettingsRowActSlot />,
       }}
     />
   );
@@ -428,6 +420,9 @@ function CommandRows({
   const editing = edit !== undefined && edit.accountId === accountId ? edit : undefined;
   const edited =
     editing?.id === undefined ? undefined : commands.find((each) => each.id === editing.id);
+  // Note that a save's answer is laid only on the edit that sent it, read as it stands when the answer lands, because a newer edit, another account's among them, may have taken its place.
+  const current = useRef(editing);
+  current.current = editing;
 
   const open = (command: AllowedCommand | undefined) => {
     if (accountId === undefined || saving) return;
@@ -455,6 +450,7 @@ function CommandRows({
 
     const { prefix } = typedPrefix;
     const otherwise = edited === undefined ? WRITE_FAILED.ADD : WRITE_FAILED.EDIT;
+    const sent = editing;
     setSaving(true);
     void doors
       .send(
@@ -463,16 +459,18 @@ function CommandRows({
       .then((answer) => {
         setSaving(false);
         const refusal = writeRefusal(answer, otherwise);
+        const still = current.current === sent;
 
         if (refusal !== undefined) {
-          setProblem(refusedShown(refusal, FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE));
+          if (still) setProblem(refusedShown(refusal, FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE));
 
           return;
         }
 
+        setLanded(prefix);
+        if (!still) return;
         setProblem(undefined);
         onEdit(undefined);
-        setLanded(prefix);
       });
   };
 
@@ -503,7 +501,8 @@ function CommandRows({
   };
 
   const shown = commands.filter((command) => !removing.has(command.id)).reverse();
-  const adding = editing !== undefined && editing.id === undefined;
+  // Note that an edit whose command another window removed stands as a new one, so what was typed can still be saved, as an add, or let go.
+  const adding = editing !== undefined && edited === undefined;
 
   if (shown.length === 0 && !adding) return <SettingsLine>{SECTION.EMPTY}</SettingsLine>;
 
