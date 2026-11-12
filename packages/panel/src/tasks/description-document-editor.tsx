@@ -701,9 +701,10 @@ function useFileDrop({
 
     if (!editable || column === null) return;
 
+    // Note that an editor still loading draws the sections in its place, whose lines a drag reads meanwhile.
     const spotOf = (event: DragEvent) => {
       const text = body.current;
-      const within = linesWithin(latest.current.editor !== undefined);
+      const within = linesWithin(text?.querySelector(linesWithin(true)) != null);
       const floor = text === null ? undefined : textFloor(text, within);
 
       if (text === null || floor === undefined || event.clientY < floor) return undefined;
