@@ -6,6 +6,7 @@ import {
   Editor,
   Extension,
   type JSONContent,
+  type MarkdownTokenizer,
   type NodeViewRenderer,
 } from "@tiptap/core";
 import Code from "@tiptap/extension-code";
@@ -153,6 +154,20 @@ function withWordsLine(item: JSONContent): JSONContent {
   return worded ? item : { ...item, content: [{ type: "paragraph" }, ...content] };
 }
 
+/** A numbered item's first line as GFM reads one: up to nine digits, then `.` or `)`. */
+const NUMBERED_ITEM = /^[^\S\n]*\d{1,9}[.)](?:\s|$)/u;
+
+/** TipTap's ordered list tokenizer, taking a list that opens on a number alone. */
+function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokenizer {
+  if (tokenizer === undefined) throw new Error("TipTap's ordered list reads no Markdown");
+
+  return {
+    ...tokenizer,
+    tokenize: (src, tokens, lexer) =>
+      NUMBERED_ITEM.test(src) ? tokenizer.tokenize(src, tokens, lexer) : undefined,
+  };
+}
+
 /**
  * A numbered list whose empty item opens as an empty line to type on. Note
  * that TipTap's own reads an item with no words (`1.`, as an agent leaves
@@ -162,8 +177,16 @@ function withWordsLine(item: JSONContent): JSONContent {
  * typed went there. A bulleted item already opens with its empty line. This
  * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
  * once a TipTap carrying that fix is installed.
+ *
+ * It opens only on a number, as GFM and the read view do. Note that TipTap's
+ * own also reads one or two letters or a roman numeral as an item's marker,
+ * so a paragraph opening `Mr. Smith asked` opened as a numbered item, and an
+ * edit saved it as `1. Smith asked`. This is TipTap's own fix waiting
+ * upstream (ueberdosis/tiptap#8395), so it goes once a TipTap carrying that
+ * fix is installed.
  */
 const DocumentOrderedList = OrderedList.extend({
+  markdownTokenizer: numberedOnly(OrderedList.config.markdownTokenizer),
   parseMarkdown(token, helpers) {
     const read = this.parent?.(token, helpers) ?? [];
 

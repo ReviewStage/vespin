@@ -402,6 +402,15 @@ test("a tight list switching between bullets and task items is handed over untou
   assert.equal(handedOver(), text.replace("two", "two again"));
 });
 
+test("a paragraph opening on a short word and a period stays a paragraph when it is edited", () => {
+  const text = "Mr. Smith asked for the export.\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " Done.");
+
+  assert.equal(handedOver(), "Mr. Smith asked for the export. Done.\n");
+});
+
 test("inline code inside a link, bold, or italics opens valid and keeps them when its line is edited", () => {
   const text =
     "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*, `a`**`b`**.\n";
