@@ -10,7 +10,6 @@ import {
   automationActionSchema,
   automationFiringSchema,
   automationGuardsSchema,
-  automationPresetSchema,
   automationRunReasonSchema,
   automationRunStatusSchema,
   automationScopeSchema,
@@ -100,7 +99,8 @@ const automationLiveRowSchema = EffectSchema.Struct({
   targetAgentId: EffectSchema.NullOr(EffectSchema.String),
   archiveSuccessful: EffectSchema.Boolean,
   slackDelivery: EffectSchema.Boolean,
-  preset: EffectSchema.NullOr(automationPresetSchema),
+  /** The suggestion it was made from, as any text, since a row may hold a preset this release does not know. */
+  preset: EffectSchema.NullOr(EffectSchema.String),
   createdAt: countedNumber,
   mine: EffectSchema.Boolean,
   runId: EffectSchema.NullOr(EffectSchema.String),

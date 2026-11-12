@@ -16,7 +16,6 @@ import {
   automationActionSchema,
   automationFiringSchema,
   automationGuardsSchema,
-  automationPresetSchema,
   automationRunReasonSchema,
   automationRunStatusSchema,
   automationScopeSchema,
@@ -91,7 +90,8 @@ const AutomationRowSchema = Schema.Struct({
   targetAgentId: Schema.NullOr(Schema.String),
   archiveSuccessful: Schema.Boolean,
   slackDelivery: Schema.Boolean,
-  preset: Schema.NullOr(automationPresetSchema),
+  // Note that a preset is read as any text, since a row may hold one this release does not know.
+  preset: Schema.NullOr(Schema.String),
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
 });
@@ -338,7 +338,7 @@ const insertAutomation = SqlSchema.findAll({
     targetAgentId: Schema.NullOr(Schema.String),
     archiveSuccessful: Schema.Boolean,
     slackDelivery: Schema.Boolean,
-    preset: Schema.NullOr(automationPresetSchema),
+    preset: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   Result: WrittenSchema,

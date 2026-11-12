@@ -1,4 +1,3 @@
-import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
@@ -81,8 +80,12 @@ export const automation = pgTable(
     }),
     archiveSuccessful: boolean("archive_successful").notNull().default(false),
     slackDelivery: boolean("slack_delivery").notNull().default(false),
-    /** The suggestion it was made from; null for one not made from a suggestion. */
-    preset: text("preset").$type<AutomationPresetName>(),
+    /**
+     * The suggestion it was made from, an `AUTOMATION_PRESET` value; null for
+     * one not made from a suggestion. Note that it is read as any text, since
+     * a row may hold a preset a reader's release does not know.
+     */
+    preset: text("preset"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

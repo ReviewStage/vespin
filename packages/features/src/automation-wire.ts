@@ -343,7 +343,7 @@ const automationTargetSchema = EffectSchema.Union([
 export type AutomationTarget = typeof automationTargetSchema.Type;
 
 /** The list's suggestion an automation was made from (`automation-presets.ts`). */
-export const automationPresetSchema = EffectSchema.Literals(Object.values(AUTOMATION_PRESET));
+const automationPresetSchema = EffectSchema.Literals(Object.values(AUTOMATION_PRESET));
 
 /** Where a run came from, beyond the automation's own trigger. */
 export const AUTOMATION_FIRING = {
@@ -542,8 +542,13 @@ const automationSummarySchema = EffectSchema.Struct({
   archiveSuccessful: EffectSchema.optionalKey(EffectSchema.Boolean),
   /** Whether each run's result is sent to its owner on Slack by the workspace's bot; absent from a service before it. */
   slackDelivery: EffectSchema.optionalKey(EffectSchema.Boolean),
-  /** The suggestion it was made from, which the list then suggests no more; null for one made otherwise, and absent from a service before it. */
-  preset: EffectSchema.optionalKey(EffectSchema.NullOr(automationPresetSchema)),
+  /**
+   * The suggestion it was made from, which the list then suggests no more;
+   * null for one made otherwise, and absent from a service before it. Note
+   * that it is read as any text, not this release's presets, so a preset a
+   * newer service added, or one since retired, never refuses the list.
+   */
+  preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the
