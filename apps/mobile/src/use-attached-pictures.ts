@@ -69,6 +69,8 @@ export interface AttachedPictures {
   readonly attach: () => void;
   /** Adds pictures dropped on the holder, by the addresses of the JPEGs the drop kept (`dropPictures`), each file deleted once read, and says how many it could not keep. */
   readonly drop: (uris: readonly string[], unreadable: number) => void;
+  /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
+  readonly opening: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
   readonly take: () => readonly HeldPicture[];
@@ -127,7 +129,7 @@ export function useAttachedPictures(
       .catch((error: unknown) => console.error("The photo picker did not open.", error));
   };
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
-  const drop = (uris: readonly string[], unreadable: number) => {
+  const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
@@ -145,17 +147,23 @@ export function useAttachedPictures(
     )
       .then((contents) => add(contents, unreadable))
       .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
+  const drop = (uris: readonly string[], unreadable: number) => {
+    void dropped(uris, unreadable);
   };
-  const opening = useEffectEvent(() => {
-    if (opensWith !== undefined && opensWith.length > 0) drop(opensWith, 0);
+  // Note that the pictures opened with are being read from the first render, so nothing is sent without them.
+  const [opening, setOpening] = useState(opensWith !== undefined && opensWith.length > 0);
+  const open = useEffectEvent(() => {
+    if (opensWith === undefined || opensWith.length === 0) return;
+    void dropped(opensWith, 0).finally(() => setOpening(false));
   });
-  useEffect(() => opening(), []);
+  useEffect(() => open(), []);
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures),
     attach,
     drop,
+    opening,
     detach: (id) => {
       setPictures((held) => held.filter((picture) => picture.id !== id));
       onNote(undefined);
