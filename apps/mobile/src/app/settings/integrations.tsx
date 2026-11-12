@@ -79,6 +79,21 @@ function renameTitle(provider: IntegrationProvider): string {
   return `${INTEGRATION_ROW_WORDS.RENAME} ${INTEGRATION_NAME[provider]} account`;
 }
 
+/**
+ * A label cut to what the service keeps, on whole characters so an emoji
+ * isn't split, and trimmed again so a cut never leaves a space at its end.
+ */
+function cutLabel(typed: string): string {
+  let kept = "";
+
+  for (const character of typed) {
+    if (kept.length + character.length > INTEGRATION_LABEL_MAX) break;
+    kept += character;
+  }
+
+  return kept.trim();
+}
+
 /** Whether the provider rides the account's own GitHub sign-in, which the desktop and the web connect. */
 function bySignIn(provider: IntegrationProvider): boolean {
   return INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN;
@@ -336,7 +351,7 @@ function useIntegrationActs(
    * the label it has, as the panel renames it in place; the host draws the
    * label asked at once, and a refusal puts the old one back and is said
    * under the row. Note that a label past what the service keeps is cut to
-   * it, as the panel's field takes no more.
+   * it (`cutLabel`), as the panel's field takes no more.
    */
   const askRename = (row: ServerRow, account: NonNullable<ServerRow["account"]>) =>
     askForName({
@@ -344,7 +359,7 @@ function useIntegrationActs(
       act: INTEGRATION_ROW_WORDS.RENAME,
       name: integrationAccountLabel(account),
       onName: (typed) => {
-        const label = typed.slice(0, INTEGRATION_LABEL_MAX);
+        const label = cutLabel(typed);
         said(row.connection, undefined);
         void write(
           () =>
@@ -405,7 +420,8 @@ function useIntegrationActs(
     }
 
     const connected = statuses.statusOf(row.connection) === INTEGRATION_STATUS.CONNECTED;
-    const expired = row.kind === SERVER_ROW.RECONNECT;
+    // Note that an expired account is told by its standing, as the panel's ⋯ tells it, so one whose sign-in again failed keeps its menu.
+    const expired = statuses.statusOf(row.connection) === INTEGRATION_STATUS.EXPIRED;
 
     if (!connected && !expired) return [];
 
