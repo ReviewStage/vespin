@@ -86,17 +86,17 @@ const SOUND_WORDS = {
   PLAY: (name: string) => `Play ${name}`,
   READING: "Loading",
   RENAME: "Rename…",
-  REMOVE: "Remove…",
+  DELETE: "Delete",
   THING: "Sound",
   NAME_LABEL: "Name",
   NAME_TITLE: "Name this sound",
   RENAME_TITLE: "Rename sound",
   SAVE: "Save",
   SAVING: "Saving",
-  REMOVE_TITLE: "Remove this sound?",
-  REMOVE_BODY: "It is deleted, and a sound set to it goes back to its default.",
-  REMOVE_VERB: "Remove sound",
-  REMOVING: "Removing",
+  DELETE_TITLE: "Delete this sound?",
+  DELETE_BODY: "A sound set to it goes back to its default.",
+  DELETE_VERB: "Delete sound",
+  DELETING: "Deleting",
   LIST: "Your sounds",
   NOT_ADDED: "Your sound could not be added.",
   NOT_REMOVED: "Your sound could not be removed.",
@@ -113,7 +113,7 @@ const SOUND_ACT = {
 /** Those acts as the rows its ⋯ opens. */
 const SOUND_ACTS = [
   { id: SOUND_ACT.RENAME, label: SOUND_WORDS.RENAME, icon: <GLYPH.RENAME /> },
-  { id: SOUND_ACT.REMOVE, label: SOUND_WORDS.REMOVE, icon: <TrashIcon /> },
+  { id: SOUND_ACT.REMOVE, label: SOUND_WORDS.DELETE, icon: <TrashIcon /> },
 ] as const;
 
 /** Says that the service refused an act on one of the account's own sounds, in the app's own words, never the sound's name. */
@@ -384,7 +384,7 @@ function SoundList({
           actions={[
             { label: SOUND_WORDS.RENAME, icon: <GLYPH.RENAME />, onSelect: () => onRename(sound) },
             {
-              label: SOUND_WORDS.REMOVE,
+              label: SOUND_WORDS.DELETE,
               icon: <TrashIcon />,
               danger: true,
               onSelect: () => onRemove(sound),
@@ -532,11 +532,11 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
           open
           confirm={remove}
           question={{
-            title: SOUND_WORDS.REMOVE_TITLE,
+            title: SOUND_WORDS.DELETE_TITLE,
             replayUnmasked: true,
-            body: SOUND_WORDS.REMOVE_BODY,
-            verb: SOUND_WORDS.REMOVE_VERB,
-            running: SOUND_WORDS.REMOVING,
+            body: SOUND_WORDS.DELETE_BODY,
+            verb: SOUND_WORDS.DELETE_VERB,
+            running: SOUND_WORDS.DELETING,
             loss: CONFIRM_LOSS.IRREVERSIBLE,
           }}
         />

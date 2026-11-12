@@ -1091,7 +1091,14 @@ function MemoryList({
 
   const acts: readonly SelectionAct[] = [
     ...(chosen.some((memory) => memory.forgettable) && !forgetting
-      ? [{ label: MEMORY_ACT.FORGET, icon: <TrashIcon />, onAct: () => askForget(chosen) }]
+      ? [
+          {
+            label: MEMORY_ACT.FORGET,
+            icon: <TrashIcon />,
+            danger: true,
+            onAct: () => askForget(chosen),
+          },
+        ]
       : []),
     { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onAct: () => copyAll(chosen) },
   ];

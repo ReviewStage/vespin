@@ -247,8 +247,8 @@ const WORDS = {
   CHECKING_KEY: "Checking the key",
   DISCONNECT: "Disconnect",
   DISCONNECTING: "Disconnecting",
-  REMOVE_KEY: "Remove key",
-  REMOVING: "Removing",
+  DELETE_KEY: "Delete key",
+  DELETING: "Deleting",
   REPLACE_KEY: "Replace key",
   REPLACE_TOKEN: "Replace token",
   RUN_SETUP_TOKEN: "Run this in a terminal",
@@ -268,7 +268,7 @@ const WORDS = {
   REVOCATION_UNCONFIRMED: `${PRODUCT_NAME} signed out of Codex, but OpenAI didn't confirm it ended. To end it there too, remove ${PRODUCT_NAME} in your ChatGPT settings.`,
   SAVE_TOKEN_FAILED: "Couldn't save the token. Try again.",
   SAVE_KEY_FAILED: "Couldn't save the key. Try again.",
-  REMOVE_KEY_FAILED: "Couldn't remove the key. Try again.",
+  DELETE_KEY_FAILED: "Couldn't delete the key. Try again.",
   CLAUDE_DISCONNECT_FAILED: "Couldn't disconnect your Claude plan. Try again.",
   CHATGPT_DISCONNECT_FAILED: "Couldn't disconnect your Codex plan. Try again.",
   REORDER_FAILED: "Couldn't reorder. Try again.",
@@ -292,7 +292,7 @@ const PLAN_DISCONNECT_REFUSED = {
 
 const KEY_REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: WORDS.REMOVE_KEY_FAILED,
+  reason: WORDS.DELETE_KEY_FAILED,
 };
 
 /** What disconnecting each harness's plan asks. */
@@ -488,13 +488,13 @@ function keyRemovalQuestion(provider: ProviderKeyProvider): DialogQuestion {
   const name = harness.keyName;
 
   return {
-    title: `Remove your ${name} ${WORDS.API_KEY}?`,
+    title: `Delete your ${name} ${WORDS.API_KEY}?`,
     body:
       provider === PROVIDER_KEY_PROVIDER.OPENAI
         ? `Agents on ${name} models won't start without a ${harness.planName}. Calls and dictation will be off.`
         : `Agents on ${name} models won't start without a ${harness.planName}.`,
-    verb: WORDS.REMOVE_KEY,
-    running: WORDS.REMOVING,
+    verb: WORDS.DELETE_KEY,
+    running: WORDS.DELETING,
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   };
 }
@@ -1314,7 +1314,7 @@ function KeyRow({
                 ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
-              [{ label: WORDS.REMOVE_KEY, danger: true, onSelect: removal.ask }],
+              [{ label: WORDS.DELETE_KEY, danger: true, onSelect: removal.ask }],
             ]}
           />
         )}

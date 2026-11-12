@@ -1108,29 +1108,29 @@ test("the tile stands still while an upload is under way, so the upload cannot p
   assert.equal(photoTile(page)?.disabled, true);
 });
 
-test("Remove photo, offered on the tile only where a photo is set, asks first and then sends no photo", async () => {
+test("Delete photo, offered on the tile only where a photo is set, asks first and then sends no photo", async () => {
   const bare = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const bareTile = photoTile(bare.page)?.getAttribute("aria-label");
   const bareMenu = tileMenu(bare.page).map((each) => each.textContent);
 
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN, photoVersion: "v1" });
   const offered = tileMenu(page);
-  const remove = offered.find((each) => each.textContent === "Remove photo");
+  const remove = offered.find((each) => each.textContent === "Delete photo");
   act(() => remove?.click());
   await settle();
   assert.deepEqual(photos(), []);
   // The confirm repeats the menu's verb and says in one line what goes, with no ellipsis.
   assert.match(
     dialog().textContent ?? "",
-    /The photo is deleted, and the workspace is marked by its first letter instead\./u,
+    /The workspace is marked by its first letter instead\./u,
   );
   assert.equal((dialog().textContent ?? "").includes("…"), false);
-  await confirm("Remove photo");
+  await confirm("Delete photo");
 
   assert.deepEqual([bareTile, bareMenu], ["Add photo", []]);
   assert.deepEqual(
     offered.map((each) => each.textContent),
-    ["Replace photo", "Remove photo"],
+    ["Replace photo", "Delete photo"],
   );
   assert.deepEqual(photos(), [{ workspaceId: ACME.id, photo: null }]);
 });

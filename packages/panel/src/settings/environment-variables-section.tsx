@@ -241,9 +241,9 @@ function VariableRow({
             confirm={deletion}
             question={{
               title: `Delete ${name}?`,
-              verb: "Delete",
+              verb: "Delete variable",
               running: "Deleting",
-              loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+              loss: CONFIRM_LOSS.IRREVERSIBLE,
               replayUnmasked: true,
               titleReplayMasked: true,
             }}

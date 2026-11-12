@@ -153,8 +153,8 @@ import {
 
 /** The photo's removal, which its tile offers and the confirm asks. */
 const PHOTO_WORDS = {
-  REMOVE: "Remove photo",
-  REMOVE_BODY: "The photo is deleted, and the workspace is marked by its first letter instead.",
+  DELETE: "Delete photo",
+  DELETE_BODY: "The workspace is marked by its first letter instead.",
 } as const;
 
 const INVITE_LINK_COPIED = "Invite link copied";
@@ -1846,13 +1846,13 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
         open
         confirm={remove}
         question={{
-          title: `Remove ${workspace.name}'s photo?`,
+          title: `Delete ${workspace.name}'s photo?`,
           replayUnmasked: true,
           titleReplayMasked: true,
-          body: PHOTO_WORDS.REMOVE_BODY,
-          verb: PHOTO_WORDS.REMOVE,
-          running: "Removing",
-          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+          body: PHOTO_WORDS.DELETE_BODY,
+          verb: PHOTO_WORDS.DELETE,
+          running: "Deleting",
+          loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
       />
       {slugging.dialog}

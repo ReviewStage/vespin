@@ -529,7 +529,7 @@ test("Delete asks first, red for a personal skill whose files go, then takes it 
   );
 });
 
-test("Deleting a workspace skill says everyone in the workspace loses it, in the accent", async () => {
+test("Deleting a workspace skill says everyone in the workspace loses it", async () => {
   await mountPage();
 
   await choose("release-notes", "Delete");

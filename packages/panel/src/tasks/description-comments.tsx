@@ -3986,7 +3986,6 @@ export function PendingPageComment({
             {
               label: COMMENT_WORDS.DELETE,
               icon: <TrashIcon />,
-              danger: true,
               onSelect: () => review.remove(clientKey),
             },
           ],
