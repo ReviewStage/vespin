@@ -266,7 +266,9 @@ A flow is written one way throughout:
   row and let the list settle before its tap or long press, `scroll-to.yaml`
   centers an element on a page, so neither a bar nor the reply box covers
   it, or with `ABOVE` scrolls it above a control, for an element at a list's
-  end, which no scroll can center, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
+  end, which no scroll can center, or with `BELOW` scrolls up in short slow
+  steps until it stands clear under the bar, for a page whose floating
+  controls a centering swipe can leave it under, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
   it. Maestro reads a swipe's points as the flow is parsed, so a swipe stays
   in its flow.
 - **A swipe is closed before the next press**, by pressing its action or a

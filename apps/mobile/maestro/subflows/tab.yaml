@@ -9,6 +9,9 @@
 # cold launch and is out of the tree while a sheet goes, so a check of the
 # screen found neither way and tapped nothing. Each way waits for its tab
 # up to half a minute, as long as a loaded runner's cold launch has taken.
+# On an iPhone, a page scrolled down collapses the tab bar to its current
+# tab alone, heard as "Collapsed" and with no id, so the bar is waited for,
+# and a collapsed one pressed to stand its tabs again, before the tab.
 appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
@@ -17,6 +20,15 @@ env:
     when:
       true: ${FLOATING_TABS != 'true'}
     commands:
+      - extendedWaitUntil:
+          visible: "Tab Bar"
+          timeout: 30000
+      - runFlow:
+          when:
+            visible: "Collapsed"
+          commands:
+            - tapOn: "Collapsed"
+            - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
             id: "${TAB.toLowerCase()}-tab"

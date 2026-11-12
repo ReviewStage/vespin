@@ -40,14 +40,16 @@ appId: dev.vespin.ios
 - tapOn: "Edited.*"
 # The second turn: the page it showed as a card, and its recording, read as
 # its MP4 copy, which the system's player plays in place.
-# Note that the card is scrolled to the window's middle, because a scroll
-# that stops once it shows leaves it under the bar, where the tap lands on the
-# status bar and scrolls the list to its top instead.
+# Note that the card is scrolled to in short steps until it stands clear
+# under the agent's name in the bar (`scroll-to.yaml`'s `BELOW`), because a
+# scroll that stops once it shows leaves it under the bar, where the tap
+# lands on the status bar and scrolls the list to its top, and one that
+# centers it may leave it under the held call's banner.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: "Invite funnel, Page"
-      DIRECTION: UP
+      BELOW: "Build teammate invitations"
 - takeScreenshot: agent-page-card
 - tapOn: "Invite funnel, Page"
 # Note that the wait is long, because the first web view a freshly booted

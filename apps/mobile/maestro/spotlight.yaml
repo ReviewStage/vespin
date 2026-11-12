@@ -22,10 +22,12 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - pressKey: Home
 - waitForAnimationToEnd
-# A swipe down from the Home Screen's middle opens Spotlight's search.
-- swipe:
-    start: "50%,40%"
-    end: "50%,70%"
+# The Home Screen's Search, over the Dock, opens Spotlight's search.
+# Note that it is pressed rather than the Home Screen swiped down, because a
+# swipe while the Home Screen still settles from the app's close moves its
+# pages instead, and the words were typed into nothing.
+- tapOn: "Search"
+- waitForAnimationToEnd
 - inputText: "Weekly digest"
 # Note that the app's row is found by its title and the summary Spotlight
 # reads beside it, "In progress · Ada Lovelace", since Maestro matches words

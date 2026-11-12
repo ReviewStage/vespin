@@ -1,4 +1,4 @@
-# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP, or with `ABOVE` down until it stands above the control of that id, and lets it settle.
+# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP; with `ABOVE`, down until it stands above the control of that id; with `BELOW`, up in short steps until it stands clear under the bar whose words `BELOW` names; and lets it settle.
 #
 # Note that the element is centered, because a scroll that stops once it
 # shows leaves it at the window's edge: under a thread's reply box and the
@@ -8,7 +8,14 @@
 # further and the scroll swipes on until its time is up, so it is scrolled
 # to above the control that would cover it instead (`ABOVE`, such as
 # `composer-field`); a row is reached through `open-row.yaml` or
-# `row-menu.yaml`. Each scroll may take a minute, because a page that never
+# `row-menu.yaml`. Maestro's centering is one more whole swipe once the
+# element shows, which leaves it wherever that swipe ends: on an agent's
+# page, under its held call's banner. So an element a tap must land on there
+# is scrolled to with `BELOW`, which starts with it above the window and
+# drags the page down a seventh of the window at a time, slowly enough that
+# nothing flings, until its top passes the bar's words, then once more,
+# which stands its middle between a quarter and two fifths down the window,
+# clear of the bar, Jump to latest, and the banner. Each scroll may take a minute, because a page that never
 # holds still, an agent's turn still running or a video playing, holds each
 # swipe ten seconds waiting for it to, which ran a scroll out of Maestro's
 # twenty seconds after two swipes.
@@ -16,7 +23,27 @@ appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
   ABOVE: ${ABOVE || ''}
+  BELOW: ${BELOW || ''}
 ---
+- runFlow:
+    when:
+      true: ${BELOW != ''}
+    commands:
+      - repeat:
+          times: 40
+          while:
+            notVisible:
+              text: "${ELEMENT}"
+              below: "${BELOW}"
+          commands:
+            - swipe:
+                start: "50%, 40%"
+                end: "50%, 54%"
+                duration: 1500
+      - swipe:
+          start: "50%, 40%"
+          end: "50%, 54%"
+          duration: 1500
 - runFlow:
     when:
       true: ${ABOVE != ''}
@@ -30,7 +57,7 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && DIRECTION == 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && DIRECTION == 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
@@ -39,7 +66,7 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && DIRECTION != 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && DIRECTION != 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
