@@ -96,7 +96,7 @@ export interface PlacedWords {
   readonly top: number;
 }
 
-/** Where the caret goes as the editor opens: where a click landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
+/** Where the caret goes as the editor opens: where a click or a drop of pictures landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
 export type DescriptionEditorPlacement =
   | {
       readonly x: number;
@@ -104,6 +104,8 @@ export type DescriptionEditorPlacement =
       readonly words?: PlacedWords | undefined;
       /** Where the words the press selected start, which the editor selects from to `words`; none where it selected nothing. */
       readonly from?: PlacedWords | undefined;
+      /** Image files dropped on the drawn text, laid in as pictures at the caret as the editor opens there; none for a click. */
+      readonly pictures?: readonly File[] | undefined;
     }
   | { readonly section: number }
   | typeof PLACEMENT_END;

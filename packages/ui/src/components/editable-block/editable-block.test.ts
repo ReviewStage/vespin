@@ -14,8 +14,9 @@ import {
 /**
  * editable-block.test.ts -- a document's blocks are one Tab stop the arrows
  * step across, Return opens the block the keyboard selected, and a press on
- * a block's own words opens it where it landed, while a press portaled out
- * of it and a key from inside it are not the block's.
+ * a block's own words opens it where it landed, as files dropped on it are
+ * handed it there, while a press portaled out of it and a key from inside it
+ * are not the block's.
  */
 
 declare global {
@@ -51,6 +52,10 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
       entry,
       onOpen: () => heard.push(`${label} opened`),
       onPress: ({ x, y }) => heard.push(`${label} pressed at ${String(x)},${String(y)}`),
+      onDropFiles: ({ files, x, y }) =>
+        heard.push(
+          `${label} took ${files.map((file) => file.name).join()} at ${String(x)},${String(y)}`,
+        ),
       children: [
         createElement("p", { key: "words" }, `${label} words`),
         createElement("pre", { key: "code" }, "code"),
@@ -137,6 +142,32 @@ test("a press on a block's words opens it where it landed, and a portaled press 
     menu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   expect(heard).toEqual(["Second pressed at 12,34"]);
+});
+
+/** A drag event of `type` carrying `files`, as a drag from the system's files does; jsdom has no DragEvent. */
+function fileDrag(type: string, files: readonly File[], at = { clientX: 0, clientY: 0 }): Event {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...at });
+  Object.defineProperty(event, "dataTransfer", {
+    value: { types: ["Files"], files, dropEffect: "none" },
+  });
+
+  return event;
+}
+
+test("files dragged over a block are its own, so the window never opens them, and a drop hands them to it where it landed", () => {
+  const heard: string[] = [];
+  drawDocument(heard);
+  const words = blockNamed("Second").querySelector("p");
+
+  if (words === null) throw new Error("the words are drawn");
+  const shot = new File(["png"], "shot.png", { type: "image/png" });
+  const over = fileDrag("dragover", [shot]);
+  act(() => {
+    words.dispatchEvent(over);
+    words.dispatchEvent(fileDrag("drop", [shot], { clientX: 12, clientY: 34 }));
+  });
+  expect(over.defaultPrevented).toBe(true);
+  expect(heard).toEqual(["Second took shot.png at 12,34"]);
 });
 
 test("the text's blocks are found apart from the title's", () => {
