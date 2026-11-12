@@ -69,6 +69,16 @@ final class ContinuedLinks {
   }
 }
 
+/// A call's refusal, written by one completion and read by another, on whichever queues the system answers on.
+final class Refusal: @unchecked Sendable {
+  private let lock = NSLock()
+  private var error: Error?
+
+  func hold(_ error: Error) { lock.withLock { self.error = error } }
+
+  var held: Error? { lock.withLock { error } }
+}
+
 public final class SystemActivityModule: Module {
   /// Our activity type, declared in the app's `NSUserActivityTypes` (`@repo/features/ios-system-activity`).
   static let activityType = "dev.vespin.viewing"
@@ -114,12 +124,17 @@ public final class SystemActivityModule: Module {
     }.runOnQueue(.main)
 
     // Note that each Spotlight call is handed to the index on Expo's async queue, which is serial, so the system takes them in the order JavaScript made them, and each is answered by its own completion alone. No call waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
+    // Note that a delete-all refused by the time its items are added refuses the whole call, so the index is never taken as holding the lists alone while an earlier account's items may stand in it; the system answers in the order it was asked, so a refusal comes before the items' answer if it comes at all.
     AsyncFunction("replaceAll") { (items: [SpotlightRecord], promise: Promise) in
+      let emptying = Refusal()
       self.index.deleteAllSearchableItems { error in
         guard let error else { return Self.log.notice("Spotlight's delete-all was answered") }
         Self.log.error("Spotlight's delete-all was refused: \(error.localizedDescription, privacy: .public)")
+        emptying.hold(error)
       }
-      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: Self.answer(promise))
+      self.index.indexSearchableItems(items.map(Self.searchableItem)) { error in
+        Self.answer(promise)(error ?? emptying.held)
+      }
     }
 
     AsyncFunction("index") { (items: [SpotlightRecord], promise: Promise) in
