@@ -60,6 +60,7 @@ export const ADMIN_TAB = {
   RELIABILITY: "reliability",
   WORKSPACES: "workspaces",
   USERS: "users",
+  LIMITS: "limits",
 } as const;
 
 export type AdminTab = (typeof ADMIN_TAB)[keyof typeof ADMIN_TAB];
@@ -342,6 +343,8 @@ export function adminLinkFields(view: AdminView): AdminLinkFieldsResult {
       return { section: ADMIN_LINK_SECTION.WORKSPACES };
     case ADMIN_TAB.USERS:
       return { section: ADMIN_LINK_SECTION.USERS };
+    case ADMIN_TAB.LIMITS:
+      return { section: ADMIN_LINK_SECTION.LIMITS };
     default:
       return {};
   }

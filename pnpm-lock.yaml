@@ -1062,6 +1062,9 @@ importers:
       '@pierre/trees':
         specifier: 1.0.0-beta.6
         version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.6.0)(react-dom@19.2.8)(react@19.2.8)(shiki@4.6.0)
+      '@repo/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       '@repo/brand':
         specifier: workspace:*
         version: link:../brand
