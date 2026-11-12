@@ -1,0 +1,30 @@
+# settings-integrations-tools.yaml -- Settings › Integrations reading each connected server's tools on the Inbox fixture: a server whose tools answered says it's connected, one whose read couldn't be answered says so with Retry, and an account at a provider holding two is renamed from its menu.
+#
+# Launched on the host's Inbox fixture, whose Linear and Relay Notion list
+# their tools and whose Personal Notion's read failed, and whose rename is
+# answered as the service would (`@repo/host/fixture-inbox`), so no server
+# is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Integrations"
+- tapOn: "Integrations"
+- waitForAnimationToEnd
+- assertVisible: "The tools could not be read."
+- assertVisible: "Retry"
+- takeScreenshot: settings-integrations-tools
+# The Personal Notion's menu offers Rename, which asks for the label in the system's alert.
+- longPressOn: "Notion · Personal"
+- tapOn: "Rename"
+- assertVisible: "Rename Notion account"
+- takeScreenshot: settings-integrations-rename
+- tapOn: "Cancel"
