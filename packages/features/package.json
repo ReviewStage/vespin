@@ -28,6 +28,7 @@
     "./device-platform": "./src/device-platform.js",
     "./drawn-pictures": "./src/drawn-pictures.js",
     "./host-live": "./src/host-live.js",
+    "./link-standing-model": "./src/link-standing-model.js",
     "./machine-name": "./src/machine-name.js",
     "./machines-settings-words": "./src/machines-settings-words.js",
     "./markdown-fence": "./src/markdown-fence.js",

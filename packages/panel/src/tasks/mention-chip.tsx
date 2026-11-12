@@ -31,6 +31,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
@@ -88,12 +89,7 @@ import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
-import {
-  type LinkStanding,
-  useLinkStanding,
-  useNumberedTaskId,
-  useWordsWorkspaceId,
-} from "./use-link-standing.js";
+import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
 

@@ -100,6 +100,8 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { markdownGithubPages } from "./markdown-model.js";
+
 export { MarkdownPage } from "./markdown-page.js";
 
 export {

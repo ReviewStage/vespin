@@ -57,7 +57,7 @@ import { provenanceText } from "@repo/features/time-format";
 import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import {
   AGENT_ROW_STATE,
@@ -115,6 +115,7 @@ import {
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
+import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -1314,6 +1315,14 @@ function OverviewDescription({
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
   const { pictureSource, videoAt } = useDescriptionPictures(body);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
+  const linkStanding = useLinkStandings(
+    useMemo(() => [body], [body]),
+    task.repository,
+    workspaces.find((each) => each.id === task.workspaceId),
+  );
 
   const openThread = (threadId: string) =>
     router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
@@ -1327,6 +1336,7 @@ function OverviewDescription({
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          linkStanding={linkStanding}
         />
       </ListSection>
     );
@@ -1346,6 +1356,7 @@ function OverviewDescription({
             onOpenLink={openLink}
             pictureSource={pictureSource}
             videoAt={videoAt}
+            linkStanding={linkStanding}
             last={index === blocks.length - 1}
             menuActions={
               block.quote === undefined

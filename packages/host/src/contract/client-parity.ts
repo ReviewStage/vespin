@@ -17,8 +17,9 @@
  * the account's workspaces by its owner, its parent, sub-tasks,
  * and blocks added, changed, and taken away, the task followed or
  * unfollowed and the account's machines switch on it set, and a task's
- * description, pages, and comment threads followed, and read again where
- * they could not be, with a thread started
+ * description, its pictures read, the state of the pull requests and
+ * issues its links name followed, pages, and comment threads followed,
+ * and read again where they could not be, with a thread started
  * on one block of the description and a reply on a thread, and a task
  * its link names by number that the list does not hold, found and opened
  * from its own read; an agent's page,
@@ -430,7 +431,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_FILE]: panel(IOS.REPOSITORY_FILES),
   [PORT_ACT_KIND.TASKS_TREE]: panel(IOS.REPOSITORY_FILES),
   [PORT_ACT_KIND.TASKS_SKILLS]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_LINK_STANDING_FOLLOW]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_LINK_STANDING_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_LINK_PREVIEW]: panel(IOS.HOVER),
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
@@ -450,7 +451,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PICTURE_READ]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.DESCRIPTION_EDIT),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: EVERYWHERE,
