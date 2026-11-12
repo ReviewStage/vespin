@@ -1268,15 +1268,19 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
-test("Memory digest is suggested no more once the list holds an automation made from it, whatever its name, and still beside one merely named for it", async () => {
+test("Memory digest is suggested no more once the list holds the reader's own or a workspace automation made from it, whatever its name, and still beside a teammate's personal one or one merely named for it", async () => {
   memoryOn();
 
   for (const { held, suggested } of [
     {
-      held: { name: "Weekly memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST },
+      held: { name: "Weekly memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: true },
       suggested: false,
     },
-    { held: { name: "Memory digest" }, suggested: true },
+    {
+      held: { name: "Their memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: false },
+      suggested: true,
+    },
+    { held: { name: "Memory digest", mine: true }, suggested: true },
   ]) {
     world.standing = [SWEEP, automation(4, { ...held, scope: AUTOMATION_SCOPE.PERSONAL })];
     const page = mount();

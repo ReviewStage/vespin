@@ -11,7 +11,6 @@ import {
   AUTOMATION_PRESET,
   type AutomationPresetName,
   automationPreset,
-  presetListed,
 } from "@repo/features/automation-presets";
 import {
   AUTOMATION_CALL_FAILURE,
@@ -156,7 +155,8 @@ import {
  * from the suggestion's preset (`@repo/features/automation-presets`), to
  * look over and Create. A suggestion behind an experiment, as Memory digest
  * stands behind the workspace's Memory, is offered only while it is on, and
- * one the list already holds an automation made from is offered no more.
+ * one the reader already made, or the workspace already holds, is offered
+ * no more.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -690,8 +690,10 @@ function useOfferedPresets(workspaceId: string | undefined): readonly Automation
  * The automations suggested under the list, or under the line saying there
  * is none yet, each a card whose press opens a new automation's page filled
  * in from its preset, to look over and Create; nothing where none is
- * offered. One the list already holds an automation made from, by the
- * preset that automation saved (`presetListed`), is not suggested.
+ * offered. A preset is taken by an automation made from it, whatever its
+ * name, that is the reader's own or the workspace's: a teammate's personal
+ * one runs for that teammate alone, so the reader is still offered their
+ * own, while one for the workspace serves everyone.
  */
 function SuggestedAutomations({
   tasks,
@@ -704,8 +706,16 @@ function SuggestedAutomations({
   const workspace = tasks.workspace;
   const offered = useOfferedPresets(workspace?.id);
 
+  const taken = new Set(
+    listed.flatMap((automation) =>
+      automation.mine === true || automation.scope === AUTOMATION_SCOPE.WORKSPACE
+        ? [automation.preset]
+        : [],
+    ),
+  );
+
   const cards = SUGGESTIONS.flatMap(({ preset, glyph }) => {
-    if (!offered.includes(preset) || presetListed(preset, listed)) return [];
+    if (!offered.includes(preset) || taken.has(preset)) return [];
 
     const filled = automationPreset(preset);
 

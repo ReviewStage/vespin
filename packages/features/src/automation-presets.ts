@@ -1,6 +1,5 @@
 import { AGENT_TOOL } from "./agent-tools.js";
 import { SCHEDULE_PRESET } from "./automation-schedule.js";
-import type { AutomationSummary } from "./automation-wire.js";
 import { INBOX_BOUNDS, INBOX_TOOL } from "./inbox-wire.js";
 
 /**
@@ -12,12 +11,10 @@ import { INBOX_BOUNDS, INBOX_TOOL } from "./inbox-wire.js";
  * over, change, and Create. It runs on the one path every automation runs
  * on (`automation-runs.ts`), and nothing reads a preset's fields after it is
  * saved, so the member's edits are the automation and no second copy of what
- * it does is kept. An automation made from a card keeps only the preset's
- * key (its `preset`), so the list suggests that card no more once it holds
- * the automation, whatever the member renamed it to (`presetListed`). Which
- * presets a list suggests, such as one only while the workspace has an
- * experiment on, is the list's to say, since the experiments are a package
- * above this one.
+ * it does is kept; an automation made from a card keeps only the preset's
+ * key. Which presets a list suggests, such as one only while the workspace
+ * has an experiment on, is the list's to say, since the experiments are a
+ * package above this one.
  *
  * Memory digest, the one preset, has an agent post the memories the
  * workspace kept or corrected that week as one Inbox thread every Monday,
@@ -80,12 +77,4 @@ export function automationPreset(name: AutomationPresetName): AutomationPreset {
     case AUTOMATION_PRESET.MEMORY_DIGEST:
       return memoryDigestPreset();
   }
-}
-
-/** Whether the list already holds an automation made from the preset `name` names. */
-export function presetListed(
-  name: AutomationPresetName,
-  automations: readonly Pick<AutomationSummary, "preset">[],
-): boolean {
-  return automations.some((automation) => automation.preset === name);
 }
