@@ -11,7 +11,7 @@ import type {
 import { mountDescriptionEditor } from "./description-editor.js";
 
 /**
- * A description's pictures in its editor: a file pasted or chosen is laid in as a
+ * A description's pictures in its editor: a file pasted, chosen, or dropped on the drawn text is laid in as a
  * picture below the caret's line, or in place of an empty one, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
  * one still being kept out; and a picture of another description pasted in is kept
@@ -74,6 +74,26 @@ test("a picture laid in writes nothing while it is kept, then its line under the
   handle.settlePicture(laid.upload, KEPT);
 
   assert.equal(meanwhile, TEXT);
+  assert.equal(
+    handle.markdown(),
+    TEXT.replace("follows the mock.\n", `follows the mock.\n\n![members](${KEPT})\n`),
+  );
+});
+
+test("pictures dropped on the drawn text are laid in below the line they landed on as the editor opens there", () => {
+  const landed = {
+    section: 0,
+    text: "The invite email follows the mock.",
+    occurrence: 0,
+    offset: 4,
+    code: false,
+    top: 0,
+  };
+
+  const { handle, taken } = opened(TEXT, { x: 0, y: 0, words: landed, pictures: [PNG()] });
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+
+  assert.equal(taken.length, 1);
   assert.equal(
     handle.markdown(),
     TEXT.replace("follows the mock.\n", `follows the mock.\n\n![members](${KEPT})\n`),

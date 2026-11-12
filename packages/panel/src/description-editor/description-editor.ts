@@ -772,6 +772,15 @@ export function mountDescriptionEditor(
   held = sourcesOf(editor.state.doc, opened);
   const onWords = placedOnWords(editor, placement);
   editor.view.dispatch(editor.state.tr.setSelection(onWords ?? placed(editor, placement)));
+
+  // Pictures dropped on the drawn text are laid in at the caret the drop opened the editor at, as a drop in the open editor is.
+  const dropped =
+    placement !== undefined && "pictures" in placement ? placement.pictures : undefined;
+
+  if (dropped !== undefined && pictures !== undefined) {
+    laidInPictures(editor.view, dropped, pictures);
+  }
+
   // The text and caret as the editor opened on the words a click landed on,
   // which stand for those words only until either changes: a merged answer
   // laid in, a word typed, or the caret moved.
