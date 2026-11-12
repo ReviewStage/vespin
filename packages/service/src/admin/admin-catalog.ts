@@ -59,7 +59,13 @@ const PLACEHOLDER_TASK = {
 const PLACEHOLDER_STANDING: AgentStanding = {
   agent: Option.none(),
   open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS]),
-  experiments: { descriptionsOn: true, memoryOn: false, turnEndOn: false, replyButtonsOn: false },
+  experiments: {
+    descriptionsOn: true,
+    memoryOn: false,
+    turnEndOn: false,
+    replyButtonsOn: false,
+    computerUseOn: false,
+  },
 };
 
 const HEADING_MARK = "## ";

@@ -1,5 +1,5 @@
 /**
- * tools.tsx -- the Tools screen: Vespin's own tools as a coding agent is offered them, each with its definition's size and whether it loads on the first turn or only on search.
+ * tools.tsx -- the Tools screen: our own tools as a coding agent is offered them, each with its definition's size and whether it loads on the first turn or only on search.
  *
  * Every figure is the deploy's code (the catalog read), never use: a tool
  * listed from the first turn costs its definition on every turn, so its size
@@ -13,6 +13,7 @@ import {
   type AdminToolLoading,
 } from "@repo/features/admin-catalog-wire";
 import { formatCount } from "@repo/features/number-format";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { QuietWords, TEXT_FONT, Text } from "@repo/ui";
 import {
   createDataTableColumnHelper,
@@ -32,8 +33,10 @@ import {
 } from "./catalog-page.js";
 
 /** What the page holds, said once over it. */
-const TOOLS_NOTE =
-  "Vespin's own tools as a coding agent is offered them, in the order its tool list names them; press one for what the agent is told. A tool loaded on the first turn costs its definition on every turn; one found on search costs a search step the first time it is called. A gated tool is offered only where its gate opens.";
+const TOOLS_NOTE = `${PRODUCT_NAME}'s own tools as a coding agent is offered them, in the order its tool list names them; press one for what the agent is told. A tool loaded on the first turn costs its definition on every turn; one found on search costs a search step the first time it is called. A gated tool is offered only where its gate opens.`;
+
+/** What the tools table is titled and named by. */
+const TOOLS_TITLE = `${PRODUCT_NAME}'s tools`;
 
 const LOADING_LABEL = {
   [ADMIN_TOOL_LOADING.FIRST_TURN]: "First turn",
@@ -120,17 +123,17 @@ function ToolSections({ catalog }: { catalog: AdminCatalog | undefined }): React
         <StatCards layout={STAT_LAYOUT.GROUP} stats={TOOL_STATS} data={catalog} />
       </AdminSection>
 
-      <AdminSection title="Vespin's tools">
+      <AdminSection title={TOOLS_TITLE}>
         {catalog === undefined ? (
           <DataTableSkeleton
-            label="Vespin's tools"
+            label={TOOLS_TITLE}
             columns={TOOL_COLUMNS}
             rows={SKELETON_ROWS}
             minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
           />
         ) : (
           <DataTable
-            label="Vespin's tools"
+            label={TOOLS_TITLE}
             columns={TOOL_COLUMNS}
             rows={catalog.tools}
             getRowId={(tool) => tool.name}

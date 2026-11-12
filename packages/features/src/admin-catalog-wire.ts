@@ -33,7 +33,7 @@ export const ADMIN_TURN_PIPELINE = {
 
 export type AdminTurnPipeline = (typeof ADMIN_TURN_PIPELINE)[keyof typeof ADMIN_TURN_PIPELINE];
 
-/** One of Vespin's own tools as a coding agent is offered it. */
+/** One of our own tools as a coding agent is offered it. */
 export interface AdminCatalogTool {
   name: string;
   /** What the agent is told the tool does, as its definition words it. */
