@@ -574,11 +574,13 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction
                 icon="archivebox"
                 destructive
-                onPress={() =>
+                onPress={() => {
+                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+                  setArchiving(false);
                   void actions.archiveAsk.ask(id).then((stands) => {
                     if (stands) setArchiving(true);
-                  })
-                }
+                  });
+                }}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -664,7 +666,10 @@ export function AgentScreen() {
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(leave);
+          actions.archiveAsk.answered(
+            () => actions.archive(leave),
+            () => setArchiving(true),
+          );
         }}
         onDismiss={() => setArchiving(false)}
       />

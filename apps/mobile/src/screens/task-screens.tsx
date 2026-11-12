@@ -1118,21 +1118,24 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), read afresh as it's raised, because one that
- * starts working while the alert is up would otherwise be stopped and
- * archived without a word of it.
+ * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
+ * its act is pressed, because one that starts working while the alert is up
+ * would otherwise be stopped and archived without a word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
-  const { question, ask: readAfresh } = useArchiveAsk(asked?.agentId ?? "");
+  const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) =>
+    archive: (agentId) => {
+      // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+      letGo();
       void readAfresh(agentId).then((stands) => {
         if (stands) setAsked({ agentId, presented: true });
-      }),
+      });
+    },
     ask: (
       <ConfirmAsk
         title={question.title}
@@ -1142,8 +1145,12 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
         presented={asked?.presented === true}
         onAct={() => {
           if (asked === undefined || !asked.presented) return;
+          const { agentId } = asked;
           letGo();
-          acts.archive(asked.agentId);
+          answered(
+            () => acts.archive(agentId),
+            () => setAsked({ agentId, presented: true }),
+          );
         }}
         onDismiss={letGo}
       />
