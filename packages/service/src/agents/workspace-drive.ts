@@ -38,13 +38,12 @@
  * (`github-install-app.ts`), GitHub creating, unsuspending, or deleting an
  * installation, or adding repositories to it or removing them
  * (`github-webhook-app.ts`), and a member adding or removing a repository on
- * their token (`workspace-repositories.ts`). The daily refresh fills every
- * drive that is missing or unfinished (`base-drive-refresh.ts`), and the
- * drive is deleted with its workspace (`workspace-deletion.ts`). The fill's sandbox
+ * their token (`workspace-repositories.ts`), and the drive is deleted with
+ * its workspace (`workspace-deletion.ts`). The fill's sandbox
  * writes its firewall under the workspace's first owner.
  *
- * A drive that is not whole sends its workspace's agents to the image to
- * clone, so every way one ends up so is reported to Sentry as
+ * Nothing refills a drive on a timer, so a drive that is not whole stays so
+ * until someone fixes it: every way one ends up so is reported to Sentry as
  * a `WorkspaceDriveBroken` issue (`reportedBroken`), a repository whose fill
  * failed, a fill that failed whole, and a start that found the drive gone or
  * left unfinished, each naming the workspace.
