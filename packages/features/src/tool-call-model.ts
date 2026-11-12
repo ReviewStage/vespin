@@ -774,6 +774,33 @@ function namedCall(
   };
 }
 
+/** The status `look_at_picture` answers with when it wrote a description's PDF into the agent's machine. */
+const LOOK_WRITTEN = "written";
+
+/**
+ * A `look_at_picture` call as its row reads it: a picture in a thread or in
+ * the description, or, where the answer says it wrote a PDF into the agent's
+ * machine, a read of that PDF named by its file's name, the last part of the
+ * path the answer gives. A refusal stays a look, its reason in its answer.
+ */
+function lookCall(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
+  if (stringAt(output, "status") === LOOK_WRITTEN) {
+    const name = stringAt(output, "path")?.split("/").at(-1);
+
+    return {
+      ...namedCall(CALL_KIND.READ_DESCRIPTION_PDF, input, output, undefined),
+      subject: name ?? "",
+    };
+  }
+
+  const kind =
+    threadPictureOf(input) === undefined
+      ? CALL_KIND.LOOK_AT_PICTURE
+      : CALL_KIND.LOOK_AT_THREAD_PICTURE;
+
+  return namedCall(kind, input, output, undefined);
+}
+
 /** A call about one agent named by the agent's title its answer gives, as the agent's tab names it; nothing before the answer, whose input holds only an id. */
 function answeredAgentCall(
   kind: CallKind,
@@ -1130,15 +1157,7 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
  * reaches here (`native-tool-calls.ts`).
  */
 const AGENT_TOOL_VIEWS = {
-  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
-    namedCall(
-      threadPictureOf(input) === undefined
-        ? CALL_KIND.LOOK_AT_PICTURE
-        : CALL_KIND.LOOK_AT_THREAD_PICTURE,
-      input,
-      output,
-      undefined,
-    ),
+  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) => lookCall(input, output),
   [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>

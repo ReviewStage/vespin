@@ -172,13 +172,19 @@ patchedDependencies:
 # TipTap release carries #8405.
   "@tiptap/extension-list@3.33.1": patches/@tiptap__extension-list@3.33.1.patch
 #
-# `@tiptap/markdown` 3.33.1 writes two code spans that touch as one span where
-# another mark changes between them, so an edited line holding inline code
-# right against bold inline code saved one span with the bold's asterisks
-# inside it. The patch makes the serializer half of upstream's
-# ueberdosis/tiptap#8662 (#8637): a code span is written innermost, closed
-# where another mark opens or closes while it goes on, and opened again
-# after. Delete it when a TipTap release carries #8662.
+# `@tiptap/markdown` 3.33.1 is patched for two things. It writes two code spans
+# that touch as one span where another mark changes between them, so an edited
+# line holding inline code right against bold inline code saved one span with
+# the bold's asterisks inside it; the patch makes the serializer half of
+# upstream's ueberdosis/tiptap#8662 (#8637): a code span is written innermost,
+# closed where another mark opens or closes while it goes on, and opened again
+# after. And its `MarkdownManager` registers its extensions' tokenizers on the
+# global `marked` for good, so every editor opened adds about six more and
+# parsing a description slows with each one (ueberdosis/tiptap#8316): a
+# 20-section description took ~16 ms to open in a fresh window and ~300 ms
+# after 400 editors had opened; the patch makes upstream's one-line change in
+# ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
+# Delete each half when a TipTap release carries its PR.
   "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
 
 # Transitive versions raised past a published advisory, each within the major

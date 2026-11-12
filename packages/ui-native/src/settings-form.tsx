@@ -457,6 +457,82 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
   );
 }
 
+/** A workspace a `WorkspacePickRows` picks among: how its tile draws it, the line under its name, and whether it may be picked. */
+export type WorkspacePickOption = {
+  readonly workspace: SwitcherWorkspace;
+  /** Who shares it, or why it cannot be picked. */
+  readonly line: string | undefined;
+  readonly disabled: boolean;
+};
+
+type WorkspacePickRowsProps = {
+  readonly options: readonly WorkspacePickOption[];
+  readonly picked: string | undefined;
+  readonly onPick: (id: string) => void;
+};
+
+/**
+ * A choice among workspaces, as `PickRows` draws a choice: each a row with
+ * its tile, its name, and its line under it, the picked one checked in
+ * copper; one that may not be picked stands dimmed, its line saying why, as
+ * the panel's Move to workspace lists one whose GitHub cannot reach the
+ * task's repository.
+ */
+export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
+  const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+
+  return (
+    <>
+      {options.map(({ workspace, line, disabled: off }) => (
+        <SwiftUIButton
+          key={workspace.id}
+          onPress={() => onPick(workspace.id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(workspace.name),
+            ...(line === undefined ? [] : [accessibilityValue(line)]),
+            ...(workspace.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            disabled(off),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+          >
+            <WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE - 8} />
+            <VStack alignment="leading" spacing={1}>
+              <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
+                {workspace.name}
+              </Text>
+              {line === undefined ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line}
+                </Text>
+              )}
+            </VStack>
+            <Spacer />
+            {workspace.id === picked ? (
+              <Image
+                {...glyphImage(PICKED_MARK)}
+                size={markSize}
+                color={colors.ACCENT}
+                modifiers={[font({ size: markSize, weight: "semibold" })]}
+              />
+            ) : null}
+          </HStack>
+        </SwiftUIButton>
+      ))}
+    </>
+  );
+}
+
 /** One thing a row's menu does, such as a member's Remove from workspace or a port's Share. */
 export interface MenuRowAct {
   readonly label: string;

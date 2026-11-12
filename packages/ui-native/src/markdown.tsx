@@ -148,7 +148,7 @@ interface Drawing {
   readonly lineWidth: number;
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
-  readonly pictureSource: (written: string) => string | undefined;
+  readonly pictureSource: (written: string) => string | null | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
@@ -599,9 +599,14 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
 /** The most a full-screen picture zooms in to, as a pinch takes it. */
 const VIEWER_MAX_ZOOM = 4;
 
+/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+function unreadWords(alt: string): string {
+  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+}
+
 type PictureProps = {
-  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone. */
-  readonly source: string | undefined;
+  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone, and `null` where it could not be read, which says so in its well. */
+  readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
   /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
@@ -627,7 +632,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   const heard = alt === "" ? "Picture" : alt;
 
   const acts = useKeptActs(
-    source === undefined ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
+    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
   const well = [
@@ -639,6 +644,19 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
     return (
       <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
         <ActivityIndicator color={colors.TEXT_MUTED} />
+      </View>
+    );
+  }
+
+  // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
+  if (source === null) {
+    const words = unreadWords(alt);
+
+    return (
+      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
+        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
+          {words}
+        </Text>
       </View>
     );
   }
@@ -799,8 +817,8 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
-  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way. Each is drawn from the address it names where none is given. */
-  readonly pictureSource?: ((written: string) => string | undefined) | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */

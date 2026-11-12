@@ -123,8 +123,8 @@ builds a control of its own.
 
 ## Vespin's look
 
-Denser and quieter than iOS's defaults, drawn from Linear, Cursor,
-Conductor, Claude and Codex (the developer, Nov 10, 2026), on iOS's own
+Denser and quieter than iOS's defaults, with a muted palette and plain rows
+(the developer, Nov 10, 2026), on iOS's own
 navigation, tab bar, swipes, menus, sheets and glass.
 
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type

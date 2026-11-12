@@ -478,3 +478,22 @@ test("a code block laid in after a last line written with no line break stands a
 
   assert.equal(handedOver(), "Intro\n\n```sh\npwd\n```");
 });
+
+test("a paragraph opening on a short word and a period after a numbered list stays a paragraph when the list is edited", () => {
+  const text = "1. Export\n\nMr. Smith asked for the export.\n";
+  const { editor, handedOver } = opened(text);
+
+  editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
+  editor.commands.insertContent("Then ");
+
+  assert.equal(handedOver(), "1. Then Export\n\nMr. Smith asked for the export.\n");
+});
+
+test("a lettered line indented under a numbered item keeps the list whole", () => {
+  const { editor } = opened("1. People\n   Mr. Smith\n2. Finish\n");
+
+  assert.deepEqual(
+    editor.getJSON().content?.map((block) => block.type),
+    ["orderedList"],
+  );
+});

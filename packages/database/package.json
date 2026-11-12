@@ -58,6 +58,7 @@
     "./models/description-revisions": "./src/models/description-revisions.js",
     "./models/task-section-store": "./src/models/task-section-store.js",
     "./models/task-block-store": "./src/models/task-block-store.js",
+    "./models/task-follower-store": "./src/models/task-follower-store.js",
     "./models/task-number-store": "./src/models/task-number-store.js",
     "./models/task-store": "./src/models/task-store.js",
     "./models/provider-key-seal": "./src/models/provider-key-seal.js",
