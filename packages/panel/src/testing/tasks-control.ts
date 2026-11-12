@@ -469,6 +469,7 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
     onClose: ignore,
     tasks: [],
     onShowMention: ignore,
+    onStartSettled: ignore,
     ...overrides,
   };
 }

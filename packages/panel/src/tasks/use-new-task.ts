@@ -11,11 +11,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
-import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
+import type { AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { DescriptionMention } from "@repo/features/mention-link";
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -62,6 +63,18 @@ const TASK_STARTED_AGENT_REFUSED_NOTE = "Task started, but its agent did not";
 
 /** That toast's action, which opens the task. */
 const OPEN_STARTED_TASK = "Open";
+
+/** What the card says of an agent's start whose outcome is unknown, which may have started its task. */
+const START_UNKNOWN_NOTE = `${PRODUCT_NAME} couldn't tell whether this task started. Retry to make sure; it won't start twice.`;
+
+/** The card's note for an agent's start whose outcome is unknown, keeping the answer that left it so where there is one. */
+export function startUnknownNote(cause?: unknown): ComposerNote {
+  return {
+    reason: FAILURE_REASON.OTHER,
+    text: START_UNKNOWN_NOTE,
+    ...(cause === undefined ? undefined : { cause }),
+  };
+}
 
 /** What New task stands as a page of its own: an agent's start under way, or a start Home's own composer refused. */
 const NEW_TASK_PAGE = {
@@ -146,10 +159,17 @@ export interface NewTaskPreset {
   readonly refused?: NewTaskRefusal;
 }
 
-/** The card as it pressed Start, and why the start was refused, which the card opens again on. */
+/**
+ * The card as it pressed Start, and why the start was refused, which the
+ * card opens again on: a refusal the service gave, whose words the card
+ * takes back for editing, or a start whose outcome is unknown (`unknown`),
+ * which may have made its task, so the card keeps its press, key and task id
+ * among it, rather than its words, and asks it again only as the same start.
+ */
 export interface NewTaskRefusal {
   readonly card: NewTaskCardKept;
   readonly note: Failure;
+  readonly unknown?: true;
 }
 
 /** A start pressed on Home's own composer and refused, which that composer opens again on: each refusal a new opening, so the composer draws it afresh. */
@@ -225,6 +245,8 @@ export interface NewTaskStart {
   /** The relations the start makes its task in, from the new task's side, written with it in one transaction; none for a task related to none. */
   readonly relations?: readonly TaskCreateRelation[];
   readonly handed?: NewTaskAgent;
+  /** The id the start makes its task under, the card's as it minted it with the agent's key, so a start asked again answers the task it made rather than a second. */
+  readonly taskId?: string;
   /** What the card held as it pressed Start, which it opens again on where an agent's start is refused after the card closed. */
   readonly card?: NewTaskCardKept;
 }
@@ -293,6 +315,8 @@ export interface NewTask {
   tasks: readonly TaskSummary[];
   /** Opens a task or a section a mention in the composer names, as the window's own opener does. */
   onShowMention: (mention: DescriptionMention) => void;
+  /** Says a start whose outcome was unknown made its task after all, as a read of the tasks showed it, with Open. */
+  onStartSettled: (taskId: string) => void;
 }
 
 /**
@@ -339,6 +363,11 @@ export interface NewTaskDoors {
   >;
   /** Shows a tab in a task's own column. */
   readonly showTab: (taskId: string, tab: MainTab) => void;
+}
+
+/** The refusal a card opens again on: its press and why, and whether the start's outcome is unknown. */
+function refusalOf(card: NewTaskCardKept, note: Failure, unknown: boolean): NewTaskRefusal {
+  return unknown ? { card, note, unknown } : { card, note };
 }
 
 /** The start act, traced as a send where it carries an agent; one with none is not. */
@@ -427,8 +456,10 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // stays where they went, and the agent's tab is the one the task opens on
   // when they come to it.
   // Note that a start whose task was refused, or never answered, is never
-  // sent again by itself, because the service keeps no key for a task, so a
-  // second start could make a second task; the card says why with Retry.
+  // sent again by itself; the card says why with Retry. An agent's start
+  // carries the task id the card minted beside the agent's key, which the
+  // service answers a start sent again with the task and agent it made by,
+  // so the card's Retry after an outcome unknown is the same start.
   // With Settings' Open a task once it starts off, the start is a quiet one:
   // the window stays on the page it was on, the agent's tab is made ready
   // for when the task opens, and a toast says the task started with Open.
@@ -477,8 +508,9 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // with no dialog standing over Home was the composer's own.
     const pressedOnHome = newTaskAsk === undefined && place.atHome();
 
-    // Note that a refusal keeps what refused it, so the box that shows it reports that in its place.
-    const refusedWith = (note: ComposerNote): ComposerNote => {
+    // Note that a refusal keeps what refused it, so the box that shows it reports that in its place,
+    // and that an agent's start whose outcome is unknown opens the card on its press, not its words.
+    const refusedWith = (note: ComposerNote, unknown = false): ComposerNote => {
       if (saidInToast) {
         toast({
           words: note.text,
@@ -497,7 +529,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         if (card !== undefined && pressedOnHome && place.atHome()) {
           const refusal: HomeRefusedPage = {
             kind: NEW_TASK_PAGE.HOME_REFUSED,
-            refused: { card, note },
+            refused: refusalOf(card, note, unknown),
             arrivals: place.arrivals(),
           };
 
@@ -513,7 +545,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
                 ? undefined
                 : {
                     ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
-                    refused: { card, note },
+                    refused: refusalOf(card, note, unknown),
                   },
           });
         }
@@ -523,6 +555,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     };
 
     return sendTaskStart({
+      ...(from.taskId === undefined ? undefined : { id: from.taskId }),
       ...(name.length === 0 ? undefined : { name }),
       ...(repository === null ? undefined : { repository }),
       ...(workspaceId === undefined ? undefined : { workspaceId }),
@@ -545,6 +578,12 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     }).then(
       (answer) => {
         if ("failure" in answer) {
+          // Note that an agent's start the service never answered may have made its task, so it is
+          // no refusal: the card keeps its press and asks it again only under the same key and id.
+          if (handed !== undefined && answer.failure === TASK_CALL_FAILURE.UNANSWERED) {
+            return refusedWith(startUnknownNote(answer), true);
+          }
+
           return refusedWith({
             reason: FAILURE_REASON.OTHER,
             text:
@@ -555,35 +594,43 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           });
         }
 
-        // Note that an agent's start put the card and whatever stood away as it was pressed, so
-        // what stands now is the developer's since, a New task opened again among it, and stays.
-        if (stays) {
-          if (handed === undefined) setNewTaskAsk(undefined);
-          else openAgent(answer.planId, handed, answer.agentStart, from.device);
-          const { agentStart } = answer;
-          sayStarted(
-            answer.planId,
-            handed === undefined || (agentStart !== undefined && !("failure" in agentStart)),
-          );
+        const { planId, agentStart } = answer;
+
+        if (handed === undefined) {
+          setNewTaskAsk(undefined);
+
+          if (stays) sayStarted(planId, true);
+          else {
+            setPage((now) => homeRefusedUnder(now));
+            place.standBound();
+          }
 
           return undefined;
         }
 
-        if (handed === undefined) {
-          setNewTaskAsk(undefined);
-          setPage((now) => homeRefusedUnder(now));
-          place.standBound();
+        // Note that a task answered with no word of its agent is how the host answers a start it let
+        // go unsent, its task perhaps never made, so its outcome is unknown too.
+        if (agentStart === undefined) return refusedWith(startUnknownNote(answer), true);
+
+        // Note that an agent's start put the card and whatever stood away as it was pressed, so
+        // what stands now is the developer's since, a New task opened again among it, and stays.
+        if (stays) {
+          openAgent(planId, handed, agentStart, from.device);
+          sayStarted(planId, !("failure" in agentStart));
 
           return undefined;
         }
 
         letGoOfPage();
-        openAgent(answer.planId, handed, answer.agentStart, from.device);
+        openAgent(planId, handed, agentStart, from.device);
 
         return undefined;
       },
+      // Note that an act that failed on its way may have reached the service, so an agent's start is unknown.
       (refused: Error) =>
-        refusedWith({ reason: FAILURE_REASON.OTHER, text: refused.message, cause: refused }),
+        handed === undefined
+          ? refusedWith({ reason: FAILURE_REASON.OTHER, text: refused.message, cause: refused })
+          : refusedWith(startUnknownNote(refused), true),
     );
   };
 
@@ -612,14 +659,13 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // under its box, whose Retry is the agent's own Start on the task. Either
   // opens on the agent's tab, the task's Overview beside it, so the side
   // panel stands as it stood on every other task.
-  // Note that an answer naming neither is read as one the service never gave.
   const openAgent = (
     planId: string,
     handed: NewTaskAgent,
-    started: AgentAgentAnswer | undefined,
+    started: AgentAgentAnswer,
     device: MacOffer | undefined,
   ) => {
-    if (started !== undefined && !("failure" in started)) {
+    if (!("failure" in started)) {
       agents.onTaskStarted(planId, started.agent);
       showTab(planId, agentTab(started.agent.id));
 
@@ -627,8 +673,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     }
 
     // Note that the refusal keeps the answer that said it, so the draft's tab reports the service's word for it.
-    const answer = started ?? { failure: AGENT_CALL_FAILURE.UNANSWERED };
-    const refused = { ...agentStartFailureNote(answer, planId, device), cause: answer };
+    const refused = { ...agentStartFailureNote(started, planId, device), cause: started };
     const { idempotencyKey: id, ...words } = handed;
     agents.onHandDraft(planId, { id, ...words, refused });
     showTab(planId, draftTab(id));
@@ -713,5 +758,6 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     onClose: () => setNewTaskAsk(undefined),
     tasks: doors.tasks,
     onShowMention: place.showMention,
+    onStartSettled: (taskId) => sayStarted(taskId, true),
   };
 }

@@ -63,7 +63,12 @@ import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import type { RepositoryChooser } from "./repository-chip.js";
-import type { NewTaskAgent, NewTaskPreset, NewTaskStart } from "./use-new-task.js";
+import {
+  type NewTaskAgent,
+  type NewTaskPreset,
+  type NewTaskStart,
+  startUnknownNote,
+} from "./use-new-task.js";
 
 /**
  * New task as the developer meets it: a card over the window whose head row
@@ -132,6 +137,9 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+/** A start answered with no word of how it went, which the card opens again on as one whose outcome is unknown. */
+const OUTCOME_UNKNOWN: unique symbol = Symbol("outcome unknown");
+
 async function settle(): Promise<void> {
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
@@ -147,7 +155,12 @@ async function settle(): Promise<void> {
  * and a refusal opens it again on what it held, as the tab does.
  */
 async function mount(
-  answer: string | Failure | undefined | Promise<Failure | undefined> = undefined,
+  answer:
+    | string
+    | Failure
+    | typeof OUTCOME_UNKNOWN
+    | undefined
+    | Promise<Failure | undefined> = undefined,
   preset?: NewTaskPreset,
   chooser: Partial<RepositoryChooser> & {
     /** What the service answers the chooser's workspace's repositories with, which the host holds for the chip. */
@@ -160,6 +173,7 @@ async function mount(
   await writeHandedAppState();
   const starts: [string, string | null][] = [];
   const agents: (NewTaskAgent | undefined)[] = [];
+  const taskIds: (string | undefined)[] = [];
   const startedIn: (string | undefined)[] = [];
   const control = tasksControl();
 
@@ -194,11 +208,16 @@ async function mount(
         ) => {
           starts.push([name, repository]);
           agents.push(from?.handed);
+          taskIds.push(from?.taskId);
           startedIn.push(workspaceId);
+          const unknown = answer === OUTCOME_UNKNOWN;
 
-          const refused = Promise.resolve(answer).then((said) =>
-            Predicate.isString(said) ? { reason: FAILURE_REASON.OTHER, text: said } : said,
-          );
+          const refused: Promise<Failure | undefined> =
+            answer === OUTCOME_UNKNOWN
+              ? Promise.resolve(startUnknownNote())
+              : Promise.resolve(answer).then((said) =>
+                  Predicate.isString(said) ? { reason: FAILURE_REASON.OTHER, text: said } : said,
+                );
 
           const card = from?.card;
 
@@ -210,7 +229,7 @@ async function mount(
             if (note !== undefined) {
               setReopened({
                 ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
-                refused: { card, note },
+                refused: unknown ? { card, note, unknown: true } : { card, note },
               });
               setOpen(true);
             }
@@ -264,6 +283,8 @@ async function mount(
     startedIn,
     /** The coding agent each start handed its words, where it asked for one. */
     agents,
+    /** The id each start made its task under, where it named one. */
+    taskIds,
     /** Every Settings link the dialog's presses followed. */
     links,
     opener,
@@ -869,18 +890,23 @@ test("a start refused for a missing credential says which harness to connect, an
   assert.equal(card.field().textContent, "Dark mode toggle", "the words stay");
 });
 
-test("Retry after an agent's start that did not land carries the same key, and other words carry another", async () => {
-  const card = await mount("The service did not answer.");
+test("a start whose outcome is unknown opens the card again on no words, saying it may have started, and its Retry after a relaunch is the same start, under the same key and task id; other words are another", async () => {
+  const card = await mount(OUTCOME_UNKNOWN);
   card.type("Dark mode toggle");
   await card.key("Enter");
+  assert.equal(card.field().textContent, "", "the words are not put back");
+  await card.relaunch();
+  assert.match(card.note() ?? "", /couldn't tell whether this task started/u);
   act(() => card.button("Retry").click());
   await settle();
-  card.type(" for the sidebar");
+  card.type("Dark mode toggle for the sidebar");
   await card.key("Enter");
   const keys = card.agents.map((agent) => agent?.idempotencyKey);
 
   assert.equal(keys.length, 3);
+  assert.equal(card.agents[1]?.prompt, "Dark mode toggle", "Retry asks the kept press again");
   assert.equal(keys[1], keys[0], "a press asking the same again is the same start");
+  assert.equal(card.taskIds[1], card.taskIds[0], "and makes the same task");
   assert.notEqual(keys[2], keys[1], "other words are another start");
 });
 

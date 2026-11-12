@@ -1,4 +1,9 @@
-import { type AgentAttachment, DIFF_SIDE } from "@repo/features/agent-wire";
+import { agentPermissionModeSchema } from "@repo/features/agent-approval-wire";
+import {
+  type AgentAttachment,
+  agentRunsOnRequestSchema,
+  DIFF_SIDE,
+} from "@repo/features/agent-wire";
 import { DESCRIPTION_COMMENT_SCOPE } from "@repo/features/description-comment-wire";
 import {
   INBOX_REPLY,
@@ -8,6 +13,8 @@ import {
   type InboxReplyKind,
   inboxFormValueSchema,
 } from "@repo/features/inbox-wire";
+import { modelChoiceSchema } from "@repo/features/models-wire";
+import { TASK_CREATE_RELATION_KIND } from "@repo/features/task-wire";
 import { createWait, type Wait } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Equal, Schema, SchemaTransformation } from "effect";
@@ -36,7 +43,9 @@ import { readKept, writeKept } from "./kept-storage.js";
  * the ask as it stood, so they are kept with the revision they were made
  * on and read as none once the ask changed (`draftAt`), its words and files
  * standing whatever the revision. Sending a draft lets it go, and so does emptying its box, so a
- * place holds a draft only while its box holds something.
+ * place holds a draft only while its box holds something, or, for New task,
+ * while a start whose outcome is unknown waits to be settled, its key and
+ * task id kept with it so a relaunch asks it again as the same start.
  *
  * The words are kept in the renderer's own storage, as the sidebar's folds
  * and the plans' looks are, so they outlast a reload and a relaunch on this
@@ -273,6 +282,40 @@ const pageElementSchema = Schema.Struct({
 /** The element of a page a thread being started there is on: its path, its words, the heading it stands under, and whether the words are selected in it. */
 export type DraftPageElement = typeof pageElementSchema.Type;
 
+/**
+ * A New task start whose outcome is unknown, kept with the card's draft so a
+ * relaunch keeps its key: the key and the task's id it was sent under, the
+ * words the card held, and what it asked, without its files, which storage
+ * never holds. A Start asked again under them is the same start, which the
+ * service answers with the task it made where it made one.
+ */
+const keptStartSchema = Schema.Struct({
+  key: Schema.String,
+  taskId: Schema.String,
+  words: Schema.String,
+  ask: Schema.Struct({
+    repository: Schema.NullOr(Schema.String),
+    workspaceId: Schema.optionalKey(Schema.String),
+    deviceId: Schema.optionalKey(Schema.String),
+    runsOn: Schema.optionalKey(agentRunsOnRequestSchema),
+    relations: Schema.Array(
+      Schema.Struct({
+        kind: Schema.Literals(Object.values(TASK_CREATE_RELATION_KIND)),
+        taskId: Schema.String,
+      }),
+    ),
+    agent: Schema.Struct({
+      prompt: Schema.String,
+      choice: Schema.optionalKey(modelChoiceSchema),
+      disabledServers: Schema.Array(Schema.String),
+      permissionMode: Schema.optionalKey(agentPermissionModeSchema),
+    }),
+  }),
+});
+
+/** A New task start whose outcome is unknown, as its card's draft keeps it. */
+export type KeptStart = typeof keptStartSchema.Type;
+
 /** The drafts as storage keeps them: each place's words, a card's picks where it holds some, and the account that wrote them, the latest written last. */
 const storedDrafts = Schema.fromJsonString(
   Schema.Array(
@@ -287,6 +330,7 @@ const storedDrafts = Schema.fromJsonString(
       dropped: Schema.optionalKey(Schema.Array(Schema.String)),
       revision: Schema.optionalKey(Schema.Number),
       element: Schema.optionalKey(pageElementSchema),
+      start: Schema.optionalKey(keptStartSchema),
     }),
   ),
 );
@@ -310,6 +354,8 @@ export interface Draft {
   readonly revision?: number | undefined;
   /** The element of a page a thread being started there is on, so the page pins the draft where it was started; none on the page as a whole (`description-comments.tsx`). */
   readonly element?: DraftPageElement | undefined;
+  /** New task's start whose outcome is unknown, kept until a read or its retry settles it (`new-task-composer.tsx`). */
+  readonly start?: KeptStart | undefined;
 }
 
 /** One place's draft. */
@@ -349,7 +395,8 @@ function stored(draft: Draft): boolean {
     draft.values.length > 0 ||
     (draft.steps ?? []).length > 0 ||
     draft.press !== undefined ||
-    (draft.dropped ?? []).length > 0
+    (draft.dropped ?? []).length > 0 ||
+    draft.start !== undefined
   );
 }
 
@@ -371,7 +418,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
       const read = placeOf(storedPlace);
 
       if (read === undefined) return [];
-      const { steps, press, dropped, element } = rest;
+      const { steps, press, dropped, element, start } = rest;
       const revision = rest.revision ?? read.revision;
 
       return [
@@ -386,6 +433,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
           ...(dropped === undefined ? undefined : { dropped }),
           ...(revision === undefined ? undefined : { revision }),
           ...(element === undefined ? undefined : { element }),
+          ...(start === undefined ? undefined : { start }),
         },
       ];
     })
@@ -409,14 +457,26 @@ function storedAs(owner: Owner, kept: KeptDraft, entry: StoredDraft): boolean {
     entry.press === kept.press &&
     Equal.equals(entry.dropped ?? [], kept.dropped ?? []) &&
     entry.revision === kept.revision &&
-    Equal.equals(entry.element, kept.element)
+    Equal.equals(entry.element, kept.element) &&
+    Equal.equals(entry.start, kept.start)
   );
 }
 
 /** A draft as storage keeps it, a card's picks only where it holds some. */
 function entryOf(
   owner: Owner,
-  { place, text, choices, values, steps = [], press, dropped = [], revision, element }: KeptDraft,
+  {
+    place,
+    text,
+    choices,
+    values,
+    steps = [],
+    press,
+    dropped = [],
+    revision,
+    element,
+    start,
+  }: KeptDraft,
 ): StoredDraft {
   return {
     accountId: owner,
@@ -429,6 +489,7 @@ function entryOf(
     ...(dropped.length === 0 ? undefined : { dropped }),
     ...(revision === undefined ? undefined : { revision }),
     ...(element === undefined ? undefined : { element }),
+    ...(start === undefined ? undefined : { start }),
   };
 }
 

@@ -853,7 +853,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
   await act(async () => {
     await tab.control().newTask.start("", "acme/api", undefined, {
       handed: { idempotencyKey: key, ...agent },
-      card: { ...card, press: { key, ask } },
+      card: { ...card, press: { key, taskId: OTHER_TASK_ID, ask } },
     });
   });
   const refused = tab.control().newTask.homeRefused?.refused;
@@ -874,7 +874,11 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
       card: {
         ...card,
         repository: "acme/web",
-        press: { key: second.idempotencyKey, ask: { ...ask, repository: "acme/web" } },
+        press: {
+          key: second.idempotencyKey,
+          taskId: OTHER_TASK_ID,
+          ask: { ...ask, repository: "acme/web" },
+        },
       },
     });
   });
@@ -4492,6 +4496,7 @@ test("New task's agent start refused after its page opened opens the card again 
     choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
     press: {
       key: AGENT_KEY,
+      taskId: OTHER_TASK_ID,
       ask: { repository: "acme/web", workspaceId: undefined, relations: [], agent: handed },
     },
     relations: [],
@@ -4546,6 +4551,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     choice: undefined,
     press: {
       key: AGENT_KEY,
+      taskId: OTHER_TASK_ID,
       ask: { repository: "acme/web", workspaceId: undefined, relations: [], agent: handed },
     },
     relations: [],

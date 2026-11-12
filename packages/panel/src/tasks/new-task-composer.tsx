@@ -9,6 +9,7 @@ import {
   TASK_CREATE_RELATION_KIND,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
+  type TaskRunsOnRequest,
 } from "@repo/features/task-wire";
 import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
@@ -30,8 +31,10 @@ import { useAgentDefault } from "../account-choices.js";
 import { appPlatform } from "../app-platform.js";
 import {
   DRAFT_PLACE,
+  type Draft,
   type DraftPlace,
   EMPTY_DRAFT,
+  type KeptStart,
   useDraft,
   useDraftWriter,
 } from "../composer-drafts.js";
@@ -67,7 +70,12 @@ import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
-import type { NewTaskAgent, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import {
+  type NewTaskAgent,
+  type NewTaskRefusal,
+  type NewTaskStart,
+  startUnknownNote,
+} from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -126,11 +134,17 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * default afresh. A call starts only from an agent's own tab, so starting
  * a task never opens one.
  *
- * An agent's start carries a key the card mints, and a press asking the
- * same again, as Retry after a start the service never answered does,
- * carries the same key, so a service that made the task and its agent
- * answers them rather than a second pair; a press asking anything else,
- * other servers among it, mints another, and so does the card mounted afresh.
+ * An agent's start carries a key the card mints, and the id its task is
+ * made under beside it, and a press asking the same again, as Retry after a
+ * start the service never answered does, carries the same pair, so a
+ * service that made the task and its agent answers them rather than a
+ * second pair; a press asking anything else, other servers among it, mints
+ * another. A start whose outcome is unknown, never answered or failed on its
+ * way, may have made its task, so the card opens again on no words: it keeps
+ * the press with its draft (`../composer-drafts.ts`), which a relaunch keeps,
+ * says the task may have started, and its Retry asks that press again
+ * whatever the box holds. A read of the tasks listing the press's task
+ * settles it, and the card lets it go and says the task started, with Open.
  *
  * Return starts, Shift+Return is a new line, and ⌘Return on a box with
  * neither words nor files starts a bare task: an empty description, no call, and
@@ -159,9 +173,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * and opened again, or Home's, finds them where they were left, the words
  * after a relaunch too; a task started lets them go, as emptying the box
  * does, an agent's start as it is pressed, so a New task opened while it is
- * out opens empty, and a refused card opened again brings its own words
- * and files back ahead of whatever was written there since
- * (`refused-send.ts`). The card holds its own repository and model, so the owner
+ * out opens empty, and a card opened again on a refusal the service gave
+ * brings its own words and files back ahead of whatever was written there
+ * since (`refused-send.ts`). The card holds its own repository and model, so the owner
  * mounts it afresh to start those over; the workspace it starts in is the
  * owner's.
  *
@@ -258,15 +272,85 @@ interface AgentAsk {
   readonly workspaceId: string | undefined;
   /** The device the task's agents run on, by its id; none for the cloud. */
   readonly deviceId?: string | undefined;
+  /** Where the start runs its agent, as Runs on said; none on an automation's card, which draws none. */
+  readonly runsOn?: TaskRunsOnRequest | undefined;
   /** The relations the task starts in, in the order they were picked. */
   readonly relations: readonly TaskCreateRelation[];
   readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
 }
 
-/** One Agent-mode press: what it asked, and the key it carried. */
+/** One Agent-mode press: what it asked, and the key and task id it carried. */
 export interface NewTaskPress {
   readonly ask: AgentAsk;
   readonly key: string;
+  readonly taskId: string;
+}
+
+/** Where a start goes beside its agent: the task's repository, none for a tree's, its workspace and relations, and where its agents run. */
+interface StartGoes {
+  readonly repository: string | null;
+  readonly workspaceId: string | undefined;
+  readonly relations: readonly TaskCreateRelation[];
+  readonly runsOn: TaskRunsOnRequest | undefined;
+  readonly device: MacOffer | undefined;
+}
+
+/** The kept starts a card has said were settled, each said once however often a card mounts on it, as strict mode mounts one twice. */
+const SETTLED = new Set<string>();
+
+/** A press whose outcome is unknown as the draft keeps it: everything but its files, and the words the card held. */
+function keptOf({ key, taskId, ask }: NewTaskPress, words: string): KeptStart {
+  const { choice, permissionMode } = ask.agent;
+
+  return {
+    key,
+    taskId,
+    words,
+    ask: {
+      repository: ask.repository,
+      ...(ask.workspaceId === undefined ? undefined : { workspaceId: ask.workspaceId }),
+      ...(ask.deviceId === undefined ? undefined : { deviceId: ask.deviceId }),
+      ...(ask.runsOn === undefined ? undefined : { runsOn: ask.runsOn }),
+      relations: ask.relations,
+      agent: {
+        prompt: ask.agent.prompt,
+        disabledServers: ask.agent.disabledServers,
+        ...(choice === undefined ? undefined : { choice }),
+        ...(permissionMode === undefined ? undefined : { permissionMode }),
+      },
+    },
+  };
+}
+
+/** The press a draft kept, its files none, since storage keeps none. */
+function pressOfKept({ key, taskId, ask }: KeptStart): NewTaskPress {
+  const { agent } = ask;
+
+  return {
+    key,
+    taskId,
+    ask: {
+      repository: ask.repository,
+      workspaceId: ask.workspaceId,
+      deviceId: ask.deviceId,
+      runsOn: ask.runsOn,
+      relations: ask.relations,
+      agent: {
+        prompt: agent.prompt,
+        attachments: [],
+        choice: agent.choice,
+        disabledServers: agent.disabledServers,
+        ...(agent.permissionMode === undefined
+          ? undefined
+          : { permissionMode: agent.permissionMode }),
+      },
+    },
+  };
+}
+
+/** A draft with no start kept. */
+function withoutStart(draft: Draft): Draft {
+  return { ...draft, start: undefined };
 }
 
 /** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
@@ -408,9 +492,27 @@ export function NewTaskComposer({
 
   const starts = useAsyncAction<Failure>(rejectedFailure);
   const starting = starts.running;
-  // The refusal a refused card opened on, said until a start or an edit lets it go.
-  const [handed, setHanded] = useState<Failure | undefined>(refused?.note);
-  const note = starts.refusal ?? handed;
+
+  // The refusal a refused card opened on, said until a start or an edit lets it go; a start whose outcome is unknown is said by its kept press.
+  const [handed, setHanded] = useState<Failure | undefined>(
+    refused?.unknown === true ? undefined : refused?.note,
+  );
+
+  // A start whose outcome is unknown, kept with the draft until a read or its Retry settles it, said as
+  // the answer that left it so where the card opened on it, and plainly after a relaunch.
+  const keptStart = draft.draft.start;
+
+  const keptNote = useMemo(
+    () =>
+      keptStart === undefined
+        ? undefined
+        : refused?.unknown === true && refused.card.press.key === keptStart.key
+          ? refused.note
+          : startUnknownNote(),
+    [keptStart, refused],
+  );
+
+  const note = starts.refusal ?? handed ?? keptNote;
 
   // The relations the press that opened the card chose, or the refused card's, which the + menu and the rows change.
   const [related, setRelated] = useState<readonly NewTaskRelation[]>(
@@ -444,14 +546,25 @@ export function NewTaskComposer({
   // The workspace the card stands in now, whose draft a Put back pressed later writes to.
   const workspaceNow = useRef(workspaceId);
   workspaceNow.current = workspaceId;
-  // A refused card opened again puts the words and files it was pressed with back ahead of what the box holds since.
+  // A refused card opened again puts the words and files it was pressed with back ahead of what the box holds since;
+  // one whose outcome is unknown keeps its press with the draft instead, leaving the box as it stands.
   // Note that the draft is found as the write lands, because the workspaces may be read after the card opened.
   useLayoutEffect(() => {
     if (refused === undefined || PUT_BACK.has(refused)) return;
     PUT_BACK.add(refused);
-    const { words: kept, press } = refused.card;
+    const { words: pressedWords, press } = refused.card;
+
+    if (refused.unknown === true) {
+      writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => ({
+        ...now,
+        start: keptOf(press, pressedWords),
+      }));
+
+      return;
+    }
+
     putBackRefused({
-      went: { text: kept, attachments: press.ask.agent.attachments },
+      went: { text: pressedWords, attachments: press.ask.agent.attachments },
       most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
       update: (next) =>
         writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => {
@@ -624,24 +737,37 @@ export function NewTaskComposer({
     );
   };
 
-  const begin = (handing: Pick<NewTaskStart, "handed" | "card"> = {}) => {
+  // Note that a tree's start names no repository, because the service gives it the other task's.
+  const goesNow = (): StartGoes => ({
+    repository: tree ? null : repository,
+    workspaceId,
+    relations: relationsAsked(relations),
+    runsOn,
+    device,
+  });
+
+  const begin = (
+    handing: Pick<NewTaskStart, "handed" | "card" | "taskId"> = {},
+    goes: StartGoes = goesNow(),
+    letGo: (was: Draft) => Draft = () => EMPTY_DRAFT,
+  ) => {
     if (devicesUnread) return;
     void starts.run(() => {
       onStarting?.(true);
       setHanded(undefined);
       // Note that an agent's start lets its words go as it is pressed, because the card closes at
       // once and a New task opened before the service answers must open empty; a refused card
-      // opened again brings its own words back (`refused.card.words`).
+      // opened again brings its own words back (`refused.card.words`). A kept start asked again
+      // lets only itself go, the box's words being none of its.
       const agentStart = handing.handed !== undefined;
 
-      if (agentStart) draft.update(() => EMPTY_DRAFT);
+      if (agentStart) draft.update(letGo);
 
-      // Note that a tree's start names no repository, because the service gives it the other task's.
       return newTask
-        .start("", tree ? null : repository, workspaceId, {
-          ...(runsOn === undefined ? undefined : { runsOn }),
-          ...(device === undefined ? undefined : { device }),
-          ...(relations.length === 0 ? undefined : { relations: relationsAsked(relations) }),
+        .start("", goes.repository, goes.workspaceId, {
+          ...(goes.runsOn === undefined ? undefined : { runsOn: goes.runsOn }),
+          ...(goes.device === undefined ? undefined : { device: goes.device }),
+          ...(goes.relations.length === 0 ? undefined : { relations: goes.relations }),
           ...handing,
         })
         .then((refused) => {
@@ -672,6 +798,7 @@ export function NewTaskComposer({
       repository,
       workspaceId,
       deviceId: device?.deviceId,
+      runsOn,
       relations: relationsAsked(relations),
       agent: {
         prompt,
@@ -682,12 +809,18 @@ export function NewTaskComposer({
       },
     };
 
-    const held = pressed.current;
-    const key = held !== undefined && sameAsk(held.ask, ask) ? held.key : crypto.randomUUID();
-    const press = { ask, key };
+    // Note that a press asking what a kept start asked is that start again, after a relaunch too.
+    const held = pressed.current ?? (keptStart === undefined ? undefined : pressOfKept(keptStart));
+
+    const press: NewTaskPress =
+      held !== undefined && sameAsk(held.ask, ask)
+        ? { ask, key: held.key, taskId: held.taskId }
+        : { ask, key: crypto.randomUUID(), taskId: crypto.randomUUID() };
+
     pressed.current = press;
     begin({
-      handed: { idempotencyKey: key, ...ask.agent },
+      handed: { idempotencyKey: press.key, ...ask.agent },
+      taskId: press.taskId,
       card: {
         ...(forAutomation ? { purpose } : undefined),
         relations,
@@ -698,6 +831,66 @@ export function NewTaskComposer({
       },
     });
   };
+
+  // A kept start asked again goes as it was pressed, under its key and task id, whatever the card holds
+  // now, its files this window's where it pressed it, and the relations it names that the window lists.
+  const resend = (start: KeptStart) => {
+    const press = pressed.current?.key === start.key ? pressed.current : pressOfKept(start);
+    const { ask } = press;
+    pressed.current = press;
+
+    const cardRelations = ask.relations.flatMap((relation) => {
+      const task = newTask.tasks.find((each) => each.id === relation.taskId);
+
+      return task === undefined ? [] : [{ kind: relation.kind, task }];
+    });
+
+    begin(
+      {
+        handed: { idempotencyKey: press.key, ...ask.agent },
+        taskId: press.taskId,
+        card: {
+          ...(forAutomation ? { purpose } : undefined),
+          relations: cardRelations,
+          repository: ask.repository,
+          choice: ask.agent.choice,
+          press,
+          words: start.words,
+        },
+      },
+      {
+        repository: ask.relations.some((relation) => treeKind(relation.kind))
+          ? null
+          : ask.repository,
+        workspaceId: ask.workspaceId,
+        relations: ask.relations,
+        runsOn: ask.runsOn,
+        device: devices.find((each) => each.deviceId === ask.deviceId),
+      },
+      withoutStart,
+    );
+  };
+
+  // A kept start the window's tasks now list made its task: the card lets it go and says so, with Open.
+  // Note that a start out holds it, since the task it is making is drawn in the list as it is asked.
+  const keptLanded =
+    keptStart !== undefined &&
+    !starting &&
+    newTask.tasks.some((task) => task.id === keptStart.taskId);
+
+  const settledTaskId = keptLanded ? keptStart.taskId : undefined;
+  const settle = useRef({ said: newTask.onStartSettled, letGo: draft.update });
+  settle.current = { said: newTask.onStartSettled, letGo: draft.update };
+  useEffect(() => {
+    if (settledTaskId === undefined) return;
+    settle.current.letGo(withoutStart);
+
+    if (pressed.current?.taskId === settledTaskId) pressed.current = undefined;
+
+    if (SETTLED.has(settledTaskId)) return;
+    SETTLED.add(settledTaskId);
+    settle.current.said(settledTaskId);
+  }, [settledTaskId]);
 
   // ⌘Return on a box with nothing in it starts a bare task: no call and no agent.
   const bare = () => begin();
@@ -746,7 +939,11 @@ export function NewTaskComposer({
     note: devicesFailed ? DEVICES_UNREAD : note,
     closed: undefined,
     send: start,
-    retry: devicesFailed ? () => readModels.current() : start,
+    retry: devicesFailed
+      ? () => readModels.current()
+      : note === keptNote && keptStart !== undefined
+        ? () => resend(keptStart)
+        : start,
     sent: [],
   };
 
