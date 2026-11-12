@@ -410,8 +410,9 @@ interface ProductEventPropertyValue {
 
 /**
  * The properties no set can enumerate. Each gets a named reader instead, and
- * all are narrower than free text by construction: a version parses as `x.y.z`
- * or not at all, and a count must be a rung of the ladder above.
+ * all are narrower than free text by construction: a version is a build's
+ * (`isProductBuildVersion`) or nothing, and a count must be a rung of the
+ * ladder above.
  */
 type EnumeratedProductEventProperty = Exclude<
   ProductEventProperty,
@@ -603,9 +604,23 @@ function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | und
  * two can never disagree; the two no set can enumerate are named here, beside
  * an experiment's scope, which reads a missing one as the account's, which
  * is what makes "no free text" a property of the type rather than a promise
- * about call sites: a version that is not `x.y.z` and a count that is not a
+ * about call sites: a version that names no build and a count that is not a
  * rung are both discarded.
  */
+/** A deployment's commit, as the web app names the build it is: forty hex digits and nothing else. */
+const DEPLOYMENT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
+
+/**
+ * Whether a string names a build: a release version, `x.y.z`, as the desktop
+ * and the iPhone app are named, or a deployment's commit, as the web app is,
+ * which is deployed from `main` on every merge and has no version of its own.
+ * Either shape has no room for a word, which is what keeps the property out
+ * of free text.
+ */
+export function isProductBuildVersion(value: string): boolean {
+  return parseReleaseVersion(value) !== undefined || DEPLOYMENT_COMMIT_PATTERN.test(value);
+}
+
 const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   // SAFETY: the source is keyed by exactly the enumerable properties, and each
   // reader answers a member of the set filed under the key it lands on, which
@@ -618,7 +633,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
     ]),
   ) as Pick<PropertyReader, EnumeratedProductEventProperty>),
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: (value) =>
-    isWireString(value) && parseReleaseVersion(value) ? value.trim() : undefined,
+    isWireString(value) && isProductBuildVersion(value.trim()) ? value.trim() : undefined,
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
@@ -725,9 +740,7 @@ export const PRODUCT_EVENT_BUILD_FIELD = {
 const ProductEventBuildSchema = Schema.Struct({
   [PRODUCT_EVENT_BUILD_FIELD.APP_VERSION]: Schema.optionalKey(
     Schema.String.check(
-      Schema.makeFilter(
-        (value) => value === value.trim() && parseReleaseVersion(value) !== undefined,
-      ),
+      Schema.makeFilter((value) => value === value.trim() && isProductBuildVersion(value)),
     ),
   ),
   [PRODUCT_EVENT_BUILD_FIELD.PACKAGED]: Schema.optionalKey(Schema.Boolean),
