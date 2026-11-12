@@ -1,3 +1,4 @@
+import { PHOTO_WORDS } from "@repo/features/workspace-settings-words";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import { CameraIcon, ImageUpIcon } from "../../icons/icons.js";
 import { ReplayMask } from "../../session-replay-marks.js";
@@ -21,14 +22,6 @@ import { Tooltip } from "../tooltip/hint.js";
  * the tile. Note that the words it is named by are a hint on a rest, since
  * the tile says what it is by itself.
  */
-
-/** What a press on the tile does, said as its name and its hint. */
-const PICK_WORDS = {
-  ADD: "Add photo",
-  CHANGE: "Change photo",
-  REPLACE: "Replace photo",
-  DELETE: "Delete photo",
-} as const;
 
 /**
  * The tile as a press: a workspace tile's box and corner, lighting its camera
@@ -69,7 +62,7 @@ export function PhotoPick({
   // Note that a photo set is told by its removal being offered, because the photo's own picture may still be on its way.
   const choosing = onRemove !== undefined;
   const menu = useMenu(choosing);
-  const label = photo === undefined && !choosing ? PICK_WORDS.ADD : PICK_WORDS.CHANGE;
+  const label = photo === undefined && !choosing ? PHOTO_WORDS.ADD : PHOTO_WORDS.CHANGE;
   const press = choosing ? menu.trigger() : { onClick: picker.open };
 
   return (
@@ -109,10 +102,10 @@ export function PhotoPick({
           label={label}
           menu={menu.drawn}
           groups={[
-            [{ label: PICK_WORDS.REPLACE, icon: <ImageUpIcon />, onSelect: picker.open }],
+            [{ label: PHOTO_WORDS.REPLACE, icon: <ImageUpIcon />, onSelect: picker.open }],
             [
               {
-                label: PICK_WORDS.DELETE,
+                label: PHOTO_WORDS.DELETE,
                 icon: <GLYPH.DELETE />,
                 danger: true,
                 onSelect: onRemove,
