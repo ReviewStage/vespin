@@ -17,6 +17,7 @@ import {
   inboxLineKind,
   inboxPinnedRuns,
   inboxPreviewHeard,
+  inboxShownItems,
   isDone,
   isUnread,
   listedItems,
@@ -1686,7 +1687,8 @@ export function InboxList({
 }): React.JSX.Element {
   const regionId = useId();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
-  const drawn = view.items;
+  // Note that the rows of a folded run are drawn nowhere, so no key, selection, or act reaches them.
+  const drawn = useMemo(() => inboxShownItems(view), [view]);
   // Note that only rows drawn stay chosen, so an item gone from the list or filtered out is never acted on, and stays unchosen once back.
   const picks = drawn.filter(({ item }) => picked.has(item.id));
 
@@ -1740,7 +1742,7 @@ export function InboxList({
   });
 
   // Note that the motion replays a commit only where the rows stand otherwise, never one that drew them where they stood.
-  const laidOut = useLaidOut(view.items);
+  const laidOut = useLaidOut(drawn);
   // Note that the rows are handed doors that stand across draws, each calling the newest the list was handed,
   // because the page hands new ones on every draw and a row handed a new door draws again (`InboxItemRow`).
   const choose = useSteadyDoor(onChoose);

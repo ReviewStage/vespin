@@ -175,9 +175,9 @@ function useChoiceFirst(
 /**
  * Opens the run a newly chosen item stands folded in, as a link, a
  * notification, or a search opens it, since a row's press and K and J reach
- * no item of a folded run. Note that an item is handled once, as it is
- * found, so the reader folding the chosen item's run afterwards keeps it
- * folded.
+ * no item of a folded run. Note that an item is handled once while it stays
+ * chosen, as it is found, so the reader folding the chosen item's run
+ * afterwards keeps it folded.
  */
 function useFoldOpensOnChoice(
   standing: readonly InboxGroup[],
@@ -188,7 +188,14 @@ function useFoldOpensOnChoice(
   const handled = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (chosenId === undefined || chosenId === handled.current) return;
+    // Note that letting the choice go forgets it, so the same item chosen again by a link opens its run again.
+    if (chosenId === undefined) {
+      handled.current = undefined;
+
+      return;
+    }
+
+    if (chosenId === handled.current) return;
 
     const group = standing.find(({ items }) => items.some((item) => item.id === chosenId));
     const item = group?.items.find((each) => each.id === chosenId);
