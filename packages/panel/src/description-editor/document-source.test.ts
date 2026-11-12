@@ -488,3 +488,12 @@ test("a paragraph opening on a short word and a period after a numbered list sta
 
   assert.equal(handedOver(), "1. Then Export\n\nMr. Smith asked for the export.\n");
 });
+
+test("a lettered line indented under a numbered item keeps the list whole", () => {
+  const { editor } = opened("1. People\n   Mr. Smith\n2. Finish\n");
+
+  assert.deepEqual(
+    editor.getJSON().content?.map((block) => block.type),
+    ["orderedList"],
+  );
+});
