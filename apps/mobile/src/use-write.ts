@@ -50,6 +50,8 @@ interface WriteSaying<Answer> {
   readonly subject?: WriteSubject | undefined;
   /** The buzz a write that went plays; none for one that goes quietly, such as a read mark. */
   readonly went?: Buzz | undefined;
+  /** What runs once the write went, whether on its first send or a Try again, such as the notice that offers its Undo. */
+  readonly done?: (() => void) | undefined;
   /**
    * Says the refusal in place, beside what the write came from, rather than
    * in the notice, such as a send whose words go back into its field; it is
@@ -199,6 +201,7 @@ export function useWrite(): Write {
             if (words !== undefined) return failed(words, false, retry);
 
             if (saying.went !== undefined) buzz(saying.went);
+            saying.done?.();
 
             return true;
           },

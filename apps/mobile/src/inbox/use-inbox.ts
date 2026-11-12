@@ -431,10 +431,10 @@ export function useInboxActs(): {
             // Note that a thread answered or resolved already offers no Try again, which could never take.
             retry: (answer) => "failure" in answer,
             went: BUZZ.SUCCESS,
+            // Note that a Try again that went offers Undo as the first send's would.
+            done: () => settled(item, clientKey, SETTLE.RESOLVE),
           },
-        ).then((went) => {
-          if (went) settled(item, clientKey, SETTLE.RESOLVE);
-        });
+        );
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;

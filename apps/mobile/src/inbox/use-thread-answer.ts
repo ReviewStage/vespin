@@ -438,10 +438,9 @@ export function useThreadAnswer(
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
         inPlace: (words) => refuse(key, draft, words),
         went: BUZZ.SUCCESS,
+        done: () => settled(item, key, SETTLE.RESOLVE),
       },
-    ).then((went) => {
-      if (went) settled(item, key, SETTLE.RESOLVE);
-    });
+    );
   };
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
