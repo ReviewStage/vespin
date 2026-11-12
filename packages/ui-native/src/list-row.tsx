@@ -347,9 +347,12 @@ export function RowFrame({
   menuActions = [],
   preview,
   link,
+  selectable = true,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** Whether its list may select it by its id, which opens it; false for a row that opens nothing, such as a follower, so a press leaves no selection behind. */
+  readonly selectable?: boolean | undefined;
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
@@ -358,7 +361,7 @@ export function RowFrame({
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
-    tag(id),
+    ...(selectable ? [tag(id)] : []),
     ...rowPlacement(colors, selected),
     ...(heard === undefined
       ? []

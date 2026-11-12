@@ -5,10 +5,12 @@
  * the task carries them, as the panel's chip does. Who they are, in what
  * order, and what each write's refusal says are the panel's own model
  * (`@repo/features/task-followers-model`); a person's name and face are read
- * against the members of the workspace the phone works in, which the tabs
- * hold followed (`useMemberPicturesFollow`). A write is drawn on the task at
- * once by the host (`compose-tasks.ts`), and a refusal said in the app's one
- * failure notice (`useWrite`).
+ * against the members of the task's own workspace, which the page holds
+ * followed while it draws them, since a task a link opens may stand in
+ * another workspace than the one the phone works in. A write is drawn on the
+ * task at once by the host (`compose-tasks.ts`), and a refusal said in the
+ * app's one failure notice (`useWrite`), a newer write of the same thing
+ * voiding an older one's Try again.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -32,8 +34,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useMemberPictures } from "../member-pictures.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** One follower as the page's row draws them. */
 export interface FollowerLine {
@@ -86,11 +89,22 @@ function useFollowerWrites(taskId: string) {
       went: BUZZ.SUCCESS,
     };
 
+    // Note that following and the switch are each one value per task, so a newer write of either makes an older one's Try again do nothing.
+    const following = { ...saying, subject: { kind: WRITE_SUBJECT.TASK_FOLLOW, id: taskId } };
+
+    const machinesSaying = {
+      ...saying,
+      subject: { kind: WRITE_SUBJECT.TASK_FOLLOWER_MACHINES, id: taskId },
+    };
+
     return {
-      follow: () => void write(() => acts[ACT_KIND.TASKS_FOLLOW]({ taskId }), saying),
-      unfollow: () => void write(() => acts[ACT_KIND.TASKS_UNFOLLOW]({ taskId }), saying),
+      follow: () => void write(() => acts[ACT_KIND.TASKS_FOLLOW]({ taskId }), following),
+      unfollow: () => void write(() => acts[ACT_KIND.TASKS_UNFOLLOW]({ taskId }), following),
       setMachines: (machines: boolean) =>
-        void write(() => acts[ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]({ taskId, machines }), saying),
+        void write(
+          () => acts[ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]({ taskId, machines }),
+          machinesSaying,
+        ),
     };
   }, [acts, write, taskId]);
 }
@@ -103,6 +117,7 @@ function useFollowerWrites(taskId: string) {
 export function useTaskFollowers(
   task: Pick<TaskSummary, "id" | "workspaceId" | "assignee" | "followers">,
 ): TaskFollowers | undefined {
+  const acts = useHostActs();
   const pictureOf = useMemberPictures();
   const writes = useFollowerWrites(task.id);
 
@@ -110,6 +125,12 @@ export function useTaskFollowers(
     ...appStateQuery,
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.FOLLOWING),
   });
+
+  // Note that the task's own workspace's members are held while its followers stand, since the tabs hold only the chosen workspace's.
+  const shown = following && task.followers !== undefined;
+  useLiveFollow(shown ? task.workspaceId : undefined, (workspaceId) =>
+    acts[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId }),
+  );
 
   const { data: readerId } = useQuery({
     ...appStateQuery,
@@ -122,18 +143,20 @@ export function useTaskFollowers(
   });
 
   // Note that a task carries no followers while its workspace has Following off, so there is nothing to draw for one.
-  if (!following || task.followers === undefined) return undefined;
+  if (!shown || task.followers === undefined) return undefined;
   const view = followersView(task.followers, readerId);
 
   return {
     lines: view.followers.map((follower) => {
       const name = followerName(follower.userId, members, task.assignee);
       const you = follower === view.reader;
+      const member = members?.find((each) => each.userId === follower.userId);
 
       return {
         follower,
         label: you ? FOLLOWING_WORDS.YOU : name,
-        face: { name, picture: pictureOf(follower.userId) },
+        // Note that the reader's own picture stands before the members are read, as every face of theirs does.
+        face: { name, picture: member?.pictureUrl ?? pictureOf(follower.userId) },
         you,
       };
     }),

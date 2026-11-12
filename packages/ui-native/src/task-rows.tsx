@@ -427,7 +427,8 @@ type FollowerRowProps = {
  * A person who follows a task, as the panel's Following list draws them:
  * their face, their name, and at the line's end a muted Assignee on the
  * assignee, then a laptop where the task's agents may use their machines,
- * nothing where they may not.
+ * nothing where they may not. A press opens nothing, as the panel's row
+ * changes nothing, so the list never selects it.
  */
 export function FollowerRow({ id, label, face, role, machines }: FollowerRowProps) {
   const colors = useColors();
@@ -450,7 +451,9 @@ export function FollowerRow({ id, label, face, role, machines }: FollowerRowProp
     />
   );
 
-  return <RowFrame id={id} row={row} heard={{ label, value: [role, machines] }} />;
+  return (
+    <RowFrame id={id} row={row} heard={{ label, value: [role, machines] }} selectable={false} />
+  );
 }
 
 type SwitchLinkRowProps = {
