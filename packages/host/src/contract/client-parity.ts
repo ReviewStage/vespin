@@ -18,7 +18,9 @@
  * and blocks added, changed, and taken away, and a task's
  * description, pages, and comment threads followed, and read again where
  * they could not be, with a thread started
- * on one block of the description and a reply on a thread; an agent's page,
+ * on one block of the description and a reply on a thread, and a task
+ * its link names by number that the list does not hold, found and opened
+ * from its own read; an agent's page,
  * one the task list doesn't hold read by its id, and Archive reading it
  * afresh before it asks: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
@@ -433,11 +435,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.CODE_COLOR),
-  [PORT_ACT_KIND.TASKS_FIND]: panel(
-    notYet(
-      "iOS opens a task link by its number from the tasks it holds; one outside them is Task not found",
-    ),
-  ),
+  [PORT_ACT_KIND.TASKS_FIND]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_RESTORE]: EVERYWHERE,

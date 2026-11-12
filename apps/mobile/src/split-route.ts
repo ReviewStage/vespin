@@ -48,13 +48,14 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
  * regular window it hands its item back to the tab's root, which selects it
  * beside the list, rather than covering the list with a page of its own, so
  * a link, a notification, an unfold, or a related task opened from a page
- * lands where a tap on the list would.
+ * lands where a tap on the list would. Nothing is handed while `id` is none,
+ * as while a task a link names by number is still found.
  */
-export function useHandToSplit(tab: SplitTab, id: string): boolean {
+export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useEffect(() => {
-    if (regular) router.dismissTo({ pathname: tab, params: { selected: id } });
+    if (regular && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
   }, [regular, router, tab, id]);
 
   return regular;

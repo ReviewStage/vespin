@@ -113,6 +113,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useFoundTask } from "../tasks/use-found-task.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -1538,6 +1539,7 @@ function TasksSplitScreen({
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
+  const found = useFoundTask(selected, undefined);
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1576,7 +1578,7 @@ function TasksSplitScreen({
                 onRefresh={refreshTasks}
                 onArchiveAgent={archiveAsk.archive}
               />
-            ) : selected !== undefined && read ? (
+            ) : selected !== undefined && read && !found.seeking ? (
               <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
             ) : (
               <EmptyState title={SELECT_A_TASK} symbol="checklist" />
@@ -1622,12 +1624,20 @@ export function TasksListScreen() {
   );
 }
 
-/** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it, read as it opens; Task not found where the read list holds no such task, and the reading state while it is still read. */
+/**
+ * The Tasks tab's pushed screen: one task's Overview, named by the route's
+ * `id`, its path small in the bar and its ⋯ beside it, read as it opens. A
+ * number a link names in its `workspace` that the list doesn't hold is found
+ * on the service first, and a task the list doesn't hold opens from its own
+ * read (`useFoundTask`); Task not found once neither finds it, and the
+ * reading state while either is still read.
+ */
 export function TaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
   const colors = useColors();
-  const held = useTaskOverview(id);
+  const found = useFoundTask(id, workspace);
+  const held = useTaskOverview(found.taskId);
 
   const { setStatus, question } = useStatusAsk(
     held ?? { setStatus: () => undefined, agentsWorking: () => false },
@@ -1656,7 +1666,8 @@ export function TaskScreen() {
           moveDoor,
         });
 
-  const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
+  // Note that a number is handed to the split view only once found, as the task's id, since the split view's selection names no workspace.
+  const handed = useHandToSplit(SPLIT_TAB.TASKS, found.seeking ? undefined : (found.taskId ?? id));
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
@@ -1720,7 +1731,7 @@ export function TaskScreen() {
             onRefresh={refreshTasks}
             onArchiveAgent={archiveAsk.archive}
           />
-        ) : read ? (
+        ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
         ) : (
           <EmptyState title={READING_TASK} symbol="checklist" />

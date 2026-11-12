@@ -11,6 +11,7 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
@@ -578,11 +579,22 @@ function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
+/** The id a link's word names a task by, or none where it names one by its number. */
+function idNamed(named: string | undefined): string | undefined {
+  if (named === undefined) return undefined;
+
+  return taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named }) === undefined
+    ? named
+    : undefined;
+}
+
 /**
  * One task by its id or its number, as a link names it, with all its page
  * shows, its description and pages followed while the page stands, as the
- * panel's Overview follows them (`TASKS_DOCUMENT_FOLLOW`, `TASKS_PAGES_FOLLOW`);
- * none where the list holds no such task.
+ * panel's Overview follows them (`TASKS_DOCUMENT_FOLLOW`, `TASKS_PAGES_FOLLOW`).
+ * A task the list doesn't hold, named by its id, stands on its own
+ * description read, as the panel's page stands on it (`use-found-task.ts`
+ * finds one a link names by number); none until that read answers with it.
  */
 export function useTaskOverview(named: string | undefined): TaskOverview | undefined {
   const acts = useHostActs();
@@ -592,10 +604,12 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
   const { rename } = useTaskWrites();
   const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
-  const task = named === undefined ? undefined : listed.find((each) => namesTask(each, named));
-  const taskId = task?.id;
-  // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
-  const placing = useTaskPlacing(task?.workspaceId);
+
+  const listedTask =
+    named === undefined ? undefined : listed.find((each) => namesTask(each, named));
+
+  // Note that an id the list doesn't hold is followed by its own read, while a number it doesn't hold names nothing to follow.
+  const taskId = listedTask?.id ?? idNamed(named);
   const relations = useTaskRelationWrites();
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_DOCUMENT_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
@@ -611,6 +625,11 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
             pages: state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
           },
   });
+
+  const read = held?.document;
+  const task = listedTask ?? (read !== undefined && "task" in read ? read.task : undefined);
+  // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
+  const placing = useTaskPlacing(task?.workspaceId);
 
   return useMemo(() => {
     if (task === undefined) return undefined;
