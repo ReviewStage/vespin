@@ -155,6 +155,7 @@ import { TOOLBARS_EXAMPLE } from "./examples/toolbars";
 import { TOOLTIPS_EXAMPLE } from "./examples/tooltips";
 import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
+import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
 import { VIDEO_PLAYER_EXAMPLE } from "./examples/video-player";
 import { WRITING_GLYPHS_EXAMPLE } from "./examples/writing-glyphs";
 import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
@@ -177,6 +178,7 @@ export const EXAMPLES: readonly Example[] = [
   LAYOUT_EXAMPLE,
   WRITING_GLYPHS_EXAMPLE,
   ATTACHMENT_CHIPS_EXAMPLE,
+  UPLOAD_COVERS_EXAMPLE,
   AVATARS_EXAMPLE,
   SUGGESTIONS_EXAMPLE,
   REPOSITORIES_EXAMPLE,

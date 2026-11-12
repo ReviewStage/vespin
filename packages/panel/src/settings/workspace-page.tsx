@@ -1801,7 +1801,8 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               }}
               // An upload still under way would put a photo back after its removal, so none is asked meanwhile.
               onRemove={set && !uploading ? remove.ask : undefined}
-              disabled={uploading || remove.busy}
+              disabled={remove.busy}
+              uploading={uploading}
             />
           ) : (
             <ReplayMask>

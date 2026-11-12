@@ -21,15 +21,16 @@ import {
   CaptionField,
   type CaptionLeave,
   Card,
-  ErrorState,
   FoldingButton,
   FormField,
   isVideoDataUrl,
   MENU_SURFACE_ELEMENT,
   MENU_SURFACE_FLOW,
   MenuSurface,
-  Spinner,
   TextField,
+  UPLOAD_COVER_SIZE,
+  UPLOAD_COVER_STATE,
+  UploadCover,
   useFilePicker,
 } from "@repo/ui";
 import { CaptionsIcon, GLYPH, Maximize2Icon, TextCursorInputIcon } from "@repo/ui/icons";
@@ -73,12 +74,14 @@ import { documentScrollerOf } from "./document-frame.js";
  *
  * A picture laid in waits on its upload: the Mac re-encodes it to at most
  * `PICTURE_BOUNDS.MAX_BYTES` (`encodeImage`), shows it at once from those
- * bytes at half strength with the window's spinner and "Uploading" where
- * its caption will stand, and keeps it on the description (`planning.pictureKeep`).
- * Kept, the picture takes its address and the text writes its line; until
- * then the text writes nothing of it. A keep that fails says so in the same
- * place, as every failure is said (`@repo/ui`'s `ErrorState`): its sentence, then
- * Retry and Remove. A picture of another description pasted in is read as that
+ * bytes under the upload's cover (`@repo/ui`'s `UploadCover`), the spinner
+ * on it and the meter along its foot, and keeps it on the description
+ * (`planning.pictureKeep`). Kept, the picture takes its address and the text
+ * writes its line; until then the text writes nothing of it. A keep that
+ * fails says so on the picture, under the same veil: its sentence, then
+ * Retry, Copy details, and Remove, Retry left out where a refusal says
+ * nothing a second try would change. A PDF waits and fails the same way on
+ * its file's chip, its face Retry and its corner Remove. A picture of another description pasted in is read as that
  * description's and kept again on this one, so this description's readers can see it; a
  * video an agent recorded is carried across as it is, and waits as a quiet
  * box, since its bytes draw no picture, and so does a PDF laid in, which
@@ -98,14 +101,14 @@ import { documentScrollerOf } from "./document-frame.js";
  * chooses files while the text is edited.
  */
 
-/** What a picture's upload says, and what a failed one says by why. */
+/** What a failed upload says by why. */
 const UPLOAD_WORDS = {
-  SENDING: "Uploading",
   NOT_A_PICTURE: "This file is not a picture a description can keep.",
   TOO_MANY: "This description already holds as many pictures as it can.",
   TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
   NOT_COPIED: "The picture could not be read from its description.",
   FAILED: "The image could not be uploaded.",
+  PDF_FAILED: "The PDF could not be uploaded.",
   NOT_A_PDF: "This file is not a PDF a description can keep.",
   PDF_TOO_LARGE: `This PDF is larger than the ${formatBytes(AGENT_BOUNDS.MAX_PDF_BYTES)} a description keeps.`,
 } as const;
@@ -155,6 +158,8 @@ type Upload =
       readonly url?: string | undefined;
       readonly reason: string;
       readonly taken: PictureTaken;
+      /** Whether a second try could land, which a file that is no picture or PDF it can keep never does. */
+      readonly again: boolean;
     };
 
 /** A picture's node the panel draws into. */
@@ -166,13 +171,13 @@ interface DrawnPicture {
   readonly doors: PictureNodeDoors;
 }
 
-/** Why a keep failed, in the words said where its caption will stand. */
-function keepFailedWords(failure: string | undefined): string {
+/** Why a keep failed, in the words said on what failed to go: a picture, or a PDF. */
+function keepFailedWords(failure: string | undefined, url: string): string {
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY) return UPLOAD_WORDS.TOO_MANY;
 
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS) return UPLOAD_WORDS.TOO_MANY_VIDEOS;
 
-  return UPLOAD_WORDS.FAILED;
+  return isPdfDataUrl(url) ? UPLOAD_WORDS.PDF_FAILED : UPLOAD_WORDS.FAILED;
 }
 
 /** A `data:` URL of bytes the Mac encoded. */
@@ -206,7 +211,7 @@ async function encodedUrl(
   return { url: dataUrlOf(read.image.mediaType, read.image.base64) };
 }
 
-/** A picture waiting on its upload: the Mac's bytes at half strength, and the wait or its failure where its caption will stand. */
+/** A picture waiting on its upload, its bytes under the upload's cover: the wait, or why it failed with Retry where a second try could land, and Remove. */
 function UploadingPicture({
   upload,
   alt,
@@ -215,63 +220,79 @@ function UploadingPicture({
 }: {
   upload: Upload | undefined;
   alt: string;
-  onRetry: () => void;
+  onRetry: (taken: PictureTaken) => void;
   onRemove: () => void;
 }): React.JSX.Element {
   const url = upload?.url;
+  const sending = upload?.kind === UPLOAD.SENDING;
+  const failed = upload?.kind === UPLOAD.FAILED ? upload : undefined;
+  const retry = failed?.again === true ? () => onRetry(failed.taken) : undefined;
+  const name = alt === "" ? (url !== undefined && isPdfDataUrl(url) ? "PDF" : "Picture") : alt;
+
+  // Note that a node whose upload this window never held, one read back mid-upload, is said not kept, with Remove alone.
+  const failure = failureShown({
+    surface: FAILURE_SURFACE.PICTURE_KEEP,
+    cause: upload ?? FAILURE_CONDITION.NOT_KEPT,
+    ...(failed === undefined ? undefined : { refused: true }),
+  });
+
+  const words = failed?.reason ?? UPLOAD_WORDS.FAILED;
+
+  if (url !== undefined && isPdfDataUrl(url)) {
+    return (
+      <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
+        <PdfFile
+          url={url}
+          name={name}
+          state={sending ? ATTACHMENT_CHIP_STATE.UPLOADING : ATTACHMENT_CHIP_STATE.FAILED}
+          {...(sending ? {} : { failure: words, reported: failure, onRetry: retry, onRemove })}
+        />
+      </span>
+    );
+  }
 
   return (
     <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
-      {url !== undefined && isPdfDataUrl(url) ? (
-        <PdfFile
-          url={url}
-          name={alt}
-          state={
-            upload?.kind === UPLOAD.SENDING
-              ? ATTACHMENT_CHIP_STATE.UPLOADING
-              : ATTACHMENT_CHIP_STATE.FAILED
-          }
-        />
-      ) : (
-        <Card
-          as={CARD_ELEMENT.SPAN}
-          corner={CARD_CORNER.CONTROL}
-          padding={CARD_PADDING.FLUSH}
-          className={PICTURE_FRAME_CLASS}
-        >
-          {url === undefined || isVideoDataUrl(url) ? (
-            <span className={PICTURE_PENDING_CLASS} />
-          ) : (
-            // The Mac's own bytes at half strength while the upload waits.
-            <img
-              className={`${PICTURE_IMAGE_CLASS} opacity-50`}
-              src={url}
-              alt={alt}
-              draggable={false}
-            />
-          )}
-        </Card>
-      )}
-      {upload?.kind === UPLOAD.SENDING ? (
-        <span className="picture-status mt-item-gap flex items-center gap-item-gap text-caption text-muted-foreground">
-          <Spinner delay label={UPLOAD_WORDS.SENDING} />
-          <span>{UPLOAD_WORDS.SENDING}</span>
-        </span>
-      ) : (
-        <span className="mt-item-gap block">
-          <ErrorState
-            failure={failureShown({
-              surface: FAILURE_SURFACE.PICTURE_KEEP,
-              cause: upload ?? FAILURE_CONDITION.NOT_KEPT,
-              ...(upload?.kind === UPLOAD.FAILED ? { refused: true } : undefined),
-            })}
-            onRetry={upload?.kind === UPLOAD.FAILED ? onRetry : undefined}
+      <Card
+        as={CARD_ELEMENT.SPAN}
+        corner={CARD_CORNER.CONTROL}
+        padding={CARD_PADDING.FLUSH}
+        className={`${PICTURE_FRAME_CLASS} relative`}
+      >
+        {url === undefined || isVideoDataUrl(url) ? (
+          <span className={PICTURE_PENDING_CLASS} />
+        ) : (
+          <img
+            // Note that a failed picture stands at least the failure card's size, because the frame clips what the cover lays over it.
+            className={
+              failed === undefined && upload !== undefined
+                ? PICTURE_IMAGE_CLASS
+                : `${PICTURE_IMAGE_CLASS} min-h-picture-failed-h min-w-picture-failed-w`
+            }
+            src={url}
+            alt={alt}
+            draggable={false}
+          />
+        )}
+        {sending ? (
+          <UploadCover
+            size={UPLOAD_COVER_SIZE.BLOCK}
+            state={UPLOAD_COVER_STATE.UPLOADING}
+            name={name}
+          />
+        ) : (
+          <UploadCover
+            size={UPLOAD_COVER_SIZE.BLOCK}
+            state={UPLOAD_COVER_STATE.FAILED}
+            name={name}
+            failure={failure}
+            onRetry={retry}
             onRemove={onRemove}
           >
-            {upload?.kind === UPLOAD.FAILED ? upload.reason : UPLOAD_WORDS.FAILED}
-          </ErrorState>
-        </span>
-      )}
+            {words}
+          </UploadCover>
+        )}
+      </Card>
     </span>
   );
 }
@@ -551,11 +572,14 @@ export function useEditorPictures(
       settled(taken.upload, { kind: UPLOAD.SENDING, url });
 
       const failed = (reason: string) =>
-        settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken });
+        settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken, again: true });
 
       const kept = await sendKeep({ planId: taskId, picture: url }).catch(() => undefined);
 
-      if (kept === undefined || "failure" in kept) return failed(keepFailedWords(kept?.failure));
+      if (kept === undefined || "failure" in kept) {
+        return failed(keepFailedWords(kept?.failure, url));
+      }
+
       keepPictureRead(queryClient, taskId, kept.id, url);
       handle.current?.settlePicture(
         taken.upload,
@@ -575,7 +599,12 @@ export function useEditorPictures(
         const encoded = await encodedUrl(taken.file);
 
         if ("reason" in encoded) {
-          return settled(taken.upload, { kind: UPLOAD.FAILED, reason: encoded.reason, taken });
+          return settled(taken.upload, {
+            kind: UPLOAD.FAILED,
+            reason: encoded.reason,
+            taken,
+            again: false,
+          });
         }
 
         return keep(taken, encoded.url);
@@ -596,6 +625,7 @@ export function useEditorPictures(
           kind: UPLOAD.FAILED,
           reason: UPLOAD_WORDS.NOT_COPIED,
           taken,
+          again: true,
         });
       }
 
@@ -667,11 +697,7 @@ export function useEditorPictures(
         <UploadingPicture
           upload={uploads.get(each.picture.upload)}
           alt={each.picture.alt}
-          onRetry={() => {
-            const upload = uploads.get(each.picture.upload);
-
-            if (upload?.kind === UPLOAD.FAILED) beginning.current(upload.taken);
-          }}
+          onRetry={(taken) => beginning.current(taken)}
           onRemove={() => {
             handle.current?.removePicture(each.picture.upload);
             settled(each.picture.upload, undefined);

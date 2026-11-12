@@ -393,7 +393,7 @@ function DraftReply({
 /** What a reply on its way says at its head's end. */
 const SENDING = "Sending";
 
-/** A reply of the reader's not yet on the thread, on its way or not delivered: each file its words name drawn in them as its chip, and the rest over them, going up while it goes. */
+/** A reply of the reader's not yet on the thread, on its way or not delivered: each file its words name drawn in them as its chip, and the rest over them, each under the upload's cover while it goes. */
 function SendingReplyWords({
   text,
   attachments,
@@ -403,7 +403,7 @@ function SendingReplyWords({
   attachments: readonly AgentAttachment[];
   uploading?: boolean;
 }): React.JSX.Element {
-  const shown = useWordFiles(attachmentChips(attachments), text);
+  const shown = useWordFiles(attachmentChips(attachments), text, uploading);
 
   return (
     <WordFilesContext.Provider value={shown.named}>

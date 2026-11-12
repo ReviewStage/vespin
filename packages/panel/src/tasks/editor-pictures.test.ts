@@ -30,9 +30,9 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
 /**
  * editor-pictures.test.ts -- a picture laid into the description's editor is drawn
- * at once from the Mac's own bytes, dimmed, with "Uploading" where its
- * caption will stand, and as the kept picture once the service kept it; a
- * keep that failed says why with Retry and Remove, and Remove takes it out;
+ * at once from the Mac's own bytes under the upload's cover, heard as
+ * uploading, and as the kept picture once the service kept it; a keep that
+ * failed says why on the picture with Retry and Remove, and Remove takes it out;
  * a video of another description pasted in is kept on this one as it is, waiting
  * as a quiet box rather than a picture its bytes cannot draw; and Insert
  * image is offered while the text is edited, and only then; and
@@ -179,7 +179,7 @@ async function answerKeep(value: TasksPictureKeepAnswer): Promise<void> {
   await settle();
 }
 
-test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as the kept picture once the service kept it", async () => {
+test("a pasted picture is drawn at once, heard as uploading, and as the kept picture once the service kept it", async () => {
   const container = await editing();
 
   await pasteScreenshot(container);
@@ -191,8 +191,8 @@ test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as 
     uploading?.querySelector("img")?.getAttribute("src")?.startsWith("data:image/png;base64,"),
   );
   assert.equal(
-    uploading?.querySelector(".picture-status")?.textContent?.includes("Uploading"),
-    true,
+    uploading?.querySelector("[role='progressbar']")?.getAttribute("aria-label"),
+    "Uploading Screenshot",
   );
 
   await answerKeep({ id: KEPT_ID });
@@ -203,19 +203,20 @@ test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as 
   assert.ok(kept?.getAttribute("src")?.startsWith("data:image/png;base64,"));
 });
 
-test("a keep that failed says why with Retry and Remove, and Remove takes the picture out", async () => {
+test("a keep that failed says why on the picture with Retry and Remove, and Remove takes the picture out", async () => {
   const container = await editing();
   await pasteScreenshot(container);
   await keepAsked();
 
   await answerKeep({ failure: PICTURE_KEEP_FAILURE.TOO_MANY });
 
-  const failed = container.querySelector(".picture-block[data-upload='failed'] [role='alert']");
+  const failed = container.querySelector(".picture-block[data-upload='failed']");
   assert.equal(
-    failed?.textContent,
-    "This description already holds as many pictures as it can.RetryRemove",
+    failed?.querySelector("[role='alert']")?.textContent,
+    "This description already holds as many pictures as it can.",
   );
-  const [retry, remove] = [...(failed?.querySelectorAll("button") ?? [])];
+  const retry = failed?.querySelector("button[aria-label='Retry Screenshot']");
+  const remove = failed?.querySelector<HTMLButtonElement>("button[aria-label='Remove Screenshot']");
   assert.equal(retry?.textContent, "Retry");
   assert.equal(remove?.textContent, "Remove");
   act(() => remove?.click());
