@@ -344,7 +344,7 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
       >,
     )) {
       // Note that a section's comment entries are strings, which carry no build settings.
-      const build = typeof settings === "string" ? undefined : settings.buildSettings;
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME)
         build.ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = ACCENT_COLOR_NAME;
@@ -588,7 +588,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       project.pbxXCBuildConfigurationSection() as Record<string, XcodeBuildConfiguration | string>,
     )) {
       // Note that a section's comment entries are strings, which carry no build settings.
-      const build = typeof settings === "string" ? undefined : settings.buildSettings;
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME !== `"${extension.TARGET}"`) continue;
       Object.assign(build, {
