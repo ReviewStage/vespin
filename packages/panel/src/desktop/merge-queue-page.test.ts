@@ -123,9 +123,7 @@ test("with the experiment off the sidebar offers no Merge queue; on, its row ope
 
   await vi.waitFor(() =>
     assert.deepEqual(
-      [...page.querySelectorAll('[aria-label="acme/relay"] .ui-list-row-title')].map(
-        (each) => each.textContent ?? "",
-      ),
+      [...page.querySelectorAll(".ui-list-row-title")].map((each) => each.textContent ?? ""),
       ["Expire invitations", "Rename the billing job"],
     ),
   );

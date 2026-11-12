@@ -1,0 +1,76 @@
+/* track-list.css -- a track's rail and its nodes (`track-list.tsx`).
+
+   The rail runs down the list from its first row's node to its last's, a
+   hairline of the border's ink, each row carrying the stretch from its node
+   to the next row's, so the rail passes through every node's middle and
+   ends on the first and the last. A node stands over the rail on the ground,
+   filled with its tone's ink or ringed in it; one that pulses widens a
+   ring of its tone's ink as it fades, on `transform` and `opacity` alone,
+   its duration a literal as an endless loop with no end of its own may
+   have, held still by `--ui-loop-motion`. */
+
+@layer components {
+  /* Each row carries the rail from its own node, at its middle, down to the next row's, past the gap between them, at the rows' own inset where the node stands as the first mark of the leading slot; the last row carries none, so the rail ends on its node. */
+  .ui-track-list .ui-list-row {
+    position: relative;
+  }
+
+  .ui-track-list .ui-list-row:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(
+      var(--ui-list-row-inset-inline) +
+      (var(--ui-space-8) - var(--ui-space-2)) /
+      2
+    );
+    width: var(--ui-space-2);
+    height: calc(100% + var(--ui-list-gap));
+    background: var(--ui-color-border);
+    pointer-events: none;
+  }
+
+  .ui-track-node {
+    --ui-track-node-ink: var(--ui-color-border-strong);
+    position: relative;
+    z-index: 1;
+    flex: none;
+    box-sizing: border-box;
+    width: var(--ui-space-8);
+    height: var(--ui-space-8);
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-track-node-ink);
+    box-shadow: 0 0 0 var(--ui-space-2) var(--ui-color-ground);
+  }
+
+  .ui-track-node[data-tone] {
+    --ui-track-node-ink: var(--ui-tone-ink);
+  }
+
+  .ui-track-node[data-look="hollow"] {
+    border: var(--ui-space-2) solid var(--ui-track-node-ink);
+    background: var(--ui-color-ground);
+  }
+
+  .ui-track-node[data-pulse]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--ui-track-node-ink);
+    animation: ui-track-node-pulse 1.6s ease-out infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  @keyframes ui-track-node-pulse {
+    from {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+
+    to {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
+}

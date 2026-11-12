@@ -320,6 +320,8 @@ export * from "./components/searchable-menu/searchable-menu.js";
 
 export * from "./components/secret-field/secret-field.js";
 
+export * from "./components/segment-bar/segment-bar.js";
+
 export * from "./components/selection/selection-bar.js";
 
 export * from "./components/selection/selection-menu.js";
@@ -409,6 +411,8 @@ export * from "./components/toolbar/toolbar.js";
 export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
+
+export * from "./components/track-list/track-list.js";
 
 export * from "./components/turn-end/turn-end.js";
 
