@@ -119,7 +119,7 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
-/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them. */
+/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
   readonly label: string;
   readonly symbol: SfSymbol;
@@ -128,6 +128,7 @@ export type RowSubmenu = {
     readonly on: boolean;
     readonly onPress: () => void;
   }[];
+  readonly actions?: readonly RowAction[] | undefined;
 };
 
 /** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
@@ -219,8 +220,8 @@ function actionButton(action: RowAction, colors: BrandColors) {
   );
 }
 
-/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
-function rowSubmenu(submenu: RowSubmenu, ink?: string) {
+/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks, then its acts. */
+function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
     <Menu
       key={submenu.label}
@@ -236,6 +237,7 @@ function rowSubmenu(submenu: RowSubmenu, ink?: string) {
           onIsOnChange={() => choice.onPress()}
         />
       ))}
+      {(submenu.actions ?? []).map((action) => actionButton(action, colors))}
     </Menu>
   );
 }
@@ -308,7 +310,9 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
 
 /** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
 function swipeButton(swipe: RowSwipe, colors: BrandColors) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors.TEXT_MUTED) : actionButton(swipe, colors);
+  return isSubmenu(swipe)
+    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
+    : actionButton(swipe, colors);
 }
 
 /**
@@ -380,7 +384,7 @@ export function RowFrame({
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
         {swiped.map((swipe) => swipeButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>

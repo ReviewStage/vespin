@@ -137,6 +137,12 @@ function latest(tasks: readonly TaskSummary[]): number {
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
 export const NO_REPOSITORY = "No repository";
 
+/** What a task's repository pick is called while it names none, which it still needs: its menu's item and its chip's words. */
+export const CHOOSE_REPOSITORY = "Choose a repository";
+
+/** What a task's repository pick is called once it names one. */
+export const CHANGE_REPOSITORY = "Change repository";
+
 /** A repository's two parts, `acme` and `relay` of `acme/relay`; a name with no owner is its name alone. */
 export interface RepositoryParts {
   readonly owner: string | undefined;

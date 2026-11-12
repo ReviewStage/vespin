@@ -10,8 +10,9 @@
  * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
  * it, and the Undo of either; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
- * mark, rename, and delete, a task dragged into a section on an iPad, and a
- * task's description, pages, and comment threads followed, with a reply on a
+ * mark, rename, and delete, a task moved into a section from its menu or
+ * dragged into one on an iPad, its repository changed, and a task's
+ * description, pages, and comment threads followed, with a reply on a
  * thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
@@ -363,7 +364,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: panel(IOS.COMPOSER),
-  [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_SET_PARENT]: panel(IOS.TASKS),
