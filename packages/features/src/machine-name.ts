@@ -12,6 +12,41 @@
  * machine by its own name.
  */
 
+/** A control character, a line break or a tab among them, which stands between words. */
+const CONTROL_CHARACTER = /\p{Cc}/gu;
+
+/**
+ * A format character, which draws as nothing, a bidi override among them,
+ * but for the zero-width joiner and non-joiner (U+200D, U+200C), which an
+ * emoji sequence and some scripts need to draw at all.
+ */
+const FORMAT_CHARACTER = /(?![\u200C\u200D])\p{Cf}/gu;
+
+/** The two joiners a name keeps, which draw nothing alone. */
+const JOINER = /[\u200C\u200D]/gu;
+
+/** A run of white space. */
+const WHITE_RUN = /\s+/gu;
+
+/**
+ * A name a machine gave itself, as it is kept and shown: on one line, each
+ * control character a space, each format character but the joiners gone,
+ * each run of white space one space, and trimmed; empty where nothing that
+ * draws was left. Note that a machine chooses its own name, and its pairing
+ * is approved over it, so a line break would draw a facts line of its own
+ * under it, a bidi override would turn its words around, and a name of
+ * joiners alone would draw as nothing.
+ */
+export function cleanMachineName(name: string): string {
+  const kept = name
+    .replace(FORMAT_CHARACTER, "")
+    .replace(CONTROL_CHARACTER, " ")
+    .replace(WHITE_RUN, " ")
+    .trim();
+
+  return kept.replace(JOINER, "").trim() === "" ? "" : kept;
+}
+
 /** What the machine the desktop app runs on is called. */
 export const THIS_MAC = "This Mac";
 
