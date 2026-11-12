@@ -17,6 +17,8 @@ import {
   vercelConfigSource,
 } from "../server/function-rewrites";
 import { changelogRoutes } from "../src/changelog-releases";
+import { GUIDES } from "../src/GuidesPage";
+import { guideRoutes } from "../src/guides";
 import { parseReleases } from "../src/site-markdown";
 
 const SERVICE = { WEB: "web" } as const;
@@ -316,6 +318,8 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
   assert.equal(servedFile("/privacy"), "/privacy.html");
   assert.equal(servedFile("/changelog"), "/changelog.html");
   assert.equal(servedFile("/changelog/page/2"), "/changelog/page/2.html");
+  assert.equal(servedFile("/guides"), "/guides.html");
+  assert.equal(servedFile("/guides/run-codex-in-the-cloud"), "/guides/run-codex-in-the-cloud.html");
   assert.equal(servedFile("/admin"), "/admin.html");
 
   // A page of the site written with a slash after it is sent to its bare address for good, and the changelog's first page, which no file is built for, to the changelog.
@@ -327,6 +331,8 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
     ["/changelog/0.24.0/", "/changelog/0.24.0"],
     ["/changelog/page/1", "/changelog"],
     ["/changelog/page/1/", "/changelog"],
+    ["/guides/", "/guides"],
+    ["/guides/run-codex-in-the-cloud/", "/guides/run-codex-in-the-cloud"],
   ] as const) {
     assert.deepEqual(servedBy(path), { status: 308, location }, path);
   }
@@ -648,8 +654,8 @@ const ENTRY_PAGES = readdirSync(WEB).filter((name) => name.endsWith(".html"));
  * Every HTML file the build emits, relative to its root, with the addresses
  * that may serve it: Vite's entry pages, at their own path and without their
  * extension; the files `public/` carries as they are; and every changelog
- * page and release `scripts/prerender.ts` writes, at its own path and its
- * route's.
+ * page and release and every guide `scripts/prerender.ts` writes, at its own
+ * path and its route's.
  */
 function emittedPages(): ReadonlyMap<string, readonly string[]> {
   const pages = new Map<string, readonly string[]>();
@@ -671,6 +677,8 @@ function emittedPages(): ReadonlyMap<string, readonly string[]> {
   );
 
   for (const route of changelogRoutes(parseReleases(changelog))) add(route.file, route.path);
+
+  for (const route of guideRoutes(GUIDES)) add(route.file, route.path);
 
   return pages;
 }
@@ -706,6 +714,7 @@ function sourcesOf(directives: ReadonlyMap<string, readonly string[]>, name: str
 test("every HTML page the build emits is served at every address under one Content Security Policy that runs no inline script, framed by no other site, and never sniffed", () => {
   const answers = pageAnswers();
   assert.ok(answers.some(({ file }) => file.startsWith("changelog/page/")));
+  assert.ok(answers.some(({ file }) => file.startsWith("guides/")));
 
   for (const { file, address, answer } of answers) {
     const { headers } = answer;
