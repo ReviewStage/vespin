@@ -220,7 +220,6 @@ function AnswerCard({
   // Why the last thread start did not go, until the next send.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const draft = control.draftOf(item);
-  // Note that the checkbox unticks once its thread is started, and while ticked a question's controls step aside, the question left waiting.
   const [asNew, setAsNew] = useState(false);
   const [starting, setStarting] = useState(false);
   const attempt = useRef<{ readonly key: string; readonly words: string } | undefined>(undefined);
@@ -229,7 +228,7 @@ function AnswerCard({
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
-  // Note that a notice opening acknowledges offers no Got it, since opening it was the nod (`useNodOnOpen`), save while its holder's held read has failed, when opening acknowledges nothing.
+  // Note that a failed held read still offers Got it, since opening then acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
   const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
 
@@ -358,7 +357,6 @@ function AnswerCard({
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   // Note that Reply stands only while no nod or start is out, since a press lets the selection go.
   const quotes = !sending;
-  // A quote laid in is heard, so the thread can bring the box in whole rather than its caret's line alone.
   const quoted = useRef(onQuoted);
   quoted.current = onQuoted;
 

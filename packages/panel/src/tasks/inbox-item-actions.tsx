@@ -62,7 +62,6 @@ function inboxItemPlace(item: InboxItem): LinkDestination {
   return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id };
 }
 
-/** One item's acts. */
 export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): InboxItemActions {
   const { onMark, onResolve, remind } = doors;
   const subject = inboxItemSubject(item.id);

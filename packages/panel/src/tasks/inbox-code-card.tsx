@@ -67,12 +67,8 @@ function codeReadFrom(
 }
 
 /**
- * A code block: a card headed by the path and
- * the lines, the file opened in the File tab at the block's commit from
- * either, and the lines read from GitHub at that commit with a few around
- * them, the block's own lit; lines the task cannot read say why, and open
- * nothing. The read is keyed by the place and the block's window, so a
- * parent drawing afresh reads nothing again.
+ * A code block as its card. The read is keyed by the place and the block's
+ * window, so a parent drawing afresh reads nothing again.
  */
 export function InboxCodeCard({
   block,

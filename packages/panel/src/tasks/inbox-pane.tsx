@@ -575,9 +575,7 @@ function AnsweredMarker(): React.JSX.Element {
  * ink (`SteppedBack`), nothing picked and taking nothing, so what it used to
  * ask still reads in the thread and never as an answer; what became of it
  * is the thread's own line (`ThreadEvent`). An `answer` of words alone,
- * which has no controls, keeps none, as does a to-do naming no steps, whose
- * one step was the item's title as it stood then, which a later post may
- * have renamed.
+ * which has no controls, keeps none.
  */
 function HeldAsk({
   ask,
@@ -1132,19 +1130,10 @@ function answeredAsk(
 const NO_TEXT_LABELS: ReadonlySet<string> = new Set();
 
 /**
- * One message of the thread, a Markdown document, as its
- * writer's comment: a member by their face and name, the agent by its tile
- * and name and a quiet "agent" after it, then when. An answer leads with
- * the card of the ask it answered, filled in as it was answered
- * (`AnsweredCard`), or, where the thread read no longer carries that ask,
- * its stamp and its values listed; then its words, the agent's drawn as its
- * question's are and a member's as a sent message's, and the files it
- * carried after them, a picture its words draw standing there alone;
- * an agent's message that asks ends with its ask's box, a marker alone
- * while it waits, until it is answered. It is drawn again only where it is
- * handed another prop (`memo`), each the part of the item it draws, so a
- * change to the item that leaves the message as it was, as marking it read
- * does, draws none of the thread's messages again.
+ * One message of the thread as its writer's comment. It is drawn again only
+ * where it is handed another prop (`memo`), each the part of the item it
+ * draws, so a change to the item that leaves the message as it was, as
+ * marking it read does, draws none of the thread's messages again.
  */
 const ThreadMessage = memo(function ThreadMessage({
   itemId,
@@ -1161,7 +1150,7 @@ const ThreadMessage = memo(function ThreadMessage({
   itemId: string;
   /** The item's title, as `cardTitle` reads it. */
   title: string;
-  /** The member the item's agent addressed its thread to (`inboxAddressedTo`), which an open ask from before messages kept their own addressee is addressed to. */
+  /** The member the item's agent addressed its thread to (`inboxAddressedTo`). */
   threadAddressedTo: InboxItem["waitsOn"];
   message: InboxMessage;
   thread: readonly InboxMessage[];
@@ -1322,10 +1311,10 @@ function InboxItemMenu({
   heading?: React.ReactNode;
 }): React.JSX.Element | null {
   const menu = useMenu(shown);
-  // Note that a time of the reader's own is picked from the item's row, whose list holds the picker, so this menu offers the times alone.
   // The item the pane shows is the one the Inbox's U, H, and E act on, so its ⋯ names their chords.
   useShortcutTarget(shown ? inboxItemSubject(item.id) : undefined, INBOX_ITEM_KEYS);
 
+  // Note that a time of the reader's own is picked from the item's row, whose list holds the picker, so this menu offers the times alone.
   const { groups: itemGroups } = useInboxItemActions(item, {
     onMark,
     onResolve: onClose,
@@ -1571,7 +1560,6 @@ function Crumbs({
   const path = (task: CrumbHeld, agent: CrumbHeld | undefined) => {
     const crumbs: Crumb[] = [
       taskCrumb(holder, doors, task),
-      // Note that once the title joins the path the agent's crumb keeps its size, so a narrow bar cuts the task's crumb short first and then the title.
       agentCrumb(by, titleShown, agent),
       { label: title, current: true, shown: titleShown },
     ].filter((crumb) => crumb !== undefined);
@@ -1585,7 +1573,6 @@ function Crumbs({
 
   // The agent's crumb holds its menu where the window lists the agent, which an agent started on another Mac may not be.
   const listed = by.subject.agent;
-  // While the thread holds the keys, they act on its task, the agent's copies on its agent; U and P stay the thread's.
   const keys = doors.keys === true;
   const agentKeys = keys ? THREAD_AGENT_COPY_KEYS : NO_CRUMB_KEYS;
 
@@ -1828,7 +1815,6 @@ export function InboxPane({
       </DraftQuestion>
     );
 
-  // The box stands at the thread's end as the reader's draft reply.
   const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
       <DraftReply readerId={readerId} place={place}>
@@ -1923,7 +1909,6 @@ export function InboxPane({
           pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
           actions={
             <>
-              {/* The bar ends in the pager, where the item stands alone, and the item's ⋯ menu. */}
               {pager === undefined ||
               (pager.onPrevious === undefined && pager.onNext === undefined) ? null : (
                 <ReplayUnmask>
@@ -1943,12 +1928,10 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        {/* The thread is a log as an agent's transcript is: each item opens at its newest message, the box at its end, and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
         <Conversation list={board}>
           <ConversationContent
             className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
           >
-            {/* The item's words are drawn as documents: its own pictures read through the Inbox, and a link alone on its line as its card. */}
             <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
               <Subject item={item} heading={setHeading} first={phoneHead} />
               <ReplyDoorProvider value={quoteDoor?.lay}>
