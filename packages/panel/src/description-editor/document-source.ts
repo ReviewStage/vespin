@@ -42,9 +42,10 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
 /**
  * A GitHub alert's marker as TipTap's Markdown re-prints a quote opening on
  * one, its brackets escaped as any words' are (`> \[!NOTE\]`), which GitHub
- * no longer draws as an alert.
+ * no longer draws as an alert; on any line, since a quote in a list item is
+ * re-printed indented.
  */
-const ESCAPED_ALERT = /^(>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/gimu;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -208,11 +209,16 @@ function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
 }
 
-/** A block re-printed, a quote opening on a GitHub alert's marker keeping it unescaped, so it stays an alert. */
+/**
+ * A block re-printed, a quote opening on a GitHub alert's marker keeping it
+ * unescaped, so it stays an alert, and with no blank line before it. Note that
+ * TipTap's own opens a table on one (ueberdosis/tiptap#8719), so an edited
+ * table gained a blank line over it.
+ */
 function reprinted(manager: MarkdownManager, node: PmNode): string {
-  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] }).trimEnd();
+  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] });
 
-  return node.type.name === "blockquote" ? markdown.replace(ESCAPED_ALERT, "$1[!$2]") : markdown;
+  return markdown.replace(/^\n+/u, "").trimEnd().replace(ESCAPED_ALERT, "$1[!$2]");
 }
 
 /** Whether a block holds a picture still waiting on its upload, at any depth. */

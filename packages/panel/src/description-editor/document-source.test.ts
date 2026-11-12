@@ -497,3 +497,29 @@ test("a lettered line indented under a numbered item keeps the list whole", () =
     ["orderedList"],
   );
 });
+
+test.each([
+  {
+    block: "a GitHub alert in a list item keeps its marker",
+    text: "- Before you start\n\n  > [!WARNING]\n  > Back up the database.\n",
+    words: "Before you start",
+    saved: "- Before you start now\n  > [!WARNING]\n  > Back up the database.\n",
+  },
+  {
+    block: "a table gains no blank line over it",
+    text: "The steps:\n\n| Step | Command    |\n| ---- | ---------- |\n| Run  | `pnpm dev` |\n",
+    words: "Run",
+    saved:
+      "The steps:\n\n| Step    | Command    |\n| ------- | ---------- |\n| Run now | `pnpm dev` |\n",
+  },
+])("an edited block is re-printed as GitHub draws it: $block", ({ text, words, saved }) => {
+  const { editor, handedOver } = opened(text);
+  let end = 0;
+  editor.state.doc.descendants((node, pos) => {
+    if (node.text === words) end = pos + node.nodeSize;
+  });
+
+  editor.chain().setTextSelection(end).insertContent(" now").run();
+
+  assert.equal(handedOver(), saved);
+});
