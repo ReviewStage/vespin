@@ -15,8 +15,8 @@
  * mark, rename, and delete, a task moved into a section from its menu or
  * dragged into one on an iPad, its repository changed, its parent, sub-tasks,
  * and blocks added, changed, and taken away, and a task's
- * description, pages, and comment threads followed, with a reply on a
- * thread; an agent's page: a message sent or
+ * description, pages, and comment threads followed, with a thread started
+ * on one block of the description and a reply on a thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
@@ -418,7 +418,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_COMMENT_START]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENT_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_ACT]: EVERYWHERE,
 
   [PORT_ACT_KIND.TERMINAL_LIST]: panel(IOS.DESK_TOOLS),

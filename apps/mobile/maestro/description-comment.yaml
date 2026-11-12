@@ -1,0 +1,39 @@
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so Teammate
+# invitations holds its description and its comment threads and no server is
+# reached. Nothing is sent, since the fixture stages no comment start.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- waitForAnimationToEnd
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: description-blocks
+# A long press on a block lifts it over the system's menu, which offers
+# Comment.
+- longPressOn: "Goal"
+- assertVisible: "Comment"
+- waitForAnimationToEnd
+- takeScreenshot: description-block-menu
+- tapOn: "Comment"
+- assertVisible: "Add a comment"
+- inputText: "Should this name the expiry?"
+- waitForAnimationToEnd
+- takeScreenshot: description-new-comment
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
