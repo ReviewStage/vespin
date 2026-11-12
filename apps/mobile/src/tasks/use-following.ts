@@ -23,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
@@ -47,8 +48,8 @@ export interface TaskFollowing {
   readonly setMachines: (on: boolean) => void;
 }
 
-/** What names a follower the app holds no member row of, such as one who left the workspace. */
-const UNKNOWN_MEMBER = "Former member";
+/** What names a follower the members read does not, while it is unread or failed, as the panel's chip names one. */
+const UNNAMED = "Someone";
 
 /** What a follower write's refusal says; nothing where the service took it. */
 function refusedNote(answer: TasksFollowersAnswer): string | undefined {
@@ -68,10 +69,18 @@ function mayRetry(answer: TasksFollowersAnswer): boolean {
 export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
   const acts = useHostActs();
   const write = useWrite();
-  const facesOf = useMemberFaces();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const listed = view?.tasks.find((task) => task.id === taskId)?.followers;
+  const task = view?.tasks.find((each) => each.id === taskId);
+  const listed = task?.followers;
+  const assignee = task?.assignee;
+
+  // Note that the followers are named from the task's own workspace's members, since a link may open a task outside the workspace the phone works in.
+  useLiveFollow(task?.workspaceId, (id) =>
+    acts[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
+  );
+
+  const facesOf = useMemberFaces(task?.workspaceId);
 
   return useMemo(() => {
     if (listed === undefined) return undefined;
@@ -82,7 +91,7 @@ export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
 
       return {
         ...follower,
-        name: face?.name ?? UNKNOWN_MEMBER,
+        name: face?.name ?? (assignee?.userId === follower.userId ? assignee.name : UNNAMED),
         picture: face?.picture,
         you: follower.userId === readerId,
       };
@@ -105,5 +114,5 @@ export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
       setMachines: (machines) =>
         void write(() => acts[ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]({ taskId, machines }), saying),
     };
-  }, [listed, readerId, facesOf, acts, write, taskId]);
+  }, [listed, assignee, readerId, facesOf, acts, write, taskId]);
 }

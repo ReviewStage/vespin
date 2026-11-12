@@ -40,10 +40,8 @@ export function useMemberPicturesFollow(): void {
   );
 }
 
-/** The members of the workspace the phone works in, as the follow `useMemberPicturesFollow` holds reads them. */
-function useMembers() {
-  const workspaceId = useChosenWorkspaceId();
-
+/** The members of the workspace `workspaceId` names, or of the one the phone works in where none is named, as a follow of them reads them. */
+function useMembers(workspaceId: string | undefined) {
   const { data: members } = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -59,12 +57,15 @@ function useMembers() {
 }
 
 /**
- * Each member's name and picture by their id, of the workspace the phone
- * works in, as a follower's face is drawn; none for someone the list has yet
- * to hold, or who left it.
+ * Each member's name and picture by their id, of the workspace
+ * `workspaceId` names, or of the one the phone works in where none is
+ * named, as a follower's face is drawn; none for someone the list has yet
+ * to hold, or who left it. A caller naming another workspace holds its own
+ * follow of that workspace's members.
  */
-export function useMemberFaces(): MemberOf {
-  const members = useMembers();
+export function useMemberFaces(workspaceId?: string): MemberOf {
+  const chosenId = useChosenWorkspaceId();
+  const members = useMembers(workspaceId ?? chosenId);
 
   return useMemo(() => {
     const byId = new Map((members ?? []).map((member) => [member.userId, member]));
@@ -86,7 +87,7 @@ export function useMemberFaces(): MemberOf {
  */
 export function useMemberPictures(): PictureOf {
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  const members = useMembers();
+  const members = useMembers(useChosenWorkspaceId());
 
   const readerId = account === undefined ? undefined : signedInAccountId(account);
 
