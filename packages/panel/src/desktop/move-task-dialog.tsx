@@ -9,6 +9,8 @@ import {
   moveLossParts,
   moveTargetLine,
   moveTargets,
+  moveTitle,
+  moveVerb,
   TASK_MOVE_WORDS,
   workspaceTakesTask,
 } from "@repo/features/task-move-model";
@@ -160,7 +162,7 @@ function MoveTaskCard({
     <Dialog
       open={open}
       size={DIALOG_SIZE.CONFIRM}
-      title={`Move “${task.name}” to another workspace`}
+      title={moveTitle(task.name)}
       busy={moving}
       initialFocus={chosen === undefined ? cancel : first}
       onDismiss={dismiss}
@@ -169,9 +171,9 @@ function MoveTaskCard({
           onCancel={dismiss}
           cancelRef={cancel}
           act={{
-            verb: chosen === undefined ? "Move" : `Move to ${chosen.name}`,
+            verb: moveVerb(chosen),
             tone: DIALOG_TONE.PRIMARY,
-            running: "Moving",
+            running: TASK_MOVE_WORDS.RUNNING,
             busy: moving,
             disabled: chosen === undefined,
             onPress: () => confirm.run(),

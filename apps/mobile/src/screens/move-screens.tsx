@@ -10,6 +10,8 @@ import {
   movePartsText,
   moveTargetLine,
   moveTargets,
+  moveTitle,
+  moveVerb,
   TASK_MOVE_WORDS,
   workspaceTakesTask,
 } from "@repo/features/task-move-model";
@@ -28,7 +30,8 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
@@ -96,17 +99,36 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   const from = workspaces.find((workspace) => workspace.id === task?.workspaceId);
   const personalId = workspaces[0]?.id;
 
+  const { choose } = useChosenWorkspace(workspaces);
+  // Note that a press is read off a ref, since a second tap can land before the render that disables Move, and the sheet's standing too, since an answer may land once it is gone.
+  const sending = useRef(false);
+  const standing = useRef(true);
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+
   const move = () => {
-    if (task === undefined || chosen === undefined || moving) return;
+    if (task === undefined || chosen === undefined || sending.current) return;
+    sending.current = true;
     setMoving(true);
 
     void write(() => acts[ACT_KIND.TASKS_MOVE]({ taskId: task.id, workspaceId: chosen.id }), {
       refused: (answer) => ("failure" in answer ? TASK_MOVE_WORDS.REFUSED : undefined),
       went: BUZZ.SUCCESS,
     }).then((moved) => {
+      sending.current = false;
+
+      if (!standing.current) return;
       setMoving(false);
 
-      if (moved) router.back();
+      if (!moved) return;
+      // The phone follows the task into the workspace it moved to, as the panel's list follows it, so its page names it there.
+      choose(chosen.id);
+      router.back();
     });
   };
 
@@ -120,14 +142,18 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },
+          // Note that the sheet stays while the move is out, as the panel's dialog refuses to close, so its answer lands where it was asked.
+          gestureEnabled: !moving,
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button disabled={moving} onPress={() => router.back()}>
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button disabled={chosen === undefined || moving} onPress={move}>
-          {TASK_MOVE_WORDS.ACT}
+          {moving ? TASK_MOVE_WORDS.RUNNING : moveVerb(chosen)}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
@@ -146,7 +172,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
 
   const effects =
     chosen === undefined
-      ? TASK_MOVE_WORDS.CHOOSE
+      ? undefined
       : [moveLossParts(from, chosen), moveGainParts(chosen), moveAgentsParts(chosen)]
           .map(movePartsText)
           .join("\n");
@@ -156,7 +182,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
       {bar}
       <Screen>
         <SettingsForm>
-          <ListSection title={TASK_MOVE_WORDS.LEGEND} footer={effects}>
+          <ListSection title={moveTitle(task.name)} footer={effects}>
             <WorkspacePickRows
               options={targets.map((workspace) => ({
                 workspace: switcherWorkspace(workspace, workspace.id === personalId, photos),

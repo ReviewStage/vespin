@@ -805,13 +805,6 @@ function historyActions(
   ];
 }
 
-/**
- * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Remove
- * parent where it has one, Open in browser, and Permanently delete, red,
- * which asks first; then its Status, each status checked where it stands,
- * Task relation, Move to section, and its repository.
- */
 /** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
 function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
   return open === undefined
@@ -819,6 +812,14 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
     : [{ label: TASK_MOVE_WORDS.TITLE, symbol: "folder", onPress: open }];
 }
 
+/**
+ * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
+ * history where the workspace's descriptions stand on, New sub-task, Move
+ * to workspace where the reader may move it, Remove parent where it has
+ * one, Open in browser, and Permanently delete, red, which asks first; then
+ * its Status, each status checked where it stands, Task relation, Move to
+ * section, and its repository.
+ */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
 

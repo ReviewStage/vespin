@@ -26,7 +26,19 @@ export const TASK_MOVE_WORDS = {
   REFUSED: "The task could not be moved. Try again.",
   /** What it says where no workspace can take the task. */
   CHOOSE: "Choose a workspace.",
+  /** What the act says while the move is out. */
+  RUNNING: "Moving",
 } as const;
+
+/** What the move asks over its list, naming the task. */
+export function moveTitle(taskName: string): string {
+  return `Move “${taskName}” to another workspace`;
+}
+
+/** What the act says: the move to the workspace chosen, or Move where none can take the task. */
+export function moveVerb(chosen: Pick<Workspace, "name"> | undefined): string {
+  return chosen === undefined ? TASK_MOVE_WORDS.ACT : `Move to ${chosen.name}`;
+}
 
 /** The kinds of a line's parts: its words, and a workspace it names. */
 export const MOVE_PART = {
