@@ -21,6 +21,7 @@ import { useToast } from "../toast.js";
 import {
   closesComposer,
   heldSentLines,
+  landedSentLines,
   messageFailureNote,
   SENT_LINE_STATE,
   type SentLine,
@@ -60,7 +61,9 @@ import type { HeldUpdate } from "./refused-send.js";
  * one that failed still goes. The line is kept past the tab for the account
  * that sent it (`failed-lines.ts`), so a refusal that lands while the tab is
  * closed, or its task left, is drawn where the line went once the tab opens
- * again, the rows and tabs leading to it wear the failed mark meanwhile, and
+ * again, as it is after a reload or a relaunch, its files left behind, and
+ * one kept from before whose row the transcript holds is let go, since it
+ * went after all; the rows and tabs leading to it wear the failed mark meanwhile, and
  * a toast says so where the tab is not on screen as it lands. A refusal that
  * something elsewhere mends, a token to update or the task to move to the
  * workspace that reaches its repository, is also said under the box with that
@@ -336,6 +339,20 @@ export function useAgentComposer(input: {
     if (standing.length === held.sent.length) return;
     setHeld((was) => ({ ...was, sent: heldSentLines(was.sent, latest.current.messages) }));
   }, [standing.length, held.sent.length]);
+
+  // A line kept from before a reload whose row the transcript holds went after all, so it is let go.
+  // Note that a line refused in this window is not, because its row may still be on its way out.
+  useEffect(() => {
+    const restored = failedLinesOf(failedLines, agentId).flatMap((failed) =>
+      failed.restored === true ? [failed.line] : [],
+    );
+
+    const went = new Set(landedSentLines(restored, messages).map((line) => line.id));
+
+    if (went.size === 0) return;
+    keepFailed((all) => all.filter((failed) => !went.has(failed.line.id)));
+    setHeld((was) => ({ ...was, sent: was.sent.filter((each) => !went.has(each.id)) }));
+  }, [failedLines, agentId, messages, keepFailed]);
 
   // A rewind's cut is let go once the transcript reads back without the messages it dropped.
   const cutStands = held.cut !== undefined && messages.some((message) => held.cut?.has(message.id));
