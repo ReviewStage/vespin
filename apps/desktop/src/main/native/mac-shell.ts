@@ -114,8 +114,8 @@ export function spawnMacShell(folder: string, cols: number, rows: number): MacSh
   // the Buffer it read, which node-pty's typings still name a string, so the
   // chunk passes through as it came and a string is only ever encoded here
   // for those typings' sake.
-  const bytesOf = (chunk: string): Uint8Array =>
-    typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+  const bytesOf = (chunk: string | Uint8Array): Uint8Array =>
+    chunk instanceof Uint8Array ? chunk : Buffer.from(chunk);
 
   return {
     onData: (listener) => void running.onData((chunk) => listener(bytesOf(chunk))),
