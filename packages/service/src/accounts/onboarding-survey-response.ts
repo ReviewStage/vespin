@@ -5,9 +5,9 @@
  * questions, the account keeps its answers (`@repo/settings`'s
  * `OnboardingSurvey`), and each set the service saves is recorded here under
  * the account's person, each answer in its own words and an Other in the
- * person's words where they wrote some. What it hopes we help with takes
- * several answers, so it is recorded as the list of them, as PostHog's
- * multiple-choice question holds one. A PostHog destination posts each
+ * person's words where they wrote some. Each question takes several
+ * answers, so each is recorded as the list of them, as a multiple-choice
+ * question in PostHog holds one. A PostHog destination posts each
  * production response to #signups. Setup
  * keeps a set only where it changed, so a walk back and forth posts once.
  */
@@ -54,16 +54,7 @@ function wordsOf<Value extends string>(
   return answer === SURVEY_OTHER && other !== undefined ? other : labels[answer];
 }
 
-/** What a question of one answer was answered, in its words. */
-function responseOf<Value extends string>(
-  labels: Readonly<Record<Value, string>>,
-  answer: Value | undefined,
-  other: string | undefined,
-): string | undefined {
-  return answer === undefined ? undefined : wordsOf(labels, answer, other);
-}
-
-/** What a question of several answers was answered, each in its words. */
+/** What a question was answered, each answer in its words. */
 function responsesOf<Value extends string>(
   labels: Readonly<Record<Value, string>>,
   answers: readonly Value[] | undefined,
@@ -82,13 +73,13 @@ export function onboardingSurveyAnswered(
       id: ONBOARDING_SURVEY.REFERRAL.ID,
       responseKey: ONBOARDING_SURVEY.REFERRAL.RESPONSE_KEY,
       question: SURVEY_QUESTION.REFERRAL,
-      response: responseOf(SURVEY_REFERRAL_LABEL, survey.referral, survey.referralOther),
+      response: responsesOf(SURVEY_REFERRAL_LABEL, survey.referral, survey.referralOther),
     },
     {
       id: ONBOARDING_SURVEY.ROLE.ID,
       responseKey: ONBOARDING_SURVEY.ROLE.RESPONSE_KEY,
       question: SURVEY_QUESTION.ROLE,
-      response: responseOf(SURVEY_ROLE_LABEL, survey.role, survey.roleOther),
+      response: responsesOf(SURVEY_ROLE_LABEL, survey.role, survey.roleOther),
     },
     {
       id: ONBOARDING_SURVEY.INTENT.ID,

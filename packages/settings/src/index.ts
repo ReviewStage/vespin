@@ -68,9 +68,11 @@ export {
 } from "./mac-commands.js";
 
 export {
+  isOlderOnboardingSurveyJson,
   isOnboardingSurveyJson,
   type OnboardingSurvey,
   onboardingSurveyFrom,
+  onboardingSurveyHasAnswer,
   onboardingSurveyStored,
   SURVEY_INTENT,
   SURVEY_INTENT_LABEL,
