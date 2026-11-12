@@ -2845,6 +2845,42 @@ test("an answer queued behind a note on the open question never goes once the no
   assert.deepEqual(checkedOptions(pane), ["7 days"], "its pick is back on the ask");
 });
 
+test("Edit on an answer that did not go puts no pick back once the agent asked again, though the new ask offers the same options", async () => {
+  const shown = threadItem([askingMessage(EXPIRY_ASK)]);
+  const pane = await mountThread(shown);
+  const page = pane.ownerDocument.body;
+  heldMessages(() => ({ failure: AGENT_CALL_FAILURE.NOT_PERMITTED }));
+  act(() => openOptions(pane)[1]?.click());
+  act(() =>
+    pane.querySelector<HTMLButtonElement>('form.inbox-answer button[type="submit"]')?.click(),
+  );
+  await settle();
+  assert.deepEqual(undeliveredWords(page), [null]);
+
+  // The agent withdraws its ask and asks again, offering the same options.
+  const askedAgain = threadItem(
+    [
+      askingMessage(EXPIRY_ASK, { status: INBOX_ASK_STATUS.WITHDRAWN }),
+      askingMessage(EXPIRY_ASK, { id: "e1b2c3d4-0000-4000-8000-000000000040", createdAt: 2_000 }),
+    ],
+    { revision: shown.revision + 1 },
+  );
+  await act(async () =>
+    world.main.push(
+      { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
+      { items: [askedAgain, RETRY] },
+    ),
+  );
+  await settle();
+
+  await pickOnUndelivered(page, null, "Edit");
+  assert.deepEqual(
+    checkedOptions(itemPane(page)),
+    [],
+    "the new ask holds no pick it was never given",
+  );
+});
+
 test("Got it pressed while a reply that settles the notice is out goes nowhere once the reply lands, the box released and saying nothing", async () => {
   const notice = noticeItem({ startedBy: TEAMMATE });
   const pane = await mountThread(notice);

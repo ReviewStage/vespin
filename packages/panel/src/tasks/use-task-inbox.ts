@@ -25,6 +25,7 @@ import {
   INBOX_STATUS,
   type InboxAnswers,
   type InboxItem,
+  openAskOf,
 } from "@repo/features/inbox-wire";
 import type { AppInboxItems } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
@@ -471,11 +472,18 @@ function draftOfUndelivered(item: InboxItem, reply: UndeliveredReply): Draft {
   );
 }
 
-/** The ask an answer answers, where the item's thread still carries it and this build knows it. */
+/**
+ * The ask an answer answers, where it is still the thread's open ask and
+ * this build knows it. Note that an ask the agent has posted over since is
+ * none, so its picks never land on the ask standing now, whose options may
+ * share their labels.
+ */
 function askAnswered(item: InboxItem, answers: InboxAnswers) {
-  const ask = (item.thread ?? []).find((message) => message.id === answers.ask)?.ask;
+  const asking = openAskOf(item.thread ?? []);
 
-  return ask !== undefined && knownAsk(ask) ? ask : undefined;
+  return asking !== undefined && asking.message.id === answers.ask && knownAsk(asking.ask)
+    ? asking.ask
+    : undefined;
 }
 
 /** Whether a card holds nothing at all: no words, files, picks, fields, steps, or press. */
