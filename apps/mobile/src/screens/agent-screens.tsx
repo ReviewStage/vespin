@@ -531,7 +531,10 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction
                 icon="archivebox"
                 destructive
-                onPress={() => setArchiving(true)}
+                onPress={() => {
+                  actions.archiveAsk.ask();
+                  setArchiving(true);
+                }}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -610,9 +613,9 @@ export function AgentScreen() {
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk
-        title={actions.archiveQuestion.title}
-        message={actions.archiveQuestion.message}
-        act={actions.archiveQuestion.act}
+        title={actions.archiveAsk.question.title}
+        message={actions.archiveAsk.question.message}
+        act={actions.archiveAsk.question.act}
         destructive
         presented={archiving}
         onAct={() => {

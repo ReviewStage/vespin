@@ -18,7 +18,9 @@
  * and blocks added, changed, and taken away, and a task's
  * description, pages, and comment threads followed, and read again where
  * they could not be, with a thread started
- * on one block of the description and a reply on a thread; an agent's page: a message sent or
+ * on one block of the description and a reply on a thread; an agent's page,
+ * one the task list doesn't hold read by its id, and Archive reading it
+ * afresh before it asks: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
@@ -127,9 +129,6 @@ const IOS = {
     "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
   ),
   AGENT_TRANSCRIPT_COPY: notYet("iOS's agent page doesn't offer Copy transcript yet"),
-  AGENT_UNLISTED: notYet(
-    "iOS draws an agent the task list doesn't hold from its transcript alone, without its status or model, and Archive asks no fresh read of whether it still works",
-  ),
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
@@ -309,7 +308,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENT_TAB_DOT),
   [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENT_TAB_DOT),
-  [PORT_ACT_KIND.AGENTS_PAGE]: panel(IOS.AGENT_UNLISTED),
+  [PORT_ACT_KIND.AGENTS_PAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: panel(IOS.AGENT_ORIGIN),
   [PORT_ACT_KIND.AGENTS_ORIGIN_RETRY]: panel(IOS.AGENT_ORIGIN),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: EVERYWHERE,

@@ -39,7 +39,7 @@ import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
-import { useFollowedAgent } from "./use-agent.js";
+import { useAgentPage, useFollowedAgent } from "./use-agent.js";
 
 /** Why each act did not take, said over the composer. */
 const ACT_FAILED = {
@@ -61,12 +61,40 @@ export interface ArchiveQuestion {
 }
 
 /** What Archive asks of an agent by where it stands now: the panel's Stop and archive where it still works, which says what archiving stops, and Archive agent at rest. */
-export function archiveQuestion(working: boolean): ArchiveQuestion {
+function archiveQuestion(working: boolean): ArchiveQuestion {
   const stopWords = archiveStopWords(false);
 
   return working
     ? { title: stopWords.title, message: stopWords.body, act: stopWords.verb }
     : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act };
+}
+
+/** What Archive asks of one agent, and the way to ask it. */
+export interface ArchiveAsk {
+  /** What Archive asks, by where the agent stands now. */
+  readonly question: ArchiveQuestion;
+  /** Reads the agent afresh as the question is raised. */
+  readonly ask: () => void;
+}
+
+/**
+ * What Archive asks of the agent `agentId` names, read afresh each time it's
+ * asked, as the panel reads a teammate's agent again before archiving it
+ * (`agent-archive.tsx`). Note that it asks Stop and archive where either the
+ * list or the fresh read finds the agent at work, because an agent the list
+ * doesn't hold is followed by nothing, and one that started a turn since
+ * would otherwise be stopped without a word of it.
+ */
+export function useArchiveAsk(agentId: string): ArchiveAsk {
+  const agent = useFollowedAgent(agentId);
+  const [asked, setAsked] = useState(0);
+  const fresh = useAgentPage(agentId, asked > 0, asked);
+
+  const working = [agent, fresh].some(
+    (read) => read !== undefined && agentStillWriting(read.status),
+  );
+
+  return { question: archiveQuestion(working), ask: () => setAsked((was) => was + 1) };
 }
 
 /** What the agent's menu does. */
@@ -77,8 +105,8 @@ export interface AgentActions {
   readonly copyLink: () => void;
   readonly rename: (title: string) => void;
   readonly pin: () => void;
-  /** What Archive asks first, by where the agent stands now. */
-  readonly archiveQuestion: ArchiveQuestion;
+  /** What Archive asks first, by where the agent stands now, read afresh as it's raised. */
+  readonly archiveAsk: ArchiveAsk;
   /** Archives the agent, the question answered, and calls `onArchived` once the service took it. */
   readonly archive: (onArchived: () => void) => void;
   /** What Permanently delete asks first of the agent, named as its page names it `name`. */
@@ -98,7 +126,7 @@ export function useAgentActions(agentId: string, address: string | undefined): A
   const select = useMemo(() => selectAgentPinned(agentId), [agentId]);
   const { data: pinned = false } = useQuery({ ...appStateQuery, select });
   const [note, setNote] = useState<string | undefined>(undefined);
-  const working = agent !== undefined && agentStillWriting(agent.status);
+  const archiveAsk = useArchiveAsk(agentId);
 
   /** Sends an act, saying `failed` where the service refused it or never answered, and buzzing as it lands. */
   const send = (
@@ -141,7 +169,7 @@ export function useAgentActions(agentId: string, address: string | undefined): A
         () => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned: !pinned }),
         pinned ? ACT_FAILED.UNPIN : ACT_FAILED.PIN,
       ),
-    archiveQuestion: archiveQuestion(working),
+    archiveAsk,
     archive: (onArchived) =>
       send(
         () => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
