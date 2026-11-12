@@ -228,7 +228,6 @@ export type AgentClient = Pick<
   | "switchServers"
   | "choosePermissionMode"
   | "answerApproval"
-  | "addRepository"
   | "changeQueue"
   | "archive"
   | "pin"
@@ -1039,8 +1038,6 @@ function composed(
     AGENTS_ARCHIVE: declaredWrite(dependencies.pool, archived),
     AGENTS_PIN: declaredWrite(dependencies.pool, pinned),
     // Note that a repository added draws nothing on the agent's row, which lists no repositories, so it is asked and answered alone.
-    AGENTS_ADD_REPOSITORY: ({ agentId, addRepository }) =>
-      asked(client.addRepository(agentId, { addRepository })),
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
       asked(client.rewind(agentId, messageId, restoreFiles === true)),

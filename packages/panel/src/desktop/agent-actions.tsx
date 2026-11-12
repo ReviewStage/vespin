@@ -24,7 +24,6 @@ import {
   useShortcutTargetOn,
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { useAddRepository } from "../tasks/add-repository.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
@@ -58,9 +57,7 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
  * its worktree instead of the relayed tab; Open in Slack, for an agent
- * started from a Slack message, which opens that message; Add repository…,
- * a repository added beside the ones the agent works in, while Several
- * repositories is on (`add-repository.tsx`); Move to ›, the
+ * started from a Slack message, which opens that message; Move to ›, the
  * cloud or another of the member's devices, while the agent may be
  * continued there (`move-agent.tsx`); Archive, asked
  * first while a teammate's agent works (`agent-archive.tsx`), or Unarchive once it is
@@ -106,8 +103,6 @@ export interface AgentMenuDoors {
   onOpenInTask?: (() => void) | undefined;
   /** Opens the Slack message the agent was started from, for an agent started from Slack whose link Slack answered. */
   onOpenInSlack?: (() => void) | undefined;
-  /** Add repository…, a repository added beside the ones the agent works in (`add-repository.tsx`). */
-  addRepository?: MenuAction | undefined;
   /** Move to ›, the places the agent may be continued at (`move-agent.tsx`). */
   moveTo?: MenuEntry | undefined;
   /** Archives the agent, or Unarchive once it is archived (`agent-archive.tsx`). */
@@ -123,7 +118,7 @@ export interface AgentMenuDoors {
  * copies; Rename; Show terminal,
  * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
- * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
+ * Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
  * and ⌘⌫ only where the chord acts on what the menu acts on (`subject`):
  * the chosen tab or a sidebar row. A group with nothing in it is left
@@ -134,7 +129,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack, run } = doors;
-  const { addRepository, moveTo, archive, deletion, subject } = doors;
+  const { moveTo, archive, deletion, subject } = doors;
   const copies: MenuEntry[] = [
     ...(links ?? []),
     // Note that the two copies share one Copy transcript beside Copy link, so the menu leads with one copy of the agent's words rather than two.
@@ -190,11 +185,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
     copies,
     named,
     opened,
-    [
-      ...(addRepository === undefined ? [] : [addRepository]),
-      ...(moveTo === undefined ? [] : [moveTo]),
-      ...(archive === undefined ? [] : [archive]),
-    ],
+    [...(moveTo === undefined ? [] : [moveTo]), ...(archive === undefined ? [] : [archive])],
     // Note that the delete names the agent it deletes, which the menu's own subject stands in for where it is drawn as a tab or a row.
     deletion === undefined ? [] : [subject === undefined ? deletion : { ...deletion, subject }],
   ].filter((group) => group.length > 0);
@@ -210,7 +201,6 @@ export type AgentDoors = Pick<
   | "onOpenBrowser"
   | "run"
   | "onOpenInSlack"
-  | "addRepository"
   | "moveTo"
   | "archive"
   | "deletion"
@@ -387,7 +377,6 @@ export function useAgentActions(
   const unarchive = useAgentUnarchive(agent.id, agents);
   const deletion = useAgentDelete(agent, agents, { shown, onDeleted });
   const moveTo = useMoveToEntry(agent, agents);
-  const added = useAddRepository(agent, agents, shown);
   // Note that an Unarchive stands while what the agent stands under is archived, and it is not
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
   const renamable = agents.onUnarchive === undefined;
@@ -428,7 +417,6 @@ export function useAgentActions(
           : () => onOpenBrowser(agent.id),
       run: agent.archivedAt !== undefined ? undefined : run,
       onOpenInSlack: slackUrl === undefined ? undefined : () => appPlatform().openWeb(slackUrl),
-      addRepository: added.action,
       moveTo,
       archive: agent.archivedAt === undefined ? archive.action : unarchive,
       deletion: deletion.action,
@@ -439,7 +427,6 @@ export function useAgentActions(
     rename: renamable ? rename : undefined,
     dialog: (
       <>
-        {added.dialog}
         {archive.dialog}
         {deletion.dialog}
       </>

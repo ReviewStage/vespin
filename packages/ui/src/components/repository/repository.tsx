@@ -40,16 +40,12 @@ import {
 /** The mark beside a repository the developer's own GitHub token reaches rather than the App. */
 const TOKEN_LABEL = "Token";
 
-/** The mark beside the first of several repositories picked, where an agent starts and its pull requests open by default. */
-const PRIMARY_LABEL = "Primary";
-
 /** How tall a repository's line stands, in pixels: the theme's `ui-24`, which `h-ui-24` draws it at. */
 const LINE_PX = 24;
 
-/** The marks a repository's row wears after its owner: whether the developer's own token reaches it, and whether it is the primary of several picked. */
+/** The marks a repository's row wears after its owner: whether the developer's own token reaches it. */
 export interface RepositoryRowMarks {
   readonly token?: boolean | undefined;
-  readonly primary?: boolean | undefined;
 }
 
 /**
@@ -170,8 +166,7 @@ export function RepositoryCard({
  * its name, its owner muted after it, since the owner is the part rows most
  * often share and a narrow menu cuts the end of a row, and after the owner
  * the Token mark, where the developer's own GitHub token reaches it rather
- * than the App, and the Primary mark, where it is the first of several
- * picked; found by its whole `owner/name` all the same.
+ * than the App; found by its whole `owner/name` all the same.
  */
 export function repositoryMenuRow(
   repository: string,
@@ -179,10 +174,7 @@ export function repositoryMenuRow(
   marks: RepositoryRowMarks = {},
 ): MenuRow {
   const { owner, name } = repositoryParts(repository);
-  const badges = [
-    ...(marks.token === true ? [TOKEN_LABEL] : []),
-    ...(marks.primary === true ? [PRIMARY_LABEL] : []),
-  ];
+  const badges = marks.token === true ? [TOKEN_LABEL] : [];
   return {
     id: repository,
     label: name,

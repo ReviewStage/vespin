@@ -122,7 +122,6 @@ import {
 } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
-import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
   hasRepository,
@@ -230,7 +229,6 @@ import {
   type SandboxSetup,
 } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
-import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
@@ -269,7 +267,6 @@ import {
   type ApprovalLine,
   type NativeSessions,
   RUNNER_ANSWER,
-  RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   TURN_HANDOVER,
   type TurnHandover,
@@ -962,14 +959,6 @@ export const runnerSessions = <
         ? Effect.succeed(false)
         : Effect.map(readAgent(userId, found.agentId), Option.isSome);
 
-    /** Where the repositories the agent works in beside its own are checked out, which its launch marks as it marks its own checkout; none for an agent in one repository or none. */
-    const extraCheckoutsOf = (agent: Agent) =>
-      hasRepository(agent)
-        ? Effect.map(readAgentRepositories(userId, agent.id), ([, ...extras]) =>
-            extraCheckoutPaths(extras.map((extra) => extra.repository)),
-          )
-        : Effect.succeed([]);
-
     /** The repository's credential set at the running place's firewall again, minted afresh, beside the launch's swaps; an agent with no repository has none, and nothing is written. */
     const renewCredential = (target: ConversationTarget, agent: Agent, place: MachinePlace) =>
       Effect.gen(function* () {
@@ -1137,7 +1126,7 @@ export const runnerSessions = <
           });
           return { firstSequence, ...config, opening };
         });
-        const [launch, sources, environment, extraCheckouts, integrations] = yield* Effect.all(
+        const [launch, sources, environment, integrations] = yield* Effect.all(
           [
             made,
             // The launch's swaps stand before the runner starts, so its first request carries the
@@ -1150,7 +1139,6 @@ export const runnerSessions = <
                     read === undefined ? {} : { github: repositoryCredentialOf(read) },
                   ),
             workspaceEnvironmentOf(agent, kind),
-            extraCheckoutsOf(agent),
             options.integrations(agent),
           ],
           { concurrency: "unbounded" },
@@ -1161,7 +1149,6 @@ export const runnerSessions = <
           sources,
           // Note that the workspace's variables go first, so ours win a name they share.
           env: { ...environment, ...credential.env, ...delivered.env },
-          extraCheckouts,
           fingerprint: launchFingerprint(
             credential,
             delivered,
@@ -1272,7 +1259,6 @@ export const runnerSessions = <
           env: made.env,
           userId,
           agentId: agent.id,
-          extraCheckouts: made.extraCheckouts,
           name: place.name,
           started,
           ready,
@@ -1786,9 +1772,8 @@ export const runnerSessions = <
           [
             placed.pipe(
               Effect.tap((place) => Deferred.succeed(created, place.created)),
-              // Note that a repository added beside the agent's own while its place stood is cloned here, which its launch then shares,
-              // as is the agent's own where the place holds no checkout of it, as a launch whose checkout failed leaves it.
-              Effect.tap((place) => machine.checkOutMissing(place.place, target, agent, false)),
+              // Note that the agent's own checkout is cloned here where the place holds none, as a launch whose checkout failed leaves it.
+              Effect.tap((place) => machine.checkOutMissing(place.place, target, agent)),
             ),
             Effect.exit(
               Effect.flatMap(harness.launch(agent, layout), (credential) =>
@@ -2240,29 +2225,6 @@ export const runnerSessions = <
           Effect.as(RUNNER_ANSWER.WRITTEN),
           Effect.catchIf(sandboxGone, () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE)),
         );
-      });
-
-    /**
-     * A repository added beside the agent's own handed to the place it runs
-     * in now, under the agent's runner lease: the credential set afresh for
-     * the whole set, and every extra the place does not hold cloned and
-     * shared with the runner's user (`checkOutMissing`). Nothing where no place
-     * runs, since the next launch clones it, a fresh place's with the rest
-     * and a resumed one's as it relaunches (`relaunched`).
-     */
-    const checkOutHolding = (sessionId: string, conversationId: string) =>
-      Effect.gen(function* () {
-        const found = yield* machine.findPlace(userId, sessionId);
-        if (Option.isNone(found)) return RUNNER_CHECKOUT.NOT_LIVE;
-        const agent = yield* agentOf(conversationId);
-        const running = found.value.running;
-        if (found.value.agentId !== agent.id || running === undefined) {
-          return RUNNER_CHECKOUT.NOT_LIVE;
-        }
-        const target = { userId, conversationId: agent.conversationId };
-        yield* renewCredential(target, agent, running);
-        yield* machine.checkOutMissing(running, target, agent, true);
-        return RUNNER_CHECKOUT.CHECKED_OUT;
       });
 
     /**
@@ -2868,23 +2830,6 @@ export const runnerSessions = <
           Effect.catch((failure) =>
             Effect.logWarning(
               `A ${harness.name} warm call failed: ${keptFailureWords(failureWords(failure))}`,
-            ),
-          ),
-          Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
-          Effect.provideContext(context),
-        ),
-
-      checkOut: (sessionId, conversationId) =>
-        Effect.gen(function* () {
-          const { id } = yield* agentOf(conversationId);
-          return yield* holdingRunner(id, checkOutHolding(sessionId, conversationId));
-        }).pipe(
-          Effect.catch((failure) =>
-            Effect.as(
-              Effect.logWarning(
-                `A ${harness.name} checkout of an added repository failed: ${keptFailureWords(failureWords(failure))}`,
-              ),
-              RUNNER_CHECKOUT.FAILED,
             ),
           ),
           Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),

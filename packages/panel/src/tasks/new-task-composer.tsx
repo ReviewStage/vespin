@@ -104,15 +104,7 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * that its GitHub reaches, else the first its read lists, and stands on none
  * only where it reaches none or No repository was picked. A repository a read
  * does not list is dropped, so a later read listing it does not bring it back.
- * A task's card for an agent in the cloud picks several repositories in that
- * one chip, each checked in its menu: the first the task's own, marked
- * Primary, where the agent starts, and the rest beside it, cloned beside its
- * checkout; unchecking the primary makes the next pick the task's. The
- * repository the card chose, the default or a preset, stands in until the
- * first pick, which replaces it; only picks after it add. A tree's card
- * holds the other task's repository as the first, its row checked and
- * disabled saying why, and picks others beside it; a card on a device
- * picks one.
+ * A tree's card holds the other task's repository, saying why.
  *
  * The words are a coding agent's prompt. Start stands once there are
  * words or files, with a repository or with none, which the chip offers
@@ -250,9 +242,6 @@ const DEVICES_UNREAD: Failure = {
 /** The servers a card switches off as it opens: none, as an agent started with none named runs with every one on. */
 const NONE_OFF: readonly string[] = [];
 
-/** The repositories a card's agent works in beside the task's as it opens: none. */
-const NONE_ALSO: readonly string[] = [];
-
 /** The repositories a card's default passes over as it opens: none, until a read leaves one out. */
 const NONE_DROPPED: readonly string[] = [];
 
@@ -283,7 +272,7 @@ export interface NewTaskPress {
   readonly key: string;
 }
 
-/** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, permission mode, and repositories beside the task's in the same order. */
+/** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
 function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
   return (
     a.repository === b.repository &&
@@ -303,19 +292,13 @@ function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
     a.agent.choice?.contextWindow === b.agent.choice?.contextWindow &&
     a.agent.disabledServers.length === b.agent.disabledServers.length &&
     a.agent.disabledServers.every((server) => b.agent.disabledServers.includes(server)) &&
-    a.agent.permissionMode === b.agent.permissionMode &&
-    sameInOrder(a.agent.alsoRepositories ?? [], b.agent.alsoRepositories ?? [])
+    a.agent.permissionMode === b.agent.permissionMode
   );
 }
 
 /** Whether two names are one repository, as GitHub spells it or not. */
 function sameRepository(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
-}
-
-/** Whether two lists name the same in the same order. */
-function sameInOrder(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((each, index) => each === b[index]);
 }
 
 /** A card's draft place: its purpose's, in its workspace, none before the workspaces are read. */
@@ -396,13 +379,6 @@ export function NewTaskComposer({
         : newTask.preset?.repository,
   );
   const [choice, pickedModel, choose] = useDefaultChoice(refused?.card.choice);
-  // The repositories the agent works in beside the task's, a refused card's as it was pressed.
-  const [alsoChosen, setAlsoChosen] = useState<readonly string[]>(
-    refused?.card.press.ask.agent.alsoRepositories ?? NONE_ALSO,
-  );
-  // Whether the chip's repositories are the member's own picks, as a refused card's were pressed,
-  // rather than the default or a preset standing in until the first pick.
-  const [pickedByHand, setPickedByHand] = useState(refused !== undefined);
   // The servers the + menu switched off, a refused card's as it was pressed.
   const [disabledServers, setDisabledServers] = useState<readonly string[]>(
     refused?.card.press.ask.agent.disabledServers ?? NONE_OFF,
@@ -524,8 +500,6 @@ export function NewTaskComposer({
     setListed(undefined);
     if (scope !== undefined) {
       setChosen(undefined);
-      setAlsoChosen(NONE_ALSO);
-      setPickedByHand(false);
       setDropped(NONE_DROPPED);
     }
     setScope(repositories.scope);
@@ -563,38 +537,6 @@ export function NewTaskComposer({
       : candidate;
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
   const repository = treeRelation === undefined ? picked : treeRelation.task.repository;
-  // A task's card picks several repositories in its one chip, the first the task's own, for an agent
-  // in the cloud; one on a device picks one, as the service refuses others beside it there. A tree's
-  // card holds the other task's repository as the first, picking others beside it where it names one.
-  // A pick the chip's read does not list, or the task's own, is let go as the task's is.
-  const offersAlso = !forAutomation && device === undefined && !(tree && repository === null);
-  const also =
-    !offersAlso || repository === null
-      ? NONE_ALSO
-      : alsoChosen.filter((each) => !sameRepository(each, repository) && isListed(each));
-  // A press checks a row after the others or unchecks it, the first pick left standing the task's.
-  // Note that the first press replaces a repository the card chose rather than the member, the
-  // default or a preset, because the commonest pick is another single repository, not a second.
-  const togglePick = (name: string) => {
-    // A tree's repository is held as the first, so a press checks or unchecks only those beside it.
-    if (tree) {
-      if (repository !== null && sameRepository(repository, name)) return;
-      setAlsoChosen(
-        also.some((each) => sameRepository(each, name))
-          ? also.filter((each) => !sameRepository(each, name))
-          : [...also, name],
-      );
-      return;
-    }
-    const picks = repository === null || !pickedByHand ? [] : [repository, ...also];
-    const next = picks.some((each) => sameRepository(each, name))
-      ? picks.filter((each) => !sameRepository(each, name))
-      : [...picks, name];
-    const [first = null, ...rest] = next;
-    setChosen(first);
-    setAlsoChosen(rest);
-    setPickedByHand(true);
-  };
   const said = words.trim();
   // Note that an automation's agent starts on words alone, since the brief fences them as the request, and a file's marker is no words of the request's.
   const requested = wordsWithoutMarkers(said).trim() !== "";
@@ -694,7 +636,6 @@ export function NewTaskComposer({
         choice: pickedModel,
         disabledServers,
         ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
-        ...(also.length === 0 ? undefined : { alsoRepositories: also }),
       },
     };
     const held = pressed.current;
@@ -732,33 +673,12 @@ export function NewTaskComposer({
       align={POPOVER_ALIGN.START}
       value={repository}
       chooser={repositories}
-      onChoose={(name) => {
-        setChosen(name);
-        setPickedByHand(true);
-      }}
+      onChoose={setChosen}
       onUnreached={judged && repository !== null ? () => drop(repository) : undefined}
-      onClear={
-        tree
-          ? undefined
-          : () => {
-              setChosen(null);
-              setAlsoChosen(NONE_ALSO);
-              setPickedByHand(true);
-            }
-      }
+      onClear={tree ? undefined : () => setChosen(null)}
       onListed={setListed}
       pending={!tree && chosen !== null && repository === null}
-      held={tree && !offersAlso ? REPOSITORY_HELD : undefined}
-      several={
-        offersAlso
-          ? {
-              also,
-              onToggle: togglePick,
-              held: tree ? REPOSITORY_HELD : undefined,
-              standIn: !tree && !pickedByHand,
-            }
-          : undefined
-      }
+      held={tree ? REPOSITORY_HELD : undefined}
     />
   );
   const composer: AgentComposerControl = {

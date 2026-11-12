@@ -142,15 +142,11 @@ import {
 import { AgentImage } from "../coder-host/agent-image.js";
 import { CODER } from "../coder-host/bounds.js";
 import {
-  type AgentExtraRead,
   type AgentRepositoryRead,
   agentCheckoutPlan,
-  agentExtraReads,
-  agentFirewallSources,
   agentRepositoryRead,
   CheckoutRefused,
   claimAgentCheckout,
-  cloneAgentExtras,
   cloneAgentRepository,
   finishCheckoutWith,
   openWorkingFolder,
@@ -299,9 +295,8 @@ const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=
 const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
- * A checkout marked safe for git in the sandbox and its repository shared
- * with `agent`'s group, as the launch marks each: the agent's own and every
- * repository it works in beside it. Note that nothing of the checkout's
+ * The agent's checkout marked safe for git in the sandbox and its repository
+ * shared with `agent`'s group, as the launch marks it. Note that nothing of the checkout's
  * files is changed, because every write the checkout makes is already the
  * group's (`../repository-shell.ts`'s `GROUP_WRITES`); the repository's
  * sharing is set here for a checkout cloned before its clone set it.
@@ -312,22 +307,6 @@ function sharedCheckout(path: string): readonly string[] {
     `if [ -d ${path}/.git ] && ! git -C ${path} config --get core.sharedRepository | grep -Fxq group; then git -C ${path} config core.sharedRepository group; fi`,
   ];
 }
-
-/**
- * The checkouts given marked safe for git and shared with `agent`'s group,
- * as the launch marks each, run by bash as root: for a checkout cloned into
- * a sandbox whose runner already runs, whose launch marked only those that
- * stood before it.
- */
-function sharedCheckoutsScript(paths: readonly string[]): string {
-  return ["set -euo pipefail", ...paths.flatMap(sharedCheckout)].join("\n");
-}
-
-/** How long the marking of checkouts cloned under a running runner is waited on. */
-const SHARE_WAIT = Duration.minutes(2);
-
-/** Why checkouts cloned under a running runner were not shared with its user. */
-const NOT_SHARED = "the checkouts cloned beside the agent's could not be shared with its runner";
 
 /** What a place holds where it holds the agent's own checkout: its repository's git folder. */
 const CHECKOUT_GIT_PATH = `${CODER.CHECKOUT_PATH}/.git`;
@@ -349,9 +328,7 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
  * which the next launch overwrites); the member's installed skills, where
  * the sandbox's opening uploaded them,
  * moved where only root writes and every user reads (`native-skills.ts`),
- * each checkout marked safe for git and shared with `agent`'s group, the
- * agent's own and those of the repositories it works in beside it at the
- * paths given (`extraCheckoutPaths`), none for an agent in one repository,
+ * the agent's checkout marked safe for git and shared with `agent`'s group,
  * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
  * another user installed in its checkout handed to it where it is not
  * `agent`'s already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
@@ -362,7 +339,7 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
  * git left behind when its runner was killed would otherwise fail every
  * relaunch after it.
  */
-function readyScript(extraCheckouts: readonly string[]): string {
+function readyScript(): string {
   return [
     "set -euo pipefail",
     LINK_TOOLS_DIRECTORY,
@@ -370,7 +347,7 @@ function readyScript(extraCheckouts: readonly string[]): string {
     `install -o root -g root -m 0444 -t ${RUNNER_DIRECTORY} ${RUNNER_UPLOADS.join(" ")}`,
     `rm -rf ${RUNNER_UPLOAD}`,
     `if [ -d ${NATIVE_SKILLS_PATH.UPLOAD} ]; then rm -rf ${NATIVE_SKILLS_PATH.INSTALLED} && mkdir -p $(dirname ${NATIVE_SKILLS_PATH.INSTALLED}) && mv ${NATIVE_SKILLS_PATH.UPLOAD} ${NATIVE_SKILLS_PATH.INSTALLED} && chown -R root:root ${NATIVE_SKILLS_PATH.INSTALLED} && chmod -R u=rwX,go=rX ${NATIVE_SKILLS_PATH.INSTALLED}; fi`,
-    ...[CODER.CHECKOUT_PATH, ...extraCheckouts].flatMap(sharedCheckout),
+    ...sharedCheckout(CODER.CHECKOUT_PATH),
     OPEN_DRIVE_STORE,
     HAND_INSTALL_TO_AGENT,
     `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${SHARED_FILES_DIRECTORY}`,
@@ -511,7 +488,6 @@ function snapshotUnusable(failure: { readonly _tag: string }): boolean {
 interface AgentCheckoutReads {
   readonly agent: WithRepository<Agent>;
   readonly read: AgentRepositoryRead;
-  readonly extras: readonly AgentExtraRead[];
   /** The workspace's cloud setup scripts as the launch reads them beside the open, which the sandbox runs after its checkout. */
   readonly setup: Effect.Effect<SandboxSetup | undefined>;
 }
@@ -860,9 +836,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     );
 
   /** The same, its launch read from the caller's store. */
-  const checkoutIn = (sandbox: SandboxRunning, userId: string, beside: FirewallSources = {}) =>
+  const checkoutIn = (sandbox: SandboxRunning, userId: string) =>
     Effect.map(Effect.context<DatabaseServices>(), (context) =>
-      checkoutOver(context, sandbox, userId, beside),
+      checkoutOver(context, sandbox, userId),
     );
 
   /** The sandbox as it runs: its name, and the run it is up in. */
@@ -996,13 +972,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * beside the `agent` user it makes (`../agent-sandbox-open.ts`): the
    * agent's repository checked out as it was created (`checkedOutAs`), on
    * the read the caller made of it, which confirmed its workspace still
-   * reaches it before any sandbox opens on its code, and each repository it
-   * works in beside its own cloned into its folder (`cloneAgentExtras`), one
-   * already standing in a source's snapshot left as it is. The agent's write
+   * reaches it before any sandbox opens on its code. The agent's write
    * token, the one its start minted and its read was made on, is the run's
    * first write, and stands on past the checkout, which reaches GitHub
-   * through it with no write of its own; a repository it works in beside its
-   * own still has its read token for its clone alone, beside it.
+   * through it with no write of its own.
    */
   const checkedOutIn = (
     context: Context.Context<DatabaseServices>,
@@ -1017,7 +990,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
       yield* checkedOutAs(checkout.agent, sandbox, checkout.read, from);
-      yield* cloneAgentExtras(sandbox, checkout.extras);
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
       if (from !== CREATED_FROM.SOURCE) {
         yield* setUp(context, later, checkout.agent, opened, yield* checkout.setup);
@@ -1138,9 +1110,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * where it owns one, else from the image with a fork of its workspace's
    * drive where no fill holds it, else from the image alone, each
    * snapshot or drive found gone at the create passed by for the next. The
-   * repository, on the write token its start minted (`read`), its extras,
-   * and the source's snapshot are read at once, since none waits on
-   * another. Nothing fills the workspace's drive here:
+   * repository, on the write token its start minted (`read`), and the
+   * source's snapshot are read at once, since none waits on another. Nothing
+   * fills the workspace's drive here:
    * its fills keep it (`../workspace-drive.ts`), and a start that finds none
    * clones.
    */
@@ -1152,16 +1124,15 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     setup: Effect.Effect<SandboxSetup | undefined>,
   ) =>
     Effect.gen(function* () {
-      const [read, extras, source] = yield* Effect.all(
+      const [read, source] = yield* Effect.all(
         [
           repositoryRead,
-          hasRepository(agent) ? agentExtraReads(target, agent) : Effect.succeed([]),
           sourceSnapshotOf(agent),
         ],
         { concurrency: "unbounded" },
       );
       const checkout =
-        hasRepository(agent) && read !== undefined ? { agent, read, extras, setup } : undefined;
+        hasRepository(agent) && read !== undefined ? { agent, read, setup } : undefined;
       // A drive the sandboxes could not be asked about, or one a fill holds, is passed by.
       const drive =
         checkout === undefined ? undefined : workspaceDriveName(checkout.read.workspaceId);
@@ -1360,27 +1331,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     // finds it. A runner started but never configured is ended, and the caller undoes what it
     // recorded of it, so the next message relaunches whole rather than writing to a runner that
     // waits for its config.
-    // Note that a clone run again finds the folder of a checkout already standing and clones nothing,
-    // so only a repository added since the place opened is cloned here. A runner already running
-    // keeps its repository credential through the clone, minted afresh, since each write is whole.
-    // Before a relaunch (not `shared`), the agent's own checkout is cloned first where the place
-    // holds none (`ownCheckoutRestored`).
-    checkOutMissing: (place, target, agent, shared) =>
+    // Before a relaunch, the agent's own checkout is cloned where the place holds none (`ownCheckoutRestored`).
+    checkOutMissing: (place, target, agent) =>
       Effect.gen(function* () {
         if (!hasRepository(agent)) return;
-        if (!shared) yield* ownCheckoutRestored(place, target, agent);
-        const reads = yield* agentExtraReads(target, agent);
-        if (reads.length === 0) return;
-        const beside = shared ? yield* agentFirewallSources(target, agent) : {};
-        yield* cloneAgentExtras(yield* checkoutIn(place, agent.userId, beside), reads);
-        if (!shared) return;
-        const commandId = yield* api.start(place, {
-          command: "bash",
-          args: ["-c", sharedCheckoutsScript(reads.map((read) => read.path))],
-          sudo: true,
-        });
-        const exit = yield* api.commandExit(place, commandId, SHARE_WAIT);
-        if (exit !== 0) return yield* new CheckoutRefused({ reason: NOT_SHARED });
+        yield* ownCheckoutRestored(place, target, agent);
       }),
 
     launchRunner: (place, launch) =>
@@ -1404,7 +1359,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           const readied = yield* api
             .run(place, {
               command: "sudo",
-              args: ["-n", "bash", "-c", readyScript(launch.extraCheckouts ?? [])],
+              args: ["-n", "bash", "-c", readyScript()],
             })
             .pipe(Effect.withSpan("web/readyRunnerSandbox"));
           if (readied.exitCode !== 0) return yield* new SandboxUnavailable({ detail: NOT_READIED });

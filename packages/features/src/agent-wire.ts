@@ -21,7 +21,7 @@ import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
-import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -86,8 +86,6 @@ export const AGENT_BOUNDS = {
   MAX_CHOICE_CHARS: 200,
   /** The most characters a branch a Start names may spell, as `start_agent` has always held it. */
   MAX_BRANCH_CHARS: 255,
-  /** The most repositories a Start may name beside the agent's own: one less than an automation names (`AUTOMATION_BOUNDS.MAX_REPOSITORIES`). */
-  MAX_ALSO_REPOSITORIES: 9,
   /** The most characters one message to an agent may spell, trimmed: room for a pasted failure and the words around it, well inside one model call. */
   MAX_MESSAGE_CHARS: 16_000,
   /**
@@ -303,31 +301,6 @@ export type LocalAgentRefusal = (typeof LOCAL_AGENT_REFUSAL)[keyof typeof LOCAL_
  * not take the agent, and never that the service did not answer.
  */
 export const localAgentRefusalSchema = EffectSchema.Literals(Object.values(LOCAL_AGENT_REFUSAL));
-
-/** Why a Start naming repositories beside its agent's own, or a repository added to a running agent, was refused, which the refusal names (`extra-repository-refused`). */
-export const EXTRA_REPOSITORY_REFUSAL = {
-  /** The agent works in no repository of its own, which extras stand beside. */
-  NO_REPOSITORY: "no-repository",
-  /** The agent would run on a device, and only an agent in the cloud works in several repositories. */
-  DEVICE: "device",
-  /** The repository the refusal names is reached on the starter's own GitHub token, and an agent's repositories are all reached through the GitHub App. */
-  TOKEN: "token",
-  /** The repository the refusal names is on another installation of the GitHub App than the agent's own, and one token reaches an agent's repositories only on one. */
-  OTHER_INSTALLATION: "other-installation",
-  /** The repository the refusal names is already among the agent's, which a repository added later is refused for. */
-  ALREADY: "already",
-  /** The agent already works in as many repositories beside its own as a Start may name (`AGENT_BOUNDS.MAX_ALSO_REPOSITORIES`). */
-  FULL: "full",
-  /** The agent asking has heard words from another account, so it may not widen what an agent's token reaches (`heardFromAnotherAccount`). */
-  HEARD_ANOTHER_ACCOUNT: "heard-another-account",
-} as const;
-
-export type ExtraRepositoryRefusal =
-  (typeof EXTRA_REPOSITORY_REFUSAL)[keyof typeof EXTRA_REPOSITORY_REFUSAL];
-
-export const extraRepositoryRefusalSchema = EffectSchema.Literals(
-  Object.values(EXTRA_REPOSITORY_REFUSAL),
-);
 
 /** The device a refused Start named, by the name it registered with, and its owner's name where the service knew it. */
 export const refusedDeviceSchema = EffectSchema.Struct({
@@ -749,24 +722,6 @@ export const startBranchSchema = EffectSchema.String.check(
   EffectSchema.isPattern(/^[^\s~^:?*[\\]+$/u),
 );
 
-/** A repository a Start names beside the agent's own: `owner/name`, and the branch its checkout is cloned at, none for its default branch. */
-const agentAlsoRepositorySchema = EffectSchema.Struct({
-  repository: githubRepositoryFullNameSchema,
-  branch: EffectSchema.optionalKey(startBranchSchema),
-});
-
-export type AgentAlsoRepository = typeof agentAlsoRepositorySchema.Type;
-
-/** The repositories a Start names beside the agent's own: at least one where the list is named, at most the bound, and each once, in any case. */
-const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
-  EffectSchema.isMinLength(1),
-  EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES),
-  EffectSchema.makeFilter(
-    (named: readonly AgentAlsoRepository[]) =>
-      new Set(named.map((each) => each.repository.toLowerCase())).size === named.length,
-  ),
-);
-
 /**
  * Starting an agent (POST): the request's own key, which a retry carries
  * again, and the model and effort to run on where the developer chose
@@ -793,13 +748,7 @@ const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema
  * a fork, else where the starting member's newest agent on the task runs,
  * else where the member last named (`account_preference.runs_on_*`), else
  * in the cloud; a task holds no place of its own. An automation's run reads
- * neither of its owner's own and runs in the cloud. A Start's
- * `alsoRepositories` names the repositories its agent works in beside its
- * own, each with the branch its checkout is cloned at where it names one:
- * only beside a repository of its own, in the cloud, through the same
- * installation of the GitHub App, and only for a member with the Several
- * repositories experiment on; none for an agent in one repository or none.
- * A Start's `branch` names the branch its agent's checkout is cloned at,
+ * neither of its owner's own and runs in the cloud. A Start's `branch` names the branch its agent's checkout is cloned at,
  * which must already be on GitHub, as the member MCP server's `start_agent`
  * takes it: refused as not found where the repository has no such branch,
  * and refused beside `from`, since an agent started from another is cloned
@@ -824,7 +773,6 @@ export const agentStartRequestFields = {
   blank: EffectSchema.optionalKey(EffectSchema.Boolean),
   call: EffectSchema.optionalKey(EffectSchema.Boolean),
   runsOn: EffectSchema.optionalKey(agentRunsOnRequestSchema),
-  alsoRepositories: EffectSchema.optionalKey(agentAlsoRepositoriesSchema),
   branch: EffectSchema.optionalKey(startBranchSchema),
   title: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_TITLE_CHARS)),
   permissionMode: EffectSchema.optionalKey(agentPermissionModeSchema),
@@ -1057,34 +1005,6 @@ export const agentServersRequestSchema = EffectSchema.Struct({
 });
 
 export type AgentServersRequest = typeof agentServersRequestSchema.Type;
-
-/** When a repository added to a running agent is checked out: now, in the place it runs, or at its next turn, where no place ran or the checkout there failed, as its next launch clones it. */
-export const ADDED_REPOSITORY_CHECKOUT = {
-  NOW: "now",
-  NEXT_TURN: "next_turn",
-} as const;
-
-export type AddedRepositoryCheckout =
-  (typeof ADDED_REPOSITORY_CHECKOUT)[keyof typeof ADDED_REPOSITORY_CHECKOUT];
-
-const addedRepositoryCheckoutSchema = EffectSchema.Literals(
-  Object.values(ADDED_REPOSITORY_CHECKOUT),
-);
-
-/**
- * Adding a repository to a running agent (PATCH): `owner/name`, and the
- * branch its checkout is cloned at, none for its default branch, appended
- * after the repositories it works in beside its own, checked out, and told
- * to it, as `update_agent`'s `addRepository` adds one. Only for the agent's
- * starter, an agent in the cloud in a repository of its own, its repositories all reached through
- * one installation of the GitHub App; refused by why
- * (`extra-repository-refused`) otherwise. Nothing removes one.
- */
-export const agentAddRepositoryRequestSchema = EffectSchema.Struct({
-  addRepository: agentAlsoRepositorySchema,
-});
-
-export type AgentAddRepositoryRequest = typeof agentAddRepositoryRequestSchema.Type;
 
 /**
  * The task's agent list's query (GET): `archived=include` lists the
@@ -1394,8 +1314,6 @@ const agentTxidSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9]
 export const agentAnswerSchema = EffectSchema.Struct({
   agent: agentSummarySchema,
   txid: EffectSchema.optionalKey(agentTxidSchema),
-  /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
-  addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
   /** When a change of permission mode reaches the agent: from its next turn; none for any other change. */
   permissionModeApplies: EffectSchema.optionalKey(permissionModeAppliesSchema),
 });

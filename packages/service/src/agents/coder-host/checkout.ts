@@ -32,10 +32,9 @@ import {
   agentMember,
   agentWorkspace as workspaceOfAgent,
 } from "../../github/workspace-repository.js";
-import { extraCheckoutPaths, REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
   claimWorkspaceCheckout,
-  cloneExtraRepository,
   cloneRepository,
   linkWorkspaceFolder,
   REPOSITORY_REFUSAL,
@@ -475,83 +474,6 @@ export const agentRepositoryRead = /* @__PURE__ */ Effect.fn("web/agentRepositor
 export function repositoryCredentialOf(read: AgentRepositoryRead): RepositoryCredential {
   return { token: read.token, fullName: read.fullName, access: read.access };
 }
-
-/** A repository the agent works in beside its own, as its workspace reaches it: the repository as GitHub spells it, the branch its checkout is cloned at, the folder it is cloned into, and a read token for it with whose it is. */
-export interface AgentExtraRead {
-  readonly fullName: string;
-  readonly branch: string;
-  readonly path: string;
-  readonly token: Redacted.Redacted;
-  readonly access: GitHubTokenAccess;
-}
-
-/**
- * The repositories the agent works in beside its own (`readAgentRepositories`),
- * each as its workspace reaches it now, with a read token for that one
- * repository, the branch it was named at or its default branch, and the
- * folder it is cloned into (`extraCheckoutPaths`); none for an agent in one
- * repository, which reads nothing of GitHub. Refused as not reachable,
- * naming the repository, where one is no longer reached.
- */
-export const agentExtraReads = /* @__PURE__ */ Effect.fn("web/agentExtraReads")(function* (
-  target: ConversationTarget,
-  agent: WithRepository<Agent>,
-): Effect.fn.Return<readonly AgentExtraRead[], CheckoutRefused, CheckoutServices> {
-  const [, ...extras] = yield* readAgentRepositories(target.userId, agent.id).pipe(
-    Effect.mapError(refusedBy),
-  );
-  if (extras.length === 0) return [];
-  const app = yield* GitHubApp;
-  const workspace = yield* agentWorkspace(target, agent).pipe(Effect.mapError(refusedBy));
-  if (Option.isNone(workspace))
-    return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const paths = extraCheckoutPaths(extras.map((each) => each.repository));
-  return yield* Effect.forEach(
-    extras,
-    (extra, index) =>
-      Effect.gen(function* () {
-        const reached = yield* app
-          .repositoryReadToken(workspace.value, extra.repository, agentMember(agent))
-          .pipe(Effect.mapError(refusedBy));
-        if (Option.isNone(reached)) {
-          return yield* new CheckoutRefused({
-            reason: CODER_REFUSAL.NOT_REACHABLE,
-            detail: `Not reached: ${extra.repository}.`,
-          });
-        }
-        const { repository, token, access } = reached.value;
-        const read: AgentExtraRead = {
-          fullName: repository.fullName,
-          branch: extra.baseBranch ?? repository.defaultBranch,
-          path: paths[index] ?? REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
-          token,
-          access,
-        };
-        return read;
-      }),
-    { concurrency: "unbounded" },
-  );
-});
-
-/**
- * The repositories the agent works in beside its own cloned whole into
- * their folders, on the reads the caller made of them, one after another,
- * since each clone's token stands in the one slot the firewall keeps for a
- * clone (`underCloneCredential`); nothing for an agent with none.
- */
-export const cloneAgentExtras = /* @__PURE__ */ Effect.fn("web/cloneAgentExtras")(function* (
-  sandbox: RepositorySandbox,
-  reads: readonly AgentExtraRead[],
-): Effect.fn.Return<void, CheckoutRefused> {
-  for (const read of reads) {
-    yield* cloneExtraRepository(
-      sandbox,
-      { fullName: read.fullName, branch: read.branch, folder: read.path.split("/").pop() ?? "" },
-      read.token,
-      read.access,
-    ).pipe(Effect.mapError(refusedWith));
-  }
-});
 
 /**
  * The agent's repository cloned whole into the sandbox on the read the

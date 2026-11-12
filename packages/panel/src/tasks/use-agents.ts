@@ -171,22 +171,6 @@ export function agentDeleteMutation(send: (agentId: string) => Promise<AgentDele
 /** An agent's delete as a question holds it. */
 type AgentDeleteMutation = ReturnType<typeof agentDeleteMutation>;
 
-/** A repository added to an agent: the agent, and the repository. */
-interface RepositoryAdded {
-  readonly agentId: string;
-  readonly repository: string;
-}
-
-/** A repository added to an agent as the dialog asking holds it, a mutation of its own sent through `send`; it draws nothing on the agent's row, so its answer is only the dialog's to say. */
-export function agentAddRepositoryMutation(
-  send: (added: RepositoryAdded) => Promise<AgentActAnswer>,
-) {
-  return mutationOptions({ mutationKey: [ACT_KIND.AGENTS_ADD_REPOSITORY], mutationFn: send });
-}
-
-/** A repository added to an agent, as the dialog asking holds it. */
-type AgentAddRepositoryMutation = ReturnType<typeof agentAddRepositoryMutation>;
-
 /** An agent's rename as a surface holds it. */
 type AgentRenameMutation = ReturnType<typeof agentRenameMutation>;
 
@@ -491,8 +475,6 @@ export interface AgentsControl {
   onPermissionMode: PermissionModeWriter;
   /** Answers one tool call an agent holds: allow, allow for the agent, or deny with words. */
   onAnswerApproval: ApprovalAnswerWriter;
-  /** The add of a repository beside the ones an agent works in, which the service checks out and tells it of (`add-repository.tsx`), as the dialog asking holds its own mutation over it: answering the agent, or why not, for that dialog to say. None where a surface offers no add. */
-  addRepository?: AgentAddRepositoryMutation | undefined;
   /** Opens Settings on its Integrations page, where an MCP server is connected. */
   onOpenIntegrations: () => void;
   /** Opens Settings on its Agents page at the provider's harness row, where the developer's key for it is; at the page's top where none is known. */
@@ -1541,13 +1523,6 @@ export function useAgents(input: {
     [sendServers, failed],
   );
 
-  // A repository added draws nothing on the agent's row, so its answer is only the dialog's to say.
-  const addRepository = agentAddRepositoryMutation(({ agentId, repository }) =>
-    sendAct(ACT_KIND.AGENTS_ADD_REPOSITORY, { agentId, addRepository: { repository } }).catch(
-      agentUnreached,
-    ),
-  );
-
   // A rename's field closes as the edit ends, and the host draws the new name at once, so a second
   // rename may be out before the first answers; only the newest one's refusal is said, in a toast,
   // as the name it replaced comes back, which the call's own `onSettled` keeps to.
@@ -1771,7 +1746,6 @@ export function useAgents(input: {
     onSwitchServers,
     onPermissionMode,
     onAnswerApproval,
-    addRepository,
     onOpenIntegrations: () => latest.current.onOpenIntegrations(),
     me: input.me,
     onOpenApiKeys: (provider) => latest.current.onOpenApiKeys(provider),

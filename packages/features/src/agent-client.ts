@@ -18,7 +18,6 @@ import {
   approvalAnswerRequestSchema,
 } from "./agent-approval-wire.js";
 import {
-  AGENT_ADD_REPOSITORY_RENAMES,
   AGENT_ARCHIVE_RENAMES,
   AGENT_CALL_FAILURE,
   AGENT_CHOOSE_RENAMES,
@@ -109,7 +108,6 @@ import {
   AGENT_LIST_ARCHIVED,
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
-  type AgentAddRepositoryRequest,
   type AgentArchiveRequest,
   type AgentMessageRequest,
   type AgentNewestAnswer,
@@ -119,13 +117,11 @@ import {
   type AgentRenameRequest,
   type AgentServersRequest,
   type AgentStartRequest,
-  agentAddRepositoryRequestSchema,
   agentMessageRequestSchema,
   agentQueueChangeSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestOnWire,
-  type ExtraRepositoryRefusal,
   type LocalAgentRefusal,
   type RefusedDevice,
   TRANSCRIPT_PARTS_QUERY,
@@ -264,8 +260,6 @@ type Failed = {
   readonly provider?: ModelProvider;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
-  readonly extraRepositoryRefusal?: ExtraRepositoryRefusal;
-  readonly refusedRepository?: string;
 };
 
 /** A served file's refusal: not found where the service said so; unanswered for anything else. */
@@ -281,10 +275,9 @@ const START_DECLARED: ReadonlySet<string> = new Set(
   Object.keys(agentsContract.start["~orpc"].errorMap),
 );
 
-/** The field without which the others a refusal carries say nothing: why a device or a repository refused, before which device or repository. */
+/** The field without which the others a refusal carries say nothing: why a device refused, before which device. */
 const LEADING_FIELD: Readonly<Partial<Record<HostedApiError, string>>> = {
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: "localAgentRefusal",
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: "extraRepositoryRefusal",
 };
 
 /**
@@ -320,18 +313,6 @@ function unansweredBare<Answer extends object>(answer: Answer): Answer {
   const bare = "cause" in answer ? { ...UNANSWERED, cause: answer.cause } : UNANSWERED;
   // SAFETY: a bare unanswered failure is a member of every answer a call here reads its refusals into.
   return bare as Answer;
-}
-
-/**
- * A Start's or a repository added's failure without why the repositories
- * named beside the agent's own were refused, which these calls have never
- * handed the window (the table they read before read no such field), so it draws
- * that they were refused and not why.
- */
-function extraRepositoryWhyLeftOut(answer: AgentAgentAnswer): AgentAgentAnswer {
-  if (!("failure" in answer)) return answer;
-  const { extraRepositoryRefusal: _why, refusedRepository: _repository, ...failed } = answer;
-  return failed;
 }
 
 /**
@@ -900,7 +881,7 @@ export class HostedAgentClient {
         { params: { id: taskId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
-      (started) => ("failure" in started ? extraRepositoryWhyLeftOut(started) : started.body),
+      (started) => ("failure" in started ? started : started.body),
     );
   }
 
@@ -922,7 +903,7 @@ export class HostedAgentClient {
         { params: { id: sourceId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
-      (started) => ("failure" in started ? extraRepositoryWhyLeftOut(started) : started.body),
+      (started) => ("failure" in started ? started : started.body),
     );
   }
 
@@ -1140,23 +1121,6 @@ export class HostedAgentClient {
         body: admitted,
       }),
       unansweredBare,
-    );
-  }
-
-  /** Adds a repository to one agent beside the ones it works in, answering it as it then stands; a repository refused by shape is refused here without traveling. */
-  addRepository(
-    agentId: string,
-    request: AgentAddRepositoryRequest,
-  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
-    const admitted = Result.getOrUndefined(readEither(agentAddRepositoryRequestSchema)(request));
-    if (admitted === undefined) return Effect.succeed(UNANSWERED);
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agents.change,
-        { params: { id: agentId }, body: admitted },
-        { as: AGENT_ADD_REPOSITORY_RENAMES },
-      ),
-      (answer) => extraRepositoryWhyLeftOut(unansweredBare(answer)),
     );
   }
 

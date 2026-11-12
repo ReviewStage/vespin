@@ -80,7 +80,6 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
     "Could not change the agent's permission mode on this system.",
   [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
-  [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: "Could not add a repository to the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
@@ -132,7 +131,6 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
     approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
     answer: "allow",
   },
-  AGENTS_ADD_REPOSITORY: { agentId: AGENT_ID, addRepository: { repository: "acme/app" } },
   AGENTS_QUEUE: {
     agentId: AGENT_ID,
     change: { change: QUEUE_CHANGE.DELETE, messageId: QUEUED_ID },
@@ -177,7 +175,6 @@ const NOTED_ACTS = [
   "AGENTS_RENAME",
   "AGENTS_SERVERS",
   "AGENTS_PERMISSION_MODE",
-  "AGENTS_ADD_REPOSITORY",
   "AGENTS_STOP",
   "AGENTS_REWIND",
   "AGENTS_CLEAR",

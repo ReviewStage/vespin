@@ -39,7 +39,6 @@ import {
 import {
   AGENT_MACHINE,
   AGENT_SOURCE,
-  type AgentAlsoRepository,
   type AgentAttachment,
   type AgentMachineKind,
   type AgentRunsOnRequest,
@@ -47,7 +46,6 @@ import {
   type AgentStartFrom,
   type AgentStartRequest,
   type AgentSummary,
-  EXTRA_REPOSITORY_REFUSAL,
   LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
@@ -59,7 +57,7 @@ import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
-import { Cause, Effect, Option, Result } from "effect";
+import { Cause, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   recordServerEvent,
@@ -69,18 +67,16 @@ import {
   type ServerAgentStarter,
   type ServerAgentStartFailure,
 } from "../../events/server-events.js";
-import { GitHubApp, REPOSITORY_SET_UNREACHED } from "../../github/github-app.js";
+import { GitHubApp } from "../../github/github-app.js";
 import { githubReachOrRefusal } from "../../github/github-refusal.js";
 import { readBranchHead } from "../../github/repository-file.js";
 import { workspaceRepository } from "../../github/workspace-repository.js";
 import {
   credentialMissing,
-  extraRepositoryRefused,
   HOSTED_REFUSAL,
   type HostedRefusal,
   hostedStoreOrUnavailable,
   localAgentRefused,
-  repositoryNotReachable,
 } from "../../http/http-effect.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
@@ -183,12 +179,6 @@ import {
  * stands, since no work was handed. It runs on the choice any Start does.
  * Every Start makes a coder, on a task stored in pilot mode, from before
  * Pilot was removed, as on any other.
- * A Start may name repositories its agent works in beside its own
- * (`alsoRepositories`), kept after it as the agent's extras
- * (`agent-repositories.ts`), each cloned beside its checkout under one token
- * for them all, and only in the cloud, through the one installation of the
- * App that reaches its own (`extraRepositoriesOf`); a Start that names none reads and
- * writes exactly what it did before.
  * A harness that did not take the opening leaves no agent behind, so the retry
  * under the same key starts afresh, and so does one that could not be
  * reached, a first line that could not be written, and a Start cut short
@@ -260,8 +250,6 @@ export type StartAsk = StartPlace & {
   readonly runsOn?: AgentRunsOnRequest | undefined;
   /** The mode the agent starts in, as a new-agent menu picked it; none for the starter's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
-  /** The repositories the agent works in beside its own, each with the branch its checkout is cloned at where one is named; none for an agent in one repository or none. */
-  readonly alsoRepositories?: readonly AgentAlsoRepository[] | undefined;
 };
 
 /** A repository as a task's start reached it: the full name its row keeps, and how it was reached. */
@@ -759,85 +747,6 @@ const keptPick = (userId: string, runsOn: AgentRunsOnRequest | undefined) =>
         ),
       );
 
-/**
- * The repositories a Start names beside its agent's own, as GitHub spells
- * them, each with the branch its checkout is cloned at, read before
- * anything is written; none for a Start that names none, which reads
- * nothing more. They are refused, by why, for an agent with no repository
- * of its own and for one that would run on a device; refused as invalid
- * where one is named twice, the agent's own among them; and the agent's own and every
- * extra must be reached through the one installation of the App that
- * reaches the first, so one token reaches them all (`repositorySetReach`),
- * each refused by name where it is reached only on the starter's token or
- * through another installation, and as not reachable, with why, where
- * neither reaches it. A branch named is confirmed on GitHub as the agent's
- * own is. Of those a start from another agent carries from it
- * (`inherited`), one whose branch GitHub no longer holds is cloned at its default branch, as the
- * agent's own inherited branch is (`startBranchOf`).
- */
-const extraRepositoriesOf = Effect.fnUntraced(function* (
-  named: readonly AgentAlsoRepository[] | undefined,
-  landing: Pick<StartLanding, "workspaceId" | "repository">,
-  where: StartMachine,
-  member: string | undefined,
-  inherited: boolean,
-): Effect.fn.Return<
-  readonly { readonly repository: string; readonly baseBranch: string | undefined }[] | undefined,
-  HostedRefusal,
-  DatabaseServices | HttpClient.HttpClient | GitHubApp
-> {
-  if (named === undefined || named.length === 0) return undefined;
-  const own = landing.repository;
-  if (own === null) {
-    return yield* Effect.fail(extraRepositoryRefused(EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY));
-  }
-  if (where.asked.machine === AGENT_MACHINE.DEVICE) {
-    return yield* Effect.fail(extraRepositoryRefused(EXTRA_REPOSITORY_REFUSAL.DEVICE));
-  }
-  const every = [own, ...named.map((each) => each.repository)];
-  if (new Set(every.map((each) => each.toLowerCase())).size !== every.length) {
-    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  }
-  const app = yield* GitHubApp;
-  const reached = yield* githubReachOrRefusal(
-    app.repositorySetReach(landing.workspaceId, every, member),
-  );
-  if (Result.isFailure(reached)) {
-    const refused = reached.failure;
-    return yield* Effect.fail(
-      refused.why === REPOSITORY_SET_UNREACHED.UNREACHED
-        ? repositoryNotReachable(refused.unreached)
-        : extraRepositoryRefused(
-            refused.why === REPOSITORY_SET_UNREACHED.TOKEN
-              ? EXTRA_REPOSITORY_REFUSAL.TOKEN
-              : EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION,
-            refused.repository,
-          ),
-    );
-  }
-  const [, ...extras] = reached.success;
-  return yield* Effect.forEach(
-    named,
-    (each, index) =>
-      Effect.gen(function* () {
-        const repository = extras[index]?.fullName ?? each.repository;
-        if (each.branch === undefined) return { repository, baseBranch: undefined };
-        const confirmed = confirmedBranch(landing.workspaceId, repository, member, each.branch);
-        if (!inherited) return yield* Effect.as(confirmed, { repository, baseBranch: each.branch });
-        return yield* confirmed.pipe(
-          Effect.as<string | undefined>(each.branch),
-          Effect.catch((refusal) =>
-            refusal.error === HOSTED_REFUSAL.BRANCH_NOT_FOUND.error
-              ? Effect.succeed(undefined)
-              : Effect.fail(refusal),
-          ),
-          Effect.map((baseBranch) => ({ repository, baseBranch })),
-        );
-      }),
-    { concurrency: READ_CONCURRENCY },
-  );
-});
-
 /** Starts the account's agent on the task, as above; its sessions are composed only once a new agent needs its session opened, so a retry that found its agent asks for none. */
 export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* (
   agentSessions: Effect.Effect<
@@ -865,7 +774,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const inherited: Inherited = { from: taken.from, rules };
   // An agent started from another runs on that agent's choice unless the Start names one, and is
   // landed with that agent's replay fitted to the choice's window.
-  const { read, landing, carried } = yield* landedInheriting(
+  const { read, landing } = yield* landedInheriting(
     userId,
     ask,
     inherited,
@@ -914,14 +823,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const [[reached, branch]] = yield* bothInOrder(bothInOrder(reach, branchOf), mentions);
   // Where it runs, the runtime, and the payer are decided as the agent is made, by the place it names or else its source or its starter's default, and its model, and never change.
   const where = yield* machineOfStart(userId, ask, rules.source, landing.task);
-  // A start from another agent works in the repositories its source worked in beside its own, unless it names others.
-  const extras = yield* extraRepositoriesOf(
-    ask.alsoRepositories ?? carried,
-    landing,
-    where,
-    member,
-    carried !== undefined,
-  );
   const runtime = yield* startRuntimeOf(userId, choice.model, keys, where.asked.machine);
   const placed = yield* startMachineOf(
     userId,
@@ -955,7 +856,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       ),
       githubAccess: reached?.access,
       startBranch: branch,
-      extraRepositories: extras,
       disabledServers: rules.disabledServers,
       // The servers those words mention are its first turn's, whatever the switches say.
       mentionedServers:
@@ -1177,7 +1077,6 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     blank: request.blank,
     call: request.call,
     runsOn: request.runsOn,
-    alsoRepositories: request.alsoRepositories,
     branch: request.branch,
     title: request.title,
     permissionMode: request.permissionMode,

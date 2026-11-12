@@ -247,8 +247,6 @@ export const AGENT_ACT_KIND = {
   AGENTS_PERMISSION_MODE: "agents.permissionMode",
   /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
   AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
-  /** A repository added to one agent beside the ones it works in (`agent-repository-add.ts`). */
-  AGENTS_ADD_REPOSITORY: "agents.addRepository",
   AGENTS_QUEUE: "agents.queue",
   AGENTS_STOP: "agents.stop",
   AGENTS_REWIND: "agents.rewind",
@@ -997,7 +995,6 @@ export const PORT_ACT_USE = {
   AGENTS_SERVERS: ACT_USE.WRITE,
   AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
   AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
-  AGENTS_ADD_REPOSITORY: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,

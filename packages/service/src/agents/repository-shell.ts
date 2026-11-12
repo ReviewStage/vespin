@@ -108,7 +108,7 @@ const CHECKOUT_SCRIPT = [
 ].join("\n");
 
 /**
- * The checkout of a repository an agent works in beside its own: a whole
+ * The checkout of a repository into a folder of its own: a whole
  * clone of the one branch into a directory of this call's own under the
  * workspace, moved to the folder named once whole, as the agent's own
  * checkout is cloned (`CHECKOUT_SCRIPT`), its writes the group's, and a
@@ -400,37 +400,6 @@ export const cloneRepository = /* @__PURE__ */ Effect.fn("web/cloneRepository")(
   );
   yield* underCloneCredential(sandbox, confirmed.fullName, token, access, clone);
 });
-
-/**
- * A repository an agent works in beside its own cloned whole into the
- * folder named under the workspace, at the branch given, with the token at
- * the firewall for the clone alone (`underCloneCredential`), or the refusal
- * that stopped it. Nothing records it, since no probe reads it.
- */
-export const cloneExtraRepository = /* @__PURE__ */ Effect.fn("web/cloneExtraRepository")(
-  function* (
-    sandbox: RepositorySandbox,
-    confirmed: { readonly fullName: string; readonly branch: string; readonly folder: string },
-    token: Redacted.Redacted,
-    access: GitHubTokenAccess,
-  ): Effect.fn.Return<void, RepositoryRefusal> {
-    const clone = runInSandbox(
-      sandbox,
-      {
-        command: EXTRA_CHECKOUT_SCRIPT,
-        workingDirectory: SANDBOX_PATH.WORKSPACE,
-        env: {
-          ...COMMAND_ENVIRONMENT,
-          [SANDBOX_VARIABLE.FOLDER]: confirmed.folder,
-          [SANDBOX_VARIABLE.BRANCH]: confirmed.branch,
-          [SANDBOX_VARIABLE.URL]: cloneUrl(confirmed.fullName),
-        },
-      },
-      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-    );
-    yield* underCloneCredential(sandbox, confirmed.fullName, token, access, clone);
-  },
-);
 
 /**
  * One repository of a workspace drive brought to its default branch in its

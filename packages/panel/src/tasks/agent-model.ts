@@ -17,7 +17,6 @@ import {
   ACTION,
   credentialMissingWords,
   deviceAwayWords,
-  extraRepositoryRefusalWords,
   HOST_REMOVED,
   keyUnreadableWords,
   localAgentRefusalWords,
@@ -965,11 +964,6 @@ export function startFailureNote(
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return callFailure(
       localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice ?? device),
-    );
-  }
-  if (refused.failure === AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) {
-    return callFailure(
-      extraRepositoryRefusalWords(refused.extraRepositoryRefusal, refused.refusedRepository),
     );
   }
   return (

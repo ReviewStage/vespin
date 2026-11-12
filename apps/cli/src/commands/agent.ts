@@ -21,8 +21,6 @@ import { HOSTED_API_ERROR, isWireUuid } from "@repo/features";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
-  ADDED_REPOSITORY_CHECKOUT,
-  type AddedRepositoryCheckout,
   AGENT_CURSOR_START,
   AGENT_MACHINE,
   AGENT_STATUS,
@@ -1355,7 +1353,6 @@ const AGENT_CHANGE = {
   PIN: "pin",
   ARCHIVE: "archive",
   SERVERS: "servers",
-  REPOSITORY: "repository",
 } as const;
 
 type AgentChange = (typeof AGENT_CHANGE)[keyof typeof AGENT_CHANGE];
@@ -1367,7 +1364,6 @@ const AGENT_CHANGE_FLAGS: Record<AgentChange, string> = {
   [AGENT_CHANGE.PIN]: "--pin or --unpin",
   [AGENT_CHANGE.ARCHIVE]: "--archive or --unarchive",
   [AGENT_CHANGE.SERVERS]: "--disabled-servers",
-  [AGENT_CHANGE.REPOSITORY]: "--add-repository",
 };
 
 /** What `update`'s flags say, before they are read into the one change they name. */
@@ -1381,8 +1377,6 @@ interface AgentUpdateFlags {
   readonly unarchive: boolean;
   readonly reason: Option.Option<string>;
   readonly disabledServers: Option.Option<string>;
-  readonly addRepository: Option.Option<string>;
-  readonly branch: Option.Option<string>;
 }
 
 /** Fails `update` as a usage error, in `message`. */
@@ -1402,7 +1396,6 @@ function agentChangeOf(flags: AgentUpdateFlags) {
       [AGENT_CHANGE.PIN]: flags.pin || flags.unpin,
       [AGENT_CHANGE.ARCHIVE]: flags.archive || flags.unarchive,
       [AGENT_CHANGE.SERVERS]: Option.isSome(flags.disabledServers),
-      [AGENT_CHANGE.REPOSITORY]: Option.isSome(flags.addRepository),
     };
     const changes = Object.values(AGENT_CHANGE).filter((change) => named[change]);
     const [change, ...others] = changes;
@@ -1416,9 +1409,6 @@ function agentChangeOf(flags: AgentUpdateFlags) {
     }
     if (Option.isSome(flags.reason) && !flags.archive) {
       return yield* usage("--reason goes with --archive.");
-    }
-    if (Option.isSome(flags.branch) && Option.isNone(flags.addRepository)) {
-      return yield* usage("--branch goes with --add-repository.");
     }
     if (Option.isSome(flags.title)) return { change, body: { title: flags.title.value } };
     if (Option.isSome(flags.model) && Option.isSome(flags.effort)) {
@@ -1437,29 +1427,16 @@ function agentChangeOf(flags: AgentUpdateFlags) {
         },
       };
     }
-    if (Option.isSome(flags.disabledServers)) {
-      // Note that an empty list switches every server back on.
-      const names = flags.disabledServers.value.split(",").map((name) => name.trim());
-      return { change, body: { disabledServers: names.filter((name) => name !== "") } };
-    }
-    return {
-      change,
-      body: {
-        addRepository: {
-          repository: Option.getOrThrow(flags.addRepository),
-          ...(Option.isSome(flags.branch) ? { branch: flags.branch.value } : undefined),
-        },
-      },
-    };
+    // Note that an empty list switches every server back on.
+    const names = Option.getOrThrow(flags.disabledServers)
+      .split(",")
+      .map((name) => name.trim());
+    return { change, body: { disabledServers: names.filter((name) => name !== "") } };
   });
 }
 
 /** What `update` says of the agent once its change landed. */
-function updatedLines(
-  change: AgentChange,
-  agent: AgentSummary,
-  addedCheckout: AddedRepositoryCheckout | undefined,
-): string[] {
+function updatedLines(change: AgentChange, agent: AgentSummary): string[] {
   const name = agent.title ?? agent.model;
   if (change === AGENT_CHANGE.TITLE) return [`Renamed agent ${agent.id} to ${name}.`];
   if (change === AGENT_CHANGE.CHOICE) {
@@ -1470,19 +1447,12 @@ function updatedLines(
     const how = agent.archivedAt === undefined ? "Brought back" : "Archived";
     return [`${how} agent ${agent.id}.`];
   }
-  if (change === AGENT_CHANGE.SERVERS) {
-    const off = agent.disabledServers ?? [];
-    return [
-      off.length === 0
-        ? `Every MCP server is on for agent ${agent.id}.`
-        : `Switched off for agent ${agent.id}: ${off.join(", ")}.`,
-    ];
-  }
-  const when =
-    addedCheckout === ADDED_REPOSITORY_CHECKOUT.NOW
-      ? "checked out now"
-      : "checked out at its next turn";
-  return [`Added the repository to agent ${agent.id}, ${when}.`];
+  const off = agent.disabledServers ?? [];
+  return [
+    off.length === 0
+      ? `Every MCP server is on for agent ${agent.id}.`
+      : `Switched off for agent ${agent.id}: ${off.join(", ")}.`,
+  ];
 }
 
 const updateCommand = Command.make(
@@ -1525,18 +1495,6 @@ const updateCommand = Command.make(
         'The MCP servers switched off for it, comma-separated, replacing the list; "" switches every one on',
       ),
     ),
-    addRepository: Flag.String("add-repository").pipe(
-      Flag.optional,
-      Flag.withDescription(
-        "A repository, owner/name, it works in beside its own from now on; only for a cloud agent you started",
-      ),
-    ),
-    branch: Flag.String("branch").pipe(
-      Flag.optional,
-      Flag.withDescription(
-        "The branch the added repository is checked out at, with --add-repository (default: its default branch)",
-      ),
-    ),
   },
   ({ agent: id, ...flags }) =>
     Effect.gen(function* () {
@@ -1546,13 +1504,13 @@ const updateCommand = Command.make(
       const { agent } = changed;
       yield* answer({
         json: changed,
-        lines: updatedLines(change, agent, changed.addedCheckout),
+        lines: updatedLines(change, agent),
         ids: [agent.id],
       });
     }),
 ).pipe(
   Command.withDescription(
-    "Change an agent, one change a call: rename it, move it to another model, pin or unpin it, archive it or bring it back, switch its MCP servers off, or add a repository",
+    "Change an agent, one change a call: rename it, move it to another model, pin or unpin it, archive it or bring it back, or switch its MCP servers off",
   ),
   Command.withExamples([
     { command: 'vespin agent update <id> --title "Fix the login"', description: "Rename it" },

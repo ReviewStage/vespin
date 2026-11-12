@@ -15,7 +15,6 @@
  * Code's appended to its prompt, Codex's as its `developer_instructions`.
  */
 
-import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
@@ -34,19 +33,13 @@ import { RUNNER_EVENTS_PATH } from "../native-events/runner-events-app.js";
 import { RUNNER_LINES_PATH } from "../native-events/runner-lines-app.js";
 import { RUNNER_TOKEN_PATH } from "../native-events/runner-token-app.js";
 import { RUNNER_TRANSCRIPTS_PATH } from "../native-events/runner-transcripts-app.js";
-import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { standingOfAgent } from "../tool-catalog/gates.js";
 import { WORKSPACE_MCP_PATH, workspaceIntegrationMcpUrl } from "../workspace-mcp/app.js";
 import { workspaceStepOf } from "../written-mentions.js";
 import { agentAuthorship } from "./checkout.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { codexSessions } from "./codex-sessions.js";
-import {
-  agentCoderInstructions,
-  CODER_HARNESS,
-  type CoderHarness,
-  type ExtraCheckout,
-} from "./instructions.js";
+import { agentCoderInstructions, CODER_HARNESS, type CoderHarness } from "./instructions.js";
 import type { RunnerServices, RunnerSessionsOptions } from "./runner-sessions.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
 
@@ -66,26 +59,6 @@ const agentTaskNumber = (userId: string, agent: Agent) =>
   );
 
 /**
- * The repositories the agent works in beside its own, each where it is
- * checked out (`extraCheckoutPaths`), as its instructions name them; none for
- * an agent in one repository. A read that fails is logged and names none,
- * as an agent in one repository is told, rather than failing its launch.
- */
-const agentExtraCheckouts = (userId: string, agent: Agent) =>
-  readAgentRepositories(userId, agent.id).pipe(
-    Effect.map(([, ...extras]): readonly ExtraCheckout[] => {
-      const paths = extraCheckoutPaths(extras.map((extra) => extra.repository));
-      return extras.map((extra, index) => ({
-        repository: extra.repository,
-        path: paths[index] ?? extra.repository,
-        branch: extra.baseBranch,
-      }));
-    }),
-    Effect.tapError(logStoreFailure),
-    Effect.orElseSucceed((): readonly ExtraCheckout[] => []),
-  );
-
-/**
  * Our coder instructions for an agent on the harness given, composed on
  * what its row names (`instructions.ts`'s `agentCoderInstructions`): whose its commits are and the
  * co-author trailer where its starter's choice credits one, the workspace its links are written under, the number
@@ -100,7 +73,7 @@ const nativeCoderInstructions = (
   Effect.gen(function* () {
     const target = { userId, conversationId: agent.conversationId };
     // Note that we read these together, because none waits on another.
-    const [authorship, workspace, taskNumber, standing, extraRepositories] = yield* Effect.all(
+    const [authorship, workspace, taskNumber, standing] = yield* Effect.all(
       [
         hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
         workspaceStepOf(userId, agent.organizationId).pipe(
@@ -109,9 +82,6 @@ const nativeCoderInstructions = (
         ),
         agentTaskNumber(userId, agent),
         standingOfAgent(Option.some(agent)),
-        hasRepository(agent)
-          ? agentExtraCheckouts(userId, agent)
-          : Effect.succeed<readonly ExtraCheckout[]>([]),
       ],
       { concurrency: "unbounded" },
     );
@@ -122,7 +92,6 @@ const nativeCoderInstructions = (
       standing,
       harness,
       place,
-      ...(extraRepositories.length === 0 ? undefined : { extraRepositories }),
     });
   });
 

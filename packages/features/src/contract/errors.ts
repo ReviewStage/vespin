@@ -16,11 +16,7 @@
 import type { ErrorMapItem } from "@orpc/contract";
 import { Schema as EffectSchema } from "effect";
 import { approvalSettledDataSchema } from "../agent-approval-wire.js";
-import {
-  extraRepositoryRefusalSchema,
-  localAgentRefusalSchema,
-  refusedDeviceSchema,
-} from "../agent-wire.js";
+import { localAgentRefusalSchema, refusedDeviceSchema } from "../agent-wire.js";
 import {
   hostPairingHeldDataSchema,
   hostRemovedDataSchema,
@@ -70,18 +66,12 @@ const localAgentRefusedDataSchema = EffectSchema.Struct({
   refusedDevice: EffectSchema.optionalKey(refusedDeviceSchema),
 });
 
-/** What a refused Start naming repositories beside its agent's own carries beside its slug: why, and the repository where one is why. */
-const extraRepositoryRefusedDataSchema = EffectSchema.Struct({
-  extraRepositoryRefusal: EffectSchema.optionalKey(extraRepositoryRefusalSchema),
-  refusedRepository: EffectSchema.optionalKey(EffectSchema.String),
-});
-
 /**
  * The fields each refusal that carries more than its slug carries beside
  * it, as the wire spells them: a refused bearer that was a device secret no
  * standing host holds (which the host reads as removed), an upstream's
  * status, a repository's reach, a plan's reset, a missing credential's
- * provider, a refused skill, a refused local agent or extra repository, the
+ * provider, a refused skill, a refused local agent, the
  * daemon version the service takes, when a held pairing's guesses are
  * taken again, and how an ask an answer named stands. The client reads a refusal's fields with these as they stand
  * (`hosted-link.ts`); the map below declares each flipped.
@@ -95,7 +85,6 @@ export const HOSTED_REFUSAL_DATA = {
   [HOSTED_API_ERROR.SKILL_NAME_TAKEN]: installedSkillRefusedDataSchema,
   [HOSTED_API_ERROR.SKILL_FILES_REFUSED]: installedSkillRefusedDataSchema,
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: localAgentRefusedDataSchema,
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: extraRepositoryRefusedDataSchema,
   [HOSTED_API_ERROR.HOST_UPGRADE_NEEDED]: hostUpgradeNeededDataSchema,
   [HOSTED_API_ERROR.HOST_PAIRING_HELD]: hostPairingHeldDataSchema,
   [HOSTED_API_ERROR.APPROVAL_SETTLED]: approvalSettledDataSchema,
@@ -171,9 +160,6 @@ export const HOSTED_ERRORS = {
   [HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN]: {},
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: declaredData(
     HOSTED_REFUSAL_DATA[HOSTED_API_ERROR.LOCAL_AGENT_REFUSED],
-  ),
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: declaredData(
-    HOSTED_REFUSAL_DATA[HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED],
   ),
   [HOSTED_API_ERROR.HOST_UPGRADE_NEEDED]: declaredData(
     HOSTED_REFUSAL_DATA[HOSTED_API_ERROR.HOST_UPGRADE_NEEDED],
