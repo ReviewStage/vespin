@@ -301,8 +301,10 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // `src/crash-reports.ts` starts the SDK under once the bundle runs, which
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
-// what a native crash report holds, with no request breadcrumbs; a build
-// without a DSN starts nothing.
+// what a native crash report holds, with no request breadcrumbs. A build
+// without a DSN, a local or simulator one, still starts the native half, so
+// it runs the launch TestFlight's does, but sends nothing: `enabled` is off,
+// and were the empty DSN refused, the start's fallback would hold no DSN.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
