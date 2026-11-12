@@ -250,7 +250,14 @@ import { BEARER_PREFIX, launchUrl, runnerTokenDigest } from "../workspace-mcp/be
 import { type AgentImage, AgentImageMissing } from "./agent-image.js";
 import { agentFailureSaid, agentLogIds, keptFailureWords, runningLogId } from "./agent-log.js";
 import { CODER, CODER_REFUSAL } from "./bounds.js";
-import { agentFirewallSources, CheckoutRefused, type CheckoutServices } from "./checkout.js";
+import {
+  type AgentRepositoryRead,
+  agentFirewallSources,
+  agentRepositoryRead,
+  CheckoutRefused,
+  type CheckoutServices,
+  repositoryCredentialOf,
+} from "./checkout.js";
 import { contextWindowOf } from "./context.js";
 import { COMMAND_ROUTE, type CommandRoute, routeBesideReplay } from "./harness-commands.js";
 import { nativeSkillFiles } from "./native-skills.js";
@@ -1028,8 +1035,9 @@ export const runnerSessions = <
      * (`HarnessLaunch`'s `credentials`, `runnerBearer`), a fresh bearer
      * recorded, numbering the launch, ahead of its config, whose URLs name
      * that number (`launchUrl`); its first message's words; the
-     * repository's credential minted afresh where the machine keeps swaps
-     * at its firewall; the workspace's variables; and the fingerprint its
+     * repository's credential where the machine keeps swaps at its firewall,
+     * the one its start minted (`repositoryToken`) or minted afresh; the
+     * workspace's variables; and the fingerprint its
      * record keeps. The session it resumes (`from`) is read as the launch
      * decides it, so a resume waits on whether its place was made anew only
      * where that decides the session (`resumedSessionWhen`).
@@ -1044,6 +1052,8 @@ export const runnerSessions = <
       from: Effect.Effect<ResumedSession, FE, FR>,
       /** The first message as the Start composed and queued it before it answered, which the launch takes over rather than composes again, its words marked handed once the runner has it. */
       queuedFirst?: OpenedLine,
+      /** The repository's write token as its start minted it, which the launch's firewall write carries rather than minting another. */
+      repositoryToken?: Effect.Effect<AgentRepositoryRead | undefined, CheckoutRefused>,
     ) =>
       Effect.gen(function* () {
         const bearer = randomBytes(BEARER_BYTES).toString("base64url");
@@ -1131,10 +1141,14 @@ export const runnerSessions = <
           [
             made,
             // The launch's swaps stand before the runner starts, so its first request carries the
-            // real value, the repository's credential minted afresh beside them.
+            // real value, the repository's credential beside them: its start's, or minted afresh.
             delivered.swaps.size === 0
               ? Effect.succeed(undefined)
-              : agentFirewallSources(target, agent),
+              : repositoryToken === undefined
+                ? agentFirewallSources(target, agent)
+                : Effect.map(repositoryToken, (read) =>
+                    read === undefined ? {} : { github: repositoryCredentialOf(read) },
+                  ),
             workspaceEnvironmentOf(agent, kind),
             extraCheckoutsOf(agent),
             options.integrations(agent),
@@ -1675,13 +1689,23 @@ export const runnerSessions = <
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
         // Note that the place opens on the machine the agent's row names, as `open` is routed.
         const kind = agent.machine ?? AGENT_MACHINE.VERCEL;
-        const services = yield* Effect.context<DatabaseServices | HostedEnvironment>();
+        const services = yield* Effect.context<
+          DatabaseServices | HostedEnvironment | CheckoutServices
+        >();
+        // The repository's write token is minted once, as the machine first asks for it, and shared.
+        const repositoryToken = yield* Effect.cached(
+          Effect.provideContext(
+            hasRepository(agent) ? agentRepositoryRead(target, agent) : Effect.succeed(undefined),
+            services,
+          ),
+        );
         yield* machine.open(
           {
             session: sessionId,
             target,
             agent,
             harness: harness.name,
+            repositoryToken,
             setup: Effect.provideContext(sandboxSetupOf(agent, kind), services),
             beside: Effect.all(
               [
@@ -1696,6 +1720,7 @@ export const runnerSessions = <
                     credential,
                     resumedSessionOf(agent, layout, true),
                     queuedFirst,
+                    repositoryToken,
                   ),
                 ),
               ],

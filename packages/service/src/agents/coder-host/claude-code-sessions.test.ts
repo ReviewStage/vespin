@@ -604,7 +604,7 @@ afterEach(() => {
 
 /** What a repository agent's sessions are composed with beside the fake Vercel: what a test does as each request reaches GitHub. */
 interface RepositoryAgentSeams {
-  readonly onGitHub?: (sent: SentToGitHub) => void;
+  readonly onGitHub?: (sent: SentToGitHub) => void | Promise<void>;
   /** The edge runner the machine's checkout runs on, where not this test's own. */
   readonly run?: SandboxRunner;
 }
@@ -634,7 +634,7 @@ const repositoryAgent = (
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
     const agent = Option.getOrThrow(started).agent;
-    const github = githubReaching([installation], undefined, {}, (sent) => {
+    const github = githubReaching([installation], undefined, {}, async (sent) => {
       if (new URL(sent.url).hostname === "vercel.com") {
         return api.respond(sent.url, {
           method: sent.method,
@@ -643,7 +643,7 @@ const repositoryAgent = (
           ...(sent.signal === undefined ? {} : { signal: sent.signal }),
         });
       }
-      seams.onGitHub?.(sent);
+      await seams.onGitHub?.(sent);
       return undefined;
     });
     // The SDK's calls of Vercel reach the same fake as the client's, through its own `fetch`.
@@ -4348,33 +4348,46 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
       }),
   );
+  it.effect(
+    "a launch mints its write token once, and clones on it while its commit identity is still read",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const clone = gate();
+        const sent: SentToGitHub[] = [];
+        // The commit identity's lookup (the App's bot, for a member with no GitHub sign-in) answers only once the clone runs.
+        const isIdentity = (each: SentToGitHub) =>
+          decodeURIComponent(new URL(each.url).pathname).endsWith("[bot]");
+        const identity = sighting(isIdentity);
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
+          onGitHub: async (each) => {
+            sent.push(each);
+            identity.observe(each);
+            if (isIdentity(each)) await clone.arrived;
+          },
+        });
+        api.hooks.onRun = async (env) => {
+          if (isClone({ env })) await clone.pass();
+        };
 
-  it.effect("a launch mints its write token while its repository is cloned", () =>
-    Effect.gen(function* () {
-      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-      const api = runnerSandboxApi();
-      const clone = gate();
-      const write = sighting((sent) => mintsRepositoryToken(sent, TOKEN_ACCESS.WRITE));
-      const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
-        onGitHub: (sent) => write.observe(sent),
-      });
-      api.hooks.onRun = async (env) => {
-        if (isClone({ env })) await clone.pass();
-      };
+        const line = yield* writtenLine(agent, "Fix the relay.");
+        const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
+        yield* Effect.promise(() => Promise.all([clone.arrived, identity.seen]));
+        const startedDuringClone = api.commands.length;
+        clone.open();
+        const opened = yield* Fiber.join(opening);
 
-      const line = yield* writtenLine(agent, "Fix the relay.");
-      const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
-      yield* Effect.promise(() => Promise.all([clone.arrived, write.seen]));
-      const startedDuringClone = api.commands.length;
-      clone.open();
-      const opened = yield* Fiber.join(opening);
-
-      assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-      assert.equal(startedDuringClone, 0);
-      assert.equal(api.commands.length, 1);
-      const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
-      assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
-    }),
+        assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(startedDuringClone, 0);
+        assert.equal(api.commands.length, 1);
+        assert.equal(
+          sent.filter((each) => mintsRepositoryToken(each, TOKEN_ACCESS.WRITE)).length,
+          1,
+        );
+        const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
+        assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
+      }),
   );
   it.effect(
     "a message to a running runner is written ahead of its credential's renewal, and a renewal Vercel refused leaves the message standing",

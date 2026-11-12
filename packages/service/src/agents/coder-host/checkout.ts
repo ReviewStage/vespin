@@ -50,24 +50,25 @@ import { CODER, CODER_REFUSAL, type CoderRefusal } from "./bounds.js";
 /**
  * checkout.ts -- a coding agent's checkout of its repository, whose commits are, and the credential its sandbox pushes through.
  *
- * The agent's repository is checked out in two steps. As its sandbox opens,
- * it is checked out on the same terms as the brain's checkout
- * (`repository-shell.ts`): the installation of its task's workspace is
- * confirmed to reach it and a read token minted for that one repository,
- * set at the sandbox's firewall for the clone alone and withdrawn after it;
- * a sandbox created for a launch has the launch's write token set there
- * first instead, to stand on past the checkout, which reaches GitHub
- * through it with no write of its own (`writeAgentCredential`).
+ * The agent's repository is checked out in two steps. As a cloud start
+ * begins, the installation of its task's workspace is confirmed to reach it
+ * and its write token minted, once (`agentRepositoryRead`), which the
+ * sandbox's checkout waits on and nothing else of GitHub's. As its sandbox
+ * opens, it is checked out on the same terms as the brain's checkout
+ * (`repository-shell.ts`), the token set at the sandbox's firewall first,
+ * to stand on past the checkout, which reaches GitHub through it with no
+ * write of its own (`writeAgentCredential`); a checkout made again before a
+ * relaunch sets it there for the clone alone.
  * The clone is whole, since a branch and a pull request are cut from the
  * history, or is no clone at all where its sandbox was created on a fork of
  * its workspace's drive, whose checkout of the repository is claimed and
  * fetched up to the branch instead (`claimAgentCheckout`,
  * `../workspace-drive.ts`), or from the snapshot of the agent it was started from, whose checkout
- * stands as that agent left it. The launch then finishes it (`finishCheckoutWith`): a
- * write token is minted, carrying contents and pull requests write, since
- * the agent pushes a branch and opens a pull request from it, and set at the
- * firewall; the commit identity is set; and the token is handed back for
- * the authored file to set at the firewall for the session's own commands,
+ * stands as that agent left it. The launch then finishes it (`finishCheckoutWith`): the
+ * write token, carrying contents and pull requests write, since the agent
+ * pushes a branch and opens a pull request from it, is set at the firewall;
+ * the commit identity, read on it beside the checkout (`agentCheckoutPlan`),
+ * is set; and the token is handed on for the launch's own firewall write,
  * minted afresh at every write after
  * (`agentFirewallSources`, `../sandbox-firewall.ts`), which is where `gh` and `git push` reach
  * GitHub; it never enters the sandbox's filesystem or environment. An installation token is good for an hour, so
@@ -438,7 +439,7 @@ function refusedWith(failure: RepositoryRefusal): CheckoutRefused {
   return new CheckoutRefused({ reason: failure.reason, detail: failure.detail });
 }
 
-/** The agent's repository as its workspace reaches it: the workspace, the repository as GitHub spells it, its default branch, and a read token with whose it is. */
+/** The agent's repository as its workspace reaches it: the workspace, the repository as GitHub spells it, its default branch, and its write token with whose it is. */
 export interface AgentRepositoryRead {
   readonly workspaceId: string;
   readonly fullName: string;
@@ -448,35 +449,32 @@ export interface AgentRepositoryRead {
 }
 
 /**
- * The agent's repository as its workspace reaches it now: the workspace, the
- * repository as GitHub spells it with its default branch, and a read token
- * for that one repository with whose it is; refused as not reachable where
- * neither the workspace's installation nor the starter's own token reaches
- * it, and as GitHub unavailable where GitHub did not say.
+ * The agent's repository as its workspace reaches it now, read on the one
+ * write token a cloud start mints for it (`agentRepositoryToken`): the
+ * workspace, the repository as GitHub spells it with its default branch,
+ * and the token with whose it is, which the checkout clones or fetches
+ * through, the firewall carries, and the commit identity is read on
+ * (`agentCheckoutPlan`), so a start mints it once and its checkout waits on
+ * nothing else of GitHub's. Refused as not reachable where neither the
+ * workspace's installation nor the starter's own token reaches it, and as
+ * GitHub unavailable where GitHub did not say.
  */
 export const agentRepositoryRead = /* @__PURE__ */ Effect.fn("web/agentRepositoryRead")(function* (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
 ): Effect.fn.Return<AgentRepositoryRead, CheckoutRefused, CheckoutServices> {
-  const app = yield* GitHubApp;
   // Note that a store that could not be read refuses as GitHub unavailable.
   const workspace = yield* agentWorkspace(target, agent).pipe(Effect.mapError(refusedBy));
   if (Option.isNone(workspace))
     return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const reached = yield* app
-    .repositoryReadToken(workspace.value, agent.repository, agentMember(agent))
-    .pipe(Effect.mapError(refusedBy));
-  if (Option.isNone(reached))
-    return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const { repository, token, access } = reached.value;
-  return {
-    workspaceId: workspace.value,
-    fullName: repository.fullName,
-    defaultBranch: repository.defaultBranch,
-    token,
-    access,
-  };
+  const minted = yield* agentRepositoryToken(target, agent);
+  return { workspaceId: workspace.value, ...minted };
 });
+
+/** The agent's write token as the firewall carries it, from the read its start made. */
+export function repositoryCredentialOf(read: AgentRepositoryRead): RepositoryCredential {
+  return { token: read.token, fullName: read.fullName, access: read.access };
+}
 
 /** A repository the agent works in beside its own, as its workspace reaches it: the repository as GitHub spells it, the branch its checkout is cloned at, the folder it is cloned into, and a read token for it with whose it is. */
 export interface AgentExtraRead {
@@ -558,7 +556,7 @@ export const cloneAgentExtras = /* @__PURE__ */ Effect.fn("web/cloneAgentExtras"
 /**
  * The agent's repository cloned whole into the sandbox on the read the
  * caller made of it, at the branch it was started on where its row names one
- * and at the default branch otherwise, the read token standing at the
+ * and at the default branch otherwise, the read's token standing at the
  * firewall for the clone alone where none stands there for it already
  * (`writeAgentCredential`). The checkout is recorded under the name the
  * agent's row holds. Nothing else is set: no commit identity and no
@@ -653,20 +651,16 @@ export interface AgentCheckoutPlan {
 }
 
 /**
- * What a checkout's finish reads of GitHub, apart from the sandbox: a write
- * token minted and the commit identity read, so a launch that opens a
- * sandbox anyway reads them while its checkout is made (`runner-sessions.ts`).
+ * What a checkout's finish sets, on the write token its start minted: the
+ * token itself, and the commit identity read on it, which a launch reads
+ * while its checkout is made, since the checkout waits on the token alone.
  */
 export const agentCheckoutPlan = /* @__PURE__ */ Effect.fn("web/agentCheckoutPlan")(function* (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
+  credential: RepositoryCredential,
 ): Effect.fn.Return<AgentCheckoutPlan, CheckoutRefused | StoreFailure, CheckoutServices> {
-  const minted = yield* agentRepositoryToken(target, agent);
-  const identity = yield* identityOn(target, agent, minted);
-  return {
-    credential: { token: minted.token, fullName: minted.fullName, access: minted.access },
-    identity,
-  };
+  return { credential, identity: yield* identityOn(target, agent, credential) };
 });
 
 /**
