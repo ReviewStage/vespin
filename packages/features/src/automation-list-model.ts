@@ -351,11 +351,15 @@ export function automationTriggerText(
       const picked = trigger.filters?.level ?? [];
       const levels = Object.values(SENTRY_LEVEL).filter((level) => picked.includes(level));
 
+      const projects = trigger.filters?.project ?? [];
+      const environments = trigger.filters?.environment ?? [];
+
+      // Note that each filter is said as words after a comma, never set apart by a dot.
       const kept = [
-        trigger.filters?.project ?? [],
-        trigger.filters?.environment ?? [],
-        levels,
-      ].flatMap((values) => (values.length > 0 ? [` · ${values.join(", ")}`] : []));
+        projects.length === 0 ? undefined : `for ${orList(projects)}`,
+        environments.length === 0 ? undefined : `in ${orList(environments)}`,
+        levels.length === 0 ? undefined : `at ${orList(levels)} level`,
+      ].flatMap((part) => (part === undefined ? [] : [`, ${part}`]));
 
       return `When ${provider.events[trigger.event].words} in ${provider.name}${kept.join("")}`;
     }
@@ -462,6 +466,11 @@ export function automationRunPlace(
   };
 }
 
+/** Words closed as a sentence, so another can follow them: a period where they end on none. */
+function sentenceOf(words: string): string {
+  return /[.…!?]$/u.test(words) ? words : `${words}.`;
+}
+
 /** A run's line: why it did not start, where it did not, else where its agent stands and what its start noted, or that it waits to start. */
 export function automationRunLine(
   run: AutomationRunSummary,
@@ -471,7 +480,9 @@ export function automationRunLine(
   if (run.status === AUTOMATION_RUN_STATUS.STARTED) {
     const standing = run.agent === null ? "Its agent is gone" : agentLine(run.agent, keyHolder);
 
-    return run.reason === null ? standing : `${standing} · ${RUN_REASON_WORDS[run.reason]}`;
+    return run.reason === null
+      ? standing
+      : `${sentenceOf(standing)} ${RUN_REASON_WORDS[run.reason]}`;
   }
 
   if (run.reason !== null) return RUN_REASON_WORDS[run.reason];

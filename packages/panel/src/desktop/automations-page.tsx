@@ -125,6 +125,7 @@ import {
   automationDeleteQuestion,
   automationNarrowLine,
   automationNextText,
+  automationOwnerFor,
   automationOwnerName,
   READING_AUTOMATIONS,
 } from "./automation-words.js";
@@ -251,7 +252,7 @@ function MakerCell({
   const name = actorName(maker);
 
   return (
-    <Tooltip label={`${name} · ${automationOwnerName(owner, workspace?.name, mine)}`}>
+    <Tooltip label={`${name}, ${automationOwnerFor(owner, workspace?.name, mine)}`}>
       <AutomationOwnerFrame
         owner={owner}
         mark={<ActorMark actor={maker} size={ACTOR_SIZE.INLINE} />}
