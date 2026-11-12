@@ -334,6 +334,17 @@ export interface NewAgentRepository {
 }
 
 /**
+ * What a conversation's `native_session` holds in place of a harness's own
+ * session id. `REPLAY` marks a transcript written with no session behind it,
+ * as an imported one, whose first launch opens a fresh session handed its
+ * newest steps word for word (`restartReplayOf`); the session that launch
+ * records takes its place, and a `/clear` empties it.
+ */
+export const NATIVE_SESSION = {
+  REPLAY: "transcript-replay",
+} as const;
+
+/**
  * How an agent is run, as its rows hold it: what answers its conversation,
  * the retired runtime for a conversation from before the column, the harness's own session
  * or thread id, the digest of its runner's bearer, and who pays for it.
