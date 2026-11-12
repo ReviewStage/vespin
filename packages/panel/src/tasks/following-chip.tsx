@@ -237,15 +237,30 @@ export function FollowingChip({
   task: Pick<TaskSummary, "id" | "workspaceId" | "assignee" | "followers">;
   editable: boolean;
 }): React.JSX.Element | null {
+  // Note that a task carries no followers while its workspace has Following off, so nothing is read for one.
+  if (task.followers === undefined) return null;
+
+  return <FollowingShown task={task} followers={task.followers} editable={editable} />;
+}
+
+/** The chip for a task that carries its followers, while the workspace has Following on. */
+function FollowingShown({
+  task,
+  followers,
+  editable,
+}: {
+  task: Pick<TaskSummary, "id" | "workspaceId" | "assignee">;
+  followers: readonly TaskFollowerWire[];
+  editable: boolean;
+}): React.JSX.Element | null {
   const on = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.FOLLOWING);
-  const shown = on && task.followers !== undefined;
   const { readerId } = useMemberDirectory();
-  const view = followersView(task.followers ?? [], readerId);
+  const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
-  const book = useDevicePresence(shown && view.reader !== undefined);
+  const book = useDevicePresence(on && view.reader !== undefined);
   const writes = useFollowerWrites(task.id);
 
-  if (!shown) return null;
+  if (!on) return null;
 
   const rows: readonly MenuRow[] = view.followers.map((follower, index) => {
     const actor = actors[index] ?? personActor(undefined, undefined, undefined);
