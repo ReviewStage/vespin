@@ -32,8 +32,7 @@
  * read again where it could not be, a cloud agent's
  * listening ports listed and shared by a public link, opened in Safari or
  * no longer shared, its repository's run actions run and stopped in its
- * sandbox, its transcript read whole and copied concise or whole, or
- * shared, and the agent renamed, pinned, archived, and deleted; New agent
+ * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
  * on a task and New task, a sub-task or a related task among it, or one
  * filed for later with no agent, with the models and the repositories they
  * pick among followed, and read again where they could not be;

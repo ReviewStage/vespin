@@ -19,7 +19,8 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz, shareWords } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 
 /** What the copy says where the transcript couldn't be read or copied, in the panel's words. */
@@ -45,12 +46,14 @@ export function useTranscriptCopy(
   const [note, setNote] = useState<string | undefined>(undefined);
   const latest = useRef(0);
 
-  // Note that leaving the page outdates every press, so a read that settles after it neither copies, shares, nor says anything.
-  useEffect(
-    () => () => {
-      latest.current += 1;
-    },
-    [],
+  // Note that leaving the page, by a push over it or by closing it, outdates every press, so a read that settles after it neither copies, shares, nor says anything.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        latest.current += 1;
+      },
+      [],
+    ),
   );
 
   /**

@@ -61,11 +61,9 @@ export function shareLink(url: string): void {
 /**
  * Raises the system's share sheet on words, such as a transcript copied as
  * Markdown, which it sends as text to Messages, Mail, Notes or a file. Note
- * that a sheet put away answers nothing, and a sheet that could not stand is
- * said on the console, as a link's is.
+ * that a sheet put away answers nothing, and a sheet that could not stand
+ * rejects, so the caller can say so where its press shows a failure.
  */
-export function shareWords(message: string): void {
-  Share.share({ message }).catch((cause: unknown) => {
-    console.error("The share sheet did not open.", cause);
-  });
+export function shareWords(message: string): Promise<void> {
+  return Share.share({ message }).then(() => undefined);
 }
