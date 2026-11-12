@@ -14,8 +14,11 @@ import { mountDescriptionEditor } from "./description-editor.js";
  * A description's pictures in its editor: a file pasted, chosen, or dropped on the drawn text is laid in as a
  * picture below the caret's line, or in place of an empty one, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
- * one still being kept out; and a picture of another description pasted in is kept
- * again on this one. Synthetic description and pictures.
+ * one still being kept out; a picture of another description pasted in is kept
+ * again on this one; and a picture alone on its line is a block the caret
+ * never stands beside: laid in selected, left by the arrows for the line past
+ * it, given a line below by Enter, selected by a press on it, and taken back
+ * to by an Escape from its own controls. Synthetic description and pictures.
  */
 
 const TASK_ID = "5d8e2a61-7c3b-4f0e-9b1a-2c6d4e8f0a13";
@@ -31,6 +34,7 @@ afterEach(() => {
   for (const handle of handles.splice(0)) handle.destroy();
   document.body.innerHTML = "";
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 /** The editor on `TEXT`, its caret at the end of the Approach section unless `placement` says, with the panel's pictures stood in for. */
@@ -38,15 +42,28 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
   const taken: PictureTaken[] = [];
   // The pictures drawn now, each by the upload it waits on, "" once kept.
   const drawn = new Map<number, string>();
+  // Whether each picture drawn now is selected.
+  const selected = new Map<number, boolean>();
+  const onFinish = vi.fn();
 
   const pictures: DescriptionEditorPictures = {
-    draw: (_element, picture) => {
+    draw: (element, picture) => {
       const key = drawn.size + taken.length + Math.random();
       drawn.set(key, picture.upload);
+      selected.set(key, false);
+      // One of the panel's own controls on the picture, as its tools are.
+      element.appendChild(document.createElement("button")).textContent = "Alt text";
 
       return {
-        redraw: (next) => drawn.set(key, next.upload),
-        undraw: () => drawn.delete(key),
+        redraw: (next, isSelected) => {
+          drawn.set(key, next.upload);
+          selected.set(key, isSelected);
+        },
+        enlarge: () => undefined,
+        undraw: () => {
+          drawn.delete(key);
+          selected.delete(key);
+        },
       };
     },
     take: (each) => taken.push(...each),
@@ -62,14 +79,46 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
     label: "Description",
     className: "markdown description-unit",
     onDraft: () => undefined,
-    onFinish: () => undefined,
+    onFinish,
     onLeaveUp: () => undefined,
     pictures,
   });
 
   handles.push(handle);
 
-  return { handle, taken, host, drawn };
+  return { handle, taken, host, drawn, selected, onFinish };
+}
+
+/** A key pressed in the editor, answering whether something took it. */
+function press(host: HTMLElement, key: string, on?: Element): boolean {
+  const target = on ?? host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+  const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+  target.dispatchEvent(event);
+
+  return event.defaultPrevented;
+}
+
+/** Words pasted at the caret, as typing them lays them in. */
+function pasteWords(host: HTMLElement, words: string): void {
+  const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", {
+    value: {
+      files: [],
+      types: ["text/plain"],
+      getData: (type: string) => (type === "text/plain" ? words : ""),
+    },
+  });
+  editable.dispatchEvent(paste);
+}
+
+/** The editor with a picture laid in at the end of the Approach section and kept. */
+function withPicture() {
+  const held = opened();
+  held.handle.insertPictures([PNG()]);
+  held.handle.settlePicture(held.taken[0]?.upload ?? "", KEPT);
+
+  return held;
 }
 
 /** ⌘Z, or ⇧⌘Z with `redo`, pressed in the editor, as Ctrl outside a Mac. */
@@ -300,4 +349,57 @@ test.each([
   handle.settlePicture(taken[0]?.upload ?? "", KEPT);
 
   assert.equal(handle.markdown(), landed);
+});
+
+test("a picture laid in stands selected, so no caret stands on a line beside it", () => {
+  const { selected } = withPicture();
+
+  assert.deepEqual([...selected.values()], [true]);
+});
+
+test("an arrow off a selected picture goes on to the line past it, never to the spot beside it", () => {
+  const { handle, host } = withPicture();
+
+  press(host, "ArrowRight");
+  pasteWords(host, "Next: ");
+
+  assert.equal(
+    handle.markdown(),
+    TEXT.replace(
+      "follows the mock.\n\n## Decisions",
+      `follows the mock.\n\n![members](${KEPT})\n\n## Next: Decisions`,
+    ),
+  );
+});
+
+test("Enter on a selected picture opens an empty line below it and keeps the picture", () => {
+  const { handle, host } = withPicture();
+
+  press(host, "Enter");
+  pasteWords(host, "Below.");
+
+  assert.equal(
+    handle.markdown(),
+    TEXT.replace("follows the mock.\n", `follows the mock.\n\n![members](${KEPT})\n\nBelow.\n`),
+  );
+});
+
+test("an Escape from a picture's own control goes back to the picture selected in the text, never past the editor", () => {
+  const { host, selected, onFinish } = withPicture();
+  press(host, "ArrowRight");
+  const control = host.querySelector(".editor-picture button") ?? assert.fail("its control");
+
+  const taken = press(host, "Escape", control);
+
+  assert.equal(taken, true);
+  assert.deepEqual([...selected.values()], [true]);
+  assert.equal(onFinish.mock.calls.length, 0);
+});
+
+test("the editor opened by a press that landed on a picture opens with that picture selected", () => {
+  const markdown = `## Approach\n\n![The mock](${KEPT})\n\n![members](${KEPT})\n\nSingle use.\n`;
+
+  const { selected } = opened(markdown, { x: 300, y: 200, picture: { section: 0, occurrence: 1 } });
+
+  assert.deepEqual([...selected.values()], [false, true]);
 });

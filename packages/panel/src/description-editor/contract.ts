@@ -97,6 +97,18 @@ export interface PlacedWords {
 }
 
 /**
+ * The picture a click landed on in a section as drawn: the section, and how
+ * many of the description's pictures the section draws before it. Note that
+ * the editor finds it by these rather than by the click's point, because
+ * the panel draws the editor's pictures only after it opens, so the point
+ * stands over other words as it is placed.
+ */
+export interface PlacedPicture {
+  readonly section: number;
+  readonly occurrence: number;
+}
+
+/**
  * Where dropped pictures land: before the text's first block, or below the
  * caret's line at a list depth, `0` after the outermost list holding the line,
  * a deeper one at the end of that many list items in, and the line's own
@@ -104,12 +116,14 @@ export interface PlacedWords {
  */
 export type PictureLanding = { readonly first: true } | { readonly depth: number };
 
-/** Where the caret goes as the editor opens: where a click or a drop of pictures landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
+/** Where the caret goes as the editor opens: where a click or a drop of pictures landed, on the picture or the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
 export type DescriptionEditorPlacement =
   | {
       readonly x: number;
       readonly y: number;
       readonly words?: PlacedWords | undefined;
+      /** The picture the press landed on, which the editor opens selected; none off a picture. */
+      readonly picture?: PlacedPicture | undefined;
       /** Where the words the press selected start, which the editor selects from to `words`; none where it selected nothing. */
       readonly from?: PlacedWords | undefined;
       /** Image files dropped on the text, laid in as pictures at the caret as the editor opens there or moves it there; none for a click. */
@@ -262,9 +276,10 @@ export interface PictureNodeDoors {
   readonly remove: () => void;
 }
 
-/** A picture as the panel draws it into its node's element: drawn again as the node changes or is selected, and taken down. */
+/** A picture as the panel draws it into its node's element: drawn again as the node changes or is selected, opened over the window as a double-click asks, and taken down. */
 interface PictureDrawing {
   readonly redraw: (picture: PictureNode, selected: boolean) => void;
+  readonly enlarge: () => void;
   readonly undraw: () => void;
 }
 

@@ -117,6 +117,7 @@ export function PictureBlock({
   alt,
   caption,
   onOpen,
+  pointerOpens = true,
 }: {
   /** The block's own element, as the place drawing it may need to find it among others. */
   ref?: React.Ref<HTMLSpanElement> | undefined;
@@ -127,6 +128,8 @@ export function PictureBlock({
   caption: string | undefined;
   /** Opens the picture over the window; without one, the picture is drawn with no press to it. */
   onOpen?: (() => void) | undefined;
+  /** Whether a pointer's press on a picture opens it, rather than passing on to the place around it, as an editable description's text takes it; a key's press always does. */
+  pointerOpens?: boolean | undefined;
 }): React.JSX.Element {
   const said =
     caption === undefined || caption === "" ? null : (
@@ -183,6 +186,7 @@ export function PictureBlock({
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
         <PictureTile
           name={alt}
+          pointerOpens={pointerOpens}
           onOpen={(event) => {
             // Note that the press stops here, because a click into a section opens its editor.
             event.stopPropagation();

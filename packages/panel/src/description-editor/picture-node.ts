@@ -1,3 +1,4 @@
+import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import {
@@ -28,7 +29,7 @@ import type {
 import { inTableCell } from "./writing-keys.js";
 
 /**
- * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
+ * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph and kept as a block there, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
  *
  * A picture stands in the description's Markdown as `![alt](address "caption")`
  * (`@repo/features/description-attachment-link`), and so does a PDF, its
@@ -42,13 +43,30 @@ import { inTableCell } from "./writing-keys.js";
  * back alone, so undo and redo take the picture out and bring it back whole. A picture of another description
  * pasted in is kept again on this one, so its new readers can see it. The
  * node's element is the panel's to draw into, as a mention's is: its
- * picture, its upload, and its tools while selected.
+ * picture, its upload, and its tools while selected. A picture alone on its
+ * line is a block, as a document editor's image is: the caret never stands
+ * beside it, an arrow from the line before or after selects it, Enter on it
+ * opens a line below, Backspace and Delete take it out with its line, words
+ * typed over it start a line below, a double-click enlarges it, and an
+ * Escape from its own controls comes back to it. One laid in stands
+ * selected, with no empty line kept or added around it.
  */
 
 const PICTURE_NODE = "image";
 
 /** What a picture laid in from a pasted screenshot is called until it is described. */
 const PASTED_ALT = "Screenshot";
+
+/** The keys besides the arrows a selected picture takes. */
+const PICTURE_KEYS: ReadonlySet<string> = new Set(["Enter", "Backspace", "Delete"]);
+
+/** Which way each arrow moves past a picture, and whether it moves by lines, which only the view can tell the caret's edge for. */
+const ARROWS: ReadonlyMap<string, { readonly dir: 1 | -1; readonly vertical: boolean }> = new Map([
+  ["ArrowDown", { dir: 1, vertical: true }],
+  ["ArrowRight", { dir: 1, vertical: false }],
+  ["ArrowUp", { dir: -1, vertical: true }],
+  ["ArrowLeft", { dir: -1, vertical: false }],
+]);
 
 /** Escapes the characters that would end a picture's alt text, address, or title early. */
 function escaped(words: string, ends: RegExp): string {
@@ -88,7 +106,8 @@ function picturesFilled(state: EditorState): Transaction | null {
   state.doc.descendants((node, pos) => {
     const src = node.type.name === PICTURE_NODE ? settled.get(node.attrs.upload) : undefined;
 
-    if (src !== undefined) tr.setNodeMarkup(pos, undefined, { ...node.attrs, src, upload: "" });
+    // Note that the attributes change in place, so a selected picture stays selected as it is kept.
+    if (src !== undefined) tr.setNodeAttribute(pos, "src", src).setNodeAttribute(pos, "upload", "");
   });
 
   return tr.docChanged ? tr.setMeta("addToHistory", false) : null;
@@ -113,21 +132,52 @@ function settledPictures(): Plugin<ReadonlyMap<string, string>> {
   });
 }
 
-/** The position of the picture a caret stands just before, at the start of the picture's own line; none elsewhere. */
-function pictureAfterCaret(selection: Selection): number | undefined {
+/** Whether a line holds a picture alone, which the editor treats as a block of its own. */
+function pictureLine(line: PmNode): boolean {
+  return line.childCount === 1 && line.firstChild?.type.name === PICTURE_NODE;
+}
+
+/** The picture a caret stands beside at an end of its line, by its position, and whether the caret stands before it, at the line's start, or after it, at its end; none elsewhere. */
+function pictureBesideCaret(selection: Selection): { at: number; before: boolean } | undefined {
   const { $head, empty } = selection;
 
-  if (!(selection instanceof TextSelection) || !empty || $head.parentOffset !== 0) return undefined;
+  if (!(selection instanceof TextSelection) || !empty) return undefined;
+  const { parent, parentOffset } = $head;
+  const { firstChild, lastChild } = parent;
 
-  return $head.parent.firstChild?.type.name === PICTURE_NODE ? $head.pos : undefined;
+  if (parentOffset === 0 && firstChild?.type.name === PICTURE_NODE) {
+    return { at: $head.pos, before: true };
+  }
+
+  if (parentOffset === parent.content.size && lastChild?.type.name === PICTURE_NODE) {
+    return { at: $head.pos - lastChild.nodeSize, before: false };
+  }
+
+  return undefined;
+}
+
+/** A selection landing on a line that holds a picture alone made the picture's, as the arrows land on a picture; any other as it was. */
+function landingOn(doc: PmNode, landed: Selection): Selection {
+  const { $from } = landed;
+
+  return pictureLine($from.parent) ? NodeSelection.create(doc, $from.start()) : landed;
+}
+
+/** The selection on the line past the one `$line` stands on, after it where `dir` is 1 and before it where -1, its picture where it holds one alone; none at the text's end. */
+function linePast(doc: PmNode, $line: ResolvedPos, dir: 1 | -1): Selection | undefined {
+  const edge = dir > 0 ? $line.after() : $line.before();
+  const past = Selection.findFrom(doc.resolve(edge), dir, true);
+
+  return past === null ? undefined : landingOn(doc, past);
 }
 
 /**
- * The caret kept off the spot just before a picture, whose caret box the
- * browser and ProseMirror draw the picture's height: a move onto it, by the
- * arrows or a press, selects the picture instead, as a document editor
- * selects an image block, and a move back off a selected picture onto it
- * goes on to the end of the line before. Note that a change to the text,
+ * The caret kept off the two spots beside a picture at an end of its line,
+ * whose caret boxes the browser and ProseMirror draw the picture's height on
+ * a line of their own: a move onto either, by the arrows or a press, selects
+ * the picture instead, as a document editor selects an image block, and a
+ * move off a selected picture onto either goes on to the line past it, or
+ * stays on the picture at the text's end. Note that a change to the text,
  * and a caret already standing there, are left as they are, so the editor
  * opening on a text that starts with a picture never selects it, where a
  * key typed would replace it.
@@ -135,29 +185,133 @@ function pictureAfterCaret(selection: Selection): number | undefined {
 function pictureCaret(): Plugin {
   return new Plugin({
     appendTransaction: (trs, old, state) => {
-      const at = pictureAfterCaret(state.selection);
+      const beside = pictureBesideCaret(state.selection);
 
       if (
-        at === undefined ||
+        beside === undefined ||
         trs.some((tr) => tr.docChanged) ||
         old.selection.eq(state.selection)
       ) {
         return null;
       }
 
-      if (!(old.selection instanceof NodeSelection && old.selection.from === at)) {
-        return state.tr.setSelection(NodeSelection.create(state.doc, at));
+      const picture = NodeSelection.create(state.doc, beside.at);
+
+      if (!(old.selection instanceof NodeSelection && old.selection.from === beside.at)) {
+        return state.tr.setSelection(picture);
       }
 
-      const before = Selection.findFrom(
-        state.doc.resolve(state.selection.$head.before()),
-        -1,
-        true,
-      );
+      const past = linePast(state.doc, state.selection.$head, beside.before ? -1 : 1);
 
-      return before === null ? null : state.tr.setSelection(before);
+      return state.tr.setSelection(past ?? picture);
     },
   });
+}
+
+/** The picture standing alone on its line that is selected; none where the selection is anything else. */
+function pictureSelected(selection: Selection): NodeSelection | undefined {
+  return selection instanceof NodeSelection &&
+    selection.node.type.name === PICTURE_NODE &&
+    pictureLine(selection.$from.parent)
+    ? selection
+    : undefined;
+}
+
+/** The line past the caret's onto a picture alone on its own, where the caret stands at its line's edge that way; none anywhere else. */
+function arrivedOnPicture(view: EditorView, key: string): Selection | undefined {
+  const arrow = ARROWS.get(key);
+  const { selection } = view.state;
+
+  if (arrow === undefined || !(selection instanceof TextSelection) || !selection.empty) {
+    return undefined;
+  }
+
+  const { $head } = selection;
+
+  const atEdge = arrow.vertical
+    ? view.endOfTextblock(arrow.dir > 0 ? "down" : "up")
+    : $head.parentOffset === (arrow.dir > 0 ? $head.parent.content.size : 0);
+
+  const past = atEdge ? linePast(view.state.doc, $head, arrow.dir) : undefined;
+
+  return past instanceof NodeSelection ? past : undefined;
+}
+
+/** The line a picture stood alone on taken out with it, the caret on the line past it, before it for Backspace and after it for Delete, or the other where none is. */
+function pictureTakenOut(view: EditorView, picked: NodeSelection, dir: 1 | -1): void {
+  const $line = picked.$from;
+  const tr = view.state.tr.delete($line.before(), $line.after());
+  const $gone = tr.doc.resolve(tr.mapping.map($line.before()));
+  const near = Selection.findFrom($gone, dir, true) ?? Selection.findFrom($gone, -dir, true);
+
+  if (near !== null) tr.setSelection(landingOn(tr.doc, near));
+  view.dispatch(tr.scrollIntoView());
+}
+
+/** An empty line, or one holding `words`, laid in below a selected picture, the caret at its end. */
+function lineBelow(view: EditorView, picked: NodeSelection, words: string): void {
+  const { state } = view;
+  const paragraph = state.schema.nodes.paragraph;
+
+  if (paragraph === undefined) return;
+  const after = picked.$from.after();
+  const line = paragraph.create(null, words === "" ? null : state.schema.text(words));
+  const tr = state.tr.insert(after, line);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1 + words.length)));
+}
+
+/**
+ * A key on the text around its pictures, as a document editor takes one on
+ * an image block: an arrow onto a picture alone on its line selects it, and
+ * one on a selected picture moves to the line past it, or stays on it at the
+ * text's end; Enter on it opens an empty line below it, never in its place;
+ * Backspace and Delete take it out with its line. Answers whether the key
+ * was the picture's.
+ */
+export function pictureKeyDown(view: EditorView, event: KeyboardEvent): boolean {
+  if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return false;
+  const { state } = view;
+  const picked = pictureSelected(state.selection);
+  const arrow = ARROWS.get(event.key);
+
+  if (picked === undefined) {
+    const arrived = arrivedOnPicture(view, event.key);
+
+    if (arrived !== undefined) view.dispatch(state.tr.setSelection(arrived).scrollIntoView());
+
+    return arrived !== undefined;
+  }
+
+  if (arrow !== undefined) {
+    const past = linePast(state.doc, picked.$from, arrow.dir);
+
+    // Note that a move up off the text's first picture is not the picture's, so ↑ there leaves for the title above, as from the first line.
+    if (past === undefined) return arrow.dir > 0;
+    view.dispatch(state.tr.setSelection(past).scrollIntoView());
+  } else if (event.key === "Enter") {
+    lineBelow(view, picked, "");
+  } else if (event.key === "Backspace" || event.key === "Delete") {
+    pictureTakenOut(view, picked, event.key === "Backspace" ? -1 : 1);
+  }
+
+  return arrow !== undefined || PICTURE_KEYS.has(event.key);
+}
+
+/** Whether a node is a picture the drawn text draws as one, a description's own: not one from outside the app, which it draws as a link. */
+export function drawnAsPicture(node: PmNode): boolean {
+  return (
+    node.type.name === PICTURE_NODE &&
+    descriptionAttachmentOf(String(node.attrs.src ?? "")) !== undefined
+  );
+}
+
+/** Words typed over a selected picture alone on its line, laid in on a new line below it rather than in its place; answers whether they were. */
+export function pictureTyped(view: EditorView, words: string): boolean {
+  const picked = pictureSelected(view.state.selection);
+
+  if (picked !== undefined) lineBelow(view, picked, words);
+
+  return picked !== undefined;
 }
 
 /** The node's picture as the panel draws it. */
@@ -226,6 +380,23 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
           },
         });
 
+        // Note that an Escape from the picture's own controls that none of them took goes back to the picture, selected in the focused text, since the editor never hears their keys and the window would leave the task on it.
+        const escaped = (event: KeyboardEvent) => {
+          const pos = getPos();
+
+          if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+
+          if (pos === undefined) return;
+          event.preventDefault();
+          const { view } = editor;
+          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+          view.focus();
+        };
+
+        const enlarged = () => drawing.enlarge();
+        dom.addEventListener("keydown", escaped);
+        dom.addEventListener("dblclick", enlarged);
+
         return {
           dom,
           update: (next) => {
@@ -248,7 +419,11 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
             event.target instanceof Element &&
             event.target.closest("button, input, textarea") !== null,
           ignoreMutation: () => true,
-          destroy: () => drawing.undraw(),
+          destroy: () => {
+            dom.removeEventListener("keydown", escaped);
+            dom.removeEventListener("dblclick", enlarged);
+            drawing.undraw();
+          },
         };
       };
     },
@@ -341,7 +516,15 @@ export function laidInPictures(
   });
 
   const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph, landing);
-  view.dispatch(state.tr.replaceWith(from, to, paragraphs).scrollIntoView());
+  const tr = state.tr.replaceWith(from, to, paragraphs);
+  // The last picture laid in stands selected, so no caret stands on a line beside it.
+  const last = paragraphs.slice(0, -1).reduce((at, each) => at + each.nodeSize, from + 1);
+
+  if (tr.doc.nodeAt(last)?.type.name === PICTURE_NODE) {
+    tr.setSelection(NodeSelection.create(tr.doc, last));
+  }
+
+  view.dispatch(tr.scrollIntoView());
   pictures.take(taken);
 }
 
