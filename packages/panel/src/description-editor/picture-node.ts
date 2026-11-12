@@ -20,11 +20,13 @@ import {
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { descriptionFiles, isPdfUpload } from "../picture-files.js";
-import type {
-  DescriptionEditorPictures,
-  PictureLanding,
-  PictureNode,
-  PictureTaken,
+import {
+  type DescriptionEditorPictures,
+  PICTURE_LEAVE,
+  type PictureLanding,
+  type PictureLeave,
+  type PictureNode,
+  type PictureTaken,
 } from "./contract.js";
 import { inTableCell } from "./writing-keys.js";
 
@@ -369,14 +371,22 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
             const pos = getPos();
 
             if (pos === undefined) return;
-            editor.view.dispatch(
-              editor.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, ...change }),
-            );
+            const { tr } = editor.state;
+
+            // Note that the attributes change in place, so the picture stays selected, its tools with it, while its caption is typed.
+            for (const [name, value] of Object.entries(change))
+              tr.setNodeAttribute(pos, name, value);
+            editor.view.dispatch(tr);
           },
           remove: () => {
             const pos = getPos();
 
             if (pos !== undefined) removedAt(editor.view, pos);
+          },
+          leave: (to) => {
+            const pos = getPos();
+
+            if (pos !== undefined) leftAt(editor.view, pos, to);
           },
         });
 
@@ -437,6 +447,41 @@ function removedAt(view: EditorView, pos: number): void {
   const from = alone ? $pos.before() : pos;
   const to = alone ? $pos.after() : pos + ($pos.nodeAfter?.nodeSize ?? 1);
   view.dispatch(view.state.tr.delete(from, to));
+}
+
+/**
+ * The caret handed back to the text from the caption of the picture at
+ * `pos`: the picture selected; the start of the first line after its own,
+ * an empty line laid in after it where no line follows; or a new empty line
+ * laid in just after it, as a document editor leaves an image's caption by
+ * its arrows and by Return.
+ */
+function leftAt(view: EditorView, pos: number, to: PictureLeave): void {
+  const { state } = view;
+
+  if (to === PICTURE_LEAVE.UP) {
+    view.dispatch(state.tr.setSelection(NodeSelection.create(state.doc, pos)).scrollIntoView());
+    view.focus();
+
+    return;
+  }
+
+  const after = state.doc.resolve(pos).after();
+  const { tr } = state;
+
+  const next =
+    to === PICTURE_LEAVE.NEW_LINE ? null : Selection.findFrom(state.doc.resolve(after), 1, true);
+
+  const paragraph = state.schema.nodes.paragraph;
+
+  if (next !== null) tr.setSelection(next);
+  else if (paragraph !== undefined) {
+    tr.insert(after, paragraph.create());
+    tr.setSelection(TextSelection.create(tr.doc, after + 1));
+  }
+
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
 }
 
 /** The nodes a list's items are, whose depth a picture dropped below one of their lines lands at. */

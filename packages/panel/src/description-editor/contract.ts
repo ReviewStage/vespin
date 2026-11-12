@@ -270,10 +270,21 @@ export interface PictureNode {
   readonly upload: string;
 }
 
-/** What the panel may do to the picture it draws: describe it anew, or take it out of the text. */
+/** Where the caret goes as it leaves a picture's caption: the picture above it, selected, the start of the line after it, or a new empty line laid in just after it. */
+export const PICTURE_LEAVE = {
+  UP: "up",
+  DOWN: "down",
+  NEW_LINE: "new-line",
+} as const;
+
+export type PictureLeave = (typeof PICTURE_LEAVE)[keyof typeof PICTURE_LEAVE];
+
+/** What the panel may do to the picture it draws: describe it anew, take it out of the text, or hand the caret back to the text from its caption. */
 export interface PictureNodeDoors {
   readonly describe: (change: { readonly alt?: string; readonly title?: string }) => void;
   readonly remove: () => void;
+  /** The editor focused with the picture selected (`UP`), the caret at the start of the line after it, an empty one laid in where none follows (`DOWN`), or on a new empty line laid in just after it (`NEW_LINE`). */
+  readonly leave: (to: PictureLeave) => void;
 }
 
 /** A picture as the panel draws it into its node's element: drawn again as the node changes or is selected, opened over the window as a double-click asks, and taken down. */

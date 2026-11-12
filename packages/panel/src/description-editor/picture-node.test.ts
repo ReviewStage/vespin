@@ -2,11 +2,13 @@
 
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import type {
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-  DescriptionEditorPlacement,
-  PictureTaken,
+import {
+  type DescriptionEditorHandle,
+  type DescriptionEditorPictures,
+  type DescriptionEditorPlacement,
+  PICTURE_LEAVE,
+  type PictureNodeDoors,
+  type PictureTaken,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
@@ -15,10 +17,12 @@ import { mountDescriptionEditor } from "./description-editor.js";
  * picture below the caret's line, or in place of an empty one, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
  * one still being kept out; a picture of another description pasted in is kept
- * again on this one; and a picture alone on its line is a block the caret
- * never stands beside: laid in selected, left by the arrows for the line past
- * it, given a line below by Enter, selected by a press on it, and taken back
- * to by an Escape from its own controls. Synthetic description and pictures.
+ * again on this one; the caret leaving a picture's caption for what follows
+ * stands on a line after it; and a picture alone on its line is a block the
+ * caret never stands beside: laid in selected, left by the arrows for the
+ * line past it, given a line below by Enter, selected by a press on it, and
+ * taken back to by an Escape from its own controls. Synthetic description
+ * and pictures.
  */
 
 const TASK_ID = "5d8e2a61-7c3b-4f0e-9b1a-2c6d4e8f0a13";
@@ -45,9 +49,12 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
   // Whether each picture drawn now is selected.
   const selected = new Map<number, boolean>();
   const onFinish = vi.fn();
+  // Each picture's doors, in the order the pictures were drawn.
+  const doors: PictureNodeDoors[] = [];
 
   const pictures: DescriptionEditorPictures = {
-    draw: (element, picture) => {
+    draw: (element, picture, its) => {
+      doors.push(its);
       const key = drawn.size + taken.length + Math.random();
       drawn.set(key, picture.upload);
       selected.set(key, false);
@@ -86,7 +93,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
 
   handles.push(handle);
 
-  return { handle, taken, host, drawn, selected, onFinish };
+  return { handle, taken, host, drawn, doors, selected, onFinish };
 }
 
 /** A key pressed in the editor, answering whether something took it. */
@@ -402,4 +409,25 @@ test("the editor opened by a press that landed on a picture opens with that pict
   const { selected } = opened(markdown, { x: 300, y: 200, picture: { section: 0, occurrence: 1 } });
 
   assert.deepEqual([...selected.values()], [false, true]);
+});
+
+test("a selected picture described anew, as its caption is typed, stays selected", () => {
+  const { selected, doors } = withPicture();
+
+  doors[0]?.describe({ title: "The invite" });
+
+  assert.deepEqual([...selected.values()], [true]);
+});
+
+test("leaving the caption of the text's last picture for what follows puts the caret on a line after it", () => {
+  const markdown = `## Approach\n\nThe invite email follows the mock.\n\n![members](${KEPT} "The invite")\n`;
+  const words = "The invite email follows the mock.";
+  const caret = { section: 0, text: words, occurrence: 0, offset: 2, code: false, top: 0 };
+  const { handle, taken, doors } = opened(markdown, { x: 0, y: 0, words: caret });
+
+  doors[0]?.leave(PICTURE_LEAVE.DOWN);
+  handle.insertPictures([PNG()]);
+  handle.settlePicture(taken[0]?.upload ?? "", OTHERS);
+
+  assert.equal(handle.markdown(), `${markdown}\n![members](${OTHERS})\n`);
 });

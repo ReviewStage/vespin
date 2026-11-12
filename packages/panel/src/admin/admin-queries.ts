@@ -76,6 +76,39 @@ export function adminReliabilityQuery(reads: AdminReads, query: AdminWindowedQue
   });
 }
 
+/**
+ * The Agents page's read: the Cost and Reliability answers asked together,
+ * since the page joins them by harness and draws nothing until both are in;
+ * its key names both reads, apart from either page's own, and it keeps
+ * whether the database answered Reliability's probe.
+ */
+export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
+  return queryOptions({
+    queryKey: [
+      QUERY_ROOT.ADMIN,
+      ADMIN_READ.COST,
+      ADMIN_READ.RELIABILITY,
+      query.scope,
+      query.window,
+    ],
+    queryFn: async ({ signal }) => {
+      const [cost, reliability] = await Promise.all([
+        reads.cost(query, signal),
+        reads.reliability(query, signal),
+      ]);
+
+      // Note that we keep the database probe's verdict, because Reliability answers an empty source when it fails, which would otherwise read as no runs.
+      return {
+        cost,
+        harnesses: reliability.agentHarnesses,
+        databaseReachable: reliability.systemHealth.database.reachable,
+      };
+    },
+    placeholderData: keepPreviousData,
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
 /** The roster's read, which the star writes into. */
 export function adminUsersQuery(reads: AdminReads, query: AdminUsersQuery) {
   return queryOptions({

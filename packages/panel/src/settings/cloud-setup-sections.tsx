@@ -18,8 +18,6 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -85,12 +83,13 @@ import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import type { SettingsSearchInput } from "../settings-search.js";
 import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
 import { useOpenPlace } from "../tasks/use-open-link.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION, settingsSectionDrawn, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
@@ -139,14 +138,12 @@ const PLACEHOLDER = {
 /** What a section of a repository's scripts says, by which script it holds. */
 const REPOSITORY_SECTION = {
   [REPOSITORY_SCRIPT_KIND.SETUP]: {
-    title: "Setup scripts",
-    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
+    section: SECTION.ENVIRONMENT_SETUP,
     caption: "Run in each new cloud sandbox after its repository is checked out.",
     empty: "No setup scripts yet.",
   },
   [REPOSITORY_SCRIPT_KIND.ARCHIVE]: {
-    title: "Archive scripts",
-    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_ARCHIVE,
+    section: SECTION.ENVIRONMENT_ARCHIVE,
     caption:
       "Run when an agent is archived, before its sandbox is deleted. Stopped after 90 seconds.",
     empty: "No archive scripts yet.",
@@ -154,8 +151,7 @@ const REPOSITORY_SECTION = {
 } as const satisfies Record<
   RepositoryScriptKind,
   {
-    readonly title: string;
-    readonly anchor: string;
+    readonly section: typeof SECTION.ENVIRONMENT_SETUP | typeof SECTION.ENVIRONMENT_ARCHIVE;
     readonly caption: string;
     readonly empty: string;
   }
@@ -660,8 +656,7 @@ function RepositoryScriptsSection({
 
   return (
     <SettingsSection
-      title={words.title}
-      anchor={words.anchor}
+      {...settingsSectionHead(words.section)}
       caption={words.caption}
       action={
         manages ? (
@@ -1288,8 +1283,7 @@ function RunActionsSection({
 
   return (
     <SettingsSection
-      title="Run actions"
-      anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS}
+      {...settingsSectionHead(SECTION.ENVIRONMENT_RUN_ACTIONS)}
       caption="Listed in each agent's Run menu, the default on its button. Each runs when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on."
       action={
         manages ? (
@@ -1440,9 +1434,19 @@ function RunActionsOfRepository({
 }
 
 /** The scripts over one workspace: its install script, then each repository's setup script, then each one's archive script, then each one's run actions where the workspace has Run actions on. */
-export function CloudSetupSections({ workspace }: { workspace: Workspace }): React.JSX.Element {
+export function CloudSetupSections({
+  workspace,
+  view,
+}: {
+  workspace: Workspace;
+  /** What the pages offer, which says whether Run actions is drawn as the search says it is. */
+  view: SettingsSearchInput | undefined;
+}): React.JSX.Element {
   const manages = managesWorkspace(workspace);
-  const runActionsOn = useWorkspaceExperiment(workspace.id, EXPERIMENT.RUN_ACTIONS);
+
+  const runActionsOn =
+    view !== undefined && settingsSectionDrawn(SECTION.ENVIRONMENT_RUN_ACTIONS, view);
+
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
   const answer = setup.data;
@@ -1460,8 +1464,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
   return (
     <>
       <SettingsSection
-        title="Install software"
-        anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL}
+        {...settingsSectionHead(SECTION.ENVIRONMENT_INSTALL)}
         caption="Installs tools in every new cloud sandbox. Runs with sudo."
       >
         {read ??

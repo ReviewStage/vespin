@@ -1,20 +1,11 @@
 /**
- * memory-settings-words.ts -- what Settings › Memory says, and how it orders and marks the workspace's memories, on the desktop, the web, and the iOS app alike.
+ * memory-settings-words.ts -- what Settings › Memory says, and how it orders the workspace's memories, on the desktop, the web, and the iOS app alike.
  */
 
 import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "./agent-view.js";
 import { MEMORY_BOUNDS, MEMORY_RECALL_WINDOW_DAYS, type MemorySummary } from "./memory-wire.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { countWords, readFailedWords, readingWords, TERM } from "./words.js";
-
-/** One day, in milliseconds. */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** How long a memory reads as New after it was kept. */
-const NEW_FOR_MS = 7 * DAY_MS;
-
-/** How far back a memory's recalls are counted, as the service counts them. */
-const RECALL_WINDOW_MS = MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
 
 /** What the page says while it cannot read or write, and with nothing to show. */
 export const MEMORY_PAGE_WORDS = {
@@ -67,15 +58,11 @@ export function memorySaveRefusal(answer: MemorySaveAnswerView): string | undefi
   return "failure" in answer ? MEMORY_SAVE_REFUSAL[answer.failure] : undefined;
 }
 
-/** What a memory says of how agents use it: New or Unused under its words, and its recall columns where it has none. */
-export const MEMORY_USE_WORDS = {
-  NEW: "New",
-  UNUSED: "Unused",
+/** What a memory's recall columns say where agents were handed it in none of the window: no count, and never last. */
+export const MEMORY_UNRECALLED_WORDS = {
   NONE: "—",
   NEVER: "Never",
 } as const;
-
-export type MemoryUse = typeof MEMORY_USE_WORDS.NEW | typeof MEMORY_USE_WORDS.UNUSED;
 
 /** What a caption says Recalls counts. */
 export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
@@ -83,15 +70,6 @@ export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WIND
 /** How often agents were handed a memory in the recall window, as a line says it: "3 recalls". */
 export function recallsText(recalls: number): string {
   return `${recalls.toLocaleString("en-US")} ${recalls === 1 ? "recall" : "recalls"}`;
-}
-
-/** New on a memory kept in the last week, Unused on one older than the recall window that no agent was handed in it, and none otherwise. */
-export function memoryUse(memory: MemorySummary, now: number): MemoryUse | undefined {
-  const age = now - memory.createdAt;
-
-  if (age < NEW_FOR_MS) return MEMORY_USE_WORDS.NEW;
-
-  return age > RECALL_WINDOW_MS && memory.recalls30d === 0 ? MEMORY_USE_WORDS.UNUSED : undefined;
 }
 
 /** The memories as the page orders them: most recalled in the recall window first, then most recently kept or corrected, as the service lists them. */

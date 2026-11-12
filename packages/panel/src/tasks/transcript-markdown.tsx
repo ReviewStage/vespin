@@ -1,6 +1,6 @@
+import { draftKindOf } from "@repo/features/draft-text";
 import type { CodeLines } from "@repo/features/tasks-view";
 import { CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
-import { draftKindOf } from "@repo/ui/draft-text";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
@@ -211,7 +211,7 @@ function DraftLink({ url, children }: { url: string; children: ReactNode }): Rea
 /**
  * Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or
  * ```draft, in a `DraftCard` as they will look when sent
- * (`@repo/ui/draft-text`), its Copy putting them on the clipboard as rich
+ * (`@repo/features/draft-text`), its Copy putting them on the clipboard as rich
  * text; none for any other fence, which its place draws as code. A
  * transcript's block and an Inbox to-do's step draw a draft alike.
  */

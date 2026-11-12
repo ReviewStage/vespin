@@ -134,7 +134,7 @@ export function SettingsPanel({
       ) : null}
 
       {view !== SETTINGS_VIEW.ENVIRONMENT ? null : signedIn ? (
-        <CloudEnvironmentPage control={workspace} />
+        <CloudEnvironmentPage control={workspace} view={panelView} />
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {SIGNED_OUT_WORDS}

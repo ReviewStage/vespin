@@ -5,6 +5,7 @@ import {
   COST_SOURCE,
 } from "@repo/features/admin-cost-wire";
 import { ADMIN_METRICS_WINDOW } from "@repo/features/admin-wire";
+import { AGENT_RUNTIME } from "@repo/features/agent-wire";
 import { test } from "vitest";
 import type { OfferedModel } from "../providers/model-catalog.js";
 import {
@@ -77,6 +78,7 @@ function tokens(
 ): AdminCostTokenRow {
   return {
     source: COST_SOURCE.APP,
+    runtime: null,
     fastRefused: false,
     inputTokens: 0,
     outputTokens: 0,
@@ -131,6 +133,41 @@ test("a refused fast share is priced at its base model, and an unlisted model's 
   assert.deepEqual(cost.byModel, [
     { model: MODEL.FAST, spendUsd: 3, pricedTokens: 2 * MILLION, unpricedTokens: 0 },
     { model: MODEL.UNLISTED, spendUsd: null, pricedTokens: 0, unpricedTokens: 500 },
+  ]);
+});
+
+test("coding agents' tokens split by the harness that ran them, and the app's own turns by none", () => {
+  const cost = built({
+    tokens: [
+      tokens({
+        day: TODAY,
+        userId: "a",
+        model: MODEL.BASE,
+        source: COST_SOURCE.AGENTS,
+        runtime: AGENT_RUNTIME.CLAUDE_CODE,
+        inputTokens: 2 * MILLION,
+      }),
+      tokens({
+        day: TODAY,
+        userId: "b",
+        model: MODEL.UNLISTED,
+        source: COST_SOURCE.AGENTS,
+        runtime: AGENT_RUNTIME.CODEX,
+        inputTokens: 700,
+      }),
+      tokens({ day: TODAY, userId: "a", model: MODEL.BASE, inputTokens: MILLION }),
+    ],
+  });
+
+  // Two million base-model tokens at a dollar a million; Codex's model is one the catalog does not price.
+  assert.deepEqual(cost.byHarness, [
+    {
+      runtime: AGENT_RUNTIME.CLAUDE_CODE,
+      spendUsd: 2,
+      pricedTokens: 2 * MILLION,
+      unpricedTokens: 0,
+    },
+    { runtime: AGENT_RUNTIME.CODEX, spendUsd: null, pricedTokens: 0, unpricedTokens: 700 },
   ]);
 });
 

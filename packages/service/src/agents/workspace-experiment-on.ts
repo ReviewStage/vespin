@@ -58,15 +58,16 @@ export function experimentOnSinceIn(
 
 /**
  * The experiments an agent's tools, their words, and its instructions are
- * built by: its workspace's Task descriptions and Memory, and Done and
- * follow-ups as the account that started the agent chose it, on or off. An
- * agent is told nothing of one that is off, so every word that names one is
- * chosen by this.
+ * built by: its workspace's Task descriptions, Memory, and Reply buttons, and
+ * Done and follow-ups as the account that started the agent chose it, on or
+ * off. An agent is told nothing of one that is off, so every word that names
+ * one is chosen by this.
  */
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
   readonly memoryOn: boolean;
   readonly turnEndOn: boolean;
+  readonly replyButtonsOn: boolean;
 }
 
 /** Every experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
@@ -74,6 +75,7 @@ export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   memoryOn: true,
   turnEndOn: true,
+  replyButtonsOn: true,
 };
 
 /** Every experiment off. */
@@ -81,6 +83,7 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
   memoryOn: false,
   turnEndOn: false,
+  replyButtonsOn: false,
 };
 
 /** The agent an agent's experiments are read for: its workspace, and the account that started it. */
@@ -113,6 +116,7 @@ export function experimentsReadIn(
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
         turnEndOn,
+        replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
       });
     }),
     Effect.tapError(logStoreFailure),

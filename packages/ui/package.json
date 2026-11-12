@@ -36,7 +36,6 @@
     "./tasks-page-model": "./src/tasks-page-model.js",
     "./section-icon-model": "./src/section-icon-model.js",
     "./github-html": "./src/github-html.js",
-    "./draft-text": "./src/draft-text.js",
     "./held-link": "./src/held-link.js",
     "./link-route": "./src/link-route.js",
     "./pull-request-link": "./src/pull-request-link.js",
