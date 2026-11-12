@@ -254,11 +254,6 @@ export function dayAndTimeText(at: number): string {
   return DAY_AND_TIME.format(at);
 }
 
-/** A moment's weekday and time of day: "Mon 2:05 PM". */
-export function weekdayAndTimeText(at: number): string {
-  return WEEKDAY_AND_TIME.format(at);
-}
-
 /** A time of day a schedule names by its hour (0 to 23) and minute, on the 12-hour clock: "2:05 PM". */
 export function clockText(hour: number, minute: number): string {
   const half = hour < 12 ? "AM" : "PM";

@@ -16,7 +16,6 @@ import {
   sinceHeard,
   sinceText,
   untilText,
-  weekdayAndTimeText,
   workingTime,
 } from "./time-format.js";
 
@@ -97,7 +96,6 @@ test("every clock is a 12-hour one, a schedule's included", () => {
   assert.equal(clockText(0, 0), "12:00 AM");
   assert.equal(clockText(12, 30), "12:30 PM");
   assert.equal(clockText(9, 5), "9:05 AM");
-  assert.equal(weekdayAndTimeText(new Date(2026, 9, 19, 14, 5).getTime()), "Mon 2:05 PM");
 });
 
 test("a moment to come is due at its time today, its weekday and time inside a week, and its date past that or once its day is gone", () => {
