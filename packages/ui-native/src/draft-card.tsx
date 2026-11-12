@@ -11,7 +11,9 @@
  * drawn as Slack draws them and its links pressed open as the message opens
  * any. Copy message puts the body on the pasteboard as rich text and plain
  * (`draftCopy`) through the app's `Keeping`, so it pastes into Slack or Mail
- * with its links and bold; Copy subject copies its words alone. A card under
+ * with its links and bold; Copy subject copies its words alone. VoiceOver hears the
+ * body as one element and offers each link as one of its actions ("Open …"),
+ * as a line of Markdown does. A card under
  * no `KeepingProvider` offers no Copy.
  */
 
@@ -27,7 +29,14 @@ import {
   draftCopy,
 } from "@repo/features/draft-text";
 import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, Text, type TextStyle, View } from "react-native";
+import {
+  type AccessibilityActionEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  type TextStyle,
+  View,
+} from "react-native";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -66,6 +75,34 @@ const styles = StyleSheet.create({
   barWords: { flex: 1 },
   body: { padding: SPACE.ROW },
 });
+
+/** What a VoiceOver action that opens a link says before the link's words, as a line of Markdown says it. */
+const OPEN_WORD = "Open";
+
+/** One link a draft holds, as VoiceOver offers it: the action's name, what it says, and the address it opens. */
+type DraftLink = { readonly name: string; readonly label: string; readonly url: string };
+
+/** Runs' plain words, as a link's words are heard. */
+function runsWords(runs: readonly DraftRun[]): string {
+  return runs.map((run) => (run.kind === DRAFT_RUN.TEXT ? run.text : runsWords(run.runs))).join("");
+}
+
+/** Every link a draft's runs hold, in the order they stand, nested marks and links walked. */
+function draftLinks(runs: readonly DraftRun[], found: DraftLink[] = []): DraftLink[] {
+  for (const run of runs) {
+    if (run.kind === DRAFT_RUN.LINK) {
+      found.push({
+        name: `open-${found.length}`,
+        label: `${OPEN_WORD} ${runsWords(run.runs) || run.url}`,
+        url: run.url,
+      });
+    }
+
+    if (run.kind !== DRAFT_RUN.TEXT) draftLinks(run.runs, found);
+  }
+
+  return found;
+}
 
 /** "Copy message" or "Copy subject". */
 function copyName(what: string): string {
@@ -150,6 +187,20 @@ export function DraftCard({
   const edge = { borderColor: colors.CHIP_EDGE };
   const quiet = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
   const { subject } = draft;
+  const links = draftLinks(draft.runs);
+
+  // Note that iOS lists only the body's words to VoiceOver, never a link inside them, so each link is offered as one of the body's actions, as a line of Markdown offers its own.
+  const linkActions =
+    links.length === 0
+      ? {}
+      : {
+          accessibilityActions: links.map(({ name, label }) => ({ name, label })),
+          onAccessibilityAction: (event: AccessibilityActionEvent) => {
+            const link = links.find(({ name }) => name === event.nativeEvent.actionName);
+
+            if (link !== undefined) onOpenLink(link.url);
+          },
+        };
 
   return (
     <View style={[styles.card, edge, { backgroundColor: colors.SURFACE }]}>
@@ -185,7 +236,7 @@ export function DraftCard({
         </View>
       )}
       <View style={styles.body}>
-        <Text selectable style={{ fontSize: PROSE_SIZE, color: colors.TEXT }}>
+        <Text selectable style={{ fontSize: PROSE_SIZE, color: colors.TEXT }} {...linkActions}>
           <DraftRuns runs={draft.runs} onOpenLink={onOpenLink} colors={colors} />
         </Text>
       </View>
