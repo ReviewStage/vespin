@@ -2656,17 +2656,25 @@ svg.lucide {
   pointer-events: none;
 }
 
-/* The button stands in the gutter at the column's end, its glyph over a
-   one-digit count's glyph (a count grows in toward the words as its figures
-   do, so a longer one's glyph stands further in), and centered on its block's
-   first line as a count is on its words' first line, which stands in its
-   place on a line holding threads. Beside the margin's cards, where no count
-   stands, it stands centered in the gap before them, which is as wide as the
-   gutter. */
-.comment-block-button {
+/* The block's button and a folded line's count stand in the gutter at the
+   column's end, each centered on the first line of what it is on, so a
+   count, which stands in the button's place on a line holding threads,
+   reads as the line it starts. Both are the same icon button, a count's
+   figures standing on its glyph (`CornerCount`), so every glyph in the gutter
+   stands in one column, and a count of more figures, at most "99+", grows
+   out from its glyph's corner and still ends inside the gutter
+   (desktop.css). */
+.comment-block-button,
+.comment-count {
   position: absolute;
   left: 100%;
   translate: 0 -50%;
+}
+
+/* The button shows only while the pointer is over the description. Beside
+   the margin's cards, where no count stands, it stands centered in the gap
+   before them, which is as wide as the gutter. */
+.comment-block-button {
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
 }
@@ -2692,26 +2700,6 @@ svg.lucide {
   .comment-block-button {
     opacity: 1;
   }
-}
-
-/* Where the margin folds: a line's comments counted at its end, in the
-   gutter past the column where the block's button stands, a quiet button
-   lit while its threads stand under it; the open thread floats under it.
-   The count, a glyph and its figures, is drawn tighter than a toolbar's
-   button, and a web gutter is a finger's target across (desktop.css), which
-   it fills; its press still takes the whole target on a touch screen, inside
-   the column. It ends a scrollbar's room short of the scroller's edge, so a
-   scrollbar drawn over the page, macOS's, never stands under it, and a count
-   of more figures grows in toward the words rather than out under it. It
-   stands centered on the first line its words stand on, wherever they go on
-   from there, so every count reads as the line it starts. */
-.comment-count {
-  --ui-control-inset: var(--ui-space-6);
-  --ui-icon-gap: var(--ui-space-4);
-  position: absolute;
-  right: calc(var(--ui-space-8) - var(--comment-gutter));
-  display: flex;
-  translate: 0 -50%;
 }
 
 /* The open thread ends a gap short of the column's end, where the counts in
