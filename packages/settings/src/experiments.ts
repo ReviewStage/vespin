@@ -149,17 +149,14 @@ export type WorkspaceExperiment = Extract<
 
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
 
-/** Whether an entry is a workspace's choice. */
-function isWorkspaceEntry(
-  entry: ListedExperiment,
-): entry is Extract<ListedExperiment, { readonly scope: typeof EXPERIMENT_SCOPE.WORKSPACE }> {
-  return entry.scope === EXPERIMENT_SCOPE.WORKSPACE;
+/** An entry's key where it is a workspace's choice; none where it is an account's. */
+function workspaceKeyOf(entry: ListedExperiment): readonly WorkspaceExperiment[] {
+  return entry.scope === EXPERIMENT_SCOPE.WORKSPACE ? [entry.key] : [];
 }
 
 /** Every workspace experiment, in the order `EXPERIMENTS` lists them. */
-export const WORKSPACE_EXPERIMENT_LIST: readonly WorkspaceExperiment[] = EXPERIMENTS.filter(
-  isWorkspaceEntry,
-).map((entry) => entry.key);
+export const WORKSPACE_EXPERIMENT_LIST: readonly WorkspaceExperiment[] =
+  EXPERIMENTS.flatMap(workspaceKeyOf);
 
 const isWorkspaceExperimentKey = Schema.is(Schema.Literals(WORKSPACE_EXPERIMENT_LIST));
 

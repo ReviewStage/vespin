@@ -475,8 +475,10 @@ function DescriptionDocument({
         tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
+
   const turnEndOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
+
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
 
   const comments = useDescriptionComments(
