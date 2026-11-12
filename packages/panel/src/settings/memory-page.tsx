@@ -2,13 +2,17 @@ import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "@repo/features/a
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
-  MEMORY_BOUNDS,
-  MEMORY_RECALL_WINDOW_DAYS,
-  type MemorySummary,
-} from "@repo/features/memory-wire";
+  forgetQuestion as forgetWords,
+  MEMORY_ACT,
+  MEMORY_PAGE_WORDS,
+  MEMORY_RECALLS_WORDS,
+  MEMORY_USE_WORDS,
+  memoriesByUse,
+  memoryUse,
+} from "@repo/features/memory-settings-words";
+import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -182,25 +186,18 @@ import { ReadFailed } from "./marks.js";
 
 /** What the page says while it cannot read or write, and with no account. */
 const PAGE_LINE = {
-  FAILED: readFailedWords(`${PRODUCT_NAME}'s memory`),
+  FAILED: MEMORY_PAGE_WORDS.FAILED,
   WORKSPACES_FAILED: readFailedWords("your workspaces"),
   SIGNED_OUT: SIGNED_OUT_WORDS,
-  EMPTY: `${PRODUCT_NAME} hasn't remembered anything yet.`,
-  FORGET_FAILED: "The memory could not be deleted. Try again.",
-  NO_MATCH: "No memories match",
+  EMPTY: MEMORY_PAGE_WORDS.EMPTY,
+  FORGET_FAILED: MEMORY_PAGE_WORDS.FORGET_FAILED,
+  NO_MATCH: MEMORY_PAGE_WORDS.NO_MATCH,
   CLEAR: "Clear search and filter",
 } as const;
 
 /** What the Filter is called, on its tooltip and its menu, and its one field. */
 const FILTER = "Filter";
 const KEPT_BY = "Saved by";
-
-/** What the selection's acts and a row's menu say. */
-const MEMORY_ACT = {
-  EDIT: "Edit",
-  FORGET: "Delete",
-  COPY: "Copy text",
-} as const;
 
 /** What the button that keeps a new memory says. */
 const ADD_MEMORY = "Add memory";
@@ -228,26 +225,6 @@ const SAVE_REFUSAL = {
   [MEMORY_SAVE_FAILURE.METHOD_NOT_ALLOWED]: SAVE_FAILED,
 } as const satisfies Record<(typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE], string>;
 
-/** One day, in milliseconds. */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** How long a memory reads as New after it was kept. */
-const NEW_FOR_MS = 7 * DAY_MS;
-
-/** How far back a memory's recalls are counted, as the service counts them. */
-const RECALL_WINDOW_MS = MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
-
-/** What a memory says of how agents use it: New or Unused under its words, and its recall columns where it has none. */
-const USE_WORDS = {
-  NEW: "New",
-  UNUSED: "Unused",
-  NONE: "—",
-  NEVER: "Never",
-} as const;
-
-/** What the caption under the search says Recalls counts. */
-const RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
-
 /** The table's columns, by id, which its sort names. */
 const COLUMN = {
   CHOSEN: "chosen",
@@ -268,7 +245,7 @@ const HEADING = {
 const MOST_RECALLED_FIRST: SortingState = [{ id: COLUMN.RECALLS, desc: true }];
 
 /** What the table is called to a reader. */
-const TABLE_LABEL = "Memories";
+const TABLE_LABEL = MEMORY_PAGE_WORDS.TITLE;
 
 /** How many rows stand while the memories are read. */
 const SKELETON_ROWS = 3;
@@ -281,7 +258,7 @@ const FORMER_WORDS = "Former members";
 
 /** What the skeletons say to a reader who cannot see them. */
 const READING_LABEL = {
-  MEMORY: readingWords(`${PRODUCT_NAME}'s memory`),
+  MEMORY: MEMORY_PAGE_WORDS.READING,
   WORKSPACES: readingWords("your workspaces"),
 } as const;
 
@@ -323,13 +300,6 @@ function forgetterOf(memory: MemorySummary, actor: Actor): string {
   return keeper === undefined
     ? "Only an owner or an admin"
     : `Only ${keeper}, or an owner or admin`;
-}
-
-/** The memories as the page orders them: most recalled in the recall window first, then most recently kept or corrected, as the service lists them. */
-function byUse(memories: readonly MemorySummary[]): readonly MemorySummary[] {
-  return [...memories].sort(
-    (one, other) => other.recalls30d - one.recalls30d || other.updatedAt - one.updatedAt,
-  );
 }
 
 /** Where a memory's words came from, as a reader who may open its task sees it. */
@@ -389,16 +359,11 @@ function SourceChip({
 
 /** New on a memory kept in the last week, Unused on one older than the recall window that no agent was handed in it, and nothing otherwise. */
 function UseBadge({ memory }: { memory: MemorySummary }): React.JSX.Element | null {
-  const now = useMinute();
-  const age = now - memory.createdAt;
+  const use = memoryUse(memory, useMinute());
 
-  if (age < NEW_FOR_MS) return <Badge tone={STATUS_TONE.WORKING}>{USE_WORDS.NEW}</Badge>;
+  if (use === MEMORY_USE_WORDS.NEW) return <Badge tone={STATUS_TONE.WORKING}>{use}</Badge>;
 
-  if (age > RECALL_WINDOW_MS && memory.recalls30d === 0) {
-    return <Badge tone={STATUS_TONE.ATTENTION}>{USE_WORDS.UNUSED}</Badge>;
-  }
-
-  return null;
+  return use === MEMORY_USE_WORDS.UNUSED ? <Badge tone={STATUS_TONE.ATTENTION}>{use}</Badge> : null;
 }
 
 /** The card a memory's words hang: whose they are, and when they were last kept or corrected. */
@@ -484,7 +449,7 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
       meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
       sortFn: "basic",
       sortDescFirst: true,
-      cell: ({ getValue }) => (getValue() === 0 ? USE_WORDS.NONE : formatCount(getValue())),
+      cell: ({ getValue }) => (getValue() === 0 ? MEMORY_USE_WORDS.NONE : formatCount(getValue())),
     }),
     column.accessor((row) => row.memory.lastRecalledAt ?? 0, {
       id: COLUMN.LAST_RECALLED,
@@ -496,7 +461,11 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
 
         return (
           <Text tone={TEXT_TONE.MUTED}>
-            {last === null ? USE_WORDS.NEVER : <Time at={last} look={TIME_LOOK.AGO} hint={false} />}
+            {last === null ? (
+              MEMORY_USE_WORDS.NEVER
+            ) : (
+              <Time at={last} look={TIME_LOOK.AGO} hint={false} />
+            )}
           </Text>
         );
       },
@@ -745,20 +714,8 @@ function KeptByChips(props: {
 
 /** What Delete asks, of one memory or of several, and what it says of those the reader may not delete. */
 function forgetQuestion(asked: readonly MemorySummary[], left: number) {
-  const one = asked.length === 1;
-  const them = one ? "it" : "them";
-  const body = `No agent will recall ${them} in any later task in this workspace, for anyone.`;
-
-  const kept =
-    left === 0
-      ? ""
-      : ` ${countWords(left, TERM.MEMORY)} you may not delete ${left === 1 ? "stays" : "stay"}.`;
-
   return {
-    title: one ? "Delete this memory?" : `Delete ${countWords(asked.length, TERM.MEMORY)}?`,
-    body: `${body}${kept}`,
-    verb: `${MEMORY_ACT.FORGET} ${one ? TERM.MEMORY.one : TERM.MEMORY.many}`,
-    running: "Deleting",
+    ...forgetWords(asked.length, left),
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
   };
@@ -1098,7 +1055,7 @@ function MemoryList({
   const found = searchTokens(query);
   const editor = useMemoryEditor(workspaceId, new Set(memories.map((memory) => memory.id)));
 
-  const all = byUse(memories).map((memory): ShownMemory => {
+  const all = memoriesByUse(memories).map((memory): ShownMemory => {
     // Note that the service names a memory's keeper as nobody only once their account is deleted.
     const actor =
       memory.keptBy === null
@@ -1196,7 +1153,7 @@ function MemoryList({
         <Stack gap={GAP.CONTROL}>
           <div className={SEARCH_LINE}>
             <SearchField
-              label="Search memories"
+              label={MEMORY_PAGE_WORDS.SEARCH}
               placeholder="Search memories"
               value={query}
               onChange={setQuery}
@@ -1212,7 +1169,7 @@ function MemoryList({
           <KeptByChips keepers={keepersOf(all)} kept={kept} onKept={setKept} />
           {listed.length === 0 ? null : (
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {`${countWords(listed.length, TERM.MEMORY)} · ${RECALLS_WORDS}`}
+              {`${countWords(listed.length, TERM.MEMORY)} · ${MEMORY_RECALLS_WORDS}`}
             </Text>
           )}
         </Stack>

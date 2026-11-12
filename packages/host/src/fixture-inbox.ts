@@ -76,6 +76,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -967,6 +968,48 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/**
+ * The fixture workspace's memories, as Settings › Memory lists them: one an
+ * agent of the account kept and agents recall often, one Grace kept this
+ * week, which reads as New and the account may delete as its owner, and one
+ * no agent was handed in the recall window.
+ */
+const MEMORIES: readonly MemorySummary[] = [
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a61",
+    text: "The web server's tests run on PGlite through `test:store`.",
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: LANDED - 20 * DAY,
+    updatedAt: LANDED - 20 * DAY,
+    source: null,
+    recalls30d: 14,
+    lastRecalledAt: LANDED - 2 * HOUR,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a62",
+    text: "Release dates are written in Eastern time, never UTC.",
+    keptBy: { userId: "user-grace", name: "Grace Hopper" },
+    forgettable: true,
+    createdAt: LANDED - 2 * DAY,
+    updatedAt: LANDED - 2 * DAY,
+    source: null,
+    recalls30d: 3,
+    lastRecalledAt: LANDED - DAY,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a63",
+    text: "The staging database is reset every Sunday night.",
+    keptBy: { userId: "user-alan", name: "Alan Turing" },
+    forgettable: true,
+    createdAt: LANDED - 60 * DAY,
+    updatedAt: LANDED - 60 * DAY,
+    source: null,
+    recalls30d: 0,
+    lastRecalledAt: null,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1571,6 +1614,7 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },

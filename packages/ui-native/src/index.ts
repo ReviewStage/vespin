@@ -152,6 +152,7 @@ export {
   ActionRow,
   MemberRow,
   type MemberRowAct,
+  NoteRow,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
