@@ -24,7 +24,7 @@ import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useMemberFaces } from "../member-pictures.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** One person following a task, as its sheet and chip draw them. */
 export interface FollowerFace extends TaskFollowerWire {
@@ -88,8 +88,13 @@ export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
       };
     });
 
-    // Note that a follow and its switch tap as a toggle does, lighter than a status's buzz.
-    const saying = { refused: refusedNote, retry: mayRetry, went: BUZZ.SELECTION } as const;
+    // Note that a follow and its switch tap as a toggle does, lighter than a status's buzz, and all three share the task's one subject, so a newer one makes an older one's Try again do nothing.
+    const saying = {
+      refused: refusedNote,
+      retry: mayRetry,
+      subject: { kind: WRITE_SUBJECT.TASK_FOLLOWING, id: taskId },
+      went: BUZZ.SELECTION,
+    } as const;
 
     return {
       followers,
