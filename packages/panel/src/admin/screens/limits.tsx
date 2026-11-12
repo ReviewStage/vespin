@@ -404,12 +404,17 @@ const LIMITS_NOTE =
 /** The groups whose limits a search finds, each keeping only the rows it finds; every group where the search is empty. */
 function foundGroups(query: string): readonly LimitGroup[] {
   const term = query.trim().toLowerCase();
+
   if (term === "") return LIMIT_GROUPS;
+
   const found = (each: Limit) =>
     [each.label, each.constant, each.figure].some((words) => words.toLowerCase().includes(term));
-  return LIMIT_GROUPS.map((group) => ({ ...group, limits: group.limits.filter(found) })).filter(
-    (group) => group.limits.length > 0,
-  );
+
+  return LIMIT_GROUPS.flatMap((group) => {
+    const limits = group.limits.filter(found);
+
+    return limits.length === 0 ? [] : [{ ...group, limits }];
+  });
 }
 
 export function LimitsScreen({
@@ -421,8 +426,10 @@ export function LimitsScreen({
   const { gate } = useAdminDoors();
   const [query, setQuery] = useState("");
   const groups = useMemo(() => foundGroups(query), [query]);
+
   // Note that the page reads nothing, so the gate's own hold is all that keeps it from a reader who has not signed in here.
   if (gate.heldAtGate()) return gate.signedOut();
+
   return frame(
     <AdminCollectionPage
       title="Limits"
