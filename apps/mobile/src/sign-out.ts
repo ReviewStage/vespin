@@ -40,12 +40,12 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
         .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
         .then(
           () =>
-            clearAccountNotifications().catch((error: unknown) =>
-              console.error("The account's notifications were not cleared.", error),
+            clearAccountNotifications().catch((cause: unknown) =>
+              console.error("The account's notifications were not cleared.", cause),
             ),
-          (refused: unknown) => {
+          (cause: unknown) => {
             reregisterPushDevice(acts, fixture).catch(() => undefined);
-            throw refused;
+            throw cause;
           },
         )
         .finally(() => {

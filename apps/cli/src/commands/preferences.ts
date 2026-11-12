@@ -11,16 +11,16 @@
 import { HOSTED_API_ERROR } from "@repo/features";
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
-import { modelChoiceSchema } from "@repo/features/models-wire";
+import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { Effect, Option, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
 
-/** The coding-agent default a snapshot carries, as the answer prints it, or a failure where the service answered none that reads as one. */
-const defaultOf = Effect.fnUntraced(function* (agent: unknown) {
-  const read = Schema.decodeUnknownOption(modelChoiceSchema)(agent);
+const readModelChoice = Schema.decodeUnknownOption(modelChoiceSchema);
 
+/** The coding-agent default a snapshot carries, as the answer prints it, or a failure where the service answered none that reads as one. */
+const defaultOf = Effect.fnUntraced(function* (read: Option.Option<ModelChoice>) {
   if (Option.isSome(read)) return read.value;
 
   return yield* new CommandFailed({
@@ -73,7 +73,7 @@ const setCommand = Command.make(
         },
       );
 
-      yield* answerDefault(yield* defaultOf(written.agent));
+      yield* answerDefault(yield* defaultOf(readModelChoice(written.agent)));
     }),
 ).pipe(
   Command.withDescription(
@@ -92,7 +92,7 @@ export const preferencesCommand = Command.make("preferences", {}, () =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
     const preferences = yield* askService(hosted.account.preferences, undefined);
-    yield* answerDefault(yield* defaultOf(preferences.agent));
+    yield* answerDefault(yield* defaultOf(readModelChoice(preferences.agent)));
   }),
 ).pipe(
   Command.withDescription("Show your preferences: the model and effort your agents start on"),

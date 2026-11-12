@@ -46,7 +46,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { turnStatusOf, turnsAwaitingRunner } from "@repo/database/models/turn-state";
 import { type QueuedAgentTurn, QueuedTurnListener } from "@repo/database/models/writer";
 import { causeKind, failureKind } from "@repo/runtime/effect";
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_STATUS, type WireValue } from "@repo/wire";
 import { send } from "@vercel/queue";
 import {
   Cause,
@@ -108,7 +108,7 @@ function deliveredAgainAfter(again: Duration.Duration): QueueAnswer {
  * queue to deliver again where its store or machine was unreachable.
  */
 export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDelivery")(function* (
-  message: unknown,
+  message: WireValue | QueuedAgentTurn,
 ): Effect.fn.Return<QueueAnswer, unknown, DatabaseServices> {
   const delivered = yield* Effect.option(decodeTurnMessage(message));
 

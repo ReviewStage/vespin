@@ -87,7 +87,7 @@ export function actPort(): ActPortClient {
 
 /** One listener on one push, held as its own entry so a listener subscribed twice hears twice. */
 interface PushEntry {
-  readonly listener: (payload: unknown) => void;
+  readonly listener: (payload: PushEvent["payload"]) => void;
 }
 
 /** This window's push stream: the listeners a window subscribes through, and when main began to listen. */
@@ -144,10 +144,10 @@ export function openPushStream(client: ActPortClient): PushStream {
   const opened = client.pushes().then((stream) => {
     void (async () => {
       for await (const event of stream) deliver(held, event);
-    })().catch((error: unknown) => {
+    })().catch((cause: unknown) => {
       // Note that a stream ends this way only with its page, its port closing under it, unless something broke.
-      if (!(error instanceof Error && error.name === "AbortError")) {
-        console.error("This window's push stream ended.", error);
+      if (!(cause instanceof Error && cause.name === "AbortError")) {
+        console.error("This window's push stream ended.", cause);
       }
     });
   });

@@ -72,8 +72,8 @@ const isVariableName = Schema.is(workspaceVariableNameSchema);
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
-function rejected(error: unknown): ActionResult {
-  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+function rejected(cause: unknown): ActionResult {
+  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(cause) };
 }
 
 /** The workspace's variables by name, read as the page opens and on Try again. */

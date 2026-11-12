@@ -1,4 +1,10 @@
-import { DIFF_SETTING_GROUPS, type DiffSettingSection, SETTING_SECTION } from "@repo/settings";
+import {
+  type AppSettingField,
+  type AppSettingValue,
+  DIFF_SETTING_GROUPS,
+  type DiffSettingSection,
+  SETTING_SECTION,
+} from "@repo/settings";
 import {
   DIFF_FONT,
   DIFF_FONT_LABEL,
@@ -195,7 +201,7 @@ export type ViewSettingsScope =
 const switchStored = (enabled: boolean) => enabled;
 
 /** A switch's setting as the switch draws it. */
-const switchDrawn = (value: unknown) => value === true;
+const switchDrawn = (value: AppSettingValue<AppSettingField>) => value === true;
 
 /**
  * The settings every run of lines follows, a File tab's and a diff's alike:

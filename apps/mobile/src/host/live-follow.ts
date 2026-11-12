@@ -6,7 +6,7 @@ import { useEffect, useEffectEvent } from "react";
 type OpenedFollow = AsyncIteratorObject<unknown, unknown, unknown>;
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 

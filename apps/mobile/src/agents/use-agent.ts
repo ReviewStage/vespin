@@ -35,7 +35,7 @@ import { useWrite } from "../use-write.js";
 const AGENT_MEDIA_PREFIX = "agent";
 
 /** Says on the console a read the host refused, which the page draws without. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 
@@ -187,9 +187,9 @@ export function useAgentMedia(
       held.add(pictureId);
 
       // A read that fails is forgotten, so the transcript's next change asks for it again.
-      const forget = (error: unknown) => {
+      const forget = (cause: unknown) => {
         if (asked.current.agentId === agentId) held.delete(pictureId);
-        refused("A picture the agent showed")(error);
+        refused("A picture the agent showed")(cause);
       };
 
       // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
@@ -237,8 +237,8 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
             : { failed: true },
         );
       },
-      (error: unknown) => {
-        refused("The page")(error);
+      (cause: unknown) => {
+        refused("The page")(cause);
 
         if (current) setRead({ failed: true });
       },
@@ -308,8 +308,8 @@ export function useOlderPages(agentId: string, before: string | undefined): Olde
           if ("failure" in answer) settle({ ...ask, failed: true });
           else if (!answer.landed) settle(undefined);
         },
-        (error: unknown) => {
-          refused("An older page of the transcript")(error);
+        (cause: unknown) => {
+          refused("An older page of the transcript")(cause);
           settle({ ...ask, failed: true });
         },
       );

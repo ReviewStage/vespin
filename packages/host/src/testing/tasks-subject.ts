@@ -462,7 +462,7 @@ type ListAnswer = Exclude<
 type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
 
 /** A row's id; none where it is no object carrying one as words. */
-function rowIdOf(row: unknown): string | undefined {
+function rowIdOf<Row>(row: Row): string | undefined {
   return Predicate.isObjectOrArray(row) && "id" in row && Predicate.isString(row.id)
     ? row.id
     : undefined;
@@ -1589,13 +1589,16 @@ export function subject(
       input: ActInput<(typeof TASKS_ACTS)[Name]>,
     ): Effect.Effect<ActOutput<(typeof TASKS_ACTS)[Name]>>;
     function call(method: GatewayMethod, params?: WireRecord): Effect.Effect<WireValue>;
-    function call(name: TasksActName | GatewayMethod, params: unknown = {}) {
+    function call(
+      name: TasksActName | GatewayMethod,
+      params: ActInput<(typeof TASKS_ACTS)[TasksActName]> | WireRecord = {},
+    ) {
       const acts: HostActTable<typeof TASKS_ACTS> = { ...tasks.acts, ...workspaces.acts };
 
       if (name in acts) {
         // SAFETY: the overloads pair each act's name with its own input.
         const handler = acts[name as TasksActName] as (
-          input: unknown,
+          input: typeof params,
         ) => Effect.Effect<unknown, unknown>;
 
         return Effect.orDie(handler(params));
@@ -1615,11 +1618,13 @@ export function subject(
     const windowHolds = yield* FiberMap.make<WindowHold>();
 
     /** The follow `name`'s handler, by a name not yet known. */
-    const followOf = (name: keyof typeof TASKS_FOLLOWS) =>
+    const followOf = <Name extends keyof typeof TASKS_FOLLOWS>(name: Name) =>
       // SAFETY: every Tasks follow's handler holds and asks again by its own key, which the overloads below pair with its name.
       tasks.acts[name] as {
-        readonly hold: (key: unknown) => Effect.Effect<void, never, Scope.Scope>;
-        readonly retry?: (key: unknown) => Effect.Effect<void>;
+        readonly hold: (
+          key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>,
+        ) => Effect.Effect<void, never, Scope.Scope>;
+        readonly retry?: (key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>) => Effect.Effect<void>;
       };
 
     /** Holds `name`'s read at `key` as a window's stream does, until `unfollow`; a hold that stands already holds nothing anew. */

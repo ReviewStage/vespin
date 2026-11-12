@@ -108,8 +108,8 @@ function scriptedService(
 
   const client: MacCommandClient = {
     // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
-    liveRead: ((
-      _read: unknown,
+    liveRead: (<Read>(
+      _read: Read,
       { userId, kinds }: { readonly userId: string; readonly kinds?: string },
       poll?: { readonly after?: string | undefined },
     ) =>

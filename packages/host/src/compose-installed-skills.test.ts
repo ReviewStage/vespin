@@ -118,8 +118,8 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
 
   const client: InstalledSkillsClient = {
     // SAFETY: the skills' read is the one live read the client is asked for, answering its own script's rows.
-    liveRead: ((
-      _read: unknown,
+    liveRead: (<Read>(
+      _read: Read,
       { userId, workspaceId }: { readonly userId: string; readonly workspaceId: string },
       poll?: { readonly after?: string | undefined },
     ) => {

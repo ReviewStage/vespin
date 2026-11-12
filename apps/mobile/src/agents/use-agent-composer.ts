@@ -189,8 +189,8 @@ export function useAgentComposer(
     enabled: mention !== undefined && planId !== undefined,
     staleTime: SKILLS_FRESH_MS,
     queryFn: (): Promise<SkillsRead> =>
-      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (error: unknown) => {
-        console.error("The task's skills were not read.", error);
+      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (cause: unknown) => {
+        console.error("The task's skills were not read.", cause);
 
         return { unread: SKILLS_UNANSWERED };
       }),

@@ -256,7 +256,7 @@ test("a worker's tab whose earlier messages could not be read says so over its l
 
   // SAFETY: the tab sends only this kind here, and its answer is the kind's refusal.
   fakeActPort({
-    [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: (payload: unknown) => {
+    [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: <Payload>(payload: Payload) => {
       asked.push(payload);
 
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });

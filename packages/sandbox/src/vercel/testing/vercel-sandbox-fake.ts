@@ -271,7 +271,9 @@ interface FakeDrive {
 }
 
 /** A create's mounts as `@vercel/sandbox` sends them: each path's drive and mode. */
-type FakeMounts = Readonly<Record<string, { readonly drive: string; readonly mode: string }>>;
+export type FakeMounts = Readonly<
+  Record<string, { readonly drive: string; readonly mode: string }>
+>;
 
 /**
  * The drives a fake of Vercel keeps, as Vercel answers a call on one: a
@@ -281,12 +283,13 @@ type FakeMounts = Readonly<Record<string, { readonly drive: string; readonly mod
  * create's mounts is kept as the create sent it, opaque to the suite, which
  * reads it back by the path it was mounted at (`mountedAt`).
  */
-export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => boolean) {
+export function fakeDrives(
+  attached: (mounts: (mounts: FakeMounts | undefined) => boolean) => boolean,
+) {
   const drives: FakeDrive[] = [];
   let next = 0;
   const named = (name: string) => drives.find((each) => !each.deleted && each.name === name);
-  // SAFETY: the fake is handed the mounts the SDK sends, each keyed by its path.
-  const mountsOf = (mounts: unknown): FakeMounts => (mounts ?? {}) as FakeMounts;
+  const mountsOf = (mounts: FakeMounts | undefined): FakeMounts => mounts ?? {};
 
   return {
     drives,
@@ -295,10 +298,10 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
       // SAFETY: a create's body mounts drives by path, as Vercel's API spells them.
       created.mounts as FakeMounts | undefined,
     /** Whether every drive a create's mounts name stands. */
-    mountable: (mounts: unknown) =>
+    mountable: (mounts: FakeMounts | undefined) =>
       Object.values(mountsOf(mounts)).every((mount) => named(mount.drive) !== undefined),
     /** The drive standing that a create's mounts put at the path, where one does. */
-    mountedAt: (mounts: unknown, at: string) => {
+    mountedAt: (mounts: FakeMounts | undefined, at: string) => {
       const name = mountsOf(mounts)[at]?.drive;
 
       return name === undefined ? undefined : named(name);
@@ -344,7 +347,7 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
       }
 
       if (method === "DELETE") {
-        const mountsIt = (mounts: unknown) =>
+        const mountsIt = (mounts: FakeMounts | undefined) =>
           Object.values(mountsOf(mounts)).some((mount) => mount.drive === name);
 
         if (attached(mountsIt)) {

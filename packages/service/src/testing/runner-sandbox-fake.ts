@@ -37,6 +37,7 @@ import {
   commandAnswered,
   commandLogsStreamed,
   commandRunStreamed,
+  type FakeMounts,
   fakeDrives,
   sandboxDeleted,
   sandboxesListed,
@@ -48,7 +49,7 @@ import {
   snapshotOf,
   vercelSandboxOver,
 } from "@repo/sandbox/vercel/testing";
-import type { WireValue } from "@repo/wire";
+import type { UnparsedWireValue, WireValue } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { Effect, Layer, Option, Predicate, Schema } from "effect";
@@ -85,7 +86,7 @@ export interface FakeSandbox {
   /** The snapshot it resumes from, which its last snapshot made; none before one is taken. */
   currentSnapshotId?: string;
   /** What its create mounted, as the create sent it, which the drives read back (`fakeDrives`). */
-  mounted?: unknown;
+  mounted?: FakeMounts | undefined;
 }
 
 export interface FakeCommand {
@@ -723,26 +724,26 @@ const decodeCodexConfig = Schema.decodeUnknownSync(CodexConfigSchema);
 const decodeInputLine = Schema.decodeUnknownSync(InputLineSchema);
 
 /** A launch's config, of either harness, read whole: a key its schema does not name fails the read. */
-export const readRunnerConfig = (input: unknown): RunnerConfig => decodeRunnerConfig(input, WHOLE);
+export const readRunnerConfig = (input: UnparsedWireValue): RunnerConfig => decodeRunnerConfig(input, WHOLE);
 
 /** A Claude Code launch's config, read whole: a key its schema does not name fails the read. */
-export const readClaudeCodeConfig = (input: unknown): ClaudeCodeConfig =>
+export const readClaudeCodeConfig = (input: UnparsedWireValue): ClaudeCodeConfig =>
   decodeClaudeCodeConfig(input, WHOLE);
 
 /** A Codex launch's config, read whole: a key its schema does not name fails the read. */
-export const readCodexConfig = (input: unknown): CodexConfig => decodeCodexConfig(input, WHOLE);
+export const readCodexConfig = (input: UnparsedWireValue): CodexConfig => decodeCodexConfig(input, WHOLE);
 
 /** A line a runner is handed, read whole: a key its schema does not name fails the read. */
-export const readInputLine = (input: unknown): InputLine => decodeInputLine(input, WHOLE);
+export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);
 
 /** The lines a command's stdin holds, each read back. */
-export function linesOf(command: FakeCommand | undefined): unknown[] {
+export function linesOf(command: FakeCommand | undefined): WireValue[] {
   assert.ok(command !== undefined);
 
   return command.stdin
     .split("\n")
     .filter((text) => text !== "")
-    .map((text) => JSON.parse(text));
+    .map((text): WireValue => JSON.parse(text));
 }
 
 /**
@@ -773,7 +774,7 @@ export const launchLines = (command: FakeCommand | undefined) =>
  */
 export const launchRead = <Config>(
   command: FakeCommand | undefined,
-  readConfig: (input: unknown) => Config,
+  readConfig: (input: UnparsedWireValue) => Config,
 ) =>
   Effect.map(launchLines(command), ([config, ...lines]) => ({
     config: readConfig(config),
@@ -785,7 +786,7 @@ type StdinRead<Config> = { readonly config: Config; readonly lines: readonly Inp
 /** A launch's stdin as its runner reads it: its config as `readConfig` reads it, then each line written after it. */
 export function stdinRead<Config>(
   command: FakeCommand | undefined,
-  readConfig: (input: unknown) => Config,
+  readConfig: (input: UnparsedWireValue) => Config,
 ): StdinRead<Config> {
   const [config, ...lines] = linesOf(command);
 
@@ -848,13 +849,10 @@ type SentPolicy =
  * the way out; none where the policy carries no such swap.
  */
 function swappedBearer(
-  policy: unknown,
+  sent: SentPolicy | undefined,
   host: string,
   placeholder: string | undefined,
 ): string | undefined {
-  // SAFETY: the policy is the body the API was sent, Vercel's network policy as the adapter spells it.
-  const sent = policy as SentPolicy | undefined;
-
   if (sent === undefined || Predicate.isString(sent) || placeholder === undefined) return undefined;
 
   const swap = (sent.allow[host] ?? []).find((rule) =>
@@ -875,5 +873,8 @@ export function launchBearer(
   command: FakeCommand | undefined,
   host: string,
 ): string | undefined {
-  return swappedBearer(api.policyAtConfig(command), host, command?.env[RUNNER_ENV.BEARER]);
+  // SAFETY: the policy is the body the API was sent, Vercel's network policy as the adapter spells it.
+  const sent = api.policyAtConfig(command) as SentPolicy | undefined;
+
+  return swappedBearer(sent, host, command?.env[RUNNER_ENV.BEARER]);
 }

@@ -135,8 +135,8 @@ export function useScreenFailureReport(error: Error): void {
 }
 
 /** Reports a host that could not stand, so the app drew Retry in every screen's place. */
-export function reportHostFailure(error: unknown): void {
-  captureException(error, { mechanism: MECHANISM.HOST });
+export function reportHostFailure(cause: unknown): void {
+  captureException(cause, { mechanism: MECHANISM.HOST });
 }
 
 /** Effect's reporters with Sentry's beside them, for the host's runtime to stand on, so a failure one of its boundaries reports is an event. */

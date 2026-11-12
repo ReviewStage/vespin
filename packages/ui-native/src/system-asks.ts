@@ -53,7 +53,7 @@ export function askForName({ title, act, name, onName }: NameAsk): void {
  * on the console, since the press had nothing else to show.
  */
 export function shareLink(url: string): void {
-  Share.share({ url }).catch((error: unknown) => {
-    console.error("The share sheet did not open.", error);
+  Share.share({ url }).catch((cause: unknown) => {
+    console.error("The share sheet did not open.", cause);
   });
 }

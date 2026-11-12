@@ -265,7 +265,7 @@ async function shareAsked(
 
   if (port === null) {
     const answer = await askAct(ACT_KIND.AGENTS_PORT_UNSHARE, { agentId }).catch(
-      (error: unknown) => ({ error }),
+      (cause: unknown) => ({ error: cause }),
     );
 
     if ("shared" in answer) queryClient.setQueryData(queryKey, answer);
@@ -275,7 +275,7 @@ async function shareAsked(
   }
 
   const answer = await askAct(ACT_KIND.AGENTS_PORT_SHARE, { agentId, port }).catch(
-    (error: unknown) => ({ error }),
+    (cause: unknown) => ({ error: cause }),
   );
 
   const linked: AgentSharedPortAnswerView | undefined =

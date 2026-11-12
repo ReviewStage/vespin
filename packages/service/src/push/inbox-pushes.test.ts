@@ -9,7 +9,7 @@ import { user } from "@repo/database/schemas/auth";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
-import { inboxPushResponseOf } from "@repo/features/inbox-push-wire";
+import { inboxPushOf, inboxPushResponseOf } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
@@ -200,10 +200,13 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         ]);
 
         // The app reads the payload back: the second button answers with the second option.
-        assert.deepEqual(inboxPushResponseOf(sender.sent[0]?.payload, { actionId: "1" }), {
-          route: `/inbox/${item.id}`,
-          press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
-        });
+        assert.deepEqual(
+          inboxPushResponseOf(inboxPushOf(sender.sent[0]?.payload), { actionId: "1" }),
+          {
+            route: `/inbox/${item.id}`,
+            press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
+          },
+        );
 
         yield* answerInboxAsk(poster.userId, item.id, {
           answers: { ask: asking.id, reply: INBOX_REPLY.CHOSE, choices: ["Redis"] },

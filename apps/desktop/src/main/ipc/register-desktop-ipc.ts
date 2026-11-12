@@ -4,8 +4,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BROWSER_LIVE_PORT_CHANNEL } from "@repo/features/browser-live-acts";
-import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
+import {
+  BROWSER_LIVE_PORT_CHANNEL,
+  type BrowserLivePortOutbound,
+  type BrowserLivePortTicket,
+} from "@repo/features/browser-live-acts";
+import {
+  TERMINAL_PORT_CHANNEL,
+  type TerminalPortOutbound,
+  type TerminalPortTicket,
+} from "@repo/features/terminal-acts";
 import {
   browserLiveProcedures,
   clientSettingSideEffects,
@@ -78,14 +86,14 @@ async function windowStill(
  * Opens a fresh channel to a panel's page under `channel`: main keeps one end
  * and posts the other to the page with the ticket.
  */
-function portTo(channel: string) {
-  return (sender: WebContents, ticket: unknown) => {
+function portTo<Ticket, Outbound>(channel: string) {
+  return (sender: WebContents, ticket: Ticket) => {
     const { port1, port2 } = new MessageChannelMain();
     sender.postMessage(channel, ticket, [port2]);
     port1.start();
 
     return {
-      post: (message: unknown) => port1.postMessage(message),
+      post: (message: Outbound) => port1.postMessage(message),
       onMessage: (listener: (message: WireBoundaryInput) => void) =>
         port1.on("message", (event) => listener(event.data)),
       onClose: (then: () => void) => void port1.once("close", then),
@@ -129,7 +137,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...browserLiveProcedures<WebContents>({
       host: operator.host,
       ports: {
-        open: portTo(BROWSER_LIVE_PORT_CHANNEL),
+        open: portTo<BrowserLivePortTicket, BrowserLivePortOutbound>(BROWSER_LIVE_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
@@ -142,7 +150,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
       mirror: (agentId) => operator.host.mirrorEnsure({ agentId }),
       spawn: spawnMacShell,
       ports: {
-        open: portTo(TERMINAL_PORT_CHANNEL),
+        open: portTo<TerminalPortTicket, TerminalPortOutbound>(TERMINAL_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
@@ -156,7 +164,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...terminalProcedures<WebContents>({
       host: operator.host,
       ports: {
-        open: portTo(TERMINAL_PORT_CHANNEL),
+        open: portTo<TerminalPortTicket, TerminalPortOutbound>(TERMINAL_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,

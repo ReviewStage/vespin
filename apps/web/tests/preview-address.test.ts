@@ -4,6 +4,7 @@ import { chmodSync, copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import type { WireValue } from "@repo/wire";
 import { type TestContext, test } from "vitest";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -91,7 +92,7 @@ function commit(root: string, path: string, content: string): string {
 /** What the fake `gh` answers for a request GitHub refuses. */
 const REFUSED = Symbol("refused");
 
-function answer(answers: string, path: string, body: unknown): void {
+function answer(answers: string, path: string, body: WireValue | typeof REFUSED): void {
   writeFileSync(
     join(answers, path.replace(/[^A-Za-z0-9]/g, "_")),
     body === REFUSED ? "REFUSED\n" : JSON.stringify(body),

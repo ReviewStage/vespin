@@ -105,12 +105,15 @@ export interface HostStandingOptions {
   readonly report: (line: string) => void;
 }
 
+/** Where a host stands with the service, and the instant its quiet spell ends. */
+interface Standing {
+  readonly kind: HostStanding;
+  readonly until: number;
+}
+
 /** A host's standing with the service, standing until its first refusal. */
 export const hostServiceStanding = Effect.fnUntraced(function* (options: HostStandingOptions) {
-  const standing = yield* SubscriptionRef.make<{
-    readonly kind: HostStanding;
-    readonly until: number;
-  }>({
+  const standing = yield* SubscriptionRef.make<Standing>({
     kind: HOST_STANDING.STANDING,
     until: 0,
   });
@@ -180,7 +183,7 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
     });
 
   /** Waits until the standing is no longer `from`: a refusal or a call taken heard since. */
-  const movedFrom = (from: unknown) =>
+  const movedFrom = (from: Standing) =>
     SubscriptionRef.changes(standing).pipe(
       Stream.filter((now) => now !== from),
       Stream.runHead,

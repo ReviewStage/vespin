@@ -26,7 +26,7 @@ const NOTIFICATION_SETTINGS_URL = "app-settings:notifications";
 export function openNotificationSettings(): void {
   openURL(NOTIFICATION_SETTINGS_URL)
     .catch(() => openSettings())
-    .catch((error: unknown) => console.error("iOS's Settings did not open.", error));
+    .catch((cause: unknown) => console.error("iOS's Settings did not open.", cause));
 }
 
 /** Where the permission stands, as Settings words it. */
@@ -60,7 +60,7 @@ export function useNotificationPermission(): UseNotificationPermissionResult {
   const read = useCallback(() => {
     getPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
-      (error: unknown) => console.error("The notification permission could not be read.", error),
+      (cause: unknown) => console.error("The notification permission could not be read.", cause),
     );
   }, []);
 
@@ -84,7 +84,7 @@ export function useNotificationPermission(): UseNotificationPermissionResult {
 
     requestPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
-      (error: unknown) => console.error("The notification permission was not asked.", error),
+      (cause: unknown) => console.error("The notification permission was not asked.", cause),
     );
   };
 

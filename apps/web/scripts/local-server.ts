@@ -160,8 +160,8 @@ function page(
     const outgoing = NodeHttpServerRequest.toServerResponse(request);
     incoming.url = `${served.pathname}${served.search}`;
     outgoing.once("close", () => resume(Effect.succeed(HttpServerResponse.empty())));
-    vite.middlewares(incoming, outgoing, (error?: unknown) => {
-      outgoing.statusCode = error === undefined ? STATUS.NOT_FOUND : STATUS.SERVER_ERROR;
+    vite.middlewares(incoming, outgoing, (cause?: unknown) => {
+      outgoing.statusCode = cause === undefined ? STATUS.NOT_FOUND : STATUS.SERVER_ERROR;
       outgoing.end();
     });
   });

@@ -63,7 +63,7 @@ function isWireSchema(schema: unknown): schema is Schema.Codec<unknown, unknown>
 }
 
 /** Whether the act port's contract would carry `answer` as the kind's: it encodes through the output schema the kind's procedure declares. */
-function carried(kind: PortActKind, answer: unknown): boolean {
+function carried<Answer>(kind: PortActKind, answer: Answer): boolean {
   const [declared] = actContract[kind]["~orpc"].outputSchemas ?? [];
   assert.ok(isWireSchema(declared), `${kind} declares a wire schema`);
 

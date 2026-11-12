@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { WireBoundaryInput } from "@repo/wire";
 import { Schema } from "effect";
 import { test } from "vitest";
 import {
@@ -50,7 +51,7 @@ function fitsOver(reports: ReadonlyArray<(frame: number) => number>): PageFit[] 
   return fits;
 }
 
-type FramedPageResult = { posted: unknown[]; handTheme: () => void };
+type FramedPageResult = { posted: WireBoundaryInput[]; handTheme: () => void };
 
 /**
  * A page's window running the height and theme scripts, laid out
@@ -59,9 +60,9 @@ type FramedPageResult = { posted: unknown[]; handTheme: () => void };
  * the window's theme.
  */
 function framedPage(): FramedPageResult {
-  const posted: unknown[] = [];
+  const posted: WireBoundaryInput[] = [];
   const page = new EventTarget();
-  const parent = { postMessage: (data: unknown) => posted.push(data) };
+  const parent = { postMessage: (data: WireBoundaryInput) => posted.push(data) };
 
   const document = {
     readyState: "complete",

@@ -1063,10 +1063,11 @@ export function composeLocalAgents(
           );
 
         /** A files line's files written under the agent's own places (`agentPlaces`), each at its mode; one whose path names a place outside them is never written. */
-        const wroteFiles = (agentId: string, payload: unknown) =>
+        const wroteFiles = (
+          agentId: string,
+          files: Option.Option<typeof deviceAgentFilesPayloadSchema.Type>,
+        ) =>
           Effect.gen(function* () {
-            const files = decodeFiles(payload);
-
             if (Option.isNone(files)) return;
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
             const layout = layoutIn(folder, agentId);
@@ -1099,10 +1100,11 @@ export function composeLocalAgents(
          * and 1 where it could not run, ran past `RESTORE_DEADLINE`, or the line's payload could not be
          * read. Nothing it prints is kept.
          */
-        const restored = (agentId: string, payload: unknown) =>
+        const restored = (
+          agentId: string,
+          snapshot: Option.Option<typeof deviceAgentRestorePayloadSchema.Type>,
+        ) =>
           Effect.gen(function* () {
-            const snapshot = decodeRestore(payload);
-
             if (Option.isNone(snapshot)) return 1;
             yield* stopped(agentId);
             const layout = layoutIn(folder, agentId);
@@ -1181,7 +1183,7 @@ export function composeLocalAgents(
               }
 
               case DEVICE_AGENT_LINE_KIND.FILES:
-                yield* wroteFiles(agentId, line.payload);
+                yield* wroteFiles(agentId, decodeFiles(line.payload));
                 break;
               case DEVICE_AGENT_LINE_KIND.STOP:
                 yield* stopped(agentId);
@@ -1191,7 +1193,10 @@ export function composeLocalAgents(
                 break;
               // A restore is settled with its exit, which the service reads the outcome from.
               case DEVICE_AGENT_LINE_KIND.RESTORE:
-                return yield* settle(line.id, yield* restored(agentId, line.payload));
+                return yield* settle(
+                  line.id,
+                  yield* restored(agentId, decodeRestore(line.payload)),
+                );
             }
 
             yield* settle(line.id);

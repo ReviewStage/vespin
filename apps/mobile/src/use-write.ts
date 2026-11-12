@@ -132,8 +132,8 @@ export function useOfflineNotice(): void {
     if (refused === 0) return;
     buzz(BUZZ.ERROR);
     notices.say({ kind: NOTICE_KIND.REFUSED, words: offlineRefusedWords(refused) });
-    acts[ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR]().catch((error: unknown) =>
-      console.error("The count of changes refused offline was not cleared.", error),
+    acts[ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR]().catch((cause: unknown) =>
+      console.error("The count of changes refused offline was not cleared.", cause),
     );
   }, [refused, notices, acts]);
 }

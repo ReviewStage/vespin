@@ -434,11 +434,11 @@ function errorCode(text: string): string | undefined {
 }
 
 /** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone (`SNAPSHOT_GONE`). */
-function snapshotGoneFailure(failure: unknown): boolean {
+function snapshotGoneFailure(cause: unknown): boolean {
   return (
-    failure instanceof APIError &&
-    failure.response.status === SNAPSHOT_GONE.STATUS &&
-    SNAPSHOT_GONE.BODY.test(failure.text ?? "")
+    cause instanceof APIError &&
+    cause.response.status === SNAPSHOT_GONE.STATUS &&
+    SNAPSHOT_GONE.BODY.test(cause.text ?? "")
   );
 }
 
@@ -587,9 +587,9 @@ interface MountedDrive {
 }
 
 /** Nothing where the SDK's failure was Vercel's not-found, else the failure thrown on. */
-function absentIfNotFound(failure: unknown): undefined {
-  if (failure instanceof APIError && failure.response.status === NOT_FOUND_STATUS) return undefined;
-  throw failure;
+function absentIfNotFound(cause: unknown): undefined {
+  if (cause instanceof APIError && cause.response.status === NOT_FOUND_STATUS) return undefined;
+  throw cause;
 }
 
 /**
@@ -661,10 +661,10 @@ async function openedWithDrive(
 }
 
 /** Whether a resume's failure says no sandbox stands to resume: none under the name, or one whose snapshot is gone, which a create replaces. */
-function noneToResume(failure: unknown): boolean {
-  if (!(failure instanceof APIError)) return false;
+function noneToResume(cause: unknown): boolean {
+  if (!(cause instanceof APIError)) return false;
 
-  return failure.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(failure);
+  return cause.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(cause);
 }
 
 /**
@@ -998,9 +998,9 @@ function vercelSandbox(
                 resume: true,
                 signal,
                 onResume: portsClosedOnResume(signal),
-              }).catch((failure: unknown) => {
-                if (noneToResume(failure)) return undefined;
-                throw failure;
+              }).catch((cause: unknown) => {
+                if (noneToResume(cause)) return undefined;
+                throw cause;
               });
 
               if (standing !== undefined) return await idleTimed(standing, signal);
@@ -1026,11 +1026,11 @@ function vercelSandbox(
                 });
 
               try {
-                const opened = await gotOrCreated().catch(async (failure: unknown) => {
+                const opened = await gotOrCreated().catch(async (cause: unknown) => {
                   // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
-                  if (!snapshotGoneFailure(failure)) throw failure;
+                  if (!snapshotGoneFailure(cause)) throw cause;
 
-                  if (!(await clearedStale(ask.name, under, signal))) throw failure;
+                  if (!(await clearedStale(ask.name, under, signal))) throw cause;
 
                   return await gotOrCreated();
                 });

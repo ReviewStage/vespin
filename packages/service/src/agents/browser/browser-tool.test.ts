@@ -294,13 +294,17 @@ const openConversation = Effect.gen(function* () {
 });
 
 /** One call of the tool, as an agent's root makes it, on the browser given. */
-function call(conversationId: string, input: unknown, browserLayer: Layer.Layer<AgentBrowser>) {
+function call(
+  conversationId: string,
+  input: WireBoundaryInput,
+  browserLayer: Layer.Layer<AgentBrowser>,
+) {
   const transcript = { userId: owners.get(conversationId) ?? "", conversationId };
 
   // SAFETY: the cases hand the tool JSON-shaped inputs, as a model's call carries them.
   return runBrowserTool(
     { browserSession: SESSION, conversationId, transcript, openSandbox: async () => undefined },
-    unparsedWire(input as WireBoundaryInput),
+    unparsedWire(input),
   ).pipe(Effect.provide(browserLayer));
 }
 

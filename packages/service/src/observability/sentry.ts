@@ -438,7 +438,7 @@ const SENTRY_LOG_METHOD = {
 } as const;
 
 /** A line's message as one string, folded as Sentry's own Effect logger folds it, so a search for its words still matches. */
-function foldedLogMessage(message: unknown): string {
+function foldedLogMessage<Message>(message: Message): string {
   if (Predicate.isString(message)) return message;
 
   if (Array.isArray(message) && message.length === 1) {

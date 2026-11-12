@@ -542,10 +542,10 @@ function assistantMoments(message: WireValue): readonly NativeMoment[] {
  * or the words the model reads in its place.
  */
 function backgrounded(
-  toolUseResult: unknown,
+  output: ReturnType<typeof readAgentOutputStatus>,
   content: string | readonly WireValue[] | undefined,
 ): boolean {
-  const status = Option.map(readAgentOutputStatus(toolUseResult), (output) => output.status);
+  const status = Option.map(output, (read) => read.status);
 
   if (Option.isSome(status)) return status.value === AGENT_ASYNC_LAUNCHED;
 
@@ -580,7 +580,7 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
     if (
       name === CLAUDE_CODE_TOOL.AGENT &&
       answer.value.is_error !== true &&
-      backgrounded(read.value.tool_use_result, answer.value.content)
+      backgrounded(readAgentOutputStatus(read.value.tool_use_result), answer.value.content)
     ) {
       const callId = answer.value.tool_use_id;
       moments.push({ kind: NATIVE_MOMENT.SUBAGENT_RUNNING, callId, key: callId });

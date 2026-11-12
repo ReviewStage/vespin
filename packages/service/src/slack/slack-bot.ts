@@ -60,6 +60,7 @@ import {
   DateTime,
   Duration,
   Effect,
+  flow,
   Layer,
   Option,
   Redacted,
@@ -316,13 +317,10 @@ function codeOf(code: string | undefined): string | undefined {
   return code !== undefined && SLACK_CODE_PATTERN.test(code) ? code : undefined;
 }
 
-/** An answer read as the schema says, a shape not read refused. */
-function readAnswer<A>(
-  method: SlackMethod,
-  schema: Schema.Codec<A, unknown>,
-  answer: unknown,
-): Effect.Effect<A, SlackBotFailure> {
-  return Schema.decodeUnknownEffect(schema)(answer).pipe(
+/** The reader of an answer as the schema says, a shape not read refused. */
+function readAnswer<A>(method: SlackMethod, schema: Schema.Codec<A, unknown>) {
+  return flow(
+    Schema.decodeUnknownEffect(schema),
     Effect.mapError(() => new SlackBotFailure({ method })),
   );
 }
@@ -363,7 +361,7 @@ function connectedSlackId(
   connectSubject: string,
 ): Effect.Effect<Option.Option<string>> {
   return api(SLACK_METHOD.AUTH_TEST, {}, connectSubject).pipe(
-    Effect.flatMap((answer) => readAnswer(SLACK_METHOD.AUTH_TEST, MemberAuthSchema, answer)),
+    Effect.flatMap((answer) => readAnswer(SLACK_METHOD.AUTH_TEST, MemberAuthSchema)(answer)),
     Effect.map((answer) =>
       answer.team_id === teamId ? Option.some(answer.user_id) : Option.none<string>(),
     ),
@@ -435,7 +433,7 @@ const memberSlackId = Effect.fn("web/slackMemberId")(function* (
 
   const found = yield* api(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, { email }).pipe(
     Effect.flatMap((answer) =>
-      readAnswer(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, LookupSchema, answer),
+      readAnswer(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, LookupSchema)(answer),
     ),
     Effect.map((answer) => Option.some(answer.user.id)),
     Effect.catchIf(
@@ -498,7 +496,7 @@ function sentFile(
     length: String(file.bytes.byteLength),
   }).pipe(
     Effect.flatMap((answer) =>
-      readAnswer(SLACK_METHOD.FILES_GET_UPLOAD_URL_EXTERNAL, UploadUrlSchema, answer),
+      readAnswer(SLACK_METHOD.FILES_GET_UPLOAD_URL_EXTERNAL, UploadUrlSchema)(answer),
     ),
     Effect.tap((answer) => files.send(answer.upload_url, file.bytes)),
     Effect.map((answer) => Option.some({ id: answer.file_id, title: file.title ?? file.name })),
@@ -560,7 +558,7 @@ export function slackBotOver(
   return {
     configured: true,
     team: api(SLACK_METHOD.AUTH_TEST, {}).pipe(
-      Effect.flatMap((answer) => readAnswer(SLACK_METHOD.AUTH_TEST, AuthTestSchema, answer)),
+      Effect.flatMap((answer) => readAnswer(SLACK_METHOD.AUTH_TEST, AuthTestSchema)(answer)),
       Effect.map((answer) => ({ id: answer.team_id, name: answer.team })),
     ),
     dm: (organizationId, userId, content, thread) =>
@@ -586,7 +584,7 @@ export function slackBotOver(
           ...postArgs(content),
         });
 
-        const message = yield* readAnswer(SLACK_METHOD.CHAT_POST_MESSAGE, PostedSchema, posted);
+        const message = yield* readAnswer(SLACK_METHOD.CHAT_POST_MESSAGE, PostedSchema)(posted);
 
         return Option.some<SlackMessage>({ channel: message.channel, ts: message.ts });
       }).pipe(Effect.catch(swallowed<SlackMessage>("write to a member"))),
@@ -605,7 +603,7 @@ export function slackBotOver(
         ...postArgs(content),
       }).pipe(
         Effect.flatMap((answer) =>
-          readAnswer(SLACK_METHOD.CHAT_POST_MESSAGE, PostedSchema, answer),
+          readAnswer(SLACK_METHOD.CHAT_POST_MESSAGE, PostedSchema)(answer),
         ),
         Effect.map((message) =>
           Option.some<SlackMessage>({ channel: message.channel, ts: message.ts }),
@@ -619,7 +617,7 @@ export function slackBotOver(
         limit: THREAD_MESSAGES_READ,
       }).pipe(
         Effect.flatMap((answer) =>
-          readAnswer(SLACK_METHOD.CONVERSATIONS_REPLIES, RepliesSchema, answer),
+          readAnswer(SLACK_METHOD.CONVERSATIONS_REPLIES, RepliesSchema)(answer),
         ),
         Effect.map((answer) =>
           answer.messages.map(
@@ -638,14 +636,14 @@ export function slackBotOver(
     permalink: (channel, ts) =>
       api(SLACK_METHOD.CHAT_GET_PERMALINK, { channel, message_ts: ts }).pipe(
         Effect.flatMap((answer) =>
-          readAnswer(SLACK_METHOD.CHAT_GET_PERMALINK, PermalinkSchema, answer),
+          readAnswer(SLACK_METHOD.CHAT_GET_PERMALINK, PermalinkSchema)(answer),
         ),
         Effect.map((answer) => Option.some(answer.permalink)),
         Effect.catch(swallowed<string>("read a message's link")),
       ),
     userEmail: (slackUserId) =>
       api(SLACK_METHOD.USERS_INFO, { user: slackUserId }).pipe(
-        Effect.flatMap((answer) => readAnswer(SLACK_METHOD.USERS_INFO, UserInfoSchema, answer)),
+        Effect.flatMap((answer) => readAnswer(SLACK_METHOD.USERS_INFO, UserInfoSchema)(answer)),
         Effect.map((answer) => Option.fromNullishOr(answer.user.profile?.email)),
         Effect.catch(swallowed<string>("read a member's email")),
       ),
@@ -655,7 +653,7 @@ export function slackBotOver(
       limit: CHANNELS_READ,
     }).pipe(
       Effect.flatMap((answer) =>
-        readAnswer(SLACK_METHOD.CONVERSATIONS_LIST, ChannelsSchema, answer),
+        readAnswer(SLACK_METHOD.CONVERSATIONS_LIST, ChannelsSchema)(answer),
       ),
       Effect.map((answer) =>
         Option.some(
@@ -765,7 +763,7 @@ function slackWebApi(
         Effect.mapError(() => new SlackBotFailure({ method })),
       );
 
-      const said = yield* readAnswer(method, AnswerSchema, answer);
+      const said = yield* readAnswer(method, AnswerSchema)(answer);
 
       if (!said.ok) {
         const code = codeOf(said.error);

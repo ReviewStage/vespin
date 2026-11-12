@@ -17,6 +17,7 @@
  */
 import { type CodeLines, type CodeToken, codeLinesSchema } from "@repo/features/tasks-view";
 import { catchAllButInterrupt } from "@repo/runtime/effect";
+import type { WireBoundaryInput } from "@repo/wire";
 import { type Cause, Deferred, Duration, Effect, Exit, Option, Queue, Schema, Scope } from "effect";
 
 /**
@@ -51,13 +52,13 @@ export const taskCodeAnswerSchema = Schema.Struct({
 
 /** A process that colors, as the asking side holds it: a message sent to it, and its end. */
 export interface TaskCodeProcess {
-  readonly send: (message: unknown) => void;
+  readonly send: (message: typeof taskCodeRequestSchema.Encoded) => void;
   readonly kill: () => void;
 }
 
 /** What the process's spawner hands what it hears: each message, and the process's exit. */
 export interface TaskCodeProcessListeners {
-  readonly onMessage: (message: unknown) => void;
+  readonly onMessage: (message: WireBoundaryInput) => void;
   readonly onExit: () => void;
 }
 
@@ -70,7 +71,7 @@ export type ColorCode = (language: string, code: string) => Effect.Effect<CodeLi
 /** One process standing: what it was spawned as, what it answered, and the scope that ends it. */
 interface Spawned {
   readonly child: TaskCodeProcess;
-  readonly answers: Queue.Queue<unknown, Cause.Done>;
+  readonly answers: Queue.Queue<WireBoundaryInput, Cause.Done>;
   readonly scope: Scope.Closeable;
   /** Whether the process has exited, so no further block is sent to it. */
   readonly exited: () => boolean;
@@ -90,7 +91,7 @@ export function plainCodeLines(code: string): CodeToken[][] {
 
 /** The lines the process answered for `id`, or none where it ended first or answered what it should not. */
 function answerFor(
-  answers: Queue.Queue<unknown, Cause.Done>,
+  answers: Queue.Queue<WireBoundaryInput, Cause.Done>,
   id: number,
 ): Effect.Effect<CodeLines | undefined> {
   return Effect.matchEffect(Queue.take(answers), {
@@ -110,7 +111,7 @@ function answerFor(
 function spawnInto(parent: Scope.Scope, spawn: SpawnTaskCodeProcess): Effect.Effect<Spawned> {
   return Effect.gen(function* () {
     const scope = yield* Scope.fork(parent);
-    const answers = yield* Queue.unbounded<unknown, Cause.Done>();
+    const answers = yield* Queue.unbounded<WireBoundaryInput, Cause.Done>();
     let exited = false;
 
     const child = yield* Effect.acquireRelease(

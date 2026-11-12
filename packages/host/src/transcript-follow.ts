@@ -21,7 +21,7 @@ import {
 import { FAILURE_FACT, type FailureFacts } from "@repo/features/failure-facts";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { joinedWindowRows, windowMessagesOf } from "@repo/features/transcript-window";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import {
   Data,
   Duration,
@@ -222,8 +222,8 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
 }
 
 /** A value as JSON with every object's keys in order, so two messages alike read alike whichever read built them. */
-function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, held: unknown) =>
+function canonical<Value>(value: Value): string {
+  return JSON.stringify(value, (_key, held: WireBoundaryInput) =>
     Predicate.isObject(held)
       ? Object.fromEntries(
           Object.entries(held).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),

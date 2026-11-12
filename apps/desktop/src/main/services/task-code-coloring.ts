@@ -10,6 +10,7 @@
 import path from "node:path";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { type ColorCode, taskCodeProcessColoring } from "@repo/host/task-code-remote";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { Effect, Scope } from "effect";
 import { utilityProcess } from "electron";
 
@@ -28,7 +29,7 @@ export function colorCodeInUtilityProcess(
       serviceName: SERVICE_NAME,
     });
 
-    child.on("message", (message: unknown) => listeners.onMessage(message));
+    child.on("message", (message: WireBoundaryInput) => listeners.onMessage(message));
     child.on("exit", () => listeners.onExit());
 
     return {

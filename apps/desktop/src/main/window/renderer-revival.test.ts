@@ -1,6 +1,7 @@
 /** renderer-revival.test.ts -- a panel renderer that dies is stood back up after a pause, a bounded number of times before a load succeeds. */
 import { EventEmitter } from "node:events";
 import type { RunMode } from "@repo/host";
+import type { BaseWindow, MessageBoxOptions } from "electron";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PanelManager, type PanelSystem } from "./panel-manager";
 import { STAND_IN_DISPLAY } from "./stand-in-display";
@@ -18,7 +19,7 @@ import { STAND_IN_DISPLAY } from "./stand-in-display";
 
 const windows: FakeBrowserWindow[] = [];
 
-type Sheets = { answers: number[]; shownOn: unknown[] };
+type Sheets = { answers: number[]; shownOn: (BaseWindow | MessageBoxOptions)[] };
 
 /** The answers the next sheets give, by button, and the windows each was shown on. */
 const sheets: Sheets = { answers: [], shownOn: [] };
@@ -79,7 +80,7 @@ const SYSTEM: PanelSystem = {
     },
   },
   dialog: {
-    showMessageBox: (window: unknown) => {
+    showMessageBox: (window: BaseWindow | MessageBoxOptions) => {
       sheets.shownOn.push(window);
 
       return Promise.resolve({ response: sheets.answers.shift() ?? 0, checkboxChecked: false });

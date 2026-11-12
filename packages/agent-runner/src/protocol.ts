@@ -23,8 +23,10 @@ import type {
   SDKMessage,
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
+import type { WireValue } from "@repo/wire";
 import { Option, Predicate, Schema } from "effect";
 import type { ServerNotification } from "./codex-protocol/index.js";
+import type { CodexErrorInfo } from "./codex-protocol/v2/index.js";
 
 /**
  * The environment the runner reads. The bearer authenticates it to the service, its
@@ -1101,7 +1103,9 @@ const decodeCodexErrorKind = Schema.decodeUnknownOption(CodexErrorKindSchema);
  * The kind of a `codexErrorInfo` as Codex wrote it: its word, or its
  * object's one key; none for a kind this pin does not name, or no info.
  */
-export function codexErrorKind(info: unknown): CodexErrorKind | undefined {
+export function codexErrorKind(
+  info: CodexErrorInfo | WireValue | undefined,
+): CodexErrorKind | undefined {
   const named = Predicate.isString(info)
     ? info
     : Predicate.isObjectOrArray(info) && Object.keys(info).length === 1

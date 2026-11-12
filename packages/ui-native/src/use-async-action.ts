@@ -56,8 +56,8 @@ const IDLE = { stage: ASYNC_ACTION_STAGE.IDLE } as const;
 const RUNNING = { stage: ASYNC_ACTION_STAGE.RUNNING } as const;
 
 /** The words a rejection says: an `Error`'s message, else the value itself. */
-export function rejectionWords(rejected: unknown): string {
-  return rejected instanceof Error ? rejected.message : String(rejected);
+export function rejectionWords(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 /**
@@ -70,7 +70,7 @@ export function rejectionWords(rejected: unknown): string {
  * sees one left running.
  */
 export function useAsyncAction<Refusal = string>(
-  unanswered: (rejected: unknown) => Refusal,
+  unanswered: (cause: unknown) => Refusal,
 ): AsyncAction<Refusal> {
   const [state, setState] = useState<AsyncActionState<Refusal>>(IDLE);
   const out = useRef(false);
@@ -108,7 +108,7 @@ export function useAsyncAction<Refusal = string>(
 
     return Promise.resolve(started).then(
       (refusal) => settle(refusal ?? undefined),
-      (rejected: unknown) => settle(newestUnanswered.current(rejected)),
+      (cause: unknown) => settle(newestUnanswered.current(cause)),
     );
   }, []);
 

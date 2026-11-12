@@ -2,13 +2,13 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { type AgentNoticeDoorsSurface, NOTICE_KIND } from "@repo/host/agent-notices";
 import { PUSH } from "@repo/host/contract";
 import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
-import { app, Notification } from "electron";
+import { app, type Event as ElectronEvent, Notification } from "electron";
 import type { PanelManager } from "./panel-manager";
 
 /** A notification as macOS holds it once posted: shown once asked, and answering with Electron's events. */
 interface PostedNotification {
   on(event: "click" | "close" | "show", listener: () => void): void;
-  on(event: "failed", listener: (event: unknown, error: string) => void): void;
+  on(event: "failed", listener: (event: ElectronEvent, error: string) => void): void;
   show(): void;
 }
 

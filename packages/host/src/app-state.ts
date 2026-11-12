@@ -1181,7 +1181,7 @@ type HeldValue = Keyed | readonly HeldValue[] | string | number | boolean | null
 type Keyed = { readonly [key: string]: HeldValue };
 
 /** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
-function isKeyed(value: unknown): value is Keyed {
+function isKeyed(value: HeldValue): value is Keyed {
   return Predicate.isObjectOrArray(value);
 }
 
@@ -1217,7 +1217,7 @@ function rowsAreValue(entry: HostReadSliceEntry): boolean {
 }
 
 /** The record a key's read's rows are, where its slice names the field its list stands under (`rowsAt`); none otherwise. */
-function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
+function recordOf(entry: HostReadSliceEntry, value: HeldValue): Keyed | undefined {
   if (entry.rowsAt === undefined || !isKeyed(value)) return undefined;
 
   return isKeyed(value.rows) ? value.rows : undefined;
@@ -1229,7 +1229,7 @@ function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
  * where it holds none. Note that a read holding rows says nothing else
  * (`AppHostRead`), so its rows are all of it that can move.
  */
-function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly Keyed[] | undefined {
+function rowsOf(entry: HostReadSliceEntry, value: HeldValue): readonly Keyed[] | undefined {
   if (!isKeyed(value)) return undefined;
 
   const rows: unknown =
@@ -1243,7 +1243,7 @@ function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly Keyed[] | u
 }
 
 /** A key's read's record of rows without its list, where its slice names `rowsAt`; none otherwise. */
-function besideOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
+function besideOf(entry: HostReadSliceEntry, value: HeldValue): Keyed | undefined {
   const record = recordOf(entry, value);
 
   if (record === undefined) return undefined;

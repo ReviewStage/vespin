@@ -137,7 +137,7 @@ export function useAttachedPictures(
         if (picked.canceled) return;
         add(picked.assets.map((asset) => asset.base64));
       })
-      .catch((error: unknown) => console.error("The photo picker did not open.", error));
+      .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
 
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
@@ -159,7 +159,7 @@ export function useAttachedPictures(
       }),
     )
       .then((contents) => add(contents, unreadable))
-      .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
+      .catch((cause: unknown) => console.error("The dropped pictures were not read.", cause));
 
   const drop = (uris: readonly string[], unreadable: number) => {
     void dropped(uris, unreadable);

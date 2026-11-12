@@ -648,11 +648,9 @@ export const postToOpenAi = /* @__PURE__ */ Effect.fnUntraced(function* (
  */
 function renewedFrom(
   credentials: SealedCredentials,
-  body: unknown,
+  renewed: Option.Option<typeof CodexRefreshAnswerSchema.Type>,
   now: Date,
 ): { readonly credentials: SealedCredentials; readonly expiresAt: Date } | undefined {
-  const renewed = Schema.decodeUnknownOption(CodexRefreshAnswerSchema)(body);
-
   if (Option.isNone(renewed)) return undefined;
   const tokens = renewed.value;
   const expiresAt = codexAccessExpiryOf(tokens.access_token, now, tokens.expires_in);
@@ -771,7 +769,11 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
         return { outcome: CHATGPT_ACCESS.UNREACHABLE };
       }
 
-      const renewed = renewedFrom(credentials, body, now);
+      const renewed = renewedFrom(
+        credentials,
+        Schema.decodeUnknownOption(CodexRefreshAnswerSchema)(body),
+        now,
+      );
 
       if (renewed === undefined) return { outcome: CHATGPT_ACCESS.UNREACHABLE };
       const { expiresAt } = renewed;

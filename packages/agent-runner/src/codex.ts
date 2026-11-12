@@ -158,6 +158,7 @@ import type {
   ApprovalsReviewer,
   AskForApproval,
   ChatgptAuthTokensRefreshResponse,
+  CodexErrorInfo,
   CommandExecutionApprovalDecision,
   SandboxMode,
   SandboxPolicy,
@@ -323,7 +324,7 @@ type Signal =
       readonly status: TurnStatus;
       readonly error: string | undefined;
       /** Codex's own word for why the turn failed (`codexErrorInfo`), as it wrote it. */
-      readonly errorInfo: unknown;
+      readonly errorInfo: CodexErrorInfo | null | undefined;
     }
   | { readonly kind: typeof SIGNAL.PROBED; readonly answered: boolean }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
@@ -400,7 +401,11 @@ const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(InputLineSch
 
 /** The field of a refusal's `data` read here: the `TurnError`'s info, where app-server sent one. */
 const decodeRefusalData = Schema.decodeUnknownOption(
-  Schema.Struct({ codexErrorInfo: Schema.optionalKey(Schema.NullOr(Schema.Unknown)) }),
+  Schema.Struct({
+    codexErrorInfo: Schema.optionalKey(
+      Schema.NullOr(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)])),
+    ),
+  }),
 );
 
 const CODEX_EFFORTS: ReadonlySet<string> = new Set(Object.values(CODEX_EFFORT));
@@ -474,8 +479,7 @@ function bundledCatalog() {
 function ultrafastCatalog(): string {
   const catalog = bundledCatalog();
 
-  const isUltrafast = (tier: unknown) =>
-    Predicate.isObjectOrArray(tier) && "id" in tier && tier.id === SERVICE_TIER.ULTRAFAST;
+  const isUltrafast = Schema.is(Schema.Struct({ id: Schema.Literal(SERVICE_TIER.ULTRAFAST) }));
 
   const models = catalog.models.map((model) => {
     const tiers = model.service_tiers ?? [];

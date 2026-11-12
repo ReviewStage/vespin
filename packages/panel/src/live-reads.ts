@@ -358,8 +358,8 @@ function idsOf(read: LiveReadName, path: readonly string[]): readonly LiveReadId
 }
 
 /** Every read `held` holds `depth` segments deep, each with its path. */
-function readsIn(
-  held: unknown,
+function readsIn<Held>(
+  held: Held,
   depth: number,
   ids: readonly string[] = [],
 ): readonly { readonly ids: readonly string[]; readonly held: unknown }[] {

@@ -13,7 +13,7 @@ const ELSEWHERE_WORDS =
   /body its description in Markdown|adds nothing to the description|edit-description|an edit of the description|runs share its memory/gu;
 
 /** Every string a value holds: a tool's description, and each description and string its JSON Schema names, keys aside. */
-function wordsIn(value: unknown): readonly string[] {
+function wordsIn<Value>(value: Value): readonly string[] {
   if (Predicate.isString(value)) return [value];
 
   if (Array.isArray(value)) return value.flatMap(wordsIn);

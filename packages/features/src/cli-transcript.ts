@@ -178,7 +178,7 @@ export function transcriptCallPlace(
 }
 
 /** A call's input or result as words: a string as it is, anything else as its JSON, indented. */
-function callWords(value: unknown): string {
+function callWords(value: UnparsedWireValue): string {
   return Predicate.isString(value) ? value : (JSON.stringify(value, null, 2) ?? "");
 }
 

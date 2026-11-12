@@ -137,7 +137,7 @@ function mount(initial: Standing, keyPrefix = "key") {
   let restand: ((next: Standing) => void) | undefined;
 
   /** One ask answered from its kind's queue, and written down. */
-  const scripted = (kind: AnyKind, payload: unknown): Promise<WireBoundaryInput> => {
+  const scripted = <Payload>(kind: AnyKind, payload: Payload): Promise<WireBoundaryInput> => {
     asked.push({ kind, payload });
     const next = answers.get(kind)?.shift();
 
@@ -151,7 +151,10 @@ function mount(initial: Standing, keyPrefix = "key") {
     ...fakeActPortCalls(),
     // SAFETY: the test scripts each kind's answer in that kind's own shape.
     ...(Object.fromEntries(
-      SENT_ON_MUTATIONS.map((kind) => [kind, (payload: unknown) => scripted(kind, payload)]),
+      SENT_ON_MUTATIONS.map((kind) => [
+        kind,
+        <Payload>(payload: Payload) => scripted(kind, payload),
+      ]),
     ) as Partial<FakeActPort>),
   });
 

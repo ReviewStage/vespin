@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { it } from "@effect/vitest";
+import type { WireValue } from "@repo/wire";
 import { type FakeResponder, fakeHttpClientLayer } from "@repo/wire/testing";
 import {
   Cause,
@@ -1748,7 +1749,7 @@ function fakeMcpRoute(answer: "take" | "refuse" = "take") {
 
 /** The CLI's end of the control channel an SDK MCP server is connected to: what the server sent it, in order. */
 function fakeCliTransport() {
-  const sent: unknown[] = [];
+  const sent: WireValue[] = [];
   const answered = Deferred.makeUnsafe<void>();
 
   const transport = {
@@ -1758,7 +1759,7 @@ function fakeCliTransport() {
       | undefined,
     start: async () => {},
     close: async () => {},
-    send: async (message: unknown) => {
+    send: async (message: WireValue) => {
       sent.push(message);
       Deferred.doneUnsafe(answered, Exit.void);
     },

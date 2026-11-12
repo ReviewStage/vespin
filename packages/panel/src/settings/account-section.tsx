@@ -150,9 +150,9 @@ const ACCOUNT_DELETE_MUTATION = mutationOptions({
   mutationFn: (): Promise<ActionResult> =>
     sendAct(ACT_KIND.ACCOUNT_DELETE, undefined).then(
       () => ({ status: ACTION_RESULT_STATUS.ACCEPTED }),
-      (error: unknown) => ({
+      (cause: unknown) => ({
         status: ACTION_RESULT_STATUS.REJECTED,
-        reason: accountDeleteRefusalWords(error),
+        reason: accountDeleteRefusalWords(cause),
       }),
     ),
 });

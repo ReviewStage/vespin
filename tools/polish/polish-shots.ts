@@ -266,7 +266,7 @@ interface PlaywrightPage {
   goto(url: string, options?: TimeoutOptions): Promise<void>;
   waitForSelector(selector: string, options?: TimeoutOptions): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
-  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<void>;
+  waitForFunction(script: string, arg: undefined, options?: { timeout: number }): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
   emulateMedia(options: MediaOptions): Promise<void>;
   screenshot(options: ScreenshotOptions): Promise<Buffer>;
@@ -325,8 +325,8 @@ function say(line: string): void {
 }
 
 /** The first line of what was thrown. */
-function firstLineOf(error: unknown): string {
-  return error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error);
+function firstLineOf(cause: unknown): string {
+  return cause instanceof Error ? (cause.message.split("\n")[0] ?? "") : String(cause);
 }
 
 /** Playwright, from beside this script or from the global npm folder. */
@@ -557,7 +557,7 @@ async function watchDeaths(app: ElectronApplication): Promise<void> {
     watched.on(
       "render-process-gone",
       (
-        _event: unknown,
+        _event: never,
         contents: { getURL(): string },
         details: { reason: string; exitCode: number },
       ) =>
@@ -567,7 +567,7 @@ async function watchDeaths(app: ElectronApplication): Promise<void> {
     );
     watched.on(
       "child-process-gone",
-      (_event: unknown, details: { type: string; reason: string; exitCode: number }) =>
+      (_event: never, details: { type: string; reason: string; exitCode: number }) =>
         deaths.push(`${details.type} process went: ${details.reason} (exit ${details.exitCode})`),
     );
   }, undefined);
@@ -701,9 +701,9 @@ async function shootDesktop(
       timeout: READY_TIMEOUT_MS,
     })
     // Note that Playwright kills a launch it gave up on, so the folder that launch may have made goes with it.
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       forget();
-      throw error;
+      throw cause;
     });
 
   try {

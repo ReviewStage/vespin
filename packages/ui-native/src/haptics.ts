@@ -28,5 +28,5 @@ export function buzz(kind: Buzz): void {
   const played =
     kind === BUZZ.SELECTION ? selectionAsync() : notificationAsync(NOTIFICATION_FEEDBACK[kind]);
 
-  played.catch((error: unknown) => console.error("The buzz did not go.", error));
+  played.catch((cause: unknown) => console.error("The buzz did not go.", cause));
 }

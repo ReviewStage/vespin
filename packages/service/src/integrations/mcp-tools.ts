@@ -213,7 +213,7 @@ const decodeWireValue = Schema.decodeUnknownOption(WireValueSchema);
 const decodeToolResult = Schema.decodeUnknownOption(
   Schema.Struct({
     isError: Schema.optionalKey(Schema.Boolean),
-    structuredContent: Schema.optionalKey(Schema.Unknown),
+    structuredContent: Schema.optionalKey(WireValueSchema),
     content: Schema.optionalKey(Schema.Array(Schema.Unknown)),
   }),
 );
@@ -222,7 +222,7 @@ const decodeTextBlock = Schema.decodeUnknownOption(
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
 );
 
-const decodeJsonText = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
+const decodeJsonText = Schema.decodeUnknownOption(Schema.fromJsonString(WireValueSchema));
 
 /** The JSON-RPC answers a response carries: its body whole, or each event's `data:` lines joined. */
 function answersOf(contentType: string, body: string): readonly RpcAnswerType[] {
@@ -577,7 +577,7 @@ export function toolResultTexts(result: WireValue): readonly string[] {
  * sent one, then each text block that is JSON, in order; none where the
  * result is the tool's own error.
  */
-export function toolResultJson(result: WireValue): readonly unknown[] {
+export function toolResultJson(result: WireValue): readonly WireValue[] {
   const read = Option.getOrUndefined(decodeToolResult(result));
 
   if (read === undefined || read.isError === true) return [];

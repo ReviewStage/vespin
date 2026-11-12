@@ -25,6 +25,7 @@ import {
   type InferSchemaInput,
   type InferSchemaOutput,
   ProcedureContract,
+  type RouterContract,
 } from "@orpc/contract";
 import { Predicate, Schema } from "effect";
 import { ANY_PROCEDURE_REFUSALS } from "./contract/base.js";
@@ -159,7 +160,7 @@ export function spelledFailure(
 }
 
 /** Every procedure of a group, the group's nested groups' among them. */
-function proceduresIn(group: unknown): readonly AnyProcedureContract[] {
+function proceduresIn(group: RouterContract): readonly AnyProcedureContract[] {
   if (group instanceof ProcedureContract) return [group];
 
   if (!Predicate.isObjectOrArray(group)) return [];
@@ -203,7 +204,7 @@ function failuresOf(
  * constant's name (`not-found` is `NOT_FOUND`), as an `as const` object.
  */
 export function failureSetOf<
-  Group,
+  Group extends RouterContract,
   const As extends HostedRenames = NoRenames,
   Live extends boolean = false,
 >(

@@ -21,21 +21,21 @@ const VALUE_KIND = {
 
 type ValueKind = (typeof VALUE_KIND)[keyof typeof VALUE_KIND];
 
-/** The value's kind, as `typeof` words it: `null` and arrays are objects. */
-export function valueKind(value: unknown): ValueKind {
-  if (Predicate.isString(value)) return VALUE_KIND.STRING;
+/** A thrown value's kind, as `typeof` words it: `null` and arrays are objects. */
+export function valueKind(cause: unknown): ValueKind {
+  if (Predicate.isString(cause)) return VALUE_KIND.STRING;
 
-  if (Predicate.isNumber(value)) return VALUE_KIND.NUMBER;
+  if (Predicate.isNumber(cause)) return VALUE_KIND.NUMBER;
 
-  if (Predicate.isBoolean(value)) return VALUE_KIND.BOOLEAN;
+  if (Predicate.isBoolean(cause)) return VALUE_KIND.BOOLEAN;
 
-  if (Predicate.isBigInt(value)) return VALUE_KIND.BIGINT;
+  if (Predicate.isBigInt(cause)) return VALUE_KIND.BIGINT;
 
-  if (Predicate.isSymbol(value)) return VALUE_KIND.SYMBOL;
+  if (Predicate.isSymbol(cause)) return VALUE_KIND.SYMBOL;
 
-  if (Predicate.isUndefined(value)) return VALUE_KIND.UNDEFINED;
+  if (Predicate.isUndefined(cause)) return VALUE_KIND.UNDEFINED;
 
-  if (Predicate.isFunction(value)) return VALUE_KIND.FUNCTION;
+  if (Predicate.isFunction(cause)) return VALUE_KIND.FUNCTION;
 
   return VALUE_KIND.OBJECT;
 }

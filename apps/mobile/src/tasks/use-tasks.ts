@@ -76,7 +76,7 @@ const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
@@ -208,9 +208,9 @@ function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
 
             return landed;
           },
-          (error: unknown) => {
+          (cause: unknown) => {
             letGo();
-            throw error;
+            throw cause;
           },
         );
       },

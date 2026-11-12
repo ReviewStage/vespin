@@ -57,9 +57,9 @@ export function createReportingRoot(
   element: HTMLElement,
   sentry: DesktopSentryReports,
 ): (surface: ReactNode) => void {
-  const report = (thrown: unknown): void => {
-    console.error("The window's surface failed to render.", thrown);
-    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+  const report = (cause: unknown): void => {
+    console.error("The window's surface failed to render.", cause);
+    const error = cause instanceof Error ? cause : new Error(String(cause));
     sentry.reportBlankWindow(error, BLANK_WINDOW.RENDER);
     sentry.load();
   };

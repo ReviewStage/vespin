@@ -309,7 +309,7 @@ export function markdownStep<Values extends readonly unknown[], Tree>(
   let keyed = keyedSteps.get(step);
 
   if (keyed === undefined) {
-    const attach = (_serials: unknown, ...attached: Values) => step(...attached);
+    const attach = <Serials,>(_serials: Serials, ...attached: Values) => step(...attached);
     Object.defineProperty(attach, "name", { value: step.name });
     // SAFETY: a unified attacher takes its options and answers a transformer, which `step` does.
     keyed = attach as MarkdownStep;

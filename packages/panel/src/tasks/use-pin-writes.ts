@@ -280,7 +280,7 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         accountIn(client) === pressedBy
           ? sendAgentPin({ agentId, pinned, ...placed }).then(
               (answer) => ("agent" in answer ? AGENT_PIN_ASKED.CHANGED : { refused: answer }),
-              (error: unknown) => ({ refused: error }),
+              (cause: unknown) => ({ refused: cause }),
             )
           : AGENT_PIN_ASKED.UNASKED,
     );

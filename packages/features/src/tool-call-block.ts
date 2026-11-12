@@ -76,14 +76,14 @@ function isContainer<T>(value: T): value is T & object {
 }
 
 /** A value that stands on its key's line: a scalar, its later lines set in under the first, or an empty list or record as "(none)". */
-function leafWords(value: unknown, indent: string): string {
+function leafWords(value: WireValue, indent: string): string {
   if (isContainer(value)) return NONE;
 
   return String(value).replaceAll("\n", `\n${indent}  `);
 }
 
 /** A JSON value as indented `key: value` lines and `- item` lines, with no braces or quotes. */
-function readableLines(value: unknown, indent: string): string[] {
+function readableLines(value: WireValue, indent: string): string[] {
   if (Array.isArray(value) && value.length === 0) return [`${indent}${NONE}`];
 
   if (Array.isArray(value)) {

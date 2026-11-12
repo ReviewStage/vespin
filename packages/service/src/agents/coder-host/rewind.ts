@@ -91,11 +91,10 @@ const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /** How a call the machine refused is refused to the caller, a restore's or a diff's: a Mac away or removed by name, anything else as unavailable. */
-export function refusedByMachine(failure: unknown): HostedRefusal {
-  if (failure instanceof LaunchRefused && failure.deviceRemoved === true)
-    return HOST_REMOVED_REFUSAL;
+export function refusedByMachine(cause: unknown): HostedRefusal {
+  if (cause instanceof LaunchRefused && cause.deviceRemoved === true) return HOST_REMOVED_REFUSAL;
 
-  if (failure instanceof LaunchRefused && failure.deviceAway === true) {
+  if (cause instanceof LaunchRefused && cause.deviceAway === true) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
   }
 
