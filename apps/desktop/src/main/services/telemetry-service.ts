@@ -162,12 +162,11 @@ class MainSentrySpan implements Tracer.Span {
     this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
   }
 
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Effect's Tracer.Span contract hands an attribute's value as unknown
-  attribute(key: string, value: unknown): void {
+  readonly attribute: Tracer.Span["attribute"] = (key, value) => {
     this.attributes.set(key, value);
 
     if (isKeptKey(key) && isKeptValue(value)) this.sentry.setAttribute(key, value);
-  }
+  };
 
   event(): void {}
 
