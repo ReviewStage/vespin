@@ -31,6 +31,7 @@ import {
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
   type PullRequestMove,
@@ -160,7 +161,7 @@ function keepReminder(
   stageFixture(state);
 }
 
-/** Keeps the words of a memory the fixture saved over one of its own, and lays them over the document at once, as the host draws a correction; nothing for a new memory, which the host draws only as a read carries it, or for any other act. */
+/** Keeps the words of a memory the fixture saved, over one of its own or as a new one, and lays them over the document at once (`savedMemoriesAppState`); nothing for any other act. */
 function keepMemory(
   state: Pick<AppStateStore, "snapshot" | "update">,
   kind: PortActKind,
@@ -170,8 +171,8 @@ function keepMemory(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { text, replaces } = payload as PortActPayload<typeof ACT_KIND.MEMORIES_SAVE>;
 
-  if (replaces === undefined) return;
-  MEMORY_WORDS.set(state, new Map(MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS).set(replaces, text));
+  const id = replaces ?? NEW_MEMORY_ID;
+  MEMORY_WORDS.set(state, new Map(MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS).set(id, text));
   stageFixture(state);
 }
 

@@ -45,3 +45,4 @@ appId: dev.vespin.ios
 - tapOn: "Save"
 - waitForAnimationToEnd
 - assertVisible: "The web server's tests run on PGlite through `test:store`."
+- assertVisible: "Preview deployments sleep after an hour without a request."
