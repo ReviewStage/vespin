@@ -50,7 +50,6 @@ import {
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
-import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { isWebAddress } from "@repo/host/acts";
 import {
   HoverCard,
@@ -554,9 +553,6 @@ function chipName(
 ): string {
   const entity = entityOfMention(mention);
   const { live, held } = entityName(entity, known, { heading, answered: standing, repository });
-
-  // Note that a plan the window still lists Untitled keeps the name it was written with, which says more.
-  if (entity.kind === ENTITY_KIND.PLAN && held === UNTITLED_TASK_NAME) return written;
 
   return (live || bare ? held : undefined) ?? written;
 }

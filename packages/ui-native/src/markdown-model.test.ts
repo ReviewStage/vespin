@@ -93,6 +93,19 @@ describe("markdownBlocks", () => {
     });
   });
 
+  it("calls a place it holds no name for by its kind, which a screen reader hears once", () => {
+    const [paragraph] = markdownBlocks(
+      "https://vespin.dev/acme/automation/5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b83/run/1f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b83",
+      READING,
+    );
+
+    expect(paragraph).toMatchObject({
+      runs: [
+        { kind: MARKDOWN_RUN.CHIP, chip: { name: "Automation run", heard: "Automation run" } },
+      ],
+    });
+  });
+
   it("joins a paragraph's lines with a space, and keeps them where a person typed the words", () => {
     const written = "A quote stands apart,\nand wraps.";
     expect(markdownBlocks(written, READING)).toEqual([

@@ -37,6 +37,7 @@ import {
 } from "@repo/features/link-grammar";
 import { formatCount } from "@repo/features/number-format";
 import {
+  CHECK_SUMMARY_WORDS,
   CHECK_WORDS,
   checksCountOf,
   checksSummaryOf,
@@ -2456,14 +2457,6 @@ const SUMMARY_GLYPHS = {
   [CHECK_SUMMARY.NONE]: null,
 } as const satisfies Record<CheckSummary, ReactNode>;
 
-/** How the checks went, in the words the Checks tab's glyph says to a reader who cannot see it. */
-const SUMMARY_WORDS = {
-  [CHECK_SUMMARY.FAILING]: "failing",
-  [CHECK_SUMMARY.PENDING]: "running",
-  [CHECK_SUMMARY.PASSING]: "passing",
-  [CHECK_SUMMARY.NONE]: "none",
-} as const satisfies Record<CheckSummary, string>;
-
 /** The tone the Checks tab's count takes for how its checks went, as its glyph does: a wait quiet, under the ring every wait turns. */
 const SUMMARY_TONES = {
   [CHECK_SUMMARY.FAILING]: STATUS_TONE.DANGER,
@@ -2484,7 +2477,9 @@ function checksCount(
   const tone = SUMMARY_TONES[summary];
 
   return [
-    glyph === null ? { text, tone } : { text, tone, glyph, glyphLabel: SUMMARY_WORDS[summary] },
+    glyph === null
+      ? { text, tone }
+      : { text, tone, glyph, glyphLabel: CHECK_SUMMARY_WORDS[summary] },
   ];
 }
 

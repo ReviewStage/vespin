@@ -1,4 +1,5 @@
 /** usage-limit-notice.tsx -- the warning kept in a conversation where its agent moved to its next plan or key, paused, or stopped at its usage limit. */
+import { dueText } from "@repo/features/time-format";
 import type { UsageLimitNotice as Notice } from "@repo/wire/ui-messages";
 import { GLYPH } from "../../icons/icons.js";
 import { STATUS_TONE } from "../../status-tone.js";
@@ -17,11 +18,7 @@ function nextWords(notice: Notice): string {
 
   if (notice.resetsAt === null) return "Send a message to continue";
 
-  const reset = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(
-    notice.resetsAt,
-  );
-
-  return `Resumes at ${reset}`;
+  return `Resumes at ${dueText(notice.resetsAt, Date.now())}`;
 }
 
 export function UsageLimitNotice({
