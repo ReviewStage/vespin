@@ -21,7 +21,7 @@ import { GATEWAY_EVENT } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { KEEP_AWAKE, type KeepAwake } from "@repo/settings";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Duration, Effect, Layer, Option, PubSub, Result, Stream } from "effect";
+import { Duration, Effect, Layer, Option, Predicate, PubSub, Result, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import { systemError } from "effect/PlatformError";
@@ -101,6 +101,29 @@ const nudged = (time: Duration.Input) =>
   });
 
 /**
+ * The disk with each of its calls run whole once begun. Note that Node lands a
+ * call its fiber was interrupted out of all the same, so a case that ended
+ * while the host was mid-step, such as making `~/.local/bin` for its link
+ * after a register, had the call land in the temporary folder as its scope
+ * removed it, which failed the removal (ENOTEMPTY); run whole, the scope's
+ * close waits for the call to land instead.
+ */
+const wholeCalls = <Disk extends object>(disk: Disk): Disk =>
+  // SAFETY: each entry is the disk's own, a method's Effect only made uninterruptible, so the record keeps the disk's shape.
+  Object.fromEntries(
+    Object.entries(disk).map(([name, entry]) => [
+      name,
+      Predicate.isFunction(entry)
+        ? (...args: unknown[]) => {
+            const answered: unknown = entry(...args);
+
+            return Effect.isEffect(answered) ? Effect.uninterruptible(answered) : answered;
+          }
+        : entry,
+    ]),
+  ) as Disk;
+
+/**
  * This Mac's host composed over a state folder of its own, with what each
  * fake was asked, in the order it was asked: the service's enrolls, by the
  * device id and the version they carried, and leaves, and the agent's
@@ -140,7 +163,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
 
     const files = Layer.effect(
       FileSystem.FileSystem,
-      Effect.map(FileSystem.FileSystem, (fileSystem) => ({
+      Effect.map(Effect.map(FileSystem.FileSystem, wholeCalls), (fileSystem) => ({
         ...fileSystem,
         remove: (path: string, removing?: Parameters<typeof fileSystem.remove>[1]) =>
           path === options.lockedFolder
