@@ -126,7 +126,11 @@ import {
   type RefusedDevice,
   TRANSCRIPT_PARTS_QUERY,
 } from "./agent-wire.js";
-import { ALLOWED_COMMAND_QUERY, allowedCommandAddRequestSchema } from "./allowed-command-wire.js";
+import {
+  ALLOWED_COMMAND_QUERY,
+  allowedCommandAddRequestSchema,
+  allowedCommandEditRequestSchema,
+} from "./allowed-command-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -607,6 +611,20 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.account.addAllowedCommand, admitted);
+  }
+
+  /** One of the account's always-allowed commands, by its id, given first words typed by hand, answering the list as it then stands; words the service would refuse by shape are refused here without traveling at all. */
+  editAllowedCommand(
+    id: string,
+    prefix: CommandPrefix,
+  ): Effect.Effect<AllowedCommandsWriteAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(allowedCommandEditRequestSchema)({ id, prefix }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.editAllowedCommand, admitted);
   }
 
   /** One of the account's always-allowed commands removed by its id, answering the list as it then stands. */

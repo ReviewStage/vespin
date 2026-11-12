@@ -20,9 +20,11 @@ import { AlwaysAllowedSection } from "./always-allowed-section.js";
 
 /**
  * always-allowed-section.test.ts -- Settings › Agents' Always allowed: Add
- * sends a typed command's first words, a trailing `*` dropped, and refuses
- * shell syntax under the field without sending it; and Remove takes a
- * command off at once, its toast's Undo adding it again. Synthetic ids.
+ * command's card sends a typed command's first words, a trailing `*`
+ * dropped, and refuses shell syntax under the field without sending it;
+ * Edit command sends one write putting the new words in place; and Remove
+ * takes a command off at once, its toast's Undo adding it again. Synthetic
+ * ids.
  */
 
 declare global {
@@ -78,13 +80,16 @@ function serveWrites(start: readonly AllowedCommand[]): AllowedCommandWriteParam
   fakeActPort({
     [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => {
       sent.push(write);
+      const named = "add" in write ? [] : "edit" in write ? write.edit : write.remove;
+      const kept = commands.filter((each) => each.prefix.join(" ") !== named.join(" "));
+      const added = "add" in write ? write.add : "edit" in write ? write.to : undefined;
       commands =
-        "add" in write
-          ? [
-              ...commands,
-              { ...GIT_STATUS, id: crypto.randomUUID(), prefix: write.add, addedAt: Date.now() },
-            ]
-          : commands.filter((each) => each.prefix.join(" ") !== write.remove.join(" "));
+        added === undefined
+          ? kept
+          : [
+              ...kept,
+              { ...GIT_STATUS, id: crypto.randomUUID(), prefix: added, addedAt: Date.now() },
+            ];
       writeAppState(documentHolding(commands));
       const answer: AllowedCommandsWriteAnswerView = { commands };
 
@@ -117,11 +122,30 @@ async function mount(commands: readonly AllowedCommand[]): Promise<void> {
   await settle();
 }
 
-/** Types `words` into the field and presses Enter. */
+/** The button or menu item that reads `words`. */
+function pressable(selector: string, words: string): HTMLElement {
+  return (
+    [...document.querySelectorAll<HTMLElement>(selector)].find(
+      (each) => each.textContent === words,
+    ) ?? assert.fail(`no ${words}`)
+  );
+}
+
+/** Opens the only row's ⋯ and presses `item` in it. */
+async function pressInMenu(item: string): Promise<void> {
+  const ellipsis =
+    document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
+    assert.fail("no ⋯");
+
+  act(() => ellipsis.click());
+  act(() => pressable('[role="menuitem"]', item).click());
+  await settle();
+}
+
+/** Types `words` into the card's field, replacing what it held, and presses Enter. */
 async function typeAndEnter(words: string): Promise<void> {
   const field =
-    document.querySelector<HTMLInputElement>('input[aria-label="Add a command"]') ??
-    assert.fail("no field");
+    document.querySelector<HTMLInputElement>('[role="dialog"] input') ?? assert.fail("no field");
 
   act(() => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -145,6 +169,8 @@ test("Add sends a typed command's first words, its trailing * dropped, and refus
   const sent = serveWrites([]);
   await mount([]);
 
+  act(() => pressable("button", "Add command").click());
+  await settle();
   await typeAndEnter("pnpm lint | tee out");
   assert.deepEqual(sent, [], "shell syntax is not sent");
   assert.match(document.body.textContent ?? "", /no quotes, pipes, globs, or other shell syntax/u);
@@ -154,23 +180,25 @@ test("Add sends a typed command's first words, its trailing * dropped, and refus
   assert.deepEqual(listed(), ["pnpm lint *"]);
 });
 
+test("Edit command opens the card filled in and sends one write putting the new words in place", async () => {
+  const sent = serveWrites([GIT_STATUS]);
+  await mount([GIT_STATUS]);
+
+  await pressInMenu("Edit command");
+  const field =
+    document.querySelector<HTMLInputElement>('[role="dialog"] input') ?? assert.fail("no field");
+  assert.equal(field.value, "git status");
+
+  await typeAndEnter("git diff");
+  assert.deepEqual(sent, [{ edit: ["git", "status"], to: ["git", "diff"] }]);
+  assert.deepEqual(listed(), ["git diff *"]);
+});
+
 test("Remove takes a command off at once, and its toast's Undo adds it again", async () => {
   const sent = serveWrites([GIT_STATUS]);
   await mount([GIT_STATUS]);
 
-  const ellipsis =
-    document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
-    assert.fail("no ⋯");
-
-  act(() => ellipsis.click());
-
-  const remove =
-    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (each) => each.textContent === "Remove",
-    ) ?? assert.fail("no Remove");
-
-  act(() => remove.click());
-  await settle();
+  await pressInMenu("Remove");
 
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "nothing is asked");
   assert.deepEqual(listed(), []);
@@ -190,19 +218,7 @@ test("a removal that never reaches the host leaves the command standing and says
   });
   await mount([GIT_STATUS]);
 
-  const ellipsis =
-    document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
-    assert.fail("no ⋯");
-
-  act(() => ellipsis.click());
-
-  const remove =
-    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (each) => each.textContent === "Remove",
-    ) ?? assert.fail("no Remove");
-
-  act(() => remove.click());
-  await settle();
+  await pressInMenu("Remove");
 
   assert.deepEqual(listed(), ["git status *"]);
   assert.equal(newestToastSays()?.includes("Couldn't change your always-allowed commands"), true);
