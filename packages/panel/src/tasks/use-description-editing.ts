@@ -589,7 +589,10 @@ export function useDescriptionEditing(
     saves,
     history,
     step,
-    keepHistory: (left) => setClosedWith({ taskId, history: left }),
+    // Note that a history an editor leaves as it closes on another account signing in is dropped, since what it would take back was typed as the last one.
+    keepHistory: (left) => {
+      if (sameAccount(signedInNow(), wroteAs.current)) setClosedWith({ taskId, history: left });
+    },
     stepHistory: (next) => {
       if (editor !== undefined || history === undefined) return;
       open();

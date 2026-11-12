@@ -1935,3 +1935,34 @@ test("the history an editor left never reaches another task, though its descript
   assert.deepEqual({ offeredBefore, offeredAfter }, { offeredBefore: true, offeredAfter: false });
   assert.equal(open().history, undefined);
 });
+
+test("⌘Z leaves the description alone while the focus stands outside its page, and takes it up again once the focus comes back", async () => {
+  const { container, render } = mount();
+  await typedAndLeft(container, render, `${BODY}Mine.\n`);
+  const elsewhere = document.createElement("button");
+  document.body.append(elsewhere);
+
+  act(() => elsewhere.focus());
+  const offeredElsewhere = appCommandOffered(APP_COMMAND.UNDO);
+  act(() => block(container, "Goal").focus());
+
+  assert.deepEqual(
+    { offeredElsewhere, offeredOnPage: appCommandOffered(APP_COMMAND.UNDO) },
+    { offeredElsewhere: false, offeredOnPage: true },
+  );
+});
+
+test("the history an editor leaves as it closes on another account signing in is dropped, so ⌘Z never takes back the last account's words", async () => {
+  const { container, render } = mount();
+  await typedAndLeft(container, render, `${BODY}Mine.\n`);
+  act(() => block(container, "Goal").click());
+  const openBefore = container.querySelector(".description-document-editor") !== null;
+
+  act(() => signInTeammate());
+  await settle();
+
+  assert.deepEqual(
+    { openBefore, offered: appCommandOffered(APP_COMMAND.UNDO) },
+    { openBefore: true, offered: false },
+  );
+});

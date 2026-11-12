@@ -1,9 +1,11 @@
+import type { JSONContent } from "@tiptap/core";
 import { closeHistory, history, redo, redoDepth, undo, undoDepth } from "@tiptap/pm/history";
 import type { Fragment, Node as PmNode, Schema } from "@tiptap/pm/model";
 import type { EditorState, SelectionBookmark } from "@tiptap/pm/state";
 import { ReplaceAroundStep, ReplaceStep, Step, type StepMap } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { Predicate } from "effect";
+import { commentAnchorMark } from "./comment-anchors.js";
 import { type EditorHistory, HISTORY_STEP, type OpenedHistory } from "./contract.js";
 
 /**
@@ -15,7 +17,8 @@ import { type EditorHistory, HISTORY_STEP, type OpenedHistory } from "./contract
  * (`historyOf`); an editor opened later takes it up only where the document
  * it opened on is that very document (`historyTakenUp`), since each step is
  * a change at a place in it, and against any other text it would change the
- * wrong words. Each editor builds a schema of its own, which a step's
+ * wrong words. The comment threads' marks are left out of that comparison,
+ * since a thread closed or opened while the editor was down moves no words. Each editor builds a schema of its own, which a step's
  * nodes belong to, so every step is made again on the new editor's schema
  * from its JSON; and the blocks a step brings back keep the sources the
  * earlier editor knew them by, so a block undone writes back as it was
@@ -65,7 +68,7 @@ interface HistoryState {
   readonly prevComposition: number;
 }
 
-/** What a kept history holds beside what the panel reads: the document it ends on, as JSON, the history plugin's state, and the sources of the blocks it may bring back. */
+/** What a kept history holds beside what the panel reads: the document it ends on, as `documentWords`, the history plugin's state, and the sources of the blocks it may bring back. */
 interface HeldHistory {
   readonly doc: string;
   readonly state: HistoryState;
@@ -74,6 +77,49 @@ interface HeldHistory {
 
 /** Each kept history's steps, by the history the panel holds, so the panel never holds them itself. */
 const held = new WeakMap<EditorHistory, HeldHistory>();
+
+/** Words beside each other that wear the same marks joined into one run, as ProseMirror keeps them. */
+function joinedWords(content: readonly JSONContent[]): JSONContent[] {
+  const joined: JSONContent[] = [];
+
+  for (const node of content) {
+    const last = joined.at(-1);
+
+    if (
+      last?.text !== undefined &&
+      node.text !== undefined &&
+      JSON.stringify(last.marks) === JSON.stringify(node.marks)
+    ) {
+      joined[joined.length - 1] = { ...last, text: last.text + node.text };
+    } else {
+      joined.push(node);
+    }
+  }
+
+  return joined;
+}
+
+/**
+ * A node as JSON with the comment threads' marks left out, which come and
+ * go as threads open and close and stand at no place of their own. Note
+ * that the words a mark split from their neighbors are joined again, since
+ * unmarked they would be one run.
+ */
+function withoutThreads(node: JSONContent): JSONContent {
+  const { marks, content, ...rest } = node;
+  const kept = marks?.filter((mark) => mark.type !== commentAnchorMark.name) ?? [];
+
+  return {
+    ...rest,
+    ...(kept.length > 0 && { marks: kept }),
+    ...(content !== undefined && { content: joinedWords(content.map(withoutThreads)) }),
+  };
+}
+
+/** A document's words and blocks as JSON, the comment threads' marks left out, which two documents agree on where every step lands alike in both. */
+function documentWords(doc: PmNode): string {
+  return JSON.stringify(withoutThreads(doc.toJSON()));
+}
 
 /** Whether a branch has the shape `HistoryBranch` reads. */
 function isBranch(branch: unknown): branch is HistoryBranch {
@@ -162,7 +208,7 @@ export function historyOf(
   const plugin: unknown = HISTORY_KEY?.getState(state);
 
   if (isHistoryState(plugin)) {
-    held.set(kept, { doc: JSON.stringify(state.doc.toJSON()), state: plugin, sources });
+    held.set(kept, { doc: documentWords(state.doc), state: plugin, sources });
   }
 
   return kept;
@@ -181,7 +227,7 @@ export function historyTakenUp(
   const kept = opened === undefined ? undefined : held.get(opened.kept);
   const { doc, schema } = view.state;
 
-  if (kept === undefined || HISTORY_KEY === undefined || kept.doc !== JSON.stringify(doc.toJSON()))
+  if (kept === undefined || HISTORY_KEY === undefined || kept.doc !== documentWords(doc))
     return undefined;
   const copied = new Map<PmNode, string>();
   const { state } = kept;

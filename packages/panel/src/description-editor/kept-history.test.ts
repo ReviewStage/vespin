@@ -5,6 +5,7 @@ import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { afterEach, test, vi } from "vitest";
 import {
   type DescriptionEditorHandle,
+  type EditorAnchor,
   type EditorHistory,
   HISTORY_STEP,
   type HistoryStep,
@@ -47,8 +48,20 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The editor on `markdown`, taking up `kept` with `step` where given, and the drafts it handed over. */
-function opened(markdown: string, kept?: EditorHistory, step?: HistoryStep) {
+/** A comment thread on the decision's words, as the service anchors it in `TEXT`. */
+const THREAD: EditorAnchor = {
+  thread: "thread-decision",
+  from: TEXT.indexOf("Model an invite"),
+  to: TEXT.indexOf("Model an invite") + "Model an invite".length,
+};
+
+/** The editor on `markdown`, its open threads' words marked, taking up `kept` with `step` where given, and the drafts it handed over. */
+function opened(
+  markdown: string,
+  kept?: EditorHistory,
+  step?: HistoryStep,
+  anchors?: readonly EditorAnchor[],
+) {
   const drafts: string[] = [];
   const host = document.createElement("div");
   document.body.append(host);
@@ -62,6 +75,7 @@ function opened(markdown: string, kept?: EditorHistory, step?: HistoryStep) {
     onDraft: (draft) => drafts.push(draft),
     onFinish: () => undefined,
     history: kept === undefined ? undefined : { kept, step },
+    anchors,
   });
 
   handles.push(handle);
@@ -81,10 +95,10 @@ function listOf(editor: ReturnType<typeof opened>["editor"]) {
   return list;
 }
 
-/** The history of an editor on `TEXT` whose list was deleted, its caret in the list, and which was then taken down. */
-function closedAfterDeleting() {
+/** The history of an editor on `TEXT` whose list was deleted, its caret in the list, and which was then taken down; its threads' words marked where given. */
+function closedAfterDeleting(anchors?: readonly EditorAnchor[]) {
   vi.useFakeTimers({ toFake: ["Date"] });
-  const { handle, editor } = opened(TEXT);
+  const { handle, editor } = opened(TEXT, undefined, undefined, anchors);
   const list = listOf(editor);
   editor.commands.setTextSelection(list.from + 3);
   editor.commands.deleteRange(list);
@@ -128,6 +142,14 @@ test("⌘Z as the editor opens leaves the caret where the change was taken back,
     { undoneAt, redoneIn: editor.state.selection.$from.node(1).type.name },
     { undoneAt: list.from + 3, redoneIn: "table" },
   );
+});
+
+test("a thread closed while the editor was down leaves its history standing, since closing it moves no words", () => {
+  const { kept, typed } = closedAfterDeleting([THREAD]);
+
+  const { handle } = opened(typed, kept, HISTORY_STEP.UNDO, []);
+
+  assert.equal(handle.markdown(), TEXT);
 });
 
 test("an editor opened on text changed since the last one closed drops its history, so ⌘Z there takes nothing back", () => {

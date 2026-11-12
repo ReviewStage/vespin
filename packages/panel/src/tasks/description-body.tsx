@@ -1406,17 +1406,32 @@ export const DescriptionBody = memo(function DescriptionBody({
   // ⌘Z and ⇧⌘Z in the drawn text open the editor a step back or forward
   // through the history it left as it closed, while the text is still the one
   // it left, as a document editor's undo reaches the page whether or not the
-  // caret is in it. Note that they answer over the window's own undo while
-  // the focus stands on the page or nowhere, and a field's typing keeps its own.
-  const stepping = editable && shown && editing.editor === undefined ? editing.history : undefined;
-
-  const onPage = () => {
+  // caret is in it. Note that they are offered only while the focus stands on
+  // the page or nowhere, where they answer over the window's own undo, and a
+  // field's typing keeps its own.
+  const onPage = useCallback(() => {
     const focused = document.activeElement;
 
     return (
       focused === null || focused === document.body || scroller.current?.contains(focused) === true
     );
-  };
+  }, []);
+
+  const [focusOnPage, setFocusOnPage] = useState(onPage);
+  useEffect(() => {
+    if (!editable) return;
+    const heard = () => setFocusOnPage(onPage());
+    document.addEventListener("focusin", heard);
+    document.addEventListener("focusout", heard);
+
+    return () => {
+      document.removeEventListener("focusin", heard);
+      document.removeEventListener("focusout", heard);
+    };
+  }, [editable, onPage]);
+
+  const stepping =
+    editable && shown && focusOnPage && editing.editor === undefined ? editing.history : undefined;
 
   useAppCommand(
     APP_COMMAND.UNDO,
