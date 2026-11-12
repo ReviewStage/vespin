@@ -16,6 +16,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
+  background,
   buttonStyle,
   disabled,
   font,
@@ -52,13 +53,20 @@ const PRESS_FRAME = [
 /** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
 const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
 
-/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
-function roundModifiers(colors: ReturnType<typeof useColors>) {
+/**
+ * The round button's look: the system's prominent circle in the ink, its mark
+ * in the ground, inside the composer's press frame. Note that a disabled
+ * circle drops the tint for the system's faint fill, which in light mode
+ * matched the composer's own ground, so a Send with nothing to send vanished:
+ * it stands on a hairline-gray disc of ours instead, its mark muted.
+ */
+function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(colors.GROUND),
+    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
+    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
     ...PRESS_FRAME,
     hoverEffect(HOVER_EFFECT.HIGHLIGHT),
   ];
@@ -180,12 +188,14 @@ function SendButton({
     );
   }
 
+  const sendable = !empty && onSend !== undefined;
+
   return (
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors),
-        disabled(empty || onSend === undefined),
+        ...roundModifiers(colors, sendable),
+        disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
     >
