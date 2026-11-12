@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   GITHUB_INSTALLATION_STATUS,
@@ -86,12 +86,10 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * agents told, run past its answer on production and on a Preview: they are
  * published to the github-delivery-reads queue, whose consumer is a function
  * of its own, so a burst of deliveries never shares an instance with a
- * member's request, and every delivery about one commit within
- * `GITHUB_DELIVERY_READ.WINDOW` is read once, after the window closes, as
- * GitHub asks (https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks).
- * A delivery telling of a review, a comment, a failure, or a dequeue is read
- * on its own, at once. Anywhere else, as in a test, the reads run in the
- * delivery before its answer.
+ * member's request, as GitHub asks
+ * (https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks).
+ * Anywhere else, as in a test, the reads run in the delivery before its
+ * answer.
  *
  * Before anything else of a delivery is read, the repository it names is
  * recorded by GitHub's id under the name it carries
@@ -554,46 +552,6 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
   Effect.provideService(GitHubBackground, true),
 );
 
-/**
- * The message a delivery's reads are published under, and how long until
- * it is delivered: one of its own, at once, for a delivery that tells of a
- * review, a comment, a failure, or a dequeue; else one for every delivery
- * about the same commit and branches in its window, delivered once the
- * window closes, so a burst of checks on one push is read once. Nothing
- * where the delivery asks no read at all.
- */
-function publishedAs(
-  { event, deliveryId, payload }: DeliveryToRead,
-  now: number,
-): { readonly key: string; readonly delay: Duration.Duration } | undefined {
-  if (agentWakeOf(event, payload, now) !== undefined) {
-    return { key: deliveryId, delay: Duration.zero };
-  }
-
-  const target = deliveryTarget(event, payload);
-  const checks = checksCompletedWakeOf(event, payload, now);
-
-  if (target === undefined && checks === undefined) return undefined;
-  const windowMillis = Duration.toMillis(GITHUB_DELIVERY_READ.WINDOW);
-  const window = Math.floor(now / windowMillis);
-
-  // Note that the event is named, so a check run's burst never stands in for a suite's, which alone reads the branches again.
-  const about = JSON.stringify({
-    event,
-    repository: target?.repository ?? checks?.repository,
-    branches: target?.branches ?? checks?.branches,
-    sha: checks?.sha,
-    window,
-  });
-
-  const closes = (window + 1) * windowMillis - now;
-
-  return {
-    key: createHash("sha256").update(about).digest("hex"),
-    delay: Duration.sum(Duration.millis(closes), GITHUB_DELIVERY_READ.PAST_WINDOW),
-  };
-}
-
 /** A delivery's reads as a queue message carries them. */
 const DeliveryMessageSchema = Schema.Struct({
   event: Schema.String,
@@ -601,26 +559,18 @@ const DeliveryMessageSchema = Schema.Struct({
   payload: WireValueSchema,
 });
 
-/** On Vercel: the reads published to their topic, nothing told yet; run in the delivery where the queue did not take them. */
+/** On Vercel: the reads published to their topic under GitHub's id for the delivery, so a redelivery is dropped; a publish that failed fails the delivery. */
 const vercelHand = (delivery: DeliveryToRead) =>
-  Effect.gen(function* () {
-    const published = publishedAs(delivery, yield* Clock.currentTimeMillis);
-
-    if (published === undefined) return NOTHING_READ;
-
-    const sent = yield* Effect.tryPromise(() =>
-      send(GITHUB_DELIVERY_READ.TOPIC, delivery, {
-        idempotencyKey: published.key,
-        delaySeconds: Math.ceil(Duration.toSeconds(published.delay)),
-        retentionSeconds: Math.ceil(Duration.toSeconds(GITHUB_DELIVERY_READ.RETAINED)),
-      }),
-    ).pipe(Effect.timeoutOption(GITHUB_DELIVERY_READ.PUBLISH_WAIT), Effect.option);
-
-    if (Option.isSome(sent) && Option.isSome(sent.value)) return NOTHING_READ;
-    yield* Effect.logWarning("github webhook: a delivery's reads were not published; read here");
-
-    return yield* deliveryReads(delivery);
-  });
+  Effect.tryPromise(() =>
+    send(GITHUB_DELIVERY_READ.TOPIC, delivery, {
+      idempotencyKey: delivery.deliveryId,
+      retentionSeconds: Math.ceil(Duration.toSeconds(GITHUB_DELIVERY_READ.RETAINED)),
+    }),
+  ).pipe(
+    Effect.timeout(GITHUB_DELIVERY_READ.PUBLISH_WAIT),
+    Effect.as(NOTHING_READ),
+    Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
+  );
 
 interface GitHubDeliveryReadsService {
   /** The delivery's reads handed on, answering what they came to where they ran before the answer. */

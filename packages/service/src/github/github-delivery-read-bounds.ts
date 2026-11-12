@@ -16,14 +16,10 @@ export const GITHUB_DELIVERY_READ = {
   PATH: "/api/github/delivery-reads",
   /** The consumer's duration, the Fluid default, since a wake it tells may open a turn whose sandbox takes most of a minute to resume. */
   MAX_DURATION_SECONDS: 300,
-  /** The window a burst of deliveries about one commit is read once in: every one in it is answered by one read, sent once it closes. */
-  WINDOW: Duration.seconds(10),
-  /** How long past its window's close a read is sent, so a delivery landing on the close is still in it. */
-  PAST_WINDOW: Duration.seconds(2),
   /** How long a read's message is kept, so one that keeps failing is tried again for that long and then given up. */
   RETAINED: Duration.hours(1),
   /** How long a read that failed waits before it comes again. */
   FAILED_AGAIN: Duration.minutes(1),
-  /** How long a publish is waited on before the reads are run in the delivery instead; a send answers in milliseconds. */
+  /** How long a publish is waited on before the delivery is refused; a send answers in milliseconds. */
   PUBLISH_WAIT: Duration.seconds(5),
 } as const;
