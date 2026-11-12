@@ -12,7 +12,8 @@
      between controls, list items, and sections, a page's inset and measure, a
      menu's rows, glyph, and shadow, the keyboard's ring, the floating layers,
      and the window's sidebar, well, and workspace hues are the desktop
-     profile's roles in `@repo/ui` (`tokens/profiles.css`, `palettes.css`),
+     profile's roles in `@repo/ui` (`tokens/profiles.css`, `palettes.css`,
+     `identity.css`),
      read here by their own names (`--ui-space-8`, `--ui-control-height`,
      `--ui-color-identity-1`, …). Every
      padding, margin, and gap in the window is one of those steps or a name

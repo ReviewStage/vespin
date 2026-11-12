@@ -11,7 +11,9 @@
    `generate-surface-shared.mjs`, so a change of brand, or a second theme, is
    a change of that one table. What stays here is what no brand changes: the
    fills and edges drawn as alphas of the ink, the tints mixed from the
-   tones, shadows, and the identity, chart, and find colors.
+   tones, shadows, and the chart and find colors. The identity hues are
+   generated into `identity.css` from the same package, since the iOS app
+   draws them too.
 
    The desktop writes each role once, as `light-dark()`, and a theme is only
    its `color-scheme`: `system` answers `prefers-color-scheme` on the frame the
@@ -123,17 +125,6 @@
     0 1px 2px light-dark(rgba(0, 0, 0, 0.25), transparent),
     0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.08), transparent);
 
-  /* A person's disc (`avatar.tsx`) and a workspace's tile: six muted hues
-     read off an id, each holding its white letter at AA on either ground.
-     None is copper, so no one's disc reads as attention's beside a row. */
-  --ui-color-identity-1: light-dark(#4a5fc0, #4f63b8);
-  --ui-color-identity-2: light-dark(#23766f, #2b7f78);
-  --ui-color-identity-3: light-dark(#237293, #2a7899);
-  --ui-color-identity-4: light-dark(#a8435f, #a24a63);
-  --ui-color-identity-5: light-dark(#6a4fbd, #6c55b3);
-  --ui-color-identity-6: light-dark(#3f7434, #477a3a);
-  --ui-color-on-identity: #fff;
-
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone, and none
      is copper, so no series reads as attention beside a badge. */
@@ -207,16 +198,6 @@
   --ui-color-float: color-mix(in srgb, var(--ui-color-float-solid) 80%, transparent);
   --ui-shadow-switch-thumb: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
 
-  /* A person's disc (`avatar.tsx`): six muted hues read off their id, each
-     holding its white letter at AA on the light ground. */
-  --ui-color-identity-1: #4a5fc0;
-  --ui-color-identity-2: #23766f;
-  --ui-color-identity-3: #237293;
-  --ui-color-identity-4: #a8435f;
-  --ui-color-identity-5: #6a4fbd;
-  --ui-color-identity-6: #3f7434;
-  --ui-color-on-identity: #fff;
-
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone. */
   --ui-color-chart-1: #2f9bd8;
@@ -283,16 +264,6 @@
   --ui-color-float-solid: var(--ui-color-overlay);
   --ui-color-float: color-mix(in srgb, var(--ui-color-float-solid) 80%, transparent);
   --ui-shadow-switch-thumb: none;
-
-  /* A person's disc (`avatar.tsx`): six muted hues read off their id, each
-     holding its white letter at AA on the dark ground. */
-  --ui-color-identity-1: #4f63b8;
-  --ui-color-identity-2: #2b7f78;
-  --ui-color-identity-3: #2a7899;
-  --ui-color-identity-4: #a24a63;
-  --ui-color-identity-5: #6c55b3;
-  --ui-color-identity-6: #477a3a;
-  --ui-color-on-identity: #fff;
 
   /* The chart series on the dark ground: the light's own five, which hold
      3:1 on the dark card as well, so none needs a
