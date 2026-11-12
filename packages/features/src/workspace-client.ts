@@ -15,6 +15,7 @@ import { spelledFailure } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { type ImageBody, imageBodyOf, imageBodyUnread } from "./image-body.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
+import type { MergeQueueAnswer } from "./merge-queue-wire.js";
 import {
   type WorkspaceSentry,
   workspaceSentryDisconnectRequestSchema,
@@ -516,6 +517,16 @@ export class HostedWorkspaceClient {
 
     return resultOf(
       hostedCall(this.#hosted.workspaceEnvironment.put, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** Every pull request GitHub's merge queues hold across the workspace's repositories, to a member with the Merge queue experiment on. */
+  mergeQueue(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<MergeQueueAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceMergeQueue.read, { workspaceId }),
       (answer) => answer,
     );
   }

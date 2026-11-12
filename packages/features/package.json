@@ -173,6 +173,7 @@
     "./task-section-writes": "./src/task-section-writes.js",
     "./task-wire": "./src/task-wire.js",
     "./tasks-view": "./src/tasks-view.js",
+    "./merge-queue-wire": "./src/merge-queue-wire.js",
     "./pull-request-model": "./src/pull-request-model.js",
     "./pull-request-write-wire": "./src/pull-request-write-wire.js",
     "./pull-request-chapters": "./src/pull-request-chapters.js",

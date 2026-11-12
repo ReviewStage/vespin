@@ -33,7 +33,7 @@ import {
   UNKNOWN_AGENT_LABEL,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
-import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -2447,5 +2447,47 @@ export function deleteTaskCommitted(
         return Option.some({ txid: removed.value.txid });
       }),
     ),
+  );
+}
+
+/**
+ * The repositories the workspace's tasks work in that the account sees, each
+ * once whatever its case, the one a task changed most recently first, at
+ * most as many as asked: what a read across the workspace's repositories,
+ * such as their merge queues, asks GitHub about.
+ */
+const findWorkspaceTaskRepositories = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    workspaceId: Schema.String,
+    limit: Schema.Number,
+  }),
+  Result: Schema.Struct({ repository: Schema.String }),
+  execute: ({ userId, workspaceId, limit }) =>
+    Database.use((db) =>
+      db
+        .select({ repository: sql<string>`min(${task.repository})` })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, workspaceId),
+            taskReachableBy(userId),
+            isNotNull(task.repository),
+          ),
+        )
+        .groupBy(sql`lower(${task.repository})`)
+        .orderBy(desc(sql`max(${task.updatedAt})`))
+        .limit(limit),
+    ),
+});
+
+/** The repositories the workspace's tasks the account sees work in, most recently changed first, at most `limit`; none for a workspace the account is not in. */
+export function readWorkspaceTaskRepositories(
+  userId: string,
+  workspaceId: string,
+  limit: number,
+): TaskStoreEffect<readonly string[]> {
+  return Effect.map(findWorkspaceTaskRepositories({ userId, workspaceId, limit }), (rows) =>
+    rows.map((row) => row.repository),
   );
 }

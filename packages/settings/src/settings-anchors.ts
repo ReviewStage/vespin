@@ -74,4 +74,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.REWIND_FILES]: "experiment-rewind-files",
   [EXPERIMENT.TURN_END]: "experiment-turn-end",
   [EXPERIMENT.RUN_ACTIONS]: "experiment-run-actions",
+  [EXPERIMENT.MERGE_QUEUE]: "experiment-merge-queue",
 } as const satisfies Record<Experiment, string>;

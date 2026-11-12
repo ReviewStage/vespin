@@ -21,6 +21,8 @@ export const EXPERIMENT = {
   TURN_END: "turn-end",
   /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs from the Run button over an agent's tabs, ⌘K, or a phone's ⋯: in a cloud agent's sandbox, or on the Mac a local agent runs on, as each action allows. */
   RUN_ACTIONS: "run-actions",
+  /** Merge queue: every pull request GitHub's merge queues hold across the repositories the workspace's tasks work in, on a page of its own. */
+  MERGE_QUEUE: "merge-queue",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -82,6 +84,14 @@ export interface ExperimentEntry {
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.MERGE_QUEUE,
+    name: "Merge queue",
+    detail:
+      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, with the task each belongs to.",
+    owner: "Charles",
+    since: "2026-11-12",
+  },
   {
     key: EXPERIMENT.REWIND_FILES,
     name: "Rewind restores files",
