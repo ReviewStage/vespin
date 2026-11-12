@@ -376,7 +376,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           page: SETTINGS_VIEW.AGENTS,
           haystack: [
             "Always allowed",
-            "always allow allowlist allowed commands permissions approval ask run without asking shell bash",
+            "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
           ],
         }
       : undefined,
