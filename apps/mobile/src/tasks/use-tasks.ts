@@ -646,6 +646,11 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       : undefined;
 
   const task = listedTask ?? unlistedTask;
+  const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a task stands under its own workspace, its path and its link named by that workspace's key, since a link may open one outside the workspace the phone works in.
+  const taskWorkspace = workspaces?.find((each) => each.id === task?.workspaceId) ?? workspace;
+
   // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
   const placing = useTaskPlacing(task?.workspaceId);
 
@@ -671,7 +676,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       task,
       document: document !== undefined && "task" in document ? document.task : undefined,
       documentRetry,
-      workspace,
+      workspace: taskWorkspace,
       agents,
       pages: held?.pages ?? [],
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
@@ -682,7 +687,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       placing,
       relations,
     };
-  }, [task, view, waiting, held, workspace, listed, rename, placing, relations, acts]);
+  }, [task, view, waiting, held, taskWorkspace, listed, rename, placing, relations, acts]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
