@@ -22,7 +22,7 @@ import {
   useFailureNotices,
   WordsRow,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
@@ -190,6 +190,7 @@ function Version({
 }) {
   const colors = useColors();
   const router = useRouter();
+  const navigation = useNavigation();
   const acts = useHostActs();
   const write = useWrite();
   const openLink = useOpenLink();
@@ -237,7 +238,8 @@ function Version({
       if (!went) return;
       notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
 
-      if (standing.current) router.back();
+      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
+      if (standing.current && navigation.isFocused()) router.back();
     });
   };
 
