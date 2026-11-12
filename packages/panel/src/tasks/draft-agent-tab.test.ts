@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Failure } from "@repo/features/failure-remedy";
@@ -548,7 +549,7 @@ test("a fork's draft names its source and the message over the box, starts on th
   assert.equal(dropped, 1);
 });
 
-test("a suggestion's draft names the agent that suggested it over the box, sends its words through the suggestion rather than as a Start, and its × lets the suggestion go", async () => {
+test("a suggestion's draft names the agent that suggested it over the box, sends its words and chips through the suggestion rather than as a Start, and its × lets the suggestion go", async () => {
   const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
   const suggestion = {
@@ -573,11 +574,17 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
 
   const tab = mount(
     [],
-    { ...DRAFT, prompt: "Send the invite email, and retry a bounce once.", suggestion },
+    {
+      ...DRAFT,
+      prompt: "Send the invite email, and retry a bounce once.",
+      suggestion,
+      disabledServers: [INTEGRATION_PROVIDER.LINEAR],
+      permissionMode: AGENT_PERMISSION_MODE.ASK,
+    },
     {
       agents: [source],
-      startSuggestion: (draftId, through, words) => {
-        sent.push({ draftId, button: through.buttonId, words });
+      startSuggestion: (draftId, through, words, _choice, _attachments, servers, _runsOn, mode) => {
+        sent.push({ draftId, button: through.buttonId, words, servers, mode });
 
         return Promise.resolve(undefined);
       },
@@ -599,6 +606,8 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
       draftId: DRAFT.id,
       button: suggestion.buttonId,
       words: "Send the invite email, and retry a bounce once.",
+      servers: [INTEGRATION_PROVIDER.LINEAR],
+      mode: AGENT_PERMISSION_MODE.ASK,
     },
   ]);
   assert.deepEqual(tab.starts, [], "a suggestion is never started as a prompt");

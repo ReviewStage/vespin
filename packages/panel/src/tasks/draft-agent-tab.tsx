@@ -187,6 +187,9 @@ export function DraftAgentTab({
           prompt,
           draft.choice,
           draft.attachments,
+          draft.disabledServers,
+          draft.runsOn,
+          draft.permissionMode,
         ),
       );
 

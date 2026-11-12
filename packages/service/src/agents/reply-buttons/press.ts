@@ -133,12 +133,14 @@ export const readReplyButtonView = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* viewOf(userId, button, agent);
 });
 
-/** Whether what the member sent fits what the suggestion sets off: a send names no title, branch, or model, and a model goes with its effort. */
+/** Whether what the member sent fits what the suggestion sets off: a send names nothing of a new agent's (title, branch, model, servers, place, or permissions), and a model goes with its effort. */
 function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
-  const { title, branch, model, effort } = sent;
+  const { title, branch, model, effort, disabledServers, runsOn, permissionMode } = sent;
 
   if (button.action.kind === REPLY_BUTTON_ACTION.SEND) {
-    return [title, branch, model, effort].every((each) => each === undefined);
+    return [title, branch, model, effort, disabledServers, runsOn, permissionMode].every(
+      (each) => each === undefined,
+    );
   }
 
   return (model === undefined) === (effort === undefined);
@@ -147,7 +149,8 @@ function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
 /**
  * The suggestion run as the member, with what they sent from its draft: the
  * agent it reached, or why it was refused. The words, files, title, branch,
- * and model are the draft's as the member left them, never the button's,
+ * model, servers, place, and permissions are the draft's as the member left
+ * them, never the button's,
  * which only filled the draft in. The words open with a link to the agent
  * whose reply held the suggestion, and the line keeps which suggestion it
  * was, so the agent they reach and its transcript both say who suggested
@@ -202,6 +205,13 @@ const runPressed = (
         ...(sent.model === undefined || sent.effort === undefined
           ? undefined
           : { model: sent.model, effort: sent.effort }),
+        ...(sent.disabledServers === undefined
+          ? undefined
+          : { disabledServers: sent.disabledServers }),
+        ...(sent.runsOn === undefined ? undefined : { runsOn: sent.runsOn }),
+        ...(sent.permissionMode === undefined
+          ? undefined
+          : { permissionMode: sent.permissionMode }),
       },
       summaryModel,
       undefined,

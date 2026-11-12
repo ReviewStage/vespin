@@ -114,6 +114,9 @@ export const replyButtonSentSchema = EffectSchema.Struct({
   branch: agentStartRequestFields.branch,
   model: agentStartRequestFields.model,
   effort: agentStartRequestFields.effort,
+  disabledServers: agentStartRequestFields.disabledServers,
+  runsOn: agentStartRequestFields.runsOn,
+  permissionMode: agentStartRequestFields.permissionMode,
 }).check(EffectSchema.makeFilter(({ words, attachments }) => hasWordsOrFiles(words, attachments)));
 
 export type ReplyButtonSent = typeof replyButtonSentSchema.Type;

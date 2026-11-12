@@ -1,3 +1,4 @@
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
@@ -5,7 +6,7 @@ import {
   type ReplyButtonPressAnswerView,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
-import type { AgentAttachment } from "@repo/features/agent-wire";
+import type { AgentAttachment, AgentRunsOnRequest } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { ModelChoice } from "@repo/features/models-wire";
 import type { ReplyButtonSent } from "@repo/features/reply-button-wire";
@@ -55,6 +56,9 @@ export function sentOf(
   words: string,
   attachments: readonly AgentAttachment[],
   choice?: ModelChoice,
+  disabledServers: readonly string[] = [],
+  runsOn?: AgentRunsOnRequest,
+  permissionMode?: AgentPermissionMode,
 ): ReplyButtonSent {
   return {
     words,
@@ -62,6 +66,9 @@ export function sentOf(
     ...(suggestion.title === undefined ? undefined : { title: suggestion.title }),
     ...(suggestion.branch === undefined ? undefined : { branch: suggestion.branch }),
     ...(choice === undefined ? undefined : { model: choice.model, effort: choice.effort }),
+    ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+    ...(runsOn === undefined ? undefined : { runsOn }),
+    ...(permissionMode === undefined ? undefined : { permissionMode }),
   };
 }
 
