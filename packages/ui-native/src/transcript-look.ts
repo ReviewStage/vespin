@@ -8,6 +8,7 @@ import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 export const CALL_SYMBOL = {
   [CALL_KIND.COMMAND]: "apple.terminal",
   [CALL_KIND.MAC_COMMAND]: "laptopcomputer",
+  [CALL_KIND.COMPUTER]: "display",
   [CALL_KIND.BROWSER]: "globe",
   [CALL_KIND.READ_FILE]: "doc.text",
   [CALL_KIND.WRITE_FILE]: "square.and.pencil",

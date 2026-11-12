@@ -870,7 +870,9 @@ it.effect(
           yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
           yield* settled;
           assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
-          assert.deepEqual(service.settledResults.get(first.id), { computer: { done: "pressed" } });
+          assert.deepEqual(service.settledResults.get(first.id), {
+            computer: { done: "pressed", app: SIMULATOR },
+          });
 
           const second = computerCommand(SECOND.id, OTHER_AGENT, "Simulator");
           service.queue(second, NOW);
@@ -878,7 +880,7 @@ it.effect(
           yield* settled;
           assert.deepEqual(asks(), []);
           assert.deepEqual(service.settledResults.get(second.id), {
-            computer: { done: "pressed" },
+            computer: { done: "pressed", app: SIMULATOR },
           });
         }),
       );

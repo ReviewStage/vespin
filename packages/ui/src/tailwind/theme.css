@@ -898,6 +898,8 @@
      where one fits, and say so where none does. */
   --spacing-page-thumb-row: 48px; /* off-scale: a row's media line */
   --spacing-icon-16: var(--ui-icon-16);
+  --spacing-icon-20: var(--ui-icon-20);
+  --spacing-icon-40: var(--ui-icon-40);
   --color-veil: var(--ui-color-veil);
   --color-on-veil: var(--ui-color-on-veil);
   /* A picture's own shape, which its tile sets where it is drawn
