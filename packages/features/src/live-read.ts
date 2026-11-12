@@ -37,7 +37,7 @@
 
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
-import { Option, Predicate, Schema, SchemaTransformation } from "effect";
+import { Option, Schema, SchemaTransformation } from "effect";
 import { ANY_PROCEDURE_REFUSALS, declaredProcedure, refuses } from "./contract/base.js";
 import type { HOSTED_ERRORS } from "./contract/errors.js";
 import { LIVE_POLL, sealedLiveQuerySchema } from "./live-wire.js";
@@ -417,10 +417,7 @@ export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
     )
     .output(
       // SAFETY: an answer's fields decode with no services, so its flip is the codec from its `Type` to its `Encoded`.
-      Schema.flip(read.answer) as Schema.Codec<
-        Read["answer"]["Encoded"],
-        Read["answer"]["Type"]
-      >,
+      Schema.flip(read.answer) as Schema.Codec<Read["answer"]["Encoded"], Read["answer"]["Type"]>,
     );
 }
 
