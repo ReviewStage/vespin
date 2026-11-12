@@ -60,6 +60,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent, writesToAgent } from "../agent-reach.js";
 import { keptHandedImages, senderLabel, turnContent } from "../attached-files.js";
 import { mentionedContext, mentionedServers, NO_MENTIONED_READS } from "../mentioned-context.js";
@@ -987,6 +988,9 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     ...line,
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
+
+  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet.
+  yield* followAsMessaged(userId, agent.taskId);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(

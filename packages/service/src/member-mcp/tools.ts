@@ -678,7 +678,9 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
     "Canceled ones among them: each with its id, its key (such as ACME-42), its name, where it " +
     `stands (its status: ${Object.values(TASK_STATUS).join(", ")}) and how much it matters (its ` +
     "priority), who it is assigned to (its assignee's mention link, null for no one), the " +
-    "repository its agents work in (null for none yet), who started it, the sectionId of the " +
+    "repository its agents work in (null for none yet), who started it, its followers (each " +
+    "with their name and id, whether they are its assignee, and whether its " +
+    "agents may use their machines; absent where the workspace keeps none), the sectionId of the " +
     "sidebar section the member keeps it in (null for none), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with nextOffset where more stand; and beside them every ` +
     "section the member keeps in that workspace's sidebar, each with its id and title. Narrow " +
@@ -698,7 +700,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
     "status) and how much it matters (its priority), repository, who started it (startedBy, and " +
     "startedByUserId to link them by), " +
     "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
-    "blocks (each with its id, name, and status), and its description as last saved, cut on a " +
+    "blocks (each with its id, name, and status), its followers (each with their name and id, " +
+    "whether they are its assignee, and whether its agents may use their machines; " +
+    "absent where the workspace keeps none), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
   input: READ_TASK_TOOL.inputSchema,
@@ -708,8 +712,10 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
       "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
       "status) and how much it matters (its priority), repository, who started it (startedBy, " +
       "and startedByUserId to link them by), " +
-      "the brief it was started with (null for none), and the tasks it is blocked by and the " +
-      "tasks it blocks (each with its id, name, and status). " +
+      "the brief it was started with (null for none), the tasks it is blocked by and the " +
+      "tasks it blocks (each with its id, name, and status), and its followers (each with their " +
+      "name and id, whether they are its assignee, and whether its agents may use " +
+      "their machines; absent where the workspace keeps none). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     input: READ_TASK_TOOL.inputSchema,
   },

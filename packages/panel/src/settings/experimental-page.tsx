@@ -92,6 +92,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.FOLLOWING]: {
+    on: (workspace: string) =>
+      `Shows who follows each task to everyone in ${workspace}, and lets each follower choose whether the task's agents may use their machines.`,
+    off: (workspace: string) =>
+      `Hides who follows each task for everyone in ${workspace}, and stops agents from reading followers.`,
+  },
   [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
       `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,

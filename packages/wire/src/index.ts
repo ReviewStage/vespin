@@ -56,6 +56,8 @@ export {
   type SchemaRefusal,
 } from "./schema-vocabulary.js";
 
+export { type TaskFollowerWire, taskFollowerSchema } from "./task-follower.js";
+
 export {
   TURN_OPEN,
   TURN_ORIGIN,

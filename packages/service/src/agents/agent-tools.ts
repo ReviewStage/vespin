@@ -113,6 +113,7 @@ import {
 } from "../providers/model-catalog.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { createTaskAsked } from "../tasks/task-create-relation.js";
+import { followerReadingsOf } from "../tasks/task-following.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
@@ -1291,7 +1292,9 @@ export const LIST_TASKS_TOOL = {
     "it stands (its status) and how much it matters (its priority), who it is assigned to (its " +
     "assignee's mention link, null for no one), " +
     "the repository its agents work in (null for none yet), who started it, whether it is " +
-    "the task you work on, the sectionId of the sidebar section the " +
+    "the task you work on, its followers (each with their name and id, whether " +
+    "they are its assignee, and whether its agents may use their machines; absent where your " +
+    "workspace keeps none), the sectionId of the sidebar section the " +
     "developer you work for keeps it in (null for none, under Tasks), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with ` +
     "nextOffset where more stand; and beside them every section that developer keeps in this " +
@@ -3120,8 +3123,15 @@ export function runListTasks(
       );
 
       const { step, name } = yield* workspaceNamingOf(userId, workspace.value);
+      const page = matching.slice(offset, offset + TASKS_LIST_LIMIT);
 
-      const tasks = matching.slice(offset, offset + TASKS_LIST_LIMIT).map((task) => ({
+      const followers = yield* followerReadingsOf(
+        userId,
+        workspace.value,
+        page.map((task) => task.id),
+      );
+
+      const tasks = page.map((task) => ({
         id: task.id,
         ...taskStandingOf(task, { step, name }),
         name: task.name,
@@ -3129,6 +3139,9 @@ export function runListTasks(
         startedBy: task.createdBy?.name ?? null,
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
+        ...(followers === undefined
+          ? undefined
+          : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
       }));
 
       const next = offset + TASKS_LIST_LIMIT;
