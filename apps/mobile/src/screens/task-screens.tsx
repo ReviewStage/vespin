@@ -573,6 +573,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
 
   const listed = [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ]
@@ -610,9 +611,16 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
- * first, while a refused newer one leaves the older to finish.
+ * first, while a refused newer one leaves the older to finish. Nothing is
+ * dropped onto Following, which holds what the reader follows rather than
+ * where they put it.
  */
-function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
+function placeIn(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+): ((task: TaskSummary) => void) | undefined {
+  if (group.kind === TASK_TREE_GROUP.FOLLOWING) return undefined;
+
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
       const newest = countDrop(task.id);
@@ -640,9 +648,9 @@ function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummar
 }
 
 /**
- * One group of the tree as its section: Pinned, a section of the member's,
- * or a repository, folding under its header and count; My tasks heads a
- * repository group the tree draws no heading for. A task's row dragged onto
+ * One group of the tree as its section: Pinned, Following, a section of the
+ * member's, or a repository, folding under its header and count; My tasks
+ * heads a repository group the tree draws no heading for. A task's row dragged onto
  * its header, as an iPad drags, moves the task there (`placeIn`).
  */
 function GroupSection({
@@ -676,11 +684,15 @@ function GroupSection({
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
-      onDropLink={(url) => {
-        const task = droppedTask(listing.tree, url);
+      onDropLink={
+        place === undefined
+          ? undefined
+          : (url) => {
+              const task = droppedTask(listing.tree, url);
 
-        if (task !== undefined) place(task);
-      }}
+              if (task !== undefined) place(task);
+            }
+      }
     >
       <RowForEach data={rows} keyOf={(row) => row.task.id}>
         {(row) => (
@@ -704,6 +716,7 @@ function GroupSection({
 function treeEmpty(tree: TaskTree): boolean {
   return [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ].every((group) => group.rows.length === 0);
@@ -720,9 +733,9 @@ type TasksTreeProps = {
 };
 
 /**
- * The Tasks list as the panel's phone Tasks draws it: Pinned, the member's
- * sections, and the repository groups, each folding under its header and
- * count, a task's sub-tasks folded under it; or, while a search is typed,
+ * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
+ * the member's sections, and the repository groups, each folding under its
+ * header and count, a task's sub-tasks folded under it; or, while a search is typed,
  * every task of the workspace it finds. A pull reads it again.
  */
 function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
@@ -748,6 +761,9 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
+      {tree.following === undefined ? null : (
+        <GroupSection group={tree.following} listing={listing} />
+      )}
       {tree.sections.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
@@ -760,13 +776,17 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 
 /**
  * The member's tasks a regular window's app sidebar lists under its places:
- * Pinned and each of their sections, each folding under its header and
- * count, every row acting as the Tasks tab's does.
+ * Pinned, Following, and each of their sections, each folding under its
+ * header and count, every row acting as the Tasks tab's does.
  */
 export function useSidebarTasks(): SidebarTasks {
   const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
-  const groups = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections];
+  const groups = [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+  ];
 
   return {
     sections: groups.map((group) => (
