@@ -215,6 +215,8 @@ export interface RepositoryPick {
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly pick: (repository: string) => void;
+  /** Whether the repositories were read, so none listed means the workspace reaches none. */
+  readonly read: boolean;
   /** Why the repositories could not be read, where they listed nothing; none while they read or were read. */
   readonly failed: string | undefined;
   /** Reads the workspace's repositories again. */
@@ -285,6 +287,7 @@ export function useRepositoryPick(
     options: listed.map((repository) => ({ id: repository, label: repository })),
     picked: kept ?? starting,
     pick: setPicked,
+    read: read?.rows !== undefined,
     failed:
       read?.failed === true && read.rows === undefined
         ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED)
