@@ -266,11 +266,15 @@ function answeredOutcome(
   outcome: ComputerOutcome,
 ): Effect.Effect<ComputerRan, never, DatabaseServices> {
   const ran = { status: MAC_COMMAND_STATUS.RAN };
+
   if ("done" in outcome) {
     const acted = outcome.app;
+
     if (acted === undefined) return Effect.succeed({ ...ran, done: outcome.done });
+
     return Effect.map(namedApp(transcript, acted), (app) => ({ ...ran, done: outcome.done, app }));
   }
+
   if ("apps" in outcome) {
     // Note that the list leaves the apps' icons out, since a read of each app keeps its own.
     const apps = outcome.apps.map(({ iconPng: _icon, ...app }) => app);

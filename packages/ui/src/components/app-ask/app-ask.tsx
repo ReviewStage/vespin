@@ -80,6 +80,7 @@ export function AppAsk({
   const [scope, setScope] = useState<readonly AllowScope[]>([ALLOW_SCOPE.ALWAYS]);
   // Note that a pick taken back leaves no scope, which allows once rather than widening.
   const allow = scope[0] === ALLOW_SCOPE.ALWAYS ? onAllowAlways : onAllowOnce;
+
   return (
     <Dialog
       open={open}

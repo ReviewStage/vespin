@@ -39,6 +39,7 @@ export function MacCommandAskDialog(): React.JSX.Element | null {
 
   if (ask === undefined) return null;
   const answer = (decision: MacCommandDecision) => answerAsk({ id: ask.id, decision });
+
   if (!isMacShellAsk(ask)) {
     return (
       <AppAsk
@@ -52,6 +53,7 @@ export function MacCommandAskDialog(): React.JSX.Element | null {
       />
     );
   }
+
   return (
     <CommandAsk
       key={ask.id}

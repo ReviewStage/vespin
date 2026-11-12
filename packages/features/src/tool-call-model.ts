@@ -197,12 +197,14 @@ function computerAppName(
   output: WireValue | undefined,
 ): string | undefined {
   const named = isRecord(output) ? stringAt(output.app, "name") : undefined;
+
   return named ?? stringAt(input, "app");
 }
 
 /** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
 function computerAppIcon(output: WireValue | undefined): string | undefined {
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
+
   return stringAt(output.app.icon.picture, "id");
 }
 
@@ -1251,6 +1253,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
     const description = computerCallWords(stringAt(input, "action"));
     const icon = computerAppIcon(output);
+
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",

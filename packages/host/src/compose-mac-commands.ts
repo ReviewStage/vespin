@@ -233,8 +233,10 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCom
     // Note that a done action names the app it acted on, which the helper's own answer does not.
     const outcome =
       "done" in answer.outcome && app !== undefined ? { ...answer.outcome, app } : answer.outcome;
+
     return { computer: outcome };
   }
+
   if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
 
   return { refused: "Not run: the computer-use helper answered something else." };
@@ -475,6 +477,7 @@ export function composeMacCommands(
           command.conversationId,
           new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
         );
+
         return { app };
       });
 
@@ -497,8 +500,10 @@ export function composeMacCommands(
 
         const { action } = command;
         let app: ComputerApp | undefined;
+
         if (action.op !== COMPUTER_ACTION.LIST_APPS) {
           const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
+
           if ("refused" in allowed) return yield* settled(command.id, allowed);
           app = allowed.app;
         }

@@ -119,6 +119,7 @@ test("a computer call says what it did to which app, by the name the Mac gave it
       app: { name: "Simulator", refused: false, icon: { picture: { id: "icon-1" } } },
     },
   });
+
   assert.deepEqual(callLine(done.kind, done.subject, done.description), {
     verb: "Clicked in",
     subject: "Simulator",
@@ -132,6 +133,7 @@ test("a computer call says what it did to which app, by the name the Mac gave it
     input: { action: "get_app_state", app: "simulator" },
     output: undefined,
   });
+
   assert.deepEqual(callLine(running.kind, running.subject, running.description), {
     verb: "Looked at",
     subject: "simulator",

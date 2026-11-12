@@ -38,6 +38,7 @@ export function AppIcon({
   size?: AppIconSize | undefined;
 }): React.JSX.Element {
   const seat = SEAT[size];
+
   if (src === undefined) {
     return (
       <span
@@ -48,6 +49,7 @@ export function AppIcon({
       </span>
     );
   }
+
   return (
     <img
       className={`ui-app-icon block flex-none ${seat} object-contain`}

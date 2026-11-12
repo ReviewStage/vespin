@@ -455,6 +455,7 @@ function notKeptWords(byteCount: number): string {
 export function KeptAppIcon({ id }: { id: string }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
+
   return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />;
 }
 
