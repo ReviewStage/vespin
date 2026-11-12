@@ -264,5 +264,4 @@ export {
   WorkspaceSwitcher,
   WorkspaceSwitcherMenu,
   WorkspaceTile,
-  workspaceSettingsAction,
 } from "./workspace-switcher.js";

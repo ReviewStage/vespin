@@ -140,7 +140,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
   screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
-  name opening Settings, New workspace and Workspace settings; the account's
+  name opening Settings, New workspace, and Settings… in a section under the
+  chosen workspace's name; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its

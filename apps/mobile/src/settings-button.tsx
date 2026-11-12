@@ -19,7 +19,7 @@ export const SETTINGS_ROUTE = {
   MEMORY: "/settings/memory",
   /** Send feedback, as Settings' About and the iPad's Help menu open it. */
   FEEDBACK: "/settings/feedback",
-  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
+  /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
 
