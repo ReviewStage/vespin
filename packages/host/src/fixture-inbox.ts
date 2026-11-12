@@ -88,7 +88,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -979,6 +979,9 @@ const MEMBERS: WorkspaceMembersAnswer = {
     },
   ],
 };
+
+/** The id a memory the fixture is asked to keep anew is kept under. */
+const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
 
 /**
  * The fixture workspace's memories, as Settings › Memory lists them: one an
@@ -1968,6 +1971,25 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
   [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
+  // Note that a memory's words are kept as the service keeps them, by Ada, a correction keeping its memory's id, though nothing here moves, so the window draws a correction itself and a new memory never.
+  [ACT_KIND.MEMORIES_SAVE]: ({ text, replaces }) => {
+    const corrected = MEMORIES.find((memory) => memory.id === replaces);
+
+    return {
+      outcome: corrected === undefined ? MEMORY_SAVED.KEPT : MEMORY_SAVED.CORRECTED,
+      memory: {
+        id: corrected?.id ?? NEW_MEMORY_ID,
+        text,
+        keptBy: { userId: ADA.userId, name: ADA.name },
+        forgettable: true,
+        createdAt: corrected?.createdAt ?? LANDED,
+        updatedAt: LANDED,
+        source: null,
+        recalls30d: corrected?.recalls30d ?? 0,
+        lastRecalledAt: corrected?.lastRecalledAt ?? null,
+      },
+    };
+  },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),

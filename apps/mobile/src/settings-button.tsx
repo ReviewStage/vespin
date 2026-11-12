@@ -18,6 +18,8 @@ export const SETTINGS_ROUTE = {
   AGENTS: "/settings/agents",
   MACHINES: "/settings/machines",
   MEMORY: "/settings/memory",
+  /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
+  MEMORY_EDIT: "/settings/memory-edit",
   /** Send feedback, as Settings' About and the iPad's Help menu open it. */
   FEEDBACK: "/settings/feedback",
   SKILLS: "/settings/skills",

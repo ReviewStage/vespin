@@ -43,6 +43,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="skills" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS] }} />
       <Stack.Screen name="skill" />
       <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
+      <Stack.Screen name="memory-edit" />
       <Stack.Screen name="feedback" options={{ title: FEEDBACK_WORDS.TITLE }} />
     </Stack>
   );

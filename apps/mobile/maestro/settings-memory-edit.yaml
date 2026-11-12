@@ -1,0 +1,46 @@
+# settings-memory-edit.yaml -- Settings › Memory on the Inbox fixture: a memory's words edited from its row and saved over it, then a new memory written from the bar's + and saved, landing back on Memory.
+#
+# Launched on the host's Inbox fixture, whose act door keeps a memory's
+# words as the service would (`@repo/host/fixture-inbox`), so no server is
+# reached. The host draws a correction over its memory the moment it is
+# sent, and a new memory only as the next read carries it, which the
+# fixture never sends, so the new one is not looked for on the list.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Memory"
+- tapOn: "Memory"
+- waitForAnimationToEnd
+# A press on a memory opens its words to be changed.
+- tapOn: "The staging database is reset every Sunday night."
+- waitForAnimationToEnd
+- assertVisible: "Edit memory"
+- takeScreenshot: settings-memory-edit
+- tapOn:
+    id: "memory-words"
+- eraseText: 60
+- inputText: "The staging database is reset every Saturday night."
+- tapOn: "Save"
+- waitForAnimationToEnd
+- assertVisible: "The staging database is reset every Saturday night."
+- assertNotVisible: "The staging database is reset every Sunday night."
+# The bar's + writes a new one.
+- tapOn: "Add memory"
+- waitForAnimationToEnd
+- assertVisible: "New memory"
+- tapOn:
+    id: "memory-words"
+- inputText: "Preview deployments sleep after an hour without a request."
+- takeScreenshot: settings-memory-new
+- tapOn: "Save"
+- waitForAnimationToEnd
+- assertVisible: "The web server's tests run on PGlite through `test:store`."
