@@ -184,6 +184,11 @@ export interface OpenedSandbox extends ListedSandbox {
   readonly running: string;
 }
 
+/** A sandbox a create opened, as `getOrCreate` hands it to its caller's `onCreate`: whether the drive of its own it mounted is the one an earlier create under its name left, as it stood. */
+export interface CreatedSandbox extends OpenedSandbox {
+  readonly driveKept: boolean;
+}
+
 /** One run of a sandbox, as a caller fences a call to it: the sandbox's name, and the run it means. */
 export interface SandboxRunning {
   readonly name: string;
@@ -268,13 +273,17 @@ export type DriveOrigin = { readonly base: string } | { readonly ownedBy: string
  * a base drive, by its name, made empty where none stands, mounted to be
  * filled (`fill`), which one sandbox fills at a time and many fork; or a
  * drive of the sandbox's own forked from a base drive or from another
- * sandbox's own (`fork`), copying its files as they stand; or the drive an
- * earlier create under the sandbox's name forked (`own`), mounted again as it
- * stands, as after its kept snapshot lapsed, and none where it forked none.
- * A sandbox owns the drive it forked, which its delete deletes with it, so
- * neither goes without the other; it never owns a base drive, which no
- * sandbox's delete touches. A fork whose origin is missing, or was never
- * filled, answers as gone (`SandboxGone`).
+ * sandbox's own (`fork`), copying its files as they stand; or the sandbox's
+ * own drive (`own`): the one an earlier create under its name forked or
+ * made, mounted again as it stands, else one made empty. Where `getOrCreate`
+ * names its own, a stopped sandbox under the name whose own drive stands is
+ * never resumed from its snapshot: it is deleted, its drive kept, and made
+ * again from the ask's source with that drive mounted, so its work comes
+ * back on the drive and nothing else of its old disk does; one with no
+ * drive of its own resumes as before. A sandbox owns the drive it forked or
+ * made, which its delete deletes with it, so neither goes without the other;
+ * it never owns a base drive, which no sandbox's delete touches. A fork whose
+ * origin is missing, or was never filled, answers as gone (`SandboxGone`).
  */
 export type SandboxDrive =
   | { readonly fill: string; readonly at: string }
