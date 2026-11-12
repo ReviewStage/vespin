@@ -25,6 +25,7 @@
     "./automation-view": "./src/automation-view.js",
     "./credential-redaction": "./src/credential-redaction.js",
     "./device-platform": "./src/device-platform.js",
+    "./drawn-pictures": "./src/drawn-pictures.js",
     "./host-live": "./src/host-live.js",
     "./machine-name": "./src/machine-name.js",
     "./machines-settings-words": "./src/machines-settings-words.js",
