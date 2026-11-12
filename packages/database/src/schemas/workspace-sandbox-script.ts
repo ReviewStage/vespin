@@ -1,9 +1,10 @@
+import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { sql } from "drizzle-orm";
-import { integer, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, updatedAt } from "./_helpers.js";
 import { organization } from "./auth.js";
 
@@ -75,12 +76,16 @@ export const workspaceRepositoryRunAction = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** `owner/name` as GitHub spelled it when the list was saved, e.g. `"acme/relay"`. */
     repository: text("repository").notNull(),
-    /** Its place in the repository's list, from 0; the first is the Run button's. */
+    /** Its place in the repository's list, from 0, as the Run menu lists it. */
     position: integer("position").notNull(),
     /** The words the Run menu and the action's Terminal tab draw. */
     label: text("label").notNull(),
     /** The bash it runs from the checkout. */
     command: text("command").notNull(),
+    /** The icon the Run menu draws it with, one emoji or one Lucide glyph, as a sidebar section's is; none for the menu's own. */
+    icon: jsonb("icon").$type<TaskSectionIcon>(),
+    /** Whether it is the Run button's and ⌥⌘R's; where no action of the list is, the first is. */
+    isDefault: boolean("is_default").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -91,5 +96,9 @@ export const workspaceRepositoryRunAction = pgTable(
       sql`lower(${table.repository})`,
       table.position,
     ),
+    // At most one default in a repository's list however its name is cased.
+    uniqueIndex("workspace_repository_run_action_repository_default")
+      .on(table.organizationId, sql`lower(${table.repository})`)
+      .where(sql`${table.isDefault}`),
   ],
 );

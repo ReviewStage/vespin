@@ -162,10 +162,22 @@ export function MenuRow({
             indent={row.indent}
             leading={row.leading}
             label={row.label}
+            adornment={row.adornment}
             description={row.description}
             foldLabel={row.fold.label}
             defaultOpen={row.fold.defaultOpen}
             actions={() => more}
+            controls={row.controls}
+            control={
+              row.control === undefined && row.describedControl === undefined
+                ? undefined
+                : (control) => (
+                    <>
+                      {row.control}
+                      {row.describedControl?.(control)}
+                    </>
+                  )
+            }
           >
             {row.fold.body}
           </SettingsFoldRow>

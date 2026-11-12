@@ -10,8 +10,8 @@ import { CodeEditor } from "./code-editor.js";
  * the words typed, never the ones its colors were for, so the colored layer
  * under the caret always spells what the field holds; and a numbered one
  * numbers each line the field holds, its empty ones and a closing empty one
- * included, so each number stands beside the line the caret is on; and ⌘S
- * and Escape in one answer its save and its escape, the browser's own Save
+ * included, so each number stands beside the line the caret is on; and ⌘S,
+ * ⌘↩, and Escape in one answer its save and its escape, the browser's own Save
  * Page kept from opening.
  * Synthetic code.
  */
@@ -70,7 +70,7 @@ test("a numbered editor numbers every line it holds, empty ones included", () =>
   expect(drawn).toEqual(["1", "2", "3", "4"]);
 });
 
-test("⌘S in an editor answers its save, kept from the browser, and Escape answers its escape", () => {
+test("⌘S and ⌘↩ in an editor answer its save, kept from the browser, and Escape answers its escape", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -97,9 +97,11 @@ test("⌘S in an editor answers its save, kept from the browser, and Escape answ
   // The same physical key on a Cyrillic layout, whose character is no Latin letter.
   const cyrillic = { key: "ы", code: "KeyS", metaKey: true, bubbles: true, cancelable: true };
   act(() => field.dispatchEvent(new KeyboardEvent("keydown", cyrillic)));
+  const enter = { key: "Enter", metaKey: true, bubbles: true, cancelable: true };
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", enter)));
   act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect({ pressed, browserSaveKept: save.defaultPrevented }).toEqual({
-    pressed: ["save", "save", "escape"],
+    pressed: ["save", "save", "save", "escape"],
     browserSaveKept: true,
   });
 });

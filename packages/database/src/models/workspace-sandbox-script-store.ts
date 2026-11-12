@@ -9,6 +9,7 @@
  * keeping the spelling of its latest save.
  */
 
+import { type TaskSectionIcon, taskSectionIconSchema } from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
@@ -180,17 +181,21 @@ const RunActionSchema = Schema.Struct({
   repository: Schema.String,
   label: Schema.String,
   command: Schema.String,
+  icon: Schema.NullOr(taskSectionIconSchema),
+  isDefault: Schema.Boolean,
   updatedAt: InstantColumnSchema,
 });
 
 /** One of a repository's run actions as its list was last saved, with the repository as that save spelled it. */
 export type WorkspaceRunAction = typeof RunActionSchema.Type;
 
-/** One action as a save writes it: the id it keeps, where it keeps one, its label, and its command. */
+/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, and whether it is the default. */
 export interface RunActionWrite {
   readonly id?: string | undefined;
   readonly label: string;
   readonly command: string;
+  readonly icon?: TaskSectionIcon | undefined;
+  readonly isDefault?: boolean | undefined;
 }
 
 const RUN_ACTION_COLUMNS = {
@@ -198,6 +203,8 @@ const RUN_ACTION_COLUMNS = {
   repository: runAction.repository,
   label: runAction.label,
   command: runAction.command,
+  icon: runAction.icon,
+  isDefault: runAction.isDefault,
   updatedAt: runAction.updatedAt,
 };
 
@@ -253,6 +260,8 @@ const insertRunAction = SqlSchema.void({
     position: Schema.Number,
     label: Schema.String,
     command: Schema.String,
+    icon: Schema.NullOr(taskSectionIconSchema),
+    isDefault: Schema.Boolean,
     now: Schema.Date,
   }),
   execute: ({ now, ...row }) =>
@@ -366,6 +375,7 @@ export function setRunActions(
         const standing = yield* findRepositoryRunActions({ organizationId, repository });
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
+        let defaulted = false;
         for (const [position, action] of actions.entries()) {
           const keeps = action.id !== undefined && keepable.delete(action.id);
           yield* insertRunAction({
@@ -374,9 +384,13 @@ export function setRunActions(
             position,
             label: action.label,
             command: action.command,
+            icon: action.icon ?? null,
+            // Note that only the first action named default is, so a list naming two still saves one.
+            isDefault: action.isDefault === true && !defaulted,
             now,
             ...(keeps && action.id !== undefined ? { id: action.id } : {}),
           });
+          defaulted ||= action.isDefault === true;
         }
       }),
     ),

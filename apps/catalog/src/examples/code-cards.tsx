@@ -4,6 +4,7 @@ import {
   CodeCard,
   CodeCardHeader,
   CodeEditor,
+  CodePreview,
   FileCodeCard,
   TerminalIcon,
   TextButton,
@@ -144,6 +145,14 @@ function CodeCards(): React.JSX.Element {
           lines={COLORED_LINES}
           copy={copyToClipboard}
         />
+      </CatalogSection>
+      <CatalogSection
+        id="code-preview"
+        title="A preview of a script's first lines, the rest fading out"
+      >
+        <CodePreview code={SCRIPT} />
+        <CodePreview code={COLORED} lines={COLORED_LINES} />
+        <CodePreview code={SHORT} />
       </CatalogSection>
       <CatalogSection id="code-card-cut" title="Cut at 40 lines, with Show all">
         <CodeCard title="yaml" code={LONG} copy={copyToClipboard} />
