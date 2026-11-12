@@ -216,12 +216,13 @@ host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
 your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
-the next time you open the app), and reports of a screen that could not be
-drawn. It uses Sentry's default data collection, so reports may include error
+the next time you open the app, a crash as the app starts, before its first
+screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
-account by its id only. The app sends no performance traces, screenshots, or
+account by its id only, or not at all for a crash before you are signed in
+again at launch. The app sends no performance traces, screenshots, or
 recordings of the screen.
 
 ### Feedback

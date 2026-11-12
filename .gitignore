@@ -59,6 +59,9 @@ artifacts/
 # The iOS app's native project, which Expo generates from apps/mobile/app.config.ts
 # on every build, its Metro state, and Xcode's own per-user and build state.
 apps/mobile/ios/
+# The options Sentry's native half starts on at launch, which the config plugin
+# writes beside app.config.ts on every prebuild, the build's DSN among them.
+apps/mobile/sentry.options.json
 apps/mobile/android/
 .expo/
 expo-env.d.ts
