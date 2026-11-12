@@ -1086,6 +1086,7 @@ const shownUploads = Effect.fnUntraced(function* (
   conversationId: string,
   journal: StoredUIMessage,
 ) {
+  // SAFETY: a stored part's input and output are the JSON the row carried, which `shownPicturesOf` parses.
   const shown = journal.parts.flatMap((part) =>
     isStoredToolPart(part) &&
     storedToolName(part) === AGENT_TOOL.SHOW_IMAGE &&

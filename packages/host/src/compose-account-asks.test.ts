@@ -90,6 +90,7 @@ it.effect(
       const drawnDefault = () => {
         // SAFETY: the host tells its own slices whole, as built.
         const held = preferences().at(-1) as AppAccountPreferences | undefined;
+        // SAFETY: the host tells its own slices whole, as built.
         const offered = models().at(-1) as AppModels | undefined;
         assert.ok(held?.["user-dana"]?.rows !== undefined, "the preferences answered");
 

@@ -135,6 +135,7 @@ async function stage(root: string, node: AgentToolPin): Promise<void> {
 
 /** The target's tarball, on the Node given, and its `.sha256`, in `dist/release/`. */
 async function packageTarball(target: HostTarget, node: AgentToolPin): Promise<void> {
+  // SAFETY: this is the workspace's own package.json, which carries the version the tarball is named for.
   const { version } = JSON.parse(readFileSync(join(APP, "package.json"), "utf8")) as {
     version: string;
   };

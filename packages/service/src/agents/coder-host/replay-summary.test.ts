@@ -85,7 +85,10 @@ const said = (at: number, size = 1_000): ReplayStep => ({
 });
 
 /** A model answering each call by `answer`, or never where it answers nothing, keeping each prompt it was asked. */
-function scripted(answer: (prompt: string) => string | undefined, finish = "stop") {
+function scripted(
+  answer: (prompt: string) => string | undefined,
+  finish: "stop" | "length" = "stop",
+) {
   const asked: string[] = [];
   const bounds: (number | undefined)[] = [];
 
@@ -100,7 +103,7 @@ function scripted(answer: (prompt: string) => string | undefined, finish = "stop
 
       return {
         content: [{ type: "text", text }],
-        finishReason: { unified: finish as "stop" | "length", raw: finish },
+        finishReason: { unified: finish, raw: finish },
         usage: {
           inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
           outputTokens: { total: 1, text: 1, reasoning: 0 },

@@ -337,13 +337,16 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
 
   let configLabelKey: string = key;
 
+  // SAFETY: each `key in` check below admits the key as one its object holds.
   if (key in payload && typeof payload[key as keyof typeof payload] === "string") {
+    // SAFETY: the condition above checked the key holds a string.
     configLabelKey = payload[key as keyof typeof payload] as string;
   } else if (
     payloadPayload &&
     key in payloadPayload &&
     typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
   ) {
+    // SAFETY: the condition above checked the key holds a string.
     configLabelKey = payloadPayload[key as keyof typeof payloadPayload] as string;
   }
 

@@ -17,7 +17,17 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { EventEmitter, once } from "node:events";
 import { gunzipSync } from "node:zlib";
-import { RUNNER_ENV, type RunnerConfig } from "@repo/agent-runner/protocol";
+import {
+  type ClaudeCodeConfig,
+  ClaudeCodeConfigSchema,
+  type CodexConfig,
+  CodexConfigSchema,
+  type InputLine,
+  InputLineSchema,
+  RUNNER_ENV,
+  type RunnerConfig,
+  RunnerConfigSchema,
+} from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
 import { recordNativeHanded } from "@repo/database/models/agent-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
@@ -41,8 +51,9 @@ import {
 import type { WireValue } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { agentTag } from "../agents/agent-sandbox-open.js";
+import { EXCESS_KEYS } from "../core.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";
@@ -701,6 +712,25 @@ export function runnerSandboxApi() {
   };
 }
 
+const WHOLE = { onExcessProperty: EXCESS_KEYS.REFUSE } as const;
+const decodeRunnerConfig = Schema.decodeUnknownSync(RunnerConfigSchema);
+const decodeClaudeCodeConfig = Schema.decodeUnknownSync(ClaudeCodeConfigSchema);
+const decodeCodexConfig = Schema.decodeUnknownSync(CodexConfigSchema);
+const decodeInputLine = Schema.decodeUnknownSync(InputLineSchema);
+
+/** A launch's config, of either harness, read whole: a key its schema does not name fails the read. */
+export const readRunnerConfig = (input: unknown): RunnerConfig => decodeRunnerConfig(input, WHOLE);
+
+/** A Claude Code launch's config, read whole: a key its schema does not name fails the read. */
+export const readClaudeCodeConfig = (input: unknown): ClaudeCodeConfig =>
+  decodeClaudeCodeConfig(input, WHOLE);
+
+/** A Codex launch's config, read whole: a key its schema does not name fails the read. */
+export const readCodexConfig = (input: unknown): CodexConfig => decodeCodexConfig(input, WHOLE);
+
+/** A line a runner is handed, read whole: a key its schema does not name fails the read. */
+export const readInputLine = (input: unknown): InputLine => decodeInputLine(input, WHOLE);
+
 /** The lines a command's stdin holds, each read back. */
 export function linesOf(command: FakeCommand | undefined): unknown[] {
   assert.ok(command !== undefined);
@@ -718,7 +748,8 @@ export function linesOf(command: FakeCommand | undefined): unknown[] {
 export const launchLines = (command: FakeCommand | undefined) =>
   Effect.gen(function* () {
     assert.ok(command?.agentId !== undefined);
-    const [config, ...stdin] = linesOf(command) as [RunnerConfig, ...unknown[]];
+    const [first, ...stdin] = linesOf(command);
+    const config = readRunnerConfig(first);
     const db = yield* Database;
 
     const queued = yield* db
@@ -729,8 +760,31 @@ export const launchLines = (command: FakeCommand | undefined) =>
       )
       .orderBy(asc(runnerLine.seq));
 
-    return [config, ...stdin, ...queued.map((row): WireValue => JSON.parse(row.text))];
+    return [first, ...stdin, ...queued.map((row): WireValue => JSON.parse(row.text))];
   });
+
+/**
+ * A launch as its runner reads it: its config as `readConfig` reads it, then
+ * each line it was handed (`launchLines`).
+ */
+export const launchRead = <Config>(
+  command: FakeCommand | undefined,
+  readConfig: (input: unknown) => Config,
+) =>
+  Effect.map(launchLines(command), ([config, ...lines]) => ({
+    config: readConfig(config),
+    lines: lines.map(readInputLine),
+  }));
+
+/** A launch's stdin as its runner reads it: its config as `readConfig` reads it, then each line written after it. */
+export function stdinRead<Config>(
+  command: FakeCommand | undefined,
+  readConfig: (input: unknown) => Config,
+): { readonly config: Config; readonly lines: readonly InputLine[] } {
+  const [config, ...lines] = linesOf(command);
+
+  return { config: readConfig(config), lines: lines.map(readInputLine) };
+}
 
 /** Every message queued for the agent's runner stamped taken, what its words handed kept, as each one's ACCEPTED would, which the fake runner never posts. */
 export const runnerTook = (agentId: string) =>

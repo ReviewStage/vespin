@@ -136,6 +136,7 @@ const loggedBy = <E, R>(writes: Effect.Effect<unknown, E, R>) =>
 
     return rows.slice(before?.rows ?? 0).map((row) => ({
       table: row.table,
+      // SAFETY: each captured row's key is the list of its rows' primary keys.
       ids: (row.key as readonly { readonly id: string }[]).map((key) => key.id).sort(),
       topics: row.topics,
     }));

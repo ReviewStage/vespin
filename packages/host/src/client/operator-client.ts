@@ -100,9 +100,10 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       }),
       // Note that a live follow's slice is written whole as it is told, as each read's own was, and only a slice a follow declares.
       gateway.host.onLiveReadChanged(({ read, held }) => {
-        // SAFETY: a followed slice is told whole as the host holds it (`liveTold`), so `held` is that slice's own.
-        if (FOLLOWED_SLICES.has(read))
+        if (FOLLOWED_SLICES.has(read)) {
+          // SAFETY: a followed slice is told whole as the host holds it (`liveTold`), so `held` is that slice's own.
           state.update({ [read]: held } as Parameters<AppStateStore["update"]>[0]);
+        }
       }),
       gateway.host.onAccountPreferencesChanged((held) => {
         state.update({ [LIVE_READ.ACCOUNT_PREFERENCES]: held });

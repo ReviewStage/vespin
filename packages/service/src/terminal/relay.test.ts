@@ -105,13 +105,14 @@ function world(options: {
   let credentialAt: number | undefined;
   const policies: string[] = [];
   const touched: { readonly sessionId: string; readonly at: number }[] = [];
+  const claims: number[] = [];
 
   const asked = {
     attached: 0,
     resumed: 0,
     tokens: 0,
     released: 0,
-    claims: [] as number[],
+    claims,
     policies,
     touched,
   };

@@ -13,7 +13,12 @@ import { failedChunkAnswer, type StaleBuildTab } from "../src/app/stale-build";
 /** A tab online or not, its reloads, asks, and each ask's dismissal kept. */
 function tabWith(options: { online?: boolean } = {}) {
   const leave = pageLeave(new EventTarget());
-  const seen = { reloads: 0, asks: [] as (() => void)[], dismisses: [] as (() => void)[] };
+
+  const seen: { reloads: number; asks: (() => void)[]; dismisses: (() => void)[] } = {
+    reloads: 0,
+    asks: [],
+    dismisses: [],
+  };
 
   const tab: StaleBuildTab = {
     online: () => options.online ?? true,

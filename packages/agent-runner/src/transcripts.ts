@@ -69,7 +69,10 @@ export function transcriptStore(
           await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE, key: keyOf(key), after }),
         );
 
-        for (const entry of page.entries) entries.push(entry as SessionStoreEntry);
+        for (const entry of page.entries) {
+          // SAFETY: each entry is one the SDK appended through this store, carried back unchanged.
+          entries.push(entry as SessionStoreEntry);
+        }
 
         // Note that a cursor that does not move on fails the load, which would otherwise never end.
         if (page.next !== null && after !== null && page.next <= after) {

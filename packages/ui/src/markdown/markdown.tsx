@@ -247,6 +247,7 @@ function lineContent(node: RootContent): RootContent[] {
   const parts = node.children.map((child) => lineContent(child));
   const kept = BLOCK_HOLDERS.has(node.type) ? spaced(parts) : parts.flat();
 
+  // SAFETY: a word mark holds phrasing content, which is what `lineContent` answers, so the node keeps its own type.
   return WORD_MARKS.has(node.type) ? [{ ...node, children: kept } as RootContent] : kept;
 }
 
@@ -265,6 +266,7 @@ const runOnOneLine = () => (tree: MarkdownRoot) => {
   const definitions = tree.children.filter(defines);
   const blocks = tree.children.filter((node) => !defines(node));
   // Note that the words stand in one paragraph, because the root sets a line break between its children, which would space a word from its own mark.
+  // SAFETY: `lineContent` answers each block's phrasing content, which is what a paragraph holds.
   const words = spaced(blocks.map(lineContent)) as PhrasingContent[];
   tree.children = [{ type: "paragraph", children: words }, ...definitions];
 };

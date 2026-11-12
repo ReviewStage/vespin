@@ -1461,6 +1461,7 @@ test("a Vespin link naming a task by its number opens the task the service finds
   const tab = mount(
     { shown: true, tasks: OPEN },
     {
+      // SAFETY: a find's payload names the number it finds.
       [ACT_KIND.TASKS_FIND]: (payload) =>
         Promise.resolve(
           (payload as { number: number }).number === 42
@@ -1722,6 +1723,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
     },
     {
       [ACT_KIND.AGENTS_PAGE]: (payload) => {
+        // SAFETY: a page read's payload names the agent it reads.
         const { agentId } = payload as { agentId: string };
 
         // Note that the service never answers for the agent the list followed live carries, which opens without it.
@@ -1990,6 +1992,7 @@ test.each([
   async (_spelling, href, expected) => {
     const opened = await agentOpenedBy(href);
 
+    // SAFETY: each expected key is one of the opened place's own, a missing one reading undefined.
     const read = Object.fromEntries(
       Object.keys(expected).map((key) => [key, opened[key as keyof typeof opened]]),
     );
@@ -2156,6 +2159,7 @@ test.each([
   async (_spelling, href, expected) => {
     const opened = await placeOpenedBy(href);
 
+    // SAFETY: each expected key is one of the opened place's own, a missing one reading undefined.
     const read = Object.fromEntries(
       Object.keys(expected).map((key) => [key, opened[key as keyof typeof opened]]),
     );

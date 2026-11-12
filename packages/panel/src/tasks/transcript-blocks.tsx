@@ -2049,6 +2049,7 @@ function TurnRowView<B>({
  * the tab draws its blocks another way: a running turn's page touches its
  * newest row alone, so every row before it is kept as it was drawn.
  */
+// SAFETY: memo draws TurnRowView with the same props, so it takes what TurnRowView takes.
 const SteadyTurnRow = memo(TurnRowView, (a, b) =>
   sameFieldsBy(a, b, { row: sameTurnRow }),
 ) as typeof TurnRowView;

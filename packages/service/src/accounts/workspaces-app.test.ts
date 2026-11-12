@@ -177,13 +177,14 @@ const INVITATION_MAIL = invitationMailFromEnvironment.pipe(
 const emailsTo = (address: string) =>
   RESEND.requests
     .map(
-      (request) =>
-        JSON.parse(request.body ?? "{}") as {
-          from: string;
-          to: string[];
-          text: string;
-          html: string;
-        },
+      (
+        request,
+      ): {
+        from: string;
+        to: string[];
+        text: string;
+        html: string;
+      } => JSON.parse(request.body ?? "{}"),
     )
     .filter((email) => email.to.includes(address));
 

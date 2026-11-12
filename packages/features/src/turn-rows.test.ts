@@ -139,6 +139,7 @@ function changed(value: unknown): string | boolean | object {
 
   if (Array.isArray(value)) return value.slice(1);
 
+  // SAFETY: the arrays are handled above, and every other field a row holds is an object.
   return { ...(value as object), more: true };
 }
 
@@ -164,6 +165,7 @@ test("a row of each kind reads alike copied whole, and otherwise once any of its
     assert.ok(sameTurnRow(row, structuredClone(row)), `a ${row.kind} row copied whole`);
 
     for (const key of Object.keys(row)) {
+      // SAFETY: `key` is one of the row's own keys, and the copy only changes that field's value.
       const other = { ...row, [key]: changed(row[key as keyof typeof row]) } as TurnRow<Block>;
       assert.ok(!sameTurnRow(row, other), `a ${row.kind} row whose ${key} changed`);
     }

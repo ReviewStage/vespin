@@ -389,6 +389,7 @@ export const INBOX_ASK_STATUS_MOVES = {
 export function statusesMovingTo<Status extends string>(
   moves: Readonly<Record<Status, readonly Status[]>>,
   to: Status,
+  // SAFETY: a moves table is keyed by every status it lists, and by nothing else.
   from: readonly Status[] = Object.keys(moves) as Status[],
 ): Status[] {
   return from.filter((status) => moves[status].includes(to));

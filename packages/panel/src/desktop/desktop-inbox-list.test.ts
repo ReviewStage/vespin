@@ -972,7 +972,7 @@ test("on Needs you, an item answered on another Mac slides out from where its ro
     leaving.every((each) => each.hasAttribute("inert")),
     "each is drawn on out of reach",
   );
-  const fades = played.filter((each) => leaving.includes(each.element as HTMLElement));
+  const fades = played.filter((each) => leaving.some((leaver) => leaver === each.element));
   assert.deepEqual(
     fades.map((each) => each.keyframes.at(-1)),
     [

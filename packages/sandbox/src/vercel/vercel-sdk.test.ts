@@ -442,7 +442,7 @@ it.effect(
           return Response.json(sandboxFound({ ...RUNNING_SANDBOX, status, timeout }));
         }
 
-        const { duration } = JSON.parse(String(init.body)) as { readonly duration: number };
+        const { duration }: { readonly duration: number } = JSON.parse(String(init.body));
         extensions.push(duration);
         timeout += duration;
 

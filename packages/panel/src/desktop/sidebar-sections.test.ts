@@ -1516,13 +1516,18 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   await press(search, "Enter", true);
   const noColor = document.activeElement ?? assert.fail("nothing has the focus");
   assert.equal(noColor.getAttribute("aria-label"), "Black");
-  await press(noColor as HTMLElement, "ArrowRight");
-  assert.equal(document.activeElement?.getAttribute("aria-label"), "Red");
-  await press(document.activeElement as HTMLElement, "Escape");
+  assert.ok(noColor instanceof HTMLElement);
+  await press(noColor, "ArrowRight");
+  const red = document.activeElement;
+  assert.equal(red?.getAttribute("aria-label"), "Red");
+  assert.ok(red instanceof HTMLElement);
+  await press(red, "Escape");
   assert.equal(document.querySelector(".section-icon-colors"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   await act(async () => dialogButton("Telescope").click());
-  await act(async () => (document.activeElement as HTMLButtonElement).click());
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement);
+  await act(async () => focused.click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1866,7 +1871,9 @@ test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it
   assert.deepEqual(namesIn(container, "Pinned"), ["Pin audit", "Pin review"]);
   assert.equal(document.activeElement, rowPress(container, "Pin audit"));
 
-  await act(async () => (document.activeElement as HTMLElement).blur());
+  const pinned = document.activeElement;
+  assert.ok(pinned instanceof HTMLElement);
+  await act(async () => pinned.blur());
   assert.equal(appCommandOffered(APP_COMMAND.MOVE_ROW_DOWN), false, "the keyboard left the list");
 });
 

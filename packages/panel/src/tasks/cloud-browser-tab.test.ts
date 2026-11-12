@@ -581,8 +581,8 @@ test("a draft's open that answers once another account signed in chooses nothing
   let answer: (tab: AgentBrowserTab) => void = () => undefined;
   fakeActPort({
     [ACT_KIND.TASKS_BROWSER_TAB_OPEN]: () =>
-      // SAFETY: the test hands back the wire's own answer, a tab.
       new Promise((resolve) => {
+        // SAFETY: the test hands back the wire's own answer, a tab.
         answer = (tab) => resolve({ tab } as never);
       }),
   });

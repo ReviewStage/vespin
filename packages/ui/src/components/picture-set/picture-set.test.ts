@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
@@ -69,7 +70,9 @@ test("a few pictures stand captioned in the list their caller names, each openin
     "Enlarge After",
   ]);
   expect(presses.map((press) => press.textContent)).toEqual(["Before", "After"]);
-  act(() => (presses[1] as HTMLButtonElement).click());
+  const after = presses[1];
+  assert.ok(after instanceof HTMLButtonElement);
+  act(() => after.click());
   expect(opened).toEqual(["After"]);
   expect(container.querySelector("figcaption")).toBeNull();
 });
@@ -165,7 +168,9 @@ test("a picture whose read did not land says it could not be read, and its Retry
     "Members could not be read.",
   );
   expect(presses.map((press) => press.textContent)).toEqual(["Retry"]);
-  act(() => (presses[0] as HTMLButtonElement).click());
+  const retry = presses[0];
+  assert.ok(retry instanceof HTMLButtonElement);
+  act(() => retry.click());
   expect(pressed).toEqual(["retry"]);
 });
 

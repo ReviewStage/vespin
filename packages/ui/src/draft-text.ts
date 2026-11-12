@@ -156,6 +156,7 @@ function slackRuns(text: string): DraftRun[] {
       continue;
     }
 
+    // SAFETY: `Object.hasOwn` checked the character is one of MARK_OF's keys.
     const mark = Object.hasOwn(MARK_OF, character)
       ? MARK_OF[character as keyof typeof MARK_OF]
       : undefined;

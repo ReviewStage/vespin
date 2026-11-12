@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test } from "vitest";
@@ -45,11 +46,13 @@ test("the strip is hidden from a reader, and a press on it shows the rail", () =
       }),
     ),
   );
-  const strip = container.firstElementChild as HTMLElement;
+  const strip = container.firstElementChild;
+  assert.ok(strip !== null);
 
   expect(strip.getAttribute("aria-hidden")).toBe("true");
 
-  const last = strip.lastElementChild as HTMLElement;
+  const last = strip.lastElementChild;
+  assert.ok(last instanceof HTMLElement);
   act(() => last.click());
   expect(shown).toEqual(["rail"]);
 });
@@ -70,9 +73,12 @@ test("a strip of bars that takes no press hears the pointer come to rest on it a
       }),
     ),
   );
-  const strip = container.firstElementChild as HTMLElement;
+  const strip = container.firstElementChild;
+  assert.ok(strip !== null);
 
-  act(() => (strip.lastElementChild as HTMLElement).click());
+  const last = strip.lastElementChild;
+  assert.ok(last instanceof HTMLElement);
+  act(() => last.click());
   act(() => strip.dispatchEvent(new PointerEvent("pointerover", { bubbles: true })));
   act(() =>
     strip.dispatchEvent(

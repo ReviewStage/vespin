@@ -586,6 +586,7 @@ function syncedParts<Part extends string>(
       if (sync.past === undefined) return [part, { ...sealed, sync }];
       // Note that a delta's rows are read at a snapshot past the settled id, which shows writes past it that no delta carries yet, so a writer confirms by `next` and the txids instead.
       const { snapshot: _snapshot, ...delta } = sealed;
+      // SAFETY: the queries are keyed by the read's own parts.
       const ofPart = gone.get(part as Part) ?? [];
 
       return [part, { ...delta, sync, ...(ofPart.length !== 0 && { gone: ofPart }) }];
@@ -597,6 +598,7 @@ function syncedParts<Part extends string>(
 function rowIds(sealed: SealedLiveQueryWire, key: string): ReadonlySet<string> {
   return new Set(
     (sealed.rows ?? []).flatMap((row) => {
+      // SAFETY: the guard below admits only an object, which is read by its own keys.
       const id =
         typeof row === "object" && row !== null
           ? (row as Readonly<Record<string, unknown>>)[key]
@@ -819,6 +821,7 @@ function boundParts<Read extends AnyLiveRead>(
   const { heldOn, olderParts } = read.declaration;
   // SAFETY: a declaration names its held and older parts among its own (`LiveReadDeclaration`).
   const held = heldOn as readonly PartOf<Read>[] | undefined;
+  // SAFETY: a declaration names its held and older parts among its own (`LiveReadDeclaration`).
   const older = olderParts as readonly PartOf<Read>[] | undefined;
   const sync = asked[LIVE_POLL.SYNC];
 

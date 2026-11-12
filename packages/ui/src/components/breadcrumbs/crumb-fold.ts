@@ -59,6 +59,7 @@ function foldableCount(crumbs: readonly Crumb[]): number {
   const last = crumbs.findLastIndex((crumb) => crumb.shown !== false);
   let count = 0;
 
+  // SAFETY: `count` stays below `last`, the index of a crumb the path holds.
   while (count < last && foldable(crumbs[count] as Crumb)) count += 1;
 
   return count;

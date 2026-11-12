@@ -346,8 +346,10 @@ function laid<Part>(
 ): AppPullRequestPart<Part> {
   const kept = cache.get(held);
 
-  // SAFETY: a read's entry is only ever written below, from that same read.
-  if (kept?.moves === moves) return kept.staged as AppPullRequestPart<Part>;
+  if (kept?.moves === moves) {
+    // SAFETY: a read's entry is only ever written below, from that same read.
+    return kept.staged as AppPullRequestPart<Part>;
+  }
 
   const rows = Object.fromEntries(
     [...parts()].map(([number, each]) => [String(number), { rows: each }]),

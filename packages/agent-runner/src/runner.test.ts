@@ -1752,6 +1752,7 @@ function fakeCliTransport() {
   const answered = Deferred.makeUnsafe<void>();
 
   const transport = {
+    // SAFETY: the SDK sets the handler once it connects; nothing is set before.
     onmessage: undefined as
       | ((message: { jsonrpc: "2.0"; method: string; id?: number }) => void)
       | undefined,

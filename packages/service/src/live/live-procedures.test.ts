@@ -2317,6 +2317,7 @@ const lookingOn = (looking: Queue.Queue<void>): SyncShape => ({
 });
 
 /** Each part's row ids, as a delta answers its rows. */
+// SAFETY: a part's rows are the read's own rows, each keyed by its `id`.
 const idsOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly id: string }).id).toSorted();
 
@@ -2364,6 +2365,7 @@ const messageWritten = (userId: string, agentId: string) =>
   });
 
 /** The agent's row among a part's rows, as the task list reads it. */
+// SAFETY: a part's rows are the read's own rows, each keyed by its `id`, an agent's carrying its sandbox's state.
 const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: string) =>
   (part.rows ?? []).find((row) => (row as { readonly id: string }).id === agentId) as
     | { readonly sandboxOpen?: boolean; readonly sandboxState?: string | null }
@@ -2559,6 +2561,7 @@ const openItem = (userId: string) =>
   });
 
 /** The client keys of a messages part's rows, as the reader's own messages carry them. */
+// SAFETY: a messages part's rows are the read's own rows, each carrying its client key.
 const clientKeysOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly clientKey: string | null }).clientKey);
 

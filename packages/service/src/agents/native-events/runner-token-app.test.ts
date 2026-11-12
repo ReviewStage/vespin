@@ -81,9 +81,9 @@ function openAi() {
   const respond = async (url: string, init: RequestInit): Promise<Response> => {
     assert.equal(url, CODEX_DEVICE_OAUTH.TOKEN_URL);
 
-    const body = JSON.parse(await new Response(init.body).text()) as {
-      readonly refresh_token?: string;
-    };
+    const body: { readonly refresh_token?: string } = JSON.parse(
+      await new Response(init.body).text(),
+    );
 
     assert.equal(body.refresh_token, `refresh-${state.renewals}`);
     state.renewals += 1;

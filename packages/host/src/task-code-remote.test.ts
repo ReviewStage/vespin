@@ -37,6 +37,7 @@ function forkChild(
 
   return {
     send: (message) => {
+      // SAFETY: the messages sent are the wire values the child reads, every one an object.
       child.send(message as object);
       afterSend(child);
     },

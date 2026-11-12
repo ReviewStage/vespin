@@ -318,6 +318,7 @@ describe("the developer tools", () => {
 
 /** A window of the app's, as the menu is handed the one it was chosen over. */
 function aWindow(): BaseWindow {
+  // SAFETY: the menu only hands the window it was chosen over back to its command, reading nothing of it.
   return {} as BaseWindow;
 }
 
@@ -349,6 +350,7 @@ function pressKey(
   const item = everyItem(drawn).find((candidate) => candidate.id === command);
 
   if (!item?.click) return assert.fail(`no ${command} item`);
+  // SAFETY: the menu's commands read only the window and whether a key pressed the item.
   item.click({} as MenuItem, window, { triggeredByAccelerator: true } as KeyboardEvent);
 
   return reopened;
@@ -408,7 +410,9 @@ describe("Reload", () => {
     if (!item?.click) return assert.fail("View has no Reload item");
 
     const window = aWindow();
+    // SAFETY: the menu's commands read only the window and whether a key pressed the item.
     item.click({} as MenuItem, window, { triggeredByAccelerator: true } as KeyboardEvent);
+    // SAFETY: the menu's commands read only the window and whether a key pressed the item.
     item.click({} as MenuItem, undefined, { triggeredByAccelerator: true } as KeyboardEvent);
 
     assert.deepEqual(reloaded, [window]);

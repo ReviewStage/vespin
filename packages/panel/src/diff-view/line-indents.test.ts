@@ -33,9 +33,11 @@ test("a line is marked with its indent in columns, tabs to the next stop", () =>
   const content = drawnLines(["    four", "\ttab", " \tspace then tab", "none"]);
   markLineIndents(content);
 
-  const marks = [...content.children].map((line) =>
-    (line as HTMLElement).style.getPropertyValue(LINE_INDENT),
-  );
+  const marks = [...content.children].map((line) => {
+    assert.ok(line instanceof HTMLElement);
+
+    return line.style.getPropertyValue(LINE_INDENT);
+  });
 
   assert.deepEqual(marks, ["4ch", "2ch", "2ch", ""]);
 });
@@ -43,7 +45,8 @@ test("a line is marked with its indent in columns, tabs to the next stop", () =>
 test("a line drawn again with no indent loses its mark", () => {
   const content = drawnLines(["  nested"]);
   markLineIndents(content);
-  const line = content.firstElementChild as HTMLElement;
+  const line = content.firstElementChild;
+  assert.ok(line instanceof HTMLElement);
   line.textContent = "flush";
   markLineIndents(content);
   assert.equal(line.style.getPropertyValue(LINE_INDENT), "");

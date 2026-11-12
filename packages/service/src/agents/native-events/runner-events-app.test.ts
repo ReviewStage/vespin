@@ -116,9 +116,8 @@ const standingWith = (
   options: RunnerEventsOptions,
   after:
     | Layer.Layer<AfterResponse>
-    | Layer.Layer<
-        SettledTurnListener | StartedTurnListener
-      > = Layer.empty as Layer.Layer<AfterResponse>,
+    | Layer.Layer<SettledTurnListener | StartedTurnListener>
+    | Layer.Layer<never> = Layer.empty,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -814,6 +813,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const agent = yield* agentWithBearer;
         const commit = "0123456789abcdef0123456789abcdef01234567";
 
+        // SAFETY: each message below is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId, snapshot: { commit } },
           {
@@ -1065,6 +1065,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         );
 
         // The next launch fails on its own, the limit having lifted: it says nothing of the old one.
+        // SAFETY: each message below is one the pinned SDK or the runner emits, written in its JSON shape.
         const relaunch = [
           { type: "system", subtype: "init", ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.INPUT_CLOSED },
@@ -2600,10 +2601,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           }),
         ]);
 
-        const post = yield* standingWith(
-          {},
-          Layer.merge(Layer.empty as Layer.Layer<AfterResponse>, reporting),
-        );
+        const post = yield* standingWith({}, reporting);
 
         // As Codex said the expired key of LUKE-WEB-2R: a connection failed, its 401 in its info.
         const expired = {
@@ -2687,10 +2685,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           }),
         ]);
 
-        const post = yield* standingWith(
-          {},
-          Layer.merge(Layer.empty as Layer.Layer<AfterResponse>, reporting),
-        );
+        const post = yield* standingWith({}, reporting);
 
         const agent = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
         yield* signedIn(agent.userId);

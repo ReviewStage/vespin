@@ -255,10 +255,12 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
 
         const short = yield* schedule(agent, { delaySeconds: 5, prompt: "Too soon." }, queue);
         const long = yield* schedule(agent, { delaySeconds: 100_000, prompt: "Too late." }, queue);
+        // SAFETY: a wakeup the tool books answers under `wakeup`, its delay in seconds.
         assert.equal(
           (short as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,
           WAKEUP_DELAY.MIN_SECONDS,
         );
+        // SAFETY: a wakeup the tool books answers under `wakeup`, its delay in seconds.
         assert.equal(
           (long as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,
           WAKEUP_DELAY.MAX_SECONDS,

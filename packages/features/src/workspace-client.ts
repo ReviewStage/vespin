@@ -137,9 +137,9 @@ function resultOf<Answered extends object, Picked>(
   HttpClient.HttpClient
 > {
   return Effect.map(called, (answered) => {
-    // SAFETY: an answer that carries a failure is how the call failed, and every other one is the procedure's output.
     if (failedCall(answered)) return { ok: false, failure: answered.failure } as const;
 
+    // SAFETY: an answer that carries a failure is how the call failed, and every other one is the procedure's output.
     return { ok: true, answer: pick(answered as Exclude<Answered, Failed<Answered>>) } as const;
   });
 }

@@ -232,8 +232,12 @@ const standingSocket = (resolveUserId: LiveSocketOptions["resolveUserId"]) =>
       resolveUserId,
       fetch: credentialEcho,
       origin: ORIGIN,
-      // SAFETY: the echo answers every ask from its request alone and reads no service of the web runtime's.
-    }).pipe(Effect.provide(Context.empty() as Context.Context<WebServices>));
+    }).pipe(
+      Effect.provide(
+        // SAFETY: the echo answers every ask from its request alone and reads no service of the web runtime's.
+        Context.empty() as Context.Context<WebServices>,
+      ),
+    );
     // SAFETY: a listening TCP server answers its bound address as AddressInfo, never a pipe path.
     const { port } = relay.server.address() as AddressInfo;
 

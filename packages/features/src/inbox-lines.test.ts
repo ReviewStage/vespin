@@ -36,6 +36,7 @@ test("a to-do's ticks are read off the thread by the ask the answer names, and n
     },
   ] as const;
 
+  // SAFETY: the ticks read only the item's thread.
   const item = { thread } as unknown as Parameters<typeof inboxTodoTicks>[0];
   assert.deepEqual(inboxTodoTicks(item, { ask, reply: INBOX_REPLY.ANSWERED, steps: [1] }), {
     steps: ["Open Settings.", "Add the key."],
@@ -50,6 +51,7 @@ test("a to-do's ticks are read off the thread by the ask the answer names, and n
     inboxTodoTicks(
       { thread: [] },
       { ask, reply: INBOX_REPLY.ANSWERED, steps: [0] },
+      // SAFETY: the older ticks are the ones an earlier answer kept, in the shape the reader takes.
       older as Parameters<typeof inboxTodoTicks>[2],
     ),
     { steps: ["Rotate the key."], ticked: [0] },

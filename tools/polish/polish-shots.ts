@@ -298,11 +298,13 @@ function loadPlaywright(): Playwright {
   const require = createRequire(import.meta.url);
 
   try {
+    // SAFETY: the playwright package's main export is the module `Playwright` names.
     return require("playwright") as Playwright;
   } catch {
     const root = spawnSync("npm", ["root", "-g"], { encoding: "utf8" }).stdout.trim();
 
     try {
+      // SAFETY: the global playwright package's main export is the module `Playwright` names.
       return require(path.join(root, "playwright")) as Playwright;
     } catch {
       throw new Error(
@@ -316,6 +318,7 @@ function loadPlaywright(): Playwright {
 async function viteOf(appRoot: string): Promise<typeof import("vite")> {
   const require = createRequire(path.join(appRoot, "package.json"));
 
+  // SAFETY: the module resolved is the app's own Vite, which `typeof import("vite")` describes.
   return (await import(require.resolve("vite"))) as typeof import("vite");
 }
 
@@ -507,11 +510,13 @@ interface DesktopLaunch {
 /** Starts writing down, in the main process, each renderer or helper process of the app that dies, for `deathsOf` to read. */
 async function watchDeaths(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ app: electronApp }: never) => {
+    // SAFETY: this runs in the app's main process, where `app` is Electron's, an event emitter.
     const watched = electronApp as {
       on(event: string, listener: (...args: never[]) => void): void;
     };
 
     const deaths: string[] = [];
+    // SAFETY: the main process's global is an object, and `polishDeaths` is this script's own name on it.
     (globalThis as { polishDeaths?: string[] }).polishDeaths = deaths;
     watched.on(
       "render-process-gone",
@@ -534,10 +539,12 @@ async function watchDeaths(app: ElectronApplication): Promise<void> {
 
 /** The deaths `watchDeaths` wrote down, or none where the app no longer answers. */
 async function deathsOf(app: ElectronApplication): Promise<readonly string[]> {
+  // SAFETY: `polishDeaths` is only ever the list `watchDeaths` set.
   const deaths = await app
     .evaluate(() => (globalThis as { polishDeaths?: string[] }).polishDeaths ?? [], undefined)
     .catch(() => []);
 
+  // SAFETY: `polishDeaths` is only ever the list `watchDeaths` set.
   return deaths as string[];
 }
 
@@ -562,6 +569,7 @@ async function endApp(app: ElectronApplication): Promise<boolean> {
   const exited = exitsInTime(child);
   await app
     .evaluate(({ app: electronApp }: never) => {
+      // SAFETY: this runs in the app's main process, where `app` is Electron's, which can exit.
       (electronApp as { exit(code: number): void }).exit(0);
     }, undefined)
     .catch(() => undefined);
@@ -595,6 +603,7 @@ async function sizeWindow(
 ): Promise<string | undefined> {
   for (let tries = 0; tries < RESIZE_TRIES; tries++) {
     await window.evaluate((open: never, arg: Frame) => {
+      // SAFETY: this runs in the app's main process, where the window handed is Electron's BrowserWindow.
       const sized = open as {
         setContentSize(width: number, height: number): void;
         webContents: { setZoomFactor(zoom: number): void };
@@ -669,6 +678,7 @@ async function shootDesktop(
     // The window itself, as the page is drawn in it, rather than one looked up by its address.
     const window = await app.browserWindow(page);
     await app.evaluate(({ nativeTheme }: never, theme: Theme) => {
+      // SAFETY: this runs in the app's main process, where `nativeTheme` is Electron's.
       (nativeTheme as { themeSource: string }).themeSource = theme;
     }, shot.theme);
     await page.emulateMedia({ colorScheme: shot.theme, reducedMotion: "reduce" });
@@ -689,6 +699,7 @@ async function shootDesktop(
     const ground = await page.evaluate<Rgb>(GROUND_SCRIPT);
 
     const png = await window.evaluate(async (open: never) => {
+      // SAFETY: this runs in the app's main process, where the window handed is Electron's BrowserWindow.
       const captured = open as {
         webContents: {
           capturePage(

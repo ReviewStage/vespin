@@ -61,7 +61,7 @@ const ROSTER: AdminUserList = {
 
 /** An answer as the port carries it: JSON, as the host's act answers cross. */
 function onTheWire(value: AdminReadAnswer): WireBoundaryInput {
-  return JSON.parse(JSON.stringify(value)) as WireBoundaryInput;
+  return JSON.parse(JSON.stringify(value));
 }
 
 let root: Root | undefined;
@@ -220,6 +220,7 @@ test("the Users view reads its roster through the window's host and draws its ac
   const [read] = reads;
   assert.equal(reads.length, 1);
   assert.ok(read !== undefined);
+  // SAFETY: an admin read's payload names the procedure it reads.
   assert.equal((read.payload as { procedure: string }).procedure, ADMIN_READ.USERS);
   assert.match(page.textContent ?? "", /Ada Lovelace/u);
 });

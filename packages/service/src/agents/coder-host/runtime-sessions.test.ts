@@ -777,6 +777,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             .from(messages)
             .where(eq(messages.conversationId, onClaudeCode.conversationId));
 
+          // SAFETY: a message's parts are stored as its UI parts, each naming its type.
           assert.deepEqual(
             rows.flatMap((row) => (row.parts as { type: string }[]).map((part) => part.type)),
             ["data-session-cleared"],

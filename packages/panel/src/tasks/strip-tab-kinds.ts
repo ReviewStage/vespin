@@ -412,13 +412,15 @@ const STRIP_TAB_KINDS = {
   },
 } as const satisfies { readonly [K in StripTabKind]: StripTabKindDeclaration<K> };
 
-/** The declaration of a tab's kind, over any tab. Note that each entry is read only with a tab of its own kind, which is what makes the widening sound. */
+/** The declaration of a tab's kind, over any tab. */
 function declarationOf(tab: StripTab): StripTabKindDeclaration<StripTabKind> {
+  // SAFETY: each entry is read only with a tab of its own kind, which is what makes the widening sound.
   return STRIP_TAB_KINDS[stripTabKind(tab)] as unknown as StripTabKindDeclaration<StripTabKind>;
 }
 
-/** A tab as its kind's answers take it. Note that a word an earlier version kept reads as a word tab, which its kind's answers take as any other word. */
+/** A tab as its kind's answers take it. */
 function asKindTab(tab: StripTab): AnyKindTab {
+  // SAFETY: a word an earlier version kept reads as a word tab, which its kind's answers take as any other word.
   return tab as AnyKindTab;
 }
 

@@ -261,8 +261,11 @@ export function keptContent(budget: number): Effect.Effect<KeptContent> {
           if (userId === undefined) return yield* ask;
           const found = recall(key, userId);
 
-          // SAFETY: `keep` is the one writer, and the one call keeping under a key is typed by its kind, so what is kept under it is that kind's answer.
-          if (found !== undefined) return found as KeptAnswer<typeof key>;
+          if (found !== undefined) {
+            // SAFETY: `keep` is the one writer, and the one call keeping under a key is typed by its kind, so what is kept under it is that kind's answer.
+            return found as KeptAnswer<typeof key>;
+          }
+
           const answer = yield* ask;
           const content = carries(answer);
 

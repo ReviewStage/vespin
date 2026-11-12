@@ -540,6 +540,7 @@ function factAttributes(
 ): FailureAttributes {
   const attributes: FailureAttributes = {};
 
+  // SAFETY: `names` is keyed by every key of CauseFacts, and by nothing else.
   for (const key of Object.keys(names) as (keyof CauseFacts)[]) {
     const value = facts[key];
 
@@ -553,6 +554,7 @@ function factAttributes(
 function aboutAttributes(about: FailureAbout): FailureAttributes {
   const attributes: FailureAttributes = {};
 
+  // SAFETY: ABOUT_ATTRIBUTE is a literal keyed by every key of FailureAbout, and by nothing else.
   for (const key of Object.keys(ABOUT_ATTRIBUTE) as (keyof FailureAbout)[]) {
     const value = about[key];
 

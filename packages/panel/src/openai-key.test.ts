@@ -36,16 +36,17 @@ const NO_EDITOR = { current: undefined };
 const NO_KEYWORDS: readonly string[] = [];
 const ignore = () => undefined;
 
+// SAFETY: the OpenAI key section reads only a key's provider, hint, and status, never its times.
 const OPENAI_KEY = {
   provider: PROVIDER_KEY_PROVIDER.OPENAI,
   hint: "sk-…a1b2",
   status: PROVIDER_KEY_STATUS.VERIFIED,
 } as ProviderKeysAnswer["keys"][number];
 
-const ANTHROPIC_KEY = {
+const ANTHROPIC_KEY: ProviderKeysAnswer["keys"][number] = {
   ...OPENAI_KEY,
   provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-} as ProviderKeysAnswer["keys"][number];
+};
 
 const roots: Root[] = [];
 

@@ -119,6 +119,7 @@ function paletteIn(appearance: DiagramAppearance): Map<DiagramRole, string> {
   root.appendChild(probe);
   const read = new Map<DiagramRole, Channels>();
 
+  // SAFETY: DiagramRole is the keys of the literal DIAGRAM_TOKENS, which holds no others.
   for (const role of Object.keys(DIAGRAM_TOKENS) as DiagramRole[]) {
     const token = DIAGRAM_TOKENS[role];
 

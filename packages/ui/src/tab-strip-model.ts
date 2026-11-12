@@ -271,12 +271,17 @@ export function stripTabKind(tab: StripTab): StripTabKind {
  * tagged, as it is; none for an object naming nothing a tab names.
  */
 export function taggedStripTab<T extends StripTab>(tab: T | UntaggedStripTab<T>): T | undefined {
-  // Note that a tab keeps its kind of `T` through the tag, the field it was found to hold, which the compiler cannot follow.
+  // SAFETY: a tab is a StripTab or an untagged one, whatever its `T`.
   const held = tab as StripTab | UntaggedStripTab;
 
-  if (typeof held === "string" || "kind" in held) return tab as T;
+  if (typeof held === "string" || "kind" in held) {
+    // SAFETY: a word, or a tab already tagged, is the `T` it was handed as.
+    return tab as T;
+  }
+
   const kind = OBJECT_STRIP_TAB_KINDS.find((each) => each in held);
 
+  // SAFETY: a tab keeps its kind of `T` through the tag, the field it was found to hold, which the compiler cannot follow.
   return kind === undefined ? undefined : ({ kind, ...held } as T);
 }
 
@@ -444,8 +449,9 @@ const TAB_IDENTITY = {
   },
 } as const satisfies { readonly [K in StripTabKind]: TabIdentity<StripTabOf<K>> };
 
-/** The identity of a tab's kind, over any tab. Note that each entry is read only with a tab of its own kind, which is what makes the widening sound. */
+/** The identity of a tab's kind, over any tab. */
 function identityOf(tab: StripTab): TabIdentity<StripTab> {
+  // SAFETY: each entry is read only with a tab of its own kind, which is what makes the widening sound.
   return TAB_IDENTITY[stripTabKind(tab)] as TabIdentity<StripTab>;
 }
 

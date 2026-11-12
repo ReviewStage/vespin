@@ -156,7 +156,7 @@ symbols.dispose ??= Symbol.for("Symbol.dispose");
 symbols.asyncDispose ??= Symbol.for("Symbol.asyncDispose");
 
 /** A stream's chunks read to its end, as one run of bytes. */
-async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   const reader = stream.getReader();
 
@@ -193,6 +193,7 @@ class StreamingResponse extends PlatformResponse {
   readonly #words: string | undefined;
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
+    // SAFETY: whatwg-fetch and React Native hand a stream of bytes, each chunk a Uint8Array over an ArrayBuffer.
     const stream =
       body instanceof ReadableStream
         ? (body as ReadableStream<Uint8Array<ArrayBuffer>>)
@@ -224,7 +225,7 @@ class StreamingResponse extends PlatformResponse {
     if (this.#stream === undefined) return super.arrayBuffer();
     const whole = await readWhole(this.#stream);
 
-    return whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength) as ArrayBuffer;
+    return whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength);
   }
 
   override async text(): Promise<string> {

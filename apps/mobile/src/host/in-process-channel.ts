@@ -68,8 +68,14 @@ export function inProcessChannel(): InProcessChannel {
       addEventListener: (type, listener) => {
         if (closed) return;
 
-        if (type === "message") ends[own].message.add(listener as Listener);
-        else ends[own].close.add(listener as () => void);
+        if (type === "message") {
+          ends[own].message.add(listener);
+
+          return;
+        }
+
+        // SAFETY: the channel's contract pairs `close` with a listener that takes no event.
+        ends[own].close.add(listener as () => void);
       },
       start: () => undefined,
       close: () => {

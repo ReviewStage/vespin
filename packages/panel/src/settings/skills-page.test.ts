@@ -563,6 +563,7 @@ test("Add skill on a group's heading installs for that group's people", async ()
     await settle();
   }
 
+  // SAFETY: an install's payload names the scope it installs into.
   assert.deepEqual(
     sentOf(ACT_KIND.INSTALLED_SKILLS_INSTALL).map((each) => (each as { scope: string }).scope),
     [INSTALLED_SKILL_SCOPE.WORKSPACE, INSTALLED_SKILL_SCOPE.PERSONAL],
@@ -711,6 +712,7 @@ test("Everyone in the workspace is offered to a member and installs there, and n
   act(() => button("Everyone in Stage").click());
   act(() => primary().click());
   await settle();
+  // SAFETY: an install's payload names the scope it installs into.
   assert.equal(
     (sentOf(ACT_KIND.INSTALLED_SKILLS_INSTALL)[0] as { scope: string } | undefined)?.scope,
     INSTALLED_SKILL_SCOPE.WORKSPACE,

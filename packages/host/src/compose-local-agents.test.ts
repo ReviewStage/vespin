@@ -257,13 +257,20 @@ const followingDevice = (
      * it was asked; and the release it names on each beat's answer, where it
      * publishes one newer.
      */
-    const service = {
-      held: new Set<string>(),
+    const service: {
+      held: Set<string>;
+      refusing: number;
+      refused: string[];
+      settleTakes: Duration.Input;
+      beatTakes: Duration.Input;
+      release: DeviceAgentRelease | undefined;
+    } = {
+      held: new Set(),
       refusing: 0,
-      refused: [] as string[],
-      settleTakes: Duration.zero as Duration.Input,
-      beatTakes: Duration.zero as Duration.Input,
-      release: undefined as DeviceAgentRelease | undefined,
+      refused: [],
+      settleTakes: Duration.zero,
+      beatTakes: Duration.zero,
+      release: undefined,
     };
 
     let launched = false;
@@ -975,6 +982,7 @@ it.effect(
       assert.ok(typeof stdin === "object" && "stream" in stdin && Stream.isStream(stdin.stream));
       const retire = JSON.stringify({ type: INPUT_LINE.RETIRE });
 
+      // SAFETY: the guard above checked the stdin is a stream, of the bytes the runner is handed.
       const retireWritten = (stdin.stream as Stream.Stream<Uint8Array>).pipe(
         Stream.decodeText(),
         Stream.takeUntil((text) => text.includes(retire)),

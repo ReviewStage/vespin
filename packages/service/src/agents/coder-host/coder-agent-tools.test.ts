@@ -4607,7 +4607,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
 
   // What a write checks, said so the model can act on it; a webhook is never made here.
   const make = (asked: WireRecord, key: string) =>
-    call(AGENT_TOOL.CREATE_AUTOMATION, { ...made, ...asked } as WireBoundaryInput, key);
+    call(AGENT_TOOL.CREATE_AUTOMATION, { ...made, ...asked }, key);
 
   assert.deepEqual(
     await make({ trigger: { kind: "webhook" } }, "webhook"),
@@ -4671,7 +4671,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
 
   // A change: paused, its next due cleared; a new prompt and model, and every run handed to one agent.
   const update = (asked: WireRecord, by = call, key = "call-change") =>
-    by(AGENT_TOOL.UPDATE_AUTOMATION, { automationId: id, ...asked } as WireBoundaryInput, key);
+    by(AGENT_TOOL.UPDATE_AUTOMATION, { automationId: id, ...asked }, key);
 
   const paused = automationOf(await update({ enabled: false }));
   assert.deepEqual([paused.enabled, paused.nextRunAt], [false, null]);

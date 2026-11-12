@@ -494,6 +494,7 @@ function layRowsInOrder() {
     const rows = [...(this.closest(".agent-servers-list")?.querySelectorAll("li") ?? [])];
     const top = this.matches("li") ? rows.indexOf(this) * ROW : 0;
 
+    // SAFETY: the list reads only a row's top, bottom, and height.
     return { top, bottom: top + ROW, left: 0, right: 0, width: 0, height: ROW } as DOMRect;
   });
 }

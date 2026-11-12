@@ -87,7 +87,9 @@ it("a quit with unsaved description words asks first, with Cancel what Return an
 
   assert.equal(quit.held(), true);
   assert.equal(asked.length, 1);
-  const [{ question, answer }] = asked as [Asked];
+  const [first] = asked;
+  assert.ok(first !== undefined);
+  const { question, answer } = first;
   assert.equal(question.message, "Quit Vespin?");
   assert.equal(question.detail, "Edits that haven't saved will be lost.");
   assert.equal(returnPresses(question), "Cancel");
@@ -253,7 +255,9 @@ it("a reload asks first, on that window, only while its own page holds unsaved w
 
   const reload = askBeforeReload("right");
   assert.equal(asked.length, 1);
-  const [{ page, question, answer }] = asked as [(typeof asked)[number]];
+  const [first] = asked;
+  assert.ok(first !== undefined);
+  const { page, question, answer } = first;
   assert.equal(page, "right");
   assert.equal(question.message, "Reload this window?");
   assert.equal(question.detail, "Edits that haven't saved will be lost.");

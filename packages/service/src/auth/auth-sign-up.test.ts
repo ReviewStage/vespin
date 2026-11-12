@@ -6,7 +6,7 @@ import { member } from "@repo/database/schemas/auth";
 import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
 import { openMigratedPglite, sqlClientOverPglite } from "@repo/database/testing";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import type { WireRecord } from "@repo/wire";
+import type { WireRecord, WireValue } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
@@ -121,7 +121,7 @@ it.effect(
         const sentTo = (pathname: string) =>
           resend.requests
             .filter((request) => request.pathname === pathname)
-            .map((request) => JSON.parse(request.body ?? "{}") as unknown);
+            .map((request): WireValue => JSON.parse(request.body ?? "{}"));
 
         assert.deepEqual(sentTo("/contacts"), [{ email: ADA.email }]);
         assert.deepEqual(sentTo("/events/send"), [
@@ -131,13 +131,14 @@ it.effect(
         const emails = resend.requests
           .filter((request) => request.pathname === "/emails")
           .map(
-            (request) =>
-              JSON.parse(request.body ?? "{}") as {
-                from: string;
-                to: string[];
-                scheduled_at: string;
-                template: { id: string; variables: { GREETING: string } };
-              },
+            (
+              request,
+            ): {
+              from: string;
+              to: string[];
+              scheduled_at: string;
+              template: { id: string; variables: { GREETING: string } };
+            } => JSON.parse(request.body ?? "{}"),
           );
 
         assert.equal(emails.length, 1);

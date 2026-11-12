@@ -16,8 +16,12 @@ function readyWith(html: string, rect = ON_SCREEN): boolean {
   const dom = new JSDOM(`<body>${html}</body>`, { runScripts: "outside-only" });
   const box = dom.window.document.querySelector("[data-box]");
 
-  if (box !== null) box.getBoundingClientRect = () => rect as DOMRect;
+  if (box !== null) {
+    // SAFETY: the script reads only the edges a stand-in rect sets.
+    box.getBoundingClientRect = () => rect as DOMRect;
+  }
 
+  // SAFETY: the script answers whether the page is ready, a boolean.
   return dom.window.eval(READY_SCRIPT) as boolean;
 }
 
@@ -49,10 +53,12 @@ describe("the scroll script", () => {
     for (const box of boxes) {
       box.scrollTop = top;
       box.addEventListener("wheel", (event) => {
+        // SAFETY: the listener is for `wheel`, whose events are WheelEvents.
         wheels.push({ deltaY: (event as WheelEvent).deltaY, top: box.scrollTop });
       });
     }
 
+    // SAFETY: the script answers whether it found the box, a boolean.
     const found = dom.window.eval(scrollScript(role, by)) as boolean;
 
     return { found, tops: boxes.map((box) => box.scrollTop), wheels };
@@ -89,6 +95,7 @@ describe("the scroll fade pin", () => {
       "--ui-scroll-area-fade-end": "24px",
     };
 
+    // SAFETY: the scripts read only these few fields of a computed style.
     dom.window.getComputedStyle = ((box: Element) => ({
       animationName:
         box.id === "faded" ? "ui-scroll-area-fade-start, ui-scroll-area-fade-end" : "none",
@@ -110,6 +117,7 @@ describe("the sized script", () => {
     const dom = new JSDOM("<body></body>", { runScripts: "outside-only" });
     Object.assign(dom.window, { innerWidth: width, innerHeight: height });
 
+    // SAFETY: the script answers whether the window took its size, a boolean.
     return dom.window.eval(
       sizedScript({ width: 760, height: 520, zoom: 1.25, phone: false }),
     ) as boolean;

@@ -30,8 +30,10 @@ class StillObserver {
   }
 }
 
+// SAFETY: the examples read no size, so an observer that never fires stands in for jsdom's missing one.
 globalThis.ResizeObserver ??= StillObserver as unknown as typeof ResizeObserver;
 
+// SAFETY: the examples read no intersection, so an observer that never fires stands in for jsdom's missing one.
 globalThis.IntersectionObserver ??= StillObserver as unknown as typeof IntersectionObserver;
 
 Element.prototype.scrollIntoView ??= () => undefined;

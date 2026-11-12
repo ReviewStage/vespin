@@ -16,6 +16,7 @@ const TOKENS: Record<string, string> = {
 };
 
 beforeEach(() => {
+  // SAFETY: the theme reads only what the stand-in computed style has.
   vi.spyOn(window, "getComputedStyle").mockImplementation(
     (element) =>
       ({

@@ -60,6 +60,7 @@ beforeEach(() => {
     const animation = { onfinish: null, cancel: () => undefined };
     played.push({ element: this, frames: frames ?? [], animation });
 
+    // SAFETY: the expand reads only `onfinish` and `cancel` of the animation it starts.
     return animation as unknown as Animation;
   };
 });

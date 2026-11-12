@@ -539,6 +539,7 @@ export function sameFieldsBy<T extends object>(
   b: T,
   by: { readonly [K in keyof T]?: (ours: T[K], theirs: T[K]) => boolean },
 ): boolean {
+  // SAFETY: a component's props hold only the props T declares, so a's own keys are T's keys.
   const keys = Object.keys(a) as (keyof T)[];
 
   return (

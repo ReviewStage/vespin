@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -290,7 +291,9 @@ test("the … of a folded path opens a menu of the crumbs it stands for, each le
     "Teammate invitations",
     "Build teammate invitations",
   ]);
-  act(() => (rows[1] as HTMLElement).click());
+  const second = rows[1];
+  assert.ok(second instanceof HTMLElement);
+  act(() => second.click());
   expect(opened).toEqual(["agent"]);
 });
 

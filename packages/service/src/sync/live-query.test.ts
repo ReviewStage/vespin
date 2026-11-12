@@ -117,6 +117,7 @@ function nodesOf(explained: unknown, root = false): readonly PlannedNode[] {
   if (Array.isArray(explained)) return explained.flatMap((each) => nodesOf(each, root));
 
   if (typeof explained !== "object" || explained === null) return [];
+  // SAFETY: the guard above admits only an object, an EXPLAIN node, whose fields PlanNode names.
   const fields = explained as PlanNode;
 
   if ("Plan" in fields) return nodesOf(fields.Plan, true);
@@ -214,7 +215,9 @@ const genericPlanOf = (statement: string) =>
         return rows.map((row) => {
           const plan = row["QUERY PLAN"];
 
-          return typeof plan === "string" ? (JSON.parse(plan) as unknown) : plan;
+          const parsed: unknown = typeof plan === "string" ? JSON.parse(plan) : plan;
+
+          return parsed;
         });
       }).pipe(Effect.ensuring(Effect.ignore(client.unsafe(`deallocate ${PLANNED}`)))),
     ),

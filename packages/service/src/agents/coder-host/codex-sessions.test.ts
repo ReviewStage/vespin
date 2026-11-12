@@ -74,9 +74,12 @@ import { GITHUB_APP_WITH_TOKENS } from "../../testing/github-app-fake.js";
 import {
   launchBearer,
   launchLines,
-  linesOf,
+  launchRead,
+  readCodexConfig,
+  readInputLine,
   runnerSandboxApi,
   runnerTook,
+  stdinRead,
 } from "../../testing/runner-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -154,7 +157,8 @@ function openAi() {
   const respond = async (url: string, init: RequestInit): Promise<Response> => {
     if (url !== CODEX_DEVICE_OAUTH.TOKEN_URL) assert.fail(`an unexpected call to OpenAI: ${url}`);
     const body = await new Response(init.body).text();
-    const refreshToken = (JSON.parse(body) as { readonly refresh_token?: string }).refresh_token;
+    const sent: { readonly refresh_token?: string } = JSON.parse(body);
+    const refreshToken = sent.refresh_token;
     assert.equal(refreshToken, `refresh-${state.renewals}`);
     state.renewals += 1;
 
@@ -283,6 +287,7 @@ function sessionsFor(userId: string, sequence: { next: number } = { next: 0 }) {
 
 /** What the newest policy the sandbox's firewall was sent sets on the host given: OpenAI's API, unless another is named. */
 const openAiRules = (api: ReturnType<typeof runnerSandboxApi>, host = "api.openai.com") => {
+  // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
   const policy = api.policies.at(-1)?.policy as
     | { readonly allow?: Readonly<Record<string, unknown>> }
     | undefined;
@@ -346,7 +351,7 @@ const deliveredOpen = (
 /** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
 const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
   Effect.gen(function* () {
-    const [config] = (yield* launchLines(command)) as [CodexConfig];
+    const { config } = yield* launchRead(command, readCodexConfig);
     assert.ok(command?.agentId !== undefined);
 
     const read = yield* runnerLinesPast(userId, command.agentId, {
@@ -355,7 +360,7 @@ const handedLines = (userId: string, command: Parameters<typeof launchLines>[0])
       limit: 50,
     });
 
-    return read.map((line) => JSON.parse(line.text) as InputLine);
+    return read.map((line) => readInputLine(JSON.parse(line.text)));
   });
 
 /** A turn of the agent's under way, as the events route queues one, by the id a Stop names it by. */
@@ -628,6 +633,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
                 .from(deviceAgentLine)
                 .where(eq(deviceAgentLine.agentId, agent.id));
 
+              // SAFETY: a device line's payload is the launch the service wrote, which names its fingerprint.
               return (line?.payload as { readonly fingerprint?: string } | undefined)?.fingerprint;
             }
 
@@ -716,7 +722,11 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(openAiRules(api, CODEX_BACKEND_HOST), undefined);
         assert.equal(openAiRules(api), undefined);
 
-        const [config, first] = (yield* launchLines(command)) as [CodexConfig, InputLine];
+        const {
+          config,
+          lines: [first],
+        } = yield* launchRead(command, readCodexConfig);
+
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CODEX,
           cwd: "/workspace/repository",
@@ -736,7 +746,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           permissionMode: PERMISSION_MODE.AUTO,
           warm: true,
         });
-        assert.ok(first.type === INPUT_LINE.MESSAGE);
+        assert.ok(first?.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
         assert.deepEqual(developerContent(first), [{ type: "text", text: "Fix the invitations." }]);
         // No token anywhere in the command, the placeholder only in its environment, and the bearer nowhere in the sandbox.
@@ -818,7 +828,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.deepEqual(openAiRules(api), [swapRule(placeholder, apiKey)]);
         assert.equal(command.env.CODEX_HOME, "/home/agent/.codex");
         // An Ultrafast version runs its base model on Codex's ultrafast tier, and on its fast one where the runner predates it.
-        const [config] = linesOf(command) as [CodexConfig];
+        const { config } = stdinRead(command, readCodexConfig);
         assert.equal(config.model, "gpt-6.1-sol");
         assert.deepEqual([config.fast, config.ultrafast], [true, true]);
         const visible = JSON.stringify([command, api.sandboxes]);
@@ -896,7 +906,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.ACCEPTED);
-        const lines = (yield* launchLines(api.commands[0])).slice(2) as InputLine[];
+        const lines = (yield* launchRead(api.commands[0], readCodexConfig)).lines.slice(1);
         assert.deepEqual(lines[0], {
           type: INPUT_LINE.MODEL,
           model: "gpt-4.1",
@@ -980,7 +990,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const relaunch = api.commands[1];
         assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
         assert.equal(openai.state.renewals, 1);
-        const [config] = (yield* launchLines(relaunch)) as [CodexConfig];
+        const { config } = yield* launchRead(relaunch, readCodexConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.harness, RUNNER_HARNESS.CODEX);
         assert.equal(config.threadId, THREAD);
@@ -1130,8 +1140,8 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
 
         const [command] = api.commands;
         assert.equal(command?.env.CODEX_HOME, "/home/agent/.codex");
-        const lines = linesOf(command) as [CodexConfig, ...InputLine[]];
-        assert.equal(lines[0].tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
+        const { config } = stdinRead(command, readCodexConfig);
+        assert.equal(config.tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const visible = JSON.stringify([command, api.sandboxes]);
 
         for (const secret of ["access-0", "access-1", "refresh-1"]) {

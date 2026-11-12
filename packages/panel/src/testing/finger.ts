@@ -29,6 +29,7 @@ function touch(type: string): PointerEvent {
 
 /** The window answers that its main pointer is a finger until the test finishes. */
 export function underAFinger(): void {
+  // SAFETY: the panel reads only what the stand-in media query list has.
   const stub = vi.spyOn(window, "matchMedia").mockImplementation(
     (query) =>
       ({

@@ -285,6 +285,7 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
   const drives: FakeDrive[] = [];
   let next = 0;
   const named = (name: string) => drives.find((each) => !each.deleted && each.name === name);
+  // SAFETY: the fake is handed the mounts the SDK sends, each keyed by its path.
   const mountsOf = (mounts: unknown): FakeMounts => (mounts ?? {}) as FakeMounts;
 
   return {

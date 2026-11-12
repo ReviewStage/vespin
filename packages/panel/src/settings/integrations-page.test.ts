@@ -1492,6 +1492,7 @@ function layRowsInOrder(page: HTMLElement): void {
     const at = rows.indexOf(this);
     const top = Math.max(at, 0) * ROW;
 
+    // SAFETY: the list reads only a row's top, bottom, and height.
     return { top, bottom: top + ROW, left: 0, right: 0, width: 0, height: ROW } as DOMRect;
   });
 }

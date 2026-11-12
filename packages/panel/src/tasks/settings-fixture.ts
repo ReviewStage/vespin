@@ -300,6 +300,7 @@ function integrationAccount(
 
 /** Each provider's first account's word, which a provider with none answers disconnected. */
 function integrationStatuses(): Record<IntegrationProvider, IntegrationStatus> {
+  // SAFETY: the entries are one per provider in INTEGRATION_PROVIDER_LIST, which lists every IntegrationProvider.
   const statuses = Object.fromEntries(
     INTEGRATION_PROVIDER_LIST.map((provider) => [provider, INTEGRATION_STATUS.DISCONNECTED]),
   ) as Record<IntegrationProvider, IntegrationStatus>;

@@ -103,7 +103,7 @@ async function opened() {
   const element = container.querySelector<TiptapEditorHTMLElement>(".ProseMirror");
   const editor = element?.editor ?? assert.fail("the editor is running");
 
-  return { container, element: element as TiptapEditorHTMLElement, editor };
+  return { container, element: element ?? assert.fail("the editor is mounted"), editor };
 }
 
 /** Where `words` end in the editor's text, as a position. */

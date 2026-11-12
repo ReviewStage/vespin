@@ -127,6 +127,7 @@ const wholeCallOf = (
       // SAFETY: a stored part's input and output are the JSON the row carried, and they are only said, never read into.
       const input = wordsCut(part.input as UnparsedWireValue);
 
+      // SAFETY: a stored part's output is the JSON the row carried, and it is only said, never read into.
       const settled =
         part.state === TOOL_PART_STATE.OUTPUT_AVAILABLE
           ? { output: wordsCut(part.output as UnparsedWireValue) }

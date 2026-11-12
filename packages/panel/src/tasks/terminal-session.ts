@@ -485,7 +485,7 @@ export class TerminalSessions {
     key: string,
     make: () => TerminalSession,
   ): TerminalSession {
-    const kinds = this.#held.get(account) ?? (new Map() as SessionsHeld);
+    const kinds: SessionsHeld = this.#held.get(account) ?? new Map();
     this.#held.set(account, kinds);
     const agents = kinds.get(kind) ?? new Map<string, Map<string, TerminalSession>>();
     kinds.set(kind, agents);

@@ -418,17 +418,18 @@ async function mount(shown = true, still = true, account?: string) {
 }
 
 /** The payload of the act of the kind the tab sent last. */
-function lastPayload(kind: TerminalActKind) {
+function lastPayload<Kind extends TerminalActKind>(kind: Kind): PortActPayload<Kind> {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request && "payload" in request, `the tab sent ${kind}`);
 
-  return request.payload;
+  // SAFETY: a request sent under a kind carries that kind's payload, as the act port checks it.
+  return request.payload as PortActPayload<Kind>;
 }
 
 test("shown, the tab starts a shell in the agent's sandbox, keeps its id for a reload, and attaches to it; hidden and shown again, it keeps its port and asks nothing more", async () => {
   const tab = await mount();
   assert.deepEqual(tab.kinds(), ["terminal.create", "terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   assert.deepEqual(kept(), [{ shell: TAB.shell, title: "Cloud 1", terminal: MADE }]);
   assert.equal(tab.standing(), "connecting…");
   const port = main.post(MADE);
@@ -444,10 +445,7 @@ test("after a reload, the tab attaches to the shell its terminal kept, which run
   keep([{ shell: TAB.shell, title: TAB.title, terminal: RUNNING_ON }]);
   const tab = await mount();
   assert.deepEqual(tab.kinds(), ["terminal.attach"]);
-  assert.equal(
-    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
-    RUNNING_ON,
-  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
 });
 
 test("closing the tab ends its shell in the sandbox, its port closed and its terminal out of the window's list", async () => {
@@ -518,10 +516,7 @@ test("the terminals a build before this one kept are the signed-in account's, an
   );
   const tab = await mount(true, true, "ada");
   assert.deepEqual(tab.kinds(), ["terminal.attach"]);
-  assert.equal(
-    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
-    RUNNING_ON,
-  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
 
   await tab.signIn("grace", false);
 
@@ -594,7 +589,7 @@ test("the first account signing in again finds its terminal, which attaches to t
   await tab.signIn("ada", true);
 
   assert.deepEqual(tab.kinds(before), ["terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   assert.deepEqual(tab.terminals.held.of("ada", TERMINAL_KIND.CLOUD, AGENT.id), [
     { shell: TAB.shell, title: "Cloud 1", terminal: MADE },
   ]);
@@ -773,7 +768,7 @@ test("a connection the host ended says so in the bar, and any key reconnects to 
   const before = main.sent.length;
   await tab.type("q", 81);
   assert.deepEqual(tab.kinds(before), ["terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   // The key reconnected; it never reached the shell.
   assert.deepEqual(
     port.posted.filter((message) => message.type === "input"),
@@ -857,10 +852,7 @@ test("a run action's tab whose shell went attaches again once its action runs ag
     tab.kinds(before).filter((kind) => kind !== ACT_KIND.TERMINAL_LIST),
     ["terminal.attach"],
   );
-  assert.equal(
-    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
-    RUNNING_ON,
-  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
 });
 
 test("a service it cannot reach shows a bar that says so, whose action asks again", async () => {

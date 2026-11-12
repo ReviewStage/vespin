@@ -89,6 +89,7 @@ test("the open task's version history lists at least four versions by more than 
   assert.ok(first !== undefined && second !== undefined);
   // SAFETY: the profile answered each revision read, with its result.
   const opened = read(second.seq) as TasksRevisionAnswer;
+  // SAFETY: the profile answered each revision read, with its result.
   const oldest = read(first.seq) as TasksRevisionAnswer;
   assert.ok("revision" in opened && "revision" in oldest);
   assert.notEqual(

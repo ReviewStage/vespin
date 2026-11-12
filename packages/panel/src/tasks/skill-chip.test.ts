@@ -264,6 +264,7 @@ test("a /compact opening a message is the command's chip in the composer and in 
 /** A node's words as drawn, without those only a screen reader hears. */
 function drawnWords(node: Node): string {
   if (!(node instanceof Element)) return node.textContent ?? "";
+  // SAFETY: a deep clone of an element is an element.
   const drawn = node.cloneNode(true) as Element;
 
   for (const heard of drawn.querySelectorAll(".ui-visually-hidden")) heard.remove();

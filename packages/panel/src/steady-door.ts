@@ -93,6 +93,7 @@ function keptPlace(
   if (kept !== undefined && kept.handed === handed) return kept;
 
   if (doorName && typeof handed === "function") {
+    // SAFETY: `doorName` marks a door, a function the panel calls with its own arguments, which `keptDoor` passes through unread.
     return keptDoor(kept, handed as (...args: never[]) => void);
   }
 
@@ -156,5 +157,6 @@ export function useSteadyDoors<Value>(value: Value): Value {
   const place = keptPlace(kept.current, value, false);
   kept.current = place;
 
+  // SAFETY: a value's steady copy has the value's own shape, each door in it replaced by a steady one of the same signature.
   return place.steady as Value;
 }

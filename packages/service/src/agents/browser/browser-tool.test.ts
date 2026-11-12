@@ -297,6 +297,7 @@ const openConversation = Effect.gen(function* () {
 function call(conversationId: string, input: unknown, browserLayer: Layer.Layer<AgentBrowser>) {
   const transcript = { userId: owners.get(conversationId) ?? "", conversationId };
 
+  // SAFETY: the cases hand the tool JSON-shaped inputs, as a model's call carries them.
   return runBrowserTool(
     { browserSession: SESSION, conversationId, transcript, openSandbox: async () => undefined },
     unparsedWire(input as WireBoundaryInput),
@@ -385,7 +386,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           title: "Lost",
           openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
         });
-        const refusing = { unopenable: "https://lost.test/" as string | undefined };
+        const refusing: { unopenable: string | undefined } = { unopenable: "https://lost.test/" };
 
         const { peer, held: pages } = yield* browser(
           [{ targetId: "tab-held", url: "https://held.test/", title: "Held" }],

@@ -576,11 +576,11 @@ export const reconcileAgent = /* @__PURE__ */ Effect.fn("web/reconcileAgent")(fu
 export const reconciledBeforeWrite = (agent: ReconciledAgent) =>
   reconcileAgent(agent).pipe(
     Effect.catchCause((cause) =>
-      Effect.as(
+      Effect.map(
         Effect.logError(`an agent was not reconciled before a write: ${causeKind(cause)}`).pipe(
           Effect.annotateLogs(agentLogIds(agent)),
         ),
-        [] as readonly string[],
+        (): readonly string[] => [],
       ),
     ),
   );

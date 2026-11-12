@@ -1607,7 +1607,9 @@ test("a row's Delete asks first, and once confirmed the row leaves the list and 
   await settle();
   const row = rowOf(page, SWEEP.name);
 
-  act(() => (row.querySelector('button[aria-label="Automation actions"]') as HTMLElement).click());
+  const actions = row.querySelector('button[aria-label="Automation actions"]');
+  assert.ok(actions instanceof HTMLElement);
+  act(() => actions.click());
   await settle();
   act(() => menuItem("Delete").click());
   await settle();
@@ -1633,7 +1635,9 @@ test("a row's Delete withdrawn deletes nothing and leaves the row standing", asy
   await settle();
   const row = rowOf(page, SWEEP.name);
 
-  act(() => (row.querySelector('button[aria-label="Automation actions"]') as HTMLElement).click());
+  const actions = row.querySelector('button[aria-label="Automation actions"]');
+  assert.ok(actions instanceof HTMLElement);
+  act(() => actions.click());
   await settle();
   act(() => menuItem("Delete").click());
   await settle();
@@ -3508,11 +3512,11 @@ test("an automation row's ⋯, its right-click and the menu key open the same me
     await settle();
   };
 
+  const actions = row.querySelector('button[aria-label="Automation actions"]');
+  assert.ok(actions instanceof HTMLElement);
+
   const doors = [
-    () =>
-      act(() =>
-        (row.querySelector('button[aria-label="Automation actions"]') as HTMLElement).click(),
-      ),
+    () => act(() => actions.click()),
     () =>
       act(() => {
         press.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));

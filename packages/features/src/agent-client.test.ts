@@ -571,6 +571,7 @@ it.effect.each(KEYED_WRITES)(
       const answer = yield* Effect.provide(retried("key-1"), landedBefore.layer);
 
       // The host keeps what it drew for a keyed write that is taken already, and takes back one refused (`keyed-write.ts`).
+      // SAFETY: a refusal's cause is the failure's facts, as the client answers them.
       assert.equal(
         writeUntakenOf("cause" in answer ? (answer.cause as FailureFacts) : undefined),
         WRITE_UNTAKEN.ALREADY_WRITTEN,

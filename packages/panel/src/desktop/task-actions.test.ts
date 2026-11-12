@@ -1138,7 +1138,11 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
   }
 
   unmountAll();
-  rightClick(mountSidebarTask(standing, standing.tasks[0] as TaskSummary, asked, true), 40, 60);
+  rightClick(
+    mountSidebarTask(standing, standing.tasks[0] ?? assert.fail("no first task"), asked, true),
+    40,
+    60,
+  );
   assert.deepEqual(menuItems().map(itemLabel), topbar, "the open task's row offers the same menu");
 
   unmountAll();
@@ -1149,7 +1153,11 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
   );
 
   unmountAll();
-  rightClick(mountSidebarTask(standing, standing.tasks[1] as TaskSummary, asked), 40, 60);
+  rightClick(
+    mountSidebarTask(standing, standing.tasks[1] ?? assert.fail("no second task"), asked),
+    40,
+    60,
+  );
   const row = menuItems().map(itemLabel);
 
   for (const item of ["Version history", "Change repository"]) {
@@ -1239,16 +1247,16 @@ test("a sidebar task's ⋯, a right-click on it, and the menu key open the same 
   const fromMore = openedMenu();
   assert.equal(fromMore?.label, "Task actions");
   assert.ok(fromMore?.items.includes("Permanently delete"));
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
   assert.equal(openedMenu(), undefined);
 
   rightClick(press, 40, 60);
   assert.deepEqual(openedMenu(), fromMore);
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
 
   pressKey(press, "ContextMenu");
   assert.deepEqual(openedMenu(), fromMore);
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
 
   pressKey(press, "F10", true);
   assert.deepEqual(openedMenu(), fromMore);
@@ -1331,3 +1339,11 @@ test("a sidebar task being renamed draws no ⋯ and offers no menu", () => {
   assert.equal(document.querySelector('li button[aria-label="Task actions"]'), null);
   assert.equal(openedMenu(), undefined);
 });
+
+/** The element that holds the focus, which a key is pressed on. */
+function focusedElement(): HTMLElement {
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement, "an element holds the focus");
+
+  return focused;
+}

@@ -84,6 +84,7 @@ function framedPage(): { posted: unknown[]; handTheme: () => void } {
 
   const theme: PageTheme = {
     scheme: PAGE_THEME_SCHEME.DARK,
+    // SAFETY: nothing under test reads a variable of the theme.
     variables: {} as PageTheme["variables"],
     inset: "",
     narrowInset: "",

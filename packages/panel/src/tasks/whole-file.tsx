@@ -129,15 +129,18 @@ function useWholeFileFind(
   findable: boolean,
 ): () => void {
   const [find] = useState(() => {
+    const matches: FileMatch[] = [];
+    const notes: readonly ReadNote[] = [];
+
     const state = {
       query: "",
-      matches: [] as FileMatch[],
+      matches,
       at: -1,
       painting: NO_PAINTING,
       // Whether the match the find is at still waits to be brought into view, once drawn.
       pending: false,
       // The text and notes the matches were read from.
-      searched: { text: "", notes: [] as readonly ReadNote[] },
+      searched: { text: "", notes },
       listeners: new Set<(tally: FindTally) => void>(),
       // The note cards watched while a query stands, each with what stops its watch.
       watching: new Map<string, () => void>(),
@@ -342,7 +345,12 @@ export function WholeFile({
     return element;
   }, []);
 
-  const read = useRef({ text: "", notes: [] as readonly WholeFileNote[], from: 1 });
+  const read = useRef<{ text: string; notes: readonly WholeFileNote[]; from: number }>({
+    text: "",
+    notes: [],
+    from: 1,
+  });
+
   read.current = { text, notes, from: findFrom };
   const paint = useWholeFileFind(host, read, elementFor, handle, findable);
   // Whether Pierre has drawn the file's lines since the bundle mounted it.

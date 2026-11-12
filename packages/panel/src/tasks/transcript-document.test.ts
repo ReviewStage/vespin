@@ -384,6 +384,7 @@ test("a picture far from the screen is neither asked for nor drawn until it come
     },
   );
   // Every box stands far below the window, a long thread's first picture as its foot is read, until it is scrolled to.
+  // SAFETY: the document reads only a box's top and bottom.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => box as DOMRect);
   const asked: string[] = [];
   const text = `![Far](${pictureOf(ITEM_ID, far)})`;
@@ -403,6 +404,7 @@ test("a picture far from the screen is neither asked for nor drawn until it come
 
   const scrolled = (isIntersecting: boolean) => {
     box = isIntersecting ? near : away;
+    // SAFETY: the document reads only whether the box intersects and its top and bottom.
     act(() => seen.at(-1)?.([{ isIntersecting, boundingClientRect: box as DOMRect }]));
   };
 
