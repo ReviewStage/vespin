@@ -662,18 +662,18 @@ export function AgentComposer({
    * One of the box's own commands, chosen from the `/` list or typed as the
    * message's first word: `/model` opens the model chip's menu, its search
    * focused, `/clear` and `/new` start the
-   * agent's harness on a fresh session, and `/compact` chosen from the list
-   * is written into the words, where the developer may add what to keep
-   * before sending it, the service handing it to the harness as its
-   * compaction (`harness-commands.ts`). Whatever runs empties the box.
+   * agent's harness on a fresh session, and `/compact` or `/goal` chosen
+   * from the list is written into the words, where the developer may add
+   * what to keep or the goal's condition before sending it, the service
+   * handing it to the harness as its compaction or its goal
+   * (`harness-commands.ts`). Whatever runs empties the box.
    */
   const runCommand = (name: SlashCommand, chosen: boolean) => {
     switch (name) {
-      case SLASH_COMMAND.COMPACT: {
+      case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.GOAL: {
         const words = leadingCommand(composer.draft)?.words ?? "";
-
-        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
-
+        if (chosen) editor.current?.replace(`/${name} ${words}`);
         return;
       }
 
@@ -718,6 +718,7 @@ export function AgentComposer({
       case SLASH_COMMAND.MODEL:
         return reach.model ? typed.name : undefined;
       case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.GOAL:
         return undefined;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:

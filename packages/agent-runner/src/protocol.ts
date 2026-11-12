@@ -24,6 +24,7 @@ import type {
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { WireValue } from "@repo/wire";
+import type { GoalEvent } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import type { ServerNotification } from "./codex-protocol/index.js";
 import type { CodexErrorInfo } from "./codex-protocol/v2/index.js";
@@ -840,6 +841,7 @@ export const RUNNER_EVENT = {
   END: "vespin_runner_end",
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
   APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
+  GOAL: "vespin_runner_goal",
 } as const;
 
 /** Why a launch ended. */
@@ -958,6 +960,28 @@ export interface RunnerWaiting {
   readonly type: typeof RUNNER_EVENT.WAITING;
   readonly background_tasks: readonly BackgroundTaskSummary[];
   readonly session_crons: readonly SessionCronSummary[];
+}
+
+/**
+ * The GOAL event: the agent's goal moved where nothing the harness puts out
+ * on its own stream says so. Claude Code's `/goal` settling, met or judged
+ * impossible, which the CLI writes only to its transcript (a `goal_status`
+ * attachment), posted just ahead of the `result` that ends the turn it
+ * settled in (`claude-goals.ts`); the checker's verdicts before it are on the
+ * stream itself, as the CLI's `Stop hook feedback` lines.
+ */
+export interface RunnerGoal {
+  readonly type: typeof RUNNER_EVENT.GOAL;
+  readonly event: GoalEvent;
+  readonly condition: string;
+  /** The harness's reason, where it gave one. */
+  readonly reason: string | null;
+  /** The turns the goal ran, as the harness counted them; null where it did not say. */
+  readonly turns: number | null;
+  /** The tokens the goal spent, as the harness counted them; null where it did not say. */
+  readonly tokens: number | null;
+  /** The goal's token budget; null where it has none or the harness did not say. */
+  readonly tokenBudget: number | null;
 }
 
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
@@ -1154,7 +1178,8 @@ export type RunnerMessage =
   | RunnerIdle
   | RunnerEndEvent
   | RunnerApprovalRequested
-  | RunnerApprovalResolved;
+  | RunnerApprovalResolved
+  | RunnerGoal;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

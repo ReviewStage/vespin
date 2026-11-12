@@ -64,6 +64,7 @@ import {
 } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
 import { sentOf } from "@repo/features/suggestion-model";
+import { GOAL_CLEAR_LINE } from "@repo/features/slash-command";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
@@ -229,6 +230,7 @@ import { AgentBootLine, BOOT_LINE, type BootLine, bootLineOf } from "./agent-boo
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
+import { GoalDock, GoalNoticeView } from "./agent-goal.js";
 import {
   agentLines,
   agentName,
@@ -1279,6 +1281,8 @@ function AgentPartView({
       return <CompactedLine notice={part.notice} />;
     case AGENT_PART.SESSION_CLEARED:
       return <NewSessionLine />;
+    case AGENT_PART.GOAL:
+      return <GoalNoticeView notice={part.notice} />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -3624,6 +3628,14 @@ function AgentTabView({
           messages={kept}
           pending={pendingWords}
           readerId={readerId}
+        />
+        <GoalDock
+          messages={lines}
+          working={standing.working}
+          onBringIn={(messageId) => bringIn?.current?.(messageId, () => undefined)}
+          onClear={controlsQueue ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
+          // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
+          onResume={undefined}
         />
         <AgentPicturesProvider value={pictures}>
           <ComputerDock

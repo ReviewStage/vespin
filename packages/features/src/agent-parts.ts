@@ -27,6 +27,9 @@ import {
   CompactedNoticeSchema,
   type ConnectionLostNotice,
   ConnectionLostNoticeSchema,
+  GOAL_PART,
+  type GoalNotice,
+  GoalNoticeSchema,
   SESSION_CLEARED_PART,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
@@ -68,6 +71,8 @@ export const AGENT_PART = {
   COMPACTED: COMPACTED_PART,
   /** Where the agent's harness was started on a fresh session (`/clear`). */
   SESSION_CLEARED: SESSION_CLEARED_PART,
+  /** Where the agent's goal moved: set, judged, paused, resumed, or ended. */
+  GOAL: GOAL_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -118,6 +123,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
   | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
+  | { readonly kind: typeof AGENT_PART.GOAL; readonly notice: GoalNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -189,6 +195,12 @@ export function agentPart(part: WireValue): AgentPart {
 
   if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
 
+  if (part.type === AGENT_PART.GOAL) {
+    const notice = Schema.decodeUnknownOption(GoalNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.GOAL, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
 
   if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {
@@ -405,7 +417,8 @@ const AGENT_READING: RowReading<AgentPart> = {
       part.kind === AGENT_PART.USAGE_LIMIT ||
       part.kind === AGENT_PART.CONNECTION_LOST ||
       part.kind === AGENT_PART.COMPACTED ||
-      part.kind === AGENT_PART.SESSION_CLEARED
+      part.kind === AGENT_PART.SESSION_CLEARED ||
+      part.kind === AGENT_PART.GOAL
     ) {
       return ROW_PART.NOTICE;
     }

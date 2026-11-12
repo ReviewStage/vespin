@@ -14,7 +14,11 @@ import {
   valueFromJsonText,
   type WireValue,
 } from "@repo/wire";
-import type { UsageLimitAgent, UsageLimitAnswer } from "@repo/wire/ui-messages";
+import {
+  GoalNoticeSchema,
+  type UsageLimitAgent,
+  type UsageLimitAnswer,
+} from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moments.js";
 
@@ -142,6 +146,8 @@ const readConnectionRestored = Schema.decodeUnknownOption(
   Schema.Struct({ host: Schema.String, carryOn: Schema.Boolean }),
 );
 
+/** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
+const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
 /**
  * The end a runner posted where it let a wait on wakeups go so its sandbox
  * could stop, read as a turn that ended, the wakeups it named dropped. A
@@ -265,6 +271,13 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
       ]);
     case RUNNER_EVENT.END:
       return Option.some(endMoments(message));
+    case RUNNER_EVENT.GOAL:
+      return Option.some(
+        Option.match(readGoal(message), {
+          onSome: (notice): readonly NativeMoment[] => [{ kind: NATIVE_MOMENT.GOAL, notice }],
+          onNone: () => [],
+        }),
+      );
     // An ask and its settle are no moment of the run: the events route lands them apart (`runner-approvals.ts`).
     case RUNNER_EVENT.APPROVAL_REQUESTED:
     case RUNNER_EVENT.APPROVAL_RESOLVED:

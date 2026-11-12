@@ -51,6 +51,7 @@ import {
   COMPACTED_PART,
   CONNECTION_LOST_PART,
   type ConnectionLostNotice,
+  GOAL_PART,
   isSettledToolPartState,
   isStoredToolPart,
   readStoredUIMessages,
@@ -2057,6 +2058,25 @@ const compacted = /* @__PURE__ */ Effect.fnUntraced(function* (
   ]);
 });
 
+/** A goal's move stays among the journal's parts where it happened, as a compaction does. */
+const goalMoved = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.GOAL }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === GOAL_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: GOAL_PART, id, data: event.notice },
+  ]);
+});
+
 /** The host answered again: the loss's notice says when, so it reads as a wait that ended rather than one still on. */
 const connectionRestored = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
@@ -2130,6 +2150,8 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return connectionRestored(context, event);
     case RUN_EVENT.COMPACTED:
       return compacted(context, event);
+    case RUN_EVENT.GOAL:
+      return goalMoved(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:

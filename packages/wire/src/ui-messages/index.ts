@@ -6,6 +6,7 @@ export * from "./compaction.js";
 
 export * from "./connection-lost.js";
 
+export * from "./goal.js";
 export * from "./session-cleared.js";
 
 export * from "./tool-parts.js";

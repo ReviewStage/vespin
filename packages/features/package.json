@@ -314,6 +314,7 @@
     "./tool-call-model": "./src/tool-call-model.js",
     "./turn-files": "./src/turn-files.js",
     "./turn-files-wire": "./src/turn-files-wire.js",
+    "./agent-goal-model": "./src/agent-goal-model.js",
     "./agent-parts": "./src/agent-parts.js",
     "./agent-ports-model": "./src/agent-ports-model.js",
     "./glyph-state": "./src/glyph-state.js",

@@ -58,7 +58,12 @@ import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { COMPACTED_PART, type StoredUIMessage } from "@repo/wire/ui-messages";
+import {
+  COMPACTED_PART,
+  GOAL_EVENT,
+  GOAL_PART,
+  type StoredUIMessage,
+} from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
 import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
@@ -1351,6 +1356,96 @@ it.layer(SUITE)("the runner events route", (it) => {
           agentFailureOf(turn && { ...turn, failureDetail: turn.detail }),
           AGENT_FAILURE.REFUSAL,
         );
+      }),
+  );
+
+  it.effect(
+    "a goal's setting, the checker's verdict, and its settling stand in its turn as goal notices, not as words",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const condition = "every billing test passes";
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          // Claude Code's own answer to `/goal`, which it writes as a synthetic assistant message.
+          {
+            type: "assistant",
+            local_command_run: { command: "goal", args: condition },
+            message: {
+              model: "<synthetic>",
+              content: [{ type: "text", text: `Goal set: ${condition}` }],
+            },
+            ...top,
+          },
+          {
+            type: "assistant",
+            message: { id: "m1", content: [{ type: "text", text: "On it." }] },
+            ...top,
+          },
+          {
+            type: "user",
+            isSynthetic: true,
+            message: {
+              role: "user",
+              content: [
+                { type: "text", text: `Stop hook feedback:\n[${condition}]: 2 tests still fail.` },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: RUNNER_EVENT.GOAL,
+            event: GOAL_EVENT.MET,
+            condition,
+            reason: "All pass.",
+            turns: 2,
+            tokens: 900,
+            tokenBudget: null,
+          },
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.flatMap((row) => row.parts);
+        assert.deepEqual(
+          parts.flatMap((part) => (part.type === GOAL_PART && "data" in part ? [part.data] : [])),
+          [
+            {
+              event: GOAL_EVENT.SET,
+              condition,
+              reason: null,
+              turns: null,
+              tokens: null,
+              tokenBudget: null,
+            },
+            {
+              event: GOAL_EVENT.NOT_MET,
+              condition,
+              reason: "2 tests still fail.",
+              turns: null,
+              tokens: null,
+              tokenBudget: null,
+            },
+            {
+              event: GOAL_EVENT.MET,
+              condition,
+              reason: "All pass.",
+              turns: 2,
+              tokens: 900,
+              tokenBudget: null,
+            },
+          ],
+        );
+        // The CLI's answer to `/goal` is the goal's notice alone, not words of the agent's.
+        assert.ok(!JSON.stringify(parts).includes("Goal set:"));
       }),
   );
 

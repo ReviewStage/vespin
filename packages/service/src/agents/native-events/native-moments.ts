@@ -3,7 +3,7 @@ import { PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import type { RunUsage, ToolCallSettlement } from "@repo/features/turn-run";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
-import type { CompactedNotice } from "@repo/wire/ui-messages";
+import type { CompactedNotice, GoalNotice } from "@repo/wire/ui-messages";
 
 /**
  * native-moments.ts -- what a native harness's run amounts to for the transcript, said once for every harness.
@@ -74,6 +74,8 @@ export const NATIVE_MOMENT = {
   REFUSED: "refused",
   /** The harness folded its context. */
   COMPACTED: "compacted",
+  /** The agent's goal moved, as its harness said: set, judged after a turn, paused, resumed, or ended. */
+  GOAL: "goal",
   /** The harness could not fold its context, why in `detail`: why the model turn under way failed, where it did. */
   COMPACTION_FAILED: "compaction_failed",
   /** The harness said something the record keeps nothing of but the log should: a failure that changes no turn, or a message this build does not read. */
@@ -171,6 +173,7 @@ export type NativeMoment =
       readonly notice?: CompactedNotice;
     }
   | { readonly kind: typeof NATIVE_MOMENT.COMPACTION_FAILED; readonly detail: string }
+  | { readonly kind: typeof NATIVE_MOMENT.GOAL; readonly notice: GoalNotice }
   | { readonly kind: typeof NATIVE_MOMENT.NOTED; readonly said: string }
   | {
       readonly kind: typeof NATIVE_MOMENT.RATE_LIMIT;

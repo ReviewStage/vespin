@@ -83,6 +83,7 @@ import {
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
+import { goalWatchedStore } from "./claude-goals.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
@@ -126,6 +127,7 @@ import {
   RunnerConfigSchema,
   type RunnerEnd,
   type RunnerEndEvent,
+  type RunnerGoal,
   type RunnerWaiting,
   type TurnFilesSummary,
 } from "./protocol.js";
@@ -445,6 +447,8 @@ interface Launch {
   readonly approvals: Approvals;
   readonly trace: LaunchTrace;
   readonly inFlight: MutableRef.MutableRef<InFlight | undefined>;
+  /** The goals the transcript says settled since the last `result`, posted ahead of the next (`claude-goals.ts`). */
+  readonly goals: MutableRef.MutableRef<readonly RunnerGoal[]>;
   /** Whether the CLI is in a turn: from a message the service sent, or from the CLI's own output, a wakeup's turn included. */
   readonly turnRunning: Ref.Ref<boolean>;
   /** The messages the service sent that no `result` has answered yet, by their uuid. */
@@ -715,6 +719,10 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
     );
   }
 
+  // A goal the turn settled is said before the `result` that ends the turn, so it lands in that turn.
+  if (message.type === SDK_MESSAGE.RESULT) {
+    for (const goal of MutableRef.getAndSet(launch.goals, [])) yield* launch.sink.emit(goal);
+  }
   yield* launch.sink.emit(launch.annotate(message));
 
   if (message.type !== SDK_MESSAGE.RESULT) return;
@@ -1016,12 +1024,11 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   );
 
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
-
+  const goals = MutableRef.make<readonly RunnerGoal[]>([]);
   const store =
     config.transcriptsUrl === undefined
       ? undefined
-      : transcriptStore(config.transcriptsUrl, bearer, trace.headers);
-
+      : goalWatchedStore(transcriptStore(config.transcriptsUrl, bearer, trace.headers), goals);
   const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
 
   if (Result.isFailure(resumed)) {
@@ -1074,6 +1081,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     approvals,
     trace,
     inFlight,
+    goals,
     turnRunning: yield* Ref.make(false),
     unanswered: yield* Ref.make<ReadonlySet<string>>(new Set()),
     heard: yield* Ref.make(0),
