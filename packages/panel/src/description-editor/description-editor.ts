@@ -178,7 +178,9 @@ const DocumentOrderedList = OrderedList.extend({
  * excludes every other mark, so a link or bold around inline code
  * (``[`store.ts`](url)``, as agents write constantly) opened schema-invalid,
  * and an edit on its line saved it with the link or bold dropped. It ranks
- * after every other mark, so it is written innermost (``**`x`**``). This is
+ * after every other mark, so it is written innermost (``**`x`**``), and the
+ * serializer half of that fix, which closes a code span where another mark
+ * changes while it goes on, is a pnpm patch on `@tiptap/markdown`. This is
  * TipTap's own fix waiting upstream (ueberdosis/tiptap#8662, for #8637), so it
  * goes once a TipTap carrying that fix is installed.
  */

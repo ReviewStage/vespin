@@ -129,6 +129,9 @@ patchedDependencies:
   '@tiptap/extension-list@3.33.1':
     hash: bb7489824f41b416b467a2ad6911a14b3c76d71068ee395dd0842a6a59b5d456
     path: patches/@tiptap__extension-list@3.33.1.patch
+  '@tiptap/markdown@3.33.1':
+    hash: af37c44fdbcd7e22a401f4bead3ade586b925dfb68679f36f770ce1f0fadf4ce
+    path: patches/@tiptap__markdown@3.33.1.patch
   drizzle-orm@1.0.0-rc.4:
     hash: 7eca027493ea68b0777e0306d382bf89cdd6217b8c3377c6d44e7911303f9f5b
     path: patches/drizzle-orm@1.0.0-rc.4.patch
@@ -1127,7 +1130,7 @@ importers:
         version: 3.33.1(@tiptap/core@3.33.1)(@tiptap/pm@3.33.1)
       '@tiptap/markdown':
         specifier: 3.33.1
-        version: 3.33.1(@tiptap/core@3.33.1)(@tiptap/pm@3.33.1)
+        version: 3.33.1(patch_hash=af37c44fdbcd7e22a401f4bead3ade586b925dfb68679f36f770ce1f0fadf4ce)(@tiptap/core@3.33.1)(@tiptap/pm@3.33.1)
       '@tiptap/pm':
         specifier: 3.33.1
         version: 3.33.1
@@ -13976,7 +13979,7 @@ snapshots:
       '@tiptap/core': 3.33.1(@tiptap/pm@3.33.1)
       '@tiptap/pm': 3.33.1
 
-  '@tiptap/markdown@3.33.1(@tiptap/core@3.33.1)(@tiptap/pm@3.33.1)':
+  '@tiptap/markdown@3.33.1(patch_hash=af37c44fdbcd7e22a401f4bead3ade586b925dfb68679f36f770ce1f0fadf4ce)(@tiptap/core@3.33.1)(@tiptap/pm@3.33.1)':
     dependencies:
       '@tiptap/core': 3.33.1(@tiptap/pm@3.33.1)
       '@tiptap/pm': 3.33.1

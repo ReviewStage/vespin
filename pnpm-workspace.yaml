@@ -159,6 +159,15 @@ patchedDependencies:
 # width the item's first line actually gives its words. Delete it when a
 # TipTap release carries #8405.
   "@tiptap/extension-list@3.33.1": patches/@tiptap__extension-list@3.33.1.patch
+#
+# `@tiptap/markdown` 3.33.1 writes two code spans that touch as one span where
+# another mark changes between them, so an edited line holding inline code
+# right against bold inline code saved one span with the bold's asterisks
+# inside it. The patch makes the serializer half of upstream's
+# ueberdosis/tiptap#8662 (#8637): a code span is written innermost, closed
+# where another mark opens or closes while it goes on, and opened again
+# after. Delete it when a TipTap release carries #8662.
+  "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.

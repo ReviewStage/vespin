@@ -403,7 +403,8 @@ test("a tight list switching between bullets and task items is handed over untou
 });
 
 test("inline code inside a link, bold, or italics opens valid and keeps them when its line is edited", () => {
-  const text = "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*.\n";
+  const text =
+    "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*, `a`**`b`**.\n";
   const { editor, handedOver } = opened(text);
 
   editor.state.doc.check();
