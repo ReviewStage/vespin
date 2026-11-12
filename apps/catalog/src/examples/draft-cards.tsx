@@ -1,5 +1,5 @@
+import { DRAFT_KIND, type DraftCopy } from "@repo/features/draft-text";
 import { DraftCard, TextLink } from "@repo/ui";
-import { DRAFT_KIND, type DraftCopy } from "@repo/ui/draft-text";
 import type { ReactNode } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";

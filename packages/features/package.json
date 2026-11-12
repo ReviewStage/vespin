@@ -112,6 +112,7 @@
     "./date-mention": "./src/date-mention.js",
     "./desktop-session-wire": "./src/desktop-session-wire.js",
     "./dictation-wire": "./src/dictation-wire.js",
+    "./draft-text": "./src/draft-text.js",
     "./github-connection-wire": "./src/github-connection-wire.js",
     "./github-image": "./src/github-image.js",
     "./github-repositories-wire": "./src/github-repositories-wire.js",

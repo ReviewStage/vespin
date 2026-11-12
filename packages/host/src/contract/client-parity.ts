@@ -120,8 +120,8 @@ const IOS = {
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
-  COPY_RICH: notYet(
-    "iOS draws no draft card yet; a message's long press copies its Markdown as plain words",
+  COPY_RICH: byDesign(
+    "iOS copies a draft card's message to the system's pasteboard itself, as rich text and plain words (expo-clipboard)",
   ),
   PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
   SAVE_FILE: byDesign(
