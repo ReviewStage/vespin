@@ -69,6 +69,12 @@ import { Redacted, Result, Schema } from "effect";
  * row and no other name's. The rewrap does not visit those rows: a version
  * stays in the ring until every variable sealed under it is set again.
  *
+ * A Conductor key an import runs on is sealed the same way for as long as
+ * the run has work queued, a day at most (`conductor_import_run`), with
+ * purposes of its own (`luke/conductor-import/*`) and the account and the
+ * run bound beside them, so the seal opens for no other run. The rewrap does
+ * not visit those rows: the sweep clears every one a day after its run began.
+ *
  * Rotation is a new version at the head of the environment's list: new
  * saves wrap under it, and `scripts/rewrap-provider-keys.sh` moves every
  * standing row onto it by unwrapping and rewrapping its data key, never
@@ -109,6 +115,10 @@ const SEAL_PURPOSE = {
   WORKSPACE_ENVIRONMENT: {
     DATA_KEY: "luke/workspace-environment/data-key",
     SECRET: "luke/workspace-environment/value",
+  },
+  CONDUCTOR_IMPORT: {
+    DATA_KEY: "luke/conductor-import/data-key",
+    SECRET: "luke/conductor-import/key",
   },
 } as const;
 
@@ -586,4 +596,42 @@ export function openWorkspaceVariable(
   );
 
   return value === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(value);
+}
+
+/** Whose Conductor import a seal is: the account that ran it and the run, which its seal binds. */
+export interface ConductorImportOwner {
+  readonly userId: string;
+  readonly runId: string;
+}
+
+/** A Conductor key sealed for its import run under a fresh data key, wrapped under the ring's current version, as the run's one text column holds it. */
+export function sealConductorKey(
+  ring: KeyRing,
+  owner: ConductorImportOwner,
+  key: Redacted.Redacted<string>,
+): string {
+  const names = [owner.userId, owner.runId];
+
+  return encodeSealedColumn(sealSecret(ring, SEAL_PURPOSE.CONDUCTOR_IMPORT, names, key));
+}
+
+/** The Conductor key an import run's row seals, or unreadable where the column is no seal or any part of it does not open for this run. */
+export function openConductorKey(
+  ring: KeyRing,
+  owner: ConductorImportOwner,
+  column: string,
+): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
+  const read = decodeSealedColumn(column);
+
+  if (Result.isFailure(read)) return Result.fail(PROVIDER_KEY_UNREADABLE);
+
+  const key = openSecret(
+    ring,
+    SEAL_PURPOSE.CONDUCTOR_IMPORT,
+    [owner.userId, owner.runId],
+    read.success,
+    read.success.sealed,
+  );
+
+  return key === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(key);
 }

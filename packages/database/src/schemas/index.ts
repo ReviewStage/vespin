@@ -38,6 +38,8 @@ export * from "./automation.js";
 
 export * from "./claude-session-entry.js";
 
+export * from "./conductor-import.js";
+
 export * from "./description-comment.js";
 
 export * from "./description-revision.js";

@@ -11,6 +11,7 @@ import {
   PULL_REQUEST_CHAPTERS_FUNCTION,
   PULL_REQUEST_CHAPTERS_ROUTE_PATHS,
 } from "@repo/service/chapters/chapters-function";
+import { CONDUCTOR_IMPORTS } from "@repo/service/integrations/conductor/conductor-import-bounds";
 import {
   BASE_DRIVE_REFRESH,
   BASE_DRIVE_REFRESH_PATH,
@@ -142,7 +143,9 @@ const STANDALONE_ROUTES: readonly string[] = [
  * The queue consumers, each a function of its own, since a function the
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
- * Fluid default a Start's function runs under, and the sandbox-releases
+ * Fluid default a Start's function runs under, the conductor-imports
+ * consumer, under the same bound, since a long chat takes most of a minute
+ * to read and write, and the sandbox-releases
  * consumer, under its own short bound.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
@@ -166,6 +169,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(AGENT_WAKEUP.PATH)],
     dispatches: false,
     queueTopic: AGENT_WAKEUP.TOPIC,
+  },
+  {
+    file: routeKeyOf(CONDUCTOR_IMPORTS.PATH),
+    maxDuration: CONDUCTOR_IMPORTS.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(CONDUCTOR_IMPORTS.PATH)],
+    dispatches: false,
+    queueTopic: CONDUCTOR_IMPORTS.TOPIC,
   },
   {
     file: routeKeyOf(SANDBOX_RELEASE.PATH),

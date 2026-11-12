@@ -440,6 +440,12 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SENTRY_INSTALLATIONS: "/api/workspaces/sentry/installations",
   /** One of a workspace's Sentry installations disconnected by an owner or admin (POST), answering the installations as they then stand. */
   WORKSPACE_SENTRY_DISCONNECT: "/api/workspaces/sentry/disconnect",
+  /** A Conductor key checked for an import into a workspace (POST): how many of its workspaces it sees, and the repositories among theirs not reached yet (`conductor-import-wire.ts`). */
+  CONDUCTOR_IMPORT_CHECK: "/api/workspaces/conductor-import/check",
+  /** An import from Conductor begun in a workspace (POST): every workspace the key sees queued, answering the run. */
+  CONDUCTOR_IMPORT_RUN: "/api/workspaces/conductor-import/run",
+  /** The caller's newest import from Conductor in a workspace, with where each workspace and chat stands (GET). */
+  CONDUCTOR_IMPORT_PROGRESS: "/api/workspaces/conductor-import/progress",
   /** A workspace's shared environment variables: their names to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the names as they then stand (`workspace-environment-wire.ts`). */
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */

@@ -396,6 +396,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
+  conductorImport: { check: SECRET, run: SECRET, progress: SCREEN_ONLY },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceSentry: { install: NEEDS_BROWSER },

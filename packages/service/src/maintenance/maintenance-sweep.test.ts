@@ -108,6 +108,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
 
         return { due: 0, published: 0 };
       }),
+    sweepConductorImports: () => Effect.succeed(0),
     ...overrides,
   };
 

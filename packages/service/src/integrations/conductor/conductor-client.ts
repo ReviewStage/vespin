@@ -109,7 +109,7 @@ const ConductorProjectSchema = Schema.Struct({
 });
 
 /** A workspace; `state` is Conductor's own word for where it stands (`archived`, `ready`, `sleeping`, and others). */
-const ConductorWorkspaceSchema = Schema.Struct({
+export const ConductorWorkspaceSchema = Schema.Struct({
   id: Schema.String,
   name: OptionalText,
   number: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -123,7 +123,7 @@ const ConductorWorkspaceSchema = Schema.Struct({
 });
 
 /** A chat (Conductor's session); `archivedAt` is set where it was archived. */
-const ConductorChatSchema = Schema.Struct({
+export const ConductorChatSchema = Schema.Struct({
   id: Schema.String,
   name: OptionalText,
   model: OptionalText,
@@ -314,6 +314,27 @@ export const readConductorMessages = Effect.fnUntraced(function* (
   const items = yield* readAllPages(key, ["v0", "sessions", chatId, "messages"], {});
   const records = yield* decoded(Schema.Array(StoredRecordSchema))(items);
   const known = items.filter((_, index) => KNOWN_MESSAGE_TYPES.has(records[index]?.type ?? ""));
+
+  return yield* decoded(Schema.Array(ConductorMessageSchema))(known);
+});
+
+/**
+ * A chat's first stored page, oldest first, read as `readConductorMessages`
+ * reads every page: enough for its first message without walking a chat
+ * that may hold thousands.
+ */
+export const readConductorFirstMessages = Effect.fnUntraced(function* (
+  key: Redacted.Redacted<string>,
+  chatId: string,
+) {
+  const body = yield* getJson(key, ["v0", "sessions", chatId, "messages"], {
+    [QUERY.LIMIT]: PAGE_SIZE,
+    [QUERY.OFFSET]: 0,
+  });
+
+  const { data } = yield* decoded(PageSchema)(body);
+  const records = yield* decoded(Schema.Array(StoredRecordSchema))(data);
+  const known = data.filter((_, index) => KNOWN_MESSAGE_TYPES.has(records[index]?.type ?? ""));
 
   return yield* decoded(Schema.Array(ConductorMessageSchema))(known);
 });

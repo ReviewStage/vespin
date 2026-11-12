@@ -12,6 +12,7 @@ import { releaseUnusedSandboxes } from "../agents/session-sandboxes.js";
 import { HostedEnvironment } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
+import { sweepConductorImportKeys } from "../integrations/conductor/conductor-import-sweep.js";
 import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js";
 import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { refreshLiveActivities } from "../push/live-activities.js";
@@ -55,6 +56,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     refreshLiveActivities: () => refreshLiveActivities(),
     markAwayHosts: (now) => markAwayDevices(now, MAC_PRESENCE.FRESH_MS),
     releaseSandboxes: releaseUnusedSandboxes,
+    sweepConductorImports: sweepConductorImportKeys,
   });
 });
 

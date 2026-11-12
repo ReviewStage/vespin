@@ -133,6 +133,8 @@
     "./http/socket": "./src/http/socket.js",
     "./http/store-failure": "./src/http/store-failure.js",
     "./inbox/inbox-store": "./src/inbox/inbox-store.js",
+    "./integrations/conductor/conductor-import": "./src/integrations/conductor/conductor-import.js",
+    "./integrations/conductor/conductor-import-bounds": "./src/integrations/conductor/conductor-import-bounds.js",
     "./integrations/connection-tools": "./src/integrations/connection-tools.js",
     "./integrations/github-integration": "./src/integrations/github-integration.js",
     "./integrations/integration-connect": "./src/integrations/integration-connect.js",

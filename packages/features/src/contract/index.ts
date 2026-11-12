@@ -13,6 +13,7 @@ import { agentPortsContract } from "./agent-ports.js";
 import { agentPullRequestsContract } from "./agent-pull-requests.js";
 import { agentsContract } from "./agents.js";
 import { automationsContract } from "./automations.js";
+import { conductorImportContract } from "./conductor-import.js";
 import { descriptionCommentsContract } from "./description-comments.js";
 import { deviceAgentsContract } from "./device-agents.js";
 import { dictationContract } from "./dictation.js";
@@ -88,6 +89,7 @@ export const hostedContract = {
   mcpClients: mcpClientsContract,
   messages: messagesContract,
   models: modelsContract,
+  conductorImport: conductorImportContract,
   descriptionComments: descriptionCommentsContract,
   plans: tasksContract,
   pullRequestChapters: pullRequestChaptersContract,
