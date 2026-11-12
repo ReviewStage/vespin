@@ -356,8 +356,8 @@ const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
  * agent's own and those of the repositories it works in beside it at the
  * paths given (`extraCheckoutPaths`), none for an agent in one repository,
  * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
- * another user installed in its checkout handed to it where the drive's
- * fill did not already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
+ * another user installed in its checkout handed to it where it is not
+ * `agent`'s already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s and readable by the default user the service reads as
  * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written
