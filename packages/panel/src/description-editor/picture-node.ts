@@ -1,9 +1,11 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
-import { Fragment, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { imageFiles } from "../picture-files.js";
 import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
+import { inTableCell } from "./writing-keys.js";
 
 /**
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
@@ -142,9 +144,34 @@ function removedAt(view: EditorView, pos: number): void {
 }
 
 /**
- * Pictures laid in, each in a paragraph of its own, after the top-level
- * block that `pos` stands in, or after the caret's where none is given; each
- * waits on a new upload, which is handed to the panel with its file.
+ * Where pictures laid in at `pos` stand, as the stretch they take the place
+ * of: the empty line `pos` stands on, else just below the line it stands on,
+ * which they never split, inside a list item where the line is one's, else
+ * after the top-level block `pos` stands in, as from a table's cell, whose
+ * Markdown holds no block.
+ */
+function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType) {
+  const $at = doc.resolve(pos);
+  const top = $at.depth === 0 ? pos : $at.after(1);
+
+  if (inTableCell($at)) return { from: top, to: top };
+
+  const { parent } = $at;
+
+  if (parent.type === paragraph && parent.content.size === 0) {
+    return { from: $at.before(), to: $at.after() };
+  }
+
+  const below = insertPoint(doc, parent.isTextblock ? $at.after() : pos, paragraph) ?? top;
+
+  return { from: below, to: below };
+}
+
+/**
+ * Pictures laid in, each in a paragraph of its own, where `pos` stands, or
+ * where the caret does where none is given; each waits on a new upload,
+ * which is handed to the panel with its file. Note that the upload finds
+ * its picture by name when it settles, so words typed meanwhile never move it.
  */
 export function laidInPictures(
   view: EditorView,
@@ -152,10 +179,10 @@ export function laidInPictures(
   pictures: DescriptionEditorPictures,
   pos?: number,
 ): void {
-  if (files.length === 0) return;
   const { state } = view;
-  const $at = state.doc.resolve(pos ?? state.selection.from);
-  const after = $at.depth === 0 ? $at.pos : $at.after(1);
+  const paragraph = state.schema.nodes.paragraph;
+
+  if (files.length === 0 || paragraph === undefined) return;
   const taken: PictureTaken[] = [];
 
   const paragraphs = files.map((file) => {
@@ -163,10 +190,11 @@ export function laidInPictures(
     taken.push({ upload, file });
     const picture = state.schema.node(PICTURE_NODE, { src: "", alt: altOf(file), upload });
 
-    return state.schema.node("paragraph", null, [picture]);
+    return paragraph.create(null, [picture]);
   });
 
-  view.dispatch(state.tr.insert(after, paragraphs).scrollIntoView());
+  const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph);
+  view.dispatch(state.tr.replaceWith(from, to, paragraphs).scrollIntoView());
   pictures.take(taken);
 }
 
@@ -198,7 +226,7 @@ export function removedPicture(view: EditorView, upload: string): void {
   if (pos !== undefined) removedAt(view, pos);
 }
 
-/** A paste of image files laid in as pictures after the caret's block; answers whether it was one. */
+/** A paste of image files laid in as pictures at the caret's line; answers whether it was one. */
 export function pastedPictures(
   view: EditorView,
   event: ClipboardEvent,
@@ -212,7 +240,7 @@ export function pastedPictures(
   return true;
 }
 
-/** A drop of image files from outside the editor laid in as pictures after the block they landed on; answers whether it was one. */
+/** A drop of image files from outside the editor laid in as pictures at the line they landed on; answers whether it was one. */
 export function droppedPictures(
   view: EditorView,
   event: DragEvent,
