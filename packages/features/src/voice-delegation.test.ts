@@ -83,16 +83,17 @@ it.effect("a delegation while the agent is mid-turn is queued, and sent once it 
 
 it.effect("a reply over 500 tokens goes to the voice cut to its opening sentences", () =>
   Effect.gen(function* () {
-    // Forty sentences of 49 characters, each followed by a space. The bound
-    // counts 3 characters a token, so 1,500 characters: 30 sentences spell
-    // 30 * 50 - 1 = 1,499 and fit, and a 31st would spell 1,549.
+    // A hundred and twenty sentences of 48 characters, one of them the euro
+    // sign, which UTF-8 spells in 3 bytes: 50 bytes a sentence and 51 with
+    // the space after it. The bound is 500 bytes, so 9 sentences and their
+    // spaces spell 459 and fit, and a 10th would spell 510. A bound counted
+    // in characters would keep more than it may.
     const sentences = Array.from(
-      { length: 40 },
-      (_, at) =>
-        `Fact ${String(at + 1).padStart(2, "0")} is settled, and the voice may say it now.`,
+      { length: 120 },
+      (_, at) => `Fact ${String(at + 1).padStart(2, "0")} costs 9 € now, and the voice may say it.`,
     );
 
-    assert.equal(sentences[0]?.length, 49);
+    assert.equal(sentences[0]?.length, 48);
 
     const outputs = yield* outputsOf([
       said("What did you find?"),
@@ -106,7 +107,7 @@ it.effect("a reply over 500 tokens goes to the voice cut to its opening sentence
       event: {
         type: LIVE_CLIENT_EVENT.COMMENTARY_APPEND,
         delegation_id: "item_1",
-        content: sentences.slice(0, 30).join(" "),
+        content: sentences.slice(0, 9).join(" "),
       },
     });
   }),

@@ -11,8 +11,8 @@
  * is queued, and the service's own queue holds it and hands it on once the
  * turn is over (`agent-queue-wire.ts`), so no second queue stands here.
  *
- * What the agent does goes back as context appends, each at most 500 tokens
- * as GPT-Live bounds them: a tool's progress as quiet thinking, each
+ * What the agent does goes back as context appends, each within GPT-Live's
+ * 500 tokens, held as 500 UTF-8 bytes: a tool's progress as quiet thinking, each
  * finished reply as commentary the voice says in its own words, cut to its
  * opening sentences, and a line the caller typed during the call as
  * thinking, since the agent has it already through the ordinary send. An
@@ -44,18 +44,14 @@ export const LIVE_CLIENT_EVENT = {
   COMMENTARY_APPEND: "session.commentary.append",
 } as const;
 
-/** The most tokens one append's content may hold, as GPT-Live bounds it. */
-const LIVE_APPEND_MAX_TOKENS = 500;
-
 /**
- * How many characters one token is counted as, with no tokenizer in the
- * client: low on purpose, since paths, code, and numbers spell fewer
- * characters a token than prose, and an append over the bound is refused.
+ * The most UTF-8 bytes one append's content holds: GPT-Live bounds it at 500
+ * tokens, and with no tokenizer in the client the bytes are the bound that
+ * holds, since OpenAI's tokenizers are byte-level BPE and no token covers
+ * less than one byte. Paths, digits, code, and other scripts spell fewer
+ * bytes a token than English prose, and an append over the bound is refused.
  */
-const CHARACTERS_PER_TOKEN = 3;
-
-/** The most characters one append's content holds. */
-const LIVE_APPEND_MAX_CHARS = LIVE_APPEND_MAX_TOKENS * CHARACTERS_PER_TOKEN;
+const LIVE_APPEND_MAX_BYTES = 500;
 
 /** Where an input to the loop came from: GPT-Live's data channel, the agent's transcript, or the caller's composer. */
 export const VOICE_INPUT = {
@@ -155,29 +151,50 @@ type ReadInput =
 
 const SENTENCES = new Intl.Segmenter("en", { granularity: "sentence" });
 
-/**
- * The text cut to the bound, keeping its opening: the whole sentences that
- * fit, or where even the first does not, its words up to the bound and an
- * ellipsis.
- */
-function openingWithin(text: string, maxChars: number): string {
-  const trimmed = text.trim();
+const WORDS = new Intl.Segmenter("en", { granularity: "word" });
 
-  if (trimmed.length <= maxChars) return trimmed;
+const UTF8 = new TextEncoder();
 
+const ELLIPSIS = "…";
+
+function bytesOf(text: string): number {
+  return UTF8.encode(text).length;
+}
+
+/** The longest run of the pieces, from the first, whose UTF-8 bytes fit the bound. */
+function prefixWithin(pieces: Iterable<string>, maxBytes: number): string {
   let kept = "";
 
-  for (const { segment } of SENTENCES.segment(trimmed)) {
-    if ((kept + segment).trimEnd().length > maxChars) break;
-    kept += segment;
+  for (const piece of pieces) {
+    if (bytesOf(kept + piece) > maxBytes) break;
+    kept += piece;
   }
 
-  if (kept.trim() !== "") return kept.trimEnd();
+  return kept;
+}
 
-  const cut = trimmed.slice(0, maxChars - 1);
-  const lastSpace = cut.lastIndexOf(" ");
+function segmentsOf(segmenter: Intl.Segmenter, text: string): Iterable<string> {
+  return Array.from(segmenter.segment(text), ({ segment }) => segment);
+}
 
-  return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+/**
+ * The text cut to the bound in UTF-8 bytes, keeping its opening: the whole
+ * sentences that fit, or where even the first does not, its words (or, for
+ * one word too long alone, its characters) up to the bound with room for an
+ * ellipsis.
+ */
+function openingWithin(text: string, maxBytes: number): string {
+  const trimmed = text.trim();
+
+  if (bytesOf(trimmed) <= maxBytes) return trimmed;
+  const sentences = prefixWithin(segmentsOf(SENTENCES, trimmed), maxBytes).trimEnd();
+
+  if (sentences !== "") return sentences;
+  const room = maxBytes - bytesOf(ELLIPSIS);
+  const words = prefixWithin(segmentsOf(WORDS, trimmed), room);
+  const cut = words === "" ? prefixWithin(trimmed, room) : words;
+
+  return `${cut.trimEnd()}${ELLIPSIS}`;
 }
 
 function tell(type: LiveAppend["type"], delegationId: string | null, content: string): VoiceOutput {
@@ -186,7 +203,7 @@ function tell(type: LiveAppend["type"], delegationId: string | null, content: st
     event: {
       type,
       delegation_id: delegationId,
-      content: openingWithin(content, LIVE_APPEND_MAX_CHARS),
+      content: openingWithin(content, LIVE_APPEND_MAX_BYTES),
     },
   };
 }
