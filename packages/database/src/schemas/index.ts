@@ -116,6 +116,8 @@ export * from "./task.js";
 
 export * from "./task-block.js";
 
+export * from "./task-follower.js";
+
 export * from "./task-page.js";
 
 export * from "./task-pin.js";
