@@ -1,5 +1,5 @@
 /**
- * account-allowed-commands.ts -- the shell commands a member always allows their coding agents to run unasked: listed, added once, and removed, each by the member alone.
+ * account-allowed-commands.ts -- the shell commands a member always allows their coding agents to run unasked: listed, added once, edited, and removed, each by the member alone.
  *
  * Every statement is keyed by the member's own account, so no member reads,
  * adds to, or removes from another's list (`../schemas/account-allowed-command.ts`):
@@ -9,7 +9,8 @@
  * standing. The list is held to its bound (`ALLOWED_COMMAND_BOUNDS`) by a
  * count before the add, under a lock of the member's own, so two adds racing
  * for the bound's last place land one after the other and the second is
- * refused; two members' adds never wait on each other.
+ * refused; two members' adds never wait on each other. An edit takes the
+ * same lock, so it never races an add for the words it puts in place.
  */
 
 import { ALLOWED_COMMAND_BOUNDS } from "@repo/features/allowed-command-wire";
@@ -120,6 +121,21 @@ const insertPrefix = SqlSchema.findAll({
     ),
 });
 
+const updateOfUser = SqlSchema.void({
+  Request: Schema.Struct({
+    ...PrefixKeySchema.fields,
+    id: Schema.String,
+    at: Schema.Date,
+  }),
+  execute: ({ userId, id, prefix, at }) =>
+    Database.use((db) =>
+      db
+        .update(accountAllowedCommand)
+        .set({ prefix: [...prefix], agentId: null, createdAt: at })
+        .where(and(eq(accountAllowedCommand.userId, userId), eq(accountAllowedCommand.id, id))),
+    ),
+});
+
 const deleteOfUser = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, id: Schema.String }),
   execute: ({ userId, id }) =>
@@ -163,6 +179,40 @@ export function addAllowedCommand(add: {
         const inserted = yield* insertPrefix(add);
 
         return inserted.length > 0 ? ALLOWED_COMMAND_ADDED.ADDED : ALLOWED_COMMAND_ADDED.KEPT;
+      }),
+    ),
+  );
+}
+
+/**
+ * One of the member's commands given new first words, typed by hand: it
+ * stands as added by hand at `at`, naming no agent, since no agent's ask
+ * proposed those words. Where the list keeps them already the edited
+ * command goes and the one kept stands as it was, so a prefix is still
+ * kept once; a command the member keeps not is left as it is. Note that it
+ * runs under the member's add lock, because an add racing it for the same
+ * words would otherwise keep them twice.
+ */
+export function editAllowedCommand(edit: {
+  readonly userId: string;
+  readonly id: string;
+  readonly prefix: CommandPrefix;
+  readonly at: Date;
+}): AllowedCommandEffect<void> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* client`select pg_advisory_xact_lock(hashtextextended(${edit.userId}, ${ADD_LOCK_SEED}))`;
+        const found = yield* findPrefix({ userId: edit.userId, prefix: edit.prefix });
+        const keptElsewhere = found.some((each) => each.id !== edit.id);
+
+        if (keptElsewhere) {
+          yield* deleteOfUser({ userId: edit.userId, id: edit.id });
+
+          return;
+        }
+
+        yield* updateOfUser(edit);
       }),
     ),
   );
