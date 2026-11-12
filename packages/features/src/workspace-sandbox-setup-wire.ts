@@ -211,3 +211,11 @@ export const workspaceRunActionEditRequestSchema = EffectSchema.Struct({
 });
 
 export type WorkspaceRunActionEdit = typeof workspaceRunActionEditRequestSchema.Type;
+
+/** An edit's answer: the setup as it then stands, and the id of the action it added or changed; none for a remove. */
+export const workspaceRunActionEditAnswerSchema = EffectSchema.Struct({
+  ...workspaceSandboxSetupAnswerSchema.fields,
+  actionId: EffectSchema.optionalKey(EffectSchema.String),
+});
+
+export type WorkspaceRunActionEditAnswer = typeof workspaceRunActionEditAnswerSchema.Type;
