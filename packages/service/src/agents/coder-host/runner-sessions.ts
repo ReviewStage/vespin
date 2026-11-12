@@ -122,6 +122,7 @@ import {
 } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   type Agent,
   hasRepository,
@@ -183,6 +184,7 @@ import {
   type SandboxFile,
   SandboxUnavailable,
 } from "@repo/sandbox";
+import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
@@ -1555,7 +1557,16 @@ export const runnerSessions = <
         const ahead: readonly ContentBlock[] =
           words.length === 0 ? [] : [{ type: "text", text: words.join("\n\n") }];
 
-        const route = commandRouteOf(content, replay !== undefined);
+        const commanded = commandRouteOf(content, replay !== undefined);
+
+        // Note that a `/goal` runs the harness's goal only for a starter with the Goals experiment on, and goes as the words it is otherwise.
+        const route =
+          commanded === COMMAND_ROUTE.GOAL &&
+          !(yield* accountExperimentOn(agent.userId, EXPERIMENT.GOALS).pipe(
+            Effect.orElseSucceed(() => false),
+          ))
+            ? COMMAND_ROUTE.WORDS
+            : commanded;
 
         // Note that a line the harness takes as its own command never reads the turn's words, so the session is not told it was handed them.
         const read =
