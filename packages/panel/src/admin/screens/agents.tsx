@@ -15,7 +15,7 @@ import { ADMIN_RELIABILITY_WINDOWS, type AdminMetricsWindow } from "@repo/featur
 import { AGENT_RUNTIME, type AgentRuntime } from "@repo/features/agent-wire";
 import { formatCompact, formatCount, formatPercent, formatUsd } from "@repo/features/number-format";
 import { readFailedWords } from "@repo/features/words";
-import { QuietWords } from "@repo/ui";
+import { Card, QuietWords, TEXT_TONE, Text } from "@repo/ui";
 import {
   createDataTableColumnHelper,
   DATA_TABLE_COLUMN_KIND,
@@ -61,6 +61,8 @@ const NO_FIGURE = "—";
 interface AgentsRead {
   cost: AdminCost;
   harnesses: readonly AdminHarnessReliability[];
+  /** Whether the database answered Reliability's probe; where it did not, no run was counted. */
+  databaseReachable: boolean;
 }
 
 /** One harness's row: its runs and failures where Reliability counted any, and its spend where Cost priced any. */
@@ -163,8 +165,31 @@ const HARNESS_COLUMNS = column.columns([
 const sumRuns = (read: AgentsRead, part: "failed" | "total") =>
   read.harnesses.reduce((total, harness) => total + harness.runs[part], 0);
 
-const sumSpend = (read: AgentsRead) =>
-  read.cost.byHarness.reduce((total, harness) => total + (harness.spendUsd ?? 0), 0);
+/** The window's list-price cost over every harness; null where tokens ran and the catalog priced none of them. */
+function sumSpend(read: AgentsRead): number | null {
+  const priced = read.cost.byHarness.flatMap((harness) =>
+    harness.spendUsd === null ? [] : [harness.spendUsd],
+  );
+
+  if (priced.length === 0 && read.cost.byHarness.length > 0) return null;
+
+  return priced.reduce((total, spend) => total + spend, 0);
+}
+
+const sumUnpriced = (read: AgentsRead) =>
+  read.cost.byHarness.reduce((total, harness) => total + harness.unpricedTokens, 0);
+
+/** The cost card's hint: its cost per run, then the tokens the catalog did not price. */
+function spendHint(read: AgentsRead): string {
+  const runs = sumRuns(read, "total");
+  const spend = sumSpend(read);
+  const unpriced = sumUnpriced(read);
+
+  const perRun =
+    runs === 0 || spend === null ? "no cost per run" : `${formatUsd(spend / runs)} per run`;
+
+  return unpriced === 0 ? perRun : `${perRun} · plus ${formatCompact(unpriced)} unpriced tokens`;
+}
 
 /** The headline cards, in the order they stand. */
 const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
@@ -187,12 +212,12 @@ const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
   {
     key: "spend",
     label: () => "List-price cost",
-    value: (read) => formatUsd(sumSpend(read)),
-    hint: (read) => {
-      const runs = sumRuns(read, "total");
+    value: (read) => {
+      const spend = sumSpend(read);
 
-      return runs === 0 ? "no runs to divide by" : `${formatUsd(sumSpend(read) / runs)} per run`;
+      return spend === null ? NO_FIGURE : formatUsd(spend);
     },
+    hint: spendHint,
   },
 ];
 
@@ -203,6 +228,19 @@ const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
  */
 function AgentsSections({ read }: { read: AgentsRead | undefined }): React.JSX.Element {
   const rows = read === undefined ? [] : harnessRows(read);
+
+  if (read !== undefined && !read.databaseReachable) {
+    return (
+      <AdminSection>
+        <PageNote>{AGENTS_NOTE}</PageNote>
+        <Card>
+          <Text tone={TEXT_TONE.MUTED}>
+            The database did not answer its probe, so no agent run could be counted.
+          </Text>
+        </Card>
+      </AdminSection>
+    );
+  }
 
   return (
     <>

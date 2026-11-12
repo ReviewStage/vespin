@@ -79,7 +79,8 @@ export function adminReliabilityQuery(reads: AdminReads, query: AdminWindowedQue
 /**
  * The Agents page's read: the Cost and Reliability answers asked together,
  * since the page joins them by harness and draws nothing until both are in;
- * its key names both reads, apart from either page's own.
+ * its key names both reads, apart from either page's own, and it keeps
+ * whether the database answered Reliability's probe.
  */
 export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
   return queryOptions({
@@ -96,7 +97,12 @@ export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
         reads.reliability(query, signal),
       ]);
 
-      return { cost, harnesses: reliability.agentHarnesses };
+      // Note that we keep the database probe's verdict, because Reliability answers an empty source when it fails, which would otherwise read as no runs.
+      return {
+        cost,
+        harnesses: reliability.agentHarnesses,
+        databaseReachable: reliability.systemHealth.database.reachable,
+      };
     },
     placeholderData: keepPreviousData,
     ...ADMIN_READ_OPTIONS,
