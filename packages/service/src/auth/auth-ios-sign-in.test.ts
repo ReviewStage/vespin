@@ -18,7 +18,7 @@ import {
 import { oauthUserInfoFromAuthAnswer, requestUserId } from "./bearer.js";
 import type { UserInfoEndpoint } from "./bearer-callers.js";
 import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
-import { refreshKeepsSession } from "./refresh-session.js";
+import { offlineTokensOutliveSession } from "./offline-tokens.js";
 
 /**
  * The iPhone's OAuth sign-in, end to end on one Better Auth configured as
@@ -104,7 +104,7 @@ function iosAuth() {
         clientPrivileges: denyOAuthClientPrivileges,
         cachedTrustedClients: new Set([IOS_OAUTH_CLIENT.id]),
       }),
-      refreshKeepsSession(),
+      offlineTokensOutliveSession(),
     ],
   });
 }
