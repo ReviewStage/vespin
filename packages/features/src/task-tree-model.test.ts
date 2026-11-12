@@ -125,6 +125,7 @@ test("a shut parent hides every row under it, however deep, and the rows after i
     depth,
     open,
   });
+
   const rows = [
     row("Invites", 0, true),
     row("Invite copy", 1, true),

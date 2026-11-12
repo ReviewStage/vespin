@@ -479,8 +479,10 @@ function GroupSection({
   readonly listing: TasksListing;
 }) {
   const place = placeIn(group, listing);
+
   // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
   const rows = useMemo(
     () => foldedTaskRows(group.rows, (taskId) => opened.has(taskId)),
     [group.rows, opened],
