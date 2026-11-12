@@ -58,6 +58,8 @@ export * from "./components/button/button.js";
 
 export * from "./components/calendar/calendar.js";
 
+export * from "./components/caption-field/caption-field.js";
+
 export * from "./components/card/card.js";
 
 export * from "./components/card-press/card-press.js";

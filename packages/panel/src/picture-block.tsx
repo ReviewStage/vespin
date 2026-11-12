@@ -67,6 +67,9 @@ const PICTURE_MISSING_CLASS =
 const PICTURE_CAPTION_CLASS =
   "picture-caption mt-item-gap block text-picture-caption text-muted-foreground";
 
+/** Where a caption typed in place stands, the field setting the caption's type and ink itself. */
+const PICTURE_CAPTION_FIELD_CLASS = "picture-caption mt-item-gap block";
+
 /** Whether a `data:` URL a picture read answered holds a PDF, drawn as its file rather than a picture. */
 export function isPdfDataUrl(dataUrl: string): boolean {
   return dataUrlMediaType(dataUrl) === DESCRIPTION_FILE_TYPE.PDF;
@@ -116,6 +119,7 @@ export function PictureBlock({
   state,
   alt,
   caption,
+  captionField,
   onOpen,
 }: {
   /** The block's own element, as the place drawing it may need to find it among others. */
@@ -125,12 +129,22 @@ export function PictureBlock({
   alt: string;
   /** The words drawn under it, as its Markdown's title gives them; none where it gives none. */
   caption: string | undefined;
+  /** The caption typed in place, as an editor draws it, standing where `caption` would; none where the caption is only read. */
+  captionField?: React.ReactNode;
   /** Opens the picture over the window; without one, the picture is drawn with no press to it. */
   onOpen?: (() => void) | undefined;
 }): React.JSX.Element {
-  const said =
+  const read =
     caption === undefined || caption === "" ? null : (
       <span className={PICTURE_CAPTION_CLASS}>{caption}</span>
+    );
+
+  // Note that a caption typed in place stands where the read one would, so the editor draws the picture as the text does.
+  const said =
+    captionField === undefined || captionField === null ? (
+      read
+    ) : (
+      <span className={PICTURE_CAPTION_FIELD_CLASS}>{captionField}</span>
     );
 
   // A PDF stands as its file, which a press opens over the window.
