@@ -54,11 +54,13 @@ test("creates and updates fold into one list in creation order, each call's list
     created("c2", "2", "Export the invoices"),
     updated("u1", "1", "in_progress"),
   ]);
+
   const second = turn("turn-2", [
     updated("u2", "1", "completed"),
     updated("u3", "2", "in_progress"),
     call("c3", "TaskCreate", { subject: "Open the pull request" }),
   ]);
+
   const lists = taskTodos([first, second]);
   assert.deepEqual(lists.get("c1"), [{ content: "Round the totals", status: PENDING }]);
   assert.deepEqual(lists.get("u1"), [
@@ -98,6 +100,7 @@ test("a list answer in another order keeps creation order, moves each task, adds
       ].join("\n"),
     ),
   ]);
+
   assert.deepEqual(taskTodos([message]).get("l1"), [
     { content: "Round the totals", status: DONE },
     { content: "Export the invoices", status: IN_PROGRESS },
@@ -121,6 +124,7 @@ test("a deleted task leaves the list, a read of one moves it, a failed call or a
     // A subagent of the session deleted the rest, which only the list says.
     call("l1", "TaskList", {}, "No tasks found"),
   ]);
+
   const lists = taskTodos([message]);
   assert.deepEqual(lists.get("u1"), [{ content: "Export the invoices", status: PENDING }]);
   assert.deepEqual(lists.get("g1"), [{ content: "Export the invoices", status: IN_PROGRESS }]);
@@ -134,11 +138,13 @@ test("a task first met by an update, its create on a page not yet landed or befo
     created("c1", "1", "Round the totals"),
     created("c2", "2", "Export the invoices"),
   ]);
+
   const newer = turn("turn-2", [
     updated("u1", "2", "in_progress"),
     updated("u2", "1", "completed"),
     created("c3", "3", "Open the pull request"),
   ]);
+
   // The newest page alone: the two tasks it moves stand in creation order, by their numbers, and the one it creates after them.
   assert.deepEqual(taskTodos([newer]).get("c3"), [
     { content: "Task #1", status: DONE },

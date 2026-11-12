@@ -21,6 +21,11 @@ import {
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
+type AgentsResult = {
+  readonly summary: TaskAgentsSummary;
+  readonly pullRequests: readonly TaskPullRequestLine[];
+};
+
 /**
  * task-marks.tsx -- a task's status as its mark, each of the five, its
  * priority as its mark, each of the five, and the one icon of how its agents
@@ -32,7 +37,7 @@ function agents(
   counts: Partial<Pick<TaskAgentsSummary, "working" | "failed">>,
   state?: (typeof PULL_REQUEST_STATE)[keyof typeof PULL_REQUEST_STATE],
   queued?: true,
-): { readonly summary: TaskAgentsSummary; readonly pullRequests: readonly TaskPullRequestLine[] } {
+): AgentsResult {
   const pullRequests =
     state === undefined
       ? []
@@ -47,6 +52,7 @@ function agents(
             ...(queued === undefined ? undefined : { queued }),
           },
         ];
+
   return {
     summary: { total: 1, working: 0, pullRequestTotal: pullRequests.length, ...counts },
     pullRequests,

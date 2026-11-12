@@ -66,7 +66,6 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
   type SessionMessage,
-  SessionUnreachable,
 } from "../agents/sessions/agent-sessions.js";
 import { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
 import { requestUserId } from "../auth/bearer.js";
@@ -117,6 +116,7 @@ import {
   type ScriptedSessions,
   scriptedHarnessLayer,
 } from "../testing/native-harness-fake.js";
+import { refusedSession } from "../testing/recording-sessions.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
@@ -129,29 +129,37 @@ export const SUBAGENT_NEWEST = "/api/agents/subagent-messages-newest";
 export const AGENT_STARTS = "/api/agents/agents";
 export const AGENT = "/api/agents/agent";
 export const AGENT_INBOX = "/api/agents/{id}/inbox";
+
 /** Our own tools an agent is offered and where its `run_on_mac` stands, as its MCP popover reads them. */
 export const AGENT_WORKSPACE_TOOLS = "/api/agents/workspace-tools";
 export const WORKSPACE_AGENTS = "/api/agents";
+
 /** The overview's three reads, each its own route. */
 export const AGENT_OVERVIEW = [
   "/api/agents/overview-pull-request",
   "/api/agents/overview-checks",
   "/api/agents/overview-conversation",
 ] as const;
+
 /** The public paths the inbox's procedures answer on the hosted oRPC router, its attachment's bytes aside. */
 const INBOX_PROCEDURE_PATH = /^\/api\/(?:inbox(?:\/.*)?|(?:plans|agents)\/[^/]+\/inbox)$/u;
+
 /** The account's tasks, served by the hosted oRPC router, each naming its agents in brief. */
 export const TASKS = "/api/plans";
+
 /** One task, served by the hosted oRPC router, whose delete stops the task's agents through the same Stop. */
 export const TASK = (taskId: string) => `${TASKS}/${taskId}`;
+
 /** A Stop on a task, served by the hosted oRPC router, which reaches the agent's harness as the request's caller. */
 /** The brain's own transcript of a task, served by the hosted oRPC router. */
 /** A task's own path, its Stop, or its transcript, by the task's id, which the router serves where the old groups serve flattened keys. */
 const TASK_PATH =
   /^\/api\/plans\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/stop|\/messages)?$/u;
+
 /** One part of a message of an agent's or a worker's transcript, whole, at its public path on the hosted oRPC router. */
 const TRANSCRIPT_PART_PATH =
   /^\/api\/agents\/[^/]+\/(?:subagents\/[^/]+\/)?messages\/[^/]+\/parts\/[^/]+$/u;
+
 /** An ask of an agent's a member answers, at its public path on the hosted oRPC router. */
 const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 
@@ -174,6 +182,7 @@ export function freshInstallation(
   repositories: InstallationFixture["repositories"] = [RELAY],
 ): InstallationFixture {
   installationsConnected += 1;
+
   return { id: 7 + installationsConnected, login: RELAY.owner, repositories };
 }
 
@@ -298,26 +307,20 @@ export function fakeAgentSessions(
   // Note that a boot's session takes its first message as a send, which is what an open took before a
   // first launch booted its machine first, so it is written down as the session's open.
   const booted = new Set<string>();
+
   const agentSessions = (
     authorization: string,
   ): ScriptedSessions & Pick<AgentSessions, "boot"> => ({
     boot: () =>
       Effect.suspend(() => {
         if (options.reachable === false) {
-          return Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          );
+          return Effect.fail(refusedSession());
         }
+
         sessions += 1;
         const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${String(sessions).padStart(22, "0")}`;
         booted.add(sessionId);
+
         return Effect.succeed({
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -327,27 +330,22 @@ export function fakeAgentSessions(
     answer: (sessionId, _conversationId, line) =>
       Effect.sync(() => {
         const outcome = options.answers ?? RUNNER_ANSWER.WRITTEN;
+
         if (outcome === RUNNER_ANSWER.WRITTEN) answered.push([sessionId, line]);
+
         return outcome;
       }),
     open: (message) =>
       Effect.suspend(() => {
         if (options.reachable === false) {
-          return Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          );
+          return Effect.fail(refusedSession());
         }
+
         sessions += 1;
         // A Claude Code session's id, as every agent here runs on its harness, so a Stop or a retire reaches the harness too.
         const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${String(sessions).padStart(22, "0")}`;
         opened.push({ authorization, message, sessionId });
+
         return Effect.succeed({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId });
       }),
     send: (sessionId, message) =>
@@ -355,16 +353,20 @@ export function fakeAgentSessions(
         if (booted.delete(sessionId)) {
           opened.push({ authorization, message, sessionId });
           deliveries += 1;
+
           return {
             outcome: SESSION_SEND_OUTCOME.ACCEPTED,
             sessionId,
             deliveryId: `delivery-${deliveries}`,
           } as const;
         }
+
         sent.push({ authorization, sessionId, message });
+
         switch (options.sends ?? SESSION_SEND_OUTCOME.ACCEPTED) {
           case SESSION_SEND_OUTCOME.ACCEPTED:
             deliveries += 1;
+
             return {
               outcome: SESSION_SEND_OUTCOME.ACCEPTED,
               sessionId,
@@ -382,7 +384,9 @@ export function fakeAgentSessions(
       Effect.suspend(() => {
         canceled.push([sessionId, runtimeTurnId]);
         canceledAs.push(authorization);
+
         if (canceled.length >= (options.cancelsTogether ?? 0)) together.openUnsafe();
+
         return Effect.as(
           Effect.andThen(together.await, options.canceling ?? Effect.void),
           options.cancels === false
@@ -396,10 +400,12 @@ export function fakeAgentSessions(
           reset.push(sessionId);
           resetAs.push(authorization);
           resetSaw.push(saw);
+
           return { outcome: SESSION_RESET_OUTCOME.RESET };
         }),
       ),
   });
+
   return { agentSessions, opened, sent, canceled, canceledAs, reset, resetAs, resetSaw, answered };
 }
 
@@ -466,8 +472,10 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
 function publicRequest(request: Request): Request | undefined {
   const url = new URL(request.url);
   const publicPath = ORPC_PUBLIC_PATH.get(url.pathname);
+
   if (publicPath === undefined) return undefined;
   url.pathname = publicPath(encodeURIComponent(url.searchParams.get("id") ?? ""));
+
   return new Request(url, request);
 }
 
@@ -488,6 +496,7 @@ export const standing = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     const services = Layer.mergeAll(
       afterResponse,
       Layer.succeed(SqlClient.SqlClient, client),
@@ -506,10 +515,12 @@ export const standing = (
       Layer.succeed(SlackBot, slackBotOver(undefined)),
       ANALYTICS.layer,
     );
+
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
     const sessions = new Map(
       [...bearers.values()].map((userId) => [sessionCookieOf(userId), userId]),
     );
+
     const seams = {
       // The account read as `resolveHostedUserId` reads it: the bearer where one is carried, else the session cookie.
       resolveUserId: (incoming: Request) =>
@@ -517,6 +528,7 @@ export const standing = (
           incoming,
           (input) => {
             const sub = bearers.get(input.headers.get("authorization") ?? "");
+
             return Effect.succeed(sub === undefined ? undefined : { sub });
           },
           (input) =>
@@ -533,16 +545,20 @@ export const standing = (
       titleModel,
       keepAwake: keepAwakeDetached,
     };
+
     const agents = HttpRouter.toWebHandler(
       agentsApp(seams).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     // SAFETY: the plans and messages procedures yield the services above alone, which is all a test provides of the web runtime's services.
     const webServices = (yield* Effect.context<never>().pipe(
       Effect.provide(services),
     )) as Context.Context<WebServices>;
+
     // One cache of the kept published answers for both resources that read them, as the hosted router hands it.
     const shared = { ...seams, published: instancePublishedCache() };
+
     const routed = hostedFetch({
       agentPullRequests: agentPullRequestProcedures(shared),
       agents: agentsProcedures({
@@ -553,38 +569,53 @@ export const standing = (
       messages: messagesProcedures(seams),
       plans: tasksProcedures(seams),
     });
+
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
+
     const memberMcp = HttpRouter.toWebHandler(
       memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX, seams.workspaces).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => memberMcp.dispose()));
+
     /** The response as the function answers it, for the one route that answers bytes; a task's own path, the list, a task's Stop, an agent's transcript, its Pull request tab, and the inbox land on the hosted oRPC router. */
     const fetch = (request: Request) =>
       Effect.promise(() => {
         const procedure = publicRequest(request);
+
         if (procedure !== undefined) return routed(procedure, webServices);
         const url = new URL(request.url);
         const { pathname } = url;
+
         if (pathname !== INBOX_ATTACHMENT && INBOX_PROCEDURE_PATH.test(pathname)) {
           return routed(request, webServices);
         }
+
         const id = url.searchParams.get("id");
+
         if (pathname === AGENT_MESSAGES && id !== null) {
           url.pathname = `/api/agents/${encodeURIComponent(id)}/messages`;
+
           return routed(new Request(url, request), webServices);
         }
+
         const call = url.searchParams.get("call");
+
         if (pathname === SUBAGENT_MESSAGES && id !== null && call !== null) {
           url.pathname = `/api/agents/${encodeURIComponent(id)}/subagents/${encodeURIComponent(call)}/messages`;
+
           return routed(new Request(url, request), webServices);
         }
+
         if (pathname === SUBAGENT_NEWEST && id !== null && call !== null) {
           url.pathname = `/api/agents/${encodeURIComponent(id)}/subagents/${encodeURIComponent(call)}/messages/newest`;
+
           return routed(new Request(url, request), webServices);
         }
+
         if (
           pathname === WORKSPACE_AGENTS ||
           TRANSCRIPT_PART_PATH.test(pathname) ||
@@ -592,10 +623,12 @@ export const standing = (
         ) {
           return routed(request, webServices);
         }
+
         return pathname === TASKS || TASK_PATH.test(pathname)
           ? routed(request, webServices)
           : agents.handler(request);
       });
+
     const ask = (request: Request) =>
       Effect.gen(function* () {
         const response = yield* fetch(request);
@@ -603,11 +636,14 @@ export const standing = (
         // SAFETY: the group answers JSON; the test compares it as the wire value it is, and an answer
         // with no body is compared as its text so a failure names what came back.
         const body = (text.length === 0 ? text : JSON.parse(text)) as WireBoundaryInput;
+
         return { status: response.status, body } satisfies Answer;
       });
+
     /** The member MCP server as an outside MCP client's `fetch` reaches it, its token a bearer's. */
     const mcpFetch = (input: string | URL | Request, init?: RequestInit) =>
       memberMcp.handler(new Request(input, init));
+
     return { ask, fetch, mcpFetch };
   });
 
@@ -619,6 +655,7 @@ function memberMcpBearers(bearers: ReadonlyMap<string, string>): MemberMcpAuth {
   return {
     verify: (incoming) => {
       const sub = bearers.get(incoming.headers.get("authorization") ?? "");
+
       return sub === undefined
         ? Promise.reject(new Error("the member MCP server's test admits no such bearer"))
         : Promise.resolve({ sub, client_id: MEMBER_MCP_CLIENT_ID });
@@ -657,28 +694,46 @@ export function request(
 ): Request {
   // A path the hosted oRPC router answers names its id as a segment; an old group's reads it from the query.
   const named = path.includes(ID_SEGMENT);
+
   const url = new URL(
     named && init.id !== undefined ? path.replace(ID_SEGMENT, encodeURIComponent(init.id)) : path,
     ORIGIN,
   );
+
   if (init.id !== undefined && !named) url.searchParams.set("id", init.id);
+
   if (init.archived !== undefined) url.searchParams.set("archived", init.archived);
+
   if (init.after !== undefined) url.searchParams.set("after", init.after);
+
   if (init.call !== undefined) url.searchParams.set("call", init.call);
+
   if (init.wait !== undefined) url.searchParams.set("wait", init.wait);
+
   if (init.before !== undefined) url.searchParams.set("before", init.before);
+
   if (init.parts !== undefined) url.searchParams.set("parts", init.parts);
+
   if (init.attachment !== undefined) url.searchParams.set("attachment", init.attachment);
+
   if (init.picture !== undefined) url.searchParams.set("picture", init.picture);
+
   if (init.src !== undefined) url.searchParams.set("src", init.src);
+
   if (init.number !== undefined) url.searchParams.set("number", init.number);
+
   if (init.messageId !== undefined) url.searchParams.set("messageId", init.messageId);
   const headers = new Headers();
+
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+
   if (init.accept !== undefined) headers.set("accept", init.accept);
+
   // Every client of the service names its JSON body so, which the hosted oRPC router reads a body by.
   if (init.body !== undefined) headers.set("content-type", "application/json");
+
   if (init.cookie !== undefined) headers.set("cookie", init.cookie);
+
   return new Request(url, {
     method: init.method ?? "GET",
     headers,
@@ -694,8 +749,10 @@ export function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answered.status, status, JSON.stringify(answered.body));
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read))
     return assert.fail(`the answer is not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -729,6 +786,7 @@ export const drivenWhileStarting = <A, E>(fiber: Fiber.Fiber<A, E>) =>
       yield* TestClock.adjust(CODER.MESSAGES_POLL);
       yield* Effect.yieldNow;
     }
+
     return yield* Fiber.join(fiber);
   });
 
@@ -761,10 +819,12 @@ export const openTask = (
     // Our key pays for no coding agent, so both accounts start and message theirs on their own keys.
     yield* connectAgentApiKeys(owner);
     yield* connectAgentApiKeys(other);
+
     const task = yield* startTask(owner, {
       name: "Teammate invitations",
       repository: options.repository === undefined ? RELAY_FULL_NAME : options.repository,
     });
+
     yield* saveDescriptionText(owner, task.id, SAVED);
     // The task's workspace has Task descriptions on, so an agent started on the task is handed its description.
     yield* setWorkspaceExperiment({
@@ -778,12 +838,15 @@ export const openTask = (
       yield* connectWorkspaceGitHub(task.workspaceId, installation),
       LINK_OUTCOME.LINKED,
     );
+
     const bearers = new Map([
       [`Bearer ${owner}`, owner],
       [`Bearer ${other}`, other],
     ]);
+
     const github = githubReaching([installation], undefined, undefined, options.github);
     const agentSessions = options.agentSessions ?? fakeAgentSessions();
+
     const { ask, fetch, mcpFetch } = yield* standing(
       bearers,
       github,
@@ -793,6 +856,7 @@ export const openTask = (
       options.titleModel,
       options.afterResponse,
     );
+
     return { owner, other, task, installation, agentSessions, github, ask, fetch, mcpFetch };
   });
 
@@ -800,15 +864,18 @@ export const openTask = (
 const otherAccount = (token: string | null | undefined) =>
   Effect.gen(function* () {
     if (token === undefined) return yield* openGithubUser();
+
     if (token !== null) {
       return yield* openGithubUser({
         ...standingGithubRow(yield* Clock.currentTimeMillis),
         accessToken: token,
       });
     }
+
     const db = yield* Database;
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
     return userId;
   });
 
@@ -829,6 +896,7 @@ export const publishedPullRequestDrafted =
     const commit = `${repository}/commits/${PUBLISHED.headSha}`;
     // The overview's checks name the head by the ref GitHub keeps on the pull request.
     const head = `${repository}/commits/refs%2Fpull%2F${PUBLISHED.number}%2Fhead`;
+
     switch (new URL(sent.url).pathname) {
       case `${repository}/pulls`:
         return Response.json([{ number: PUBLISHED.number }]);
@@ -874,6 +942,7 @@ export function reachRequests(sent: readonly SentToGitHub[], installationId: num
   const app = `https://api.github.com/app/installations/${installationId}`;
   const mints = sent.filter((one) => one.url === `${app}/access_tokens`);
   const forRepository = (one: SentToGitHub) => "repositories" in JSON.parse(one.body);
+
   return {
     installationReads: sent.filter((one) => one.url === app).length,
     listings: sent.filter((one) => new URL(one.url).pathname === "/installation/repositories")
@@ -886,6 +955,7 @@ export function reachRequests(sent: readonly SentToGitHub[], installationId: num
 export const AGENT_PULL_REQUEST_ACTION = "/api/agents/pull-request-action";
 export const AGENT_PULL_REQUEST_VIEWED = "/api/agents/pull-request-viewed";
 export const AGENT_PULL_REQUEST = "/api/agents/pull-request";
+
 /** The agent's changes, the files Files changed draws. */
 export const AGENT_CHANGES = "/api/agents/changes";
 export const AGENT_OVERVIEW_PULL_REQUEST = AGENT_OVERVIEW[0];
@@ -919,12 +989,15 @@ export function graphqlAnswering(
   return (sent) => {
     if (new URL(sent.url).pathname !== "/graphql") return repository(sent);
     const { query, variables } = JSON.parse(sent.body);
+
     // The published read's merge-queue ask rides with its REST reads on the App's token, as they do, and is no call the member made.
     if (query.includes(PULL_REQUEST_QUEUED_OPERATION)) {
       return Response.json({ data: { repository: { pullRequest: { mergeQueueEntry: null } } } });
     }
+
     const call = { authorization: sent.headers.get("authorization"), query, variables };
     calls.push(call);
+
     return answer(call);
   };
 }
@@ -951,6 +1024,7 @@ export function userTexts(page: {
     .filter((message) => message.role === MESSAGE_ROLE.USER)
     .map((message) => {
       const part = message.parts.find((each) => isRecord(each) && each.type === "text");
+
       return isRecord(part) && isWireString(part.text) ? part.text : undefined;
     });
 }
@@ -967,8 +1041,10 @@ export const startedAgent = (
       HOSTED_HTTP_STATUS.CREATED,
       yield* ask(startAs(owner, taskId, { idempotencyKey: randomUUID() })),
     ).agent;
+
     const stored = yield* readAgent(owner, agent.id);
     assert.ok(Option.isSome(stored));
+
     return { agent, target: { userId: owner, conversationId: stored.value.conversationId } };
   });
 
@@ -1000,6 +1076,7 @@ export type ThreadPost = Parameters<typeof postInboxThread>[1];
 export const openAskOf = (item: InboxItem): string => {
   const asking = item.thread?.find((each) => each.ask?.status === INBOX_ASK_STATUS.OPEN);
   assert.ok(asking, "the item holds an ask open");
+
   return asking.id;
 };
 
@@ -1057,10 +1134,13 @@ export const text = (words: string) => ({ type: "text", text: words });
 /** A message as the retired runtime's receipt listed it: each text part as it was handed, and each file staged, by its name and type with no bytes. */
 export function receiptOf(handed: SessionMessage["message"] | undefined): MessageReceivedPart[] {
   assert.ok(Array.isArray(handed), "the message carried parts");
+
   return handed.flatMap((part): MessageReceivedPart[] => {
     if (part.type === "text") return [{ type: "text", text: part.text }];
+
     if (part.type !== "file") return [];
     const name = part.filename === undefined ? undefined : { filename: part.filename };
+
     return [{ type: "file", mediaType: part.mediaType, ...name }];
   });
 }
@@ -1068,9 +1148,11 @@ export function receiptOf(handed: SessionMessage["message"] | undefined): Messag
 /** The first message the newest session opened on, read back into its brief, its replay, and its note. */
 export function openedParts(agentSessions: ReturnType<typeof fakeAgentSessions>) {
   const message = agentSessions.opened.at(-1)?.message.message;
+
   if (message === undefined || Array.isArray(message)) {
     return assert.fail("the session opened on words alone");
   }
+
   return { text: message, parts: firstMessageParts(message) };
 }
 
@@ -1103,6 +1185,7 @@ export const agentStartedOn = (
       HOSTED_HTTP_STATUS.CREATED,
       yield* opened.ask(startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID() })),
     ).agent;
+
     // Note that the Start's machine comes up past its answer, which hands its first message on.
     yield* afterStart;
     const stored = yield* readAgent(opened.owner, agent.id);
@@ -1113,6 +1196,7 @@ export const agentStartedOn = (
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     // The Start's first line queued the turn its runner opens (`turn-state.ts`).
     const turnId = Option.getOrThrow(yield* queuedTurnOf(target.conversationId));
+
     if (turn !== undefined) {
       yield* writer.enqueueTurn(target, {
         turnId,
@@ -1131,6 +1215,7 @@ export const agentStartedOn = (
       // A receipt of the Start's first message, as the retired runtime's relay wrote one, takes the line the Start wrote into the turn.
       const taken = yield* writer.takeAwaitingLine(target, { text: SNAPSHOT, turnId });
       assert.equal(Result.getOrUndefined(taken)?.length, 1);
+
       if (!turn.running) {
         yield* writer.consume(target, {
           kind: RUN_EVENT.TURN_ENDED,
@@ -1143,22 +1228,27 @@ export const agentStartedOn = (
         });
       }
     }
+
     // Note that the clock moves on past the turn's queueing, so a turn a later message queues is the newer, as it is on any clock that runs.
     yield* TestClock.adjust(Duration.millis(1));
+
     /** The transcript as the owner reads it now: the developer's lines, and the status. */
     const transcript = () =>
       Effect.map(
         opened.ask(request(AGENT_MESSAGES, opened.owner, { id: agent.id })),
         (answered) => {
           const page = readAnswer(agentMessagesAnswerSchema, HOSTED_HTTP_STATUS.OK, answered);
+
           return { lines: userTexts(page), status: page.status };
         },
       );
+
     /** A message of the owner's under the key given, or one minted, answered as the wire declares a message taken. */
     const sent = (text: string, clientKey = randomUUID()) =>
       Effect.map(opened.ask(messageAs(opened.owner, agent.id, { text, clientKey })), (answered) =>
         readAnswer(agentMessageAnswerSchema, HOSTED_HTTP_STATUS.ACCEPTED, answered),
       );
+
     return { ...opened, agent, target, sessionId, writer, turnId, transcript, sent };
   });
 

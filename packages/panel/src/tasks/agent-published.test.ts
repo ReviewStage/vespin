@@ -49,11 +49,13 @@ afterEach(() => {
 /** The doors given to what is drawn, and what each door was asked. */
 function doorsAsked(withPanel: boolean) {
   const asked: string[] = [];
+
   const doors: PublishedDoors = {
     openGitHub: (url) => asked.push(`github ${url}`),
     copy: (words, label) => asked.push(`copy ${words} (${label})`),
     openPullRequest: withPanel ? () => asked.push("tab") : undefined,
   };
+
   return { doors, asked };
 }
 
@@ -62,12 +64,14 @@ function drawn(element: React.ReactElement): HTMLElement | null {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(withQueryClient(element)));
+
   return container.querySelector<HTMLElement>("a, button");
 }
 
 /** Draws the pinned row over the doors given. */
 function drawRow(withPanel: boolean) {
   const { doors, asked } = doorsAsked(withPanel);
+
   const row =
     drawn(
       createElement(PublishedRow, {
@@ -76,6 +80,7 @@ function drawRow(withPanel: boolean) {
         doors,
       }),
     ) ?? assert.fail("the pull request's row stands");
+
   return { row, asked };
 }
 

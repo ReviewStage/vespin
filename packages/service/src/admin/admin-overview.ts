@@ -108,6 +108,7 @@ function countsOn(
   days: readonly string[],
 ): number[] {
   const byDay = daily.get(count);
+
   return days.map((day) => byDay?.get(day) ?? 0);
 }
 
@@ -117,6 +118,7 @@ function buildActivityDays(
   dayKeys: readonly string[],
 ): AdminActivityDay[] {
   const on = (feature: ActivityFeature, day: string) => daily.get(feature)?.get(day) ?? 0;
+
   return dayKeys.map((day) => ({
     day,
     [ACTIVITY_FEATURE.AGENTS_STARTED]: on(ACTIVITY_FEATURE.AGENTS_STARTED, day),
@@ -129,6 +131,7 @@ function buildActivityDays(
 /** Every chart feature summed per day over the given keys. */
 function activityTotals(daily: AdminOverviewSource["daily"], days: readonly string[]): number[] {
   const features = Object.values(ACTIVITY_FEATURE);
+
   return days.map((day) => sum(features.map((feature) => daily.get(feature)?.get(day) ?? 0)));
 }
 
@@ -151,12 +154,15 @@ function buildAgentOrigins(
   const over = (count: DailyCount) => sum(countsOn(daily, count, recentKeys));
   const agentsStarted = over(DAILY_COUNT.AGENTS_STARTED);
   const startedElsewhere = sum(Object.values(ORIGIN_COUNT).map(over));
+
   const agentsOf = (origin: AgentOrigin) =>
     origin === AGENT_ORIGIN.HAND ? agentsStarted - startedElsewhere : over(ORIGIN_COUNT[origin]);
+
   return {
     agentsStarted,
     origins: Object.values(AGENT_ORIGIN).map((origin) => {
       const agents = agentsOf(origin);
+
       return { origin, agents, share: shareOf(agents, agentsStarted) };
     }),
   };
@@ -165,6 +171,7 @@ function buildAgentOrigins(
 /** The ranked accounts with their counts joined, in the rank the query read them in. */
 function buildTopAccounts(source: AdminOverviewSource): AdminOverviewAccount[] {
   const counts = source.accountCounts;
+
   return source.topAccounts.map((account) => ({
     ...account,
     tasks: counts.tasks.get(account.id) ?? 0,
@@ -188,6 +195,7 @@ export function buildAdminOverview(
   const dayKeys = lastNDayKeys(now, windowDays);
   const trendKeys = lastNDayKeys(now, ADMIN_TREND_DAYS * 2);
   const recentKeys = trendKeys.slice(-ADMIN_TREND_DAYS);
+
   const trendOf = (count: DailyCount) =>
     trailingTrend(countsOn(source.daily, count, trendKeys), ADMIN_TREND_DAYS);
 
@@ -209,12 +217,14 @@ export function buildAdminOverview(
     },
     funnel: Object.values(FUNNEL_STEP).map((step) => {
       const accounts = source.funnel.get(step) ?? 0;
+
       return { step, accounts, share: shareOf(accounts, signedUp) };
     }),
     reach: {
       activeDevelopers,
       features: Object.values(REACH_FEATURE).map((feature) => {
         const developers = source.reach.get(feature) ?? 0;
+
         return { feature, developers, share: shareOf(developers, activeDevelopers) };
       }),
     },

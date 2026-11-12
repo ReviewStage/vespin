@@ -39,6 +39,7 @@ export interface FileLook {
 /** How a file is named in a row, and its tab's icon and name the same. */
 export function fileLook(path: string): FileLook {
   const name = fileName(path);
+
   return {
     icon: <FileTypeIcon name={name} />,
     label: name,
@@ -94,6 +95,7 @@ export function FileRef({
   // Note that a file named with no repository of its own is of the task's, which its card names as a mention's does.
   const task = useTaskMentions()?.repository ?? undefined;
   const repository = named ?? task;
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.LINK}

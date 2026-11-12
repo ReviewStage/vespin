@@ -63,7 +63,7 @@ import {
   PUSH_FAILURE_REASON,
   type PushEnvironment,
 } from "@repo/features/push-device-wire";
-import { isRecord, text, unparsedWire } from "@repo/wire";
+import { isRecord, text, unparsedWire, type WireRecord, type WireValue } from "@repo/wire";
 import {
   Clock,
   Config,
@@ -193,20 +193,20 @@ export interface ApnsAps {
   readonly timestamp?: number;
   readonly event?: ApnsLiveActivityEvent;
   /** A Live Activity's content state, as its widget decodes it. */
-  readonly "content-state"?: Readonly<Record<string, unknown>>;
+  readonly "content-state"?: WireRecord;
   /** When a Live Activity's content is out of date unless a later push says otherwise. */
   readonly "stale-date"?: number;
   /** When an ended Live Activity leaves the lock screen. */
   readonly "dismissal-date"?: number;
   /** A push-to-start's activity type, as the app's Swift names it, and its static attributes. */
   readonly "attributes-type"?: string;
-  readonly attributes?: Readonly<Record<string, unknown>>;
+  readonly attributes?: WireRecord;
 }
 
 /** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */
 export interface ApnsPayload {
   readonly aps: ApnsAps;
-  readonly [key: string]: unknown;
+  readonly [key: string]: WireValue | ApnsAps;
 }
 
 /** One notification to one phone: who, what kind, what Apple delivers, and how Apple routes it. */
@@ -283,6 +283,7 @@ function unsetMessage(missing: readonly string[]): string {
 /** The key as the environment holds it, with the newlines a dashboard paste may have flattened to `\n` restored; none where it is not a key. */
 function signingKeyOf(pem: string): KeyObject | undefined {
   const parsed = Result.try(() => createPrivateKey(pem.replaceAll("\\n", "\n")));
+
   return Result.isSuccess(parsed) ? parsed.success : undefined;
 }
 
@@ -298,21 +299,26 @@ function base64url(value: string | Buffer): string {
  */
 function signProviderToken(credentials: ApnsCredentials, nowMs: number): Redacted.Redacted {
   const header = base64url(JSON.stringify({ alg: "ES256", kid: credentials.keyId }));
+
   const claims = base64url(
     JSON.stringify({ iss: credentials.teamId, iat: Math.floor(nowMs / 1000) }),
   );
+
   const signature = createSign("SHA256")
     .update(`${header}.${claims}`)
     .end()
     .sign({ key: credentials.signingKey, dsaEncoding: "ieee-p1363" });
+
   return Redacted.make(`${header}.${claims}.${base64url(signature)}`);
 }
 
 /** Apple's reason, where the body carries one; nothing else of the body is read. */
 function reasonOf(body: string): string | undefined {
   const parsed = Result.try(() => JSON.parse(body));
+
   if (Result.isFailure(parsed)) return undefined;
   const wire = unparsedWire(parsed.success);
+
   return isRecord(wire) ? text(wire.reason) : undefined;
 }
 
@@ -328,7 +334,7 @@ function headersOf(
   notification: ApnsNotification,
   bundleId: string,
   providerToken: Redacted.Redacted,
-): Readonly<Record<string, string>> {
+) {
   return {
     authorization: `bearer ${Redacted.value(providerToken)}`,
     "apns-topic": topicOf(bundleId, notification.pushType),
@@ -339,7 +345,7 @@ function headersOf(
     ...(notification.collapseId === undefined
       ? undefined
       : { "apns-collapse-id": notification.collapseId }),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** A record of what became of a send, run past Apple's answer: one that would not land is logged, and the delivery answered all the same. */
@@ -378,14 +384,17 @@ const apnsSender = Effect.fnUntraced(function* (
   const providerToken = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const standing = yield* Ref.get(held);
+
     if (
       standing !== undefined &&
       now - standing.issuedAt < Duration.toMillis(APNS_PROVIDER_TOKEN_LIFETIME)
     ) {
       return standing.value;
     }
+
     const signed = { value: signProviderToken(credentials, now), issuedAt: now };
     yield* Ref.set(held, signed);
+
     return signed.value;
   });
 
@@ -400,12 +409,16 @@ const apnsSender = Effect.fnUntraced(function* (
     notification: ApnsNotification,
   ): Effect.fn.Return<ApnsDelivery, never, DatabaseServices> {
     const { device } = notification;
+
     if (device.bundleId !== credentials.bundleId) {
       // Note that a phone of another app is refused here, because Apple would refuse the topic for its token.
       yield* Effect.logWarning("a push to a phone of another app was not sent");
+
       return yield* failed(device, APNS_DELIVERY.REFUSED, PUSH_FAILURE_REASON.OTHER_APP);
     }
+
     const token = yield* providerToken;
+
     const answered = yield* transport
       .send({
         host: APNS_HOST[device.environment],
@@ -414,24 +427,32 @@ const apnsSender = Effect.fnUntraced(function* (
         body: JSON.stringify(notification.payload),
       })
       .pipe(Effect.result);
+
     if (Result.isFailure(answered)) {
       yield* Effect.logWarning(
         `a push did not reach Apple: ${answered.failure.errorName ?? "no answer"}`,
       );
+
       return yield* failed(device, APNS_DELIVERY.FAILED, PUSH_FAILURE_REASON.NO_ANSWER);
     }
+
     const { status, body } = answered.success;
+
     if (status === 200) {
       return yield* recorded(recordPushDelivered(device), APNS_DELIVERY.DELIVERED);
     }
+
     const reason = reasonOf(body);
+
     if (status === 410 || (reason !== undefined && TOKEN_GONE_REASONS.has(reason))) {
       return yield* tokenGone(device);
     }
+
     // Note that the status and Apple's reason alone are logged, because the request carries the token and the notification's words.
     yield* Effect.logWarning(
       `a push was answered ${status}${reason === undefined ? "" : ` ${reason}`}`,
     );
+
     return yield* failed(
       device,
       status === 400 || status === 403 ? APNS_DELIVERY.REFUSED : APNS_DELIVERY.FAILED,
@@ -464,17 +485,21 @@ export const apnsSenderFromEnvironment: Layer.Layer<ApnsSender, never, ApnsTrans
           bundleId: Option.none(),
         })),
       );
+
       const keyId = present(read.keyId);
       const teamId = present(read.teamId);
       const pem = present(Option.map(read.privateKey, Redacted.value));
       const bundleId = present(read.bundleId);
+
       const missing = [
         [APNS_ENVIRONMENT.KEY_ID, keyId],
         [APNS_ENVIRONMENT.TEAM_ID, teamId],
         [APNS_ENVIRONMENT.PRIVATE_KEY, pem],
         [APNS_ENVIRONMENT.BUNDLE_ID, bundleId],
       ] as const;
-      const unset = missing.filter(([, value]) => value === undefined).map(([name]) => name);
+
+      const unset = missing.flatMap(([name, value]) => (value === undefined ? [name] : []));
+
       if (
         unset.length > 0 ||
         keyId === undefined ||
@@ -483,17 +508,23 @@ export const apnsSenderFromEnvironment: Layer.Layer<ApnsSender, never, ApnsTrans
         bundleId === undefined
       ) {
         yield* Effect.logWarning(unsetMessage(unset));
+
         return unavailableSender;
       }
+
       const signingKey = signingKeyOf(pem);
+
       if (signingKey === undefined) {
         // The fault names the variable alone, never a byte of its value.
         yield* Effect.logError(
           `${APNS_ENVIRONMENT.PRIVATE_KEY} is not a private key, so no push is sent to a phone.`,
         );
+
         return unavailableSender;
       }
+
       const transport = yield* ApnsTransport;
+
       return yield* apnsSender({ keyId, teamId, signingKey, bundleId }, transport);
     }),
   );

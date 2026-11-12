@@ -14,7 +14,7 @@
 
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Result, Schema } from "effect";
+import { Predicate, Result, Schema } from "effect";
 import { BROWSER_AGENT_LIMITS, browserRefOf, cutBrowserText } from "./browser-agent-actions.js";
 
 /** Roles a node is printed under only where it has a name: wrappers that say nothing themselves. */
@@ -85,8 +85,10 @@ export interface SnapshotText {
 /** A value of the tree's as one line of words: its whitespace folded and its length cut. */
 function wordsOf(value: AxNode["name"]): string {
   const raw = value?.value;
+
   if (raw === undefined || raw === null) return "";
-  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+  const text = Predicate.isString(raw) ? raw : JSON.stringify(raw);
+
   return cutBrowserText(
     text.replace(/\s+/gu, " ").trim(),
     BROWSER_AGENT_LIMITS.SNAPSHOT_NAME_MAX_CHARS,
@@ -96,16 +98,21 @@ function wordsOf(value: AxNode["name"]): string {
 /** The flags and values a node is printed with, and its ref where it has one. */
 function marksOf(node: AxNode, role: string): string {
   const marks: string[] = [];
+
   for (const property of node.properties ?? []) {
     const value = property.value.value;
+
     if (FLAG_PROPERTIES.has(property.name) && value === true) marks.push(property.name);
+
     if (VALUED_PROPERTIES.has(property.name) && value !== undefined) {
       marks.push(`${property.name}=${String(value)}`);
     }
   }
+
   if (node.backendDOMNodeId !== undefined && !UNREFERENCED_ROLES.has(role)) {
     marks.push(`ref=${browserRefOf(node.backendDOMNodeId)}`);
   }
+
   return marks.length === 0 ? "" : ` [${marks.join(", ")}]`;
 }
 
@@ -113,13 +120,17 @@ function marksOf(node: AxNode, role: string): string {
 function lineOf(node: AxNode, depth: number, parentName: string): string | undefined {
   const role = wordsOf(node.role);
   const name = wordsOf(node.name);
+
   if (node.ignored === true || role === "") return undefined;
+
   if (WRAPPER_ROLES.has(role) && name === "") return undefined;
+
   if (role === "StaticText" && (name === "" || name === parentName)) return undefined;
   const value = wordsOf(node.value);
   const named = name === "" ? "" : ` ${JSON.stringify(name)}`;
   const valued = value === "" || value === name ? "" : ` value=${JSON.stringify(value)}`;
   const word = ROLE_WORDS.get(role) ?? role;
+
   return `${INDENT.repeat(depth)}- ${word}${named}${valued}${marksOf(node, role)}`;
 }
 
@@ -139,27 +150,34 @@ function textOf(nodes: readonly AxNode[]): SnapshotText {
   const lines: string[] = [];
   let length = 0;
   const stack = root === undefined ? [] : [{ node: root, depth: 0, parentName: "" }];
+
   for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
     const { node, depth, parentName } = next;
+
     if (HIDDEN_ROLES.has(wordsOf(node.role))) continue;
     const line = lineOf(node, depth, parentName);
+
     if (line !== undefined) {
       if (length + line.length + 1 > budget)
         return { text: `${lines.join("\n")}${CUT_NOTE}`, truncated: true };
       lines.push(line);
       length += line.length + 1;
     }
+
     const childDepth = line === undefined ? depth : depth + 1;
     const name = line === undefined ? parentName : wordsOf(node.name);
     const children = (node.childIds ?? []).flatMap((id) => byId.get(id) ?? []);
+
     for (const child of children.reverse())
       stack.push({ node: child, depth: childDepth, parentName: name });
   }
+
   return { text: lines.join("\n"), truncated: false };
 }
 
 /** The snapshot text of what `Accessibility.getFullAXTree` answered, or none where it answered no tree. */
 export function snapshotTextOf(result: UnparsedWireValue): SnapshotText | undefined {
   const read = readTree(result);
+
   return Result.isFailure(read) ? undefined : textOf(read.success.nodes);
 }

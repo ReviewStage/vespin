@@ -53,6 +53,7 @@ import {
   Duration,
   Effect,
   Option,
+  Predicate,
   Result,
   Schedule,
   Schema,
@@ -159,6 +160,7 @@ function recordingStep<R>(
 ): Effect.Effect<BrowserAgentStep, ActionFailed, R> {
   if (recorder === undefined) return failed(NO_RECORDER);
   const refused = (reason: string) => new ActionFailed({ reason });
+
   if (action.action === BROWSER_AGENT_ACTION.RECORD) {
     return recorder.start.pipe(
       Effect.map((maxSeconds) => ({
@@ -169,6 +171,7 @@ function recordingStep<R>(
       Effect.mapError(refused),
     );
   }
+
   return recorder.stop(action.caption).pipe(
     Effect.map((stopped) => ({
       action: action.action,
@@ -288,28 +291,36 @@ const failed = (reason: string) => Effect.fail(new ActionFailed({ reason }));
 
 const AttachedSchema = Schema.Struct({ sessionId: Schema.String });
 const NavigatedSchema = Schema.Struct({ errorText: Schema.optional(Schema.String) });
+
 const HistorySchema = Schema.Struct({
   currentIndex: Schema.Number,
   entries: Schema.Array(Schema.Struct({ id: Schema.Number })),
 });
+
 const QuadsSchema = Schema.Struct({ quads: Schema.Array(Schema.Array(Schema.Number)) });
+
 const ViewportSchema = Schema.Struct({
   pageX: Schema.Number,
   pageY: Schema.Number,
   clientWidth: Schema.Number,
   clientHeight: Schema.Number,
 });
+
 const MetricsSchema = Schema.Struct({
   cssLayoutViewport: Schema.Struct({ clientWidth: Schema.Number, clientHeight: Schema.Number }),
   cssVisualViewport: ViewportSchema,
 });
+
 const EvaluatedSchema = Schema.Struct({
   result: Schema.Struct({ value: Schema.optional(WireValueSchema) }),
 });
+
 const CapturedSchema = Schema.Struct({ data: Schema.String });
+
 const ResolvedSchema = Schema.Struct({
   object: Schema.Struct({ objectId: Schema.String, className: Schema.optional(Schema.String) }),
 });
+
 const ChoiceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(CHOICE.CHOSEN),
@@ -319,8 +330,10 @@ const ChoiceSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal(CHOICE.UNMATCHED), labels: Schema.Array(Schema.String) }),
   Schema.Struct({ kind: Schema.Literals([CHOICE.DISABLED, CHOICE.NOT_SELECT]) }),
 ]);
+
 const PointSchema = Schema.Struct({ x: Schema.Number, y: Schema.Number });
 const ClosedSchema = Schema.Struct({ success: Schema.optional(Schema.Boolean) });
+
 const ConsoleCallSchema = Schema.Struct({
   type: Schema.String,
   timestamp: Schema.Number,
@@ -333,9 +346,11 @@ const ConsoleCallSchema = Schema.Struct({
     }),
   ),
 });
+
 const LogEntrySchema = Schema.Struct({
   entry: Schema.Struct({ level: Schema.String, text: Schema.String, timestamp: Schema.Number }),
 });
+
 /** A frame event: `frameId` on a load's start, stop, and removal, `frame.id` on a commit. */
 const FrameEventSchema = Schema.Struct({
   frameId: Schema.optional(Schema.String),
@@ -412,8 +427,10 @@ const COVERED_BY = `function (x, y) {
 /** A reader of a command's answer, which fails as malformed where the answer is not what the method answers. */
 function answerOf<S extends Schema.ConstraintDecoder<unknown>>(schema: S) {
   const read = readEither(schema, { excess: EXCESS_KEYS.DROP });
+
   return (method: string, value: UnparsedWireValue): Effect.Effect<S["Type"], CdpFailure> => {
     const result = read(value);
+
     return Result.isFailure(result)
       ? Effect.fail(new CdpFailure({ kind: CDP_FAILURE.MALFORMED, method }))
       : Effect.succeed(result.success);
@@ -493,18 +510,25 @@ const readAttached = answerOf(AttachedSchema);
 function hearNavigation(event: CdpEvent, watched: Watched, loading: Set<string>) {
   return Effect.gen(function* () {
     const read = readFrameEvent(event.params);
+
     const frame = Result.isFailure(read)
       ? undefined
       : (read.success.frameId ?? read.success.frame?.id);
+
     if (event.method === NAVIGATION_EVENT.STARTED || event.method === NAVIGATION_EVENT.NAVIGATED) {
       if (frame !== undefined) loading.add(frame);
       yield* Deferred.succeed(watched.started, undefined);
+
       return;
     }
+
     if (!(yield* Deferred.isDone(watched.started))) return;
+
     const ended =
       event.method === NAVIGATION_EVENT.STOPPED || event.method === NAVIGATION_EVENT.DETACHED;
+
     const stopped = ended && frame !== undefined && loading.delete(frame);
+
     if (event.method === NAVIGATION_EVENT.LOADED || (stopped && loading.size === 0)) {
       yield* Deferred.succeed(watched.settled, undefined);
     }
@@ -542,9 +566,11 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
         { discard: true },
       ),
     );
+
     const attach = (targetId: string) =>
       Effect.gen(function* () {
         const method = "Target.attachToTarget";
+
         const answer = yield* cdp
           .send({ method, params: { targetId, flatten: true } })
           .pipe(
@@ -552,6 +578,7 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
               refusedAs(`there is no tab ${targetId}; list the tabs to see which are open`),
             ),
           );
+
         const { sessionId } = yield* readAttached(method, answer);
         // Note that a browser that will not emulate the focus still takes input where its window has it.
         yield* Effect.ignore(
@@ -561,6 +588,7 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
             sessionId,
           }),
         );
+
         const page: Page = {
           targetId,
           sessionId,
@@ -571,13 +599,17 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
                 : { method: command, params, sessionId },
             ),
         };
+
         attached.set(targetId, page);
+
         return page;
       });
+
     return {
       page: (targetId) =>
         Effect.suspend(() => {
           const page = attached.get(targetId);
+
           return page === undefined ? attach(targetId) : Effect.succeed(page);
         }),
       forget: (targetId) => void attached.delete(targetId),
@@ -588,6 +620,7 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
             started: yield* Deferred.make<void>(),
             settled: yield* Deferred.make<void>(),
           };
+
           const loading = new Set<string>();
           const own = Stream.filter(cdp.events, (event) => event.sessionId === page.sessionId);
           yield* Effect.forkIn(
@@ -603,6 +636,7 @@ function pagesOver(cdp: CdpSession): Effect.Effect<Pages, never, Scope.Scope> {
         Effect.suspend(() => {
           const watched = watching;
           watching = undefined;
+
           return watched?.targetId === targetId ? settleWatched(watched) : Effect.void;
         }),
     };
@@ -627,6 +661,7 @@ function navigate(page: Page, url: string) {
   return Effect.gen(function* () {
     const method = "Page.navigate";
     const { errorText } = yield* readNavigated(method, yield* page.send(method, { url }));
+
     if (errorText !== undefined && errorText !== "") {
       return yield* failed(`the page at ${url} did not load: ${errorText}`);
     }
@@ -639,9 +674,11 @@ function stepHistory(page: Page, by: -1 | 1) {
     const method = "Page.getNavigationHistory";
     const history = yield* readHistory(method, yield* page.send(method));
     const entry = history.entries[history.currentIndex + by];
+
     if (entry === undefined) {
       return yield* failed(`the tab has no page to go ${by < 0 ? "back" : "forward"} to`);
     }
+
     yield* page.send("Page.navigateToHistoryEntry", { entryId: entry.id });
   });
 }
@@ -649,6 +686,7 @@ function stepHistory(page: Page, by: -1 | 1) {
 /** The quads an element is drawn in, or none where it is not drawn; a ref no longer on the page fails. */
 function quadsOf(page: Page, ref: string) {
   const method = "DOM.getContentQuads";
+
   return page.send(method, { backendNodeId: backendNodeIdOf(ref) }).pipe(
     Effect.flatMap((answer) => readQuads(method, answer)),
     Effect.map(({ quads }) => quads.filter((quad) => quad.length === 8)),
@@ -661,14 +699,18 @@ function pointOfRef(page: Page, ref: string) {
     yield* page
       .send("DOM.scrollIntoViewIfNeeded", { backendNodeId: backendNodeIdOf(ref) })
       .pipe(Effect.mapError(refusedSaying(goneRef(ref))));
+
     const [quad] = yield* quadsOf(page, ref).pipe(
       Effect.mapError(refusedSaying(`${ref} is not drawn on the page; it may be hidden`)),
     );
+
     if (quad === undefined) {
       return yield* failed(`${ref} is not drawn on the page; it may be hidden`);
     }
+
     const xs = [quad[0] ?? 0, quad[2] ?? 0, quad[4] ?? 0, quad[6] ?? 0];
     const ys = [quad[1] ?? 0, quad[3] ?? 0, quad[5] ?? 0, quad[7] ?? 0];
+
     return { x: xs.reduce((sum, x) => sum + x, 0) / 4, y: ys.reduce((sum, y) => sum + y, 0) / 4 };
   });
 }
@@ -676,6 +718,7 @@ function pointOfRef(page: Page, ref: string) {
 /** One left-button mouse event at a point: a move, a press, or a let go. */
 function mouseAt(page: Page, point: { readonly x: number; readonly y: number }, type: string) {
   const moved = type === "mouseMoved";
+
   return page.send("Input.dispatchMouseEvent", {
     type,
     x: point.x,
@@ -697,9 +740,11 @@ function pressAt(page: Page, point: { readonly x: number; readonly y: number }) 
 /** Whether the page draws a recording's pointer; not where it cannot say in time. */
 function drawsRecordingPointer(page: Page) {
   const method = "Runtime.evaluate";
+
   const asked = page
     .send(method, { expression: DRAWS_RECORDING_POINTER, returnByValue: true })
     .pipe(Effect.flatMap((answer) => readEvaluated(method, answer)));
+
   return Effect.map(Effect.timeoutOption(Effect.option(asked), CURSOR_REPORT_TIMEOUT), (answer) =>
     Option.exists(Option.flatten(answer), ({ result }) => result.value === true),
   );
@@ -720,9 +765,11 @@ function clickAt<R>(
   return Effect.gen(function* () {
     if (cursor !== undefined) yield* reportPoint(page, cursor, BROWSER_CURSOR_KIND.CLICK, point);
     yield* mouseAt(page, point, "mouseMoved");
+
     if (cursor !== undefined && (yield* drawsRecordingPointer(page))) {
       yield* Effect.sleep(BROWSER_CURSOR_BEAT);
     }
+
     yield* pressAt(page, point);
   });
 }
@@ -742,11 +789,14 @@ function assertUncovered(
     const covered = yield* Effect.option(
       Effect.gen(function* () {
         const resolve = "DOM.resolveNode";
+
         const resolved = yield* readResolved(
           resolve,
           yield* page.send(resolve, { backendNodeId: backendNodeIdOf(ref) }),
         );
+
         const call = "Runtime.callFunctionOn";
+
         const { result } = yield* readEvaluated(
           call,
           yield* page.send(call, {
@@ -756,11 +806,14 @@ function assertUncovered(
             returnByValue: true,
           }),
         );
+
         return result.value;
       }),
     );
+
     const by = Option.getOrUndefined(covered);
-    if (typeof by === "string" && by !== "") {
+
+    if (Predicate.isString(by) && by !== "") {
       return yield* failed(
         `${ref} is covered at its middle by a ${by}, which would take the click; close or scroll past what covers it, then take a new snapshot`,
       );
@@ -771,6 +824,7 @@ function assertUncovered(
 /** Whether what has the focus takes text; a page that cannot say counts as yes, leaving the typing to land where it may. */
 function takesText(page: Page) {
   const method = "Runtime.evaluate";
+
   return page.send(method, { expression: TAKES_TEXT, returnByValue: true }).pipe(
     Effect.flatMap((answer) => readEvaluated(method, answer)),
     Effect.map(({ result }) => result.value !== false),
@@ -793,6 +847,7 @@ function typeText(page: Page, text: string, ref: string | undefined) {
           Effect.mapError(refusedSaying(`${ref} cannot take the focus; click it, or name a field`)),
         );
     }
+
     if (!(yield* takesText(page))) {
       return yield* failed(
         ref === undefined
@@ -800,6 +855,7 @@ function typeText(page: Page, text: string, ref: string | undefined) {
           : `${ref} does not take text; name a text field's ref`,
       );
     }
+
     yield* page.send("Input.insertText", { text });
   });
 }
@@ -819,9 +875,11 @@ function reportPoint<R>(
 ) {
   const reported = Effect.gen(function* () {
     const method = "Page.getLayoutMetrics";
+
     const metrics = yield* Effect.option(
       Effect.flatMap(page.send(method), (answer) => readMetrics(method, answer)),
     );
+
     if (Option.isNone(metrics)) return;
     const view = metrics.value.cssVisualViewport;
     yield* cursor.report({
@@ -833,6 +891,7 @@ function reportPoint<R>(
       at: yield* Clock.currentTimeMillis,
     });
   });
+
   return Effect.asVoid(Effect.timeoutOption(reported, CURSOR_REPORT_TIMEOUT));
 }
 
@@ -844,6 +903,7 @@ function pointTo<R>(
   point: { readonly x: number; readonly y: number },
 ) {
   if (cursor === undefined) return Effect.void;
+
   return reportPoint(page, cursor, kind, point);
 }
 
@@ -854,6 +914,7 @@ function pointTo<R>(
  */
 function typingPointOf(page: Page, ref: string | undefined) {
   const method = "Runtime.evaluate";
+
   const found: Effect.Effect<{ readonly x: number; readonly y: number }, unknown> =
     ref !== undefined
       ? pointOfRef(page, ref)
@@ -861,9 +922,11 @@ function typingPointOf(page: Page, ref: string | undefined) {
           Effect.flatMap((answer) => readEvaluated(method, answer)),
           Effect.flatMap(({ result }) => {
             const point = readPoint(result.value ?? null);
+
             return Result.isSuccess(point) ? Effect.succeed(point.success) : Effect.fail("none");
           }),
         );
+
   // Note that a point not found in time is none, as a page that does not answer the measure is.
   return Effect.map(
     Effect.timeoutOption(Effect.option(found), CURSOR_REPORT_TIMEOUT),
@@ -879,8 +942,10 @@ function typeWithCursor<R>(
   ref: string | undefined,
 ) {
   if (cursor === undefined) return typeText(page, text, ref);
+
   return Effect.gen(function* () {
     const point = yield* typingPointOf(page, ref);
+
     if (Option.isSome(point)) yield* pointTo(page, cursor, BROWSER_CURSOR_KIND.TYPE, point.value);
     yield* typeText(page, text, ref);
   });
@@ -899,18 +964,25 @@ const optionWords = (text: string) => cutBrowserText(text, BROWSER_AGENT_LIMITS.
 function choose<R>(page: Page, cursor: BrowserCursor<R> | undefined, ref: string, wanted: string) {
   return Effect.gen(function* () {
     const resolve = "DOM.resolveNode";
+
     const { object } = yield* page.send(resolve, { backendNodeId: backendNodeIdOf(ref) }).pipe(
       Effect.mapError(refusedAs(goneRef(ref))),
       Effect.flatMap((answer) => readResolved(resolve, answer)),
     );
+
     const notSelect = `${ref} is not a dropdown (a native select); click it, or take a new snapshot for the select's ref`;
+
     if (object.className !== SELECT_CLASS) return yield* failed(notSelect);
+
     if (cursor !== undefined) {
       const point = yield* typingPointOf(page, ref);
+
       if (Option.isSome(point))
         yield* pointTo(page, cursor, BROWSER_CURSOR_KIND.CLICK, point.value);
     }
+
     const call = "Runtime.callFunctionOn";
+
     const { result } = yield* page
       .send(call, {
         objectId: object.objectId,
@@ -922,10 +994,13 @@ function choose<R>(page: Page, cursor: BrowserCursor<R> | undefined, ref: string
         Effect.mapError(refusedAs(goneRef(ref))),
         Effect.flatMap((answer) => readEvaluated(call, answer)),
       );
+
     const read = readChoice(result.value ?? null);
+
     if (Result.isFailure(read))
       return yield* new CdpFailure({ kind: CDP_FAILURE.MALFORMED, method: call });
     const choice = read.success;
+
     switch (choice.kind) {
       case CHOICE.CHOSEN:
         return { label: optionWords(choice.label), value: optionWords(choice.value) };
@@ -935,10 +1010,12 @@ function choose<R>(page: Page, cursor: BrowserCursor<R> | undefined, ref: string
             JSON.stringify(cutBrowserText(label, BROWSER_AGENT_LIMITS.SNAPSHOT_NAME_MAX_CHARS)),
           )
           .join(", ");
+
         return yield* failed(
           `${ref} has no option labeled or valued ${JSON.stringify(wanted)}; its options are ${labels === "" ? "none" : labels}`,
         );
       }
+
       case CHOICE.DISABLED:
         return yield* failed(`${ref} or its option ${JSON.stringify(wanted)} is disabled`);
       case CHOICE.NOT_SELECT:
@@ -950,14 +1027,19 @@ function choose<R>(page: Page, cursor: BrowserCursor<R> | undefined, ref: string
 /** What a key event says of a key, Shift held or not: its name, code, Windows key code, and the text it types. */
 function keyOf(key: string, shifted: boolean) {
   const named = NAMED_KEYS.get(key);
+
   if (named !== undefined) return { key: named.text === " " ? " " : key, ...named };
   const upper = key.toUpperCase();
+
   if (/^[A-Z]$/u.test(upper)) {
     // Note that a letter under Shift is its capital, as a keyboard's own event says it.
     const letter = shifted ? upper : key;
+
     return { key: letter, code: `Key${upper}`, keyCode: upper.charCodeAt(0), text: letter };
   }
+
   if (/^\d$/u.test(key)) return { key, code: `Digit${key}`, keyCode: key.charCodeAt(0), text: key };
+
   return { key, code: "", keyCode: 0, text: key };
 }
 
@@ -966,13 +1048,16 @@ function pressKey(page: Page, key: string, modifiers: readonly (keyof typeof MOD
   const pressed = keyOf(key, modifiers.includes(BROWSER_MODIFIER.SHIFT));
   const bits = modifiers.reduce((sum, modifier) => sum | MODIFIER_BITS[modifier], 0);
   const text = modifiers.some((modifier) => SHORTCUT_MODIFIERS.has(modifier)) ? "" : pressed.text;
+
   const event = {
     modifiers: bits,
     key: pressed.key,
     code: pressed.code,
     windowsVirtualKeyCode: pressed.keyCode,
   };
+
   const down = text === "" ? { type: "rawKeyDown", ...event } : { type: "keyDown", ...event, text };
+
   return Effect.andThen(
     page.send("Input.dispatchKeyEvent", down),
     page.send("Input.dispatchKeyEvent", { type: "keyUp", ...event }),
@@ -990,8 +1075,10 @@ function scroll<R>(
       yield* page
         .send("DOM.scrollIntoViewIfNeeded", { backendNodeId: backendNodeIdOf(by.ref) })
         .pipe(Effect.mapError(refusedSaying(goneRef(by.ref))));
+
       return;
     }
+
     const method = "Page.getLayoutMetrics";
     const { cssLayoutViewport } = yield* readMetrics(method, yield* page.send(method));
     const middle = { x: cssLayoutViewport.clientWidth / 2, y: cssLayoutViewport.clientHeight / 2 };
@@ -1009,6 +1096,7 @@ function scroll<R>(
 /** Whether the page has finished loading; a page between documents has not. */
 function loaded(page: Page) {
   const method = "Runtime.evaluate";
+
   return page.send(method, { expression: "document.readyState", returnByValue: true }).pipe(
     Effect.flatMap((answer) => readEvaluated(method, answer)),
     Effect.map(({ result }) => result.value === "complete"),
@@ -1022,6 +1110,7 @@ function waitUntil(check: Effect.Effect<boolean, CdpFailure>) {
       failure.kind === CDP_FAILURE.REFUSED ? Effect.succeed(false) : Effect.fail(failure),
     ),
   );
+
   return Effect.asVoid(
     Effect.repeat(asked, { schedule: Schedule.spaced(WAIT_POLL), until: (ready) => ready }),
   );
@@ -1030,6 +1119,7 @@ function waitUntil(check: Effect.Effect<boolean, CdpFailure>) {
 /** How many bytes a base64 text carries. */
 function bytesOf(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
   return (base64.length / 4) * 3 - padding;
 }
 
@@ -1040,6 +1130,7 @@ function bytesOf(base64: string): number {
  */
 function capture(page: Page, params: CdpParams) {
   const method = "Page.captureScreenshot";
+
   return page.send(method, params).pipe(
     Effect.retry({
       schedule: Schedule.spaced(CAPTURE_RETRY),
@@ -1064,6 +1155,7 @@ function clipAt(
   const longest = Math.max(view.clientWidth, view.clientHeight);
   const scale = Math.min(1, longestSide / (longest * ratio));
   const side = (css: number) => Math.min(longestSide, Math.max(1, Math.round(css * scale * ratio)));
+
   return {
     clip: {
       x: view.pageX,
@@ -1088,6 +1180,7 @@ type ScreenshotClip = ReturnType<typeof clipAt>;
 function keptScreenshot(page: Page, clip: ScreenshotClip["clip"], width: number, height: number) {
   return Effect.gen(function* () {
     const png = yield* capture(page, { format: "png", clip, captureBeyondViewport: false });
+
     for (const quality of BROWSER_KEPT_SCREENSHOT.QUALITIES) {
       const jpeg = yield* capture(page, {
         format: "jpeg",
@@ -1095,14 +1188,17 @@ function keptScreenshot(page: Page, clip: ScreenshotClip["clip"], width: number,
         clip,
         captureBeyondViewport: false,
       });
+
       const smaller =
         bytesOf(png.data) < bytesOf(jpeg.data)
           ? { mime: BROWSER_KEPT_SCREENSHOT.PNG, data: png.data }
           : { mime: BROWSER_KEPT_SCREENSHOT.JPEG, data: jpeg.data };
+
       if (bytesOf(smaller.data) <= BROWSER_KEPT_SCREENSHOT.MAX_BYTES) {
         return { ...smaller, width, height };
       }
     }
+
     return undefined;
   }).pipe(Effect.orElseSucceed(() => undefined));
 }
@@ -1118,10 +1214,12 @@ function keptScreenshot(page: Page, clip: ScreenshotClip["clip"], width: number,
 function screenshot(cdp: CdpSession, page: Page, keep: boolean) {
   return Effect.gen(function* () {
     yield* cdp.send({ method: "Target.activateTarget", params: { targetId: page.targetId } });
+
     const metrics = yield* readMetrics(
       "Page.getLayoutMetrics",
       yield* page.send("Page.getLayoutMetrics"),
     );
+
     const evaluated = yield* readEvaluated(
       "Runtime.evaluate",
       yield* page.send("Runtime.evaluate", {
@@ -1129,14 +1227,18 @@ function screenshot(cdp: CdpSession, page: Page, keep: boolean) {
         returnByValue: true,
       }),
     );
+
     const ratio =
-      typeof evaluated.result.value === "number" && evaluated.result.value > 0
+      Predicate.isNumber(evaluated.result.value) && evaluated.result.value > 0
         ? evaluated.result.value
         : 1;
+
     const view = metrics.cssVisualViewport;
+
     if (Math.max(view.clientWidth, view.clientHeight) <= 0)
       return yield* failed("the tab shows nothing to capture; it has no visible area");
     const shown = clipAt(view, ratio, BROWSER_SCREENSHOT.LONGEST_SIDE);
+
     for (const quality of BROWSER_SCREENSHOT.QUALITIES) {
       const { data } = yield* capture(page, {
         format: "jpeg",
@@ -1144,18 +1246,23 @@ function screenshot(cdp: CdpSession, page: Page, keep: boolean) {
         clip: shown.clip,
         captureBeyondViewport: false,
       });
+
       if (bytesOf(data) > BROWSER_SCREENSHOT.MAX_BYTES) continue;
+
       const image = {
         mime: BROWSER_SCREENSHOT.MIME,
         data,
         width: shown.width,
         height: shown.height,
       };
+
       if (!keep) return { image };
       const full = clipAt(view, ratio, BROWSER_KEPT_SCREENSHOT.LONGEST_SIDE);
       const kept = yield* keptScreenshot(page, full.clip, full.width, full.height);
+
       return kept === undefined ? { image } : { image, kept };
     }
+
     return yield* failed(
       `the screenshot stayed over ${BROWSER_SCREENSHOT.MAX_BYTES} bytes at every quality; take a snapshot instead`,
     );
@@ -1167,8 +1274,10 @@ function snapshot(cdp: CdpSession, page: Page) {
   return Effect.gen(function* () {
     const method = "Accessibility.getFullAXTree";
     const tree = snapshotTextOf(yield* page.send(method));
+
     if (tree === undefined) return yield* new CdpFailure({ kind: CDP_FAILURE.MALFORMED, method });
     const target = (yield* cdp.pages).find((listed) => listed.targetId === page.targetId);
+
     return {
       url: cutBrowserText(target?.url ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
       title: cutBrowserText(target?.title ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
@@ -1181,8 +1290,10 @@ function snapshot(cdp: CdpSession, page: Page) {
 function wordsOfArgs(args: (typeof ConsoleCallSchema.Type)["args"]): string {
   return args
     .map((arg) => {
-      if (typeof arg.value === "string") return arg.value;
+      if (Predicate.isString(arg.value)) return arg.value;
+
       if (arg.value !== undefined) return JSON.stringify(arg.value);
+
       return arg.unserializableValue ?? arg.description ?? arg.type;
     })
     .join(" ");
@@ -1191,20 +1302,27 @@ function wordsOfArgs(args: (typeof ConsoleCallSchema.Type)["args"]): string {
 /** A console message an event carries, with when it was made, or none for any other event. */
 function consoleMessageOf(event: CdpEvent) {
   const max = BROWSER_AGENT_LIMITS.CONSOLE_MESSAGE_MAX_CHARS;
+
   if (event.method === "Runtime.consoleAPICalled") {
     const call = readConsoleCall(event.params);
+
     if (Result.isFailure(call)) return undefined;
     const level = CONSOLE_TYPE_LEVEL.get(call.success.type) ?? BROWSER_CONSOLE_LEVEL.LOG;
     const text = cutBrowserText(wordsOfArgs(call.success.args), max);
+
     return { at: call.success.timestamp, message: { level, text } };
   }
+
   if (event.method === "Log.entryAdded") {
     const read = readLogEntry(event.params);
+
     if (Result.isFailure(read)) return undefined;
     const { entry } = read.success;
     const level = LOG_LEVEL.get(entry.level) ?? BROWSER_CONSOLE_LEVEL.LOG;
+
     return { at: entry.timestamp, message: { level, text: cutBrowserText(entry.text, max) } };
   }
+
   return undefined;
 }
 
@@ -1223,19 +1341,25 @@ function consoleOf(cdp: CdpSession, page: Page) {
         Stream.runForEach(own, (event) =>
           Effect.sync(() => {
             const message = consoleMessageOf(event);
+
             if (message !== undefined) heard.push(message);
           }),
         ),
       );
       yield* Effect.yieldNow;
+
       for (const method of ["Runtime.enable", "Log.enable", "Runtime.disable", "Log.disable"]) {
         yield* page.send(method);
       }
+
       yield* Effect.yieldNow;
+
       const ordered = heard
         .toSorted((one, other) => one.at - other.at)
         .map(({ message }) => message);
+
       const max = BROWSER_AGENT_LIMITS.CONSOLE_MAX_MESSAGES;
+
       return { messages: ordered.slice(-max), truncated: ordered.length > max };
     }),
   );
@@ -1251,6 +1375,7 @@ function onPage<R>(
 ): Effect.Effect<BrowserAgentStep, ActionFailed | CdpFailure, R> {
   const cursor = run.cursor;
   const tab = page.targetId;
+
   switch (action.action) {
     case BROWSER_AGENT_ACTION.NAVIGATE:
       return Effect.as(navigate(page, action.url), actedOn(action.action, tab));
@@ -1262,15 +1387,18 @@ function onPage<R>(
       );
     case BROWSER_AGENT_ACTION.CLICK: {
       const ref = action.ref;
+
       const at =
         ref === undefined
           ? Effect.succeed({ x: action.x ?? 0, y: action.y ?? 0 })
           : Effect.tap(pointOfRef(page, ref), (point) => assertUncovered(page, ref, point));
+
       return Effect.as(
         Effect.flatMap(at, (point) => clickAt(page, cursor, point)),
         actedOn(action.action, tab),
       );
     }
+
     case BROWSER_AGENT_ACTION.TYPE:
       return Effect.as(
         typeWithCursor(page, cursor, action.text, action.ref),
@@ -1290,15 +1418,18 @@ function onPage<R>(
       return Effect.as(scroll(page, action, cursor), actedOn(action.action, tab));
     case BROWSER_AGENT_ACTION.WAIT: {
       const ref = action.ref;
+
       const check =
         ref === undefined
           ? loaded(page)
           : Effect.map(quadsOf(page, ref), (quads) => quads.length > 0);
+
       return Effect.as(
         Effect.andThen(pages.settle(tab), waitUntil(check)),
         actedOn(action.action, tab),
       );
     }
+
     case BROWSER_AGENT_ACTION.SCREENSHOT:
       return Effect.map(screenshot(cdp, page, run.keepScreenshots === true), (pictures) => ({
         ...actedOn(BROWSER_AGENT_ACTION.SCREENSHOT, tab),
@@ -1329,12 +1460,16 @@ function closeTab(cdp: CdpSession, pages: Pages, tab: string) {
   return Effect.gen(function* () {
     const method = "Target.closeTarget";
     const gone = `there is no tab ${tab}; list the tabs to see which are open`;
+
     const answer = yield* cdp
       .send({ method, params: { targetId: tab } })
       .pipe(Effect.mapError(refusedAs(gone)));
+
     const { success } = yield* readClosed(method, answer);
+
     if (success === false) return yield* failed(gone);
     pages.forget(tab);
+
     return actedOn(BROWSER_AGENT_ACTION.CLOSE, tab);
   });
 }
@@ -1368,6 +1503,7 @@ function stepOf<R>(
   run: BrowserRunOptions<R>,
 ): Effect.Effect<BrowserAgentStep, ActionFailed | CdpFailure, R> {
   if (isRecordingAction(action)) return recordingStep(action, run.recorder);
+
   if (action.action === BROWSER_AGENT_ACTION.LIST) {
     return Effect.map(cdp.pages, (listed) => ({
       action: action.action,
@@ -1379,17 +1515,21 @@ function stepOf<R>(
       })),
     }));
   }
+
   if (action.action === BROWSER_AGENT_ACTION.OPEN) {
     return Effect.map(cdp.openPage(action.url), (opened) => actedOn(action.action, opened));
   }
+
   if (tab === undefined) {
     return failed(
       "name the tab: no action before this one acted on a tab; list the tabs to find its id",
     );
   }
+
   if (action.action === BROWSER_AGENT_ACTION.CLOSE) {
     return closeTab(cdp, pages, tab);
   }
+
   return Effect.flatMap(pages.page(tab), (page) =>
     Effect.andThen(
       watched ? pages.watch(page) : Effect.void,
@@ -1398,21 +1538,29 @@ function stepOf<R>(
   );
 }
 
+type Bound = { readonly millis: number; readonly reason: string };
+
 /** How long an action may take, and what is said when it takes longer. */
-function boundOf(action: BrowserAgentAction): { readonly millis: number; readonly reason: string } {
+function boundOf(action: BrowserAgentAction): Bound {
   if (action.action === BROWSER_AGENT_ACTION.STOP_RECORDING) {
     const millis = BROWSER_AGENT_LIMITS.RECORDING_STOP_TIMEOUT_MS;
+
     return { millis, reason: `the recording was not kept within ${millis / 1000} seconds` };
   }
+
   if (action.action !== BROWSER_AGENT_ACTION.WAIT) {
     const millis = BROWSER_AGENT_LIMITS.ACTION_TIMEOUT_MS;
+
     return { millis, reason: `${action.action} did not finish within ${millis / 1000} seconds` };
   }
+
   const millis = action.timeoutMs ?? BROWSER_AGENT_LIMITS.WAIT_DEFAULT_MS;
+
   const waited =
     action.ref === undefined
       ? "the page did not finish loading"
       : `${action.ref} did not show on the page`;
+
   return { millis, reason: `${waited} within ${millis / 1000} seconds` };
 }
 
@@ -1426,6 +1574,7 @@ function boundedStep<R>(
   run: BrowserRunOptions<R>,
 ) {
   const bound = boundOf(action);
+
   return stepOf(cdp, pages, action, tab, watched, run).pipe(
     Effect.timeoutOrElse({
       duration: Duration.millis(bound.millis),
@@ -1444,13 +1593,16 @@ function watchedFor(
   next: BrowserAgentAction | undefined,
 ): boolean {
   if (!NAVIGATING_ACTIONS.has(action.action)) return false;
+
   if (action.action === BROWSER_AGENT_ACTION.KEY && action.key !== "Enter") return false;
+
   return next?.action === BROWSER_AGENT_ACTION.WAIT && (next.tab === undefined || next.tab === tab);
 }
 
 /** The tab a step leaves the next action on: the one it acted on, none once that is closed, and the one before for a list. */
 function tabAfter(step: BrowserAgentStep, before: string | undefined): string | undefined {
   if (step.action === BROWSER_AGENT_ACTION.CLOSE) return undefined;
+
   return "tab" in step ? step.tab : before;
 }
 
@@ -1473,6 +1625,7 @@ export function runBrowserActions<R = never>(
       const pages = yield* pagesOver(cdp);
       const steps: BrowserAgentStep[] = [];
       let tab: string | undefined;
+
       for (const [at, action] of actions.entries()) {
         const named =
           action.action === BROWSER_AGENT_ACTION.LIST ||
@@ -1480,8 +1633,10 @@ export function runBrowserActions<R = never>(
           isRecordingAction(action)
             ? undefined
             : (action.tab ?? tab);
+
         const watched = watchedFor(action, named, actions[at + 1]);
         const ran = yield* Effect.result(boundedStep(cdp, pages, action, named, watched, options));
+
         if (Result.isFailure(ran)) {
           const error = cutBrowserText(ran.failure, BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS);
           const failedOn = named === undefined ? {} : { tab: named };
@@ -1493,9 +1648,11 @@ export function runBrowserActions<R = never>(
           });
           break;
         }
+
         steps.push(ran.success);
         tab = tabAfter(ran.success, tab);
       }
+
       return { steps, skipped: actions.length - steps.length };
     }),
   );

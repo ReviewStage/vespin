@@ -54,6 +54,7 @@ export const workspaceIntegrationsRead = bindLiveRead(WORKSPACE_INTEGRATIONS_REA
   ],
   statements: ({ userId, workspaceId }) => {
     const reached = workspaceReachableBy(userId, workspaceId);
+
     return {
       sentryInstallations: liveRowsStatement(
         WORKSPACE_INTEGRATIONS_READ.parts.sentryInstallations,
@@ -117,6 +118,7 @@ export const workspaceIntegrationsRead = bindLiveRead(WORKSPACE_INTEGRATIONS_REA
     Effect.gen(function* () {
       const sentry = yield* SentryApp;
       const { configured: slackConfigured } = yield* SlackBot;
+
       return {
         sentryConfigured: Result.isSuccess(yield* Effect.result(sentry.settings)),
         slackConfigured,

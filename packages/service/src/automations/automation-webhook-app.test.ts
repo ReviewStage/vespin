@@ -62,15 +62,19 @@ const standing = Effect.gen(function* () {
     githubReaching([]).layer,
     modelCatalogOf([]),
   );
+
   const webhook = HttpRouter.toWebHandler(
     automationWebhookApp().pipe(HttpRouter.provideRequest(services)),
     { disableLogger: true },
   );
+
   const automationServices = yield* Effect.context<
     DatabaseServices | GitHubApp | HttpClient.HttpClient | ModelCatalog
   >().pipe(Effect.provide(services));
+
   // SAFETY: the automation procedures yield the database, the clock, GitHub, its HTTP client, and the catalog alone, which is all a test provides of the web runtime's services.
   const webServices = automationServices as Context.Context<WebServices>;
+
   const automations = hostedFetch({
     automations: automationsProcedures({
       resolveUserId: (incoming: Request) =>
@@ -79,11 +83,14 @@ const standing = Effect.gen(function* () {
         ),
     }),
   });
+
   yield* Effect.addFinalizer(() => Effect.promise(() => webhook.dispose()));
+
   /** A request as the platform hands it on: the webhook's path's id moved into the `id` query by its rewrite, the automation routes' public path as it is. */
   const ask = (path: string, init: RequestInit & { readonly query?: string } = {}) =>
     Effect.gen(function* () {
       const [, id, tail] = /^\/api\/automations\/([^/]+)(?:\/(.+))?$/u.exec(path) ?? [];
+
       const response = yield* Effect.promise(() =>
         tail === "webhook"
           ? webhook.handler(
@@ -91,10 +98,13 @@ const standing = Effect.gen(function* () {
             )
           : automations(new Request(`${ORIGIN}${path}`, init), webServices),
       );
+
       // SAFETY: the groups answer JSON; the test reads it as the wire value it is.
       const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
       return { status: response.status, body } satisfies Answer;
     });
+
   return { ask };
 });
 
@@ -103,6 +113,7 @@ const openWebhook = Effect.gen(function* () {
   const owner = yield* openGithubUser();
   const task = yield* startTask(owner, { name: "Alerts", repository: null });
   const secret = randomBytes(32).toString("base64url");
+
   const made = yield* createAutomation(owner, {
     organizationId: task.workspaceId,
     repositories: ["Acme/Relay"],
@@ -113,6 +124,7 @@ const openWebhook = Effect.gen(function* () {
     nextRunAt: null,
     webhookSecretHash: createHash("sha256").update(secret).digest("hex"),
   });
+
   return { owner, automation: Option.getOrThrow(made), secret, workspaceId: task.workspaceId };
 });
 
@@ -155,6 +167,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
         const first = yield* ask(path, call(secret, { key }));
         const retry = yield* ask(path, call(secret, { key }));
         const second = yield* ask(path, call(secret, { body: "plain text" }));
+
         const byAddress = yield* ask(path, {
           method: "POST",
           body: "plain text",
@@ -195,6 +208,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
         assert.deepEqual(yield* ask(path, { method: "POST", body: ALERT }), INVALID);
 
         const fresh = randomBytes(32).toString("base64url");
+
         const replaced = yield* ask(automationPath(automation.id), {
           method: "PATCH",
           headers: { authorization: `Bearer ${owner}`, "content-type": "application/json" },
@@ -202,6 +216,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
             webhookSecretHash: createHash("sha256").update(fresh).digest("hex"),
           }),
         });
+
         assert.equal(replaced.status, HOSTED_HTTP_STATUS.OK);
         const read = readEither(automationAnswerSchema)(unparsedWire(replaced.body));
         assert.ok(
@@ -215,6 +230,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
         });
 
         yield* updateAutomation(owner, automation.id, { enabled: false });
+
         // A paused automation acknowledges a call before its body is read, so even one it could not keep is not sent again.
         for (const body of [ALERT, "x".repeat(AUTOMATION_WEBHOOK.MAX_BODY_BYTES + 1)]) {
           assert.deepEqual(yield* ask(path, call(fresh, { body })), {
@@ -222,6 +238,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
             body: { queued: 0 },
           });
         }
+
         assert.equal((yield* listAutomationRuns(owner, automation.id)).length, 1);
       }),
   );
@@ -238,15 +255,18 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
           path,
           call(secret, { body: "x".repeat(AUTOMATION_WEBHOOK.MAX_BODY_BYTES + 1) }),
         );
+
         const binary = yield* ask(path, {
           method: "POST",
           headers: { authorization: `Bearer ${secret}` },
           body: new Uint8Array([0xff, 0xfe, 0x00, 0x41]),
         });
+
         const withNul = yield* ask(path, call(secret, { body: "a\u0000b" }));
         yield* updateAutomation(owner, automation.id, {
           trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * *", timezone: "UTC" },
         });
+
         const notWebhook = yield* ask(automationPath(automation.id), {
           method: "PATCH",
           headers: { authorization: `Bearer ${owner}`, "content-type": "application/json" },
@@ -281,6 +301,7 @@ it.layer(getTestDB())("an automation's webhook", (it) => {
             webhookSecretHash: createHash("sha256").update(mine).digest("hex"),
           }),
         });
+
         const read = readEither(automationAnswerSchema)(unparsedWire(changed.body));
 
         assert.ok(Result.isSuccess(read) && read.success.webhookSecret === undefined);

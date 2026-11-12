@@ -25,12 +25,15 @@ const OFFLINE_REFUSED_SUBJECT = "offline-refused";
 export function useOfflineRefusedToast(): void {
   const toast = useToast();
   const withdraw = useWithdrawToast();
+
   const { mutate: clearOfflineRefused } = useMutation(
     pressMutation(ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR),
   );
+
   const count = useQuery({ ...appStateQuery, select: selectNetwork }).data?.offlineRefused ?? 0;
   useEffect(() => {
     withdraw(OFFLINE_REFUSED_SUBJECT);
+
     if (count === 0) return;
     toast({
       words: offlineRefusedWords(count),

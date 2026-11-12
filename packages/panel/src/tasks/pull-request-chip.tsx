@@ -41,11 +41,13 @@ export function PullRequestChip({
   onOpen: () => void;
 }): React.JSX.Element {
   const client = useQueryClient();
+
   // Note that the page opens in the window's Pull request tab, or through the GitHub act, so the browser does not follow the address.
   const open = (url: string) => {
     if (pullRequestsOnGitHubNow(client)) appPlatform().openGitHub(url);
     else onOpen();
   };
+
   return (
     <Tooltip label={pullRequest.title} card={card}>
       <Chip

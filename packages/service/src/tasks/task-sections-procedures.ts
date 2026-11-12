@@ -27,14 +27,17 @@ export interface TaskSectionsProcedureSeams {
 /** The sections resource: the account's sections, and one change written to them. */
 export function taskSectionsProcedures(seams: TaskSectionsProcedureSeams) {
   const sections = hosted.taskSections.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: sections.list.effect(function* ({ context }) {
       return yield* hostedStoreOrUnavailable(listTaskSections(context.userId));
     }),
     write: sections.write.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const written = yield* hostedStoreOrUnavailable(writeTaskSections(context.userId, input));
+
       // A section that is not the account's, a task it does not reach there, or one past the bound is a request the service will not keep.
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       return written.value;
     }),
   };

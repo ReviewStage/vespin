@@ -44,7 +44,7 @@ export type CustomCompletionSound = (typeof CUSTOM_COMPLETION_SOUNDS)[number];
 
 /** Whether a sound is one of the account's own clips. */
 export function isCustomCompletionSound(sound: CompletionSound): sound is CustomCompletionSound {
-  return (CUSTOM_COMPLETION_SOUNDS as readonly CompletionSound[]).includes(sound);
+  return CUSTOM_COMPLETION_SOUNDS.some((custom) => custom === sound);
 }
 
 /** Every sound, in listing order. */

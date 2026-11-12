@@ -64,8 +64,11 @@ function pickedInstant(picked: DatePicked, now: number): Picked {
   if (picked.how !== DATE_PICKER_CLOSE.CONFIRM || picked.date === undefined) {
     return { kind: PICKED.NONE };
   }
+
   const at = Date.parse(picked.date.start);
+
   if (Number.isNaN(at)) return { kind: PICKED.NONE };
+
   return at <= now ? { kind: PICKED.PAST } : { kind: PICKED.AT, at };
 }
 
@@ -93,6 +96,7 @@ export interface RemindDoors {
 /** The times a menu offers, each saying when it comes due, set through `onAt` as it is chosen. */
 function timeActions(onAt: (at: number) => void): MenuAction[] {
   const now = Date.now();
+
   return REMIND_TIMES.map((time) => ({
     label: time.label,
     detail: remindWords(time.at(now), now),
@@ -120,10 +124,12 @@ export function remindEntries(
   subject: ShortcutSubject,
 ): MenuEntry[] {
   const { onPick, onRemind } = doors;
+
   const pick: MenuAction[] =
     onPick === undefined
       ? []
       : [{ label: REMIND_WORDS.PICK, icon: <GLYPH.TIME />, onSelect: () => onPick(item) }];
+
   const remind: MenuEntry = {
     label: REMIND_WORDS.REMIND_ME,
     icon: <GLYPH.TIME />,
@@ -135,6 +141,7 @@ export function remindEntries(
     command: APP_COMMAND.REMIND_ME,
     subject,
   };
+
   return [remind];
 }
 
@@ -178,27 +185,38 @@ export function remindManyGroups(
 export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindMany {
   const toast = useToast();
   const { remind } = useInboxPresses();
+
   return useCallback(
     (items, until) => {
       const touched = until === null ? items.filter(hasReminder) : items;
+
       if (onRemind === undefined || touched.length === 0) return;
       const pressed = remind(touched, until);
+
       const words =
         until === null
           ? REMIND_WORDS.CLEARED
           : `Reminder set for ${remindWords(until, Date.now())}`;
+
       void Promise.all(touched.map((item) => onRemind(item, until, QUIET))).then((taken) => {
         const kept = new Set(
           touched.filter((_, at) => taken[at]?.kept === true).map(({ id }) => id),
         );
+
         if (kept.size === 0) return;
         const said = pressed.keep(words, (id) => kept.has(id));
+
         if (said !== undefined) toast(said);
       });
     },
     [onRemind, remind, toast],
   );
 }
+
+type UseInboxRemindingResult = {
+  readonly popover: React.ReactNode;
+  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
+};
 
 /**
  * Reminders from an Inbox's list: H opens the Remind me menu on the chosen
@@ -219,19 +237,18 @@ export function useInboxReminding({
   chosen: InboxItem | undefined;
   active: boolean;
   onRemind: InboxReminder | undefined;
-}): {
-  readonly popover: React.ReactNode;
-  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
-} {
+}): UseInboxRemindingResult {
   const picker = useDatePicker(room);
   const toast = useToast();
   const menu = useMenu(active);
   const { open } = picker;
+
   // Note that the picker opens on the row of `item`, setting its reminder unless `onAt` takes the time picked, as several items chosen together do.
   const onPick = useCallback(
     (item: InboxItem, onAt?: (at: number) => void) => {
       // Note that a time for several items chosen hangs from the list's room where none of their rows is drawn.
       const row = rowOf(item.id) ?? (onAt === undefined ? undefined : (room.current ?? undefined));
+
       if (row === undefined || onRemind === undefined) return;
       open({
         at: row,
@@ -239,7 +256,9 @@ export function useInboxReminding({
         moment: REMIND_MOMENT,
         onClose: (picked) => {
           const named = pickedInstant(picked, Date.now());
+
           if (named.kind === PICKED.AT) (onAt ?? ((at) => onRemind(item, at)))(named.at);
+
           if (named.kind === PICKED.PAST)
             toast({
               replayUnmasked: true,
@@ -251,16 +270,19 @@ export function useInboxReminding({
     },
     [rowOf, onRemind, open, toast],
   );
+
   const { show } = menu;
   useAppCommand(
     APP_COMMAND.REMIND_ME,
     active && chosen !== undefined && onRemind !== undefined
       ? () => {
           const row = rowOf(chosen.id);
+
           if (row !== undefined) show(dropBelowStart(row), row);
         }
       : undefined,
   );
+
   const groups =
     chosen === undefined || onRemind === undefined
       ? []
@@ -269,6 +291,7 @@ export function useInboxReminding({
           [{ label: REMIND_WORDS.PICK, icon: <GLYPH.TIME />, onSelect: () => onPick(chosen) }],
           clearReminderActions(chosen, onRemind),
         ].filter((group) => group.length > 0);
+
   const popover = (
     <>
       {menu.drawn === undefined || groups.length === 0 ? null : (
@@ -283,5 +306,6 @@ export function useInboxReminding({
       {picker.popover}
     </>
   );
+
   return { popover, onPick };
 }

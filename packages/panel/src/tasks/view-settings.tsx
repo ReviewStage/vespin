@@ -1,4 +1,10 @@
-import { DIFF_SETTING_GROUPS, type DiffSettingSection, SETTING_SECTION } from "@repo/settings";
+import {
+  type AppSettingField,
+  type AppSettingValue,
+  DIFF_SETTING_GROUPS,
+  type DiffSettingSection,
+  SETTING_SECTION,
+} from "@repo/settings";
 import {
   DIFF_FONT,
   DIFF_FONT_LABEL,
@@ -139,6 +145,7 @@ function ThemeRow<Id extends string>({
   onChange: (id: Id) => void;
 }): React.JSX.Element {
   const chosen = themes.find((theme) => theme.id === value);
+
   return (
     <PickerRow
       density={SETTINGS_ROW_DENSITY.COMPACT}
@@ -151,6 +158,7 @@ function ThemeRow<Id extends string>({
       noMatch={NO_THEME}
       onPick={(id) => {
         const theme = themes.find((each) => each.id === id);
+
         if (theme !== undefined) onChange(theme.id);
       }}
     />
@@ -193,7 +201,7 @@ export type ViewSettingsScope =
 const switchStored = (enabled: boolean) => enabled;
 
 /** A switch's setting as the switch draws it. */
-const switchDrawn = (value: unknown) => value === true;
+const switchDrawn = (value: AppSettingValue<AppSettingField>) => value === true;
 
 /**
  * The settings every run of lines follows, a File tab's and a diff's alike:
@@ -205,12 +213,14 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
   const { settings } = useFileViewSettings();
   const wordWrapWrite = useSettingRowWrite("wordWrap", switchStored, switchDrawn, true);
   const lineNumbersWrite = useSettingRowWrite("lineNumbers", switchStored, switchDrawn, true);
+
   const diffMinimizeCommentsWrite = useSettingRowWrite(
     "diffMinimizeComments",
     switchStored,
     switchDrawn,
     true,
   );
+
   return (
     <>
       <SwitchRow
@@ -255,6 +265,7 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
 function ThemeRows(): React.JSX.Element {
   const { settings, change } = useFileViewSettings();
   const [appearance, setAppearance] = useState(currentAppearance);
+
   return (
     <>
       <SegmentedRow
@@ -285,19 +296,24 @@ function ThemeRows(): React.JSX.Element {
 /** The type every run of code is set in: its font, its size, its line height, and its ligatures, a File tab's lines and a diff's alike. */
 function TypeRows(): React.JSX.Element {
   const { settings } = useFileViewSettings();
+
   const diffFontWrite = useSettingRowWrite(
     "diffFont",
     (value: FileViewSettings["diffFont"]) => value,
   );
+
   const diffFontSizeWrite = useSettingRowWrite(
     "diffFontSize",
     (value: FileViewSettings["diffFontSize"]) => value,
   );
+
   const diffLineHeightWrite = useSettingRowWrite(
     "diffLineHeight",
     (value: FileViewSettings["diffLineHeight"]) => value,
   );
+
   const diffLigaturesWrite = useSettingRowWrite("diffLigatures", switchStored, switchDrawn, true);
+
   return (
     <>
       <SelectRow
@@ -341,16 +357,19 @@ function TypeRows(): React.JSX.Element {
 /** What a diff marks: its layout, its changed words, its indicators, and its backgrounds, where the diff is wide enough to split said under the layout. */
 function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
   const { settings, change } = useFileViewSettings();
+
   const inlineDiffWrite = useSettingRowWrite(
     "inlineDiff",
     (value: FileViewSettings["inlineDiff"]) => value,
   );
+
   const diffBackgroundsWrite = useSettingRowWrite(
     "diffBackgrounds",
     switchStored,
     switchDrawn,
     true,
   );
+
   return (
     <>
       <SegmentedRow
@@ -395,6 +414,7 @@ function GroupRows({
   scope: ViewSettingsScope;
 }): React.JSX.Element {
   const diff = scope.kind === VIEW_SETTINGS_SCOPE.DIFF;
+
   switch (section) {
     case SETTING_SECTION.DIFF:
       return <DiffRows roomy={diff && scope.roomy} />;
@@ -424,6 +444,7 @@ function ViewSettingsRows({ scope }: { scope: ViewSettingsScope }): React.JSX.El
     scope.kind === VIEW_SETTINGS_SCOPE.DIFF
       ? DIFF_SETTING_GROUPS
       : DIFF_SETTING_GROUPS.filter(({ section }) => section !== SETTING_SECTION.DIFF);
+
   return (
     <>
       {groups.map(({ section, title }) => (
@@ -469,6 +490,11 @@ function ViewSettingsPopover({
   );
 }
 
+type UseViewSettingsSheetResult = {
+  readonly action: MenuAction;
+  readonly sheet: React.ReactNode;
+};
+
 /**
  * View options as a phone offers it, where the bar it stands in is not
  * drawn: an item of the task's header's ⋯ (`useTabActions`), which opens
@@ -476,12 +502,10 @@ function ViewSettingsPopover({
  * the popover to hang from, and Done, Escape, or a press on the dimmed
  * screen puts it away.
  */
-export function useViewSettingsSheet(scope: ViewSettingsScope): {
-  readonly action: MenuAction;
-  readonly sheet: React.ReactNode;
-} {
+export function useViewSettingsSheet(scope: ViewSettingsScope): UseViewSettingsSheetResult {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
   return {
     action: {
       label: VIEW_SETTINGS_LABEL,
@@ -512,10 +536,12 @@ export function ViewSettingsButton({ scope }: { scope: ViewSettingsScope }): Rea
   const popoverId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   return (
     <div className="view-settings relative flex" ref={root}>
       <Tooltip label={VIEW_SETTINGS_LABEL}>

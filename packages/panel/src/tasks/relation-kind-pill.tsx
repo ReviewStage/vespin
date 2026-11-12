@@ -69,20 +69,24 @@ export function RelationKindPill<Kind extends string>({
   const menuId = useId();
   const box = useRef<HTMLSpanElement>(null);
   const chip = useRef<HTMLButtonElement>(null);
+
   const rows: readonly MenuRow[] = kinds.map((each) => {
     const whyNot = each === kind ? undefined : why?.(each);
+
     return {
       id: each,
       label: words[each],
       icon: icon(each),
-      ...(whyNot === undefined ? {} : { disabled: whyNot }),
+      ...(whyNot !== undefined && { disabled: whyNot }),
     };
   });
+
   // Note that we hand focus back to the pill, as a native menu returns it to its button, because closing takes the focused menu away.
   const close = () => {
     setOpen(false);
     chip.current?.focus();
   };
+
   const foot: readonly FootRow[] = [
     {
       id: REMOVE_ROW_ID,
@@ -94,6 +98,7 @@ export function RelationKindPill<Kind extends string>({
       },
     },
   ];
+
   return (
     <span className="relation-kind-pill relative inline-flex items-center" ref={box}>
       <Chip
@@ -131,6 +136,7 @@ export function RelationKindPill<Kind extends string>({
           onPick={(id) => {
             close();
             const picked = kinds.find((each) => each === id);
+
             if (picked !== undefined) onChange(picked);
           }}
           onClose={close}

@@ -49,6 +49,7 @@ export function useAgentModel(input: {
   const { agent } = input;
   const agentId = agent?.id ?? "";
   const [held, setHeld] = useState<Held>(() => fresh(agentId));
+
   if (held.agentId !== agentId) setHeld(fresh(agentId));
   // Note that the writer is read through a ref, because the tab hands a new
   // closure on every render and an answer lands on whichever render is current.
@@ -58,6 +59,7 @@ export function useAgentModel(input: {
   const writes = useRef(0);
 
   if (agent === undefined) return undefined;
+
   const choose = (next: ModelChoice) => {
     writes.current += 1;
     const write = writes.current;

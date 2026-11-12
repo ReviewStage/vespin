@@ -65,6 +65,7 @@ export function useInboxRowActs({
   const remind = useSteadyDoor(onRemind);
   const reminding = useInboxReminding({ room, rowOf, chosen, active: shown, onRemind });
   const pickRemind = useSteadyDoor(reminding.onPick);
+
   return {
     row: {
       onMark: mark,

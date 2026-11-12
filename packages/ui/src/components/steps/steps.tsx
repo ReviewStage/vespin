@@ -168,6 +168,7 @@ export function PasteSteps({
   onEscape?: (() => void) | undefined;
 }): React.JSX.Element {
   const [firstDone, setFirstDone] = useState(false);
+
   return (
     <form
       className="m-0 flex min-w-0 flex-col"

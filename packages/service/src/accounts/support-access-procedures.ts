@@ -34,6 +34,7 @@ function answered(
 /** The resource: both writes under the caller's own session. */
 export function supportAccessProcedures(seams: SupportAccessProcedureSeams) {
   const inSession = hosted.supportAccess.use(sessionMiddleware(seams.resolveSessionUserId));
+
   return {
     grant: inSession.grant.effect(function* ({ context }) {
       return yield* answered(seams.supportAccess.grant(context.sessionHeaders));

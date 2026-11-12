@@ -89,16 +89,21 @@ export interface PageSwipeOptions {
 /** The finger's speed lately, in pixels per millisecond; none where it has not moved long enough to say. */
 function speed(samples: readonly Sample[]): number {
   const last = samples.at(-1);
+
   if (last === undefined) return 0;
   const first = samples.find((sample) => last.at - sample.at <= PAGE_SWIPE.SPEED_WINDOW_MS);
+
   if (first === undefined || last.at === first.at) return 0;
+
   return (last.offset - first.offset) / (last.at - first.at);
 }
 
 /** The page a swipe let go `offset` along, moving at `velocity`, walks to: on, back, or none. */
 function stepOnRelease(offset: number, velocity: number, width: number): 1 | -1 | undefined {
   const landed = offset + velocity * PAGE_SWIPE.PROJECT_MS;
+
   if (Math.abs(landed) <= width * PAGE_SWIPE.WALK_SHARE) return undefined;
+
   return landed < 0 ? 1 : -1;
 }
 
@@ -106,9 +111,12 @@ function stepOnRelease(offset: number, velocity: number, width: number): 1 | -1 
 function keepsFinger(target: Element, surface: HTMLElement): boolean {
   for (let box: Element | null = target; box !== null && box !== surface; box = box.parentElement) {
     if (box.matches(DRAGGED_ITSELF)) return true;
+
     if (box.scrollWidth <= box.clientWidth) continue;
+
     if (SCROLLING_OVERFLOW.has(getComputedStyle(box).overflowX)) return true;
   }
+
   return false;
 }
 
@@ -128,24 +136,32 @@ export function usePageSwipe(options: PageSwipeOptions): void {
 
   useEffect(() => {
     if (!enabled) return;
+
     const unmark = () => {
       surface.current?.removeAttribute(SWIPE_ATTRIBUTE);
       surface.current?.style.removeProperty(OFFSET_PROPERTY);
     };
+
     const drop = () => {
       swipe.current = undefined;
       unmark();
     };
+
     const down = (event: PointerEvent) => {
       swiped.current = false;
+
       // A second finger makes the swipe a pinch, which is no swipe.
       if (swipe.current !== undefined) {
         drop();
+
         return;
       }
+
       const box = surface.current;
       const target = event.target;
+
       if (event.pointerType !== "touch" || !event.isPrimary || box === null) return;
+
       if (!(target instanceof Element) || !box.contains(target) || keepsFinger(target, box)) return;
       swipe.current = {
         pointerId: event.pointerId,
@@ -156,45 +172,61 @@ export function usePageSwipe(options: PageSwipeOptions): void {
         samples: [{ at: event.timeStamp, offset: 0 }],
       };
     };
+
     const move = (event: PointerEvent) => {
       const held = swipe.current;
+
       if (held === undefined || held.pointerId !== event.pointerId) return;
       const dx = event.clientX - held.x;
       const dy = event.clientY - held.y;
+
       if (held.state === SWIPE_STATE.WAITING) {
         if (Math.abs(dx) < PAGE_SWIPE.SLOP && Math.abs(dy) < PAGE_SWIPE.SLOP) return;
+
         if (Math.abs(dx) < Math.abs(dy) * PAGE_SWIPE.LEAN) {
           swipe.current = undefined;
+
           return;
         }
+
         held.state = SWIPE_STATE.CLAIMED;
         surface.current?.setAttribute(SWIPE_ATTRIBUTE, "");
       }
+
       event.stopPropagation();
       held.samples.push({ at: event.timeStamp, offset: dx });
       surface.current?.style.setProperty(OFFSET_PROPERTY, `${String(dx)}px`);
     };
+
     const touchMove = (event: TouchEvent) => {
       const held = swipe.current;
       const touch = event.touches[0];
+
       if (held === undefined || touch === undefined || !event.cancelable) return;
       // Note that a move still being read is held from the page while it leans sideways, since a scroll the browser starts now cannot be taken back.
       const sideways = Math.abs(touch.clientX - held.x) >= Math.abs(touch.clientY - held.y);
+
       if (held.state === SWIPE_STATE.CLAIMED || sideways) event.preventDefault();
     };
+
     const up = (event: PointerEvent) => {
       const held = swipe.current;
+
       if (held === undefined || held.pointerId !== event.pointerId) return;
       drop();
+
       if (held.state !== SWIPE_STATE.CLAIMED) return;
       swiped.current = true;
+
       if (event.type !== "pointerup") return;
       // Note that the release is a sample of its own, so a finger held still before it lifts carries no speed from before the pause.
       const offset = event.clientX - held.x;
       held.samples.push({ at: event.timeStamp, offset });
       const step = stepOnRelease(offset, speed(held.samples), held.width);
+
       if (step !== undefined) latest.current.onStep(step);
     };
+
     // Note that a click after a swipe reaches nothing, because a swipe let go short of a page would otherwise zoom the picture under it or close the viewer from its veil.
     const click = (event: MouseEvent) => {
       // A click a key sends (`detail` 0) is a press of its own.
@@ -203,6 +235,7 @@ export function usePageSwipe(options: PageSwipeOptions): void {
       event.preventDefault();
       event.stopPropagation();
     };
+
     const capture = { capture: true } as const;
     window.addEventListener("pointerdown", down, capture);
     window.addEventListener("pointermove", move, capture);
@@ -210,6 +243,7 @@ export function usePageSwipe(options: PageSwipeOptions): void {
     window.addEventListener("pointercancel", up, capture);
     window.addEventListener("click", click, capture);
     window.addEventListener("touchmove", touchMove, { capture: true, passive: false });
+
     return () => {
       window.removeEventListener("pointerdown", down, capture);
       window.removeEventListener("pointermove", move, capture);

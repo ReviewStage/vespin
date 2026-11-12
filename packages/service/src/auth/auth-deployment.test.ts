@@ -16,12 +16,14 @@ const PRODUCTION = {
 /** Whether production's Better Auth, through its own matcher, trusts the origin. */
 async function productionTrusts(origin: string): Promise<boolean> {
   const deployment = authDeployment(PRODUCTION);
+
   const auth = betterAuth({
     baseURL: deployment.baseURL,
     trustedOrigins: deployment.trustedOrigins,
     secret: "production-session-secret-of-enough-length",
     database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
   });
+
   return (await auth.$context).isTrustedOrigin(origin);
 }
 

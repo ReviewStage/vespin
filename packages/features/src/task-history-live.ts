@@ -109,6 +109,7 @@ export function revisionsOfLiveRows(
   const page = newest.slice(0, DESCRIPTION_HISTORY_BOUNDS.PAGE);
   const revisions = page.map(revisionLineOf);
   const oldest = page.at(-1);
+
   return newest.length > page.length && oldest !== undefined
     ? { revisions, earlier: oldest.seq }
     : { revisions };

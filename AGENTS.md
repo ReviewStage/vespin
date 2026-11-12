@@ -57,62 +57,9 @@ wire value in `packages/wire`. A
 `.ts` module whose imports name no module of its app and no platform
 library (`electron`, `react-dom`, a DOM API, `better-auth`, `eve`,
 `@vercel/*`) is logic and belongs in a package unless it is shell: an app
-entry in `knip.json`, a `runtimeEdges` row in
-`tools/anti-slop/effect-edges.json`, or a deployment or test-support file.
+entry in `knip.json`, a runtime edge that runs its Effects, or a
+deployment or test-support file.
 Review places a module and a component alike under this rule.
-
-Lint holds the UI half of this (`anti-slop/no-raw-press-outside-ui`): outside
-`packages/ui`, every app, test, and the catalog included, an intrinsic
-(lowercase) JSX element is never a control. A raw `button`, `input` (bar
-`type="hidden"`), `select`, `textarea`, or `summary`, a pressable `role`
-(`button`, `tab`, `option`, `menuitem*`, `radio`, `checkbox`, `switch`,
-`slider`, `link` off an `<a>`, or one that is no literal), and a press event (`onClick`, `onDoubleClick`,
-`onAuxClick`, `onContextMenu`, `onMouseDown`/`Up`, `onPointerDown`/`Up`,
-`onTouchStart`/`End`, and their `Capture` forms) are errors, as is
-`onKeyDown`/`onKeyUp` on an element with `tabIndex` or `contentEditable`.
-Hover, drag and drop, focus, wheel, scroll, and clipboard events, keys on a
-container that takes no focus, and a spread from a ui helper
-(`menu.contextMenu()`) stay allowed. There is no escape hatch: `pnpm lint` runs
-`tools/anti-slop/press-guard-check.ts`, which fails on a disable comment that
-would silence the rule and on an `.oxlintrc.json` that weakens it. Where it
-fires, use a `@repo/ui` component, or add the component or variant there.
-
-A loading skeleton draws through the components its loaded state draws with,
-never a copy of their boxes, and takes its counts, order, and sizes from the
-declaration the loaded surface reads, never literals of its own. Lint holds
-the first half (`anti-slop/skeleton-through-components`, under the same
-no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
-component named `*Skeleton`, in which an intrinsic element's class must be a
-literal naming itself a skeleton's (`…-skeleton…`); every other box is a
-component, factored out of the surface where it builds the box by hand.
-
-What a row does lives in its row component, never in the page that draws
-it: its menu, its rename, its selection, and its muted and unread states
-are built inside the one component every list of that kind draws
-(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
-it, and no page hands a shared row a menu, an editor, or a selection of its
-own. `[check: anti-slop/row-behavior-in-row]`, under the same no-suppression
-check: outside the row components `tools/anti-slop/row-behavior.json` names,
-each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
-`note`, `choosable`, `settled`, or `unread`, or `TaskListRow` or
-`AgentListRow` a `menu`, `editor`, or `note`, is an error, as is a spread
-onto one. `ListRow` is not held: it is the row of many kinds, each drawn
-where it is listed. A menu shows a shortcut exactly where pressing it would act on the
-menu's subject, so a key it prints always works and one it leaves out does
-not act there. `[check: anti-slop/no-shortcut-flag]`, under the same
-no-suppression check: `commandAction` and its siblings take the menu's
-subject, and the place offering a key says what it acts on
-(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
-`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
-choosing between the subject and nothing where they take it is an error.
-
-Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
-under the same no-suppression check): outside `packages/ui-native`, an
-import of React Native's `Pressable`, `TextInput`, `Switch`, `Button`, or a
-touchable, a press prop (`onPress`, `onPressIn`, `onPressOut`,
-`onLongPress`) on a React Native primitive, and an import of `@expo/ui` or
-`expo-glass-effect` are errors. Where it fires, use a `@repo/ui-native`
-component, or add the component or variant there.
 
 ## Never
 
@@ -160,23 +107,20 @@ component, or add the component or variant there.
   sandbox's disk until the next recording clears them, and whose WebM the
   service keeps beside the transcript the call is written to as it keeps a
   screenshot (`packages/service/src/agents/browser/browser-tool.ts`), shown and
-  deleted on the same terms; the model is never handed the video, the
-  transcript's player is left out of session replay, and none of it goes into a
-  trace, a counted event, or a fixture. An agent may also
+  deleted on the same terms; the model is never handed the video, and none of
+  it goes into a trace, a counted event, or a fixture. An agent may also
   post such a recording, or any WebM it recorded in its sandbox, to a thread in
   one of its workspace's channels
   (`packages/service/src/agents/coder-host/inbox-image.ts`), kept beside the
   thread's message, up to 4 MB, as a picture posted there is, shown to whoever
-  may read that thread and deleted with it; the thread's player is left out of
-  session replay, and none of it goes into a trace, a counted event, or a
-  fixture. Such a recording may also be added to its
+  may read that thread and deleted with it, and none of it goes into a trace,
+  a counted event, or a fixture. Such a recording may also be added to its
   task's plan, from the file viewer's Add to plan or an agent's `edit_plan`,
   at most ten to a plan, kept beside the plan as its pictures are
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
-  the plan's player is left out of session replay, and none of it goes into a
-  trace, a counted event, or a fixture. And Sentry's SDKs run
+  and none of it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's
@@ -250,8 +194,8 @@ pnpm check:affected                      # what changed since origin/main, from 
   flags, variants, sizes, themes) are one case, not a matrix.
 - `[review]` A test you wrote to explore the code while working is deleted
   before the push unless it passes this section.
-- `[check: anti-slop/no-source-read-in-test]` `[review]` Reach for the cheapest guard that holds: a type, then a lint rule
-  in `tools/anti-slop/`, then a test. A rule about source text, such as a
+- `[review]` Reach for the cheapest guard that holds: a type, then a lint rule,
+  then a test. A rule about source text, such as a
   banned class or import, is a lint rule, never a test that reads source
   files.
 
@@ -273,7 +217,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### How a test is written
 
-- `[check: anti-slop/no-node-test]` Tests run on vitest.
+- `[review]` Tests run on vitest.
 - `[review]` A test owns its world: one process, a temp directory it created
   (`temporaryDirectory` from `@repo/runtime/testing`), its own database
   (`getTestDB()` from `@repo/database/testing`), and `TestClock` for time. It
@@ -281,16 +225,17 @@ pnpm check:affected                      # what changed since origin/main, from 
   and passes alone or in any order.
 - `[review]` A test finishes in about a second, and a file in about ten, on
   CI. One that cannot says why in a comment.
-- `[check: anti-slop/no-internal-vi-mock]` `[review]` Use real code first, then a fake, then a stub, and replace only
+- `[review]` Use real code first, then a fake, then a stub, and replace only
   what crosses a process boundary: provider HTTP, Apple, the model, the OS,
   the clock. An Effect service is replaced by a test `Layer` on its tag;
-  anything else by `vi.spyOn`, restored with `vi.restoreAllMocks()`. Never
-  `vi.mock` a module of this repository.
+  anything else by `vi.spyOn`, restored with `vi.restoreAllMocks()`.
+- `[check: anti-slop/no-module-mocking]` Never mock a module (`vi.mock`,
+  `vi.doMock`), this repository's or a library's: pass the dependency in
+  through a seam the code already takes, or `vi.spyOn` an object it reads.
 - `[review]` An Effect test is `it.effect` and moves time with
   `TestClock.adjust`. It never runs an effect itself (`Effect.run*`,
   `Runtime.run*`, `ManagedRuntime.make`) or waits on the clock (`setTimeout`,
-  `setInterval`, `Effect.sleep`, `it.live`). The Effect edge lint rules skip
-  test files, since a test body is its own edge.
+  `setInterval`, `Effect.sleep`, `it.live`).
 - `[review]` A query over account rows comes with a test that one user cannot
   read another's. A model or repository in `packages/database/src/` has a
   sibling `__tests__/<name>.test.ts` from the PR that adds it.
@@ -300,7 +245,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### Changing and removing tests
 
-- `[check: anti-slop/no-focused-or-skipped-test]` `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
+- `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
   `.todo`, or `it.flakyTest`, no looser assertion, and no longer timeout or
   extra retry without evidence of what was slow. A flaky test is fixed or
   deleted.
@@ -315,138 +260,15 @@ pnpm check:affected                      # what changed since origin/main, from 
   `vitest.config.ts` is on the root `vitest.config.ts` projects list, and each
   workspace's tests run in exactly one CI job.
 
-## Effect idioms
+## Learning more about Effect
 
-Effect is the repository's infrastructure library, replacing what used to be
-hand-rolled: a Schema that both parses and emits JSON Schema, disposables,
-an event emitter, independent backoff loops, `setInterval` loops, a
-semaphore, single-flight, bounded queues, an idempotency ledger, a worker RPC,
-an injected clock seam, and a fake clock beside it. `effect` is pinned at
-`4.0.4` through the pnpm catalog in `pnpm-workspace.yaml` and nowhere
-else — every workspace that reaches it declares `"effect": "catalog:"`, so one
-copy resolves across the repository, which is what keeps a `Context.Service`
-minted in one package the same service in another. `@effect/platform`,
-`@effect/rpc`, `@effect/sql`, and `@effect/experimental` are consolidated into
-`effect` itself and reached at its own subpaths (`effect/http`, `effect/sql`,
-`effect/rpc`, `effect/reactivity`, …); `@effect/platform-node`,
-`@effect/sql-pg`, `@effect/sql-pglite`, and
-`@effect/vitest` stay separate, each on the same `4.0.4` through the same
-catalog. The pin is an exact release rather than a range, and is moved
-deliberately.
+This repository uses the Effect Typescript library.
 
-### Where an Effect may run
+Before writing any Effect code, first read `node_modules/effect/AGENTS.md`
+**completely**, and follow the links in the file when required.
 
-An Effect describes work; only a runtime edge runs one. The edges themselves
-are the files listed in `tools/anti-slop/effect-edges.json`'s `runtimeEdges`,
-and that file is the source of truth for them.
-`Effect.runPromise`, `Effect.runSync`, `Effect.runFork`, their
-`runPromiseExit`/`runSyncExit`/`runCallback` siblings, and the `…With` form of
-any of them belong nowhere else — everything between the edges returns an
-Effect and lets its caller decide — which the oxlint rule
-`no-run-promise-outside-edges` enforces against that same file's
-`runtimeEdges`, `runShims`, and `runOnHandedRuntime` lists;
-`no-raw-async-primitives` enforces the equivalent for `setTimeout`,
-`setInterval`, `new Promise`, `AbortController`, and `fs.watch` against its
-`rawAsyncPrimitives` list. A file on those two run lists that is not a runtime
-edge is a permanent adaptor, listed below with the one thing that keeps
-it from ever moving onto the edges themselves; there is no other kind of row
-on those lists, because a shim on its way to deletion is deleted in the same
-PR that finishes the callers it was for, not left as a name on an allowlist.
-
-### The permanent adaptors
-
-- **`packages/runtime/src/effect/single-flight.ts`** — the check-and-create of
-  the one `Deferred` every concurrent caller joins is an uninterruptible step
-  that cannot suspend, so it runs synchronously (`Effect.runSync`) and forks
-  the flight it decided on as a detached root fiber (`Effect.runFork`) rather
-  than a fiber of whoever asked first, because a caller that gives up on its
-  own await must not take the flight the other callers are still joined to.
-- **`packages/host/src/host-kernel.ts`** — `openExternalThroughNode`, the one
-  promise door the kernel keeps over `NodeRegistry#invoke`'s effect: the
-  composer that hands it on hands it to a seam outside this repository's host
-  package — the account session manager's consent
-  (`packages/credentials/src/loopback-consent.ts`, whose `openExternal` is a
-  `void | Promise<void>` and whose `reopen()` is synchronous) — so what would
-  end this row is a decision about that seam rather than an implementation
-  detail of this door.
-- **`packages/host/src/client/app-state-store.ts`** — `AppStateStore`'s `snapshot`,
-  `update`, and `touch` run their `SubscriptionRef` operation through
-  `Effect.runSyncWith` on the services the launch handed them, never an empty
-  context of their own, because every caller but the one production subscriber
-  (which forks over the store's `changes` Stream) still holds a synchronous
-  object, and the ordering those callers and this file's own tests depend on —
-  a listener's patch is not lost, a re-announce lands before the caller's next
-  statement — is what turning them into effects a caller awaits would give up.
-- **`packages/host/src/update-service.ts`** — synchronous Electron
-  IPC/menu callers (start, check, install) bridge into fibers on the services
-  the launch handed them, on the same terms as the client's `app-state-store.ts`.
-- **`packages/features/src/hosted-link.ts`** — oRPC's `OpenAPILink` awaits a promise from its `fetch`, so the account call runs there on the services the asking fiber handed it; what would end this row is an Effect transport in oRPC's link.
-- **`packages/service/src/accounts/deletion-hooks.ts`** — Better Auth awaits each `deleteUser` and `deleteOrganization` hook as a promise, so the account's and a workspace's deletion steps run there on the services the request handed them; what would end this row is a Better Auth that takes an Effect hook.
-- **`packages/service/src/member-mcp/server.ts`** — the MCP SDK's `McpServer` awaits each tool's handler as a promise, so a tool's effect runs there on the services the request's fiber handed it, the admitted member provided; what would end this row is an Effect-native MCP server that serves the 2026-07-28 revision without a session.
-- **`packages/service/src/queues/queue-consumer.ts`** — the queue SDK's `handleCallback` awaits each delivery's handler as a promise and acknowledges the message once it resolves, so every Vercel Queues consumer's delivery (automation runs and agent turns) runs its effect there on the services the function's runtime handed it; what would end this row is an Effect consumer in Vercel Queues' SDK.
-- **The test-support edges** — `packages/database/src/testing/sql-client.ts`,
-  `packages/database/src/testing/hosted-store-database.ts`, and
-  `packages/wire/src/testing/effect.ts` each build a runner (a
-  `ManagedRuntime` over a throwaway database) so a suite still written on `node:assert` or a
-  plain fixture can hold a promise where an effect is described; a test body is
-  its own edge.
-
-### Vocabulary
-
-`SchemaRead` (`@repo/wire`) is the boundary result vocabulary a Schema
-decode answers when the result crosses IPC or the wire — a `Result` inside a
-process, a `SchemaRead` where a caller on the other side of a process boundary
-reads it: `packages/host/src/acts.ts`,
-`packages/wire/src/effect/json-schema.ts`, and
-`packages/database/src/models/message-reads.ts` all produce or read it.
-
-### Idioms
-
-- Schema at the boundary a value crosses, never a hand-written parser beside a
-  hand-written shape.
-- Drizzle: the `db.select()` builder, never `db.query`; the schema module
-  under `packages/database/src/schemas/` first, then
-  `pnpm db:generate --name=<what_it_does>` for its migration folder, which
-  Drizzle's migrator applies by name and `drizzle-kit check` (run by
-  `check.sh`) holds to commuting with every other branch's
-  (`packages/database/README.md`). Two things differ from stock Drizzle usage. A row is decoded
-  by an Effect `Schema` through `SqlSchema`, never `drizzle-zod`, because
-  Effect takes no zod schema and a second validation library would split the
-  one way a boundary value is declared. A statement is an `Effect` from
-  Drizzle's own driver, `drizzle-orm/effect-postgres` over the runtime's
-  `PgClient` (`drizzle-orm/effect-pglite` in the store's tests), read off the
-  `Database` service in `packages/database/src/core/query.ts`, which every
-  layer that provides the `SqlClient` provides beside it; it is yielded, and
-  `anti-slop/no-await-drizzle-statement` refuses one awaited.
-  `apps/web/server/README.md`'s "The data layer" is the rest.
-- Runtime only at an edge above; everywhere else returns an Effect.
-- `Scope`, not a `dispose()` a caller must remember to call.
-- `Schedule`, not a hand-rolled interval or backoff loop.
-- `TestClock`, not a fake clock: a test that waits on time advances the clock
-  rather than arming a real `setTimeout` its own runner has to outlive.
-- `MutableRef` for a synchronous facade over state a synchronous caller reads
-  and writes as statements, when the fence it stands for must be up before the
-  caller's next statement.
-- `Effect.runPromiseExit` and `Cause.squash` at a promise door, so a caller
-  still holding a `Promise` sees the same rejection shape an `Effect.tryPromise`
-  would have caught, not a fiber's own defect representation.
-- No `Effect.raceFirst` over an uninterruptible region: a race that loses
-  interrupts the loser, and a fiber inside an uninterruptible region cannot be
-  interrupted, so the race never resolves.
-- `Effect.forkDetach` and a join for a deadline that must run inside an
-  uninterruptible region, since the fork itself has to survive the region even
-  when its result does not.
-- A fork does not inherit the interrupt status of whoever forked it, so a body
-  forked from inside an `Effect.acquireRelease` acquire, a finalizer, or any
-  other uninterruptible region is interruptible unless it asks not to be.
-- A discarded Effect, Stream, or Layer statement is a bug, not a fire-and-forget:
-  `pnpm discarded-effect` refuses an expression statement of one of those
-  types, `void` and `await` included, because an Effect is not thenable and a
-  description a caller walks past runs nothing.
-- Effect's `Clock` does not unref its timer: a wait armed on it references the
-  host's event loop for as long as it stands, so a store with an automatic
-  reset enabled holds its host open for as long as its generation does: mind
-  this when the caller is a process that would otherwise exit.
+If you need to learn more about particular Effect apis and concepts that the
+guide doesn't cover, search through the source code in `node_modules/effect/src`.
 
 ## Code style
 

@@ -51,6 +51,7 @@ function lineOf(parts: readonly (string | undefined)[]): string {
 /** A preview's ground and measure: the brand's ground, padded to the screen's edge, at a phone's width. */
 function PreviewCard({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <VStack
       alignment="leading"
@@ -69,6 +70,7 @@ function PreviewCard({ children }: { readonly children: ReactNode }) {
 /** A preview's path over its heading: a mark and small muted words, as a pushed page's bar names its path. */
 function PreviewPath({ mark, words }: { readonly mark: ReactNode; readonly words: string }) {
   const colors = useColors();
+
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
       {mark}
@@ -88,6 +90,7 @@ function PreviewPath({ mark, words }: { readonly mark: ReactNode; readonly words
 /** A preview's heading, as the page it opens heads itself: 20 pt semibold. */
 function PreviewHeading({ words }: { readonly words: string }) {
   const colors = useColors();
+
   return (
     <Text
       modifiers={[
@@ -110,6 +113,7 @@ function PreviewLine({
   readonly ink?: string | undefined;
 }) {
   const colors = useColors();
+
   return (
     <Text
       modifiers={[
@@ -126,6 +130,7 @@ function PreviewLine({
 /** A preview's hairline between its head and what follows, in the rows' own edge ink. */
 function PreviewRule() {
   const colors = useColors();
+
   return <SwiftUIDivider modifiers={[foregroundStyle(colors.CHIP_EDGE)]} />;
 }
 
@@ -138,6 +143,7 @@ function PreviewMessageRow({
   readonly now: number | undefined;
 }) {
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">
@@ -216,8 +222,11 @@ export type PreviewAgent = {
 /** An agent's mark as a preview's line leads with it: the spinner while it works, the alert where it failed, nothing at rest. */
 function AgentStateMark({ status }: { readonly status: AgentStatus }) {
   const state = agentGlyphState(status);
+
   if (state === GLYPH_STATE.WORKING) return <WorkingMark />;
+
   if (state === GLYPH_STATE.FAILED) return <FailedMark />;
+
   return null;
 }
 
@@ -225,6 +234,7 @@ function AgentStateMark({ status }: { readonly status: AgentStatus }) {
 function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
   const colors = useColors();
   const words = agentStateWords(agent.status);
+
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
       <AgentTile name={agent.name} harness={agent.harness} size={MARK_SIZE.WRITER} />
@@ -268,6 +278,7 @@ export function TaskPreview({
   const colors = useColors();
   const named = agents.slice(0, PREVIEW_AGENTS);
   const more = agents.length - named.length;
+
   return (
     <PreviewCard>
       <PreviewPath
@@ -333,6 +344,7 @@ export function AgentPreview({
 }) {
   const colors = useColors();
   const pull = pullRequest === undefined ? undefined : PULL_REQUEST_LOOK[pullRequest.state];
+
   return (
     <PreviewCard>
       {task === undefined ? null : (

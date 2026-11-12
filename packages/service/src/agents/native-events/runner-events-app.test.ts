@@ -10,7 +10,15 @@ import {
   type RunnerEvent,
 } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
+import {
+  listAllowedCommands,
+  removeAllowedCommand,
+} from "@repo/database/models/account-allowed-commands";
+import {
+  answerApproval,
+  listPendingApprovals,
+  readApproval,
+} from "@repo/database/models/agent-approvals";
 import {
   createAgent,
   latestTurnsOfReached,
@@ -82,6 +90,9 @@ import {
   runnerEventsApp,
 } from "./runner-events-app.js";
 
+/** The attributes an error reporter is handed beside the failure it reports. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
+
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
@@ -108,9 +119,8 @@ const standingWith = (
   options: RunnerEventsOptions,
   after:
     | Layer.Layer<AfterResponse>
-    | Layer.Layer<
-        SettledTurnListener | StartedTurnListener
-      > = Layer.empty as Layer.Layer<AfterResponse>,
+    | Layer.Layer<SettledTurnListener | StartedTurnListener>
+    | Layer.Layer<never> = Layer.empty,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -122,18 +132,23 @@ const standingWith = (
       after,
       NO_GITHUB,
     );
+
     const web = HttpRouter.toWebHandler(
       runnerEventsApp(options).pipe(HttpRouter.provideRequest(services)),
       {
         disableLogger: true,
       },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
     return (bearer: string | undefined, events: readonly RunnerEvent[], launch?: number) =>
       Effect.promise(async () => {
         const headers = new Headers({ "content-type": "application/json" });
+
         if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
         const url = `${ORIGIN}${RUNNER_EVENTS_PATH}`;
+
         const response = await web.handler(
           new Request(launch === undefined ? url : launchUrl(url, launch), {
             method: "POST",
@@ -141,6 +156,7 @@ const standingWith = (
             body: JSON.stringify({ events }),
           }),
         );
+
         return { status: response.status, body: await response.json() };
       });
   });
@@ -175,6 +191,7 @@ const agentOn = (
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const task = yield* startTask(userId, { name: "Teammate invitations" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -186,12 +203,14 @@ const agentOn = (
       runtime: harness.runtime,
       payer: harness.payer,
     });
+
     const agent = Option.getOrThrow(started).agent;
     const bearer = randomBytes(32).toString("base64url");
     yield* recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer));
     const target = { userId, conversationId: agent.conversationId };
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const lineIds: string[] = [];
+
     for (const text of lines) {
       const clientKey = randomUUID();
       yield* writer.writeAwaitingLine(
@@ -201,7 +220,9 @@ const agentOn = (
       );
       lineIds.push(sentLineId(clientKey));
     }
+
     const [lineId = ""] = lineIds;
+
     return { userId, agentId: agent.id, taskId: task.id, target, bearer, lineId, lineIds };
   });
 
@@ -214,11 +235,13 @@ const agentWithBearer = agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
 /** The SDK messages of P00's workflow turn, in the pinned SDK's shapes, as the runner numbers and posts them. */
 function workflowTurn(lineId: string): readonly RunnerEvent[] {
   const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
+
   const toolUse = (id: string, name: string, input: WireRecord) => ({
     type: "assistant",
     message: { content: [{ type: "tool_use", id, name, input }] },
     ...envelope,
   });
+
   const toolResult = (id: string, text: string) => ({
     type: "user",
     message: {
@@ -227,11 +250,13 @@ function workflowTurn(lineId: string): readonly RunnerEvent[] {
     },
     ...envelope,
   });
+
   const partial = (text: string) => ({
     type: "stream_event",
     event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } },
     ...envelope,
   });
+
   const result = (input: number, output: number) => ({
     type: "result",
     subtype: "success",
@@ -244,6 +269,7 @@ function workflowTurn(lineId: string): readonly RunnerEvent[] {
     },
     ...envelope,
   });
+
   const messagesOfTurn = [
     { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
     { type: "system", subtype: "init", ...envelope },
@@ -268,6 +294,7 @@ function workflowTurn(lineId: string): readonly RunnerEvent[] {
     result(3, 2),
     { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
   ];
+
   // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
   return messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent);
 }
@@ -307,11 +334,13 @@ const HEARTBEAT_SILENCES = [
 const transcriptOf = (conversationId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const rows = yield* db
       .select({ role: messages.role, parts: messages.parts, turnId: messages.turnId })
       .from(messages)
       .where(eq(messages.conversationId, conversationId))
       .orderBy(asc(messages.seq));
+
     const turnRows = yield* db
       .select({
         status: turns.status,
@@ -321,6 +350,7 @@ const transcriptOf = (conversationId: string) =>
       })
       .from(turns)
       .where(eq(turns.conversationId, conversationId));
+
     return { rows, turns: turnRows };
   });
 
@@ -339,11 +369,14 @@ const UNANSWERED = {
 /** A part as the transcript draws it: its type, and its words, state, and output where it has them. */
 function drawn(part: StoredUIMessage["parts"][number]): readonly WireValue[] {
   const fields: WireValue[] = [part.type];
+
   if ("text" in part) fields.push(part.text);
   else if ("state" in part && part.state !== undefined) fields.push(part.state);
+
   if ("output" in part && part.output !== undefined) {
     fields.push(valueFromJsonText(JSON.stringify(part.output)));
   }
+
   return fields;
 }
 
@@ -438,9 +471,11 @@ it.layer(SUITE)("the runner events route", (it) => {
     () =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
+
         const post = yield* standingWith({
           alive: (alive) => Effect.sync(() => void told.push(alive)),
         });
+
         const agent = yield* agentWithBearer;
         const events = workflowTurn(agent.lineId);
 
@@ -466,21 +501,26 @@ it.layer(SUITE)("the runner events route", (it) => {
     ({ upTo, holds }) =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
+
         const post = yield* standingWith({
           alive: (alive) => Effect.sync(() => void told.push(alive)),
         });
+
         const agent = yield* agentWithBearer;
         const events = upTo(workflowTurn(agent.lineId));
 
         const early = yield* post(agent.bearer, []);
         yield* post(agent.bearer, events);
         const silence = [];
+
         // An hour and more of the harness saying nothing, and the runner beating.
         for (const _beat of [1, 2, 3, 4, 5, 6, 7]) {
           yield* TestClock.adjust(Duration.minutes(5));
           silence.push(yield* post(agent.bearer, []));
         }
+
         const midway = yield* transcriptOf(agent.target.conversationId);
+
         const lapsed = yield* lapsedTurnsOf(
           agent.target.conversationId,
           new Date(yield* Clock.currentTimeMillis),
@@ -522,6 +562,7 @@ it.layer(SUITE)("the runner events route", (it) => {
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
+
         // A command's output may hold a NUL, and our own tool's JSON may spell one that its reading
         // makes real, which no Postgres text or jsonb value can hold.
         const events = workflowTurn(agent.lineId).map(
@@ -590,6 +631,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const row = Option.getOrThrow(yield* readAgent(agent.userId, agent.agentId));
+
         // Before any turn settles, the page already names who pays.
         const first = yield* transcriptPast(
           agent.target,
@@ -598,6 +640,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           row,
           row,
         ).pipe(Effect.provide(modelCatalogOf([])));
+
         assert.equal(first.usage, undefined);
         assert.equal(first.payer, AGENT_PAYER.CLAUDE_SUBSCRIPTION);
         yield* post(agent.bearer, workflowTurn(agent.lineId));
@@ -631,6 +674,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const none = yield* post(undefined, events);
         // A newer launch in the same sandbox records the bearer its one firewall swap hands both runners.
         yield* recordAgentRunnerToken(agent.userId, agent.agentId, runnerTokenDigest(agent.bearer));
+
         const cutOff: RunnerEvent = {
           sequence: 0,
           message: {
@@ -639,6 +683,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             detail: "the service refused the launch's lines: The service answered 401",
           },
         };
+
         const replaced = yield* post(agent.bearer, [cutOff], 1);
         // The launch now recorded is admitted under the same bearer, its heartbeat taken.
         const current = yield* post(agent.bearer, [], 2);
@@ -673,12 +718,15 @@ it.layer(SUITE)("the runner events route", (it) => {
     () =>
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
+
         const post = yield* standingWith({
           ended: (ended) => Effect.sync(() => void told.push(ended)),
         });
+
         const agent = yield* agentWithBearer;
         const inside = { parent_tool_use_id: "toolu_agent", session_id: SESSION };
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -732,6 +780,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "error_during_execution", is_error: true, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.STOPPED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -766,6 +815,8 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const commit = "0123456789abcdef0123456789abcdef01234567";
+
+        // SAFETY: each message below is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId, snapshot: { commit } },
           {
@@ -778,6 +829,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         ].map((message, sequence) => ({ sequence, message }) as RunnerEvent);
 
         yield* post(agent.bearer, events);
+
         const [row] = yield* Effect.flatMap(Database, (db) =>
           db
             .select({
@@ -788,6 +840,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             .from(turns)
             .where(eq(turns.conversationId, agent.target.conversationId)),
         );
+
         assert.deepEqual(row, { commit, head: null, branch: null });
       }),
   );
@@ -798,12 +851,15 @@ it.layer(SUITE)("the runner events route", (it) => {
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
         const touched: RunnerAlive[] = [];
+
         const post = yield* standingWith({
           idled: (idled) => Effect.sync(() => void told.push(idled)),
           alive: (alive) => Effect.sync(() => void touched.push(alive)),
         });
+
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
+
         const turn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           { type: "system", subtype: "init", ...envelope },
@@ -815,7 +871,9 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "success", is_error: false, ...envelope },
           { type: RUNNER_EVENT.IDLE },
         ];
+
         const retired = [{ type: RUNNER_EVENT.END, reason: RUNNER_END.IDLED }];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = [...turn, ...retired].map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -852,19 +910,23 @@ it.layer(SUITE)("the runner events route", (it) => {
           readonly turnId: string;
           readonly inTransaction: boolean;
         }[] = [];
+
         const hear = (kind: string) => (turn: { readonly turnId: string }) =>
           Effect.flatMap(SqlClient.SqlClient, (client) =>
             Effect.map(Effect.serviceOption(client.transactionService), (open) => {
               heard.push({ kind, turnId: turn.turnId, inTransaction: Option.isSome(open) });
             }),
           );
+
         const listener = Layer.merge(
           Layer.succeed(StartedTurnListener, { heard: hear("started") }),
           Layer.succeed(SettledTurnListener, { heard: hear("settled") }),
         );
+
         const post = yield* standingWith({}, listener);
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
+
         // SAFETY: each message below is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
@@ -898,8 +960,10 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const launched =
           "Async agent launched successfully. (This tool result is internal metadata, never quote it.) agentId: a1";
+
         const first = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -928,6 +992,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "success", is_error: false, ...top },
           { type: RUNNER_EVENT.WAITING, background_tasks: [], session_crons: [] },
         ];
+
         const second = [
           {
             type: "system",
@@ -947,6 +1012,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "success", is_error: false, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = [...first, ...second].map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -978,6 +1044,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -994,12 +1061,14 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "error_during_execution", is_error: true, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
         );
 
         // The next launch fails on its own, the limit having lifted: it says nothing of the old one.
+        // SAFETY: each message below is one the pinned SDK or the runner emits, written in its JSON shape.
         const relaunch = [
           { type: "system", subtype: "init", ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.INPUT_CLOSED },
@@ -1022,6 +1091,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             .from(turns)
             .where(eq(turns.conversationId, agent.target.conversationId)),
         );
+
         assert.deepEqual(ended.map((turn) => [turn.status, turn.failureDetail]).sort(), [
           [TURN_STATUS.FAILED, "error_during_execution; rate_limit_rejected five_hour"],
           [TURN_STATUS.FAILED, "input_closed"],
@@ -1052,6 +1122,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const ask = (requestId: string) => ({
           type: RUNNER_EVENT.APPROVAL_REQUESTED,
           requestId,
@@ -1061,6 +1132,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
           input: { command: "git push --force", note: "cut at \uD83D" },
         });
+
         const asking = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           { type: "system", subtype: "init", ...top },
@@ -1073,10 +1145,12 @@ it.layer(SUITE)("the runner events route", (it) => {
             by: APPROVAL_BY.MESSAGE,
           },
         ];
+
         const ending = [
           { type: "result", subtype: "success", is_error: false, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const numbered = [...asking, ...ending].map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -1085,6 +1159,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, numbered.slice(0, asking.length));
         const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
         yield* post(agent.bearer, numbered.slice(asking.length));
+
         const standingOf = (approvalId: string) =>
           Effect.map(
             readApproval(agent.userId, agent.agentId, approvalId),
@@ -1102,11 +1177,89 @@ it.layer(SUITE)("the runner events route", (it) => {
       }),
   );
 
+  it.effect(
+    "a member's Always allow keeps the prefix its harness proposed on their list once, and a prefix no command is lands on no ask",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+
+        const ask = (requestId: string, commandPrefix: readonly string[]) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          input: { command: "pnpm test --filter web" },
+          commandPrefix,
+        });
+
+        const allowed = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_RESOLVED,
+          requestId,
+          decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+          by: APPROVAL_BY.MEMBER,
+        });
+
+        // SAFETY: each message is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = (messages: readonly unknown[], from: number) =>
+          messages.map((message, at) => ({ sequence: from + at, message }) as RunnerEvent);
+
+        const asking = numbered(
+          [
+            { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+            { type: "system", subtype: "init", ...top },
+            ask("a", ["pnpm", "test"]),
+            ask("b", ["pnpm", "test && rm"]),
+          ],
+          0,
+        );
+
+        yield* post(agent.bearer, asking);
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        assert.deepEqual(
+          waiting
+            .map((each) => [each.requestId, each.ask.commandPrefix])
+            .sort(([left], [right]) => String(left).localeCompare(String(right))),
+          [
+            ["a", ["pnpm", "test"]],
+            ["b", undefined],
+          ],
+        );
+        const at = new Date(yield* Clock.currentTimeMillis);
+
+        for (const each of waiting) {
+          yield* answerApproval({
+            userId: agent.userId,
+            agentId: agent.agentId,
+            approvalId: each.id,
+            status: APPROVAL_STATUS.ALLOWED_FOR_AGENT,
+            at,
+          });
+        }
+
+        const settling = numbered([allowed("a"), allowed("b")], asking.length);
+        yield* post(agent.bearer, settling);
+        const kept = yield* listAllowedCommands(agent.userId);
+        assert.deepEqual(
+          kept.map((each) => [each.prefix, each.agentId]),
+          [[["pnpm", "test"], agent.agentId]],
+        );
+
+        // The runner's batch posted again is no new answer, so a command the member removed meanwhile stays removed.
+        yield* removeAllowedCommand(agent.userId, kept[0]?.id ?? "");
+        yield* post(agent.bearer, settling);
+        assert.deepEqual(yield* listAllowedCommands(agent.userId), []);
+      }),
+  );
+
   it.effect("a turn an API error ended keeps the error's status and words", () =>
     Effect.gen(function* () {
       const post = yield* standing;
       const agent = yield* agentWithBearer;
       const top = { parent_tool_use_id: null, session_id: SESSION };
+
       const messagesOfTurn = [
         { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
         {
@@ -1119,6 +1272,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         },
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
       ];
+
       // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
       yield* post(
         agent.bearer,
@@ -1140,6 +1294,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -1155,12 +1310,14 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "success", is_error: false, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         yield* post(
           agent.bearer,
           messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
         );
         const db = yield* Database;
+
         const ended = yield* db
           .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
           .from(turns)
@@ -1187,6 +1344,7 @@ it.layer(SUITE)("the runner events route", (it) => {
       const post = yield* standing;
       const agent = yield* agentWithBearer;
       const top = { parent_tool_use_id: null, session_id: SESSION };
+
       const messagesOfTurn = [
         { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
         { type: "system", subtype: "init", ...top },
@@ -1209,6 +1367,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         },
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
       ];
+
       // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
       yield* post(
         agent.bearer,
@@ -1235,6 +1394,7 @@ it.layer(SUITE)("the runner events route", (it) => {
       const top = { parent_tool_use_id: null, session_id: SESSION };
       const dueAt = "2026-10-21T12:17:00.000Z";
       const prompt = "Check CI on the pull request again.";
+
       const messagesOfTurn = [
         { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
         { type: "system", subtype: "init", ...top },
@@ -1261,6 +1421,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         // As a runner bundled with a host release before 0.25.0 still posts it.
         { type: RUNNER_EVENT.END, reason: "released", wakeups: [{ at: dueAt, prompt }] },
       ];
+
       // SAFETY: each message above is one the pinned SDK or a runner emits, written in its JSON shape.
       yield* post(
         agent.bearer,
@@ -1281,10 +1442,12 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const image = {
           type: "image",
           source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" },
         };
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -1323,6 +1486,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             ...top,
           },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -1346,6 +1510,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -1377,6 +1542,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             ...top,
           },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -1407,8 +1573,10 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const refused =
           "<tool_use_error>Error: No such tool available: mcp__workspace__edit_plan</tool_use_error>";
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           {
@@ -1443,6 +1611,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             ...top,
           },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -1480,10 +1649,12 @@ it.layer(SUITE)("the runner events route", (it) => {
         const agent = yield* agentWithBearer;
         yield* post(agent.bearer, workflowTurn(agent.lineId).slice(0, 4));
         const db = yield* Database;
+
         const [row] = yield* db
           .select({ sequence: conversations.nativeSequence })
           .from(conversations)
           .where(eq(conversations.id, agent.target.conversationId));
+
         assert.equal(row?.sequence, 3);
       }),
   );
@@ -1494,6 +1665,7 @@ const CODEX_RECORDING = new URL(
   "../../../../../packages/agent-runner/src/testing/app-server.jsonl",
   import.meta.url,
 );
+
 const THREAD = "00000000-0000-4000-8000-000000000002";
 
 /** One line of the recording: which phase of the probe, which way it went, and what it said. */
@@ -1517,31 +1689,41 @@ function codexLaunches(lineIds: readonly string[]): readonly (readonly RunnerEve
     .split("\n")
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as RecordedLine);
+
   const launches: WireValue[][] = [[], [], []];
   const lines = [...lineIds];
   let launch = 0;
   let turnsStarted = 0;
+
   for (const { phase, direction, message } of recorded) {
     if (phase === "resumed") launch = 2;
     const posted = launches[launch];
+
     if (posted === undefined) continue;
+
     if (direction === "client") {
       if (message.method === "turn/start" && phase === "first" && ++turnsStarted === 2) {
         launch = 1;
       }
+
       const into = launches[launch];
+
       if (
         (message.method === "turn/start" || message.method === "turn/steer") &&
         into !== undefined
       ) {
         into.push({ type: RUNNER_EVENT.ACCEPTED, uuid: lines.shift() ?? "" });
       }
+
       continue;
     }
+
     if (message.method !== undefined) posted.push(message);
   }
+
   const ends = [RUNNER_END.TURN_ENDED, RUNNER_END.STOPPED, RUNNER_END.TURN_ENDED];
   let sequence = 0;
+
   return launches.map((messagesOfLaunch, index) =>
     [...messagesOfLaunch, { type: RUNNER_EVENT.END, reason: ends[index] ?? RUNNER_END.FAILED }].map(
       // SAFETY: each message is one app-server or the runner emits, as P16 recorded it.
@@ -1559,6 +1741,7 @@ function codexUsage(inputTokens: number, outputTokens: number) {
     reasoningTokens: 0,
     cacheWriteTokens: 0,
   };
+
   return { ...counts, byModel: [{ model: HARNESS.CODEX.model, ...counts }] };
 }
 
@@ -1573,19 +1756,23 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
+
         const agent = yield* agentOn(HARNESS.CODEX, [
           "The probe's first turn.",
           "Also append the steered line.",
           "Run sleep 600.",
           "What exact line did you first write?",
         ]);
+
         const launches = codexLaunches(agent.lineIds);
+
         for (const events of launches) {
           // Each launch is posted in two batches, as the runner may split it.
           const half = Math.floor(events.length / 2);
           yield* post(agent.bearer, events.slice(0, half));
           yield* post(agent.bearer, events.slice(half));
         }
+
         const { rows, turns: settled } = yield* transcriptOf(agent.target.conversationId);
 
         assert.deepEqual(
@@ -1659,6 +1846,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
       Effect.gen(function* () {
         const post = yield* standing;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
+
         const called = (id: string, name: string, input: WireRecord, text: string) => [
           { type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } },
           {
@@ -1671,7 +1859,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             },
           },
         ];
+
         const claude = yield* agentOn(HARNESS.CLAUDE_CODE, ["Stop the server."]);
+
         const claudeTurn: WireValue[] = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: claude.lineId },
           ...[
@@ -1682,8 +1872,10 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           ].map((message) => ({ ...message, ...envelope })),
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         const codex = yield* agentOn(HARNESS.CODEX, ["Look at the screenshot."]);
         const view = { type: "imageView", id: "call_view", path: "/tmp/shared/home.png" };
+
         const codexTurn: WireValue[] = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: codex.lineId },
           notification("turn/started", { turn: { id: "turn-1" } }),
@@ -1691,11 +1883,14 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK, app-server, or the runner emits, written in its JSON shape.
         const events = (turn: readonly WireValue[]) =>
           turn.map((message, sequence) => ({ sequence, message }) as RunnerEvent);
+
         yield* post(claude.bearer, events(claudeTurn));
         yield* post(codex.bearer, events(codexTurn));
+
         const calls = (conversationId: string) =>
           Effect.map(transcriptOf(conversationId), ({ rows }) =>
             rows.flatMap((row) => row.parts.map((part) => part.type)),
@@ -1714,9 +1909,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
       const post = yield* standing;
       const agent = yield* agentOn(HARNESS.CODEX, ["Write the probe file."]);
       const change = { type: "fileChange", id: "call_patch", status: "inProgress", changes: [] };
+
       const changes = [
         { path: "agent-probe/a1b2.txt", kind: { type: "add" }, diff: "a1b2c3d4e5f6\n" },
       ];
+
       const messagesOfTurn: WireValue[] = [
         { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
         notification("turn/started", { turn: { id: "turn-1" } }),
@@ -1725,10 +1922,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
       ];
+
       // SAFETY: each message above is one app-server or the runner emits, written in its JSON shape.
       const events = messagesOfTurn.map(
         (message, sequence) => ({ sequence, message }) as RunnerEvent,
       );
+
       yield* post(agent.bearer, events);
       const { rows } = yield* transcriptOf(agent.target.conversationId);
 
@@ -1745,6 +1944,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentOn(HARNESS.CODEX, ["Look at the inbox."]);
+
         const inbox = {
           type: "mcpToolCall",
           id: "mcp_inbox",
@@ -1755,6 +1955,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           result: null,
           error: null,
         };
+
         const spawn = {
           type: "collabAgentToolCall",
           id: "call_spawn",
@@ -1766,6 +1967,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           model: "gpt-5.5",
           agentsStates: {},
         };
+
         const messagesOfTurn: WireValue[] = [
           {
             method: "thread/started",
@@ -1841,10 +2043,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           }),
           { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED, detail: "the plan's limit" },
         ];
+
         // SAFETY: each message above is one app-server or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
         );
+
         yield* post(agent.bearer, events);
         const { rows, turns: ended } = yield* transcriptOf(agent.target.conversationId);
         const context = yield* readAgentContext(agent.userId, agent.agentId);
@@ -1892,6 +2096,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentOn(HARNESS.CODEX, ["List the issues."]);
+
         const listed = {
           type: "mcpToolCall",
           id: "mcp_linear",
@@ -1902,6 +2107,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           result: null,
           error: null,
         };
+
         const messagesOfTurn: WireValue[] = [
           {
             method: "thread/started",
@@ -1926,10 +2132,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           }),
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one app-server or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,
         );
+
         yield* post(agent.bearer, events);
         const { rows } = yield* transcriptOf(agent.target.conversationId);
         const parts = rows.at(-1)?.parts ?? [];
@@ -1951,6 +2159,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     Effect.gen(function* () {
       const post = yield* standing;
       const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+
       const spawn = {
         type: "collabAgentToolCall",
         id: "call_spawn",
@@ -1963,6 +2172,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         reasoningEffort: null,
         agentsStates: {},
       };
+
       const first: WireValue[] = [
         {
           method: "thread/started",
@@ -1982,6 +2192,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           },
         }),
       ];
+
       const second: WireValue[] = [
         {
           method: "turn/completed",
@@ -1990,6 +2201,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
       ];
+
       // SAFETY: each message above is one app-server or the runner emits, written in its JSON shape.
       const events = [...first, ...second].map(
         (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -2024,6 +2236,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     Effect.gen(function* () {
       const post = yield* standing;
       const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+
       const spawn = {
         type: "collabAgentToolCall",
         id: "call_spawn",
@@ -2035,6 +2248,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         model: null,
         agentsStates: {},
       };
+
       const messagesOfTurn: WireValue[] = [
         {
           method: "thread/started",
@@ -2053,6 +2267,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
       ];
+
       // SAFETY: each message above is one app-server or the runner emits, written in its JSON shape.
       const events = messagesOfTurn.map(
         (message, sequence) => ({ sequence, message }) as RunnerEvent,
@@ -2085,6 +2300,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   const planRow = (userId: string) =>
     Effect.map(listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH), (rows) => {
       const row: ProviderKeyRow | undefined = rows[0];
+
       return [row?.status, row?.limitResetsAt?.toISOString() ?? null] as const;
     });
 
@@ -2137,6 +2353,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
+
         const agent = yield* agentOn(HARNESS.CODEX, [
           "The probe's first turn.",
           "Also append the steered line.",
@@ -2145,6 +2362,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           "Go on.",
           "Go on again.",
         ]);
+
         yield* signedIn(agent.userId);
         const [first, stopped, resumed] = codexLaunches(agent.lineIds);
         assert.ok(first && stopped && resumed);
@@ -2154,6 +2372,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         statuses.push(yield* planRow(agent.userId));
 
         const resetsAt = Date.UTC(2026, 9, 22, 9);
+
         const limited = refusedLaunch(
           agent.lineIds[4] ?? "",
           (first.at(-1)?.sequence ?? 0) + 1,
@@ -2182,6 +2401,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             },
           ],
         );
+
         yield* post(agent.bearer, limited);
         statuses.push(yield* planRow(agent.userId));
 
@@ -2195,6 +2415,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             additionalDetails: null,
           },
         );
+
         yield* post(agent.bearer, signedOut);
         statuses.push(yield* planRow(agent.userId));
 
@@ -2203,6 +2424,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           ...event,
           sequence: (signedOut.at(-1)?.sequence ?? 0) + 1 + index,
         }));
+
         yield* post(agent.bearer, ranAgain);
         statuses.push(yield* planRow(agent.userId));
 
@@ -2222,6 +2444,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const post = yield* standing;
         const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
         yield* signedIn(agent.userId);
+
         const second = yield* saveProviderKey(
           agent.userId,
           PROVIDER_KEY_PROVIDER.OPENAI,
@@ -2233,6 +2456,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           null,
           { add: true },
         );
+
         yield* recordAgentPayer(
           agent.userId,
           agent.agentId,
@@ -2340,6 +2564,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const onKey = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.API_KEY }, [
           "Fix the test.",
         ]);
+
         yield* signedIn(onKey.userId);
         yield* post(
           onKey.bearer,
@@ -2371,16 +2596,16 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, as a local agent's machine's own login refused so reads as a machine to sign in on, where Vespin's own key refused so opens one",
     () =>
       Effect.gen(function* () {
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
+
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {
             reported.push(attributes);
           }),
         ]);
-        const post = yield* standingWith(
-          {},
-          Layer.merge(Layer.empty as Layer.Layer<AfterResponse>, reporting),
-        );
+
+        const post = yield* standingWith({}, reporting);
+
         // As Codex said the expired key of LUKE-WEB-2R: a connection failed, its 401 in its info.
         const expired = {
           message:
@@ -2392,6 +2617,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const onKey = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.API_KEY }, [
           "Fix the test.",
         ]);
+
         yield* saveProviderKey(
           onKey.userId,
           PROVIDER_KEY_PROVIDER.OPENAI,
@@ -2406,11 +2632,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const onApp = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.APP }, [
           "Fix the test.",
         ]);
+
         yield* post(onApp.bearer, refusedLaunch(onApp.lineId, 0, expired));
 
         const onMachine = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.MAC_SIGN_IN }, [
           "Fix the test.",
         ]);
+
         yield* post(onMachine.bearer, refusedLaunch(onMachine.lineId, 0, expired));
 
         const keyRows = yield* listProviderKeyRows(onKey.userId, PROVIDER_KEY_KIND.API_KEY);
@@ -2424,6 +2652,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
         // The starter's own key reads as a key to replace; Fullspin's own key refused is no key of theirs.
         const db = yield* Database;
+
         const failureOf = (conversationId: string) =>
           Effect.map(
             db
@@ -2436,6 +2665,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
               .where(eq(turns.conversationId, conversationId)),
             (ended) => ended.map((turn) => agentFailureOf(turn)),
           );
+
         assert.deepEqual(yield* failureOf(onKey.target.conversationId), [
           AGENT_FAILURE.PROVIDER_KEY,
         ]);
@@ -2450,18 +2680,19 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     "a turn OpenAI refused on the starter's ChatGPT plan is reported with OpenAI's error whole, its code as OpenAI said it",
     () =>
       Effect.gen(function* () {
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
+
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {
             reported.push(attributes);
           }),
         ]);
-        const post = yield* standingWith(
-          {},
-          Layer.merge(Layer.empty as Layer.Layer<AfterResponse>, reporting),
-        );
+
+        const post = yield* standingWith({}, reporting);
+
         const agent = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
         yield* signedIn(agent.userId);
+
         // As OpenAI refused VESPIN-WEB-2R's turns: its JSON error, which Codex hands on as the turn's message and the runner as its end's.
         const message = JSON.stringify(
           {
@@ -2476,16 +2707,19 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           null,
           2,
         );
+
         const refused = refusedLaunch(agent.lineId, 0, {
           message,
           codexErrorInfo: "other",
           additionalDetails: null,
         });
+
         // SAFETY: the runner's END, written in its JSON shape.
         const end = {
           sequence: refused.length - 1,
           message: { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED, detail: message },
         } as RunnerEvent;
+
         yield* post(agent.bearer, [...refused.slice(0, -1), end]);
 
         const detail = String(reported[0]?.detail);
@@ -2500,11 +2734,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const post = yield* standing;
         const agent = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
         yield* signedIn(agent.userId);
+
         const refused = refusedLaunch(agent.lineId, 0, {
           message: 'unexpected status 401: {"error":{"code":"subscription_sharing_invalid_user"}}',
           codexErrorInfo: "unauthorized",
           additionalDetails: null,
         });
+
         yield* post(agent.bearer, refused.slice(0, 2));
         yield* signedIn(agent.userId, new Date(60_000));
         yield* post(agent.bearer, refused.slice(2));
@@ -2529,6 +2765,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   const setupTokenRow = (userId: string) =>
     Effect.map(listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN), (rows) => {
       const row: ProviderKeyRow | undefined = rows[0];
+
       return [row?.status, row?.limitResetsAt?.toISOString() ?? null] as const;
     });
 
@@ -2544,6 +2781,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     limitReply = false,
   ): readonly unknown[] => {
     const top = { parent_tool_use_id: null, session_id: SESSION };
+
     return [
       { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
       { type: "system", subtype: "init", ...top },
@@ -2573,6 +2811,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
+
         const agent = yield* agentOn(HARNESS.CLAUDE_CODE, [
           "Run the probe.",
           "Go on.",
@@ -2580,12 +2819,16 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           "Once more.",
           "And again.",
         ]);
+
         yield* pasted(agent.userId);
+
         const statuses: (readonly [string | undefined, string | null])[] = [
           yield* setupTokenRow(agent.userId),
         ];
+
         const top = { parent_tool_use_id: null, session_id: SESSION };
         let next = 0;
+
         const launch = (messagesOfLaunch: readonly unknown[]) =>
           Effect.gen(function* () {
             const events = numberedFrom(next, messagesOfLaunch);
@@ -2593,12 +2836,14 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             yield* post(agent.bearer, events);
             statuses.push(yield* setupTokenRow(agent.userId));
           });
+
         const ran = (lineId: string) => workflowTurn(lineId).map((event) => event.message);
 
         yield* launch(ran(agent.lineIds[0] ?? ""));
 
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
         const weekResetsAt = Date.UTC(2026, 9, 25, 9);
+
         // The week's reading on every model, and one on Opus alone, which is a window of its own beside it.
         const weekOf = (rateLimitType: string, utilization: number) => ({
           type: "rate_limit_event",
@@ -2611,6 +2856,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           uuid: randomUUID(),
           ...top,
         });
+
         yield* launch(
           failedClaudeLaunch(agent.lineIds[1] ?? "", [
             weekOf("seven_day", 0.4),
@@ -2657,11 +2903,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+
         // The usage the limit reported stays the plan's latest, in percent of its five hours beside its weeks, through the turns after it.
         const [row] = yield* listProviderKeyRows(
           agent.userId,
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         );
+
         assert.deepEqual(
           row?.usageWindows?.toSorted((a, b) => (a.windowMins ?? 0) - (b.windowMins ?? 0)),
           [
@@ -2683,6 +2931,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* recordAgentPayer(agent.userId, agent.agentId, AGENT_PAYER.CLAUDE_SUBSCRIPTION, only);
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const limited = numberedFrom(
           0,
           failedClaudeLaunch(
@@ -2702,18 +2951,23 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             true,
           ),
         );
+
         yield* post(agent.bearer, limited);
+
         const waiting = (yield* latestTurnsOfReached([agent.target.conversationId])).get(
           agent.target.conversationId,
         );
+
         const early = yield* releaseWaitedTurns(new Date(resetsAt - 1), 1000);
         const released = yield* releaseWaitedTurns(new Date(resetsAt), 1000);
 
         // The launch the sweep hands it on to, past the reset, handed the turn's own line again.
         const bearer = randomBytes(32).toString("base64url");
+
         const launch = Option.getOrThrow(
           yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
         );
+
         const ran = workflowTurn(agent.lineId).map((event) => event.message);
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
@@ -2771,6 +3025,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           first,
         );
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         const limited = numberedFrom(
           0,
           failedClaudeLaunch(
@@ -2790,6 +3045,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             true,
           ),
         );
+
         yield* post(agent.bearer, limited);
         const cut = yield* transcriptOf(agent.target.conversationId);
         assert.ok(!JSON.stringify(cut.rows).includes("You've hit your session limit"));
@@ -2808,9 +3064,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
 
         // The launch on the next subscription, handed the turn's own line again.
         const bearer = randomBytes(32).toString("base64url");
+
         const launch = Option.getOrThrow(
           yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
         );
+
         const ran = workflowTurn(agent.lineId).map((event) => event.message);
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
@@ -2830,6 +3088,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const post = yield* standing;
         const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
         const top = { parent_tool_use_id: null, session_id: SESSION };
+
         // As the CLI answers a resume of a session it finds nowhere it looks.
         const refused = numberedFrom(0, [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
@@ -2842,14 +3101,17 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ]);
+
         yield* post(agent.bearer, refused);
         const cut = yield* transcriptOf(agent.target.conversationId);
 
         // The launch on a fresh session, handed the turn's own line again.
         const bearer = randomBytes(32).toString("base64url");
+
         const launch = Option.getOrThrow(
           yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
         );
+
         const ran = workflowTurn(agent.lineId).map((event) => event.message);
         yield* post(bearer, numberedFrom(refused.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
@@ -2888,6 +3150,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const onKey = yield* agentOn({ ...HARNESS.CLAUDE_CODE, payer: AGENT_PAYER.API_KEY }, [
           "Fix the test.",
         ]);
+
         yield* pasted(onKey.userId);
         yield* saveProviderKey(
           onKey.userId,
@@ -2933,9 +3196,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
 /** A title model answering every call with `title`, counting the calls. */
 function scriptedTitleModel(title: string) {
   const asked = { calls: 0 };
+
   const model = new MockLanguageModelV4({
     doGenerate: async () => {
       asked.calls += 1;
+
       return {
         content: [{ type: "text", text: title }],
         finishReason: { unified: "stop", raw: "stop" },
@@ -2947,14 +3212,17 @@ function scriptedTitleModel(title: string) {
       };
     },
   });
+
   return { model, asked };
 }
 
 it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
   const top = { parent_tool_use_id: null, session_id: SESSION };
+
   const numbered = (messagesOfLaunch: readonly unknown[], from = 0) =>
     // SAFETY: each message is one the pinned SDK, app-server, or the runner emits, written in its JSON shape.
     messagesOfLaunch.map((message, index) => ({ sequence: from + index, message }) as RunnerEvent);
+
   /** A model call's answer carrying the usage the Messages API counts for it. */
   const answered = (
     id: string,
@@ -2994,6 +3262,7 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
             answered("msg_2", "Fixed it.", 5, 2400, 60),
           ]),
         );
+
         const step = Option.getOrThrow(
           yield* readAgentContext(agent.userId, agent.agentId),
         ).lastStep;
@@ -3017,6 +3286,7 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
     Effect.gen(function* () {
       const post = yield* standing;
       const agent = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
+
       const breakdown = (input: number, cached: number, output: number) => ({
         totalTokens: input + output,
         inputTokens: input,
@@ -3025,6 +3295,7 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
         outputTokens: output,
         reasoningOutputTokens: 0,
       });
+
       yield* post(
         agent.bearer,
         numbered([
@@ -3051,16 +3322,20 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
     () =>
       Effect.gen(function* () {
         const { model, asked } = scriptedTitleModel("Fix the flaky invite test");
+
         const post = yield* standingWith({
           title: (target, agent) => Effect.orDie(titleAgent(model, target, agent)),
         });
+
         const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Fix the flaky invite test."]);
         yield* updateTask(agent.userId, agent.taskId, { name: UNTITLED_TASK_NAME });
+
         const turn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           { type: "system", subtype: "init", ...top },
           answered("msg_1", "On it.", 3, 0, 4),
         ];
+
         yield* post(agent.bearer, numbered(turn));
         const named = Option.getOrThrow(yield* readAgent(agent.userId, agent.agentId));
         const task = Option.getOrThrow(yield* readTask(agent.userId, agent.taskId)).task;
@@ -3080,11 +3355,14 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
     Effect.gen(function* () {
       const { model, asked } = scriptedTitleModel("Fix the flaky invite test");
       const after = keptAfterResponse();
+
       const post = yield* standingWith(
         { title: (target, agent) => Effect.orDie(titleAgent(model, target, agent)) },
         after.layer,
       );
+
       const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Fix the flaky invite test."]);
+
       const answer = yield* post(
         agent.bearer,
         numbered([
@@ -3092,9 +3370,11 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
           { type: "system", subtype: "init", ...top },
         ]),
       );
+
       const answeredUntitled = Option.getOrThrow(
         yield* readAgent(agent.userId, agent.agentId),
       ).title;
+
       const callsAtAnswer = asked.calls;
       yield* after.run;
       const named = Option.getOrThrow(yield* readAgent(agent.userId, agent.agentId));
@@ -3317,6 +3597,7 @@ it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped"
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentOn(harness, ["Collect the menus."]);
+
         // SAFETY: each message is one the pinned harness or the runner emits, written in its JSON shape.
         const posted = events(agent.lineId).map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,

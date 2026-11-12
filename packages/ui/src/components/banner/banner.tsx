@@ -76,6 +76,7 @@ export function Banner({
   const wordsId = useId();
   const [measured, clipped] = useClipped();
   const strip = look === BANNER_LOOK.STRIP;
+
   return (
     <Alert look={look} tone={tone} aria-labelledby={wordsId}>
       <AlertRow look={look}>

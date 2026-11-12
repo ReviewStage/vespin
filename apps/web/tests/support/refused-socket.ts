@@ -11,19 +11,31 @@
  * back after a test that stubs a socket of its own (`vi.stubGlobal`).
  */
 
-class RefusedSocket extends EventTarget {
+class RefusedSocket extends EventTarget implements WebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSING = 2;
   static readonly CLOSED = 3;
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
   readonly readyState = RefusedSocket.CLOSED;
-  binaryType = "blob";
-  constructor(readonly url: string) {
+  readonly bufferedAmount = 0;
+  readonly extensions = "";
+  readonly protocol = "";
+  binaryType: BinaryType = "blob";
+  onclose: WebSocket["onclose"] = null;
+  onerror: WebSocket["onerror"] = null;
+  onmessage: WebSocket["onmessage"] = null;
+  onopen: WebSocket["onopen"] = null;
+  readonly url: string;
+  constructor(url: string | URL) {
     super();
+    this.url = String(url);
   }
   send(): void {}
   close(): void {}
 }
 
-// SAFETY: the host reads only the constants, `readyState`, events, `send`, and `close` of a socket, which this stand-in has.
-globalThis.WebSocket = RefusedSocket as unknown as typeof WebSocket;
+globalThis.WebSocket = RefusedSocket;

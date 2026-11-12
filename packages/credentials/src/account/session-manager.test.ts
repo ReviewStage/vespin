@@ -24,7 +24,11 @@ const STORED: StoredAccount = {
 function manager(options: {
   stored?: StoredAccount;
   revoke?: (token: string) => Effect.Effect<void, Error>;
-  exchangeCode?: () => Effect.Effect<{ accessToken: string; refreshToken: string }, Error>;
+  exchangeCode?: (input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }) => Effect.Effect<{ accessToken: string; refreshToken: string }, Error>;
   client?: AccountClient;
   /** Who the service says a token belongs to; the stored account's person unless given. */
   identity?: { id: string; email: string };
@@ -66,6 +70,7 @@ function manager(options: {
     const opened: string[] = [];
     const sessionExchanges: { code: string; state: string; codeVerifier: string }[] = [];
     const endedSessions: string[] = [];
+
     // SAFETY: Fixture client implements only the AccountClient methods the manager calls.
     const fixtureClient = {
       revoke: options.revoke ?? (() => Effect.void),
@@ -79,28 +84,38 @@ function manager(options: {
       refresh:
         options.refresh ??
         (() => Effect.succeed({ accessToken: "new-access", refreshToken: "new-refresh" })),
-      authorizeUrl: (input: { redirectUri: string; state: string }) => {
+      authorizeUrl: (input: { redirectUri: string; state: string; codeChallenge: string }) => {
         authorizations.push(input);
+
         return `https://accounts.example/authorize?state=${encodeURIComponent(input.state)}`;
       },
       exchangeCode:
         options.exchangeCode ??
         (() => Effect.succeed({ accessToken: "issued-access", refreshToken: "issued-refresh" })),
-      exchangeSessionCode: (input: { code: string; state: string; codeVerifier: string }) =>
+      exchangeSessionCode: (input: {
+        code: string;
+        state: string;
+        codeVerifier: string;
+      }): Effect.Effect<
+        { sessionToken: string; userId: string | undefined; email: string },
+        Error
+      > =>
         Effect.sync(() => {
           sessionExchanges.push(input);
+
           return {
             sessionToken: "signed-session",
             userId: options.sessionUserId ?? STORED.id,
             email: options.sessionEmail ?? STORED.email,
           };
         }),
-      endSession: (token: string) =>
+      endSession: (token: string): Effect.Effect<void, Error> =>
         Effect.sync(() => {
           endedSessions.push(token);
         }),
       deleteUser: options.deleteUser ?? (() => Effect.void),
-    } as unknown as AccountClient;
+    } as AccountClient;
+
     const instance = yield* AccountSessionManager.make({
       client: options.client ?? fixtureClient,
       store: {
@@ -108,12 +123,14 @@ function manager(options: {
         setAccount: (next) =>
           Effect.sync(() => {
             stored = next;
+
             return { status: ACCOUNT_STATUS.SIGNED_IN, ...next };
           }),
         clearAccount: () =>
           Effect.gen(function* () {
             if (options.beforeClear) yield* options.beforeClear;
             stored = undefined;
+
             return { status: ACCOUNT_STATUS.SIGNED_OUT };
           }),
       },
@@ -135,6 +152,7 @@ function manager(options: {
           events.push("stop");
         }),
     });
+
     // The subscriber every test is: a fiber forked into the test's own scope,
     // pumping every snapshot the instance settles on, exactly as
     // `compose-account.ts`'s `lifetime` does over the same `changes` stream.
@@ -142,6 +160,7 @@ function manager(options: {
     yield* Effect.forkScoped(
       Stream.runForEach(subscription, (account) => Effect.sync(() => changes.push(account.status))),
     );
+
     return {
       instance,
       changes,
@@ -158,6 +177,7 @@ function manager(options: {
 it.effect("sign out closes capabilities, clears storage, broadcasts, then revokes", () =>
   Effect.gen(function* () {
     const calls: string[] = [];
+
     const subject = yield* manager({
       stored: STORED,
       revoke: () =>
@@ -165,6 +185,7 @@ it.effect("sign out closes capabilities, clears storage, broadcasts, then revoke
           calls.push("revoke");
         }),
     });
+
     subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
     yield* subject.instance.signOut({ revokeRemote: true });
     // The subscriber is a separate fiber pumping the published snapshots, so
@@ -190,10 +211,13 @@ function refreshingClient(
 ): AccountClient {
   const fetchStub: FakeResponder = async (input, init) => {
     const request = new Request(input, init);
+
     if (request.url.endsWith("/oauth2/userinfo")) return userInfoEndpoint(request);
+
     if (request.url.endsWith("/oauth2/token")) return tokenEndpoint(request);
     throw new Error(`unexpected request to ${request.url}`);
   };
+
   return new AccountClient({
     baseUrl: "https://vespin.dev/api/auth",
     clientId: "desktop",
@@ -230,6 +254,7 @@ it.effect(
           ),
         ),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
 
       yield* subject.instance.refresh();
@@ -246,6 +271,7 @@ it.effect(
       // The stop waits on the renewal's caller, as `tasks.reset` waits on the
       // lock a Plans read holds while it renews.
       const callerDone = yield* Deferred.make<void>();
+
       const subject = yield* manager({
         stored: STORED,
         client: refreshingClient(() =>
@@ -258,6 +284,7 @@ it.effect(
         ),
         stopCapabilities: Deferred.await(callerDone),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
       const changes = yield* subject.instance.changes;
 
@@ -287,6 +314,7 @@ function grantCode(authorizations: readonly { redirectUri: string; state: string
     const callback = new URL(redirectUri);
     callback.searchParams.set("state", state);
     callback.searchParams.set("code", "auth-code");
+
     // The browser is handed on to the hand-off page rather than following it here.
     return yield* Effect.promise(() => fetch(callback, { redirect: "manual" }));
   });
@@ -309,8 +337,10 @@ it.effect(
           ),
         ),
       );
+
       const released = yield* Deferred.make<void>();
       const order: string[] = [];
+
       const subject = yield* manager({
         stored: STORED,
         refresh: (token) => refusing.refresh(token),
@@ -319,12 +349,14 @@ it.effect(
           Effect.andThen(Effect.sync(() => order.push("stop"))),
         ),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
       yield* subject.instance.renewOnce();
 
       const signingIn = yield* Effect.forkChild(
         subject.instance.beginSignIn(ACCOUNT_PROVIDER.GITHUB),
       );
+
       const granting = yield* Effect.forkChild(grantCode(subject.authorizations));
       // The stop is held until a sign-in that did not wait would have landed.
       yield* Effect.race(
@@ -351,18 +383,22 @@ it.effect("a sign-in canceled while a refused renewal's sign-out settles opens n
         ),
       ),
     );
+
     const released = yield* Deferred.make<void>();
+
     const subject = yield* manager({
       stored: STORED,
       refresh: (token) => refusing.refresh(token),
       stopCapabilities: Deferred.await(released),
     });
+
     subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
     yield* subject.instance.renewOnce();
 
     const signingIn = yield* Effect.forkChild(
       subject.instance.beginSignIn(ACCOUNT_PROVIDER.GITHUB),
     );
+
     yield* Effect.yieldNow;
     subject.instance.cancelSignIn();
     yield* Deferred.succeed(released, undefined);
@@ -385,12 +421,15 @@ it.effect(
           ),
         ),
       );
+
       const released = yield* Deferred.make<void>();
+
       const subject = yield* manager({
         stored: STORED,
         refresh: (token) => refusing.refresh(token),
         stopCapabilities: Deferred.await(released),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
       const again = yield* Effect.forkChild(subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB));
       yield* Effect.promise(() => armed(subject.authorizations));
@@ -399,6 +438,7 @@ it.effect(
       const signingIn = yield* Effect.forkChild(
         subject.instance.beginSignIn(ACCOUNT_PROVIDER.GITHUB),
       );
+
       yield* Effect.yieldNow;
       subject.instance.cancelSignIn();
       yield* Deferred.succeed(released, undefined);
@@ -412,6 +452,7 @@ it.effect(
 /** The hand-off page the sign-in sent the browser on to, read off its redirect. */
 function handOffPage(response: Response): URL {
   assert.equal(response.status, 303);
+
   return new URL(response.headers.get("location") ?? "");
 }
 
@@ -421,6 +462,7 @@ function returnCode(page: URL, code = "session-code") {
     const back = new URL(page.searchParams.get("return_to") ?? "");
     back.searchParams.set("code", code);
     back.searchParams.set("state", page.searchParams.get("state") ?? "");
+
     return fetch(back);
   });
 }
@@ -428,6 +470,7 @@ function returnCode(page: URL, code = "session-code") {
 /** Waits for the session trip to have opened its hand-off page in the browser. */
 async function openedPage(opened: readonly string[]): Promise<URL> {
   while (opened.length === 0) await new Promise((resolve) => setImmediate(resolve));
+
   // SAFETY: the loop returns only once a page was opened.
   return new URL(opened[0] as string);
 }
@@ -441,9 +484,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const subject = yield* manager({});
+
       const signingIn = yield* Effect.forkChild(
         subject.instance.beginSignIn(ACCOUNT_PROVIDER.GITHUB),
       );
+
       const page = handOffPage(yield* grantCode(subject.authorizations));
       assert.equal((yield* Fiber.join(signingIn)).status, ACCOUNT_STATUS.SIGNED_IN);
       assert.equal(page.origin + page.pathname, "https://example.com/desktop-session");
@@ -489,17 +534,20 @@ it.effect(
  */
 function refusingService(identity: () => Response) {
   const deletedUnder: string[] = [];
+
   const client = new AccountClient({
     baseUrl: "https://accounts.example",
     clientId: "client",
     httpClient: fakeHttpClientLayer((url, init) => {
       if (url.endsWith("/oauth2/userinfo")) return identity();
       deletedUnder.push(new Headers(init.headers).get("authorization") ?? "");
+
       return deletedUnder.length === 1
         ? jsonResponse({}, HTTP_STATUS.UNAUTHORIZED)
         : jsonResponse({ success: true });
     }),
   });
+
   return { client, deletedUnder };
 }
 
@@ -510,11 +558,13 @@ it.effect(
       const service = refusingService(() =>
         jsonResponse({ error: "invalid_request", error_description: "user not found" }, 400),
       );
+
       const subject = yield* manager({
         stored: { ...STORED, sessionToken: "signed-session" },
         deleteUser: (token) => service.client.deleteUser(token),
         userInfo: (token, provider) => service.client.userInfo(token, provider),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
 
       const account = yield* subject.instance.deleteEverywhere();
@@ -532,11 +582,13 @@ it.effect(
       const service = refusingService(() => {
         throw new TypeError("fetch failed");
       });
+
       const subject = yield* manager({
         stored: { ...STORED, sessionToken: "signed-session" },
         deleteUser: (token) => service.client.deleteUser(token),
         userInfo: (token, provider) => service.client.userInfo(token, provider),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
 
       const refused = yield* Effect.flip(subject.instance.deleteEverywhere());
@@ -554,11 +606,13 @@ it.effect(
       const service = refusingService(() =>
         jsonResponse({ sub: STORED.id ?? "", email: STORED.email }),
       );
+
       const subject = yield* manager({
         stored: { ...STORED, sessionToken: "lapsed-session" },
         deleteUser: (token) => service.client.deleteUser(token),
         userInfo: (token, provider) => service.client.userInfo(token, provider),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
       const asked = yield* Effect.forkChild(subject.instance.deleteEverywhere());
 
@@ -612,6 +666,7 @@ it.effect(
     Effect.gen(function* () {
       const subject = yield* manager({ stored: { ...STORED, sessionToken: "standing-session" } });
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
       const pending = yield* Effect.forkChild(
         subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB),
       );
@@ -630,6 +685,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const revoked: string[] = [];
+
       const subject = yield* manager({
         stored: STORED,
         revoke: (token) =>
@@ -637,10 +693,13 @@ it.effect(
             revoked.push(token);
           }),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
       const pending = yield* Effect.forkChild(
         subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB),
       );
+
       yield* Effect.promise(() => armed(subject.authorizations));
 
       subject.instance.cancelSignIn();
@@ -657,6 +716,7 @@ it.effect(
 it.effect("a sign-in again that lands replaces the standing session and revokes its token", () =>
   Effect.gen(function* () {
     const revoked: string[] = [];
+
     const subject = yield* manager({
       stored: STORED,
       revoke: (token) =>
@@ -664,6 +724,7 @@ it.effect("a sign-in again that lands replaces the standing session and revokes 
           revoked.push(token);
         }),
     });
+
     subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
     const pending = yield* Effect.forkChild(subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB));
     yield* grantCode(subject.authorizations);
@@ -683,10 +744,13 @@ it.effect("a sign-in again the account refuses fails and leaves the standing ses
       stored: STORED,
       exchangeCode: () => Effect.fail(new Error("Account refused the exchange")),
     });
+
     subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
     const refused = yield* Effect.forkChild(
       Effect.exit(subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB)),
     );
+
     yield* grantCode(subject.authorizations);
 
     assert.equal(Exit.isFailure(yield* Fiber.join(refused)), true);
@@ -700,6 +764,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const revoked: string[] = [];
+
       const subject = yield* manager({
         stored: STORED,
         identity: { id: "user-2", email: "someone@example.com" },
@@ -708,10 +773,13 @@ it.effect(
             revoked.push(token);
           }),
       });
+
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
       const refused = yield* Effect.forkChild(
         Effect.exit(subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB)),
       );
+
       yield* grantCode(subject.authorizations);
 
       assert.equal(Exit.isFailure(yield* Fiber.join(refused)), true);
@@ -784,6 +852,7 @@ it.effect("a sign-out ends a sign-in again still open, which answers no", () =>
         "still open",
       ),
     );
+
     assert.equal(answered, false);
   }),
 );

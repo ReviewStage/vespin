@@ -63,24 +63,30 @@ function mergedSkills(
   reserved: ReadonlySet<string>,
   installed: readonly InstalledSkill[],
 ): readonly TaskSkill[] {
-  const offered = installed
-    .filter((skill) => skill.userInvocable)
-    .map(
-      (skill): TaskSkill => ({
-        name: skill.name,
-        description: skill.description.slice(0, TASK_SKILL_BOUNDS.MAX_DESCRIPTION_CHARS),
-        source: SOURCE_OF_SCOPE[skill.scope],
-      }),
-    );
+  const offered = installed.flatMap((skill): TaskSkill[] =>
+    skill.userInvocable
+      ? [
+          {
+            name: skill.name,
+            description: skill.description.slice(0, TASK_SKILL_BOUNDS.MAX_DESCRIPTION_CHARS),
+            source: SOURCE_OF_SCOPE[skill.scope],
+          },
+        ]
+      : [],
+  );
+
   // Note that a repository skill the model alone loads is not offered, but still holds its name, as the session's merge does.
   const taken = new Set<string>(reserved);
   const merged: TaskSkill[] = [...repository];
+
   for (const skill of repository) taken.add(skill.name);
+
   for (const skill of offered) {
     if (taken.has(skill.name)) continue;
     taken.add(skill.name);
     merged.push(skill);
   }
+
   return merged.slice(0, TASK_SKILL_BOUNDS.MAX_SKILLS);
 }
 
@@ -91,9 +97,11 @@ const readRepository = /* @__PURE__ */ Effect.fn("web/taskSkillsRead")(function*
   member: string,
 ) {
   const reach = yield* reachTaskRepository(organizationId, repository, member);
+
   if ("refused" in reach) return reach.refused;
   const { token, repository: confirmed, access } = reach.reached;
   const skills = yield* readRepositorySkills(token, confirmed).pipe(markRefusedToken(access));
+
   return {
     branch: confirmed.defaultBranch,
     reserved: new Set(skills.map((skill) => skill.name)),
@@ -126,7 +134,9 @@ export function readTaskSkills(
 > {
   return Effect.gen(function* () {
     const stored = yield* readTaskHeader(userId, taskId);
+
     if (Option.isNone(stored)) return Option.none();
+
     return Option.some(
       yield* readWorkspaceSkills(
         stored.value.workspaceId,
@@ -158,6 +168,7 @@ export function readWorkspaceSkills(
 > {
   return Effect.gen(function* () {
     if (repository === null && !installed) return refused(TASK_FILE_REFUSAL.NO_REPOSITORY);
+
     const read =
       repository === null
         ? { branch: null, reserved: new Set<string>(), skills: [] }
@@ -166,8 +177,10 @@ export function readWorkspaceSkills(
               Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
             ),
           );
+
     if ("refusal" in read) return read;
     const offered = installed ? yield* listInstalledSkills(member, workspaceId) : [];
+
     return {
       skills: {
         repository,

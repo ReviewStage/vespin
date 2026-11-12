@@ -36,6 +36,7 @@ const openConversation = Effect.gen(function* () {
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
   const conversationId = yield* openAgentConversation(id, yield* openWorkspace(id));
+
   return conversationId;
 });
 
@@ -89,6 +90,7 @@ it.layer(getTestDB())("restoring an agent's Browser tabs", (it) => {
             const cdp = yield* agent.connect(SESSION);
             // The other connection reopens the tab and moves its row while this one opens its own page.
             const database = yield* Effect.context<DatabaseServices>();
+
             const raced: CdpSession = {
               ...cdp,
               openPage: (url) =>
@@ -98,9 +100,11 @@ it.layer(getTestDB())("restoring an agent's Browser tabs", (it) => {
                     Effect.provideContext(database),
                     Effect.orDie,
                   );
+
                   return yield* cdp.openPage(url);
                 }),
             };
+
             yield* restoreBrowserTabs(conversationId, raced);
           }),
         ).pipe(Effect.provide(agentBrowserTestLayer(peer, SESSION)));
@@ -140,6 +144,7 @@ it.layer(getTestDB())("restoring an agent's Browser tabs", (it) => {
       Effect.gen(function* () {
         const conversationId = yield* openConversation;
         yield* keep(conversationId, "before-1", "https://shop.test/cart");
+
         const peer = yield* fakeCdpPeer({
           answer: (command) =>
             command.method === "Target.getTargets"

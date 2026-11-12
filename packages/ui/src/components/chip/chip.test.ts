@@ -50,6 +50,7 @@ function render(element: ReactElement): void {
 /** A row of filters whose caller holds the one pressed, as ⌘K's does. */
 function Filters(): React.JSX.Element {
   const [chosen, setChosen] = useState<string>(FILTERS[0]);
+
   return createElement(
     "div",
     null,
@@ -71,14 +72,15 @@ function Filters(): React.JSX.Element {
 function chip(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find((each) => each.textContent === name);
   assert.ok(found, `the ${name} filter is drawn`);
+
   return found;
 }
 
 /** The names of the filters that say they stand pressed. */
 function pressed(): string[] {
-  return [...document.querySelectorAll("button")]
-    .filter((each) => each.getAttribute("aria-pressed") === "true")
-    .map((each) => each.textContent ?? "");
+  return [...document.querySelectorAll("button")].flatMap((each) =>
+    each.getAttribute("aria-pressed") === "true" ? [each.textContent ?? ""] : [],
+  );
 }
 
 test("a row of filter chips announces the first as pressed and the rest as not", () => {
@@ -110,7 +112,9 @@ test("a chip drawn as its mark alone is still named by its words", () => {
 /** A removable chip whose caller lifts it, as the sidebar's view filter does. */
 function Removable(): React.JSX.Element | null {
   const [standing, setStanding] = useState(true);
+
   if (!standing) return null;
+
   return createElement(Chip, {
     look: CHIP_LOOK.FILTER,
     removeLabel: "Show everyone's tasks",
@@ -135,6 +139,7 @@ test("a removable chip is no press of its own, and its × named for what it does
 function Reaction(): React.JSX.Element {
   const [mine, setMine] = useState(false);
   const [out, setOut] = useState(false);
+
   return createElement(
     "div",
     null,

@@ -68,6 +68,7 @@ export function FailureRatesChart({
 }): React.JSX.Element {
   const title = FAILURE_RATES_TITLE;
   const anything = daily.some((day) => SERIES.some((series) => day[series] !== null));
+
   if (!anything) {
     return (
       <ChartFrame title={title}>
@@ -77,6 +78,7 @@ export function FailureRatesChart({
   }
 
   const partialDay = partialDayKey(daily, generatedAt);
+
   return (
     <ChartFrame title={title} legend={<FailureRatesLegend />}>
       <ChartContainer

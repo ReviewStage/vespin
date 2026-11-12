@@ -38,6 +38,7 @@ function Room({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
+
   // Note that the toggle stands above the tab rather than in it, as a tab's
   // bar does, so the pane it floats never covers it.
   return (

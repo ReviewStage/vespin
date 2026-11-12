@@ -97,6 +97,8 @@ export function hostRuntime(input: {
   readonly home: string;
 }): HostRuntime | undefined {
   const hostOs = [LINUX_HOST, DARWIN_HOST].find((each) => each.platform === input.platform);
+
   if (hostOs === undefined) return undefined;
+
   return { os: hostOs, stateRoot: hostOs.stateRoot(input.home) };
 }

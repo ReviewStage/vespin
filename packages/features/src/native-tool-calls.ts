@@ -41,12 +41,14 @@ function answerWords(output: WireValue | undefined): string | undefined {
 /** The answer under the key the drawn tool answers its words in; an answer that is not words, or none yet, as it is. */
 function wordsUnder(output: WireValue | undefined, key: string): WireValue | undefined {
   const words = answerWords(output);
+
   return words === undefined ? output : { [key]: words };
 }
 
 /** A command's answer as the retired runtime's shell answered one: the terminal's words as its output. Note that the CLI folds the command's errors into the same words, so none are told apart. */
 function terminalAnswer(output: WireValue | undefined): WireValue | undefined {
   const words = answerWords(output);
+
   return words === undefined ? output : { stdout: words, stderr: "", exitCode: 0 };
 }
 
@@ -66,7 +68,9 @@ const OPENAI = "openai";
  */
 function withMaker(input: WireValue | undefined, maker: string): WireValue | undefined {
   const model = inputString(input, "model");
+
   if (!isRecord(input) || model === undefined || model.includes("/")) return input;
+
   return { ...input, model: `${maker}/${model}` };
 }
 
@@ -74,7 +78,9 @@ function withMaker(input: WireValue | undefined, maker: string): WireValue | und
 function patchLines(mark: string, words: string | undefined): readonly string[] {
   if (words === undefined || words === "") return [];
   const lines = words.split("\n");
+
   if (words.endsWith("\n")) lines.pop();
+
   return lines.map((line) => `${mark}${line}`);
 }
 
@@ -91,7 +97,9 @@ function todoStatus(status: WireValue | undefined): WireValue | undefined {
 /** A `TodoWrite` list as `write_todos` takes one: each item's words and status; an item that does not read is kept, so the list reads as JSON rather than as a shorter list. */
 function todosInput(input: WireValue | undefined): WireValue | undefined {
   const todos = isRecord(input) ? input.todos : undefined;
+
   if (!Array.isArray(todos)) return input;
+
   return {
     todos: todos.map((todo: WireValue) =>
       isRecord(todo)
@@ -104,6 +112,7 @@ function todosInput(input: WireValue | undefined): WireValue | undefined {
 /** What a monitor watches, as the command its row names: its command, or the socket it opened. */
 function watched(input: WireValue | undefined): string {
   const socket = isRecord(input) ? input.ws : undefined;
+
   return inputString(input, "command") ?? inputString(socket, "url") ?? "";
 }
 
@@ -159,6 +168,7 @@ const CLAUDE_CODE_CALLS: Record<
   [CLAUDE_CODE_TOOL.NOTEBOOK_EDIT]: ({ input, output }) => {
     const mode = inputString(input, "edit_mode") ?? "replace";
     const cell = inputString(input, "cell_id");
+
     return {
       tool: AGENT_TOOL.APPLY_PATCH,
       input: {
@@ -221,15 +231,16 @@ const CLAUDE_CODE_CALLS: Record<
 function codexTerminalAnswer(output: WireValue | undefined): WireValue | undefined {
   if (!isRecord(output) || !isWireString(output.output)) return output;
   const exitCode = isWireNumber(output.exitCode) ? output.exitCode : 0;
+
   return { stdout: output.output, stderr: "", exitCode };
 }
 
 /** The header `apply_patch` opens a file's change with, for each kind of change Codex reports. */
-const CODEX_CHANGE_HEADER: Readonly<Record<string, string>> = {
-  add: "Add",
-  delete: "Delete",
-  update: "Update",
-};
+const CODEX_CHANGE_HEADER: ReadonlyMap<string, string> = new Map([
+  ["add", "Add"],
+  ["delete", "Delete"],
+  ["update", "Update"],
+]);
 
 /**
  * One file of a Codex file change as `apply_patch` spells it: a file added
@@ -242,10 +253,13 @@ function codexFilePatch(change: WireValue): readonly string[] {
   const kind = isRecord(change) ? change.kind : undefined;
   const type = inputString(kind, "type") ?? "update";
   const diff = inputString(change, "diff");
-  const header = `*** ${CODEX_CHANGE_HEADER[type] ?? "Update"} File: ${path}`;
+  const header = `*** ${CODEX_CHANGE_HEADER.get(type) ?? "Update"} File: ${path}`;
+
   if (type === "add") return [header, ...patchLines("+", diff)];
+
   if (type === "delete") return [header, ...patchLines("-", diff)];
   const moved = inputString(kind, "move_path");
+
   return [
     header,
     ...(moved === undefined ? [] : [`*** Move to: ${moved}`]),
@@ -256,21 +270,27 @@ function codexFilePatch(change: WireValue): readonly string[] {
 /** A Codex file change's files as one `apply_patch`, which the edit renderer reads each file and its colored lines from. */
 function codexPatch(input: WireValue | undefined): WireValue | undefined {
   const changes = isRecord(input) ? input.changes : undefined;
+
   if (!Array.isArray(changes)) return input;
+
   return { patchText: changes.flatMap(codexFilePatch).join("\n") };
 }
 
 /** A plan step's status as the wire spells a to-do's: Codex's `inProgress` and `completed` are in progress and done. */
 function codexStepStatus(status: WireValue | undefined): WireValue | undefined {
   if (status === "inProgress") return AGENT_TODO_STATUS.IN_PROGRESS;
+
   if (status === "completed") return AGENT_TODO_STATUS.DONE;
+
   return status;
 }
 
 /** Codex's plan as `write_todos` takes a list: each step's words and status; a step that does not read is kept, so the list reads as JSON rather than as a shorter list. */
 function codexTodosInput(input: WireValue | undefined): WireValue | undefined {
   const plan = isRecord(input) ? input.plan : undefined;
+
   if (!Array.isArray(plan)) return input;
+
   return {
     todos: plan.map((step: WireValue) =>
       isRecord(step)
@@ -281,11 +301,11 @@ function codexTodosInput(input: WireValue | undefined): WireValue | undefined {
 }
 
 /** The few words a Codex subagent call is named by where it carries no task: what it did to the subagents it names. */
-const CODEX_SUBAGENT_DOING: Readonly<Record<string, string>> = {
-  wait: "Wait for subagents",
-  closeAgent: "Close a subagent",
-  resumeAgent: "Resume a subagent",
-};
+const CODEX_SUBAGENT_DOING: ReadonlyMap<string, string> = new Map([
+  ["wait", "Wait for subagents"],
+  ["closeAgent", "Close a subagent"],
+  ["resumeAgent", "Resume a subagent"],
+]);
 
 /** The collab tool that starts a subagent on a thread of its own, as `CollabAgentTool` spells it. */
 const CODEX_SPAWN_AGENT = "spawnAgent";
@@ -294,6 +314,7 @@ const CODEX_SPAWN_AGENT = "spawnAgent";
 function codexSpawnInput(input: WireValue | undefined): WireValue | undefined {
   const model = inputString(input, "model");
   const effort = inputString(input, "effort");
+
   return withMaker(
     {
       prompt: inputString(input, "prompt") ?? "",
@@ -309,19 +330,24 @@ function codexSubagentInput(input: WireValue | undefined): WireValue | undefined
   if (!isRecord(input)) return input;
   const prompt = inputString(input, "prompt") ?? "";
   const tool = inputString(input, "tool") ?? "";
+
   return prompt.trim() === ""
-    ? { prompt, description: CODEX_SUBAGENT_DOING[tool] ?? tool }
+    ? { prompt, description: CODEX_SUBAGENT_DOING.get(tool) ?? tool }
     : { prompt };
 }
 
 /** A Codex subagent call's answer as the subagents' words, each state's message, or its status where none said any; any other answer as it is. */
 function codexSubagentAnswer(output: WireValue | undefined): WireValue | undefined {
   const states = isRecord(output) ? output.agentsStates : undefined;
+
   if (!isRecord(states)) return output;
+
   const words = Object.values(states).flatMap((state) => {
     const message = inputString(state, "message")?.trim();
+
     return message === undefined || message === "" ? [] : [message];
   });
+
   return words.length > 0 ? words.join("\n\n") : (inputString(output, "status") ?? output);
 }
 

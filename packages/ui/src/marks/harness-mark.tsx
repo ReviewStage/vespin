@@ -43,6 +43,7 @@ export function HarnessMark({ provider, codexArt }: HarnessMarkProps): React.JSX
       />
     );
   }
+
   return (
     <svg
       className="ui-harness-mark"

@@ -13,6 +13,7 @@ const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };
@@ -20,8 +21,15 @@ function subscribe(listener: () => void): () => void {
 
 function choose(choice: Choice): void {
   held = choice;
+
   for (const listener of listeners) listener();
 }
+
+type UseSidebarShownResult = {
+  readonly shown: boolean;
+  readonly setShown: (shown: boolean) => void;
+  readonly toggle: () => void;
+};
 
 /**
  * Whether a regular window's first column stands, the app sidebar in a
@@ -31,14 +39,11 @@ function choose(choice: Choice): void {
  * holds across the tabs, since every tab's split view reads this one
  * answer, until the window is resized past three columns or back.
  */
-export function useSidebarShown(): {
-  readonly shown: boolean;
-  readonly setShown: (shown: boolean) => void;
-  readonly toggle: () => void;
-} {
+export function useSidebarShown(): UseSidebarShownResult {
   const threeColumns = useThreeColumns();
   const choice = useSyncExternalStore(subscribe, () => held);
   const shown = choice?.threeColumns === threeColumns ? choice.shown : true;
   const setShown = (next: boolean) => choose({ threeColumns, shown: next });
+
   return { shown, setShown, toggle: () => setShown(!shown) };
 }

@@ -44,6 +44,7 @@ export function useWholePartDoor(agentId: string, callId?: string): WholePartDoo
  */
 function wholePartQueryOptions(door: WholePartDoor | undefined, cut: AgentPartCut) {
   const { messageId, index, bytes } = cut;
+
   return queryOptions({
     queryKey: [QUERY_ROOT.AGENT_PART, door?.agentId, door?.callId ?? null, messageId, index, bytes],
     queryFn:
@@ -91,9 +92,12 @@ function wholePartRead(
   | { readonly state: Exclude<WholePartState, typeof WHOLE_PART.WHOLE> }
   | { readonly state: typeof WHOLE_PART.WHOLE; readonly part: WireValue } {
   if (!opened) return { state: WHOLE_PART.CUT };
+
   if (!reachable || whole.isError) return { state: WHOLE_PART.FAILED };
+
   if (whole.isPending) return { state: WHOLE_PART.READING };
   const answer = whole.data;
+
   return "part" in answer && isCutPart(answer.part)
     ? { state: WHOLE_PART.WHOLE, part: answer.part }
     : { state: WHOLE_PART.FAILED };
@@ -115,12 +119,16 @@ export function useWholePart(
   // Note that the fold opened at one size is not opened at another, so a part that grew is drawn cut again.
   const [openedAt, setOpenedAt] = useState<number>();
   const opened = openedAt === bytes;
+
   const whole = useQuery({
     ...wholePartQueryOptions(door, cut),
     enabled: opened,
   });
+
   const onOpen = useCallback(() => setOpenedAt(bytes), [bytes]);
   const read = wholePartRead(opened, door !== undefined, whole, isCutPart);
+
   if (read.state === WHOLE_PART.WHOLE) return { part: read.part };
+
   return { body: { state: read.state, bytes, head: cut.head, tail: cut.tail, onOpen } };
 }

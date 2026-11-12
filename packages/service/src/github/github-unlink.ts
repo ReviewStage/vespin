@@ -39,11 +39,14 @@ export function githubUnlink(api: GitHubUnlinkApi): GitHubUnlink {
   return (headers) =>
     Effect.gen(function* () {
       const listed = yield* pluginCall(() => api.listUserAccounts({ headers }));
+
       const accounts = yield* Effect.mapError(
         decodeAccounts(listed),
         (failure) => new Cause.UnknownError(failure),
       );
+
       const github = accounts.find((account) => account.providerId === GITHUB_PROVIDER);
+
       if (github === undefined) return;
       yield* pluginCall(() => api.unlinkAccount({ headers, body: { accountId: github.id } }));
     });

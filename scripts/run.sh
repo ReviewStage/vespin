@@ -155,8 +155,9 @@ fi
 # (apps/web/server/local-sign-in.ts). Dean's agents run on a host of the
 # run's own on this Mac: `vespin-host run` built from this checkout, its state
 # the demo profile, enrolled by the seed as Dean's with every task running
-# on it. So neither it nor the app, for which Dean's Bring your own host
-# stays off, touches the Mac's own host (~/.local/state/vespin-host).
+# on it. So neither it nor the app touches the Mac's own host
+# (~/.local/state/vespin-host), whose record names another service than the
+# run's, which the app leaves alone.
 # That host keeps its agents' folders under a home of its own in the
 # profile, never the Mac's own `~/.vespin`, and reports that folder as it
 # registers, so the service lays its launches out there. The profile is

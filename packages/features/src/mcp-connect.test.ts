@@ -12,6 +12,7 @@ describe("cursorConfigWithServer", () => {
       mcpServers: { linear: { url: "https://mcp.linear.app/mcp" }, vespin: { url: "old" } },
       theme: "dark",
     };
+
     expect(cursorConfigWithServer(existing, SERVER_URL)).toEqual({
       mcpServers: { linear: { url: "https://mcp.linear.app/mcp" }, vespin: { url: SERVER_URL } },
       theme: "dark",

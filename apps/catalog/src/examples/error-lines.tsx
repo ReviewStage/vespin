@@ -18,6 +18,7 @@ const REFUSED = {
 /** A form field whose value was refused. */
 function RefusedField(): React.JSX.Element {
   const [repository, setRepository] = useState("acme/old-name");
+
   return (
     <FormField label="Repository" error={REFUSED}>
       {(control) => <TextField field={control} value={repository} onChange={setRepository} />}

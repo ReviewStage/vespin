@@ -86,6 +86,7 @@ function drawn(
       ),
     ),
   );
+
   return host;
 }
 
@@ -102,6 +103,7 @@ function chip(host: HTMLElement, label: string): HTMLButtonElement {
   const found = [...host.querySelectorAll("button")].find((button) =>
     (button.getAttribute("aria-label") ?? button.textContent ?? "").includes(label),
   );
+
   return found ?? assert.fail(`no ${label} chip`);
 }
 
@@ -128,6 +130,7 @@ test("the repository leads the path where the page hands its doors, reading the 
   const bare = drawn({ ...TASK, repository: null }, () => undefined, {
     repository: { ...door, openRequest: 1 },
   });
+
   await act(async () => undefined);
   assert.match(bare.textContent ?? "", /Choose a repository/u);
   assert.ok(
@@ -151,8 +154,10 @@ test("a child task's path names its parent by key and name between the repositor
     priority: TASK_PRIORITY.NONE,
     number: 7,
   };
+
   const child: TaskSummary = { ...parent, id: TASK.id, name: TASK.name, parentTaskId: parent.id };
   const opened: string[] = [];
+
   const host = drawn(TASK, () => undefined, {
     tasks: [parent, child],
     onOpenTask: (taskId) => opened.push(taskId),
@@ -177,11 +182,14 @@ test("a status picked from the menu, opened by its chip or by S, is handed to th
 
   const pick = (open: () => void, words: string) => {
     act(open);
+
     const row = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
       each.textContent?.includes(words),
     );
+
     act(() => (row ?? assert.fail(`no ${words} row`)).click());
   };
+
   pick(() => chip(host, "Status").click(), "Todo");
   pick(() => {
     assert.ok(runAppCommand(APP_COMMAND.SET_STATUS), "the plan's chips answer S");
@@ -210,14 +218,19 @@ test("the assignee chip names who the task is assigned to, or no one, and No ass
     { ...TASK, assignee: { userId: "user-ada", name: "Ada Lovelace" } },
     (standing) => sent.push(standing),
   );
+
   assert.ok(chip(assigned, "Assignee").textContent?.includes("Ada Lovelace"));
+
   const pickNoAssignee = (host: HTMLElement) => {
     act(() => chip(host, "Assignee").click());
+
     const row = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
       each.textContent?.includes("No assignee"),
     );
+
     act(() => (row ?? assert.fail("no No assignee row")).click());
   };
+
   pickNoAssignee(unassigned);
   pickNoAssignee(assigned);
 
@@ -231,6 +244,7 @@ test("the assignee's menu lists No assignee, then the reader, then every other m
     email: `${userId}@acme.test`,
     role: WORKSPACE_ROLE.MEMBER,
   });
+
   fakeAppBridge({});
   fakeActPort({});
   handMembers(() => ({
@@ -265,12 +279,15 @@ test("the assignee's menu lists No assignee, then the reader, then every other m
   });
 
   act(() => chip(host, "Assignee").click());
+
   // Note that the members are listed once the read the host holds reaches its query.
   const rows = await vi.waitFor(() => {
     const listed = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
     assert.equal(listed.length, 4);
+
     return listed;
   });
+
   assert.deepEqual(
     rows.map((row) => row.textContent),
     [
@@ -373,7 +390,9 @@ test("the assignee's menu says the members could not be read, with Retry, never 
         email: "ada@acme.test",
         role: WORKSPACE_ROLE.MEMBER,
       };
+
       reads.deliverMembers({ [workspaceId]: { rows: { members: [ada] } } });
+
       return Promise.resolve();
     },
   });
@@ -399,13 +418,17 @@ test("the assignee's menu says the members could not be read, with Retry, never 
   const note = await vi.waitFor(() => {
     const said = document.querySelector(".ui-combobox-note");
     assert.match(said?.textContent ?? "", /Members could not be read\./u);
+
     return said;
   });
+
   assert.equal(document.querySelector(".ui-combobox-empty"), null);
+
   const retry =
     [...(note?.querySelectorAll("button") ?? [])].find((button) =>
       (button.textContent ?? "").includes("Retry"),
     ) ?? assert.fail("no Retry");
+
   await act(async () => retry.click());
 
   await vi.waitFor(() => assert.equal(document.querySelector(".ui-combobox-note") === null, true));

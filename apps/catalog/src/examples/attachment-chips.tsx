@@ -86,6 +86,7 @@ function AttachmentList({
   onRemove: (file: SampleFile) => void;
 }): React.JSX.Element {
   const drawn = useLeaving(files, (file) => file.name);
+
   return (
     <ul ref={row} className="catalog-attachments" aria-label="Attached files" {...motionRows()}>
       {drawn.map(({ key, value: file, leaving }) => (
@@ -111,6 +112,7 @@ function AttachmentRow({ busy }: { busy: boolean }): React.JSX.Element {
   const [files, setFiles] = useState(FILES);
   const [opened, setOpened] = useState<string>();
   const row = useRef<HTMLUListElement | null>(null);
+
   return (
     <>
       <ListMotion root={row} way={LIST_MOTION_WAY.SCALE}>
@@ -131,6 +133,7 @@ function AttachmentRow({ busy }: { busy: boolean }): React.JSX.Element {
 function UploadingRow(): React.JSX.Element {
   const [landed, setLanded] = useState(false);
   const state = landed ? ATTACHMENT_CHIP_STATE.READY : ATTACHMENT_CHIP_STATE.UPLOADING;
+
   return (
     <>
       <ul className="catalog-attachments" aria-label="Files going up">
@@ -147,6 +150,7 @@ function UploadingRow(): React.JSX.Element {
 /** Pictures and files named in a message's words, each pill hanging its picture or wearing its file's type, and saying which it opened. */
 function PicturesInWords(): React.JSX.Element {
   const [opened, setOpened] = useState<string>();
+
   return (
     <>
       <p>

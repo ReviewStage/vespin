@@ -13,7 +13,7 @@ import { type GatewayEventKind, InvalidParamsRefusal } from "./protocol.js";
 /** A value this build made, carried as the JSON it already is; every field of these shapes is a wire value. */
 export function carried<Value>(value: Value): WireValue {
   // SAFETY: the values carried here (settings, snapshots, rosters, offers, Conversation entries, event properties) are the structured-clone payloads the bridge already guarded; each is JSON data.
-  return value as unknown as WireValue;
+  return value as WireValue;
 }
 
 /** A parameter that is not the shape its method takes, as the protocol's own refusal. */
@@ -28,6 +28,7 @@ export function readParams<Params>(
   sentence: string,
 ): Effect.Effect<Params, InvalidParamsRefusal> {
   const result = readEither(schema)(unparsedWire(params));
+
   return Result.isFailure(result) ? invalid(sentence) : Effect.succeed(result.success);
 }
 
@@ -44,6 +45,7 @@ export function gatewayEventReader(client: GatewayClient) {
   ) =>
     client.on(kind, (event) => {
       const payload = read(event);
+
       if (payload !== undefined) listener(payload);
     });
 }

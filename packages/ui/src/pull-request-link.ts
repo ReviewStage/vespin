@@ -20,8 +20,10 @@ export interface OpenedPullRequest {
 function pageAddress(href: string): string {
   const cuts = [href.indexOf("#"), href.indexOf("?")].filter((at) => at >= 0);
   let address = cuts.length === 0 ? href : href.slice(0, Math.min(...cuts));
+
   // Note that the slashes are taken off one at a time rather than by a pattern, since a pattern anchored at the end backtracks over a long run of them.
   while (address.endsWith("/")) address = address.slice(0, -1);
+
   return address;
 }
 
@@ -31,9 +33,11 @@ export function pullRequestAgentOf(
   pullRequests: Iterable<OpenedPullRequest>,
 ): string | undefined {
   const address = pageAddress(href);
+
   for (const each of pullRequests) {
     if (pageAddress(each.url) === address) return each.agentId;
   }
+
   return undefined;
 }
 
@@ -60,9 +64,12 @@ export function listedPullRequestOf(
     const opened = task.pullRequests.flatMap(({ url, agentId }) =>
       url === undefined || agentId === undefined ? [] : [{ agentId, url }],
     );
+
     const agentId = pullRequestAgentOf(href, opened);
+
     if (agentId !== undefined) return { taskId: task.taskId, agentId };
   }
+
   return undefined;
 }
 
@@ -80,6 +87,7 @@ export function repositoryPullRequestOf(
 ): number | undefined {
   if (repository === null || repository === undefined) return undefined;
   const address = pullRequestAddressOf(href);
+
   return address !== undefined && address.repository.toLowerCase() === repository.toLowerCase()
     ? address.number
     : undefined;

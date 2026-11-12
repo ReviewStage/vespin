@@ -45,6 +45,7 @@ export interface TaskRoute {
 /** Where a task's own place stands by the params its address's routes read. */
 function taskAtParams(params: PlaceParams): TaskAt | undefined {
   const { workspace, taskId } = params;
+
   return workspace === undefined || taskId === undefined ? undefined : { workspace, task: taskId };
 }
 
@@ -60,14 +61,20 @@ export function useTaskRoute(): TaskRoute {
   const at = here.place === ROUTED_PLACE.TASK ? taskAtParams(here.params) : undefined;
   // Note that the entry is read as the address is, the window drawn again on every move of the router's history.
   const saved = savedTaskOf(router.history.location);
+
   const atNow = () => {
     const matches = router.matchRoutes(router.history.location.pathname);
+
     if (routedPlaceOf(matches, access) !== ROUTED_PLACE.TASK) return undefined;
+
     return taskAtParams(placeParamsOf(matches));
   };
+
   const savedNow = () => savedTaskOf(router.history.location);
+
   const workspaceNow = () =>
     placeParamsOf(router.matchRoutes(router.history.location.pathname)).workspace;
+
   const onOpen = (to: TaskAt, takesStepless = false, inPlace = false) => {
     // Note that the router writes its entry at once, which the history takes the task's step in the place of (`places/window-history.ts`).
     void router.navigate({
@@ -76,5 +83,6 @@ export function useTaskRoute(): TaskRoute {
       replace: inPlace || (takesStepless && !savesStep(router.history.location)),
     });
   };
+
   return { at, saved, atNow, savedNow, workspaceNow, onOpen };
 }

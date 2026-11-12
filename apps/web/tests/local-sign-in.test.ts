@@ -44,6 +44,7 @@ const PKCE = {
 
 const decodeTokens = Schema.decodeUnknownSync(Schema.Struct({ access_token: Schema.String }));
 const decodeUserInfo = Schema.decodeUnknownSync(Schema.Struct({ sub: Schema.String }));
+
 const decodeSession = Schema.decodeUnknownSync(
   Schema.NullOr(
     Schema.Struct({
@@ -99,6 +100,7 @@ function cookiesFrom(response: Response): string {
 function location(response: Response): URL {
   const next = response.headers.get("location");
   assert.ok(next, `expected a redirect, got ${response.status}`);
+
   return new URL(next, SERVICE_URL);
 }
 
@@ -107,11 +109,13 @@ async function sessionUser(auth: Auth, cookie: string) {
   const session = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/get-session`, { headers: { cookie } }),
   );
+
   return decodeSession(await session.json())?.user;
 }
 
 function navigate(auth: Auth, url: URL, cookie?: string): Promise<Response> {
   const navigation = { accept: "text/html", "sec-fetch-mode": "navigate" };
+
   return auth.handler(
     new Request(url, { headers: cookie === undefined ? navigation : { ...navigation, cookie } }),
   );
@@ -130,10 +134,13 @@ async function loginPageOfDesktopAuthorize(auth: Auth): Promise<URL> {
     code_challenge_method: "S256",
     prompt: "login",
   });
+
   const loginPage = location(
     await navigate(auth, new URL(`/api/auth/oauth2/authorize?${query}`, SERVICE_URL)),
   );
+
   assert.equal(loginPage.pathname, LOGIN_PAGE);
+
   return loginPage;
 }
 
@@ -174,11 +181,13 @@ test("the desktop's PKCE sign-in completes as the seeded member through the loca
       }),
     }),
   );
+
   const userInfo = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/oauth2/userinfo`, {
       headers: { authorization: `Bearer ${decodeTokens(await tokens.json()).access_token}` },
     }),
   );
+
   assert.equal(decodeUserInfo(await userInfo.json()).sub, SEEDED.id);
 });
 
@@ -188,6 +197,7 @@ test("a browser that opens the sign-in bare lands on the web app signed in as th
   const signedIn = await localSignIn(auth, SEEDED.id).fetch(
     new Request(new URL(LOGIN_PAGE, SERVICE_URL)),
   );
+
   assert.equal(location(signedIn).pathname, "/app");
 
   const user = await sessionUser(auth, cookiesFrom(signedIn));
@@ -212,6 +222,7 @@ test("beside a Vercel deployment's variables the sign-in mints no session", asyn
   const answered = await localSignIn(auth, SEEDED.id).fetch(
     new Request(new URL(LOGIN_PAGE, SERVICE_URL)),
   );
+
   assert.equal(answered.status, 403);
   assert.deepEqual(answered.headers.getSetCookie(), []);
 });

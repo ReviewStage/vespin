@@ -63,6 +63,7 @@ const PAGELOAD_ORIGIN = "auto.pageload.browser";
  */
 function routeName(pathname: string): string {
   const link = readLink(`${LINK_ORIGIN}${pathname}`);
+
   return link === undefined ? PANEL_PATH : `${PANEL_PATH}/${link.place.kind}`;
 }
 
@@ -142,7 +143,9 @@ export function initWebSentry(build: WebSentryBuild, queryClient: QueryClient): 
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });
   const client = getClient();
+
   if (client !== undefined) nameByRoute(client);
+
   return {
     reportBlankTab: (error) => {
       captureException(error, { mechanism: BLANK_TAB_MECHANISM });

@@ -75,6 +75,7 @@ function AgentsStatusMark({
   size: TaskAgentsMarkSize;
 }): React.JSX.Element | null {
   const seat = seatClass(size);
+
   switch (status.kind) {
     case TASK_AGENTS_STATUS.NONE:
       return null;
@@ -94,6 +95,7 @@ function AgentsStatusMark({
     case TASK_AGENTS_STATUS.PULL_REQUEST: {
       const state = pullRequestMarkState(status.pullRequest);
       const Glyph = PULL_REQUEST_GLYPH[state];
+
       return (
         <span
           className={seat}

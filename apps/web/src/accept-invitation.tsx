@@ -12,7 +12,7 @@ import { QUERY_ROOT } from "@repo/panel/query-keys";
 import {
   AuthMark,
   AuthPage,
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   BUTTON_VARIANT,
@@ -148,6 +148,7 @@ function otherAddress({ invited, signedIn }: Addresses): View {
       `You're signed in as ${signedIn}. Sign in with the account at the address you were invited at.`,
     );
   }
+
   return signIn(
     `This invitation is for ${invited}`,
     `You're signed in as ${signedIn}. Sign in with the account that uses ${invited}: your Google and GitHub accounts may use different addresses.`,
@@ -174,8 +175,11 @@ function refused(
   addresses: Addresses,
 ): View {
   if (error.code === INVITATION_ERROR.NOT_RECIPIENT) return otherAddress(addresses);
+
   if (error.code === INVITATION_ERROR.UNVERIFIED_ACCEPT) return unverified(addresses.signedIn);
+
   if (error.status === SPENT_STATUS) return SPENT;
+
   return UNREACHED;
 }
 
@@ -216,15 +220,20 @@ function offerView(
 ): View {
   if ("member" in answer) {
     const { workspaceName } = answer.member;
+
     return inWorkspace(`You're already in ${workspaceName}`);
   }
+
   if ("refused" in answer) {
     if (answer.refused === INVITATION_OFFER_REFUSAL.NOT_RECIPIENT) {
       return otherAddress({ invited: query.email, signedIn });
     }
+
     if (answer.refused === INVITATION_OFFER_REFUSAL.UNVERIFIED) return unverified(signedIn);
+
     return SPENT;
   }
+
   return {
     kind: VIEW.OFFER,
     id,
@@ -247,6 +256,7 @@ function readView(
       `Use the Google or GitHub account at ${query.email ?? "the address you were invited at"}.`,
     );
   }
+
   if (query.id === undefined) {
     return said(
       "Nothing to accept",
@@ -254,40 +264,55 @@ function readView(
       LANDING_TONE.DANGER,
     );
   }
+
   if (failed) return UNREACHED;
+
   if (answer === undefined) return WORKING;
+
   return offerView(answer, query.id, query, signedIn);
 }
 
 async function accept(offer: { id: string; name: string }, addresses: Addresses): Promise<View> {
   const accepted = await authClient.organization.acceptInvitation({ invitationId: offer.id });
+
   if (accepted.error) return refused(accepted.error, addresses);
+
   return inWorkspace(`You joined ${offer.name}`);
 }
 
 function titleOf(view: View): string {
   if (view.kind === VIEW.WORKING) return "Opening your invitation…";
+
   if (view.kind === VIEW.OFFER) return `Join ${view.name}`;
+
   return view.title;
 }
 
 function descriptionOf(view: View): React.ReactNode {
   if (view.kind === VIEW.WORKING) return undefined;
+
   if (view.kind === VIEW.OPENING) return undefined;
+
   if (view.kind !== VIEW.OFFER) return view.body;
   const as = ROLE_WORDS[view.role];
+
   if (view.inviter === undefined) {
     return `You're invited to work in ${view.name} on ${PRODUCT_NAME}${as}.`;
   }
+
   return `${view.inviter} invited you to work in ${view.name} on ${PRODUCT_NAME}${as}.`;
 }
 
 /** The mark each view opens on: the invitation's workspace on its offer, else the app's, badged as it ended. */
 function markOf(view: View): React.JSX.Element {
   if (view.kind === VIEW.OFFER) {
-    return <Avatar name={view.name} size={AVATAR_SIZE.PAGE} shape={AVATAR_SHAPE.TILE} decorative />;
+    return (
+      <Avatar name={view.name} size={AVATAR_SIZE.PAGE} outline={AVATAR_OUTLINE.TILE} decorative />
+    );
   }
+
   if (view.kind === VIEW.OPENING) return <AuthMark tone={LANDING_TONE.COMPLETE} />;
+
   return <AuthMark tone={view.kind === VIEW.SAID ? view.tone : undefined} />;
 }
 
@@ -320,6 +345,7 @@ function SignInCard({
   footnote: string | undefined;
 }): React.JSX.Element {
   const { pending, failed, begin } = useSocialSignIn(authClient);
+
   return (
     <SocialSignInCard
       mark={<AuthMark />}
@@ -345,10 +371,12 @@ function AcceptInvitation(): React.JSX.Element {
   const signedIn = session.data?.user.email;
   const verified = session.data?.user.emailVerified;
   const offer = useQuery(invitationOfferQuery(query.id, signedIn, verified));
+
   const joining = useMutation({
     mutationFn: (invitation: { id: string; name: string }) =>
       accept(invitation, { invited: query.email, signedIn: signedIn ?? "" }),
   });
+
   const view =
     joining.data ??
     (session.isPending ? WORKING : readView(query, signedIn, offer.isError, offer.data));
@@ -363,6 +391,7 @@ function AcceptInvitation(): React.JSX.Element {
   if (view.kind === VIEW.SIGN_IN) {
     return <SignInCard title={view.title} body={view.body} footnote={view.footnote} />;
   }
+
   return (
     <AuthPage mark={markOf(view)} title={titleOf(view)} description={descriptionOf(view)}>
       {view.kind === VIEW.OFFER ? (

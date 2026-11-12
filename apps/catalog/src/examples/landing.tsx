@@ -3,6 +3,7 @@ import {
   BUTTON_VARIANT,
   Button,
   LANDING_SCENE,
+  LandingBackedBy,
   LandingFacts,
   LandingPage,
   LandingSection,
@@ -11,12 +12,15 @@ import {
   SiteBarPages,
   SiteFootLinks,
 } from "@repo/ui";
+import codexOneX from "../../../../packages/panel/marks/codex-16.png";
+import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
+import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * landing.tsx -- the product's landing: its bar, the one line beside the
- * copper ball, a feature over its scene, a feature with facts beside its
+ * landing.tsx -- the product's landing: its bar, the one line under its
+ * backer's chip beside the copper ball, a feature over its scene, a feature with facts beside its
  * stage, and the close over the site's foot and the wordmark in dots, and the page an unknown
  * address is answered with, each in a frame that scrolls as a document would.
  * Every name and line is made up.
@@ -59,6 +63,7 @@ function Landing(): React.JSX.Element {
   return (
     <LandingPage
       bar={<Bar />}
+      badge={<LandingBackedBy href="https://www.ycombinator.com/companies" />}
       title="An inbox for all your coding agents."
       lead="Agents work in cloud sandboxes, open pull requests, and post to your Inbox when they need you."
       actions={<Button variant={BUTTON_VARIANT.PRIMARY}>Download for macOS</Button>}
@@ -76,8 +81,9 @@ function Landing(): React.JSX.Element {
       />
       <LandingSection
         title="Bring your own keys."
-        lead="Run agents on your ChatGPT or Claude plan, or bring your own API keys."
+        lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
+        codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}
         aside={
           <LandingFacts
             facts={[

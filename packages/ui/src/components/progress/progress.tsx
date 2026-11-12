@@ -57,6 +57,7 @@ const WIDTH_CLASS = {
 /** The share of the work done, as a percentage held to 0–100, a value that is not a number read as none. */
 function percentOf(value: number): number {
   if (!Number.isFinite(value)) return 0;
+
   return Math.min(100, Math.max(0, value));
 }
 
@@ -80,6 +81,7 @@ export function Progress({
   width?: ProgressWidth | undefined;
 }): React.JSX.Element {
   const percent = percentOf(value);
+
   // Note that each attribute Base UI's root sets is named here, undefined where the bar never said it, because a prop given overrides the root's own.
   const read =
     label === undefined
@@ -99,6 +101,7 @@ export function Progress({
           "aria-valuenow": Math.round(percent),
           "aria-valuetext": undefined,
         } as const);
+
   return (
     <ShadcnProgress
       value={percent}

@@ -18,6 +18,7 @@ test("the renderer's stylesheet carries the utilities Streamdown draws with", as
     logLevel: "silent",
     plugins: [tailwindPlugin()],
   });
+
   const css = result.outputFiles.map((file) => file.text).join("\n");
   expect(css).toContain(".\\[counter-reset\\:line\\]");
 });

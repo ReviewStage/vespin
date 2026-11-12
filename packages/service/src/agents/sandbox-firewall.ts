@@ -218,7 +218,9 @@ function storedOfRule(rule: HeaderRule): StoredRule {
     key: { exact: key },
     value: { exact: value },
   }));
+
   const matched = rule.path !== undefined || headers.length > 0;
+
   return {
     ...(matched
       ? {
@@ -235,6 +237,7 @@ function storedOfRule(rule: HeaderRule): StoredRule {
 /** A rule the seal holds, as the policy carries it: every transform's headers set together. */
 function ruleOfStored(stored: StoredRule): HeaderRule {
   const headers = stored.match?.headers;
+
   return {
     ...(stored.match?.path === undefined ? undefined : { path: stored.match.path }),
     ...(headers === undefined
@@ -262,6 +265,7 @@ function authorizing(
   path?: { startsWith: string } | { exact: string },
 ): HeaderRule {
   const set = { authorization };
+
   return path === undefined ? { set } : { path, set };
 }
 
@@ -297,14 +301,18 @@ function gitBasic(token: Redacted.Redacted, access: GitHubTokenAccess): string {
  */
 function githubEntry(credential: RepositoryCredential): FirewallEntry {
   const { token, fullName, access } = credential;
+
   if (access.kind !== GITHUB_ACCESS.TOKEN) {
     const basic = gitBasic(token, access);
+
     return entryOf([
       [GITHUB_HOST.GIT, [authorizing(basic)]],
       [GITHUB_HOST.API, [authorizing(basic)]],
     ]);
   }
+
   const bearer = `Bearer ${Redacted.value(token)}`;
+
   return entryOf([
     [GITHUB_HOST.GIT, [authorizing(gitBasic(token, access), { startsWith: `/${fullName}.git/` })]],
     [
@@ -362,16 +370,20 @@ export function composePolicy(sources: FirewallSources, swaps: LaunchSwaps): Net
     ...(sources.clone === undefined ? [] : [cloneEntry(sources.clone)]),
     ...SWAP_ORDER.flatMap((kind) => {
       const entry = swaps.get(kind);
+
       return entry === undefined ? [] : [entry];
     }),
   ];
+
   if (entries.length === 0) return OPEN_INTERNET;
   const hosts = new Map<string, readonly HeaderRule[]>();
+
   for (const entry of entries) {
     for (const [host, rules] of Redacted.value(entry.rules)) {
       hosts.set(host, [...(hosts.get(host) ?? []), ...rules]);
     }
   }
+
   return { hosts: Object.fromEntries(hosts) };
 }
 
@@ -383,6 +395,7 @@ function sealed(ring: KeyRing, session: FirewallOwner, swaps: LaunchSwaps): stri
       ([host, rules]) => [host, rules.map(storedOfRule)] as const,
     ),
   }));
+
   return sealFirewallEntries(ring, session, Redacted.make(encodeSwaps(kinds)));
 }
 
@@ -394,10 +407,13 @@ function sealed(ring: KeyRing, session: FirewallOwner, swaps: LaunchSwaps): stri
  */
 function opened(ring: KeyRing, session: FirewallOwner, column: string): LaunchSwaps | undefined {
   const secret = openFirewallEntries(ring, session, column);
+
   if (Result.isFailure(secret)) return undefined;
   const read = decodeSwaps(Redacted.value(secret.success));
+
   if (Result.isFailure(read)) return undefined;
   const known = (kind: string): kind is LaunchSwapKind => SWAP_ORDER.some((each) => each === kind);
+
   return new Map(
     read.success.flatMap(({ slot, rules }) =>
       known(slot)
@@ -417,9 +433,11 @@ const keyRing = Effect.gen(function* () {
   const environment = yield* Effect.serviceOption(HostedEnvironment);
   const ring = Option.getOrUndefined(environment)?.providerKeyEncryptionKeys;
   const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
   if (parsed === undefined || Result.isFailure(parsed)) {
     return yield* unkept("the deployment has no key ring to seal the firewall's launch under");
   }
+
   return parsed.success;
 });
 
@@ -427,12 +445,16 @@ const keyRing = Effect.gen(function* () {
 const launchKept = (session: FirewallOwner) =>
   Effect.gen(function* () {
     const row = yield* readFirewallLaunch(session);
+
     if (row === undefined) return undefined;
     const swaps = opened(yield* keyRing, session, row.sealedEntries);
+
     if (swaps === undefined) {
       yield* Effect.logWarning("a sandbox firewall's launch would not open, and is sent as none");
+
       return undefined;
     }
+
     return { agentId: row.agentId, swaps } satisfies KeptLaunch;
   });
 
@@ -457,6 +479,7 @@ export function sandboxFirewall(sandbox: SandboxService): SandboxFirewall {
         const launch = yield* launchKept(session).pipe(
           storeUnavailable("the firewall's launch could not be read"),
         );
+
         yield* sent(session, sources, launch?.swaps ?? NO_SWAPS);
       }).pipe(Effect.withSpan("web/writeSandboxFirewall")),
     keepLaunch: (session, launch) =>

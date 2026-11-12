@@ -134,6 +134,7 @@ export function WindowShortcutSections({
 /** A key that answers in place: its name, then its chord, or the first and the last of a run of keys, 1 – 9. */
 function InContextRow({ inContext }: { inContext: InContextKey }): React.JSX.Element {
   const { label, chord, through }: InContextShortcut = IN_CONTEXT_SHORTCUTS[inContext];
+
   return (
     <div {...searchAnchorProps(inContext)}>
       <SettingsRow density={SETTINGS_ROW_DENSITY.LIST} label={label}>
@@ -158,6 +159,7 @@ function InContextRow({ inContext }: { inContext: InContextKey }): React.JSX.Ele
 /** A writing action's Markdown rule, set as the code it is, then its chord: whichever of the two it has. */
 function WritingKeys({ action }: { action: WritingAction }): React.JSX.Element {
   const { markdown, chord }: WritingShortcut = WRITING_SHORTCUTS[action];
+
   return (
     <>
       {markdown === undefined ? null : (

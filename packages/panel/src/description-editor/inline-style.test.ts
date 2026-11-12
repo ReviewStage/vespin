@@ -20,6 +20,7 @@ beforeEach(installEditorLayout);
 
 afterEach(() => {
   for (const editor of mounted.splice(0)) editor.destroy();
+
   for (const style of document.querySelectorAll("style")) style.remove();
   document.body.innerHTML = "";
 });
@@ -28,6 +29,7 @@ afterEach(() => {
 function host(): HTMLElement {
   const element = document.createElement("div");
   document.body.append(element);
+
   return element;
 }
 

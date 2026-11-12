@@ -60,6 +60,7 @@ function ConfirmOwner({ shown }: OwnerProps): ReactElement {
     neverBusyAct(() => undefined),
     () => recordedFailure().failure,
   );
+
   return owned(
     confirm.ask,
     createElement(ConfirmDialog, {
@@ -79,6 +80,7 @@ function ConfirmOwner({ shown }: OwnerProps): ReactElement {
 function NewTaskOwner({ shown }: OwnerProps): ReactElement {
   const [open, setOpen] = useState(false);
   const control = tasksControl();
+
   return owned(
     () => setOpen(true),
     createElement(NewTaskDialog, {
@@ -94,6 +96,7 @@ function NewTaskOwner({ shown }: OwnerProps): ReactElement {
 
 function FeedbackOwner({ shown }: OwnerProps): ReactElement {
   const [open, setOpen] = useState(false);
+
   return owned(
     () => setOpen(true),
     createElement(FeedbackDialog, {
@@ -113,6 +116,7 @@ const NOTES = {
 
 function AttachmentOwner({ shown }: OwnerProps): ReactElement {
   const [open, setOpen] = useState(false);
+
   return owned(
     () => setOpen(true),
     open && shown
@@ -142,28 +146,35 @@ function open({ Owner, role }: Dialog) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (shown: boolean) =>
     act(() => root.render(withQueryClient(createElement(Owner, { shown }))));
+
   draw(true);
+
   const opener =
     [...container.querySelectorAll("button")].find((each) => each.textContent === "Open") ??
     assert.fail("the owner draws its button");
+
   opener.focus();
   act(() => opener.click());
   const card = () => document.querySelector<HTMLElement>(`[role="${role}"][aria-modal="true"]`);
   assert.ok(card(), "the dialog opens");
   const backdrop = card()?.parentElement ?? assert.fail("no backdrop");
+
   const key = (key: string, shiftKey = false) =>
     act(() => {
       (document.activeElement ?? document.body).dispatchEvent(
         new KeyboardEvent("keydown", { key, shiftKey, bubbles: true }),
       );
     });
+
   const press = (from: Element, to: Element) =>
     act(() => {
       from.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
       to.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+
   return { opener, card, backdrop, key, press, withdraw: () => draw(false) };
 }
 

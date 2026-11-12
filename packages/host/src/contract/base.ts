@@ -23,8 +23,8 @@ export const ACT_ERROR = { REFUSED: "REFUSED" } as const;
  * whose own text is for the log and never a screen. The panel's act door and
  * the iOS app's writes read a rejection through this one door.
  */
-export function actRefusalSentence(error: unknown): string | undefined {
-  return error instanceof ORPCError && error.code === ACT_ERROR.REFUSED ? error.message : undefined;
+export function actRefusalSentence(cause: unknown): string | undefined {
+  return cause instanceof ORPCError && cause.code === ACT_ERROR.REFUSED ? cause.message : undefined;
 }
 
 /** An act whose refusal, unless its row words one of its own, reads `sentence`. */
@@ -42,5 +42,6 @@ export function actProcedure(sentence: string) {
  */
 export function exactInput<Type, Encoded>(schema: EffectSchema.Codec<Type, Encoded>) {
   const copy = EffectSchema.make<EffectSchema.Codec<Type, Encoded>>(schema.ast);
+
   return EffectSchema.toStandardSchemaV1(copy, { parseOptions: { onExcessProperty: "error" } });
 }

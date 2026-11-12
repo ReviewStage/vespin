@@ -21,6 +21,7 @@ import { CatalogSection } from "../section";
 function KeepFocusExample(): React.JSX.Element {
   const [words, setWords] = useState("Type here, then press the heading");
   const [backs, setBacks] = useState(0);
+
   return (
     <CatalogSection id="keep-focus-whole" title="Beside a field">
       <Stack gap={GAP.TIGHT}>

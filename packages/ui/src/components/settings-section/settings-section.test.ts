@@ -42,6 +42,7 @@ function draw(title: string | undefined, labels: readonly string[]): HTMLElement
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const rows = labels.map((label) =>
     createElement(SettingsRow, {
       key: label,
@@ -49,14 +50,18 @@ function draw(title: string | undefined, labels: readonly string[]): HTMLElement
       children: () => createElement(Button, { children: `Change ${label}` }),
     }),
   );
+
   act(() => root.render(createElement(SettingsSection, { title, children: rows })));
+
   return container;
 }
 
 /** The name a section's `aria-labelledby` gives it, or nothing when it names none. */
 function regionName(section: Element): string | undefined {
   const labelledBy = section.getAttribute("aria-labelledby");
+
   if (labelledBy === null) return undefined;
+
   return document.getElementById(labelledBy)?.textContent ?? undefined;
 }
 
@@ -111,6 +116,7 @@ function mount(element: React.JSX.Element): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -121,6 +127,7 @@ test("a line in the rows' place says its note", () => {
       children: createElement(SettingsLine, { children: "Nobody is invited yet." }),
     }),
   );
+
   expect(container.querySelector("section")?.textContent).toContain("Nobody is invited yet.");
 });
 
@@ -149,6 +156,7 @@ test("placeholder rows tell a reader what is being read", () => {
       ],
     }),
   );
+
   const [plain, marked] = [...container.querySelectorAll('[role="status"]')];
   expect([plain?.textContent, plain?.getAttribute("aria-busy")]).toEqual([
     "Loading the keys",
@@ -173,6 +181,7 @@ test("placeholder sections are one status a reader hears, with no heading or nam
       ],
     }),
   );
+
   const regions = container.querySelectorAll('[role="status"]');
   expect([...regions].map((region) => region.textContent)).toEqual(["Loading the integrations"]);
   expect(container.querySelectorAll("h1, h2, h3, section[aria-labelledby]").length).toBe(0);

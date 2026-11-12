@@ -14,6 +14,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const drawings: LiveTaskList[] = [];
+
         const collections = yield* taskListCollections({
           pool: yield* entityPool(),
           draw: (read) => {
@@ -21,10 +22,12 @@ it.effect(
           },
           txWait: () => undefined,
         });
+
         const plans = [
           planListRow(INVITES, "Teammate invitations"),
           planListRow(BILLING, "Billing"),
         ];
+
         const invites = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
         const billing = { ...agentListRow(BILLING, 1_000), id: "agent-billing" };
         yield* collections.answer({ plans, agents: [invites, billing] });
@@ -39,8 +42,10 @@ it.effect(
 
         const taskOf = (drawing: LiveTaskList | undefined, id: string) =>
           drawing?.list.plans.find((each) => each.id === id);
+
         const agentOf = (drawing: LiveTaskList | undefined, id: string) =>
           drawing?.taskAgents.find((each) => each.id === id);
+
         assert.ok(
           taskOf(before, INVITES) !== undefined && agentOf(before, invites.id) !== undefined,
         );

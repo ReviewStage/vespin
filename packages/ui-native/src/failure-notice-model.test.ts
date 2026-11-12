@@ -10,6 +10,7 @@ import {
 } from "./failure-notice-model.js";
 
 const OFFLINE = { kind: NOTICE_KIND.OFFLINE, words: "You're offline." } as const;
+
 const REFUSED = {
   kind: NOTICE_KIND.REFUSED,
   words: "The task could not be pinned. Try again.",

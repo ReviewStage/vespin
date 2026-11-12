@@ -33,7 +33,7 @@ import { machineName, useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
 import type { PlaceMove } from "./move-agent.js";
-import { CLOUD_ROW, DeviceGlyph, rowRequest, runsOnRows } from "./runs-on.js";
+import { CLOUD_ROW, DeviceGlyph, DeviceStandingGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
   SANDBOX_STATE_WORDS,
   SandboxStateGlyph,
@@ -65,7 +65,9 @@ import {
  * judged from how long ago the service says it last beat, the label adds
  * that it is offline ("Charles's MacBook Pro · Offline"), as the Runs on
  * chips do, its glyph in the attention tone, since the agent's messages
- * wait for it to come back. The beat comes from the window's shared presence
+ * wait for it to come back. The glyph wears the device's standing dot, as
+ * its row in the menu of places does (`runs-on.tsx`'s
+ * `DeviceStandingGlyph`), so the chip and the row it checks read alike. The beat comes from the window's shared presence
  * read (`device-presence.ts`), so a device that keeps beating never reads
  * offline for want of a read; where that read fails and the beat held is
  * old, the label says it cannot check rather than that the device is away.
@@ -79,13 +81,21 @@ import {
 /** What a reader hears before the name, which the glyph says to the eye. */
 const RUNS_ON = "Runs on: ";
 
+/** What a device the label names is said to be, where it is not simply there. */
+const STANDING_WORDS = {
+  [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
+  [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,
+  [DEVICE_STANDING.SETTING_UP]: RUNS_ON_WORDS.SETTING_UP,
+  [DEVICE_STANDING.FAILED]: RUNS_ON_WORDS.FAILED,
+} as const;
+
 /** The label's words, by where the device stands. */
 function macWords(name: string, standing: DeviceStanding | undefined): string {
   if (standing === undefined || standing === DEVICE_STANDING.ONLINE) return name;
+
   if (standing === DEVICE_STANDING.CHECKING) return name;
-  return standing === DEVICE_STANDING.OFFLINE
-    ? `${name} · Offline`
-    : `${name} · Can't check status`;
+
+  return `${name} · ${STANDING_WORDS[standing]}`;
 }
 
 /** What the card says under its head of an agent on a device. */
@@ -110,7 +120,9 @@ function cloudFacts(
     icon: <GLYPH.SANDBOX_STATE aria-hidden="true" />,
     value: <SandboxStateWords state={state} />,
   };
+
   if (vcpus === undefined) return [status];
+
   return [
     status,
     { label: CLOUD_WORDS.CPU, icon: <GLYPH.CPU aria-hidden="true" />, value: `${vcpus} vCPUs` },
@@ -129,7 +141,8 @@ function cloudFacts(
  * and in the popover, never in a hint on the chip. A press opens its
  * popover (`@repo/ui`'s `ChipPopover`), headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
  * move is offered, the places to move the agent to under "Move to", as the
- * move control lists them (`useMoveMenu`).
+ * move control lists them (`useMoveMenu`), its own Cloud row wearing the
+ * chip's dot as each device's row wears its own.
  */
 function CloudChip({
   sandbox,
@@ -146,16 +159,27 @@ function CloudChip({
   const state = useSandboxState(sandbox);
   const menu = useMoveMenu(CLOUD_ROW, move);
   const stateWords = SANDBOX_STATE_WORDS[state];
+  const glyph = <SandboxStateGlyph state={state} />;
+
+  const moveMenu =
+    menu === undefined
+      ? undefined
+      : {
+          heading: CLOUD_WORDS.MOVE_TO,
+          ...menu,
+          rows: menu.rows.map((row) => (row.id === CLOUD_ROW ? { ...row, icon: glyph } : row)),
+        };
+
   return (
     <ChipPopover
       label={RUNS_ON_WORDS.LABEL}
-      glyph={<SandboxStateGlyph state={state} />}
+      glyph={glyph}
       words={RUNS_ON_WORDS.CLOUD}
       said={stateWords}
       iconOnly={narrow}
       title={CLOUD_WORDS.TITLE}
       facts={cloudFacts(state, vcpus)}
-      menu={menu === undefined ? undefined : { heading: CLOUD_WORDS.MOVE_TO, ...menu }}
+      menu={moveMenu}
     />
   );
 }
@@ -176,7 +200,9 @@ export function AgentPlace({
       <CloudChip sandbox={agent.sandbox} vcpus={agent.sandboxVcpus} move={move} narrow={narrow} />
     );
   }
+
   if (agent.mac === undefined) return null;
+
   return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
 }
 
@@ -204,11 +230,14 @@ function useMoveMenu(
   const book = useDevicePresence(listed.length > 0);
   const thisMac = useThisMac();
   const openSettings = useOpenSettings();
+
   if (move === undefined) return undefined;
+
   const places = runsOnRows(listed, book, thisMac).map(
     (row): MenuRow =>
       row.id === here || move.detail === undefined ? row : { detail: move.detail, ...row },
   );
+
   const setUp: readonly MenuRow[] =
     move.devices.length > 0
       ? []
@@ -220,12 +249,14 @@ function useMoveMenu(
             detail: SET_UP_WORDS.DETAIL,
           },
         ];
+
   return {
     rows: [...places, ...setUp],
     value: here,
     noMatch: RUNS_ON_WORDS.NO_MATCH,
     onPick: (id) => {
       if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
+
       if (id !== here) move.moveTo(rowRequest(id));
     },
   };
@@ -255,6 +286,7 @@ function PlaceMenuChip({
   narrow: boolean;
 }): React.JSX.Element {
   const menu = useMoveMenu(here, move);
+
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
@@ -302,6 +334,7 @@ function PlaceChip({
       <HoverCardNote>{note}</HoverCardNote>
     </HoverCard>
   );
+
   if (move !== undefined) {
     return (
       <PlaceMenuChip
@@ -314,6 +347,7 @@ function PlaceChip({
       />
     );
   }
+
   return (
     <Tooltip label={`${RUNS_ON}${words}`} card={card}>
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
@@ -340,16 +374,27 @@ function MacChip({
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
   const standing = presenceStanding(presence, mac.deviceId);
+
   const quiet =
     standing === undefined ||
     standing === DEVICE_STANDING.ONLINE ||
     standing === DEVICE_STANDING.CHECKING;
+
   const name = machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
+  // Note that the platform is read off the move's list, because the agent's own record names none.
+  const listed = move?.devices.find((device) => device.deviceId === mac.deviceId);
+
   return (
     <PlaceChip
       here={mac.deviceId}
       move={move}
-      glyph={<DeviceGlyph device={undefined} />}
+      glyph={
+        standing === undefined ? (
+          <DeviceGlyph device={listed} />
+        ) : (
+          <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
+        )
+      }
       words={macWords(name, standing)}
       sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
       note={DEVICE_NOTE}

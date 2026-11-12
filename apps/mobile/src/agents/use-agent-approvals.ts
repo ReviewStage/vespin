@@ -62,9 +62,11 @@ function answeredAsk(ask: Held, answered: AgentApprovalAnswerView): Held {
   if ("approval" in answered) {
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approval.status] };
   }
+
   if ("approvalStatus" in answered && answered.approvalStatus !== undefined) {
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approvalStatus] };
   }
+
   return { ...ask, answering: undefined, error: answerFailedOf(answered.failure).words };
 }
 
@@ -93,12 +95,15 @@ export function useAgentApprovals(
   const write = useWrite();
   const pending = agent?.pendingApprovals ?? NO_ASKS;
   const running = agent?.status === AGENT_STATUS.RUNNING;
+
   const [state, setState] = useState<{
     readonly agentId: string;
     readonly held: ReadonlyMap<string, Held>;
   }>(() => ({ agentId, held: new Map() }));
+
   const fresh = state.agentId === agentId ? state : { agentId, held: new Map<string, Held>() };
   const held = heldWith(fresh.held, pending, running);
+
   if (fresh !== state || !sameHeld(held, state.held)) setState({ agentId, held });
   // What the agent's row says now, which a message's mark reads as it goes.
   const latest = useRef({ pending, running });
@@ -110,7 +115,9 @@ export function useAgentApprovals(
     (forAgent: string, id: string, change: (ask: Held) => Held) =>
       setState((was) => {
         const ask = was.held.get(id);
+
         if (was.agentId !== forAgent || ask === undefined) return was;
+
         return { ...was, held: new Map(was.held).set(id, change(ask)) };
       }),
     [],
@@ -125,6 +132,7 @@ export function useAgentApprovals(
           acts[ACT_KIND.AGENTS_ANSWER_APPROVAL]({ agentId, approvalId, answer: press }).then(
             (answered) => {
               settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
+
               return answered;
             },
           ),
@@ -147,17 +155,23 @@ export function useAgentApprovals(
   const messageSent = useCallback(
     (taken: Promise<boolean>) => {
       const waitingIds = latest.current.pending.map((each) => each.id);
+
       if (waitingIds.length === 0) return;
+
       const mark = (messaged: boolean) =>
         setState((was) => {
           if (was.agentId !== agentId) return was;
           const next = new Map(was.held);
+
           for (const id of waitingIds) {
             const ask = next.get(id);
+
             if (ask !== undefined) next.set(id, markedAsk(ask, messaged, latest.current.running));
           }
+
           return { ...was, held: next };
         });
+
       mark(true);
       taken.then((went) => {
         if (!went) mark(false);
@@ -170,15 +184,18 @@ export function useAgentApprovals(
     const asks = [...held.values()].toSorted((a, b) => a.approval.askedAt - b.approval.askedAt);
     const waiting = asks.filter((ask) => ask.settled === undefined);
     const oldest = waiting[0];
+
     // Note that a subagent's call is not among the transcript's rows, so the banner alone answers it.
     const byCall = new Map(
-      asks
-        .filter((ask) => ask.approval.subagentId === undefined)
-        .map((ask) => [ask.approval.toolUseId, ask] as const),
+      asks.flatMap((ask) =>
+        ask.approval.subagentId === undefined ? [[ask.approval.toolUseId, ask] as const] : [],
+      ),
     );
+
     return {
       heldCall: (callId) => {
         const ask = byCall.get(callId);
+
         return ask === undefined
           ? undefined
           : heldCallOf(ask, (press) => answer(ask.approval.id, press));

@@ -65,6 +65,7 @@ const openAccount = (name: string, createdAt: string, role: string = USER_ROLE.U
     yield* db
       .insert(user)
       .values({ id, name, email: `${id}@app.test`, role, createdAt: at(createdAt) });
+
     return id;
   });
 
@@ -85,6 +86,7 @@ const createTask = (userId: string, organizationId: string, createdAt: string) =
       document: "",
       createdAt: at(createdAt),
     });
+
     return id;
   });
 
@@ -142,6 +144,7 @@ const startAgent = (
       createdAt: at(createdAt),
       ...extra,
     });
+
     return id;
   });
 
@@ -188,6 +191,7 @@ const fireAutomation = (userId: string, organizationId: string, when: string) =>
       action: { kind: AUTOMATION_ACTION.AGENT, prompt: "" },
       guards: AUTOMATION_DEFAULT_GUARDS,
     });
+
     for (const status of [AUTOMATION_RUN_STATUS.STARTED, AUTOMATION_RUN_STATUS.SKIPPED]) {
       yield* db.insert(automationRun).values({
         automationId: id,
@@ -198,6 +202,7 @@ const fireAutomation = (userId: string, organizationId: string, when: string) =>
         firedAt: at(when),
       });
     }
+
     return id;
   });
 
@@ -366,6 +371,7 @@ it.layer(getTestDB())("the overview's reads", (it) => {
           scope: ADMIN_METRICS_SCOPE.ALL,
           windowDays: ADMIN_METRICS_WINDOW.WEEK,
         });
+
         assert.deepEqual(everyone.activeDevelopers, { recent: 2, prior: 1 });
         assert.equal(everyone.funnel.get(FUNNEL_STEP.SIGNED_UP), 3);
         assert.deepEqual(
@@ -385,11 +391,13 @@ it.layer(getTestDB())("the overview's reads", (it) => {
       const day = "2026-10-16";
       const when = `${day}T10:00:00Z`;
       const slack = { source: { kind: AGENT_SOURCE.SLACK } };
+
       const automationOrigin = {
         name: "Synthetic automation",
         firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: Date.parse(when) },
         prompt: "",
       };
+
       const starter = yield* startAgent(dee, workspace, deeTask, when);
       const startedByAgent = { startedByAgentId: starter };
       yield* startAgent(dee, workspace, deeTask, when, { automationOrigin, ...slack });
@@ -403,6 +411,7 @@ it.layer(getTestDB())("the overview's reads", (it) => {
         scope: ADMIN_METRICS_SCOPE.ALL,
         windowDays: ADMIN_METRICS_WINDOW.WEEK,
       });
+
       const on = (count: DailyCount) => source.daily.get(count)?.get(day) ?? 0;
 
       // Six started: the starter and the plain coder by hand, the rest by the first origin that fits.
@@ -457,6 +466,7 @@ it.layer(getTestDB())("one day's reads", (it) => {
           day: "2026-10-20",
           scope: ADMIN_METRICS_SCOPE.ALL,
         });
+
         assert.equal(everyone.activity.activeDevelopers, 2);
         assert.deepEqual(
           everyone.activity.accounts.map((account) => account.id),

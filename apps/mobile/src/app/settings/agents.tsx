@@ -89,6 +89,7 @@ function choiceAt(
   current: ModelChoice,
 ): ModelChoice | undefined {
   const effort = effortFor(effortsOf(catalog, model), current.effort);
+
   return effort === undefined
     ? undefined
     : choiceOn(catalog, { model, effort }, current.contextWindow);
@@ -102,6 +103,7 @@ function modelPicked(
 ): ModelChoice | undefined {
   const speed = modelSpeedOf(current.model);
   const kept = speedsOffered(catalog, standardId).includes(speed) ? speed : MODEL_SPEED.STANDARD;
+
   return choiceAt(catalog, modelIdAtSpeed(standardId, kept), current);
 }
 
@@ -122,6 +124,7 @@ export default function AgentsScreen() {
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
+
   const view: SettingsRowsInput | undefined =
     settings === undefined
       ? undefined
@@ -134,18 +137,22 @@ export default function AgentsScreen() {
   const choose = (choice: ModelChoice | undefined) => {
     if (choice === undefined) {
       setDefaultRound((round) => round + 1);
+
       return;
     }
+
     void write
       .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
       .then((landed) => {
         if (!landed) setDefaultRound((round) => round + 1);
       });
   };
+
   const atSpeed = (next: ModelSpeed) => {
     if (current === undefined || standard === undefined) return;
     choose(choiceAt(catalog, modelIdAtSpeed(standard, next), current));
   };
+
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
@@ -201,6 +208,7 @@ export default function AgentsScreen() {
                 picked={speed}
                 onPick={(picked) => {
                   const next = speeds.find((each) => each === picked);
+
                   if (next !== undefined && next !== speed) atSpeed(next);
                 }}
               />

@@ -70,6 +70,7 @@ type CaughtRead =
 
 function stateOf(prefix: string | undefined): string {
   const random = Base64Url.encode(crypto.getRandomValues(new Uint8Array(STATE_BYTES)));
+
   return prefix ? `${prefix}.${random}` : random;
 }
 
@@ -83,6 +84,7 @@ function readCaught(
   refused: string,
 ): CaughtRead {
   const url = URL.canParse(caught) ? new URL(caught) : undefined;
+
   if (
     url === undefined ||
     url.origin !== trip.callback.origin ||
@@ -90,13 +92,17 @@ function readCaught(
   ) {
     return { reason: AUTH_SESSION_REASON.OTHER_ADDRESS };
   }
+
   if (url.searchParams.get("state") !== trip.state) {
     return { reason: AUTH_SESSION_REASON.OTHER_TRIP };
   }
+
   const code = url.searchParams.get("code");
+
   if (url.searchParams.has("error") || !code) {
     return { reason: refused, failure: SIGN_IN_FAILURE.REFUSED };
   }
+
   return { code };
 }
 
@@ -113,37 +119,49 @@ export function authSessionConsent(options: {
   const callback = new URL(options.callbackUrl);
   /** The trip whose session shows now, by its own token, so one trip's cancel never closes another's. */
   let showing: symbol | undefined;
+
   return <Grant extends object>(trip: LoopbackConsentOptions<Grant>): LoopbackConsent<Grant> => {
     const own = Symbol("auth session trip");
+
     /** Gives up this trip's claim, and never another trip's. */
     const release = Effect.sync(() => {
       if (showing === own) showing = undefined;
     });
+
     const show = Effect.fnUntraced(function* (): Effect.fn.Return<LoopbackConsentOutcome<Grant>> {
       const codeVerifier = createCodeVerifier();
       const state = stateOf(trip.statePrefix);
       const redirectUri = callback.href;
       const challenge = yield* Effect.result(codeChallenge(codeVerifier));
+
       if (Result.isFailure(challenge)) return { reason: AUTH_SESSION_REASON.CHALLENGE };
       const page = trip.authorizationUrl({ state, redirectUri, codeChallenge: challenge.success });
+
       const answer = yield* Effect.result(
         Effect.tryPromise(() => options.session.open(page, redirectUri)),
       ).pipe(Effect.ensuring(release));
+
       if (Result.isFailure(answer)) {
         return { reason: AUTH_SESSION_REASON.SHOWN, failure: SIGN_IN_FAILURE.BROWSER };
       }
+
       if (answer.success.end === AUTH_SESSION_END.CLOSED) {
         return { reason: LOOPBACK_CONSENT_CANCELED };
       }
+
       const read = readCaught(answer.success.url, { state, callback }, trip.reasons.refused);
+
       if ("reason" in read) return read;
+
       return yield* trip.exchange({ code: read.code, state, redirectUri, codeVerifier });
     });
+
     const run = Effect.fnUntraced(function* (): Effect.fn.Return<LoopbackConsentOutcome<Grant>> {
       if (showing !== undefined) return { reason: AUTH_SESSION_REASON.ALREADY_WAITING };
       // Note that the claim is taken before the digest yields, because a trip started beside
       // this one would otherwise pass the check above too and open a second sheet.
       showing = own;
+
       return yield* show().pipe(Effect.ensuring(release));
     });
 

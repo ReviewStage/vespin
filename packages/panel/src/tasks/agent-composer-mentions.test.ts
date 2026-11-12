@@ -170,17 +170,20 @@ const BILLING_AGENT = {
   ...workspaceAgent("3c3c3c3c-0000-4000-8000-000000000000", "Bill by seat", BILLING.id),
   createdAt: 2_000,
 };
+
 const SWEEPER = workspaceAgent(
   "4d4d4d4d-0000-4000-8000-000000000000",
   "Sweep flaky tests",
   UNLISTED_TASK,
 );
+
 const OLD_AGENT = workspaceAgent(
   "5e5e5e5e-0000-4000-8000-000000000000",
   "Old invoices",
   BILLING.id,
   2_000,
 );
+
 /** An agent past the newest the workspace's list answers, which only a search finds. */
 const LEDGER = workspaceAgent("6f6f6f6f-0000-4000-8000-000000000000", "Old ledger", UNLISTED_TASK);
 
@@ -206,11 +209,13 @@ let deliverTasks: (next: TasksView) => void = () => undefined;
  */
 function tasksView(): TasksView {
   if (listFailed) return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED };
+
   const listed = [...newest, OLD_AGENT].map((agent) => ({
     ...agent,
     workspaceId: "workspace-1",
     repository: PLACE.repository,
   }));
+
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
@@ -221,6 +226,7 @@ function tasksView(): TasksView {
 /** The workspace's search as the service answers it: those whose title or task's name holds the words, as the store finds them. */
 function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly AgentSummary[] {
   const lower = words.toLowerCase();
+
   return WORKSPACE_AGENTS.filter(
     (agent) =>
       (agent.title ?? "").toLowerCase().includes(lower) ||
@@ -231,6 +237,7 @@ function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly Age
 /** The workspace's members, as its Members list reads them: a teammate, then the reader. */
 const READER_ID = "u_reader";
 const DANA_ID = "u_dana";
+
 const MEMBERS: readonly WorkspaceMember[] = [
   { userId: DANA_ID, name: "Dana Reyes", email: "dana@example.com", role: WORKSPACE_ROLE.ADMIN },
   {
@@ -274,14 +281,18 @@ const LISTED_TOOLS = [
 /** What main answers the box's acts with on the act port, every one told. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   told.push(request);
+
   if (refusing.has(request.kind)) {
     return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Could not reach it." });
   }
+
   if (request.kind === ACT_KIND.TASKS_REFRESH) {
     listFailed = false;
     deliverTasks(tasksView());
+
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
   }
+
   return Promise.resolve(
     request.kind === ACT_KIND.AGENTS_WORKSPACE_LIST
       ? {
@@ -341,6 +352,7 @@ async function settle(): Promise<void> {
     act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
+
   await ticks();
   await settleQueries(ticks);
 }
@@ -376,6 +388,7 @@ const SELF_ID = "agent-1";
 
 /** A page an agent showed on the plan, and two of its agents, the box's own among them. */
 const PAGE = { id: "page-1", title: "Invites by week", version: 1, at: 1_000 };
+
 const STORE_AGENT = {
   id: "agent-2",
   name: "Wire the desktop",
@@ -386,6 +399,7 @@ const STORE_AGENT = {
     state: ACTOR_STATE.REST,
   },
 } as const;
+
 const SELF_AGENT = { ...STORE_AGENT, id: SELF_ID, name: "Invite by email" };
 
 /** The plan's page holding its pages and agents, as the task's list read them, every link a chip was asked to open kept. */
@@ -394,6 +408,7 @@ function taskPage(opened: Mention[] = []): TaskMentionsValue {
     ...STORE_AGENT,
     summary: workspaceAgent(STORE_AGENT.id, STORE_AGENT.name, TASK_ID),
   };
+
   return { ...planPage(opened), pages: [PAGE], agents: [SELF_AGENT, store] };
 }
 
@@ -405,6 +420,7 @@ function Box({ sender, skills }: { sender: MessageSender; skills: SkillSource })
     messages: [],
     send: sender,
   });
+
   return createElement(AgentComposer, { ...QUIET_COMPOSER, agentId: SELF_ID, composer, skills });
 }
 
@@ -419,6 +435,7 @@ function drawing(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const redraw = (on: TaskMentionsValue | undefined) =>
     act(() =>
       root.render(
@@ -429,7 +446,9 @@ function drawing(
         ),
       ),
     );
+
   redraw(page);
+
   return { container, redraw };
 }
 
@@ -441,12 +460,16 @@ function drawn(node: ReactNode, page: TaskMentionsValue | undefined): HTMLElemen
 /** The box drawn, every message it sends written down. */
 async function box(page: TaskMentionsValue | undefined, skills: SkillSource = noSkills) {
   const sent: string[] = [];
+
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return new Promise<AgentAgentAnswer>(ignore);
   };
+
   const { container, redraw } = drawing(createElement(Box, { sender, skills }), page);
   await settle();
+
   return { container, sent, redraw };
 }
 
@@ -467,6 +490,7 @@ function carryingTarget(container: HTMLElement): string | undefined {
     "href",
     "xmlns",
   ]);
+
   return [...container.querySelectorAll("*")]
     .flatMap((element) => [...element.attributes])
     .find((attribute) => !masked.has(attribute.name) && attribute.value.includes("://"))?.name;
@@ -535,13 +559,16 @@ test("the @ list hangs at the caret, by the word's line, and narrows as the word
     DOMRect.fromRect({ x: 120, y: 300, width: 8, height: 16 }),
   );
   vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockReturnValue(document.body);
+
   try {
     const { container } = await box(planPage([]));
 
     typeInComposer(container, "Follow @r");
     await settle();
+
     const layer =
       container.querySelector<HTMLElement>(".ui-rect-float") ?? assert.fail("the list hangs");
+
     const hung = { side: layer.dataset.side, left: layer.style.left, top: layer.style.top };
     const first = listed(container);
     typeInComposer(container, "oll");
@@ -558,6 +585,7 @@ test("the @ list hangs at the caret, by the word's line, and narrows as the word
 
 test("the @ list closes on a press outside it and the box, stays open for a press in the box, and stays closed while the caret is in its word", async () => {
   const { container } = await box(planPage([]));
+
   const press = (target: Element) =>
     act(() => {
       target.dispatchEvent(new Event("pointerdown", { bubbles: true }));
@@ -586,12 +614,14 @@ test("the box is a combobox naming the @ list it opened and the row highlighted 
   const list = container.querySelector('.mention-menu [role="listbox"]');
   const highlighted = () => list?.querySelector('[role="option"][aria-selected="true"]')?.id;
   const first = highlighted();
+
   const named = [
     field.getAttribute("role"),
     field.getAttribute("aria-multiline"),
     field.getAttribute("aria-controls"),
     field.getAttribute("aria-activedescendant"),
   ];
+
   pressInComposer(container, "ArrowDown");
   const moved = [field.getAttribute("aria-activedescendant"), highlighted()];
   pressInComposer(container, "Escape");
@@ -612,6 +642,7 @@ test("on the page of an agent no plan holds an @ offers its repository's files, 
     { workspace: "acme", workspaceId: "workspace-1", repository: "acme/relay" },
     ignore,
   );
+
   const { container } = await box(page);
 
   typeInComposer(container, "Follow @roll");
@@ -619,7 +650,7 @@ test("on the page of an agent no plan holds an @ offers its repository's files, 
 
   assert.deepEqual(listed(container), ["rollout-store.ts"]);
   assert.deepEqual(
-    told.filter((each) => each.kind === ACT_KIND.TASKS_TREE).map((each) => each.payload),
+    told.flatMap((each) => (each.kind === ACT_KIND.TASKS_TREE ? [each.payload] : [])),
     [{ workspaceId: "workspace-1", repository: "acme/relay", path: "", recursive: true }],
   );
 });
@@ -639,6 +670,7 @@ test("off a plan's page an @ in the box opens nothing and is sent as the letter 
 
 test("a sent message's mention is drawn on a plan's page as the chip that opens what it names", () => {
   const opened: Mention[] = [];
+
   const container = drawn(
     createElement(TranscriptWords, {
       text: `Follow ${mentionMarkdown(ROLLOUT, "Rollout", PLACE)}.`,
@@ -649,6 +681,7 @@ test("a sent message's mention is drawn on a plan's page as the chip that opens 
   const chip = container.querySelector<HTMLButtonElement>(
     ":is(button, [role='button'])[data-mention-ref]",
   );
+
   assert.ok(chip, "the mention is a chip");
   act(() => chip.click());
 
@@ -659,6 +692,7 @@ test("a sent message's mention is drawn on a plan's page as the chip that opens 
 
 test("off a plan's page a sent message's mention is still its chip, which opens through the window's opener", () => {
   const opened: ReadLink[] = [];
+
   const container = drawn(
     createElement(
       OpenLinkProvider,
@@ -673,6 +707,7 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
   const chip = container.querySelector<HTMLButtonElement>(
     ":is(button, [role='button'])[data-mention-ref]",
   );
+
   assert.ok(chip !== null, "the mention is a chip");
   act(() => chip.click());
 
@@ -702,11 +737,13 @@ test("once the plan's repository changes, the box offers the new repository's fi
 
 test("a sent message's mention of an MCP server is drawn on a plan's page as a chip that opens nothing", () => {
   const opened: Mention[] = [];
+
   const linear = mentionMarkdown(
     { kind: MENTION_KIND.SERVER, provider: INTEGRATION_PROVIDER.LINEAR },
     "Linear",
     PLACE,
   );
+
   const container = drawn(
     createElement(TranscriptWords, { text: `Check ${linear} first.` }),
     planPage(opened),
@@ -756,13 +793,16 @@ test("an @ in the box offers the repository's skills, a pick written as the /nam
         },
       ],
     });
+
   const { container, sent } = await box(planPage([]), release);
 
   typeInComposer(container, "Run @rel");
   await settle();
+
   const offered = [...container.querySelectorAll('.mention-menu [role="group"]')].map((group) =>
     group.getAttribute("aria-label"),
   );
+
   pressInComposer(container, "Enter");
   await settle();
   const chips = [...composerEditor(container).querySelectorAll("[data-skill-ref]")];
@@ -776,8 +816,10 @@ test("an @ in the box offers the repository's skills, a pick written as the /nam
 
 test("skills that could not be read for one @ list are asked for again by the next", async () => {
   let asks = 0;
+
   const flaky: SkillSource = () => {
     asks += 1;
+
     return Promise.resolve(
       asks === 1
         ? { unread: "GitHub could not be reached." }
@@ -793,10 +835,12 @@ test("skills that could not be read for one @ list are asked for again by the ne
           },
     );
   };
+
   const groups = (container: HTMLElement) =>
     [...container.querySelectorAll('.mention-menu [role="group"]')].map((group) =>
       group.getAttribute("aria-label"),
     );
+
   const { container } = await box(planPage([]), flaky);
 
   typeInComposer(container, "Run @releas");
@@ -811,6 +855,7 @@ test("skills that could not be read for one @ list are asked for again by the ne
 
 test("an @ whose read of the skills came back unread says they could not be read, with Retry, and ends its reading; Retry reads them again", async () => {
   let reachable = false;
+
   const flaky: SkillSource = () =>
     Promise.resolve(
       reachable
@@ -826,6 +871,7 @@ test("an @ whose read of the skills came back unread says they could not be read
           }
         : { unread: "GitHub could not be reached." },
     );
+
   const { container } = await box(planPage([]), flaky);
 
   typeInComposer(container, "Run @releas");
@@ -918,6 +964,7 @@ test("an @ in the box on a plan's page suggests the plan's other agents and then
 
   typeInComposer(container, "See @");
   await settle();
+
   const agentGlyph = container.querySelector(
     '.mention-menu [aria-label="Suggested"] [role="option"] .ui-combobox-option-glyph',
   )?.firstElementChild;
@@ -964,16 +1011,19 @@ test("another agent picked from the @ list is drawn as its chip and sent as its 
 
 test("a sent message's mention of a page or an agent is drawn as the chip that opens its tab through the window's opener, its target on no attribute", () => {
   const opened: ReadLink[] = [];
+
   const page = mentionMarkdown(
     { kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: PAGE.id },
     PAGE.title,
     PLACE,
   );
+
   const agent = mentionMarkdown(
     { kind: MENTION_KIND.AGENT, agentId: STORE_AGENT.id },
     STORE_AGENT.name,
     PLACE,
   );
+
   const container = drawn(
     createElement(
       OpenLinkProvider,
@@ -988,6 +1038,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
       ":is(button, [role='button'])[data-mention-ref]",
     ),
   ];
+
   for (const chip of chips) act(() => chip.click());
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
@@ -1004,6 +1055,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 /** The plan's page, its workspace's agents read through the window's own reader, the box drawn on it. */
 function WorkspacePage({ children }: { children: ReactNode }): ReactNode {
   const readAgents = useMentionAgentsReader("workspace-1", [BILLING], undefined);
+
   return createElement(TaskMentions, { value: { ...taskPage(), readAgents }, children });
 }
 
@@ -1019,17 +1071,22 @@ const rest = Effect.gen(function* () {
 /** The box on the plan's page that reads its workspace's agents, every message it sends written down. */
 async function workspaceBox() {
   const sent: string[] = [];
+
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return new Promise<AgentAgentAnswer>(ignore);
   };
+
   // Note that the test's Query client is handed the bridge's document before the first frame, so the agents' list reads the task list from it rather than racing its read.
   const { container } = drawing(
     createElement(WorkspacePage, null, createElement(Box, { sender, skills: noSkills })),
     undefined,
     stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), { tasks: tasksView() }),
   );
+
   await settle();
+
   return { container, sent };
 }
 
@@ -1045,9 +1102,9 @@ function agentsListed(container: HTMLElement): [string, string][] {
 
 /** The searches of the workspace's agents the list asked, each as the act carried it. */
 function workspaceReads(): unknown[] {
-  return told
-    .filter((each) => each.kind === ACT_KIND.AGENTS_WORKSPACE_LIST)
-    .map((each) => each.payload);
+  return told.flatMap((each) =>
+    each.kind === ACT_KIND.AGENTS_WORKSPACE_LIST ? [each.payload] : [],
+  );
 }
 
 test("an @ narrowed to agents offers the workspace's agents after the task's own, each labeled by its task, and no archived one before a word is typed", async () => {
@@ -1063,9 +1120,12 @@ test("an @ narrowed to agents offers the workspace's agents after the task's own
   ]);
 });
 
+type ListNoteResult = { words: string; retry: HTMLButtonElement | null };
+
 /** What the open list says after its rows, and the press that reads again. */
-function listNote(container: HTMLElement): { words: string; retry: HTMLButtonElement | null } {
+function listNote(container: HTMLElement): ListNoteResult {
   const note = container.querySelector(".mention-menu .ui-combobox-note");
+
   return {
     words: note?.textContent ?? "",
     retry:
@@ -1246,13 +1306,16 @@ it.effect(
 /** The box on the plan's page that reads its workspace's agents, among the workspace's members. */
 async function workspaceMemberBox() {
   const sender: MessageSender = () => new Promise<AgentAgentAnswer>(ignore);
+
   const { container } = drawing(
     amongMembers(
       createElement(WorkspacePage, null, createElement(Box, { sender, skills: noSkills })),
     ),
     undefined,
   );
+
   await listSettled();
+
   return container;
 }
 
@@ -1280,6 +1343,7 @@ test("an @ row for an agent ends in its starter's face where a teammate started 
         : mark.getAttribute("aria-label"),
     ),
   ]);
+
   assert.deepEqual(ends, [
     ["Wire the desktop"],
     ["Bill by seat", `face ${ACTOR_KIND.PERSON}`, "Failed"],
@@ -1296,10 +1360,12 @@ it.effect(
 
       typeInComposer(container, "See @bill");
       yield* rest;
+
       const option =
         container.querySelector<HTMLElement>(
           '.mention-menu [aria-label="Agents"] [role="option"]',
         ) ?? assert.fail("the list offers the agent");
+
       const reads = told.length;
       // Note that the hint's wait runs on this test's clock, so the pointer rests as the clock moves.
       act(() => {
@@ -1310,6 +1376,7 @@ it.effect(
 
       const card =
         document.querySelector(".ui-tooltip-card") ?? assert.fail("the row hangs a card");
+
       assert.equal(card.querySelector(".ui-hover-card-name")?.textContent, "Bill by seat");
       assert.match(card.textContent ?? "", new RegExp(`On ${BILLING.name}`, "u"));
       assert.equal(told.length, reads, "the card is drawn from the agent the list read");
@@ -1321,11 +1388,14 @@ async function cardOfRow(page: TaskMentionsValue, typed: string, section: string
   const { container } = await box(page);
   typeInComposer(container, typed);
   await listSettled();
+
   const option =
     container.querySelector<HTMLElement>(
       `.mention-menu [aria-label="${section}"] [role="option"]`,
     ) ?? assert.fail(`the list offers a row under ${section}`);
+
   restOn(option);
+
   return {
     option,
     card: document.querySelector(".ui-tooltip-card") ?? assert.fail("the row hangs a card"),
@@ -1347,6 +1417,7 @@ test("an @ row for a page says its version where it has more than one, else its 
     "See @invites",
     "Pages",
   );
+
   assert.equal(later.option.querySelector(".ui-combobox-option-detail")?.textContent, "Version 3");
   assert.equal(
     later.card.querySelector("[data-page-card] .ui-hover-card-name")?.textContent,
@@ -1371,6 +1442,7 @@ test("an @ row for a page still on its first version says how long ago it was wr
 test("a sent mention of an agent of another task or none hangs its card's one reading state while it is read, never the task page's own card for an id it has no tab of", () => {
   const mention = (agentId: string) =>
     mentionMarkdown({ kind: MENTION_KIND.AGENT, agentId }, "Agent", PLACE);
+
   const container = drawn(
     createElement(TranscriptWords, {
       text: `${mention("agent-7")} ${mention(BILLING_AGENT.id)} ${mention(SWEEPER.id)}`,
@@ -1398,6 +1470,7 @@ test("a sent mention of an agent of another task or none hangs its card's one re
     act(() => {
       chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
     });
+
     return words;
   });
 
@@ -1424,7 +1497,7 @@ test("a section's address pasted whole into the box on a plan's page is drawn as
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("a page's address pasted in the app's own scheme is called by the name the window holds, an agent's it holds none for by its kind, and a file of the plan's repository pastes as words", async () => {
+test("a page's address pasted in the app's own scheme is called by the name the window holds, an agent's it holds none for by its kind, and a file of the plan's repository and an Inbox thread become the chips they are drawn as once sent", async () => {
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: () => () => undefined,
@@ -1444,7 +1517,12 @@ test("a page's address pasted in the app's own scheme is called by the name the 
   const { container, sent } = await box(planPage([]));
   const page = encodeMention({ kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: PAGE.id }, PLACE);
   const agent = encodeMention({ kind: MENTION_KIND.AGENT, agentId: STORE_AGENT.id }, PLACE);
-  const file = "https://github.com/acme/relay/blob/HEAD/apps/web/rollout-store.ts";
+
+  // A file's page at a commit keeps that commit, so its chip opens the code it was pasted at.
+  const file =
+    "https://github.com/acme/relay/blob/3f9c2e1d5b7a4c6e8f0a2b4c6d8e0f1a3b5c7d9e/apps/web/rollout-store.ts";
+
+  const thread = "https://vespin.dev/acme/inbox/e4519584-9b91-4c47-8ba4-e7b0e636f625";
 
   typeInComposer(container, "Build ");
   pasteInComposer(container, page.replace("https:", "vespin:"));
@@ -1452,13 +1530,17 @@ test("a page's address pasted in the app's own scheme is called by the name the 
   pasteInComposer(container, agent);
   typeInComposer(container, "in ");
   pasteInComposer(container, file);
+  typeInComposer(container, "from ");
+  pasteInComposer(container, thread);
   await settle();
   const chips = [...composerEditor(container).querySelectorAll("[data-mention-ref]")];
   pressInComposer(container, "Enter");
   await settle();
 
-  assert.deepEqual(chips.map(chipName), [PAGE.title, "Agent"]);
-  assert.deepEqual(sent, [`Build [@${PAGE.title}](${page}) on [@Agent](${agent}) in ${file}`]);
+  assert.deepEqual(chips.map(chipName), [PAGE.title, "Agent", "rollout-store.ts", "Inbox item"]);
+  assert.deepEqual(sent, [
+    `Build [@${PAGE.title}](${page}) on [@Agent](${agent}) in [@rollout-store.ts](${file}) from [@Inbox item](${thread})`,
+  ]);
 });
 
 /** The repository with folders and more files than a narrowed list shows, as the plan's page names it. */
@@ -1467,6 +1549,7 @@ const WIDE: MentionPlace = { workspace: "acme", repository: "acme/wide" };
 /** The box on a plan whose repository is the wide one. */
 async function wideBox() {
   standing = "acme/wide";
+
   return box(planPage([], "acme/wide"));
 }
 
@@ -1489,11 +1572,13 @@ function kindsListed(container: HTMLElement): [string, string][] {
 function highlightRow(container: HTMLElement, group: string, name: string): void {
   const held = () => {
     const row = container.querySelector('.mention-menu [role="option"][aria-selected="true"]');
+
     return (
       row?.closest('[role="group"]')?.getAttribute("aria-label") === group &&
       row.querySelector(".ui-combobox-option-label")?.textContent === name
     );
   };
+
   for (let press = 0; press < 40 && !held(); press += 1) pressInComposer(container, "ArrowDown");
   assert.ok(held(), `${name} in ${group} holds the highlight`);
 }
@@ -1524,7 +1609,9 @@ test("a bare @ browses a row for each kind the place offers, saying nothing besi
 /** The highlighted row, by its group and its name. */
 function highlighted(container: HTMLElement): [string | null, string] | undefined {
   const row = container.querySelector('.mention-menu [role="option"][aria-selected="true"]');
+
   if (row === null) return undefined;
+
   return [
     row.closest('[role="group"]')?.getAttribute("aria-label") ?? null,
     row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
@@ -1612,9 +1699,11 @@ test("pressing the crumb's back arrow widens the list again and keeps the caret 
   highlightRow(container, "Browse", "Files and folders");
   pressInComposer(container, "ArrowRight");
   await settle();
+
   const back = [
     ...container.querySelectorAll<HTMLButtonElement>(".mention-menu-crumb button"),
   ].find((each) => each.textContent === "All kinds");
+
   assert.ok(back !== undefined, "the narrowed list's crumb offers the way back");
   const press = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
   back.dispatchEvent(press);
@@ -1735,6 +1824,7 @@ test("a file or a folder picked from a narrowed list is sent as the same link th
     "invite-07.ts",
     WIDE,
   );
+
   const folder = mentionMarkdown({ kind: MENTION_KIND.FOLDER, path: "apps" }, "apps/", WIDE);
   assert.deepEqual(sent, [`Ship ${file} and ${file} in ${folder}`]);
 });
@@ -1867,16 +1957,21 @@ function amongMembers(node: ReactElement): ReactElement {
 /** The box drawn on a plan's page among the workspace's members, every message it sends written down. */
 async function memberBox() {
   const sent: string[] = [];
+
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return new Promise<AgentAgentAnswer>(ignore);
   };
+
   const { container } = drawing(
     amongMembers(createElement(Box, { sender, skills: noSkills })),
     taskPage(),
   );
+
   await settle();
   await peopleRead();
+
   return { container, sent };
 }
 
@@ -1904,9 +1999,11 @@ test("an @ among the workspace's members offers its people, the reader first as 
   await settle();
   const row = container.querySelector<HTMLElement>('.mention-menu [role="option"]');
   assert.ok(row, "Dana is listed");
+
   const marked = [...row.querySelectorAll(".ui-combobox-option-label mark")].map(
     (mark) => mark.textContent,
   );
+
   restOn(row);
 
   assert.deepEqual(people, [
@@ -1941,6 +2038,7 @@ test("a person picked from the @ list is drawn as their chip and sent as their p
 test("a sent message's mention of a person is drawn as the chip wearing their mark and their name now that opens their page, its target on no attribute", async () => {
   const opened: ReadLink[] = [];
   const person = mentionMarkdown({ kind: MENTION_KIND.PERSON, userId: DANA_ID }, "Dana", PLACE);
+
   const container = drawn(
     amongMembers(
       createElement(
@@ -1951,12 +2049,14 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
     ),
     taskPage(),
   );
+
   await settle();
   await peopleRead();
 
   const chip = container.querySelector<HTMLButtonElement>(
     ":is(button, [role='button'])[data-mention-ref]",
   );
+
   assert.ok(chip);
   act(() => chip.click());
 
@@ -1969,7 +2069,7 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace pastes as the words it is", async () => {
+test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace keeps its own address", async () => {
   const { container, sent } = await memberBox();
   const here = "https://vespin.dev/acme/person/u_dana";
   const elsewhere = "https://vespin.dev/other/person/u_dana";
@@ -1985,9 +2085,9 @@ test("a person's page pasted into the box becomes their chip called by their nam
 
   assert.deepEqual(
     chips.map((chip) => chip.textContent),
-    ["Dana Reyes"],
+    ["Dana Reyes", "Dana Reyes"],
   );
-  assert.deepEqual(sent, [`Ask [@Dana Reyes](${here}) not ${elsewhere}`]);
+  assert.deepEqual(sent, [`Ask [@Dana Reyes](${here}) not [@Dana Reyes](${elsewhere})`]);
 });
 
 test("an old Vespin issue page's link pasted into the box stays the words it is, since Vespin keeps no issues of its own", async () => {
@@ -2010,6 +2110,7 @@ const MONDAY_NOON = Date.parse("2026-10-19T12:00:00Z");
 
 test("words after an @ that read as a date offer it first, said from today, and its pick is drawn from today and sent with the date in full", async () => {
   vi.useFakeTimers({ now: MONDAY_NOON, toFake: ["Date"] });
+
   try {
     const { container, sent } = await box(taskPage());
 
@@ -2032,6 +2133,7 @@ test("words after an @ that read as a date offer it first, said from today, and 
 
 test("a date's chip in the box opens its picker, and the day picked there is the date the message sends", async () => {
   vi.useFakeTimers({ now: MONDAY_NOON, toFake: ["Date"] });
+
   try {
     const { container, sent } = await box(taskPage());
 
@@ -2039,9 +2141,11 @@ test("a date's chip in the box opens its picker, and the day picked there is the
     await settle();
     pressInComposer(container, "Enter");
     await settle();
+
     const chip = composerEditor(container).querySelector<HTMLElement>(
       ":is(button, [role='button'])[data-mention-ref]",
     );
+
     assert.ok(chip, "the date's chip is a button in the box");
     act(() => chip.click());
     await settle();
@@ -2070,6 +2174,7 @@ test("a date's chip in the box opens its picker, and the day picked there is the
 
 test("an @ narrowed to dates offers today, tomorrow, and next Monday before a word is typed, then the row that opens the picker", async () => {
   vi.useFakeTimers({ now: MONDAY_NOON, toFake: ["Date"] });
+
   try {
     const { container } = await box(taskPage());
 
@@ -2087,6 +2192,7 @@ test("an @ narrowed to dates offers today, tomorrow, and next Monday before a wo
 
 test("a sent message's date is drawn as a chip saying it from today that opens nothing, and words that read as no date stay words", () => {
   vi.useFakeTimers({ now: MONDAY_NOON, toFake: ["Date"] });
+
   try {
     const container = drawn(
       createElement(TranscriptWords, {

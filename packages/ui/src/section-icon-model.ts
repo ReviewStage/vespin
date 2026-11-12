@@ -78,6 +78,7 @@ export function glyphName(pascal: string): string {
 /** The key Lucide's `icons` draws a glyph's name under, the inverse of `glyphName`: `arrow-down01` as `ArrowDown01`. */
 export function glyphKey(glyph: string): string {
   const drawn = RENAMED_GLYPH.get(glyph) ?? glyph;
+
   return drawn
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -87,6 +88,7 @@ export function glyphKey(glyph: string): string {
 /** What a glyph is called where it is named, its words in sentence case: `flask-conical` as "Flask conical". */
 export function glyphLabel(glyph: string): string {
   const words = glyph.split("-").join(" ");
+
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -100,6 +102,7 @@ function sameIcon(a: TaskSectionIcon, b: TaskSectionIcon): boolean {
   if (a.kind === TASK_SECTION_ICON_KIND.EMOJI) {
     return b.kind === TASK_SECTION_ICON_KIND.EMOJI && a.emoji === b.emoji;
   }
+
   return b.kind === TASK_SECTION_ICON_KIND.GLYPH && glyphKey(a.glyph) === glyphKey(b.glyph);
 }
 
@@ -116,42 +119,48 @@ export function recentIcons(
 export function glyphChoices(keys: readonly string[]): GlyphChoice[] {
   const choices = keys.map((key): GlyphChoice => {
     const glyph = glyphName(key);
+
     return { glyph, label: glyphLabel(glyph), words: [glyph.split("-").join(" ")] };
   });
+
   const rank = (choice: GlyphChoice) => {
     const at = SUGGESTED_GLYPHS.indexOf(choice.glyph);
+
     return at === -1 ? SUGGESTED_GLYPHS.length : at;
   };
+
   return choices.sort((a, b) => rank(a) - rank(b) || a.glyph.localeCompare(b.glyph));
 }
 
 /** The glyphs a query finds, every one for a blank query. */
 export function findGlyphs(choices: readonly GlyphChoice[], query: string): readonly GlyphChoice[] {
   const tokens = searchTokens(query);
+
   if (tokens.length === 0) return choices;
+
   return choices.filter((choice) => matchesTokens(choice.words, tokens));
 }
 
 /** Every emoji every Mac draws, by category in Unicode's order, from `unicode-emoji-json`'s groups. */
 export function emojiGroups(groups: readonly UnicodeEmojiGroup[]): EmojiGroup[] {
-  return groups
-    .map((group) => ({
-      name: group.name,
-      emojis: group.emojis
-        .filter((one) => Number(one.emoji_version) <= NEWEST_EMOJI_VERSION)
-        .map((one) => ({ emoji: one.emoji, name: one.name })),
-    }))
-    .filter((group) => group.emojis.length > 0);
+  return groups.flatMap((group) => {
+    const emojis = group.emojis
+      .filter((one) => Number(one.emoji_version) <= NEWEST_EMOJI_VERSION)
+      .map((one) => ({ emoji: one.emoji, name: one.name }));
+
+    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
+  });
 }
 
 /** The emoji a query finds, each category keeping only what it found and none left empty; every one for a blank query. */
 export function findEmoji(groups: readonly EmojiGroup[], query: string): readonly EmojiGroup[] {
   const tokens = searchTokens(query);
+
   if (tokens.length === 0) return groups;
-  return groups
-    .map((group) => ({
-      name: group.name,
-      emojis: group.emojis.filter((one) => matchesTokens([one.name], tokens)),
-    }))
-    .filter((group) => group.emojis.length > 0);
+
+  return groups.flatMap((group) => {
+    const emojis = group.emojis.filter((one) => matchesTokens([one.name], tokens));
+
+    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
+  });
 }

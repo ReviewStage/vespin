@@ -47,12 +47,15 @@ const PKCE = {
 const decodeStarted = Schema.decodeUnknownSync(Schema.Struct({ url: Schema.String }));
 const decodeTokens = Schema.decodeUnknownSync(Schema.Struct({ access_token: Schema.String }));
 const decodeUserInfo = Schema.decodeUnknownSync(Schema.Struct({ sub: Schema.String }));
+
 const decodeTransfer = Schema.decodeUnknownSync(
   Schema.Struct({ electron_authorization_code: Schema.String }),
 );
+
 const decodeExchanged = Schema.decodeUnknownSync(
   Schema.Struct({ token: Schema.String, user: Schema.Struct({ email: Schema.String }) }),
 );
+
 const decodeSession = Schema.decodeUnknownSync(
   Schema.NullOr(
     Schema.Struct({ user: Schema.Struct({ id: Schema.String, email: Schema.String }) }),
@@ -109,15 +112,19 @@ function json(body: WireValue): Response {
 /** GitHub's token endpoint and the two profile reads. */
 function fakeGitHub(input: string | URL | Request): Promise<Response> {
   const url = new URL(input instanceof Request ? input.url : input);
+
   if (url.href === "https://github.com/login/oauth/access_token") {
     return Promise.resolve(json({ access_token: GITHUB_TOKEN, token_type: "bearer" }));
   }
+
   if (url.href === "https://api.github.com/user") {
     return Promise.resolve(json({ id: 4242, login: "octocat", email: null }));
   }
+
   if (url.href === "https://api.github.com/user/emails") {
     return Promise.resolve(json([{ email: GITHUB_EMAIL, primary: true, verified: true }]));
   }
+
   throw new Error(`this test reaches no network: ${url.href}`);
 }
 
@@ -132,11 +139,13 @@ function cookiesFrom(response: Response): string {
 function location(response: Response): URL {
   const next = response.headers.get("location");
   assert.ok(next, `expected a redirect, got ${response.status}`);
+
   return new URL(next, SERVICE_URL);
 }
 
 function navigate(auth: Auth, url: URL | string, cookie?: string): Promise<Response> {
   const navigation = { accept: "text/html", "sec-fetch-mode": "navigate" };
+
   return auth.handler(
     new Request(url, { headers: cookie === undefined ? navigation : { ...navigation, cookie } }),
   );
@@ -172,15 +181,18 @@ async function desktopSignsIn(auth: Auth): Promise<{ browser: string; accessToke
     code_challenge: PKCE.challenge,
     code_challenge_method: "S256",
   });
+
   const loginPage = location(
     await navigate(auth, `${SERVICE_URL}/api/auth/oauth2/authorize?${authorizeQuery}`),
   );
+
   const started = await post(
     auth,
     "/sign-in/social",
     { provider: "github", oauth_query: loginPage.search.slice(1) },
     { origin: SERVICE_URL },
   );
+
   const github = new URL(decodeStarted(await started.json()).url);
   const callback = new URL(github.searchParams.get("redirect_uri") ?? "");
   callback.searchParams.set("code", GITHUB_CODE);
@@ -188,10 +200,13 @@ async function desktopSignsIn(auth: Auth): Promise<{ browser: string; accessToke
   const landed = await navigate(auth, callback, cookiesFrom(started));
   const browser = cookiesFrom(landed);
   let next = location(landed);
+
   for (let hop = 0; next.origin === SERVICE_URL && hop < 3; hop += 1) {
     next = location(await navigate(auth, next, browser));
   }
+
   assert.equal(`${next.origin}${next.pathname}`, LOOPBACK);
+
   const tokens = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/oauth2/token`, {
       method: "POST",
@@ -205,6 +220,7 @@ async function desktopSignsIn(auth: Auth): Promise<{ browser: string; accessToke
       }),
     }),
   );
+
   return { browser, accessToken: decodeTokens(await tokens.json()).access_token };
 }
 
@@ -215,13 +231,16 @@ async function transfer(auth: Auth, browser: string, state: string): Promise<str
     state,
     code_challenge: PKCE.challenge,
   });
+
   const answered = await post(
     auth,
     `/electron/transfer-user?${query}`,
     {},
     { origin: SERVICE_URL, cookie: browser },
   );
+
   assert.equal(answered.status, 200);
+
   return decodeTransfer(await answered.json()).electron_authorization_code;
 }
 
@@ -234,6 +253,7 @@ async function sessionFor(auth: Auth, headers: Readonly<Record<string, string>>)
   const answered = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/get-session`, { headers }),
   );
+
   return decodeSession(await answered.json());
 }
 
@@ -243,7 +263,9 @@ async function userInfoSubject(auth: Auth, accessToken: string): Promise<string>
       headers: { authorization: `Bearer ${accessToken}` },
     }),
   );
+
   assert.equal(answered.status, 200);
+
   return decodeUserInfo(await answered.json()).sub;
 }
 
@@ -279,6 +301,7 @@ test("the Mac's session outlives the browser's sign-out, since it is a session o
   const auth = desktopAuth();
   const { browser } = await desktopSignsIn(auth);
   const code = await transfer(auth, browser, "session-state");
+
   const signed = (await exchange(auth, code, "session-state", PKCE.verifier)).headers.get(
     "set-auth-token",
   );
@@ -312,6 +335,7 @@ test("a bare session token is not a bearer token: only the signed one counts", a
   const auth = desktopAuth();
   const { browser } = await desktopSignsIn(auth);
   const code = await transfer(auth, browser, "session-state");
+
   const bare = decodeExchanged(
     await (await exchange(auth, code, "session-state", PKCE.verifier)).json(),
   ).token;
@@ -321,6 +345,7 @@ test("a bare session token is not a bearer token: only the signed one counts", a
 
 test("no browser session, no transfer; and the plugin's own sign-in start is not served", async () => {
   const auth = desktopAuth();
+
   const query = new URLSearchParams({
     client_id: DESKTOP_SESSION_CLIENT_ID,
     state: "session-state",
@@ -333,12 +358,14 @@ test("no browser session, no transfer; and the plugin's own sign-in start is not
     {},
     { origin: SERVICE_URL },
   );
+
   assert.equal(anonymous.status, 401);
 
   const proxied = await navigate(
     auth,
     `${SERVICE_URL}/api/auth/electron/init-oauth-proxy?provider=github&${query}`,
   );
+
   assert.equal(proxied.status, 404);
 });
 
@@ -346,9 +373,11 @@ test("the Mac's sign-out under its bearer token ends its session, and the browse
   const auth = desktopAuth();
   const { browser } = await desktopSignsIn(auth);
   const code = await transfer(auth, browser, "session-state");
+
   const signed = (await exchange(auth, code, "session-state", PKCE.verifier)).headers.get(
     "set-auth-token",
   );
+
   const bearerHeader = { authorization: `Bearer ${signed}` };
 
   const signedOut = await post(auth, "/sign-out", {}, bearerHeader);

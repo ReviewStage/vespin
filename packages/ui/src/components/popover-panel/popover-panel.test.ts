@@ -53,6 +53,7 @@ function Stage({
   hint?: PopoverPanelHint;
 }): React.JSX.Element {
   const field = useRef<HTMLInputElement>(null);
+
   return createElement(
     "div",
     null,
@@ -90,6 +91,7 @@ function drawn(stage: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(stage));
+
   return container;
 }
 
@@ -97,12 +99,14 @@ function drawn(stage: ReactElement): HTMLElement {
 function dialogIn(container: HTMLElement): HTMLElement {
   const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
   assert.ok(dialog, "the panel is a dialog");
+
   return dialog;
 }
 
 /** The name a reader hears for `dialog`, read through what labels it. */
 function nameOf(dialog: HTMLElement): string | null | undefined {
   const by = dialog.getAttribute("aria-labelledby");
+
   return by === null ? dialog.getAttribute("aria-label") : document.getElementById(by)?.textContent;
 }
 
@@ -116,9 +120,11 @@ function button(container: HTMLElement, name: string): HTMLButtonElement | undef
 /** Presses `key` on what holds focus, answering whether the window heard it. */
 function press(key: string, init: KeyboardEventInit = {}): boolean {
   let windowHeard = false;
+
   const listen = () => {
     windowHeard = true;
   };
+
   window.addEventListener("keydown", listen);
   act(() => {
     document.activeElement?.dispatchEvent(
@@ -126,6 +132,7 @@ function press(key: string, init: KeyboardEventInit = {}): boolean {
     );
   });
   window.removeEventListener("keydown", listen);
+
   return windowHeard;
 }
 
@@ -140,6 +147,7 @@ test("a menu is named by its title too", () => {
   const container = drawn(
     createElement(Stage, { heard: heardNothing(), look: POPOVER_PANEL_LOOK.MENU }),
   );
+
   assert.equal(nameOf(dialogIn(container)), "Diff settings");
 });
 
@@ -202,6 +210,7 @@ test("the app's hint is hung over the × with its name", () => {
       hint: ({ label, children }) => createElement("span", { title: `${label} (hint)` }, children),
     }),
   );
+
   const close = button(container, "Close");
   assert.ok(close, "the × is still drawn under its hint");
   assert.equal(close.parentElement?.getAttribute("title"), "Close (hint)");
@@ -226,6 +235,7 @@ test("focus moving inside the panel is not a leaving", () => {
 function OpenStage({ exits }: { exits?: { count: number } }): React.JSX.Element {
   const [open, setOpen] = useState(true);
   const field = useRef<HTMLInputElement>(null);
+
   return createElement(
     "div",
     null,

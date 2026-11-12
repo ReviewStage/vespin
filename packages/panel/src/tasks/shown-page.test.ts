@@ -25,6 +25,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -36,15 +37,18 @@ function drawPage(door: ((reply: string) => void) | undefined): Window {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const page: ReactNode = createElement(ShownPage, {
     place: { taskId: TASK },
     pageId: PAGE,
     version: 1,
     title: "Invite funnel",
   });
+
   act(() => root.render(withQueryClient(createElement(ReplyDoorProvider, { value: door }, page))));
   const framed = container.querySelector("iframe")?.contentWindow;
   assert.ok(framed);
+
   return framed;
 }
 
@@ -57,6 +61,7 @@ function selectInFrame(framed: Window): void {
     box: { left: 10, top: 40, right: 200, bottom: 60 },
     words: true,
   };
+
   act(() => {
     window.dispatchEvent(
       new MessageEvent("message", { data: { type: PAGE_PICK_TYPE, selected }, source: framed }),

@@ -155,18 +155,23 @@ function Chevron({ at, variant }: { at: Widths; variant: BreadcrumbsVariant }): 
  */
 function chevronBefore(crumbs: readonly Crumb[], at: number): Widths | undefined {
   const own = SHOWN_WIDTHS[crumbs[at]?.shownAt ?? BREADCRUMB_SHOWN.ALWAYS];
+
   const before = crumbs
     .slice(0, at)
-    .filter((each) => each.shown !== false)
-    .map((each) => SHOWN_WIDTHS[each.shownAt ?? BREADCRUMB_SHOWN.ALWAYS]);
+    .flatMap((each) =>
+      each.shown === false ? [] : [SHOWN_WIDTHS[each.shownAt ?? BREADCRUMB_SHOWN.ALWAYS]],
+    );
+
   const led = {
     wide: before.some((widths) => widths.wide),
     narrow: before.some((widths) => widths.narrow),
     narrowest: before.some((widths) => widths.narrowest),
   };
+
   if (!(own.wide && led.wide) && !(own.narrow && led.narrow) && !(own.narrowest && led.narrowest)) {
     return undefined;
   }
+
   return {
     wide: !own.wide || led.wide,
     narrow: !own.narrow || led.narrow,
@@ -226,6 +231,7 @@ function CrumbControl({
 }): React.JSX.Element {
   const { label, icon, onPress } = crumb;
   const current = crumb.current === true ? "page" : undefined;
+
   if (icon !== undefined) {
     return (
       <FoldingButton
@@ -237,7 +243,9 @@ function CrumbControl({
       />
     );
   }
+
   if (crumb.editing !== undefined && crumb.editing !== null) return <>{crumb.editing}</>;
+
   const control =
     onPress === undefined ? (
       <BreadcrumbPage
@@ -260,6 +268,7 @@ function CrumbControl({
         <CrumbFace glyph={crumb.glyph} label={label} end={crumb.end} />
       </BreadcrumbLink>
     );
+
   return crumb.hint === undefined && crumb.card === undefined ? (
     control
   ) : (
@@ -303,17 +312,22 @@ function CrumbItem({
   const presence = useDisclosure(shown);
   const [was, setWas] = useState(shown);
   const [arriving, setArriving] = useState(false);
+
   if (shown !== was) {
     setWas(shown);
     setArriving(shown);
   }
+
   if (!presence.mounted) return null;
+
   const motion = presence.leaving
     ? CRUMB_MOTION.LEAVING
     : arriving
       ? CRUMB_MOTION.ARRIVING
       : undefined;
+
   const words = crumb.icon === undefined && crumb.onPress === undefined;
+
   return (
     <BreadcrumbItem
       ref={presence.ref}
@@ -354,6 +368,7 @@ export function Breadcrumbs({
 }): React.JSX.Element {
   const [measured, drawn, hidden] = useCrumbFold(crumbs);
   const menu = useMenu(hidden.length > 0);
+
   // Note that the "…" opens a menu of the crumbs it stands for, each pressing as its own crumb did, since folding a crumb must not take away where it leads.
   const shown = drawn.map((each) =>
     each.folded
@@ -373,16 +388,19 @@ export function Breadcrumbs({
         }
       : each,
   );
+
   const path = shown.map((each) => each.crumb);
   const opener = menu.open?.opener;
+
   const hiddenRows: MenuAction[] = hidden.map((crumb) => ({
     label: crumb.label,
-    ...(isValidElement(crumb.glyph) ? { icon: crumb.glyph as React.JSX.Element } : {}),
+    ...(isValidElement(crumb.glyph) && { icon: crumb.glyph }),
     disabled: crumb.onPress === undefined,
     onSelect: () => {
       if (opener !== undefined) crumb.onPress?.(opener);
     },
   }));
+
   return (
     <Breadcrumb
       ref={variant === BREADCRUMBS_VARIANT.CAPTION ? measured : undefined}

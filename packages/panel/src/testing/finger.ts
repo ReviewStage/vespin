@@ -29,21 +29,25 @@ function touch(type: string): PointerEvent {
 
 /** The window answers that its main pointer is a finger until the test finishes. */
 export function underAFinger(): void {
-  const stub = vi.spyOn(window, "matchMedia").mockImplementation(
-    (query) =>
-      ({
-        matches: query === "(pointer: coarse)",
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }) as unknown as MediaQueryList,
-  );
+  const stub = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+    const list: Partial<MediaQueryList> = {
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+
+    // SAFETY: the panel reads only what the stand-in media query list has.
+    return list as MediaQueryList;
+  });
+
   onTestFinished(() => stub.mockRestore());
 }
 
 /** A finger held still on `target` well past a long press, then lifted. */
 export function longPress(target: HTMLElement): void {
   vi.useFakeTimers();
+
   try {
     act(() => {
       target.dispatchEvent(touch("pointerdown"));
@@ -54,6 +58,7 @@ export function longPress(target: HTMLElement): void {
   } finally {
     vi.useRealTimers();
   }
+
   act(() => {
     target.dispatchEvent(touch("pointerup"));
     target.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true }));

@@ -106,7 +106,9 @@ const REMOVE =
  */
 const METER =
   "ui-attachment-chip-meter pointer-events-none absolute right-ui-4 bottom-ui-2 left-ui-4 h-attachment-chip-meter overflow-hidden rounded-ui-full bg-fill-strong";
+
 const METER_FILL = "ui-attachment-chip-meter-fill block h-full rounded-ui-full bg-working";
+
 const METER_SHARE =
   "origin-left [transform:scaleX(var(--ui-attachment-chip-share,0))] transition-transform duration-(--ui-duration-pane) ease-pane";
 
@@ -133,7 +135,9 @@ function ChipFace({
   if (state === ATTACHMENT_CHIP_STATE.LOADING) {
     return <Spinner label={`Reading ${name}`} size={SPINNER_SIZE.INLINE} />;
   }
+
   const drawn = state === ATTACHMENT_CHIP_STATE.READY || state === ATTACHMENT_CHIP_STATE.UPLOADING;
+
   if (drawn && image !== undefined) {
     return (
       <img
@@ -143,7 +147,9 @@ function ChipFace({
       />
     );
   }
+
   const words = state === ATTACHMENT_CHIP_STATE.FAILED ? failure : name;
+
   return (
     <>
       {icon}
@@ -167,6 +173,7 @@ function ChipFace({
 /** The share of an upload done, as a fraction held to 0–1, a value that is not a number read as none. */
 function fractionOf(progress: number): number {
   if (!Number.isFinite(progress)) return 0;
+
   return Math.min(100, Math.max(0, progress)) / 100;
 }
 
@@ -179,6 +186,7 @@ function UploadMeter({
   progress: number | undefined;
 }): React.JSX.Element {
   const fraction = progress === undefined ? undefined : fractionOf(progress);
+
   return (
     <span
       className={METER}
@@ -205,12 +213,14 @@ function UploadMeter({
 function useLanded(state: AttachmentChipState): boolean {
   const [was, setWas] = useState(state);
   const [landed, setLanded] = useState(false);
+
   // Note that the change is taken in the render that sees it, so the check
   // springs in on the frame the meter goes.
   if (state !== was) {
     setWas(state);
     setLanded(was === ATTACHMENT_CHIP_STATE.UPLOADING && state === ATTACHMENT_CHIP_STATE.READY);
   }
+
   return landed;
 }
 
@@ -257,6 +267,7 @@ export function AttachmentChip({
   const ready = state === ATTACHMENT_CHIP_STATE.READY;
   const uploading = state === ATTACHMENT_CHIP_STATE.UPLOADING;
   const landed = useLanded(state);
+
   const face = (
     <ChipFace
       state={state}
@@ -267,15 +278,19 @@ export function AttachmentChip({
       failure={failure}
     />
   );
+
   // A thumbnail's place: a picture, a wait, or a failure with no words.
   const picture = (ready || uploading) && image !== undefined;
+
   const thumbnail =
     picture ||
     state === ATTACHMENT_CHIP_STATE.LOADING ||
     (state === ATTACHMENT_CHIP_STATE.FAILED && failure === undefined && detail === undefined);
+
   // The card wears what the chip does: the thumbnail of a picture, else the file's glyph.
   const glyph =
     image === undefined ? icon : <img className="rounded-ui-6 object-cover" src={image} alt="" />;
+
   const card = ready ? (
     <HoverCard data-attachment-card="">
       <HoverCardHead glyph={glyph} name={name} sub={detail} />
@@ -284,6 +299,7 @@ export function AttachmentChip({
       )}
     </HoverCard>
   ) : undefined;
+
   return (
     <Tooltip label={name} card={card}>
       <li

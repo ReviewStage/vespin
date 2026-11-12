@@ -7,7 +7,7 @@
  * gone is deleted and created again under the same name: from the agents'
  * image, or from the snapshot a launch names
  * (`machine/sandbox-machine.ts`), with the drive of its own a launch has it
- * fork (`base-drive.ts`), whose files already hold a checkout.
+ * fork (`workspace-drive.ts`), whose files already hold a checkout.
  * Whichever caller opens it, a message's
  * launch (`machine/sandbox-machine.ts`), the Terminal, or the agent's browser,
  * opens it here, so a sandbox any of them creates is the same sandbox: the
@@ -30,7 +30,7 @@ import {
   type SandboxService,
   SandboxUnavailable,
 } from "@repo/sandbox";
-import { Duration, Effect, Schedule } from "effect";
+import { Duration, Effect, Predicate, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 
@@ -94,12 +94,13 @@ const IMAGE_RETRY = {
  */
 export function agentSandboxName(sessionId: string): string {
   const digest = createHash("sha256").update(sessionId).digest("hex");
+
   return `${SANDBOX_NAME}${digest.slice(0, 32)}`;
 }
 
 /** The tags a sandbox we open carries: its session's, and the agent it is opened for. */
-export function agentSandboxTags(sessionId: string, agentId: string): Record<string, string> {
-  return { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId };
+export function agentSandboxTags(sessionId: string, agentId: string) {
+  return { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId } satisfies Record<string, string>;
 }
 
 /** The calls the lookup makes of `Sandbox`. */
@@ -123,6 +124,7 @@ export const legacySandboxOf = (
     const listed = (yield* api.listTagged(SESSION_TAG, sessionId)).find(
       (each) => each.name !== agentSandboxName(sessionId),
     );
+
     return listed === undefined ? undefined : yield* api.get(listed.name);
   });
 
@@ -159,10 +161,13 @@ export function reopenedOf(
   if (standing.name === agentSandboxName(sessionId)) {
     return Effect.succeed({ sessionId, tags: { ...standing.tags }, vcpus: standing.vcpus });
   }
+
   if (standing.status !== undefined && standing.status !== SANDBOX_STATUS.STOPPED) {
     return Effect.fail(new SandboxEnding({}));
   }
+
   const agentId = agentTag(standing.tags);
+
   return Effect.succeed({
     sessionId,
     tags:
@@ -220,7 +225,9 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
             ),
           }
         : { snapshotId: of.snapshot.snapshotId };
+
     let created = false;
+
     const sandbox = yield* (yield* Sandbox).getOrCreate(
       {
         name: agentSandboxName(of.sessionId),
@@ -238,6 +245,7 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
         await onCreate?.(opened);
       },
     );
+
     return { sandbox, created };
   });
 
@@ -254,7 +262,7 @@ export const openAgentSandbox = (
     Effect.retry({
       schedule: Schedule.spaced(IMAGE_RETRY.SPACED),
       times: IMAGE_RETRY.TIMES,
-      while: (failure) => failure._tag === "ImageNotReady",
+      while: (failure) => Predicate.isTagged(failure, "ImageNotReady"),
     }),
   );
 
@@ -270,7 +278,7 @@ export const openAgentSandbox = (
 export const openAgentSandboxPromptly = (of: AgentSandboxOf) =>
   openedOnce(of).pipe(
     Effect.tapError((failure) =>
-      failure._tag === "ImageNotReady"
+      Predicate.isTagged(failure, "ImageNotReady")
         ? afterResponse("an agent's sandbox opened on its image", openAgentSandbox(of))
         : Effect.void,
     ),

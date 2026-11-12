@@ -45,6 +45,7 @@ const VIEW = {
   CHECKS: "checks",
   FILES: "files",
 } as const;
+
 type View = (typeof VIEW)[keyof typeof VIEW];
 
 const ITEMS: readonly ChoiceItem<View>[] = [
@@ -76,6 +77,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -97,6 +99,7 @@ function Held({
 }): React.JSX.Element {
   const [view, setView] = useState<View | undefined>(start);
   const panels = (each: View) => ({ tab: `${each}-tab`, panel: `${each}-panel` });
+
   return createElement(
     "div",
     null,
@@ -137,6 +140,7 @@ function options(page: HTMLElement): HTMLButtonElement[] {
 function option(page: HTMLElement, name: string): HTMLButtonElement {
   const found = options(page).find((each) => each.textContent?.startsWith(name) === true);
   assert.ok(found, `the bar offers ${name}`);
+
   return found;
 }
 
@@ -161,6 +165,7 @@ function pressKey(key: string, held: KeyboardEventInit = {}): void {
 
 function reading(page: HTMLElement): Reading {
   const name = (each: HTMLElement) => each.querySelector(".ui-choice-bar-label")?.textContent ?? "";
+
   return {
     chosen: options(page)
       .filter(
@@ -274,6 +279,7 @@ test("↑ and ↓ step a radio group and leave a tablist alone, and a key held w
   const tabs = render(
     createElement(Held, { items: OPEN_ITEMS, withPanels: true, start: VIEW.CHECKS }),
   );
+
   act(() => option(tabs, "Checks").focus());
   pressKey("ArrowDown");
   pressKey("ArrowUp");
@@ -287,16 +293,19 @@ test("↑ and ↓ step a radio group and leave a tablist alone, and a key held w
   pressKey("ArrowUp");
   assert.deepEqual(reading(radios).chosen, ["Conversation"]);
   assert.equal(focused(), "Conversation");
+
   for (const held of [{ metaKey: true }, { altKey: true }, { ctrlKey: true }, { shiftKey: true }]) {
     pressKey("ArrowRight", held);
     pressKey("End", held);
   }
+
   assert.deepEqual(reading(radios).chosen, ["Conversation"]);
   assert.equal(focused(), "Conversation");
 });
 
 test("a disabled bar takes no key", () => {
   const page = render(createElement(Held, { items: OPEN_ITEMS, disabled: true }));
+
   for (const key of ["ArrowRight", "End"]) {
     act(() => {
       option(page, "Conversation").dispatchEvent(
@@ -304,6 +313,7 @@ test("a disabled bar takes no key", () => {
       );
     });
   }
+
   assert.deepEqual(reading(page).chosen, ["Conversation"]);
 });
 
@@ -342,12 +352,16 @@ test("a bar folding together folds every option once their names no longer fit i
       disconnect() {}
     },
   );
+
   const folded = () =>
     document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "all";
+
   const optionWidth = () => glyph + (folded() ? 0 : NAME);
+
   const optionsOf = (element: HTMLElement) => [
     ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
   ];
+
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => room);
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(optionWidth);
   vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (
@@ -359,19 +373,23 @@ test("a bar folding together folds every option once their names no longer fit i
     this: HTMLElement,
   ) {
     if (this.classList.contains("ui-choice-bar-label")) return NAME;
+
     return Math.max(room, 3 * optionWidth());
   });
+
   const resize = (width: number) => {
     room = width;
     act(() => {
       for (const heard of observers) heard();
     });
   };
+
   const items: readonly ChoiceItem<View>[] = [
     { value: VIEW.CONVERSATION, label: "Conversation", icon: "C", count: "12" },
     { value: VIEW.CHECKS, label: "Checks", icon: "K" },
     { value: VIEW.FILES, label: "Files", icon: "F", count: linesCount(214, 38) },
   ];
+
   render(
     createElement(ChoiceBar<View>, {
       label: "Pull request",
@@ -382,6 +400,7 @@ test("a bar folding together folds every option once their names no longer fit i
       fold: CHOICE_BAR_FOLD.TOGETHER,
     }),
   );
+
   try {
     assert.equal(folded(), false, "names that fit stand");
     resize(300);
@@ -408,9 +427,11 @@ test("a row cut short of its options scrolls the least that brings the chosen on
   // Note that jsdom lays nothing out and scrolls nothing, so each option's 100px, the bar's 150px and its scroll are the test's.
   const WIDE = 100;
   let scrolled = 0;
+
   const optionsOf = (element: HTMLElement) => [
     ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
   ];
+
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => 150);
   vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(() => 3 * WIDE);
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(() => WIDE);
@@ -423,6 +444,7 @@ test("a row cut short of its options scrolls the least that brings the chosen on
   vi.spyOn(Element.prototype, "scrollLeft", "set").mockImplementation((to: number) => {
     scrolled = to;
   });
+
   try {
     const page = render(createElement(Held, { items: OPEN_ITEMS, start: VIEW.FILES }));
     assert.equal(scrolled, 150, "the last option, chosen, ends the row's room");
@@ -437,10 +459,13 @@ test("a row cut short of its options scrolls the least that brings the chosen on
 
 test("an option that says more hangs the app's hint saying it, and one that says nothing more hangs none", () => {
   const heard: (string | undefined)[] = [];
+
   function Hint({ label, children }: { label: string | undefined; children: ReactElement }) {
     heard.push(label);
+
     return createElement("span", { "data-hint": label }, children);
   }
+
   const page = render(
     createElement(ChoiceBar<View>, {
       label: "Pull request",
@@ -454,6 +479,7 @@ test("an option that says more hangs the app's hint saying it, and one that says
       hint: Hint,
     }),
   );
+
   assert.equal(
     option(page, "Files").closest("[data-hint]")?.getAttribute("data-hint"),
     "+60 −7 total",
@@ -466,14 +492,19 @@ test("a bar folding together folds once a name grows past its width, though noth
   // Note that jsdom lays nothing out and has no ResizeObserver, so each option is as wide as its glyph and its name at 10px a letter, and only a draw measures.
   const GLYPH = 20;
   const ROOM = 300;
+
   const folded = () =>
     document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "all";
+
   const nameOf = (element: Element) =>
     element.querySelector(".ui-choice-bar-label")?.textContent ?? "";
+
   const widthOf = (element: Element) => GLYPH + (folded() ? 0 : 10 * nameOf(element).length);
+
   const optionsOf = (element: HTMLElement) => [
     ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
   ];
+
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => ROOM);
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
     this: HTMLElement,
@@ -484,6 +515,7 @@ test("a bar folding together folds once a name grows past its width, though noth
     this: HTMLElement,
   ) {
     const options = optionsOf(this);
+
     return options.slice(0, options.indexOf(this)).reduce((left, each) => left + widthOf(each), 0);
   });
   vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
@@ -493,6 +525,7 @@ test("a bar folding together folds once a name grows past its width, though noth
       ? 10 * (this.textContent?.length ?? 0)
       : ROOM;
   });
+
   function Hint({
     label,
     children,
@@ -505,13 +538,16 @@ test("a bar folding together folds once a name grows past its width, though noth
   }) {
     return cloneElement(children, { "data-hint": label });
   }
+
   const hintOf = (name: string) =>
     options(container)
       .find((each) => nameOf(each) === name)
       ?.getAttribute("data-hint") ?? undefined;
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (first: string) =>
     act(() =>
       root.render(
@@ -530,6 +566,7 @@ test("a bar folding together folds once a name grows past its width, though noth
         }),
       ),
     );
+
   try {
     draw("Talk");
     assert.equal(folded(), false, "names that fit stand");
@@ -563,16 +600,22 @@ test("a bar folding the chosen one last keeps its name while the others fold to 
       disconnect() {}
     },
   );
+
   const step = () =>
     document.querySelector('[data-fold="chosen-last"]')?.getAttribute("data-folded") ?? "none";
+
   const nameOf = (element: Element) =>
     element.querySelector(".ui-choice-bar-label")?.textContent ?? "";
+
   const named = (element: Element) =>
     step() === "none" || (step() === "others" && element.getAttribute("aria-checked") === "true");
+
   const widthOf = (element: Element) => GLYPH + (named(element) ? 10 * nameOf(element).length : 0);
+
   const optionsOf = (element: HTMLElement) => [
     ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
   ];
+
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => room);
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
     this: HTMLElement,
@@ -583,6 +626,7 @@ test("a bar folding the chosen one last keeps its name while the others fold to 
     this: HTMLElement,
   ) {
     const options = optionsOf(this);
+
     return options.slice(0, options.indexOf(this)).reduce((left, each) => left + widthOf(each), 0);
   });
   vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
@@ -592,6 +636,7 @@ test("a bar folding the chosen one last keeps its name while the others fold to 
       ? 10 * (this.textContent?.length ?? 0)
       : room;
   });
+
   function Hint({
     label,
     children,
@@ -604,12 +649,14 @@ test("a bar folding the chosen one last keeps its name while the others fold to 
   }) {
     return cloneElement(children, { "data-hint": label });
   }
+
   const resize = (width: number) => {
     room = width;
     act(() => {
       for (const heard of observers) heard();
     });
   };
+
   const page = render(
     createElement(ChoiceBar<View>, {
       label: "Pull request",
@@ -625,10 +672,12 @@ test("a bar folding the chosen one last keeps its name while the others fold to 
       hint: Hint,
     }),
   );
+
   const hintOf = (name: string) =>
     options(page)
       .find((each) => nameOf(each) === name)
       ?.getAttribute("data-hint") ?? undefined;
+
   try {
     assert.equal(step(), "none", "names that fit stand");
     // Every name takes 290px; the chosen one's alone beside the others' glyphs, 180px.
@@ -652,6 +701,7 @@ test("a bar a finger works names every option in words alone and draws none of t
     ...item,
     icon: createElement("svg", { "data-glyph": item.value }),
   }));
+
   const bar = (fold: (typeof CHOICE_BAR_FOLD)[keyof typeof CHOICE_BAR_FOLD]) =>
     createElement(ChoiceBar<View>, {
       label: "Pull request",
@@ -661,8 +711,10 @@ test("a bar a finger works names every option in words alone and draws none of t
       look: CHOICE_BAR_LOOK.FILL,
       fold,
     });
+
   const words = render(bar(CHOICE_BAR_FOLD.WORDS));
   const together = render(bar(CHOICE_BAR_FOLD.TOGETHER));
+
   const named = (container: HTMLElement) =>
     [...container.querySelectorAll(".ui-choice-bar-label")].map((label) => label.textContent);
 

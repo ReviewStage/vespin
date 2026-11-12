@@ -26,7 +26,6 @@ import { useEffect, useRef } from "react";
  */
 const saidRevisions = new Map<string, number>();
 
-/** Whether some Inbox of the window said `item` at its revision already. */
 function saidBefore(item: InboxItem): boolean {
   return (saidRevisions.get(item.id) ?? 0) >= item.revision;
 }
@@ -43,17 +42,22 @@ export function useInboxArrivals(held: ArrivalsHeld, onScreen: boolean): void {
   const known = useRef<{ taskId: string | undefined; ids: ReadonlySet<string> } | undefined>(
     undefined,
   );
+
   useEffect(() => {
     if (!held.read) return;
     const ids = new Set(held.items.map((item) => item.id));
     const was = known.current;
     known.current = { taskId: held.taskId, ids };
+
     // Note that a task's first read is where its Inbox stands, so nothing in it is news.
     if (was === undefined || was.taskId !== held.taskId || !onScreen) return;
+
     const landed = held.items.filter(
       (item) => !was.ids.has(item.id) && item.unread === true && !saidBefore(item),
     );
+
     if (landed.length === 0) return;
+
     for (const item of landed) saidRevisions.set(item.id, item.revision);
     announce(ANNOUNCE.POLITE, inboxArrivalWords(landed.map((item) => item.title)));
   }, [held, onScreen]);

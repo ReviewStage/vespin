@@ -4,8 +4,7 @@ import { rendererFork } from "./renderer-runtime.js";
 /**
  * act-stream.ts -- one stream the window holds open on its act port until the window lets it go, followed on the renderer's services (`@repo/host/follow-stream`).
  *
- * `live-reads.ts` is its only importer, and the lint rule
- * `anti-slop/no-follow-outside-host-read` refuses any other: it holds every
+ * `live-reads.ts` is its only importer, and must stay so: it holds every
  * read a surface shows open through here.
  */
 

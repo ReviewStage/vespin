@@ -28,6 +28,7 @@ export function fileRefused(
   words: Readonly<Record<TaskFileRefusal, string>> = FILE_REFUSAL_WORDS,
 ) {
   const said = words[refused.refusal];
+
   return new CommandFailed({
     exit:
       refused.refusal === TASK_FILE_REFUSAL.UNAVAILABLE ? CLI_EXIT.UNAVAILABLE : CLI_EXIT.REFUSED,

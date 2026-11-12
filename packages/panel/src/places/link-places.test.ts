@@ -34,6 +34,7 @@ function placeAt(href: string): LinkDestination {
   const address = addressOf(href, ROUTER);
   assert.equal(address.kind, ADDRESS.PLACE, href);
   assert.notEqual(address.routed, undefined, href);
+
   return address.routed?.link.place ?? address.link.place;
 }
 

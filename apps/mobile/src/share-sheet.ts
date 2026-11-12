@@ -14,7 +14,12 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { CLIENT_PLATFORM } from "@repo/features/client-identity";
-import { shareDraftOf, shareSnapshotOf } from "@repo/features/ios-share-wire";
+import {
+  SHARE_DRAFT_PICTURE_FILES,
+  type ShareDraftPictureFile,
+  shareDraftOf,
+  shareSnapshotOf,
+} from "@repo/features/ios-share-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
@@ -42,6 +47,7 @@ const SHARE_SERVICE = {
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
+
   const select = useCallback(
     (state: AppStateSnapshot) =>
       accountId === undefined
@@ -61,33 +67,54 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
           ),
     [accountId, chosenId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
-/** Opens New task on the draft the share sheet kept for `accountId`, where one stands, and removes it. */
+/** Removes every picture file a draft may have kept but those in `kept`. */
+function removeDraftPictures(kept: readonly ShareDraftPictureFile[] = []): void {
+  for (const name of SHARE_DRAFT_PICTURE_FILES) if (!kept.includes(name)) removeAppGroupFile(name);
+}
+
+/**
+ * Opens New task on the draft the share sheet kept for `accountId`, where one
+ * stands, and removes it. Its pictures go to New task by their files' names,
+ * which New task reads from the group and deletes; a picture file no draft
+ * for this account names is removed here.
+ */
 function useOpenDraft(accountId: string | undefined): void {
   const router = useRouter();
   useEffect(() => {
     if (accountId === undefined) return undefined;
+
     const open = () => {
       const kept = readAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
+
       if (kept === undefined) return;
       removeAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
       const draft = shareDraftOf(kept, accountId);
+      removeDraftPictures(draft?.pictures);
+
       if (draft === undefined) return;
       router.push({
         pathname: "/start-task",
         params: {
           prompt: draft.prompt,
+          ...(draft.pictures === undefined || draft.pictures.length === 0
+            ? undefined
+            : { pictures: JSON.stringify(draft.pictures) }),
           ...(draft.workspaceId === undefined ? undefined : { workspace: draft.workspaceId }),
           ...(draft.repository === undefined ? undefined : { repository: draft.repository }),
         },
       });
     };
+
     open();
+
     const listening = AppState.addEventListener("change", (state) => {
       if (state === "active") open();
     });
+
     return () => listening.remove();
   }, [accountId, router]);
 }
@@ -112,7 +139,9 @@ export function useShareSheet(updateNeeded: boolean): void {
     if (accountId === undefined && signedInBefore.current !== undefined) {
       removeAppGroupFile(APP_GROUP_FILE.SHARE_SNAPSHOT);
       removeAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
+      removeDraftPictures();
     }
+
     signedInBefore.current = accountId;
   }, [accountId]);
   useOpenDraft(updateNeeded ? undefined : accountId);

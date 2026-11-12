@@ -168,9 +168,11 @@ function cutOffReasonOf(
 ): CarryOnReason | undefined {
   if (turn?.status !== TURN_STATUS.FAILED) return undefined;
   const onMac = agent.machine === AGENT_MACHINE.DEVICE;
+
   if (turn.failure === TURN_FAILURE.RUNNER_LOST) {
     return onMac ? CARRY_ON_REASON.HOST_RESTART : CARRY_ON_REASON.RUNNER_LOST;
   }
+
   return hostLostOf(turn) === undefined ? undefined : CARRY_ON_REASON.HOST_RESTART;
 }
 
@@ -178,25 +180,34 @@ function cutOffReasonOf(
 export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   const { agent, turn } = input;
   const reason = cutOffReasonOf(agent, turn);
+
   if (reason === undefined || turn === undefined) return { outcome: CARRY_ON_OUTCOME.NONE };
+
   if (agent.archivedAt !== null) return { outcome: CARRY_ON_OUTCOME.NONE };
+
   // A turn that never started lost no work: its line is resent with the next message.
   if (turn.startedAt === null) return { outcome: CARRY_ON_OUTCOME.NONE };
+
   // A carry-on cut off in its turn is not carried on again, so a crash at every resume never loops.
   if (input.openerChannel === MESSAGE_CHANNEL.CARRY_ON) return { outcome: CARRY_ON_OUTCOME.NONE };
   const settledAt = turn.settledAt?.getTime() ?? input.now;
+
   if (input.now - settledAt > Duration.toMillis(CARRY_ON.WINDOW)) {
     return { outcome: CARRY_ON_OUTCOME.NONE };
   }
+
   // A Mac away past its lease refuses every line until it beats again, so its turn waits for that beat.
   if (input.hostAway === true) return { outcome: CARRY_ON_OUTCOME.AWAIT_HOST };
+
   if (input.queued) return { outcome: CARRY_ON_OUTCOME.QUEUE_NEXT };
+
   return { outcome: CARRY_ON_OUTCOME.RESUME, reason };
 }
 
 /** The channel the line names, where its row keeps one. */
 function channelOf(line: LostLine | undefined): string | undefined {
   const metadata = line?.metadata;
+
   return metadata != null && "channel" in metadata ? metadata.channel : undefined;
 }
 
@@ -206,16 +217,20 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
   turn: AgentLatestTurn | undefined,
 ) {
   const now = yield* Clock.currentTimeMillis;
+
   if (cutOffReasonOf(agent, turn) === undefined || turn === undefined) {
     return carryOnDecision({ agent, turn, openerChannel: undefined, queued: false, now });
   }
+
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   const opener = yield* turnOpeningLine(target, turn.id);
   const queue = yield* agentQueueNow(agent.id);
+
   const hostAway =
     agent.machine === AGENT_MACHINE.DEVICE && agent.deviceId != null
       ? yield* deviceAway(agent.userId, agent.deviceId)
       : false;
+
   return carryOnDecision({
     agent,
     turn,
@@ -259,6 +274,7 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
     yield* Effect.logInfo("a cut-off turn was carried on").pipe(
       Effect.annotateLogs({ turnId, reason }),
     );
+
     return true;
   }).pipe(
     Effect.catch((refusal) =>
@@ -302,25 +318,33 @@ const agentCarriedOnReturn = (
 ) =>
   Effect.gen(function* () {
     const agent = yield* readAgent(userId, agentId);
+
     if (Option.isNone(agent)) return false;
     const { conversationId } = agent.value;
     const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
+
     if (cutOffReasonOf(agent.value, turn) === undefined) return false;
     const decided = yield* decidedCarryOn(agent.value, turn);
+
     if (decided.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
       yield* handOn(agent.value);
+
       return false;
     }
+
     if (decided.outcome === CARRY_ON_OUTCOME.AWAIT_HOST || turn === undefined) return false;
+
     if (
       decided.outcome === CARRY_ON_OUTCOME.RESUME &&
       (yield* carriedOn(sessionsFor, agent.value, turn.id, decided.reason))
     ) {
       return true;
     }
+
     // A turn past the window, or whose carry-on did not go, pauses the queue its settle deferred, as the turn's end would have;
     // a queue already paused keeps its own reason, and an empty one is not paused.
     yield* pauseAgentQueue(agent.value.id, QUEUE_PAUSE.TURN_FAILED);
+
     return false;
   }).pipe(
     // One agent's failure is said and leaves the rest of the Mac's agents to their turn.
@@ -349,9 +373,11 @@ export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostRet
 ) {
   const agentIds = yield* liveDeviceAgents(userId, deviceId);
   let went = 0;
+
   for (const agentId of agentIds) {
     if (yield* agentCarriedOnReturn(sessionsFor, userId, agentId, handOn)) went += 1;
   }
+
   return went;
 });
 
@@ -359,8 +385,10 @@ export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostRet
 const deviceAway = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
     const device = (yield* devicesNamed([deviceId])).get(deviceId);
+
     if (device === undefined || device.userId !== userId) return false;
     const now = yield* Clock.currentTimeMillis;
+
     return device.lastSeenAt.getTime() < now - DEVICE_LEASE.MS;
   });
 
@@ -383,12 +411,14 @@ export function hostWriteCarriedOn<A, E, R>(
   return Effect.gen(function* () {
     const away = yield* deviceAway(userId, deviceId);
     const answer = yield* write;
+
     if (away) {
       yield* afterResponse(
         "a returned Mac's carry-ons",
         Effect.asVoid(carryOnHostReturned(sessionsFor, userId, deviceId, handOn)),
       );
     }
+
     return answer;
   });
 }

@@ -100,11 +100,14 @@ const ranInCheckout = (
 ) =>
   Effect.gen(function* () {
     const sandbox = yield* agentSandboxOf(sandboxes, sessionId);
+
     if (sandbox === undefined) return undefined;
+
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; one not up holds no snapshot a restore reaches.
     if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(sessionId)) {
       return undefined;
     }
+
     // A stopped sandbox whose snapshot the provider dropped holds no checkout to put back.
     const running =
       runningOf(sandbox) ??
@@ -112,8 +115,10 @@ const ranInCheckout = (
         Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
         Effect.provideService(Sandbox, sandboxes),
       ));
+
     if (running === undefined) return undefined;
     yield* touchAgentSandbox(sandbox.name).pipe(Effect.provideService(Sandbox, sandboxes));
+
     return yield* sandboxes.run(running, {
       command: "sh",
       args: ["-c", script],
@@ -131,12 +136,16 @@ const restoreIn = (sandboxes: SandboxService, ask: RestoreAsk) =>
       CHECKOUT_RESTORE_SCRIPT,
       checkoutRestoreEnv(ask.snapshot),
     );
+
     if (ran === undefined) return RESTORE_OUTCOME.MISSING;
+
     if (ran.exitCode === 0) return RESTORE_OUTCOME.RESTORED;
+
     if (ran.exitCode === CHECKOUT_RESTORE_EXIT.MISSING) return RESTORE_OUTCOME.MISSING;
     yield* Effect.logWarning(
       `the checkout was not restored: the restore exited ${ran.exitCode}: ${stderrTail(ran.stderr)}`,
     );
+
     return RESTORE_OUTCOME.FAILED;
   });
 
@@ -156,20 +165,26 @@ const diffIn = (sandboxes: SandboxService, ask: DiffAsk) =>
       CHECKOUT_DIFF_SCRIPT,
       checkoutDiffEnv(ask.range),
     );
+
     const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+
     if (ran === undefined) return missing;
+
     if (ran.exitCode === 0) {
       const diffed: CheckoutDiffOutcome = {
         outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
         diff: ran.stdout,
       };
+
       return diffed;
     }
+
     if (ran.exitCode === CHECKOUT_DIFF_EXIT.MISSING) return missing;
     yield* Effect.logWarning(
       `the checkout was not diffed: the diff exited ${ran.exitCode}: ${stderrTail(ran.stderr)}`,
     );
     const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+
     return failed;
   });
 
@@ -191,8 +206,10 @@ export const diffCheckout = /* @__PURE__ */ Effect.fn("web/diffCheckout")(functi
       ),
     ),
   );
+
   if (Option.isSome(outcome)) return outcome.value;
   yield* Effect.logWarning("the checkout was not diffed in time");
+
   return { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
 });
 
@@ -214,7 +231,9 @@ export const restoreCheckout = /* @__PURE__ */ Effect.fn("web/restoreCheckout")(
       ),
     ),
   );
+
   if (Option.isSome(outcome)) return outcome.value;
   yield* Effect.logWarning("the checkout was not restored in time");
+
   return RESTORE_OUTCOME.FAILED;
 });

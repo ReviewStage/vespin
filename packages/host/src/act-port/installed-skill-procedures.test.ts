@@ -60,6 +60,7 @@ it.effect(
     Effect.gen(function* () {
       const { port, requests } = yield* hostActPort();
       const refused = [];
+
       for (const ask of ASKS) {
         refused.push(yield* port.perform(ask, OTHER_WINDOW));
         refused.push(yield* port.perform(ask, PANEL, { trusted: false }));

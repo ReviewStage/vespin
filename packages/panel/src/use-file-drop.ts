@@ -48,6 +48,7 @@ export function useFileDrop(
   { over = true, drop = true, leave = DROP_LEAVE.OUTSIDE }: FileDropOptions = {},
 ): FileDrop {
   const [dropping, setDropping] = useState(false);
+
   return {
     dropping,
     clear: () => setDropping(false),
@@ -59,10 +60,12 @@ export function useFileDrop(
       },
       onDragLeave: (event) => {
         const into = event.relatedTarget;
+
         const left =
           leave === DROP_LEAVE.WINDOW
             ? into === null
             : !(into instanceof Node && event.currentTarget.contains(into));
+
         if (left) setDropping(false);
       },
       onDrop: (event) => {

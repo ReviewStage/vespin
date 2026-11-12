@@ -35,10 +35,13 @@ export function useWhenIdle(work: () => void, timeoutMs: number): void {
   }, [work]);
   useEffect(() => {
     const run = () => latest.current();
+
     if ("requestIdleCallback" in globalThis) {
       const handle = globalThis.requestIdleCallback(run, { timeout: timeoutMs });
+
       return () => globalThis.cancelIdleCallback(handle);
     }
+
     return afterPaint(run);
   }, [timeoutMs]);
 }

@@ -11,6 +11,7 @@ import {
   SettingsRow,
   SettingsRowActSlot,
   type SettingsRowControl,
+  type SettingsRowControls,
   type SettingsRowIndent,
 } from "./settings-row.js";
 
@@ -44,19 +45,26 @@ import {
 /**
  * A row named `label` that folds `children` open under its words, its
  * chevron named `foldLabel`, open at first where `defaultOpen` says, and
- * the row's ⋯ (`actions`) before the chevron in its end.
+ * the row's ⋯ (`actions`) before the chevron in its end; what rides its
+ * label's line (`adornment`) and its controls (`control`) stand as a plain
+ * row's do, as a run action's Default badge and its Discard and Save.
  */
 export function SettingsFoldRow({
   label,
+  adornment,
   description,
   leading,
   indent,
   foldLabel,
   defaultOpen = false,
   actions,
+  controls,
+  control,
   children,
 }: {
   label: ReactNode;
+  /** What rides the label's line after it without naming the row: a badge. */
+  adornment?: ReactNode;
   description?: ReactNode;
   /** The face or mark the row leads with, past which what the fold holds starts. */
   leading?: ReactNode;
@@ -66,15 +74,22 @@ export function SettingsFoldRow({
   defaultOpen?: boolean | undefined;
   /** The row's ⋯ or another glyph-wide press, handed its ids, standing before the chevron in the row's end. */
   actions?: ((control: SettingsRowControl) => ReactNode) | undefined;
+  /** Where its controls stand where they would leave its words less than a legible stretch. */
+  controls?: SettingsRowControls | undefined;
+  /** The row's controls, handed its ids, on the name's line before its end. */
+  control?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the fold holds. */
   children: ReactNode;
 }): React.JSX.Element {
   const { state, details } = useDisclosureFold(defaultOpen);
+
   return (
     <DisclosureScope state={state}>
       <SettingsRow
         label={label}
+        adornment={adornment}
         description={description}
+        controls={controls}
         leading={leading}
         indent={indent}
         below={
@@ -89,9 +104,9 @@ export function SettingsFoldRow({
               )
             : undefined
         }
-        end={(control) => (
+        end={(ids) => (
           <>
-            {actions?.(control)}
+            {actions?.(ids)}
             <IconButton
               icon={<DisclosureChevron />}
               label={foldLabel}
@@ -100,7 +115,9 @@ export function SettingsFoldRow({
             />
           </>
         )}
-      />
+      >
+        {control}
+      </SettingsRow>
     </DisclosureScope>
   );
 }
@@ -126,6 +143,7 @@ export function SettingsRowsFold({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const folds = rows !== undefined && rows !== null && rows !== false;
+
   return (
     <>
       {head(

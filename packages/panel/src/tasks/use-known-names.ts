@@ -60,20 +60,26 @@ function agentsNamedBy(
 ): ReadonlyMap<string, string> {
   if (models === undefined) return agents;
   const held = cataloguedAgents.get(agents);
+
   if (held?.models === models) return held.agents;
   const named = new Map(agents);
+
   for (const [agentId, name] of agents) {
     const model = agentModels.get(agentId);
+
     if (model !== undefined && name === modelLabel(model))
       named.set(agentId, modelLabel(model, models));
   }
+
   cataloguedAgents.set(agents, { models, agents: named });
+
   return named;
 }
 
 /** The active task's pages as the window holds them; none with no task open, or before they are read. */
 function activePagesOf(state: AppStateSnapshot | undefined): readonly PageLine[] | undefined {
   const taskId = state?.tasks.activeTaskId;
+
   return taskId === undefined ? undefined : state?.[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows;
 }
 
@@ -87,17 +93,22 @@ function heldNamesOf(
   const agents = new Map<string, string>();
   const agentModels = new Map<string, string>();
   const automations = new Map<string, string>();
+
   for (const agent of planning?.taskAgents ?? []) {
     agents.set(agent.id, agentName(agent));
     agentModels.set(agent.id, agent.model);
+
     if (agent.automationId !== undefined && agent.automationName !== undefined) {
       automations.set(agent.automationId, agent.automationName);
     }
   }
+
   const pages = new Map(activePages?.map((page) => [page.id, page.title]));
+
   const inboxItems = new Map(
     (inbox?.waiting ?? []).flatMap((task) => task.items).map((item) => [item.id, item.title]),
   );
+
   return {
     tasks,
     agents,
@@ -146,7 +157,9 @@ function sameTargets(
   next: ReadonlyMap<string, string>,
 ): boolean {
   if (held.size !== next.size) return false;
+
   for (const [key, target] of held) if (next.get(key) !== target) return false;
+
   return true;
 }
 
@@ -159,15 +172,20 @@ function keyTargetsOf(planning: AppStateSnapshot["tasks"]): ReadonlyMap<string, 
   const workspaces = new Map(planning.workspaces.map((workspace) => [workspace.id, workspace]));
   const targets = new Map<string, string>();
   const shared = new Set<string>();
+
   for (const task of planning.tasks) {
     const workspace = workspaces.get(task.workspaceId);
+
     if (workspace === undefined || task.number === undefined) continue;
     const key = taskKey(workspace.name, task.number);
+
     if (targets.has(key)) shared.add(key);
     const place = { workspace: workspace.slug ?? "", repository: null };
     targets.set(key, encodeMention({ kind: MENTION_KIND.TASK, taskId: task.id }, place));
   }
+
   for (const key of shared) targets.delete(key);
+
   return targets.size === 0 ? NO_KEY_TARGETS : targets;
 }
 
@@ -187,7 +205,9 @@ const selectKeyTargets = memoizedSelect(
   (state) => [state.tasks],
   (planning) => {
     const next = keyTargetsOf(planning);
+
     if (!sameTargets(heldKeyTargets, next)) heldKeyTargets = next;
+
     return heldKeyTargets;
   },
 );
@@ -212,6 +232,7 @@ export function useTaskStatus(taskId: string | undefined): TaskStatus | undefine
       taskId === undefined ? undefined : selectHeldStatuses(state).get(taskId),
     [taskId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -221,6 +242,7 @@ export function useAgentStatus(agentId: string): AgentStatus | undefined {
     (state: AppStateSnapshot) => selectHeldAgentStatuses(state).get(agentId),
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -236,6 +258,7 @@ export function useKnownNames(automationId?: string): KnownNames {
   const { members, former } = useMemberDirectory();
   const agents = agentsNamedBy(held.agents, held.agentModels, useMentionedPlace().models);
   const automation = useAutomation(automationId)?.automation;
+
   const people = useMemo(
     () =>
       members === undefined && former === undefined
@@ -243,6 +266,7 @@ export function useKnownNames(automationId?: string): KnownNames {
         : new Map([...(former ?? []), ...(members ?? [])].map((each) => [each.userId, each.name])),
     [members, former],
   );
+
   // Note that the directory's automation is its name now, so it stands over the name the run that started an agent kept.
   const automations = useMemo(
     () =>
@@ -251,6 +275,7 @@ export function useKnownNames(automationId?: string): KnownNames {
         : new Map([...held.automations, [automation.id, automation.name]]),
     [held.automations, automation],
   );
+
   return useMemo(
     () =>
       people === held.people && automations === held.automations && agents === held.agents

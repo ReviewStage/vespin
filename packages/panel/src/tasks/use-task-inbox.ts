@@ -173,7 +173,9 @@ export function pendingRepliesOn(
   item: InboxItem,
 ): readonly PendingInboxReply[] {
   const replies = pending.get(item.id);
+
   if (replies === undefined) return NO_REPLIES;
+
   return replies.filter((reply) => !holdsSent(item, reply.key));
 }
 
@@ -270,6 +272,7 @@ interface Attempt {
 function keyFor(attempts: Map<string, Attempt>, itemId: string, words: string): string {
   const was = attempts.get(itemId);
   attempts.delete(itemId);
+
   return was?.words === words ? was.key : crypto.randomUUID();
 }
 
@@ -355,6 +358,7 @@ function keptDraft(draft: InboxDraft, revision: number): Draft {
  */
 function withRefused(now: Draft, went: Draft): Draft {
   if (holdsNothing(now)) return went;
+
   return { ...(holdsPicks(now) ? now : went), ...joinedAhead(went, now) };
 }
 
@@ -414,6 +418,7 @@ export type HeldTaskInboxControl = Omit<TaskInboxControl, keyof InboxCardDrafts>
 export function useTaskInbox(input: Parameters<typeof useHeldTaskInbox>[0]): TaskInboxControl {
   const held = useHeldTaskInbox(input);
   useInboxDraftsLetGo(held, input);
+
   return { ...held, ...useInboxCardDrafts(held, input) };
 }
 
@@ -457,9 +462,11 @@ export function useHeldTaskInbox(input: {
   const { mutate: retryHolder } = useMutation(holderInboxRetryMutation());
   // Note that Try again moves with the holder alone, as the read's own did, since a render builds its key anew.
   const holderId = holderKey?.id;
+
   const onRetry = useCallback(() => {
     if (holderId !== undefined) retryHolder({ kind: INBOX_SCOPE_KIND.PLAN, id: holderId });
   }, [retryHolder, holderId]);
+
   const feed = useQuery(inboxItemsQuery());
   const fed = fedItemsOf(feed.data, taskId);
   // The holder's own read stands in for the feed's once it answered, since it holds what the feed leaves out.
@@ -467,22 +474,27 @@ export function useHeldTaskInbox(input: {
   const read = holder.isSuccess;
   const failed = holder.isError;
   const [held, setHeld] = useState<Held>(() => fresh(taskId, pushed));
+
   if (held.taskId !== taskId) setHeld(fresh(taskId, pushed));
   useInboxArrivals(
     { taskId: held.taskId, items: held.items, read: held.drawn },
     input.onScreen === true,
   );
   const readInboxImage = input.agents.readInboxImage;
+
   const images = useMemo<InboxImageReads>(
     () => ({
       read: (itemId, attachmentId) => readInboxImage({ itemId, attachmentId }),
     }),
     [readInboxImage],
   );
+
   const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
+
   const [pendingReplies, setPendingReplies] = useState<
     ReadonlyMap<string, readonly PendingInboxReply[]>
   >(new Map());
+
   const [notes, setNotes] = useState<ReadonlyMap<string, InboxNote>>(new Map());
   const [unheard, setUnheard] = useState<ReadonlyMap<string, UnheardReply>>(new Map());
   // Note that the cards keep their drafts under the task, so another tab's or page's reading of its inbox shares them.
@@ -507,8 +519,10 @@ export function useHeldTaskInbox(input: {
   useEffect(() => {
     if (pushed === undefined) {
       setHeld((was) => (was.drawn ? fresh(was.taskId, undefined) : was));
+
       return;
     }
+
     setHeld((was) =>
       was.drawn && was.items === pushed ? was : { ...was, items: pushed, drawn: true },
     );
@@ -517,16 +531,20 @@ export function useHeldTaskInbox(input: {
   const note = useCallback((itemId: string, said: InboxNote | undefined) => {
     setNotes((was) => {
       const next = new Map(was);
+
       if (said === undefined) next.delete(itemId);
       else next.set(itemId, said);
+
       return next;
     });
   }, []);
+
   const onDropNote = useCallback((itemId: string, said: InboxNote) => {
     setNotes((was) => {
       if (was.get(itemId) !== said) return was;
       const next = new Map(was);
       next.delete(itemId);
+
       return next;
     });
   }, []);
@@ -536,7 +554,9 @@ export function useHeldTaskInbox(input: {
     (itemId: string, failure: AgentCallFailure): InboxNote => {
       const said = { words: messageFailureWords(failure), failure };
       note(itemId, said);
+
       if (failure === AGENT_CALL_FAILURE.NOT_FOUND) latest.current.onRetryList();
+
       return said;
     },
     [note],
@@ -546,14 +566,17 @@ export function useHeldTaskInbox(input: {
   const requeue = useCallback(
     (itemId: string, change: (was: readonly QueuedReply[]) => readonly QueuedReply[]) => {
       const next = change(queued.current.get(itemId) ?? []);
+
       if (next.length === 0) queued.current.delete(itemId);
       else queued.current.set(itemId, next);
       const shown = next.flatMap((reply) => (reply.shown === undefined ? [] : [reply.shown]));
       setPendingReplies((standing) => {
         if (shown.length === 0 && !standing.has(itemId)) return standing;
         const drawn = new Map(standing);
+
         if (shown.length === 0) drawn.delete(itemId);
         else drawn.set(itemId, shown);
+
         return drawn;
       });
     },
@@ -564,24 +587,31 @@ export function useHeldTaskInbox(input: {
   useEffect(() => {
     const landed = [...unheard.values()].filter((reply) => {
       const item = held.items.find((each) => each.id === reply.place.itemId);
+
       return held.taskId === reply.taskId && item !== undefined && holdsSent(item, reply.key);
     });
+
     if (landed.length === 0) return;
     setUnheard((standing) => {
       const next = new Map(standing);
+
       for (const reply of landed) {
         if (next.get(reply.place.itemId) === reply) next.delete(reply.place.itemId);
       }
+
       return next;
     });
+
     for (const reply of landed) {
       const { itemId } = reply.place;
       onDropNote(itemId, reply.note);
       writer.update(reply.place, (now) =>
         holdsOnly(now, reply.unsent) ? { ...now, text: "", attachments: [] } : now,
       );
+
       if (attempts.current.get(itemId)?.key === reply.key) attempts.current.delete(itemId);
     }
+
     latest.current.onRetryList();
   }, [held, unheard, onDropNote, writer]);
 
@@ -595,28 +625,36 @@ export function useHeldTaskInbox(input: {
       const key = keyFor(attempts.current, item.id, words);
       setSending((standing) => new Set(standing).add(item.id));
       note(item.id, undefined);
+
       const release = () => {
         out.current.delete(item.id);
         setSending((standing) => {
           const next = new Set(standing);
           next.delete(item.id);
+
           return next;
         });
       };
+
       // Note that the nod goes after the item's replies on their way, and holds the box meanwhile, since it settles the notice.
       queue.after(item.id, async () => {
         // A nod behind a reply that settled the notice at this revision has nothing left to nod to, and says nothing.
         const settled = answered.current.get(item.id);
+
         if (settled !== undefined && settled.revision === item.revision && !awaitsNod(settled)) {
           release();
+
           return;
         }
+
         // Note that a Got it pressed goes held, its toast saying what became of it, and draws the notice settled at once, so the box is let go.
         if (held !== undefined) {
           held([item]);
           release();
+
           return;
         }
+
         const answer = await latest.current
           .answerInbox({
             itemId: item.id,
@@ -625,16 +663,22 @@ export function useHeldTaskInbox(input: {
             clientKey: key,
           })
           .catch((): AgentInboxAnsweredView => UNANSWERED);
+
         release();
+
         if ("failure" in answer) {
           attempts.current.set(item.id, { key, words });
           refused(item.id, answer.failure);
+
           return;
         }
+
         if (!answer.taken) {
           note(item.id, { words: notTakenNote(answer.item) });
+
           return;
         }
+
         // Note that a nod the agent waits on reaches it and may open its turn, so the agents are read again.
         if (item.needsReply) latest.current.onRetryList();
       });
@@ -645,6 +689,7 @@ export function useHeldTaskInbox(input: {
   const onMessage = useCallback(
     (item: InboxItem, draft: InboxDraft, taken?: () => void) => {
       const message = inboxThreadSend(item.thread ?? [], draft);
+
       // Note that a nod on its way holds the box, so nothing goes behind it.
       if (message === undefined || out.current.has(item.id)) return;
       const { text, attachments, answers } = message;
@@ -657,6 +702,7 @@ export function useHeldTaskInbox(input: {
         if (!standing.has(item.id)) return standing;
         const next = new Map(standing);
         next.delete(item.id);
+
         return next;
       });
       // Note that the box lets go of what it sent at once, as the agent's box does, and takes it
@@ -664,6 +710,7 @@ export function useHeldTaskInbox(input: {
       const place = draftPlace(item, draftsOn);
       const went = keptDraft(draft, item.revision);
       writer.update(place, () => EMPTY_DRAFT);
+
       // Note that a plain reply stands on the thread at once under its key, as the agent's box draws a message on its way, so its words are never nowhere while it goes; one carrying an answer the host draws settled.
       const reply: QueuedReply = {
         params: {
@@ -678,6 +725,7 @@ export function useHeldTaskInbox(input: {
         went,
         shown: answers === undefined ? { key, text, attachments, at: Date.now() } : undefined,
       };
+
       requeue(item.id, (was) => [...was, reply]);
       const askedOn = taskId;
       // Note that the reply is known by its key, since those behind one that lands are drawn afresh.
@@ -685,9 +733,11 @@ export function useHeldTaskInbox(input: {
       queue.after(item.id, async () => {
         // A reply let go before its turn, queued behind one refused, sends nothing.
         if (!(queued.current.get(item.id) ?? []).some(ours)) return;
+
         const answer = await latest.current
           .messageInbox(reply.params)
           .catch((): AgentInboxMessagedView => UNANSWERED);
+
         if ("failure" in answer) {
           // Note that the reply and every one queued behind it leave the thread and come back into the
           // box in the order sent, ahead of what was written there meanwhile, an answer's picks with
@@ -707,13 +757,16 @@ export function useHeldTaskInbox(input: {
           );
           attempts.current.set(item.id, { key, words });
           const said = refused(item.id, answer.failure);
+
           // Note that a send no answer came back for may have landed all the same, so it is kept until the thread says.
           if (answer.failure === AGENT_CALL_FAILURE.UNANSWERED) {
             const kept: UnheardReply = { key, taskId: askedOn, place, unsent: went, note: said };
             setUnheard((standing) => new Map(standing).set(item.id, kept));
           }
+
           return;
         }
+
         // Note that the reply is let go under its own key, in the render its answer's item lands in, so it never stands beside the message it became.
         requeue(item.id, (was) => was.filter((each) => !ours(each)));
         answered.current.set(item.id, answer.item);
@@ -737,10 +790,13 @@ export function useHeldTaskInbox(input: {
   const ids = agents.heldIds;
   useEffect(() => {
     if (ids === undefined) return;
+
     const unknown = held.items
       .map((item) => item.agentId)
       .filter((agentId) => !ids.includes(agentId) && !asked.current.has(agentId));
+
     if (unknown.length === 0) return;
+
     for (const agentId of unknown) asked.current.add(agentId);
     latest.current.onRetryList();
   }, [held.items, ids]);
@@ -798,17 +854,22 @@ export function useInboxDraftsLetGo(
   useEffect(() => {
     if (!drawn || taskId === undefined) return;
     const covered = standings.filter(({ place }) => place.planId === taskId);
+
     const gone =
       whole === undefined
         ? []
         : covered.filter((kept) => !whole.some((item) => item.id === kept.place.itemId));
+
     const lapsed = covered.filter((kept) => {
       const item = items.find((each) => each.id === kept.place.itemId);
+
       return (
         item !== undefined && caughtUp(item, kept) && !picksStandOn(kept.revision, kept.picks, item)
       );
     });
+
     for (const kept of lapsed) update(kept.place, withoutPicks);
+
     if (gone.length > 0) drop((place) => gone.some((kept) => Equal.equals(kept.place, place)));
   }, [drawn, items, whole, taskId, standings, drop, update]);
 }
@@ -832,6 +893,7 @@ export function useInboxCardDrafts(
     (item: InboxItem): InboxDraft => {
       const found = drafts.find((each) => each.place.itemId === item.id);
       const kept = found === undefined ? undefined : draftOfItem(found, item);
+
       return kept === undefined
         ? EMPTY_INBOX_DRAFT
         : {
@@ -845,9 +907,11 @@ export function useInboxCardDrafts(
     },
     [drafts],
   );
+
   const drafted = drafts.some((kept) =>
     items.some((item) => item.id === kept.place.itemId && !holdsNothing(draftOfItem(kept, item))),
   );
+
   const onDraft = useCallback(
     (item: InboxItem, draft: InboxDraft) =>
       writer.update(draftPlace(item, draftsOn), (was) => ({
@@ -876,6 +940,7 @@ export function useInboxCardDrafts(
     (item: InboxItem, next: Parameters<HeldUpdate>[0]) =>
       writer.update(draftPlace(item, draftsOn), (was) => {
         const moved = next(was);
+
         return moved === undefined ? was : { ...was, ...moved };
       }),
     [writer, draftsOn],

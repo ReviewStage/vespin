@@ -19,16 +19,19 @@ function fakeAppBadge(displayMode: "standalone" | "browser"): number[] {
     ...navigator,
     setAppBadge: (count: number) => {
       counts.push(count);
+
       return Promise.resolve();
     },
     clearAppBadge: () => {
       counts.push(0);
+
       return Promise.resolve();
     },
   });
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: query === `(display-mode: ${displayMode})`,
   }));
+
   return counts;
 }
 

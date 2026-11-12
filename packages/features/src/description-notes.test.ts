@@ -75,6 +75,7 @@ test("a note naming a field rather than a heading is passed over, and a correcti
     add("Goal", "- Admins can withdraw an invite."),
     { kind: NOTE_KIND.REPLACE, find: "Only an admin", text: "" },
   ];
+
   const read = readNotes(
     unparsedWire({
       notes: [
@@ -118,6 +119,7 @@ test("a correction that drops a mention written as a page's address, a file's on
     "https://vespin.dev/acme/plan/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b#goal",
   ]) {
     const text = `## Rollout\n\n- Ship as [@a.ts](${target}) says, store first.\n`;
+
     const note: DescriptionNote = {
       kind: NOTE_KIND.REPLACE,
       find: `Ship as [@a.ts](${target}) says`,
@@ -170,6 +172,7 @@ test("a deletion that leaves part of a line standing keeps every mention whole, 
       find,
     );
   }
+
   const reworded: DescriptionNote = { kind: NOTE_KIND.REPLACE, find: ", store first", text: "" };
   assert.equal(
     applyNotesToText(MENTIONED, [reworded]).text,
@@ -180,6 +183,7 @@ test("a deletion that leaves part of a line standing keeps every mention whole, 
 test("a correction that drops one of two copies of a mention is not taken", () => {
   const text =
     "## Rollout\n\n- [@Goal](luke://plan/pl_1#Goal) first, then [@Goal](luke://plan/pl_1#Goal) again.\n";
+
   const note: DescriptionNote = {
     kind: NOTE_KIND.REPLACE,
     find: "then [@Goal](luke://plan/pl_1#Goal) again",
@@ -193,7 +197,9 @@ test("a correction that drops a mention past the description's twentieth is not 
   const many = Array.from({ length: 21 }, (_, at) => `- see [@f${at}](luke://file/f${at}.ts)`).join(
     "\n",
   );
+
   const text = `## Files\n\n${many}\n`;
+
   const note: DescriptionNote = {
     kind: NOTE_KIND.REPLACE,
     find: "see [@f20](luke://file/f20.ts)",
@@ -262,6 +268,7 @@ test("a section is moved by deleting it where it stands and writing it in front 
 
 test("a batch with one note that cannot be taken takes none of its notes, and says why that one missed", () => {
   const twice = `${DOCUMENT}\n## Goal\n\n- A second goal section.\n`;
+
   const cases: readonly { text: string; note: DescriptionNote; why: NoteMiss }[] = [
     {
       text: DOCUMENT,
@@ -298,6 +305,7 @@ test("a batch with one note that cannot be taken takes none of its notes, and sa
       why: { kind: NOTE_MISS.DROPS_PICTURE },
     },
   ];
+
   for (const { text, note, why } of cases) {
     // The deletion before the miss is half of a move, and must not land without it.
     const taken = applyNotesToText(text, [
@@ -393,9 +401,11 @@ test("a picture whose alt text holds a bracketed phrase, or whose caption stands
 
 test("a correction that rewords a picture's alt text and caption, or moves it within the phrase it corrects, keeping its address, is taken", () => {
   const rewordedLine = `![Members page: one member, two pending invites](${PICTURE_ADDRESS})`;
+
   const reworded = applyNotesToText(PICTURED, [
     { kind: NOTE_KIND.REPLACE, find: PICTURE_LINE, text: rewordedLine },
   ]);
+
   const moved = applyNotesToText(PICTURED, [
     {
       kind: NOTE_KIND.REPLACE,
@@ -440,6 +450,7 @@ test("deleting the line a picture stands on is a retraction, and is taken, while
   const taken = applyNotesToText(PICTURED, [
     { kind: NOTE_KIND.REPLACE, find: PICTURE_LINE, text: "" },
   ]);
+
   const cut: DescriptionNote = { kind: NOTE_KIND.REPLACE, find: "![Members page", text: "" };
 
   assert.deepEqual(taskPicturesIn(taken.text), []);

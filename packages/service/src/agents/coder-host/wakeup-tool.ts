@@ -29,7 +29,7 @@ import {
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Duration, Effect, Result, Schema } from "effect";
+import { Clock, Duration, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { type AgentCall, agentToolRejected, callerAgent, orStoreRefusal } from "../agent-tools.js";
 import { type AgentWakeupServices, AgentWakeups } from "./agent-wakeups.js";
@@ -115,18 +115,25 @@ type WakeupAsk =
 /** The call's input read, each refusal naming the one thing wrong. */
 function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
   const read = readInput(input);
+
   if (Result.isFailure(read)) {
     const prompt = isRecord(input) ? input.prompt : undefined;
+
     return Result.fail(
-      typeof prompt === "string" && prompt.trim().length > WAKEUP_PROMPT_CHARS
+      Predicate.isString(prompt) && prompt.trim().length > WAKEUP_PROMPT_CHARS
         ? WAKEUP_REFUSAL.TOO_LONG(prompt.trim().length)
         : WAKEUP_REFUSAL.UNREADABLE,
     );
   }
+
   const { delaySeconds, prompt, stop } = read.success;
+
   if (stop === true) return Result.succeed({ kind: WAKEUP_ASK.STOP });
+
   if (delaySeconds === undefined) return Result.fail(WAKEUP_REFUSAL.NO_DELAY);
+
   if (prompt === undefined) return Result.fail(WAKEUP_REFUSAL.NO_PROMPT);
+
   return Result.succeed({ kind: WAKEUP_ASK.BOOK, delaySeconds, prompt });
 }
 
@@ -143,18 +150,23 @@ const booked = (agent: Agent, delaySeconds: number, prompt: string) =>
     const at = new Date(now + held * SECOND_MS);
     const wakeupId = yield* bookAgentWakeup(agent.id, { at, prompt });
     const wakeups = yield* AgentWakeups;
+
     const published = yield* Effect.result(
       wakeups.publish({ wakeupId, delay: Duration.seconds(held) }),
     );
+
     if (Result.isFailure(published)) {
       yield* Effect.logWarning(`a wakeup was not published: ${published.failure.reason}`);
       yield* deleteAgentWakeup(wakeupId);
+
       return agentToolRejected(WAKEUP_REFUSAL.NOT_PUBLISHED);
     }
+
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       wakeup: { at: at.toISOString(), delaySeconds: held },
     };
+
     return answer;
   });
 
@@ -164,10 +176,13 @@ export function runScheduleWakeup(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentWakeupServices> {
   const asked = readAsk(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(agentToolRejected(asked.failure));
   const agent = callerAgent(call.caller);
+
   if (agent === undefined) return Effect.succeed(agentToolRejected(WAKEUP_REFUSAL.NOT_AGENT));
   const ask = asked.success;
+
   return orStoreRefusal(
     ask.kind === WAKEUP_ASK.STOP
       ? Effect.as(cancelAgentWakeup(agent.id), {

@@ -11,7 +11,9 @@ const ONE_LINE_WHITE_SPACE = new Set(["nowrap", "pre"]);
  */
 function cutShort(element: HTMLElement): boolean {
   if (element.scrollWidth > element.clientWidth) return true;
+
   if (ONE_LINE_WHITE_SPACE.has(getComputedStyle(element).whiteSpace)) return false;
+
   return element.scrollHeight > element.clientHeight;
 }
 
@@ -37,10 +39,12 @@ export function useClipped(
   const [clipped, setClipped] = useState(false);
   const box = useRef<HTMLElement | null>(null);
   const keyed = words !== undefined;
+
   const measured = useCallback(
     (element: HTMLElement | null) => {
       if (element === null) return undefined;
       box.current = element;
+
       // Note that a host with no observer (a server render, a test's DOM)
       // lays nothing out either, so its line is never cut short.
       if (typeof ResizeObserver === "undefined") {
@@ -48,11 +52,13 @@ export function useClipped(
           box.current = null;
         };
       }
+
       const measure = () => setClipped(cutShort(element));
       const resized = new ResizeObserver(measure);
       resized.observe(element);
       const reworded = keyed ? undefined : new MutationObserver(measure);
       reworded?.observe(element, { characterData: true, childList: true, subtree: true });
+
       return () => {
         box.current = null;
         resized.disconnect();
@@ -61,6 +67,7 @@ export function useClipped(
     },
     [keyed],
   );
+
   // The words a render drew are measured once they change; the observer's
   // first report measures the box it is handed, so the first words are its.
   const drawn = useRef(words);
@@ -68,8 +75,10 @@ export function useClipped(
     if (words === drawn.current) return;
     drawn.current = words;
     const element = box.current;
+
     if (element === null || words === undefined) return;
     setClipped(cutShort(element));
   }, [words]);
+
   return [measured, clipped];
 }

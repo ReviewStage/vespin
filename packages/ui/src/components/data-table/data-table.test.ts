@@ -18,6 +18,7 @@ import {
  * order the caller puts before that choice stands through every press; a
  * press on a row opens it, unless its caller says it has nothing to open,
  * while a press on a control in its cells answers for that control alone; a
+ * row's menu opens from its ⋯ and from a right-click anywhere on the row; a
  * mark column's heading is read, not drawn; a long table draws only the rows
  * near the view, telling a reader how many it holds; and no rows show the
  * empty line in place of the table. Synthetic runs.
@@ -61,6 +62,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -104,6 +106,7 @@ function SortedRuns({
   leading?: typeof PINNED_FIRST;
 }): React.JSX.Element {
   const runColumns = useMemo(() => columns(heard), [heard]);
+
   return createElement(DataTable<Run>, {
     label: "Runs",
     columns: runColumns,
@@ -124,7 +127,9 @@ function heading(container: HTMLElement, label: string): HTMLElement {
   const found = [...container.querySelectorAll<HTMLElement>("th")].find((cell) =>
     cell.textContent?.startsWith(label),
   );
+
   if (found === undefined) throw new Error(`no ${label} heading`);
+
   return found;
 }
 
@@ -198,6 +203,7 @@ test("a press on a row opens it, and a press on a control in its cells is that c
 
 test("a row its caller says has nothing to open does not open", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(DataTable<Run>, {
       label: "Runs",
@@ -209,6 +215,7 @@ test("a row its caller says has nothing to open does not open", () => {
       rowPressable: (run) => run.id !== "release",
     }),
   );
+
   const [nightly, release] = [...container.querySelectorAll("tbody tr")];
 
   press(release?.querySelectorAll("td")[2]);
@@ -224,6 +231,7 @@ test("a long table draws only the rows near the view, telling a reader how many 
     minutes: at,
     pinned: false,
   }));
+
   const container = draw(
     createElement(DataTable<Run>, {
       label: "Runs",
@@ -233,6 +241,7 @@ test("a long table draws only the rows near the view, telling a reader how many 
       empty: "No runs yet.",
     }),
   );
+
   const drawn = [...container.querySelectorAll("tbody tr[aria-rowindex]")];
 
   expect(drawn.length).toBeGreaterThan(0);
@@ -260,4 +269,43 @@ test("no rows show the empty line in place of the table", () => {
 
   expect(container.querySelector("table")).toBeNull();
   expect(container.textContent).toBe("No runs yet.");
+});
+
+test("a row's menu opens from its ⋯ and from a right-click anywhere on the row", () => {
+  const heard: string[] = [];
+
+  function Menus(): React.JSX.Element {
+    const runColumns = useMemo(() => columns(heard), []);
+
+    return createElement(DataTable<Run>, {
+      label: "Runs",
+      columns: runColumns,
+      rows: RUNS,
+      getRowId: (run) => run.id,
+      empty: "",
+      rowMenu: (run) => ({
+        thing: "Run",
+        groups: [[{ label: `Rerun ${run.name}`, onSelect: () => heard.push(`rerun ${run.id}`) }]],
+      }),
+    });
+  }
+
+  const container = draw(createElement(Menus));
+  const [nightly, release] = [...container.querySelectorAll("tbody tr")];
+
+  const item = (label: string) =>
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((each) =>
+      each.textContent?.includes(label),
+    );
+
+  press(nightly?.querySelector('button[aria-label="Run actions"]'));
+  press(item("Rerun Nightly review"));
+  act(() =>
+    release
+      ?.querySelectorAll("td")[2]
+      ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  press(item("Rerun Release notes"));
+
+  expect(heard).toEqual(["rerun nightly", "rerun release"]);
 });

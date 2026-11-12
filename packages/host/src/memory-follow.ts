@@ -2,6 +2,8 @@ import {
   AGENT_CALL_FAILURE,
   type MemoriesAnswerView,
   type MemoryForgetParams,
+  type MemorySaveAnswerView,
+  type MemorySaveParams,
 } from "@repo/features/agent-view";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
@@ -36,8 +38,11 @@ import { followLiveRead } from "./live-read-follow.js";
  * transaction, so no answer from before it puts the memory back, and taken
  * back where the service refused it. One of a memory already gone commits
  * nothing and answers no transaction, so it settles on its own answer. A
- * read of a workspace the account is no member of is told unanswered and
- * ends.
+ * correction (`memorySave` naming the memory it replaces) draws its new
+ * words over the memory at once and takes the memory the service answered
+ * in its place, since a keep answers no transaction; a new memory draws
+ * once the read carries it. A read of a workspace the account is no member
+ * of is told unanswered and ends.
  */
 
 /** A memory as the pool holds it, by its id, every write to it a change of its fields or its deletion. */
@@ -81,6 +86,7 @@ export function heldMemories(
     follow: (workspaceId, answers) => {
       // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
       const userId = dependencies.accountId();
+
       return followLiveRead(
         {
           seal: (poll, after) =>
@@ -124,5 +130,46 @@ export function memoryForget(
       Effect.map(send(forget), (answer) =>
         "memories" in answer ? { answer, txid: answer.txid } : { refused: answer },
       ),
+  };
+}
+
+/**
+ * A memory kept in the reader's own words, or corrected in place where it
+ * names the memory it `replaces`, sent as `send` asks. Note that a
+ * correction's words are drawn over the memory at once, and the memory the
+ * service answered is taken in the read's place, because a keep answers no
+ * transaction for the read to carry; a refusal puts the old words back. A
+ * new memory changes no row the read holds, so it draws as the read carries
+ * it.
+ */
+export function memorySave(
+  send: (save: MemorySaveParams) => Effect.Effect<MemorySaveAnswerView>,
+): WriteDeclaration<
+  MemoryLiveRow,
+  FieldChange<MemoryLiveRow>,
+  MemorySaveParams,
+  MemorySaveAnswerView
+> {
+  return {
+    kind: MEMORY,
+    keys: (save) => (save.replaces === undefined ? [] : [save.replaces]),
+    change: (save) => () => ({ text: save.text }),
+    send: (save) =>
+      Effect.map(send(save), (answer) => {
+        if (!("memory" in answer)) return { refused: answer };
+        const { memory } = answer;
+
+        return {
+          answer,
+          txid: undefined,
+          taken: () => ({
+            text: memory.text,
+            keeperId: memory.keptBy?.userId ?? null,
+            keeperName: memory.keptBy?.name ?? null,
+            forgettable: memory.forgettable,
+            updatedAt: memory.updatedAt,
+          }),
+        };
+      }),
   };
 }

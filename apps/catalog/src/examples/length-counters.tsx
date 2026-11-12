@@ -12,6 +12,7 @@ import { CatalogSection } from "../section";
 /** A field with a limit of 24, its counter on the label's line, as a caller draws it. */
 function LimitedField(): React.JSX.Element {
   const [value, setValue] = useState("A name that is nearly too");
+
   return (
     <FormField label="Name" count={{ length: value.length, limit: 24 }}>
       {(field) => <TextField field={field} value={value} onChange={setValue} />}

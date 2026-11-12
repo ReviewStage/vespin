@@ -87,6 +87,7 @@ function PlanMark({ taskId }: { taskId: string }): React.JSX.Element {
 function harnessMark(model: string | undefined): ReactNode {
   return <AgentMark provider={model === undefined ? undefined : providerOf(model)} />;
 }
+
 /**
  * The mark of an agent the place holds no tile of: the harness the window
  * last read it running on, giving way to the working mark while the window
@@ -97,8 +98,11 @@ function harnessMark(model: string | undefined): ReactNode {
 function KnownAgentMark({ agentId, at }: { agentId: string; at: EntityMarkAt }): ReactNode {
   const model = at.known.agentModels.get(agentId);
   const status = useAgentStatus(agentId);
+
   if (model !== undefined && status !== undefined) return <AgentGlyph agent={{ model, status }} />;
+
   if (model !== undefined) return harnessMark(model);
+
   return <ReadAgentModel agentId={agentId}>{harnessMark}</ReadAgentModel>;
 }
 
@@ -112,9 +116,11 @@ function AgentEntityMark({
 }): React.JSX.Element {
   const { tiles } = at;
   const tile = tiles?.tileOf(agent.agentId);
+
   // Note that a tile the page knows no harness of, its agents not yet read say, gives way to the mark read for it.
   const harnessless =
     tile === undefined || (tile.kind === ACTOR_KIND.AGENT && tile.provider === undefined);
+
   return harnessless ? (
     <KnownAgentMark agentId={agent.agentId} at={at} />
   ) : (
@@ -125,6 +131,7 @@ function AgentEntityMark({
 /** A person as the members around the mark draw them: their picture, their initials where they have none, or grayed where they left. */
 function PersonFace({ userId, name }: { userId: string; name: string }): React.JSX.Element {
   const person = usePerson({ userId, name });
+
   return <ActorMark actor={person} size={ACTOR_SIZE.INLINE} />;
 }
 
@@ -146,6 +153,7 @@ function PersonMark({
   const listed = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const named = listed === undefined ? undefined : workspaceOfSlug(listed, workspace);
   const face = <PersonFace userId={userId} name={name} />;
+
   return named === undefined ? (
     face
   ) : (
@@ -162,6 +170,7 @@ function AutomationTile({
   name: string;
 }): React.JSX.Element {
   const known = useAutomation(automationId);
+
   return (
     <ActorGlyph
       actor={
@@ -177,6 +186,7 @@ function AutomationTile({
 function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const listed = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, slug);
+
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
 }
 

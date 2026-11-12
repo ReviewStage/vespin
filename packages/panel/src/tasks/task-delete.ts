@@ -37,10 +37,13 @@ function tasksDeleteMutation(run: (taskId: string) => Promise<ActedResult>) {
  */
 function useDeleteSend(): (taskId: string) => Promise<ActedResult> {
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+
   return async (taskId) => {
     if (fixture) return DELETE_REFUSED;
     const deleted = await askKept(sendAct(ACT_KIND.TASKS_DELETE, { taskId }));
+
     if (deleted.kept) return { status: ACTION_RESULT_STATUS.ACCEPTED };
+
     return { ...DELETE_REFUSED, cause: deleted.cause };
   };
 }

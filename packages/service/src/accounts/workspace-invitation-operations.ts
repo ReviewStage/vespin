@@ -92,7 +92,9 @@ function pendingInvitations(
     .toSorted((first, second) => first.expiresAt.getTime() - second.expiresAt.getTime())
     .flatMap((one) => {
       const role = invitationRoleOf(one.role);
+
       if (role === undefined) return [];
+
       return [
         {
           id: one.id,
@@ -111,6 +113,7 @@ const pendingOf = Effect.fn("web/workspacePendingInvitations")(function* (
   origin: string,
 ) {
   const listed = yield* hostedStoreOrUnavailable(listWorkspaceInvitations(organizationId));
+
   return pendingInvitations(listed, origin, yield* Clock.currentTimeMillis);
 });
 
@@ -133,18 +136,23 @@ const emailInvitation = Effect.fn("web/emailWorkspaceInvitation")(function* (
   inviterId: string,
 ) {
   const mail = yield* Effect.serviceOption(InvitationMail);
+
   if (Option.isNone(mail)) return;
   const inviter = yield* readAccountPerson(inviterId).pipe(Effect.orElseSucceed(() => undefined));
+
   const accountId = yield* workspaceGitHubAccountId(inviterId, workspace.id).pipe(
     Effect.orElseSucceed(() => Option.none<number>()),
   );
+
   const workspacePictureUrl = Option.match(accountId, {
     onNone: () => workspace.pictureUrl,
     onSome: githubAccountAvatarUrl,
   });
+
   const inviterPictureUrl = yield* readAccountPicture(inviterId).pipe(
     Effect.orElseSucceed(() => undefined),
   );
+
   yield* mail.value.send({
     email: invitation.email,
     acceptUrl: invitation.acceptUrl,
@@ -152,8 +160,8 @@ const emailInvitation = Effect.fn("web/emailWorkspaceInvitation")(function* (
     inviterLabel: inviter?.name.trim() || inviter?.email || INVITER_UNKNOWN,
     role: invitation.role,
     expiresAt: invitation.expiresAt,
-    ...(workspacePictureUrl === undefined ? {} : { workspacePictureUrl }),
-    ...(inviterPictureUrl === undefined ? {} : { inviterPictureUrl }),
+    ...(workspacePictureUrl !== undefined && { workspacePictureUrl }),
+    ...(inviterPictureUrl !== undefined && { inviterPictureUrl }),
   });
 });
 
@@ -164,6 +172,7 @@ export const workspaceInvitationsRead = Effect.fn("web/workspaceInvitationsRead"
   origin: string,
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
+
   return { invitations: yield* pendingOf(workspace.id, origin) };
 });
 
@@ -182,25 +191,33 @@ export const workspaceInvite = Effect.fn("web/workspaceInvite")(function* (
   origin: string,
 ) {
   const workspace = yield* managedWorkspace(userId, input.workspaceId);
+
   if (input.role === INVITATION_ROLE.ADMIN && workspace.role !== WORKSPACE_ROLE.OWNER) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
+
   const email = input.email.toLowerCase();
+
   // Note that an address the plugin would not invite is not permitted, as the plugin's refusal was answered.
   if (!isPluginInvitableEmail(email)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const now = yield* Clock.currentTimeMillis;
+
   if (yield* hostedStoreOrUnavailable(isWorkspaceMemberAddress(workspace.id, email))) {
     return yield* Effect.fail(HOSTED_REFUSAL.ALREADY_INVITED);
   }
+
   const pending = yield* hostedStoreOrUnavailable(
     pendingWorkspaceInvitations(workspace.id, new Date(now)),
   );
+
   if (pending.some((one) => one.email === email)) {
     return yield* Effect.fail(HOSTED_REFUSAL.ALREADY_INVITED);
   }
+
   if (pending.length >= PENDING_INVITATION_LIMIT) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
+
   const made = yield* hostedStoreOrUnavailable(
     createWorkspaceInvitation({
       organizationId: workspace.id,
@@ -211,14 +228,17 @@ export const workspaceInvite = Effect.fn("web/workspaceInvite")(function* (
       expiresAt: new Date(now + INVITATION_EXPIRES_IN_MS),
     }),
   );
+
   yield* recordServerEvent(
     SERVER_EVENT.WORKSPACE_INVITE_SEND,
     { userId, workspaceId: workspace.id },
     { role: input.role },
   );
   const [invitation] = pendingInvitations([made], origin, now);
+
   if (invitation === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   yield* emailInvitation(invitation, workspace, userId);
+
   return { invitation };
 });
 
@@ -231,14 +251,17 @@ export const workspaceInvitationCancel = Effect.fn("web/workspaceInvitationCance
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const pending = yield* pendingOf(workspace.id, origin);
+
   if (!pending.some((one) => one.id === invitationId)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   yield* hostedStoreOrUnavailable(cancelWorkspaceInvitation(workspace.id, invitationId));
   yield* recordServerEvent(
     SERVER_EVENT.WORKSPACE_MEMBER_CHANGE,
     { userId, workspaceId: workspace.id },
     { action: SERVER_WORKSPACE_MEMBER_ACTION.INVITE_CANCEL },
   );
+
   return { invitations: yield* pendingOf(workspace.id, origin) };
 });

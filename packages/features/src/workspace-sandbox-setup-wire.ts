@@ -1,6 +1,7 @@
 import { Schema as EffectSchema } from "effect";
 import { githubRepositoryFullNameSchema } from "./link-grammar.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
+import { looseTaskSectionIconSchema, taskSectionIconSchema } from "./task-section-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
@@ -19,7 +20,9 @@ import { workspaceIdSchema } from "./task-wire.js";
  * when pressed, from the Run menu in the agent's message box, behind the
  * Run actions experiment; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
- * empty list removing it. Every answer is the setup as it then stands, each
+ * empty list removing it, and `PATCH /api/workspaces/sandbox-setup/run-action`
+ * adds, changes, moves, or removes one action of it, read and written
+ * under the repository's lock so two edits at once both land. Every answer is the setup as it then stands, each
  * script with how it last ran in a sandbox where it has.
  */
 
@@ -104,11 +107,19 @@ const runActionCommandSchema = EffectSchema.String.check(
   EffectSchema.isPattern(/\S/u),
 );
 
-/** One run action as it is kept: its id, which a run of it is known by while the list around it changes, its label, and its command. */
+/**
+ * One run action as it is kept: its id, which a run of it is known by while
+ * the list around it changes, its label, its command, the icon it wears
+ * where it wears one, a sidebar section's kind of icon, and whether it is
+ * the repository's default, the Run button's and ⌥⌘R's.
+ */
 export const runActionSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   label: EffectSchema.String,
   command: EffectSchema.String,
+  icon: EffectSchema.optionalKey(looseTaskSectionIconSchema),
+  /** Present, and true, on the list's one default; absent on every other action. */
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type RunAction = typeof runActionSchema.Type;
@@ -116,7 +127,7 @@ export type RunAction = typeof runActionSchema.Type;
 const repositoryRunActionsSchema = EffectSchema.Struct({
   /** `owner/name` as its latest save spelled it. */
   repository: EffectSchema.String,
-  /** Its actions in their order: the first is the Run button's. */
+  /** Its actions in their order: the default is the Run button's, or the first where none is. */
   actions: EffectSchema.Array(runActionSchema),
   /** When the list was last saved, in epoch milliseconds. */
   updatedAt: countedNumber,
@@ -150,11 +161,13 @@ export const workspaceRepositorySetupPutRequestSchema = EffectSchema.Struct({
   kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(REPOSITORY_SCRIPT_KIND))),
 });
 
-/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names. */
+/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names; its icon, none for the menu's own; and whether it is the default, the first so named being kept as it where several are. */
 const runActionPutSchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(wireUuidSchema),
   label: runActionLabelSchema,
   command: runActionCommandSchema,
+  icon: EffectSchema.optionalKey(taskSectionIconSchema),
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** Saving a repository's run actions (PUT to `/run-actions`), the whole list in its order, replacing the one that stood under any casing of its name; an empty list removes it. */
@@ -167,3 +180,42 @@ export const workspaceRunActionsPutRequestSchema = EffectSchema.Struct({
 });
 
 export type RunActionPut = typeof runActionPutSchema.Type;
+
+/**
+ * Editing one of a repository's run actions (PATCH to `/run-action`), as
+ * the service reads the list as it stands and writes it back: with no
+ * `actionId` an action is added, naming its label and command; with one,
+ * that action is changed, only in what the edit names, or removed. Making
+ * one the default makes no other the default.
+ */
+export const workspaceRunActionEditRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  repository: githubRepositoryFullNameSchema,
+  /** The action edited, by the id the setup answered; absent to add one. */
+  actionId: EffectSchema.optionalKey(wireUuidSchema),
+  /** True to remove the action `actionId` names, whatever else the edit names. */
+  remove: EffectSchema.optionalKey(EffectSchema.Boolean),
+  label: EffectSchema.optionalKey(runActionLabelSchema),
+  command: EffectSchema.optionalKey(runActionCommandSchema),
+  /** Its icon, or null for the menu's own. */
+  icon: EffectSchema.optionalKey(EffectSchema.NullOr(taskSectionIconSchema)),
+  /** True to make it the repository's default, false to make it no longer the default. */
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** Its place in the list after the edit, from 0, a place past the end being the last: an added action is last and a changed one stays where it stood where unsaid. */
+  position: EffectSchema.optionalKey(
+    EffectSchema.Int.check(
+      EffectSchema.isGreaterThanOrEqualTo(0),
+      EffectSchema.isLessThanOrEqualTo(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS - 1),
+    ),
+  ),
+});
+
+export type WorkspaceRunActionEdit = typeof workspaceRunActionEditRequestSchema.Type;
+
+/** An edit's answer: the setup as it then stands, and the id of the action it added or changed; none for a remove. */
+export const workspaceRunActionEditAnswerSchema = EffectSchema.Struct({
+  ...workspaceSandboxSetupAnswerSchema.fields,
+  actionId: EffectSchema.optionalKey(EffectSchema.String),
+});
+
+export type WorkspaceRunActionEditAnswer = typeof workspaceRunActionEditAnswerSchema.Type;

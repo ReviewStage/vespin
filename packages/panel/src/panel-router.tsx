@@ -31,6 +31,7 @@
 import type { PANEL_PATH } from "@repo/features/link-home";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { ReloadState } from "@repo/ui/error-boundary";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -85,12 +86,13 @@ function readSearch(search: string): Record<string, string> {
 }
 
 /** A query written as `linkOf` writes one, through `URLSearchParams`, with its `?` where it holds anything. */
-function writeSearch(search: Record<string, unknown>): string {
+function writeSearch(search: Readonly<Record<string, WireBoundaryInput>>): string {
   const written = new URLSearchParams(
     Object.entries(search).flatMap(([key, value]) =>
       value === undefined ? [] : [[key, String(value)]],
     ),
   ).toString();
+
   return written === "" ? "" : `?${written}`;
 }
 
@@ -116,14 +118,18 @@ function reloadDocument(): void {
 function RouteFailed({ reset }: ErrorComponentProps): React.JSX.Element {
   const router = useRouter();
   const loadFailed = useMatch({ strict: false, select: (match) => match.status === "error" });
+
   const reload = () => {
     if (loadFailed) {
       reloadDocument();
+
       return;
     }
+
     reset();
     void router.invalidate();
   };
+
   return <ReloadState onReload={reload} />;
 }
 
@@ -312,6 +318,7 @@ const inboxRoute = createRoute({
   path: "inbox",
   beforeLoad: ({ context, params, location }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({
       href: `${pathUnder(location.pathname, listed)}${location.searchStr}`,
@@ -353,6 +360,7 @@ const automationPagesRoute = createRoute({
   id: "automation-pages",
   beforeLoad: ({ context, params, location }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({ href: pathUnder(location.pathname, listed), replace: true });
   },
@@ -409,6 +417,7 @@ const personRoute = createRoute({
   path: "person/$userId",
   beforeLoad: ({ context, params }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({
       to: "/$workspace/person/$userId",
@@ -677,6 +686,7 @@ export function PanelRouterProvider({ router }: { router: PanelRouter }): React.
     asked.current = access;
     void router.invalidate();
   }, [router, access]);
+
   return <RouterProvider router={router} context={{ access }} />;
 }
 

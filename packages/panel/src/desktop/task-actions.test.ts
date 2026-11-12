@@ -129,11 +129,14 @@ function openTab(
     deleted: [],
     renamed: [],
   };
+
   const onRepository = (task: Task | TaskSummary) => ({
     ...task,
     repository: repositories[task.id] ?? null,
   });
+
   const open = onRepository(TASK);
+
   const tasks: TasksControl = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [onRepository(TASK), onRepository(OTHER)],
@@ -142,18 +145,22 @@ function openTab(
     onChangeRepository: (taskId) => asked.changed.push(taskId),
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
+
   // A delete and a rename leave on the act port, as the window sends them.
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_DELETE]: ({ taskId }) => {
       asked.deleted.push(taskId);
+
       return Promise.resolve(true);
     },
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       asked.renamed.push([taskId, name]);
+
       return renames();
     },
   });
+
   return { tasks, asked };
 }
 
@@ -163,6 +170,7 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(windowRouter().provide(element)));
+
   return container;
 }
 
@@ -177,6 +185,7 @@ function mountDescriptionTab(tasks: TasksControl): HTMLElement {
     looks: NO_LOOKS,
     tasks,
   });
+
   return mount(withQueryClient(page));
 }
 
@@ -209,6 +218,7 @@ function mountSidebarTask(
   const container = mount(withQueryClient(sidebarTask(tasks, task, asked, current)));
   const row = container.querySelector("ul > li > button");
   assert.ok(row instanceof HTMLButtonElement);
+
   return row;
 }
 
@@ -225,22 +235,27 @@ function rightClick(row: HTMLElement, clientX: number, clientY: number): void {
 function menuItems(): HTMLButtonElement[] {
   return [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')];
 }
+
 /** What an item says, without the chord printed at its end. */
 function itemLabel(item: HTMLElement): string | null {
   return item.querySelector(".ui-menu-item-label")?.textContent ?? null;
 }
+
 /** Each item of the open menu that prints a chord, as what it says and the chord's glyphs. */
 function itemChords(): [string | null, string][] {
   return menuItems().flatMap((item): [string | null, string][] => {
     const keys = item.querySelector(".ui-shortcut");
+
     return keys === null ? [] : [[itemLabel(item), keys.textContent ?? ""]];
   });
 }
+
 function choose(label: string): void {
   const item = menuItems().find((candidate) => itemLabel(candidate) === label);
   assert.ok(item, `the menu offers ${label}`);
   act(() => item.click());
 }
+
 function dialog(): HTMLElement | null {
   return document.querySelector<HTMLElement>(DIALOG);
 }
@@ -255,7 +270,9 @@ function answer(words: string): HTMLButtonElement {
   const button = [...(dialog()?.querySelectorAll("button") ?? [])].find(
     (candidate) => candidate.textContent === words,
   );
+
   assert.ok(button, `the dialog offers ${words}`);
+
   return button;
 }
 
@@ -265,6 +282,7 @@ async function confirmDelete(): Promise<void> {
   const remove = answer("Permanently delete task");
   await act(async () => remove.click());
 }
+
 test("Permanently delete asks in a dialog naming the plan, from the ⋯ and from a sidebar plan alike, and deletes on its answer", async () => {
   const { tasks, asked } = openTab();
 
@@ -296,12 +314,14 @@ test("Permanently delete asks in a dialog naming the plan, from the ⋯ and from
 
   assert.deepEqual(asked.deleted, [TASK.id, OTHER.id]);
 });
+
 test("a question asked of one task does not outlive it: the delete the Plan tab's ⋯ asked for is withdrawn as another task opens in its place", () => {
   const { tasks } = openTab();
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (control: TasksControl) =>
     act(() =>
       root.render(
@@ -315,6 +335,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
         ),
       ),
     );
+
   draw(tasks);
   openTaskMenu(container);
   choose("Permanently delete");
@@ -332,6 +353,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
 test("⌘K's Change repository shows Overview where an agent's tab hides the description, and the plan's path has its repository's menu opened under it for the ask once, not again on a later draw", () => {
   const told: string[] = [];
   const { tasks } = openTab({ [TASK.id]: "acme/app" });
+
   const asked = (overview: boolean): TasksControl => ({
     ...tasks,
     repositoryMenu: { taskId: TASK.id, request: 1 },
@@ -341,10 +363,12 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
       onChoose: (tab) => told.push(`choose ${JSON.stringify(tab)}`),
     },
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (control: TasksControl) =>
     act(() =>
       root.render(
@@ -358,6 +382,7 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
         ),
       ),
     );
+
   draw(asked(false));
   assert.deepEqual(told, [`choose "${MAIN_TAB.OVERVIEW}"`], "the ask shows the description first");
 
@@ -378,6 +403,7 @@ test("the plan's name reaches the recording only as masked text, never in an att
   choose("Permanently delete");
   const drawn = dialog()?.parentElement;
   assert.ok(drawn);
+
   for (const element of [drawn, ...drawn.querySelectorAll("*")]) {
     for (const attribute of element.attributes) {
       assert.doesNotMatch(attribute.value, /Teammate invitations/u, attribute.name);
@@ -407,6 +433,7 @@ function descriptionShown(tasks: TasksControl): TasksControl {
 /** The lines under the open menu's items, each with its time left off. */
 function menuFooter(): string[] {
   const notes = document.querySelectorAll('[role="menu"] .ui-menu-footer p');
+
   return [...notes].map((note) => (lineWords(note) ?? "").replace(/ · .*$/u, ""));
 }
 
@@ -443,6 +470,7 @@ test("a sidebar task wears its assignee's face where someone else is on it, the 
   /** Each mark the row wears, by its kind and its letter, and what the row says of it, read as Dean sees them. */
   const faces = (task: TaskSummary) => {
     const { tasks, asked } = openTab();
+
     const container = mount(
       withQueryClient(
         createElement(MemberDirectory, {
@@ -452,14 +480,18 @@ test("a sidebar task wears its assignee's face where someone else is on it, the 
         }),
       ),
     );
+
     const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
     // What the row says while it holds the keyboard, its time stepped out for Pin and Archive.
     const line = container.querySelector(".ui-list-row-title");
+
     const said = [...(line?.childNodes ?? [])]
       .map(heard)
       .join("")
       .match(/\((?:created by|assigned to|unassigned)[^)]*\)/u)?.[0];
+
     unmountAll();
+
     return [[...marks].map((mark) => [mark.getAttribute("data-kind"), mark.textContent]), said];
   };
 
@@ -475,6 +507,7 @@ test("a sidebar task wears its assignee's face where someone else is on it, the 
 
 test("a sidebar task no one is on wears no face in a workspace of the reader alone, by its count or else by its members read, and the dashed mark where others share it or nobody counted them", async () => {
   const { memberCount: _uncounted, ...uncounted } = PERSONAL;
+
   /** Each mark the row wears, by its kind, and what the row says of who is on it, read as Dean sees them. */
   const faces = async (
     workspace: Workspace,
@@ -483,20 +516,25 @@ test("a sidebar task no one is on wears no face in a workspace of the reader alo
     installMembers(members);
     const { tasks, asked } = openTab();
     const task = { ...OTHER, workspaceId: workspace.id };
+
     const container = mountReading(
       withPeopleRead({ workspace, readerId: DEAN.userId }, sidebarTask(tasks, task, asked)),
     );
+
     await act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
     await peopleRead();
     const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
     const line = container.querySelector(".ui-list-row-title");
+
     const said = [...(line?.childNodes ?? [])]
       .map(heard)
       .join("")
       .match(/\((?:assigned to|unassigned)[^)]*\)/u)?.[0];
+
     unmountAll();
+
     return [[...marks].map((mark) => mark.getAttribute("data-kind")), said];
   };
 
@@ -513,6 +551,7 @@ test("a sidebar task Vespin or a coding agent made wears who is on it rather tha
   /** Each mark the row wears, by its kind. */
   const marks = (task: TaskSummary) => {
     const { tasks, asked } = openTab();
+
     const container = mount(
       withQueryClient(
         createElement(MemberDirectory, {
@@ -522,17 +561,23 @@ test("a sidebar task Vespin or a coding agent made wears who is on it rather tha
         }),
       ),
     );
+
     const worn = [...container.querySelectorAll(".sidebar-task-time > .actor-mark")].map((mark) =>
       mark.getAttribute("data-kind"),
     );
+
     unmountAll();
+
     return worn;
   };
+
   const deans = { ...SHARED_TASK, ownerId: DEAN.userId, createdBy: DEAN };
+
   const byAgent = {
     ...deans,
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   } as const;
+
   const byApp = { ...deans, origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } } as const;
   assert.deepEqual(marks(byAgent), ["unassigned"]);
   assert.deepEqual(marks({ ...byApp, assignee: DEAN }), []);
@@ -554,6 +599,7 @@ test("the task's toolbar draws no ⋯ of the task's, and ⌘⌫ still asks to de
       }),
     ),
   );
+
   assert.equal(container.querySelector('.ui-toolbar [aria-label="Task actions"]'), null);
   assert.equal(container.querySelector(".side-panel-bar"), null, "the panel is shut");
 
@@ -572,6 +618,7 @@ const PERSONAL: Workspace = {
   github: null,
   memberCount: 1,
 };
+
 const STAGE: Workspace = {
   id: "workspace-stage",
   name: "Stage",
@@ -590,7 +637,9 @@ const STRANDED: TaskSummary = {
 /** The words a reader hears in an element: its text but for a mark hidden from a screen reader, a workspace's tile's letter among them. */
 function heard(node: Node): string {
   if (node instanceof Element && node.getAttribute("aria-hidden") === "true") return "";
+
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+
   return [...node.childNodes].map(heard).join("");
 }
 
@@ -598,6 +647,7 @@ test("a sidebar task's press says its status after its name, as a List row's doe
   /** What the row's press says, read as Dean, who is on the task, so no face is said. */
   const said = (task: TaskSummary) => {
     const { tasks, asked } = openTab();
+
     const container = mount(
       withQueryClient(
         createElement(MemberDirectory, {
@@ -607,9 +657,11 @@ test("a sidebar task's press says its status after its name, as a List row's doe
         }),
       ),
     );
+
     const press = container.querySelector(".ui-list-row-title");
     const words = press === null ? "" : heard(press);
     unmountAll();
+
     return words;
   };
 
@@ -621,10 +673,12 @@ test("a sidebar task's press says its status after its name, as a List row's doe
 test("a sidebar plan whose repository belongs to another of the account's workspaces wears how its agents stand, as any row does, its card naming that workspace", () => {
   const { asked } = openTab();
   const tasks = tasksControl({ me: DEAN.userId, workspaces: [PERSONAL, STAGE] });
+
   const working: TaskSummary = {
     ...STRANDED,
     agents: { total: 1, working: 1, pullRequestTotal: 0 },
   };
+
   const container = mount(withQueryClient(sidebarTask(tasks, working, asked)));
   const card = mount(withQueryClient(taskCardOf(tasks, working, working.updatedAt)));
 
@@ -644,11 +698,13 @@ test("no sidebar plan's card says its repository belongs elsewhere where its own
     [STRANDED, [PERSONAL]],
     [{ ...STRANDED, ownerId: CHARLES.userId }, [PERSONAL, STAGE]],
   ];
+
   const named = cases.map(([task, workspaces]) => {
     const tasks = tasksControl({ me: DEAN.userId, workspaces: [...workspaces] });
     const card = mount(withQueryClient(taskCardOf(tasks, task, task.updatedAt)));
     const found = /Repository belongs to/u.test(heard(card));
     unmountAll();
+
     return found;
   });
 
@@ -663,6 +719,7 @@ function installClipboard(): string[] {
   const copied: string[] = [];
   fakeAppBridge({});
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
+
   return copied;
 }
 
@@ -670,13 +727,16 @@ test("Copy link copies the plan's address on vespin.dev, alike from the Plan tab
   const copied = installClipboard();
   mount(withQueryClient(createElement(ToastHost)));
   const opened = openTab();
+
   // The title's Copy link button stands over the plan, which the side panel shows.
   const tasks: TasksControl = {
     ...opened.tasks,
     workspaces: [{ ...PERSONAL, slug: "dean" }],
     sidePanel: { ...opened.tasks.sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   };
+
   const link = `https://vespin.dev/dean/task/${TASK.id}`;
+
   const copyFromMenu = async () => {
     const item = menuItems().find((candidate) => itemLabel(candidate) === "Copy link");
     assert.ok(item, "the menu offers Copy link");
@@ -685,9 +745,11 @@ test("Copy link copies the plan's address on vespin.dev, alike from the Plan tab
 
   openTaskMenu(mountDescriptionTab(tasks));
   await copyFromMenu();
+
   const title = document.querySelector<HTMLButtonElement>(
     '.ui-page-header-actions button[aria-label="Copy link"]',
   );
+
   assert.ok(title, "the title has a Copy link button");
   await act(async () => title.click());
   unmountAll();
@@ -703,6 +765,7 @@ test("a task's card says who created it where others share its workspace, the re
   /** The card's lines under its name, as Dean hears them with the creation's time left off. */
   const details = (task: TaskSummary, workspace: Workspace) => {
     const tasks = tasksControl({ me: DEAN.userId, workspaces: [workspace] });
+
     const card = mount(
       withQueryClient(
         createElement(MemberDirectory, {
@@ -712,12 +775,16 @@ test("a task's card says who created it where others share its workspace, the re
         }),
       ),
     );
+
     const lines = [...card.querySelectorAll('.ui-hover-card-row[data-look="detail"]')].map((line) =>
       heard(line).replace(/ · .*$/u, ""),
     );
+
     unmountAll();
+
     return lines;
   };
+
   const charles = { ...OTHER, createdAt: 60_000, ownerId: CHARLES.userId, createdBy: CHARLES };
 
   assert.deepEqual(details(charles, STAGE), ["Created by Charles Pan"]);
@@ -727,6 +794,7 @@ test("a task's card says who created it where others share its workspace, the re
   assert.deepEqual(details(charles, PERSONAL), []);
   // A service that names no creator leaves the card as it was.
   assert.deepEqual(details(OTHER, STAGE), []);
+
   // A task an agent made for the reader says so in a workspace of one too.
   const byAgent = {
     ...charles,
@@ -734,6 +802,7 @@ test("a task's card says who created it where others share its workspace, the re
     createdBy: DEAN,
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   } as const;
+
   assert.deepEqual(details(byAgent, PERSONAL), ["Created by Agent for you"]);
 });
 
@@ -741,8 +810,10 @@ test("a task's card's creator line opens the creator's page in the window, and i
   const opened: string[] = [];
   const tasks = tasksControl({ me: DEAN.userId, workspaces: [STAGE] });
   const charles = { ...OTHER, createdAt: 60_000, ownerId: CHARLES.userId, createdBy: CHARLES };
+
   const drawn = (inWindow: boolean, task: TaskSummary = charles) => {
     const card = taskCardOf(tasks, { ...task, workspaceId: STAGE.id }, task.updatedAt);
+
     const view = mount(
       withQueryClient(
         createElement(MemberDirectory, {
@@ -754,6 +825,7 @@ test("a task's card's creator line opens the creator's page in the window, and i
         }),
       ),
     );
+
     return [...view.querySelectorAll<HTMLElement>('.ui-hover-card-row[data-look="detail"]')].find(
       (each) => each.textContent?.includes("Created by"),
     );
@@ -765,11 +837,13 @@ test("a task's card's creator line opens the creator's page in the window, and i
   assert.deepEqual(opened, [CHARLES.userId]);
   unmountAll();
   assert.equal(drawn(false)?.tagName, "SPAN");
+
   // A task an agent made for Charles still opens Charles's page, the member it names.
   const byAgent = drawn(true, {
     ...charles,
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   });
+
   assert.equal(byAgent?.tagName, "BUTTON");
   act(() => byAgent?.click());
   assert.deepEqual(opened, [CHARLES.userId, CHARLES.userId]);
@@ -779,12 +853,14 @@ test("a task's card's creator line opens the creator's page in the window, and i
 test("a task's card says you of the reader's own task outside a member directory, and, where the service counts no members, says who created it only once the members read lists someone else", async () => {
   const { memberCount: _uncounted, ...stage } = STAGE;
   const mine = { ...OTHER, workspaceId: STAGE.id, ownerId: DEAN.userId, createdBy: DEAN };
+
   const lines = async (
     workspace: Workspace,
     members: readonly { userId: string; name: string }[] | undefined,
   ) => {
     installMembers(members);
     const tasks = tasksControl({ me: DEAN.userId, workspaces: [PERSONAL, workspace] });
+
     const card = mountReading(
       members === undefined
         ? taskCardOf(tasks, mine, mine.updatedAt)
@@ -793,14 +869,19 @@ test("a task's card says you of the reader's own task outside a member directory
             taskCardOf(tasks, mine, mine.updatedAt),
           ),
     );
+
     await act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
+
     if (members !== undefined) await peopleRead();
+
     const said = [...card.querySelectorAll('.ui-hover-card-row[data-look="detail"]')].map((line) =>
       heard(line).replace(/ · .*$/u, ""),
     );
+
     unmountAll();
+
     return said;
   };
 
@@ -832,15 +913,18 @@ function installMembers(members: readonly { userId: string; name: string }[] | u
         },
   );
 }
+
 /** Where a task from a service with statuses stands before anything moves it. */
 const STANDING = { status: TASK_STATUS.TODO, priority: TASK_PRIORITY.NONE } as const;
 
 /** Opens the open menu's submenu `submenu`, then chooses `label` in it. */
 function chooseIn(submenu: string, label: string): void {
   choose(submenu);
+
   const item = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]')].find(
     (candidate) => itemLabel(candidate) === label,
   );
+
   assert.ok(item, `${submenu} offers ${label}`);
   act(() => item.click());
 }
@@ -852,6 +936,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     status: TASK_STATUS.IN_PROGRESS,
     agents: { total: 2, working: 0, pullRequestTotal: 0 },
   };
+
   const done: TaskSummary = { ...resting, status: TASK_STATUS.DONE };
   const settled: [string, TaskStatus | undefined][] = [];
   // Each status leaves on the act port, which the service keeps.
@@ -859,16 +944,19 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
       settled.push([taskId, status]);
+
       return Promise.resolve(true);
     },
   });
   const tasks = tasksControl({ tasks: [resting] });
+
   const asked: Asked = {
     opened: [],
     changed: [],
     deleted: [],
     renamed: [],
   };
+
   const doneButton = (container: HTMLElement) =>
     container.querySelector('button[aria-label="Mark done"]');
 
@@ -914,31 +1002,37 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
 test("a sidebar row's Task relation asks for the relation beside the menu, then searches the workspace's tasks and relates the one picked from the row, never opening either task", async () => {
   const parented: [string, string | null][] = [];
   const blocked: [string, TaskBlockRequest][] = [];
+
   const other: TaskSummary = {
     ...OTHER,
     id: "5d1c9b7a-3e2f-4a6b-8c9d-0e1f2a3b4c5d",
     name: "Ship signup",
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_SET_PARENT]: ({ taskId, parentTaskId }) => {
       parented.push([taskId, parentTaskId]);
+
       return Promise.resolve({ parentTaskId });
     },
     [ACT_KIND.TASKS_BLOCK]: ({ taskId, block }) => {
       blocked.push([taskId, block]);
+
       return Promise.resolve({ blockedBy: [], blocks: [] });
     },
   });
   const tasks = tasksControl({ tasks: [OTHER, other] });
   const asked: Asked = { opened: [], changed: [], deleted: [], renamed: [] };
   const row = mountSidebarTask(tasks, OTHER, asked);
+
   const pick = (words: string) => {
     const found = [
       ...document.querySelectorAll<HTMLElement>(
         '[role="menuitem"], [role="option"], [data-steered="true"]',
       ),
     ].find((each) => each.textContent?.startsWith(words));
+
     assert.ok(found, `the menu offers ${words}`);
     act(() => found.click());
   };
@@ -975,6 +1069,7 @@ test("a sidebar row's Change repository searches the workspace's repositories be
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_SET_REPOSITORY]: ({ taskId, repository }) => {
       set.push([taskId, repository]);
+
       return Promise.resolve({ repository });
     },
   });
@@ -1006,9 +1101,11 @@ test("a sidebar row's Change repository searches the workspace's repositories be
     }),
   );
   await act(async () => undefined);
+
   const web = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     each.textContent?.includes("web"),
   );
+
   assert.ok(web, "the submenu lists the workspace's repositories");
   act(() => web.click());
   await act(async () => undefined);
@@ -1020,6 +1117,7 @@ test("a sidebar row's Change repository searches the workspace's repositories be
 
 test("the open task's topbar and its sidebar row offer the one menu, Status, Priority, Assignee, Version history, and Change repository among it, Choose a repository on a task with none, the topbar's printing the chords that act on the open task; another task's row prints only U, S, and P, which act on the focused row", () => {
   const { tasks, asked } = openTab({ [TASK.id]: "acme/app", [OTHER.id]: "acme/app" });
+
   const standing: TasksControl = {
     ...tasks,
     tasks: tasks.tasks.map((each) => ({ ...each, ...STANDING })),
@@ -1034,11 +1132,17 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
     ["Permanently delete", "⌘⌫"],
   ]);
   const topbar = menuItems().map(itemLabel);
+
   for (const item of ["Status", "Priority", "Assignee", "Change repository"]) {
     assert.ok(topbar.includes(item), `the topbar's menu offers ${item}`);
   }
+
   unmountAll();
-  rightClick(mountSidebarTask(standing, standing.tasks[0] as TaskSummary, asked, true), 40, 60);
+  rightClick(
+    mountSidebarTask(standing, standing.tasks[0] ?? assert.fail("no first task"), asked, true),
+    40,
+    60,
+  );
   assert.deepEqual(menuItems().map(itemLabel), topbar, "the open task's row offers the same menu");
 
   unmountAll();
@@ -1049,11 +1153,17 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
   );
 
   unmountAll();
-  rightClick(mountSidebarTask(standing, standing.tasks[1] as TaskSummary, asked), 40, 60);
+  rightClick(
+    mountSidebarTask(standing, standing.tasks[1] ?? assert.fail("no second task"), asked),
+    40,
+    60,
+  );
   const row = menuItems().map(itemLabel);
+
   for (const item of ["Version history", "Change repository"]) {
     assert.ok(row.includes(item), `another task's row offers ${item}`);
   }
+
   assert.deepEqual(
     itemChords(),
     [
@@ -1090,6 +1200,7 @@ test("a task is found in the list the control hands down now, a renamed one by i
     id: "5d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
     name: "Added",
   };
+
   const next = tasksControl({ tasks: [{ ...listed, name: "After" }, added] });
   assert.equal(taskOf(next, OTHER.id)?.name, "After", "the newer list's task, not the older's");
   assert.equal(taskOf(next, added.id)?.name, "Added");
@@ -1102,7 +1213,9 @@ test("a task is found in the list the control hands down now, a renamed one by i
 /** The open menu's name and its items' words, or nothing where none stands. */
 function openedMenu(): { label: string | null; items: (string | null)[] } | undefined {
   const menu = document.querySelector<HTMLElement>('[role="menu"]');
+
   if (menu === null) return undefined;
+
   return {
     label: menu.getAttribute("aria-label"),
     items: menuItems().map(itemLabel),
@@ -1134,16 +1247,16 @@ test("a sidebar task's ⋯, a right-click on it, and the menu key open the same 
   const fromMore = openedMenu();
   assert.equal(fromMore?.label, "Task actions");
   assert.ok(fromMore?.items.includes("Permanently delete"));
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
   assert.equal(openedMenu(), undefined);
 
   rightClick(press, 40, 60);
   assert.deepEqual(openedMenu(), fromMore);
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
 
   pressKey(press, "ContextMenu");
   assert.deepEqual(openedMenu(), fromMore);
-  pressKey(document.activeElement as HTMLElement, "Escape");
+  pressKey(focusedElement(), "Escape");
 
   pressKey(press, "F10", true);
   assert.deepEqual(openedMenu(), fromMore);
@@ -1186,13 +1299,16 @@ test("⌘Z takes back a sidebar task's rename the service kept, sending its name
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       asked.renamed.push([taskId, name]);
       drawnName = name;
+
       return Promise.resolve(true);
     },
   });
+
   const drawn: TasksControl = {
     ...tasks,
     drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: [{ ...OTHER, name: drawnName }] }),
   };
+
   rightClick(mountSidebarTask(drawn, OTHER, asked), 40, 60);
   choose("Rename");
   const field = document.querySelector<HTMLInputElement>('input[aria-label="Task name"]');
@@ -1223,3 +1339,11 @@ test("a sidebar task being renamed draws no ⋯ and offers no menu", () => {
   assert.equal(document.querySelector('li button[aria-label="Task actions"]'), null);
   assert.equal(openedMenu(), undefined);
 });
+
+/** The element that holds the focus, which a key is pressed on. */
+function focusedElement(): HTMLElement {
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement, "an element holds the focus");
+
+  return focused;
+}

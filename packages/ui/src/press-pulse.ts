@@ -61,15 +61,21 @@ export function pulsePress(pressed: HTMLElement, pulse: PressPulse = PRESS_PULSE
     const mover = [...pressed.children].find(
       (child) => getComputedStyle(child).display !== "contents",
     );
+
     if (mover === undefined) replayMotion(pressed, PULSE_ATTRIBUTE, pressed, PRESS_PULSE.WORDS);
     else replayMotion(pressed, PULSE_ATTRIBUTE, mover, pulse);
+
     return;
   }
+
   if (pulse !== PRESS_PULSE.FACE) {
     replayMotion(pressed, PULSE_ATTRIBUTE, pressed, pulse);
+
     return;
   }
+
   const face = pressed.querySelector(`:scope > [${FACE_ATTRIBUTE}]`);
+
   if (face === null) replayMotion(pressed, PULSE_ATTRIBUTE, pressed, PRESS_PULSE.CONTROL);
   else replayMotion(pressed, PULSE_ATTRIBUTE, face, pulse);
 }

@@ -31,12 +31,14 @@ export function InboxStamp({
   onRemove?: (() => void) | undefined;
 }): React.JSX.Element {
   const tone = ANSWER_STATUS_TONE[stamp.tone];
+
   const glyph =
     stamp.tone === ANSWER_TONE.AHEAD ? (
       <CheckIcon aria-hidden="true" />
     ) : (
       <Undo2Icon aria-hidden="true" />
     );
+
   return (
     <span
       className="inbox-stamp inline-flex max-w-full self-start"

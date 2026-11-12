@@ -72,6 +72,7 @@ declare global {
 let root: Root | undefined;
 let listeners = new Set<(snapshot: AppStateSnapshot) => void>();
 let showLink: ((link: ReadLink) => void) | undefined;
+
 /** Main's document as the window first reads it. */
 let first: AppStateSnapshot = FIRST;
 
@@ -88,6 +89,7 @@ beforeEach(() => {
     applySessionReplay: () => undefined,
     adminDashboard: () => ({ href: "https://app.test/admin" }),
   });
+
   const quiet = Object.fromEntries([
     ...Object.keys(PUSH_METHOD).map((method) => [method, () => () => undefined]),
     ...bridgeEntries().map(([method, entry]) => [
@@ -95,16 +97,19 @@ beforeEach(() => {
       entry.kind === "invoke" ? () => Promise.resolve(undefined) : () => undefined,
     ]),
   ]);
+
   fakeAppBridge({
     ...quiet,
     requestAppState: () => Promise.resolve(structuredClone(first)),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
     onShowLink: (listener: (link: ReadLink) => void) => {
       showLink = listener;
+
       return () => {
         showLink = undefined;
       };
@@ -132,9 +137,11 @@ async function drawWindow(at?: string): Promise<TestWindowRouter> {
   const router = windowRouter(
     at === undefined ? undefined : createMemoryHistory({ initialEntries: [at] }),
   );
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(withQueryClient(router.drawn())));
   await settle();
+
   return router;
 }
 
@@ -151,9 +158,9 @@ function adminOpen(): boolean {
   return document.querySelector('[role="radiogroup"][aria-label="Admin sections"]') !== null;
 }
 
-/** Whether the Admin place stands drawn, its views under the recording's block, rather than its loading frame. */
+/** Whether the Admin place stands drawn, its views rather than its loading frame. */
 function adminStands(): boolean {
-  return document.querySelector(".desktop-main .ph-no-capture") !== null;
+  return document.querySelector(".desktop-main .admin-place") !== null;
 }
 
 /** Whether the Admin place stands waiting on the account's access, its loading frame up. */
@@ -273,8 +280,10 @@ function actsAsked(): { readonly kind: string; readonly payload?: unknown }[] {
   const asked: { readonly kind: string; readonly payload?: unknown }[] = [];
   fakeActPortAnswering((request) => {
     asked.push(request);
+
     return Promise.reject(refusedOnPort("Not here."));
   });
+
   return asked;
 }
 
@@ -381,6 +390,7 @@ function goHomeButton(): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find(
     (button) => button.textContent === "Go home",
   );
+
   return found ?? assert.fail("Go home stands");
 }
 
@@ -528,6 +538,7 @@ test("a link to a workspace the reader has since left, opened after a not-found 
 test("a move from one open task to another keeps the task's page drawn, never its loading frame", async () => {
   const { document: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   const other = { ...one, id: "b2000002-0000-4000-8000-0000000000f9", name: "Other", number: 77 };
+
   const openOn = (taskId: string): AppStateSnapshot => ({
     ...stateWith(
       {},
@@ -546,15 +557,18 @@ test("a move from one open task to another keeps the task's page drawn, never it
       [other.id]: { rows: { task: { ...DOCUMENT_TASK, ...other } } },
     },
   });
+
   first = openOn(one.id);
   const router = await drawWindow(`/acme/task/${one.id}`);
   // Every frame drawn while reading a task, which a loaded task's page never draws.
   const reading: string[] = [];
+
   const observer = new MutationObserver(() => {
     if (document.querySelector(".desktop-main")?.textContent?.includes("Reading the task")) {
       reading.push(router.history.location.pathname);
     }
   });
+
   observer.observe(document.body, { subtree: true, childList: true, characterData: true });
 
   await act(async () => {
@@ -576,6 +590,7 @@ function taskRow(name: string): HTMLElement {
       "aside.desktop-sidebar button, aside.desktop-sidebar a",
     ),
   ].find((row) => row.textContent?.includes(name) === true);
+
   return found ?? assert.fail(`the row of ${name} stands`);
 }
 
@@ -619,12 +634,14 @@ test.each([
   "a task pressed in the sidebar on %s that the host refuses to open lands back where it was pressed",
   async (_from, at, other) => {
     const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+
     const open = {
       ...listed,
       id: "b2000002-0000-4000-8000-0000000000f9",
       name: "Other",
       number: 77,
     };
+
     first = stateWith(
       {},
       {
@@ -632,7 +649,7 @@ test.each([
           ...IDLE_TASKS_VIEW,
           workspaces: [ACME],
           tasks: [listed, open],
-          ...(other === undefined ? {} : { activeTaskId: open.id }),
+          ...(other !== undefined && { activeTaskId: open.id }),
         },
         access: { admin: false, pending: true },
       },

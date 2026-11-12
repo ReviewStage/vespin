@@ -31,11 +31,13 @@ const LEAVE_REFUSAL_WORDS = {
     "The owner cannot leave the workspace: hand it to an admin first with vespin workspace transfer.",
   [HOSTED_API_ERROR.NOT_FOUND]: "You are no longer a member of that workspace, or it was deleted.",
 } as const;
+
 const TRANSFER_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
     "Only the workspace's owner may hand it over, to one of its admins, and never your own first workspace.",
   [HOSTED_API_ERROR.NOT_FOUND]: "That account is no member of the workspace.",
 } as const;
+
 const DELETE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
     "Only the workspace's owner may delete it, and never your own first workspace, which goes only with your account.",
@@ -72,12 +74,14 @@ export const workspaceLeaveCommand = Command.make("leave", { yes: yesFlag("Leave
       "You stayed in the workspace.",
     );
     const { origin, hosted } = yield* session;
+
     const { workspaceId } = yield* askService(
       hosted.workspaces.leave,
       { workspaceId: workspace.id },
       HOSTED_DEADLINE.USUAL,
       LEAVE_REFUSAL_WORDS,
     );
+
     yield* forgetDefault(origin, workspace);
     yield* answer({
       json: { workspaceId },
@@ -111,18 +115,21 @@ export const workspaceTransferCommand = Command.make(
         "Nothing was handed over.",
       );
       const { hosted } = yield* session;
+
       const { members } = yield* askService(
         hosted.workspaces.transfer,
         { workspaceId: workspace.id, userId: heir.userId },
         HOSTED_DEADLINE.USUAL,
         TRANSFER_REFUSAL_WORDS,
       );
+
       const listed = members.map(({ userId, name, email, role }) => ({
         userId,
         name,
         email,
         role,
       }));
+
       yield* answer({
         json: { workspaceId: workspace.id, members: listed },
         lines: [
@@ -156,12 +163,14 @@ export const workspaceDeleteCommand = Command.make(
         yes,
       );
       const { origin, hosted } = yield* session;
+
       const { workspaceId } = yield* askService(
         hosted.workspaces.delete,
         { workspaceId: workspace.id },
         HOSTED_DEADLINE.USUAL,
         DELETE_REFUSAL_WORDS,
       );
+
       yield* forgetDefault(origin, workspace);
       yield* answer({
         json: { workspaceId },

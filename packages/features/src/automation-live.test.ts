@@ -11,6 +11,7 @@ const HOUR = 3_600_000;
 /** A scheduled run fired `hoursAgo` that went to `agentId`, whose newest turn is still running. */
 function runTo(id: string, agentId: string, hoursAgo: number) {
   const firedAt = NOW - hoursAgo * HOUR;
+
   return {
     id,
     firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: firedAt },
@@ -47,6 +48,7 @@ test("an agent every run of a same-agent automation went to is at work on its la
     },
     NOW,
   );
+
   assert.deepEqual(
     runs.map((run) => [run.id, run.agent?.status]),
     [

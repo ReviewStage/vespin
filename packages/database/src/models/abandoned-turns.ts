@@ -170,12 +170,15 @@ const settledLost = (
         ...(lapsedAt === undefined ? undefined : { lapsedAt }),
       },
     );
+
     if (Result.isFailure(written)) {
       yield* Effect.logWarning(`a lost turn's settle was refused: ${written.failure.refusal}`).pipe(
         Effect.annotateLogs({ conversationId: turn.conversationId, turnId: turn.id }),
       );
+
       return false;
     }
+
     return written.success === STORE_WRITE_EFFECT.WRITTEN;
   });
 
@@ -196,7 +199,9 @@ export const settleEndedSessionTurn = /* @__PURE__ */ Effect.fn("web/settleEnded
     const open = (yield* agentRunningTurns({ conversationId: named.conversationId })).find(
       (turn) => turn.id === named.id,
     );
+
     if (open === undefined) return false;
+
     return yield* settledLost(
       writer,
       { ...named, attempt: open.attempt },
@@ -239,12 +244,16 @@ export const settleEndedSession = /* @__PURE__ */ Effect.fn("web/settleEndedSess
   const limit = options.limit ?? LOST_TURNS.LIMIT;
   let settled = 0;
   const read = new Set<string>();
+
   for (;;) {
     const lost = yield* endedSessionTurns({ runtimeSessionId, limit });
+
     if (lost.every((turn) => read.has(turn.id))) return settled;
+
     for (const { cancelRequestedAt, status: _status, ...turn } of lost) {
       read.add(turn.id);
       const { failureDetail } = options;
+
       const written = yield* settledLost(
         writer,
         turn,
@@ -257,8 +266,10 @@ export const settleEndedSession = /* @__PURE__ */ Effect.fn("web/settleEndedSess
           : { status: RUN_STATUS.CANCELED },
         options.now,
       );
+
       if (!written) continue;
       settled += 1;
+
       if (cancelRequestedAt !== null) continue;
       yield* Effect.logError(
         `a turn was settled failed for its session's end: ${failureDetail ?? "the session expired"}`,
@@ -270,6 +281,7 @@ export const settleEndedSession = /* @__PURE__ */ Effect.fn("web/settleEndedSess
         }),
       );
     }
+
     if (lost.length < limit) return settled;
   }
 });
@@ -303,6 +315,7 @@ export const settleRunnerLostTurns = /* @__PURE__ */ Effect.fn("web/settleRunner
     const running = yield* agentRunningTurns({ conversationId });
     const lost = only === undefined ? running : running.filter((turn) => only.has(turn.id));
     const failed: string[] = [];
+
     for (const { cancelRequestedAt, status: _status, ...turn } of lost) {
       const written = yield* settledLost(
         writer,
@@ -312,12 +325,15 @@ export const settleRunnerLostTurns = /* @__PURE__ */ Effect.fn("web/settleRunner
           : { status: RUN_STATUS.CANCELED },
         now,
       );
+
       if (written && cancelRequestedAt === null) failed.push(turn.id);
     }
+
     yield* dropNativeProjectionTurns(
       conversationId,
       lost.map((turn) => turn.id),
     );
+
     return failed;
   },
 );
@@ -345,10 +361,13 @@ export const settleLapsedTurns = /* @__PURE__ */ Effect.fn("web/settleLapsedTurn
   now: number,
 ): Effect.fn.Return<readonly string[], StoreFailure, DatabaseServices> {
   const settled: string[] = [];
+
   for (const { turn, end } of lapsed) {
     if (yield* settledLost(writer, turn, end, now, lapsedAt)) settled.push(turn.id);
   }
+
   yield* dropNativeProjectionTurns(conversationId, settled);
+
   return settled;
 });
 

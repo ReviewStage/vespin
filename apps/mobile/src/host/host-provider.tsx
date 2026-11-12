@@ -55,21 +55,27 @@ const HostCounts = createContext<HostCount | undefined>(undefined);
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
   const acts = useContext(HostActs);
+
   if (acts === undefined) throw new Error("A screen acted outside the host's provider.");
+
   return acts;
 }
 
 /** How a screen drawn under `HostProvider` holds a follow open on the host, such as a transcript's, until it lets it go. */
 export function useHostFollow(): HostFollow {
   const follow = useContext(HostFollows);
+
   if (follow === undefined) throw new Error("A screen followed outside the host's provider.");
+
   return follow;
 }
 
 /** How a screen drawn under `HostProvider` counts a moment through the host (`surface-open.ts`). */
 export function useHostCount(): HostCount {
   const count = useContext(HostCounts);
+
   if (count === undefined) throw new Error("A screen counted outside the host's provider.");
+
   return count;
 }
 
@@ -81,6 +87,7 @@ export function useHostCount(): HostCount {
  */
 function launchOptions(): MobileHostStartOptions {
   const device = deviceSeams();
+
   const base = {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
@@ -89,8 +96,10 @@ function launchOptions(): MobileHostStartOptions {
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
   };
+
   if (!launchStubsAuthServer()) return { ...base, device };
   standStubAuthServer();
+
   return {
     ...base,
     device: {
@@ -126,6 +135,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         const client = new QueryClient();
         const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;
+
         try {
           await following.written;
         } catch (error) {
@@ -134,6 +144,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             error,
           );
         }
+
         if (live) {
           setStanding({
             client,
@@ -143,22 +154,27 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
           });
         } else void host.close();
       },
-      (error: unknown) => {
-        console.error("The app's host could not start.", error);
-        reportHostFailure(error);
+      (cause: unknown) => {
+        console.error("The app's host could not start.", cause);
+        reportHostFailure(cause);
+
         if (live) setStanding({ failed: true });
       },
     );
+
     return () => {
       live = false;
       stopFollowing?.();
       void started?.close();
     };
   }, [attempt]);
+
   if (standing === undefined) return null;
+
   if ("failed" in standing) {
     return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;
   }
+
   return (
     <QueryClientProvider client={standing.client}>
       <HostActs.Provider value={standing.acts}>

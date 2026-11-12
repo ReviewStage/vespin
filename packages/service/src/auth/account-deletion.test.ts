@@ -14,6 +14,7 @@ import { createTask, listTasks, readTask } from "@repo/database/models/task-stor
 import { workspaceSeams } from "@repo/database/models/workspace-seams";
 import { agentTable } from "@repo/database/schemas/agent";
 import {
+  account,
   member,
   organization as organizationTable,
   session,
@@ -37,23 +38,44 @@ import {
 } from "@repo/features/automation-wire";
 import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { HTTP_METHOD } from "@repo/wire";
+import { HTTP_METHOD, type WireRecord } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
+import { symmetricEncrypt } from "better-auth/crypto";
 import { organization } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { ConfigProvider, Effect, Layer, Option, Schema } from "effect";
+import {
+  Clock,
+  ConfigProvider,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+} from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { accountDeletionSteps, workspaceDeletionSteps } from "../accounts/deletion-hooks.js";
 import { onboardingEventsFromEnvironment } from "../accounts/onboarding-events.js";
 import { WELCOME_MAIL_ENVIRONMENT } from "../accounts/welcome-mail.js";
 import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
-import { BASE_DRIVE, baseDriveName } from "../agents/base-drive.js";
+import { baseDriveName, WORKSPACE_DRIVE, workspaceDriveName } from "../agents/workspace-drive.js";
 import { AutomationCadence } from "../automations/automation-cadence.js";
+import { GitHubApp } from "../github/github-app.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { accountDeletionTestServices } from "../testing/account-deletion-services.js";
+import { announcingClock, driven } from "../testing/clock-driven.js";
+import {
+  fakeGitHub,
+  GITHUB_APP_SETTINGS,
+  GITHUB_FIXTURE,
+  type SentToGitHub,
+  signInWithGitHub,
+  standingGithubRow,
+} from "../testing/github-app-fake.js";
 import { authApp } from "./auth-app.js";
 import { authDatabaseAdapter } from "./auth-database.js";
 import {
@@ -63,6 +85,7 @@ import {
   type OrganizationDeletionApi,
   workspaceDeletion,
 } from "./auth-policy.js";
+import { SignInRevocation } from "./sign-in-revocation.js";
 
 /**
  * An account deleted at Better Auth's own `/delete-user`, through the auth
@@ -86,15 +109,20 @@ const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.Stri
 const roleIn = (organizationId: string, userId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const rows = yield* db
       .select({ role: member.role })
       .from(member)
       .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+
     return rows.map((row) => row.role);
   });
 
-/** The auth route over a Better Auth on the PGlite given, with our account deletion and organization policy. */
-const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =>
+/** The auth route over a Better Auth on the PGlite given, with our account deletion and organization policy, and any of the deletion's services a test stands in its own place. */
+const openAuthRoute = (
+  client: Awaited<ReturnType<typeof openMigratedPglite>>,
+  standIns: Layer.Layer<never> = Layer.empty,
+) =>
   Effect.gen(function* () {
     const auth = betterAuth({
       database: authDatabaseAdapter(drizzle({ client })),
@@ -112,10 +140,12 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
         }),
       ],
     });
+
     const sandboxes = memorySandbox();
     const forgotten: string[] = [];
     // Resend answers every onboarding call, and each is kept to read back.
     const resend = recordingHttpClient(() => jsonResponse({ object: "contact" }));
+
     const onboarding = onboardingEventsFromEnvironment.pipe(
       Layer.provide(
         Layer.merge(
@@ -129,6 +159,7 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
         ),
       ),
     );
+
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
@@ -140,15 +171,19 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
         publish: () => Effect.void,
       }),
       onboarding,
+      standIns,
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       authApp((request) => auth.handler(request), workspaceSeams(auth.api)).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => dispose()));
-    const post = (path: string, body: object, cookie?: string) =>
+
+    const post = (path: string, body: WireRecord, cookie?: string) =>
       Effect.promise(() =>
         handler(
           new Request(`${BASE_URL}/api/auth/${path}`, {
@@ -162,6 +197,7 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
           }),
         ),
       );
+
     /** An account signed up and signed in: its id and the cookie its session rides on. */
     const signUp = (name: string) =>
       Effect.gen(function* () {
@@ -170,18 +206,23 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
           email: `${name}@example.com`,
           password: "a-password-long-enough",
         });
+
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
         const cookie = answered.headers
           .getSetCookie()
           .map((line) => line.split(";")[0])
           .join("; ");
+
         const { id } = decodeSignedUp(yield* Effect.promise(() => answered.json())).user;
+
         return { id, cookie };
       });
+
     return { auth, post, signUp, sandboxes, forgotten, resend };
   });
 
-/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox on a repository whose base drive a fill is still filling, another of that member's on her Mac in the same repository with a stop line waiting, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
+/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox on a repository whose drive from before workspace drives stands, the workspace's drive a fill is still filling, another of that member's on her Mac in the same repository with a stop line waiting, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
 const openWorkspaces = (
   route: Effect.Success<ReturnType<typeof openAuthRoute>>,
   ada: string,
@@ -189,12 +230,15 @@ const openWorkspaces = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const solo = yield* Effect.promise(() =>
       route.auth.api.createOrganization({ body: { name: "Ada", slug: "ada", userId: ada } }),
     );
+
     const shared = yield* Effect.promise(() =>
       route.auth.api.createOrganization({ body: { name: "Acme", slug: "acme", userId: ada } }),
     );
+
     assert.ok(solo && shared);
     yield* Effect.promise(() =>
       route.auth.api.addMember({
@@ -213,10 +257,12 @@ const openWorkspaces = (
       updatedAt: now,
     });
     const agentId = yield* openAgentOnOwnTask(grace, solo.id);
+
     const [agent] = yield* db
       .select({ conversationId: agentTable.conversationId })
       .from(agentTable)
       .where(eq(agentTable.id, agentId));
+
     assert.ok(agent);
     yield* db
       .update(conversations)
@@ -230,9 +276,17 @@ const openWorkspaces = (
       name: "sandbox-of-grace",
       tags: { [SESSION_TAG]: "session-of-grace" },
     });
-    const baseDrive = baseDriveName({ workspaceId: solo.id, fullName: "acme/relay" });
-    route.sandboxes.state.drives.set(baseDrive, { name: baseDrive, forkedFrom: undefined });
-    route.sandboxes.stand({ name: baseDrive, drive: { name: baseDrive, at: BASE_DRIVE.MOUNT } });
+    const workspaceDrive = workspaceDriveName(solo.id);
+    const repositoryDrive = baseDriveName(solo.id, "acme/relay");
+
+    for (const name of [workspaceDrive, repositoryDrive]) {
+      route.sandboxes.state.drives.set(name, { name, forkedFrom: undefined });
+    }
+
+    route.sandboxes.stand({
+      name: workspaceDrive,
+      drive: { name: workspaceDrive, at: WORKSPACE_DRIVE.MOUNT },
+    });
     const mac = "00000000-0000-4000-8000-00000000000a";
     yield* registerDevice(grace, {
       id: mac,
@@ -254,6 +308,7 @@ const openWorkspaces = (
         }),
       ),
     );
+
     const [scheduled] = yield* db
       .insert(automation)
       .values({
@@ -267,7 +322,9 @@ const openWorkspaces = (
         guards: AUTOMATION_DEFAULT_GUARDS,
       })
       .returning({ id: automation.id });
+
     assert.ok(scheduled);
+
     const [sharedScheduled] = yield* db
       .insert(automation)
       .values({
@@ -281,16 +338,19 @@ const openWorkspaces = (
         guards: AUTOMATION_DEFAULT_GUARDS,
       })
       .returning({ id: automation.id });
+
     assert.ok(sharedScheduled);
     const sharedTask = yield* createTask(ada, { organizationId: shared.id, name: "Invitations" });
     const sharedAgent = yield* openTaskAgent(grace, shared.id, sharedTask.id);
+
     return {
       solo: solo.id,
       shared: shared.id,
       sharedTask: sharedTask.id,
       sharedAgent,
       leftBehind: agent.conversationId,
-      baseDrive,
+      workspaceDrive,
+      repositoryDrive,
       mac,
       local,
       schedule: scheduled.id,
@@ -299,21 +359,24 @@ const openWorkspaces = (
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left, its repositories' base drives, and its automations' schedules, tells a local agent's Mac to discard it in place of its waiting lines, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left, its drives, and its automations' schedules, tells a local agent's Mac to discard it in place of its waiting lines, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
         const ada = yield* route.signUp("ada");
         const grace = yield* route.signUp("grace");
+
         const {
           shared,
           leftBehind,
-          baseDrive,
+          workspaceDrive,
+          repositoryDrive,
           mac,
           local,
           schedule,
@@ -342,8 +405,14 @@ it.effect(
             .where(eq(conversations.id, leftBehind)),
           [],
         );
-        assert.deepEqual(route.sandboxes.state.deleted.toSorted(), [baseDrive, "sandbox-of-grace"]);
-        assert.deepEqual(route.sandboxes.state.deletedDrives, [baseDrive]);
+        assert.deepEqual(
+          route.sandboxes.state.deleted.toSorted(),
+          ["sandbox-of-grace", workspaceDrive].toSorted(),
+        );
+        assert.deepEqual(
+          route.sandboxes.state.deletedDrives.toSorted(),
+          [repositoryDrive, workspaceDrive].toSorted(),
+        );
         // The agent's row is gone with the workspace, so its Mac reads the discard alone, not the stop queued before.
         assert.deepEqual(
           (yield* deviceAgentLinesWaiting(grace.id, mac)).map(({ agentId, kind }) => ({
@@ -368,9 +437,11 @@ it.effect(
         );
         // The solo workspace's schedule goes with it, then Ada's own in the shared one with her account.
         assert.deepEqual(route.forgotten, [schedule, sharedSchedule]);
+
         const contactDeletes = route.resend.requests
           .filter((request) => request.method === HTTP_METHOD.DELETE)
           .map((request) => decodeURIComponent(request.pathname));
+
         assert.deepEqual(contactDeletes, ["/contacts/ada@example.com"]);
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
@@ -383,6 +454,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -390,12 +462,15 @@ it.effect(
         const grace = yield* route.signUp("grace");
         const alan = yield* route.signUp("alan");
         const barbara = yield* route.signUp("barbara");
+
         const acme = yield* Effect.promise(() =>
           route.auth.api.createOrganization({
             body: { name: "Acme", slug: "acme", userId: ada.id },
           }),
         );
+
         assert.ok(acme);
+
         // Grace joined first, then Alan, then Barbara, a day apart.
         for (const [day, userId, role] of [
           [1, grace.id, "member"],
@@ -428,6 +503,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -460,6 +536,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -508,6 +585,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -528,6 +606,153 @@ it.effect(
             .from(organizationTable)
             .where(eq(organizationTable.id, solo))).length,
           1,
+        );
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+/** Google's revocation endpoint, which a Google sign-in's token is posted to. */
+const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+
+/** The GitHub App's endpoint a user's whole authorization is revoked at, refresh token and all, under the fixture App's client id. */
+const GITHUB_REVOKE_URL = `https://api.github.com/applications/${GITHUB_FIXTURE.CLIENT_ID}/grant`;
+
+/** A Google sign-in's access token, synthetic. */
+const GOOGLE_ACCESS_TOKEN = "ya29.fixture-google-access";
+
+/** A request held unanswered until its caller gives up on it, as a provider that hangs holds one. */
+const hanging = (sent: SentToGitHub) =>
+  new Promise<Response>((_, refuse) => {
+    sent.signal?.addEventListener("abort", () => refuse(new Error("aborted")));
+  });
+
+/** The App over the fixture settings, as every fake stands it. */
+const FIXTURE_APP = GitHubApp.layer(GITHUB_APP_SETTINGS);
+
+/** The fixture App, but that its read of the sign-in token dies once it has the token, as a bug past the read would, before the delete. */
+const APP_DYING_ON_READ = Layer.effect(
+  GitHubApp,
+  Effect.map(Effect.service(GitHubApp), (app) => ({
+    ...app,
+    userToken: (userId: string) =>
+      Effect.andThen(app.userToken(userId), Effect.die(new Error("a bug past the read"))),
+  })),
+).pipe(Layer.provide(FIXTURE_APP));
+
+it.effect.each([
+  {
+    github: "is answered",
+    answer: () => new Response(null, { status: 204 }),
+    app: FIXTURE_APP,
+    githubRevoked: true,
+  },
+  {
+    github: "is refused",
+    answer: () => new Response(null, { status: 500 }),
+    app: FIXTURE_APP,
+    githubRevoked: true,
+  },
+  { github: "is never answered", answer: hanging, app: FIXTURE_APP, githubRevoked: true },
+  {
+    github: "dies reading its token",
+    answer: () => new Response(null, { status: 204 }),
+    app: APP_DYING_ON_READ,
+    githubRevoked: false,
+  },
+])(
+  "deleting an account revokes its GitHub and Google sign-in tokens at their providers once its rows are gone, and a GitHub revoke that $github holds the deletion up no longer than its deadline and never stops Google's",
+  ({ answer, app, githubRevoked }) =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        let githubAsked: () => void = () => undefined;
+        let googleAsked: () => void = () => undefined;
+
+        const asked = Promise.all([
+          new Promise<void>((settle) => (githubAsked = settle)),
+          new Promise<void>((settle) => (googleAsked = settle)),
+        ]);
+
+        const providers = fakeGitHub((sent) => {
+          if (sent.url === GOOGLE_REVOKE_URL) {
+            googleAsked();
+
+            return new Response(null, { status: 200 });
+          }
+
+          githubAsked();
+
+          return answer(sent);
+        }, app);
+
+        // The route runs in a runtime of its own, so it waits on the test's clock, each wait announced.
+        const { clock, asleep } = yield* announcingClock;
+
+        const route = yield* openAuthRoute(
+          client,
+          Layer.mergeAll(
+            SignInRevocation.layer(Redacted.make(GITHUB_FIXTURE.SESSION_SECRET)).pipe(
+              Layer.provideMerge(providers.layer),
+            ),
+            Layer.succeed(Clock.Clock, clock),
+          ),
+        );
+
+        const ada = yield* route.signUp("ada");
+        const now = yield* Clock.currentTimeMillis;
+        yield* signInWithGitHub(ada.id);
+        yield* db.insert(account).values({
+          id: "account-ada-google",
+          accountId: "google-ada",
+          providerId: "google",
+          userId: ada.id,
+          accessToken: yield* Effect.promise(() =>
+            symmetricEncrypt({ key: GITHUB_FIXTURE.SESSION_SECRET, data: GOOGLE_ACCESS_TOKEN }),
+          ),
+          accessTokenExpiresAt: new Date(now + GITHUB_FIXTURE.HOUR_MS),
+          scope: "email,profile",
+          updatedAt: new Date(now),
+        });
+
+        const deleting = yield* Effect.forkChild(route.post("delete-user", {}, ada.cookie));
+        // Both providers are asked before the clock moves, so only a revoke still waiting runs out its deadline; a deletion that asks neither answers first.
+        yield* Effect.raceFirst(
+          Effect.promise(() => asked),
+          Fiber.await(deleting),
+        );
+        const deleted = yield* driven({ fiber: deleting, asleep }, Duration.minutes(1));
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(
+          yield* db.select({ id: user.id }).from(user).where(eq(user.id, ada.id)),
+          [],
+        );
+
+        const revokes = providers.sent.map((sent) => ({
+          url: sent.url,
+          method: sent.method,
+          body: sent.body,
+        }));
+
+        const githubRevoke = {
+          url: GITHUB_REVOKE_URL,
+          method: HTTP_METHOD.DELETE,
+          body: JSON.stringify({ access_token: standingGithubRow(now).accessToken }),
+        };
+
+        const googleRevoke = {
+          url: GOOGLE_REVOKE_URL,
+          method: HTTP_METHOD.POST,
+          body: new URLSearchParams({ token: GOOGLE_ACCESS_TOKEN }).toString(),
+        };
+
+        assert.deepEqual(
+          revokes.toSorted((a, b) => a.url.localeCompare(b.url)),
+          githubRevoked ? [githubRevoke, googleRevoke] : [googleRevoke],
         );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),

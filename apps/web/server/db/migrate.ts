@@ -23,6 +23,7 @@ const migrationConnectionString = Config.Redacted("DATABASE_URL_UNPOOLED");
 
 const migrateConfiguredDatabase = Effect.gen(function* () {
   const url = yield* migrationConnectionString;
+
   // Note that the wait wraps the client's layer too, because Neon refuses the
   // compute as the connection opens, so each attempt needs a client of its own.
   const applied = yield* waitingOutNeonComputeLimit(
@@ -32,10 +33,12 @@ const migrateConfiguredDatabase = Effect.gen(function* () {
       ),
     ),
   );
+
   yield* Effect.logInfo(`Applied ${applied.length} migrations`, applied);
 });
 
 const executedPath = process.argv[1];
+
 if (executedPath && import.meta.url === pathToFileURL(executedPath).href) {
   NodeRuntime.runMain(migrateConfiguredDatabase);
 }

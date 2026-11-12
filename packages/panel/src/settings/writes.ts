@@ -26,6 +26,7 @@ export interface SettingsWrites {
 export function useSettingsWrites(): SettingsWrites {
   const { mutateAsync: updateSetting } = useMutation(settingMutation());
   const { mutateAsync: resetSettings } = useMutation(actMutation(ACT_KIND.SETTINGS_RESET));
+
   return useMemo<SettingsWrites>(
     () => ({
       setting: (field, value) => askActResult(updateSetting({ field, value })),

@@ -25,12 +25,14 @@ function task(name: string, parentTaskId?: string): TaskSummary {
 
 /** A section kept as Parent, Other, Child, Parent opened, so it is drawn Parent, Child, Other. */
 const KEPT: readonly TaskSummary[] = [task("Parent"), task("Other"), task("Child", "Parent")];
+
 const DRAWN = drawnTaskRows(
   KEPT,
   () => true,
   () => false,
   new Map(),
 );
+
 const at = (name: string) => DRAWN.findIndex((drawn) => drawn.task.name === name);
 
 test("a row moved up past a parent's child tasks lands beside the parent, never between it and them", () => {

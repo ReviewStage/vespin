@@ -160,7 +160,7 @@ export function outerJoined<Joined extends Column>(
  */
 export function columnAs<Declared>(column: Column): SQLWrapper<Declared> {
   // SAFETY: the column renders as itself; only the type a row is held to narrows.
-  return column as unknown as SQLWrapper<Declared>;
+  return column as SQLWrapper<Declared>;
 }
 
 /**
@@ -174,6 +174,7 @@ export function ownOrder(select: LiveSelect): Orderable {
   return {
     orderBy: (...columns) => {
       if (columns.length > 0) throw new Error("a statement that orders itself takes no order");
+
       return select;
     },
   };
@@ -198,12 +199,16 @@ export function liveRowsStatement<
   const columns: LiveColumns = selected.columns;
   // Note that an unordered part orders by nothing, which renders no `order by`, so its statement stays as it was written before it was declared.
   const declared = selected.ordered === false ? [] : part.order;
+
   const order = declared.map(([field, way]) => {
     const column = columns[field] ?? instants[field];
+
     if (column === undefined)
       throw new Error(`a live read orders by ${field}, which it does not select`);
+
     return way === ORDER.ASC ? asc(column) : desc(column);
   });
+
   return liveStatementOf(
     build(liveSelection(selected.columns, selected.instants)).orderBy(...order),
   );
@@ -373,17 +378,21 @@ function ownParts<Read extends AnyLiveRead>(
   own: LiveDeltaBinding<Read>["own"],
 ): BoundDelta<Read>["own"] {
   const parts = new Map<PartOf<Read>, { readonly table: SyncTable; readonly key: string }>();
+
   // SAFETY: `own`'s keys are parts of the read, each naming its table or none.
   for (const [part, table] of Object.entries(own) as [PartOf<Read>, SyncTable | undefined][]) {
     if (table === undefined) continue;
     const key = read.parts[part]?.key ?? "";
+
     if (!table.log?.key.includes(key)) {
       throw new Error(
         `the live read ${read.name}'s ${part} is keyed by ${key}, which ${table.name}'s log names no row by`,
       );
     }
+
     parts.set(part, { table, key });
   }
+
   return parts;
 }
 
@@ -402,20 +411,26 @@ export function bindLiveRead<
 >(read: Read, binding: LiveReadBinding<Read, Topics>): BoundLiveRead<Read, Topics> {
   if (binding.reads.length === 0) throw new Error(`the live read ${read.name} reads no table`);
   const cursor = binding.cursor !== undefined && binding.cursor.parts.length > 0;
+
   if (cursor !== (read.mode === LIVE_MODE.CURSOR))
     throw new Error(`the live read ${read.name} names cursor parts only in cursor mode`);
+
   if ((binding.delta !== undefined) !== (read.mode === LIVE_MODE.DELTA))
     throw new Error(`the live read ${read.name} answers deltas only in delta mode`);
   const unlogged = binding.reads.find((table) => table.log === undefined);
+
   if (binding.delta !== undefined && unlogged !== undefined) {
     throw new Error(
       `the live read ${read.name} answers deltas but reads ${unlogged.name}, which no log row records`,
     );
   }
+
   const served = Object.values(read.params).includes(LIVE_PARAM.SERVED);
+
   if (served && binding.serve === undefined)
     throw new Error(`the live read ${read.name} serves a param it binds nowhere`);
   const { delta, statements, ...answering } = binding;
+
   return {
     ...answering,
     declaration: read,
@@ -440,9 +455,11 @@ export function liveReadRegistry(
   reads: readonly AnyBoundRead[],
 ): ReadonlyMap<LiveReadName, AnyBoundRead> {
   const registry = new Map<LiveReadName, AnyBoundRead>();
+
   for (const read of reads) {
     if (registry.has(read.name)) throw new Error(`the live read ${read.name} is bound twice`);
     registry.set(read.name, read);
   }
+
   return registry;
 }

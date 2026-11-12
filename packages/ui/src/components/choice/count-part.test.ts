@@ -31,6 +31,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -45,6 +46,7 @@ test("a part's glyph says its state in words beside its text", () => {
       parts: [{ text: "1", tone: STATUS_TONE.DANGER, glyph: "×", glyphLabel: "failing" }],
     }),
   );
+
   assert.equal(page.querySelector('[role="img"]')?.getAttribute("aria-label"), "failing");
   assert.equal(page.textContent, "×1");
 });

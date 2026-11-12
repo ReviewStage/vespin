@@ -217,6 +217,7 @@ export type WriteOutcome =
 
 /** What a press sent while another change is out is told: it was not sent. */
 const NOT_SENT_WORDS = "Another change is on its way to GitHub.";
+
 const NOT_SENT: WriteOutcome = {
   done: false,
   words: NOT_SENT_WORDS,
@@ -226,17 +227,19 @@ const NOT_SENT: WriteOutcome = {
 /** What a note says, our sentence first and any words GitHub said on the line under it. */
 function noteWords(note: WriteNote): string {
   if (note.kind === WRITE_NOTE.SIGN_IN) return WRITE_WORDS.SIGN_IN;
+
   return note.said === undefined ? note.words : `${note.words}\n${note.said}`;
 }
 
 /** How an answer went, in the words its line says where GitHub did not make the change. */
 function outcomeOf(note: WriteNote | undefined): WriteOutcome {
   if (note === undefined) return { done: true };
+
   return { done: false, words: noteWords(note), note };
 }
 
 /** What a change reads again once GitHub answered it: where it answers a promise, the change stays out until it settles. */
-export type ReadAgain = () => unknown;
+export type ReadAgain = () => PromiseLike<void> | void;
 
 /** The tab's changes: the one out, if any, what the last one left to say, and the presses. */
 export interface PullRequestWrites {
@@ -278,6 +281,7 @@ export function noteOf(
         }
       : { kind: WRITE_NOTE.WORDS, words: failureWords(answer.failure) };
   }
+
   switch (answer.outcome) {
     case PULL_REQUEST_WRITE_OUTCOME.DONE:
       return undefined;
@@ -306,11 +310,13 @@ export function usePullRequestWrites(agentId: string, onWritten: ReadAgain): Pul
   const source = usePullRequestSource();
   const send = source?.write ?? agentPullRequestWrite(agentId, number);
   const queryClient = useQueryClient();
+
   // Note that every change to one pull request is keyed alike, so each control refuses to send while any is out (`isMutating`), and runs in order under one scope where two land in one tick.
   const mutationKey = useMemo(
     () => [ACT_KIND.AGENTS_PULL_REQUEST_ACTION, agentId, number] as const,
     [agentId, number],
   );
+
   // Note that the change is one mutation through GitHub's answer and the reads it asks again, so it stays pending until they land.
   const change = useMutation({
     mutationKey,
@@ -319,39 +325,50 @@ export function usePullRequestWrites(agentId: string, onWritten: ReadAgain): Pul
       const answer = await send(request).catch(
         (): AgentPullRequestWriteAnswerView => ({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
       );
+
       // Note that a refusal may still have moved the pull request, so every answer from GitHub reads again,
       // and the change stays out until that read lands, so the press never draws the pull request as it stood.
       if (!("failure" in answer)) await Promise.resolve(onWritten()).catch(() => undefined);
+
       // Note that the note is made once, so what the press answers and what the tab draws are the same object.
       return { answer, note: noteOf(answer) };
     },
   });
+
   const { mutateAsync, reset } = change;
   // Note that the one out is held in a ref as well, because two presses in one frame both read the mutation from before either.
   const out = useRef(false);
   // The change a question asked that was not sent because another was out, which the mutation never hears of.
   const [unsent, setUnsent] = useState<PullRequestAction | undefined>(undefined);
+
   const write = useCallback(
     async (request: PullRequestActionRequest, onDone?: () => void) => {
       if (out.current || queryClient.isMutating({ mutationKey }) > 0) return NOT_SENT;
       out.current = true;
+
       const { answer, note } = await mutateAsync(request).finally(() => {
         out.current = false;
       });
+
       if (!("failure" in answer) && answer.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE) {
         onDone?.();
       }
+
       return outcomeOf(note);
     },
     [mutateAsync, queryClient, mutationKey],
   );
+
   const pending = change.isPending ? change.variables.action : undefined;
   const note = change.data?.note;
+
   const confirmAct = (request: PullRequestActionRequest): ConfirmAct => {
     const asked = change.variables?.action === request.action;
+
     return {
       run: () => {
         setUnsent(undefined);
+
         return write(request).then((outcome) => {
           if (outcome === NOT_SENT) setUnsent(request.action);
         });
@@ -369,6 +386,7 @@ export function usePullRequestWrites(agentId: string, onWritten: ReadAgain): Pul
       },
     };
   };
+
   return { pending, note, write, dismiss: reset, confirmAct };
 }
 
@@ -382,6 +400,7 @@ type StateAction =
 /** The changes the pill's menu offers from where the pull request stands; one in the merge queue may be closed but not turned back to a draft, as on GitHub. */
 function actionsFrom(state: PullRequestState, queued: boolean): readonly StateAction[] {
   if (queued && state === PULL_REQUEST_STATE.OPEN) return [PULL_REQUEST_ACTION.CLOSE];
+
   switch (state) {
     case PULL_REQUEST_STATE.DRAFT:
       return [PULL_REQUEST_ACTION.READY_FOR_REVIEW, PULL_REQUEST_ACTION.CLOSE];
@@ -454,6 +473,7 @@ export function PullRequestStateMenu({
 }): React.JSX.Element {
   const inQueue =
     queued !== null && queued !== undefined && pullRequest.state === PULL_REQUEST_STATE.OPEN;
+
   const actions = actionsFrom(pullRequest.state, inQueue);
   const menu = useMenu(actions.length > 0);
   const toast = useToast();
@@ -467,20 +487,25 @@ export function PullRequestStateMenu({
   // Note that a place in the queue left unread, as a failed merge read leaves it, may be one, so it is asked about as one is: only a read saying it holds it nowhere lets Close act at once.
   const unread = queued === undefined && pullRequest.state === PULL_REQUEST_STATE.OPEN;
   const mayBeQueued = inQueue || unread;
+
   const confirm = useConfirmDialog(
     { subject: asked && mayBeQueued, surfaceOpen: shown },
     writes.confirmAct({ action: PULL_REQUEST_ACTION.CLOSE }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_DEQUEUE),
   );
+
   // Note that a question left behind as its panel hides is let go whole, so the panel comes back asking nothing; one already answered finishes.
   if ((!shown || !mayBeQueued) && asked && !confirm.busy) setAsked(false);
+
   const words = inQueue
     ? queuedLabel(queued.position)
     : PULL_REQUEST_STATE_LABEL[pullRequest.state];
+
   // Note that the pill is named by the words it draws, so a change out reads "Merging…" as the screen does.
   const shownWords = writes.pending === undefined ? words : `${ACTION_WORDS[writes.pending]}…`;
   const label = `Pull request ${shownWords}`;
   const tone = inQueue ? STATUS_TONE.ATTENTION : PULL_REQUEST_TONE[pullRequest.state];
+
   // The pill's mark says queued from the `queued` it is handed alone, as its words do, so the two never disagree.
   const mark = (
     <PullRequestMark
@@ -492,6 +517,7 @@ export function PullRequestStateMenu({
       }}
     />
   );
+
   if (actions.length === 0) {
     return (
       <StaticChip tone={tone}>
@@ -500,14 +526,18 @@ export function PullRequestStateMenu({
       </StaticChip>
     );
   }
+
   // Note that a Close that may leave the queue asks first, and every other change acts at once, a Close offering Reopen in a toast since it can be taken back.
   const select = (action: StateAction) => {
     if (action === PULL_REQUEST_ACTION.REOPEN) withdrawToast(toastSubject);
+
     if (action === PULL_REQUEST_ACTION.CLOSE && mayBeQueued) {
       setAsked(true);
       confirm.ask();
+
       return;
     }
+
     void writes.write(
       { action },
       action === PULL_REQUEST_ACTION.CLOSE
@@ -527,6 +557,7 @@ export function PullRequestStateMenu({
         : undefined,
     );
   };
+
   const items: MenuAction[] = actions.map((action) => ({
     label: ACTION_WORDS[action],
     icon: ACTION_GLYPHS[action],
@@ -534,6 +565,7 @@ export function PullRequestStateMenu({
     disabled: writes.pending !== undefined,
     onSelect: () => select(action),
   }));
+
   return (
     <>
       <Chip
@@ -588,6 +620,7 @@ export function PullRequestWriteNote({
   const openSettings = useOpenSettings();
   const openWorkspaceGitHub = useOpenWorkspaceGitHub();
   const place = useContext(WritePlaceContext);
+
   // Note that a task's workspace is the task's to name, and a place on none is the listed workspace's.
   const openAccess = () =>
     place?.taskId === null || place?.taskId === undefined
@@ -596,14 +629,18 @@ export function PullRequestWriteNote({
           section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
         })
       : openWorkspaceGitHub(place.taskId);
+
   const { note, dismiss } = writes;
+
   if (note === undefined) return null;
+
   // Note that the note is the answer the write kept, the same object while it stands, and names its refusal.
   const failure = failureShown({
     surface: FAILURE_SURFACE.PULL_REQUEST_WRITE,
     cause: note,
     refused: true,
   });
+
   return (
     <div className={className}>
       {note.kind === WRITE_NOTE.SIGN_IN ? (
@@ -699,17 +736,21 @@ export function PullRequestTitle({
   // Note that the edit is held in a ref as well, so an answer landing before the next render reads the edit it answers.
   const edit = useRef<TitleEdit>(TITLE_VIEWING);
   const [drawn, setDrawn] = useState<TitleEdit>(TITLE_VIEWING);
+
   const move = (next: TitleEdit) => {
     edit.current = next;
     setDrawn(next);
   };
+
   // The words follow the edit, or the title where none stands, wherever they are not being typed in.
   useLayoutEffect(() => {
     const element = text.current;
+
     if (element === null || element === document.activeElement) return;
     element.textContent = drawn.kind === TITLE_EDIT.VIEWING ? title : drawn.title;
   }, [title, drawn]);
   useEffect(() => () => withdrawToast(toastSubject), [withdrawToast, toastSubject]);
+
   const send = (typed: string) => {
     const sent: TitleEdit = { kind: TITLE_EDIT.SENDING, title: typed };
     move(sent);
@@ -718,10 +759,13 @@ export function PullRequestTitle({
       .then((outcome) => {
         // Note that words left again while this one was out are a newer edit, which this answer does not settle.
         if (edit.current !== sent) return;
+
         if (outcome !== NOT_SENT) {
           move(TITLE_VIEWING);
+
           return;
         }
+
         move({ kind: TITLE_EDIT.HELD, title: typed });
         toast({
           words: NOT_SENT_WORDS,
@@ -738,16 +782,21 @@ export function PullRequestTitle({
         });
       });
   };
+
   const keep = (element: HTMLElement) => {
     withdrawToast(toastSubject);
     const typed = element.textContent.trim();
+
     if (typed === "" || typed === standing.current) {
       element.textContent = standing.current;
       move(TITLE_VIEWING);
+
       return;
     }
+
     send(typed);
   };
+
   return (
     <EditableBlock
       ref={block}

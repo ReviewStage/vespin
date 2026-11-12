@@ -29,7 +29,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
+import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
@@ -81,15 +81,18 @@ const agentPinFlights = new WeakMap<QueryClient, Map<string, Promise<unknown>>>(
 /** The pins in flight of the window `client` holds. */
 function flightsOf(client: QueryClient): Map<string, Promise<unknown>> {
   const held = agentPinFlights.get(client);
+
   if (held !== undefined) return held;
   const flights = new Map<string, Promise<unknown>>();
   agentPinFlights.set(client, flights);
+
   return flights;
 }
 
 /** The account signed in as `client` holds the document now, by its address, which a pin waiting its turn must still be pressed under; none while none is. */
 function accountIn(client: QueryClient): string | undefined {
   const account = appStateIn(client)?.account;
+
   return account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
 }
 
@@ -157,14 +160,18 @@ export function useTaskSections(): TaskSections {
 /** The pins and sections, as the window lists them: main's, or a fixture run's own. */
 function usePinViews(): PinViews {
   const taskSections = useTaskSections();
+
   const repositoryPins =
     useQuery({ ...appStateQuery, select: selectRepositoryPins }).data ?? NO_REPOSITORY_PINS;
+
   const taskAgentPins =
     useQuery({ ...appStateQuery, select: selectTaskAgentPins }).data ?? NO_TASK_AGENT_PINS;
+
   const pinnedRepositories = useMemo(
     () => repositoryPins.map((pin) => pin.repository),
     [repositoryPins],
   );
+
   return { pinnedRepositories, taskAgentPins, taskSections };
 }
 
@@ -176,8 +183,10 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
   const toast = useToast();
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const { mutateAsync: sendSections } = useMutation(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
+
   return (writes) => {
     const [first, ...rest] = writes;
+
     if (first === undefined || fixture) return;
     askKept(sendSections({ writes: [first, ...rest] })).then((changed) => {
       if (changed.kept) return;
@@ -206,28 +215,35 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
   const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, drawn);
   const sendTaskPin = taskPinDoors.send;
   const sendAgentPin = agentPinDoors.send;
+
   const { mutateAsync: sendRepositoryPin } = useMutation(
     actMutation(ACT_KIND.TASKS_PIN_REPOSITORY),
   );
+
   const writeSections = useSectionWrites();
 
   const markTask = (taskId: string, mark: TaskMark): Promise<boolean> => {
     if (fixture) return Promise.resolve(false);
     const pinned = mark === TASK_MARK.PIN;
+
     const pressed = pressRows(ROW_WRITE.TASK_PIN, taskPinDoors, [
       { id: taskId, after: { pinned, position: null } },
     ]);
+
     return askKept(sendTaskPin({ taskId, pinned })).then((changed) => {
       if (changed.kept) {
         pressed.keep(TASK_MARKED_NOTES[mark]);
+
         return true;
       }
+
       toast({
         replayUnmasked: true,
         words: MARK_FAILED_NOTES[mark],
         tone: STATUS_TONE.DANGER,
         failure: { surface: FAILURE_SURFACE.TASK_MARK, cause: changed.cause, about: { taskId } },
       });
+
       return false;
     });
   };
@@ -258,31 +274,39 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
     const flights = flightsOf(client);
     const pressedBy = accountIn(client);
     const placed = position === undefined ? {} : { position };
+
     const asked = (flights.get(agentId) ?? Promise.resolve()).then(
       (): Promise<AgentPinAsked> | AgentPinAsked =>
         accountIn(client) === pressedBy
           ? sendAgentPin({ agentId, pinned, ...placed }).then(
               (answer) => ("agent" in answer ? AGENT_PIN_ASKED.CHANGED : { refused: answer }),
-              (error: unknown) => ({ refused: error }),
+              (cause: unknown) => ({ refused: cause }),
             )
           : AGENT_PIN_ASKED.UNASKED,
     );
+
     flights.set(agentId, asked);
     asked.then(() => {
       if (flights.get(agentId) === asked) flights.delete(agentId);
     });
+
     return asked;
   };
+
   const pinAgent = (agentId: string, pinned: boolean) => {
     if (fixture) return;
+
     const pressed = pressRows(ROW_WRITE.AGENT_PIN, agentPinDoors, [
       { id: agentId, after: { pinned, position: null } },
     ]);
+
     askAgentPin(agentId, pinned).then((asked) => {
       if (asked === AGENT_PIN_ASKED.CHANGED) {
         pressed.keep(pinned ? AGENT_PINNED_NOTES.PIN : AGENT_PINNED_NOTES.UNPIN);
+
         return;
       }
+
       if (asked === AGENT_PIN_ASKED.UNASKED) return;
       toast({
         replayUnmasked: true,
@@ -302,8 +326,10 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
   const movePins = (moves: readonly PinMove[], putBack?: () => void) => {
     if (fixture || moves.length === 0) return;
     const pressedBy = accountIn(client);
+
     const asked = moves.map(({ agent, id, position }) => {
       const flights = flightsOf(client);
+
       const flight: Promise<Kept | undefined> = agent
         ? (flights.get(id) ?? Promise.resolve(true)).then(() =>
             accountIn(client) === pressedBy
@@ -314,21 +340,26 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
               : undefined,
           )
         : askKept(sendTaskPin({ taskId: id, pinned: true, position }));
+
       if (agent) flights.set(id, flight);
+
       return flight.then((changed) => {
         if (agent && flights.get(id) === flight) flights.delete(id);
+
         return changed;
       });
     });
+
     Promise.all(asked).then((answers) => {
       const asked = answers.filter((answer) => answer !== undefined);
+
       if (asked.every((answer) => answer.kept)) return;
       putBack?.();
       toast({
         replayUnmasked: true,
         words: PIN_MOVE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstRefusal(asked) },
+        failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstNotKept(asked)?.cause },
       });
     });
   };

@@ -99,6 +99,7 @@ function tokenRepositoriesReadOf(
   read: UseQueryResult<readonly WorkspaceTokenRepository[]>,
 ): TokenRepositoriesRead {
   if (read.data !== undefined) return TOKEN_REPOSITORIES_READ.READY;
+
   return read.isError ? TOKEN_REPOSITORIES_READ.FAILED : TOKEN_REPOSITORIES_READ.READING;
 }
 
@@ -115,11 +116,14 @@ export function useTokenRepositories(workspaceId: string): TokenRepositories {
   const { mutateAsync: changeTokenRepository } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_TOKEN_REPOSITORY_SET),
   );
+
   const { mutate: removeTokenRepository } = useMutation(
     pressMutation(ACT_KIND.WORKSPACE_TOKEN_REPOSITORY_SET),
   );
+
   const read = useQuery(tokenRepositoriesQuery(workspaceId));
   const { mutate: retry } = useMutation(tokenRepositoriesRetryMutation());
+
   const change = useCallback(
     (repository: string, added: boolean) =>
       changeTokenRepository({ workspaceId, repository, added }).then(
@@ -128,6 +132,7 @@ export function useTokenRepositories(workspaceId: string): TokenRepositories {
       ),
     [changeTokenRepository, workspaceId],
   );
+
   const remove = useCallback(
     (repository: string) =>
       removeTokenRepository({
@@ -137,6 +142,7 @@ export function useTokenRepositories(workspaceId: string): TokenRepositories {
       }),
     [removeTokenRepository, workspaceId],
   );
+
   return {
     read: tokenRepositoriesReadOf(read),
     listed: read.data ?? NONE_LISTED,
@@ -161,13 +167,16 @@ function candidatesOf(
   if (list.data === undefined) {
     return list.isError ? { kind: "failed" } : { kind: "reading" };
   }
+
   const added = new Set(listed.map((one) => one.fullName.toLowerCase()));
   // A service older than `addable` lists the token's repositories among the picker's own.
   const { addable, repositories } = list.data;
   const offered = addable ?? repositories.filter((one) => one.access === GITHUB_ACCESS.TOKEN);
+
   const rows = offered
     .filter((one) => !added.has(one.fullName.toLowerCase()))
     .map((one) => repositoryMenuRow(one.fullName, pictures));
+
   return { kind: "read", rows };
 }
 
@@ -183,6 +192,7 @@ export function AddTokenRepository(props: {
 }): React.JSX.Element | null {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const token = useQuery(githubTokenQuery(accountId));
+
   return token.data?.token ? <AddRepositoryMenu {...props} /> : null;
 }
 
@@ -200,11 +210,14 @@ function AddRepositoryMenu({
   const pictures = useRepositoryPictures();
   const list = useQuery(repositoryListsQuery(workspaceId));
   const { mutate: retry } = useMutation(repositoryListsRetryMutation());
+
   const read = () => {
     if (list.isError) retry(repositoryScope(workspaceId));
   };
+
   const candidates = candidatesOf(list, repositories.listed, pictures);
   const rows = candidates.kind === "read" ? candidates.rows : [];
+
   const note =
     candidates.kind === "reading"
       ? WORDS.READING
@@ -213,6 +226,7 @@ function AddRepositoryMenu({
         : rows.length === 0
           ? WORDS.NONE
           : undefined;
+
   return (
     <AddMenuButton
       label={WORDS.ADD}
@@ -247,9 +261,11 @@ function pickerRepositories(
   if (rows === undefined) return undefined;
   const byName = new Map<string, PickerRepository>();
   const onToken = rows.repositories.filter((one) => one.access === GITHUB_ACCESS.TOKEN);
+
   for (const one of [...onToken, ...(rows.addable ?? [])]) {
     byName.set(one.fullName.toLowerCase(), one);
   }
+
   return [...byName.values()].sort((one, other) => other.updatedAt - one.updatedAt);
 }
 
@@ -276,20 +292,27 @@ export function TokenRepositoryPicker({
   const [pending, setPending] = useState<ReadonlyMap<string, boolean>>(new Map());
   const presses = useRef(new Map<string, number>());
   const listed = new Map(repositories.listed.map((one) => [one.fullName.toLowerCase(), one]));
+
   const isOn = (fullName: string) =>
     pending.get(fullName.toLowerCase()) ?? listed.has(fullName.toLowerCase());
+
   const offered = pickerRepositories(list.data);
+
   const rows: MenuRow[] = (offered ?? []).map((one) => {
     const row = repositoryMenuRow(one.fullName, pictures);
     const held = listed.get(one.fullName.toLowerCase());
+
     return held !== undefined && !held.removable ? { ...row, disabled: WORDS.NOT_YOURS } : row;
   });
+
   const settle = (key: string) =>
     setPending((was) => {
       const next = new Map(was);
       next.delete(key);
+
       return next;
     });
+
   const toggle = (fullName: string) => {
     const key = fullName.toLowerCase();
     const added = !isOn(fullName);
@@ -309,6 +332,7 @@ export function TokenRepositoryPicker({
       },
     );
   };
+
   return (
     <CheckedRepositoryChip
       rows={rows}
@@ -345,13 +369,16 @@ function nameOf(repository: WorkspaceTokenRepository): string {
 /** The token repositories by owner, each owner keyed as no case spells it, the owners in order of their logins. */
 function tokenOwners(listed: readonly WorkspaceTokenRepository[]): readonly TokenOwner[] {
   const byOwner = new Map<string, { login: string; repositories: WorkspaceTokenRepository[] }>();
+
   for (const repository of listed) {
     const login = repository.fullName.slice(0, repository.fullName.indexOf("/"));
     const key = login.toLowerCase();
     const owner = byOwner.get(key);
+
     if (owner === undefined) byOwner.set(key, { login, repositories: [repository] });
     else owner.repositories.push(repository);
   }
+
   return [...byOwner.values()].sort((one, other) =>
     one.login.localeCompare(other.login, undefined, { sensitivity: "base" }),
   );
@@ -372,10 +399,12 @@ function TokenOwnerRow({
   onRemove: (repository: string) => void;
 }): React.JSX.Element {
   const [asked, setAsked] = useState<WorkspaceTokenRepository>();
+
   // Note that the question stands only while the repository it names is still listed and removable, so a read that drops it dismisses it.
   const standing =
     asked !== undefined &&
     owner.repositories.some((one) => one.fullName === asked.fullName && one.removable);
+
   const removal = useConfirmDialog(
     { subject: standing, surfaceOpen: true },
     neverBusyAct(() => {
@@ -383,6 +412,7 @@ function TokenOwnerRow({
     }),
     confirmFailure(FAILURE_SURFACE.WORKSPACE_REPOSITORY_REMOVE),
   );
+
   const actions = owner.repositories
     .filter((repository) => repository.removable)
     .map((repository) => ({
@@ -395,6 +425,7 @@ function TokenOwnerRow({
         removal.ask();
       },
     }));
+
   return (
     <>
       <GitHubOwnerRow
@@ -429,6 +460,7 @@ export function TokenOwnerRows({
 }): React.JSX.Element {
   const reading = repositories.read === TOKEN_REPOSITORIES_READ.READING;
   useAnnounceShown(ANNOUNCE.POLITE, reading ? WORDS.ROWS_READING : "");
+
   if (reading) {
     return (
       <SettingsLine>
@@ -436,6 +468,7 @@ export function TokenOwnerRows({
       </SettingsLine>
     );
   }
+
   if (repositories.read === TOKEN_REPOSITORIES_READ.FAILED) {
     return (
       <ReadFailed
@@ -445,6 +478,7 @@ export function TokenOwnerRows({
       />
     );
   }
+
   return (
     <>
       {tokenOwners(repositories.listed).map((owner) => (

@@ -76,14 +76,17 @@ export interface FormatToolbarTurnInto {
 /** The chord a mark's hint names. */
 function markChord(mark: WritingMark): ShortcutChord | undefined {
   const shortcut: WritingShortcut = WRITING_SHORTCUTS[mark];
+
   return mark === WRITING_MARK.LINK ? LINK_CHORD : shortcut.chord;
 }
 
 /** Turn into's press, naming the current block, and the menu it drops. */
 function TurnIntoPress({ turnInto }: { turnInto: FormatToolbarTurnInto }): React.JSX.Element {
   const menu = useMenu(true);
+
   const block =
     turnInto.current === undefined ? undefined : WRITING_SHORTCUTS[turnInto.current].label;
+
   return (
     <>
       <Tooltip label={FORMAT_TOOLBAR_WORDS.TURN_INTO}>
@@ -117,6 +120,7 @@ function pressGroups(props: {
   onComment?: (() => void) | undefined;
 }): Press[][] {
   const { turnInto, onComment } = props;
+
   const turn: Press[] =
     turnInto === undefined
       ? []
@@ -126,6 +130,7 @@ function pressGroups(props: {
             draw: () => <TurnIntoPress turnInto={turnInto} />,
           },
         ];
+
   const comment: Press[] =
     onComment === undefined
       ? []
@@ -144,6 +149,7 @@ function pressGroups(props: {
             ),
           },
         ];
+
   const marks = MARK_GROUPS.map((group) =>
     group.map(
       (mark): Press => ({
@@ -163,6 +169,7 @@ function pressGroups(props: {
       }),
     ),
   );
+
   return [turn, ...marks, comment].filter((group) => group.length > 0);
 }
 
@@ -191,6 +198,7 @@ export function FormatToolbar({
   // Note that the toolbar's box is its owner's too, which places it.
   const box = useMemo(() => joinRefs(ref, roving.ref), [ref, roving.ref]);
   const groups = pressGroups({ marks, onMark, turnInto, onComment });
+
   return (
     <MenuSurface
       {...roving}

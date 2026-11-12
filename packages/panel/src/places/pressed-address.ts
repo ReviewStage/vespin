@@ -227,7 +227,8 @@ export function placeAddress(
   href?: string,
 ): PlaceAddress {
   const routed = router === undefined ? undefined : routedPressOf(router, link);
-  return { kind: ADDRESS.PLACE, link, routed, ...(href === undefined ? {} : { href }) };
+
+  return { kind: ADDRESS.PLACE, link, routed, ...(href !== undefined && { href }) };
 }
 
 /**
@@ -244,17 +245,23 @@ export function addressOf(
   settle: (link: ReadLink) => ReadLink = (link) => link,
 ): Address {
   const link = readLink(href);
+
   if (link !== undefined) return placeAddress(settle(link), router, href);
   const pullRequest = pullRequestAddressOf(href);
+
   if (pullRequest !== undefined) {
     return { kind: ADDRESS.PULL_REQUEST, href, ...pullRequest, listed: undefined };
   }
+
   const repository = pageRepositoryOf(href);
   const mention = decodeMention(href, repository ?? null);
+
   if (mention?.kind === MENTION_KIND.FILE) {
     return { kind: ADDRESS.FILE, href, repository, path: mention.path, lines: mention.lines };
   }
+
   const mentioned = mentionedLinkOf(mention);
+
   return mentioned === undefined
     ? { kind: ADDRESS.WEB, href }
     : placeAddress(settle(mentioned), router, href);

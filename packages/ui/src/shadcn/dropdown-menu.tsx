@@ -23,7 +23,7 @@ import { ChevronRightIcon } from "../icons/lucide-glyphs.js";
  *   it drawn through its exit (`data-leaving`), or Base UI does as it
  *   closes (`data-ending-style`), as a submenu does when its menu closes it
  *   alone, its fade out, taking no press. None of shadcn's ring or outline utilities, because the
- *   window's own focus ring draws the keyboard's (`anti-slop/no-shadcn-focus-ring`);
+ *   window's own focus ring draws the keyboard's;
  *   a row marks its focus with its fill instead, which `menu.css` says.
  * - An item is a menu row: one fixed height (or grown to hold a second
  *   line, `data-detail`), the menu row's corner and type, lit by the fill

@@ -12,8 +12,8 @@ import { ignoredByReplay } from "../session-replay-marks.js";
  * fade's easing, the thumb on the spring small elements ride, the one press cursor (`cursor-press`), a press taken a finger's
  * width across on a coarse pointer, centered on the track, as every button's is (`button.css`), none of shadcn's outline
  * or ring utilities, because the window's own focus ring (`@repo/panel`'s
- * base.css) draws the keyboard's ring, and a utility would outrank it
- * (`anti-slop/no-shadcn-focus-ring`), and its hidden input kept out of the
+ * base.css) draws the keyboard's ring, and a utility would outrank it,
+ * and its hidden input kept out of the
  * screen recording (`session-replay-marks.tsx`). `@repo/ui`'s `Switch`
  * (`components/switch/switch.tsx`) is what an app draws; this is its inside.
  * `SWITCH_TRACK` and `SWITCH_THUMB` are exported so the switch's drawing

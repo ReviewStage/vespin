@@ -14,8 +14,7 @@ review round, so leave out anything that does not change what the code does.
 
 - Style, naming, comment wording, or formatting.
 - Test style: call-count assertions, test structure, or a missing test.
-- The conventions in `AGENTS.md` and `docs/STYLE.md`, such as Effect idioms
-  (`Schedule` over a loop), `as const`, design tokens, file order, and comment
+- The conventions in `AGENTS.md` and `docs/STYLE.md`, such as `as const`, design tokens, file order, and comment
   length. Lint and CI hold what they can, and the rest isn't worth a review
   round.
 - A missing edge case, unless it is reachable in normal use.

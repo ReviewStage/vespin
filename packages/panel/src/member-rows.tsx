@@ -47,6 +47,7 @@ export function memberReadNote(
       </ErrorState>
     );
   }
+
   return reader.reading ? <Spinner delay label="Reading members" /> : undefined;
 }
 
@@ -84,6 +85,7 @@ export function memberRows(
 ): readonly MemberRow[] {
   return readerFirst(members ?? [], readerId).map((member) => {
     const actor = memberActor(member, readerId);
+
     return {
       member,
       actor,
@@ -136,6 +138,7 @@ export function peopleFilterActions({
 }): MenuAction[] {
   const rows = memberRows(members, readerId);
   const mine = rows.find((row) => row.actor.you);
+
   const me: MenuAction[] =
     readerId === undefined && !meWithoutId
       ? []
@@ -148,12 +151,14 @@ export function peopleFilterActions({
             onSelect: () => onChoose({ kind: PEOPLE_FILTER.ME }),
           },
         ];
+
   const anyone: MenuAction = {
     label: PEOPLE_FILTER_WORDS.ANYONE,
     icon: <UsersIcon />,
     checked: chosen.kind === PEOPLE_FILTER.ANYONE,
     onSelect: () => onChoose({ kind: PEOPLE_FILTER.ANYONE }),
   };
+
   return [
     ...(meFirst ? [...me, anyone] : [anyone, ...me]),
     ...rows

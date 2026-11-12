@@ -82,10 +82,13 @@ function fakeAuthService(tokens: Map<string, string>, revokeAsAnswered = false) 
     (async (context: { headers: Headers }) => {
       const authorization = context.headers.get("authorization") ?? "";
       const sub = tokens.get(authorization);
+
       if (sub === undefined) throw refusedToken();
+
       if (revokeAsAnswered) tokens.delete(authorization);
+
       return { sub };
-    }) as unknown as typeof auth.api.oauth2UserInfo,
+    }) as typeof auth.api.oauth2UserInfo,
   );
 }
 
@@ -108,6 +111,7 @@ const signedElsewhere = (cookie: string) =>
     const signed = decodeURIComponent(cookie.slice(at + 1));
     const token = signed.slice(0, signed.lastIndexOf("."));
     const forged = `${token}.${await makeSignature(token, FOREIGN_SECRET)}`;
+
     return `${cookie.slice(0, at)}=${encodeURIComponent(forged)}`;
   });
 
@@ -125,10 +129,13 @@ const openAccounts = Effect.gen(function* () {
       .insert(user)
       .values([ada, grace].map((id) => ({ id, name: "Test User", email: `${id}@app.test` }))),
   ).pipe(Effect.provide(plugin.database));
+
   const userInfo: UserInfoEndpoint = (input) =>
     Effect.succeed(input.headers.get("authorization") === ADA_BEARER ? { sub: ada } : undefined);
+
   const resolveUserId: UserIdResolver = (incoming) =>
     requestUserId(incoming, userInfo, plugin.resolveSessionUserId);
+
   return {
     plugin,
     ada,
@@ -147,6 +154,7 @@ const answerTo = (resolveUserId: UserIdResolver, request: Request) =>
     // SAFETY: the pins procedures yield the database and the clock alone, which the test's own context holds.
     const services = (yield* Effect.context<never>()) as Context.Context<WebServices>;
     const handle = hostedFetch({ repositoryPins: repositoryPinsProcedures({ resolveUserId }) });
+
     return yield* Effect.promise(() => handle(request, services));
   });
 
@@ -158,8 +166,10 @@ const pinnedBy = (resolveUserId: UserIdResolver, request: Request) =>
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
     assert.equal(response.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(body));
     const answered = readEither(repositoryPinsWrittenSchema)(unparsedWire(body));
+
     if (Result.isFailure(answered))
       return assert.fail(`not the wire's: ${answered.failure.refusal}`);
+
     return answered.success.pins.map((pin) => pin.repository);
   });
 
@@ -173,10 +183,13 @@ it.effect("a request without a bearer header resolves nobody", () =>
 it.effect("a valid token resolves to the auth service's own subject", () =>
   Effect.gen(function* () {
     let forwarded: string | null = null;
+
     const userId = yield* hostedUserId(request({ authorization: "Bearer token-1" }), (input) => {
       forwarded = input.headers.get("authorization");
+
       return Effect.succeed({ sub: "user-1", email: "dev@example.com" });
     });
+
     assert.deepEqual(userId, Option.some("user-1"));
     assert.equal(forwarded, "Bearer token-1");
   }),
@@ -187,16 +200,19 @@ it.effect("a rejected, malformed, or subjectless answer is one indistinguishable
     const rejected = yield* hostedUserId(request({ authorization: "Bearer expired" }), () =>
       Effect.tryPromise(() => Promise.reject(refusedToken())),
     );
+
     assert.deepEqual(rejected, Option.none());
 
     const malformed = yield* hostedUserId(request({ authorization: "Bearer odd" }), () =>
       Effect.succeed(undefined),
     );
+
     assert.deepEqual(malformed, Option.none());
 
     const subjectless = yield* hostedUserId(request({ authorization: "Bearer odd" }), () =>
       Effect.succeed({ sub: "" }),
     );
+
     assert.deepEqual(subjectless, Option.none());
   }),
 );
@@ -220,6 +236,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { ada, grace, graceCookie, userInfo, plugin } = yield* openAccounts;
+
       const named = (credential: Parameters<typeof relayUserId>[0]) =>
         relayUserId(credential, userInfo, plugin.resolveSessionUserId);
 
@@ -255,8 +272,10 @@ it.effect("a request with no cookie, or a blank one, asks the auth service for n
 it.effect("an auth service that cannot answer is refused as unavailable, never as signed out", () =>
   Effect.gen(function* () {
     const down = () => Effect.tryPromise(() => Promise.reject(new Error("connection terminated")));
+
     const throttled = () =>
       Effect.tryPromise(() => Promise.reject(new APIError("TOO_MANY_REQUESTS")));
+
     const noSession: SessionEndpoint = () => Effect.succeedNone;
 
     // A bearer whose userinfo fails or is throttled, and a cookie whose session read fails: a caller retries a 503, where a 401 signs it out.
@@ -312,6 +331,7 @@ it.effect(
         }),
         Option.some(grace),
       );
+
       for (const authorization of [junk, "Basic Z3JhY2U6aG9wcGVy", ""]) {
         assert.deepEqual(
           yield* resolveUserId(read({ authorization, cookie: graceCookie })),
@@ -352,6 +372,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { plugin, adaCookie, graceCookie, resolveUserId } = yield* openAccounts;
+
       const pins = (cookie: string, change?: { repository: string; pinned: boolean }) =>
         pinnedBy(
           resolveUserId,
@@ -395,6 +416,7 @@ it.effect("requests for one bearer that miss together share the one ask", () =>
       Array.from({ length: 5 }, () => bearerUserId(ADA_BEARER)),
       { concurrency: "unbounded" },
     );
+
     assert.deepEqual(
       resolved,
       Array.from({ length: 5 }, () => Option.some("user-ada")),
@@ -419,6 +441,7 @@ it.effect("two bearers never answer for each other on one instance", () =>
       [ADA_BEARER, "user-ada"],
       [GRACE_BEARER, "user-grace"],
     ]);
+
     fakeAuthService(tokens, true);
 
     // The second round is answered from what the instance kept, the auth service having revoked both as it answered.
@@ -437,13 +460,16 @@ it.effect(
       // Better Auth reads the instant off `Date`, so the test holds that clock alone.
       vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 9, 20) });
       const { plugin, ada, adaCookie, resolveUserId } = yield* openAccounts;
+
       const minted = yield* Effect.promise(() =>
         plugin.api.getSession({ headers: new Headers({ cookie: adaCookie }), returnHeaders: true }),
       );
+
       const cached = minted.headers
         .getSetCookie()
         .map((cookie) => cookie.slice(0, cookie.indexOf(";")))
         .find((cookie) => cookie.includes("session_data="));
+
       assert.ok(cached, "a session read hands the browser its cache cookie");
       yield* Database.use((db) => db.delete(session).where(eq(session.userId, ada))).pipe(
         Effect.provide(plugin.database),

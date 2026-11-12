@@ -53,6 +53,7 @@ function agentNoteLine(note: DescriptionAgentEdit["notes"][number]): string {
 function agentEditsText(edits: readonly LabeledAgentEdit[]): readonly string[] {
   if (edits.length === 0) return [];
   const recent = edits.slice(-RECENT_AGENT_EDITS).reverse();
+
   return [
     AGENT_EDITS_MARKER,
     ...recent.map(
@@ -65,6 +66,7 @@ function agentEditsText(edits: readonly LabeledAgentEdit[]): readonly string[] {
 /** The developer's own words about the task as they started it, as a JSON string; nothing for a task started with none. */
 function briefText(stored: StoredTask): readonly string[] {
   if (stored.brief === undefined) return [];
+
   return [BRIEF_MARKER, JSON.stringify(stored.brief)];
 }
 
@@ -89,9 +91,11 @@ function staleText(
   timeZone: string | undefined,
 ): readonly string[] {
   const edited = stored.task.lastEdit?.at;
+
   if (descriptionsOnSince === undefined || edited === undefined || edited >= descriptionsOnSince) {
     return [];
   }
+
   return [
     `Last edited ${dayMention(edited, timeZone)}, before the most recent work; check it against the code before relying on it.`,
   ];
@@ -100,10 +104,12 @@ function staleText(
 /** The day an instant falls on in the developer's zone, or UTC where their window named none, as the date mention the description writes it. */
 function dayMention(at: number, timeZone: string | undefined): string {
   const zoned = timeZone === undefined ? Option.none() : DateTime.makeZoned(at, { timeZone });
+
   // Note that UTC is a zone every runtime holds, so the fallback cannot throw.
   const day = DateTime.formatIsoDate(
     Option.getOrElse(zoned, () => DateTime.makeZonedUnsafe(at, { timeZone: UTC_ZONE })),
   );
+
   return mentionMarkdown(
     { kind: MENTION_KIND.DATE, start: day },
     dateLabel({ start: day }),
@@ -130,11 +136,13 @@ function developerTimeText({ now, timeZone }: TurnClock): string {
     timeZone === undefined
       ? Option.none()
       : Option.map(DateTime.makeZoned(now, { timeZone }), (at) => ({ zone: timeZone, at }));
+
   // Note that UTC is a zone every runtime holds, so the fallback cannot throw.
   const { zone, at } = Option.getOrElse(named, () => ({
     zone: UTC_ZONE,
     at: DateTime.makeZonedUnsafe(now, { timeZone: UTC_ZONE }),
   }));
+
   const day = new Intl.DateTimeFormat(TIME_LOCALE, {
     weekday: "long",
     month: "long",
@@ -142,20 +150,25 @@ function developerTimeText({ now, timeZone }: TurnClock): string {
     year: "numeric",
     timeZone: zone,
   }).format(now);
+
   const time = new Intl.DateTimeFormat(TIME_LOCALE, {
     hour: "numeric",
     minute: "2-digit",
     timeZone: zone,
   }).format(now);
+
   const utc = new Date(now).toISOString().slice(11, 16);
   const offset = DateTime.zonedOffsetIso(at);
   const today = DateTime.formatIsoDate(at);
+
   const todayMention = mentionMarkdown(
     { kind: MENTION_KIND.DATE, start: today },
     dateLabel({ start: today }),
     NO_PLACE,
   );
+
   const unknown = Option.isSome(named) ? "" : " Their time zone is unknown, so read it as UTC.";
+
   return `${DEVELOPER_TIME_MARKER} ${day}, ${time} ${zone} (UTC ${utc}), offset ${offset}. Today is ${todayMention}.${unknown}`;
 }
 
@@ -184,8 +197,10 @@ export function standingContext(
     `${TASK_MARKER} ${new Date(clock.now).toISOString()}`,
     developerTimeText(clock),
   ].join("\n");
+
   if (!stored) return heading;
   const { task } = stored;
+
   const description = descriptionsOn
     ? [
         DOCUMENT_MARKER,
@@ -195,5 +210,6 @@ export function standingContext(
         ...openThreadsText(comments),
       ]
     : [];
+
   return [heading, `Name: ${task.name}`, ...briefText(stored), ...description].join("\n");
 }

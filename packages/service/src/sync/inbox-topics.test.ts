@@ -58,6 +58,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -70,6 +71,7 @@ const openInboxWorld = Effect.gen(function* () {
   yield* openWorkspace(yield* openAccount);
   const task = yield* createTask(owner, { organizationId: workspaceId, name: "Preview deploys" });
   const agentId = yield* openTaskAgent(owner, workspaceId, task.id);
+
   return { owner, teammate, workspaceId, taskId: task.id, agentId };
 });
 
@@ -103,9 +105,11 @@ const wakes = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
+
     for (const read of followed) {
       assert.ok(wokenBy(topics, read), `${read[0].name} is woken by a topic the write notifies`);
     }
+
     return fired;
   });
 
@@ -131,6 +135,7 @@ const postQuestion = (world: InboxWorld) =>
     ),
     (posted) => {
       assert.ok(Result.isSuccess(posted), "the post was written");
+
       return posted.success.id;
     },
   );
@@ -207,6 +212,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
           ],
           [teammate.account, teammate.items, teammate.task, teammate.agent],
         );
+
         assert.ok(marked.value !== false && marked.value.txid !== undefined, "the mark moved");
         assert.deepEqual(marked.txids, [marked.value.txid]);
       }),
@@ -218,6 +224,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
       Effect.gen(function* () {
         const world = yield* openInboxWorld;
         const owner = inboxReadsOf(world, world.owner);
+
         const ownerTopics: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, world.workspaceId],
           [TOPIC.ACCOUNT, world.owner],
@@ -239,6 +246,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
           ownerTopics,
           [owner.account],
         );
+
         const fired = yield* wakes(
           Effect.map(
             recordAutomationRun(made.value, {
@@ -251,6 +259,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
           ownerTopics,
           [owner.account],
         );
+
         yield* wakes(
           settleAutomationRun(fired.value.id, {
             status: AUTOMATION_RUN_STATUS.FAILED,

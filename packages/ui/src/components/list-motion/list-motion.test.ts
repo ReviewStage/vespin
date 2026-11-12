@@ -55,18 +55,22 @@ interface Played {
 let root: Root | undefined;
 let played: Played[] = [];
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 beforeEach(() => {
   played = [];
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[], timing: KeyframeAnimationOptions) {
       let canceled = false;
-      const motion = {
-        onfinish: null as (() => void) | null,
+
+      const motion: Motion = {
+        onfinish: null,
         cancel: () => {
           canceled = true;
         },
       };
+
       played.push({
         element: this,
         keyframes,
@@ -74,6 +78,7 @@ beforeEach(() => {
         finish: () => motion.onfinish?.(),
         stopped: () => canceled,
       });
+
       return motion;
     },
   });
@@ -82,18 +87,23 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     const list = this.parentElement;
+
     // Note that a row taken out of the layout is drawn nowhere, as a browser draws it: an empty box at the window's corner.
     if (!this.matches("li") || list === null || this.style.display === "none") {
       return new DOMRect(0, 0, 0, 0);
     }
+
     const laidOut = [...list.children].filter(
       (each) => each instanceof HTMLElement && each.style.position !== "absolute",
     );
+
     const column = [...(list.parentElement?.children ?? [])].indexOf(list);
+
     const top =
       this.style.position === "absolute"
         ? Number.parseFloat(this.style.top)
         : laidOut.indexOf(this) * ROW;
+
     return new DOMRect(column * COLUMN, top, COLUMN, ROW);
   });
 });
@@ -102,6 +112,7 @@ afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
+
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   Reflect.deleteProperty(Element.prototype, "animate");
   vi.restoreAllMocks();
@@ -110,6 +121,7 @@ afterEach(() => {
 /** One list's rows, each by its key, drawn on while it leaves. */
 function Rows({ keys }: { keys: readonly string[] }): React.JSX.Element {
   const drawn = useLeaving(keys, (key) => key);
+
   return createElement(
     "ul",
     motionRows(),
@@ -130,11 +142,13 @@ function Lists({
   scene?: string | undefined;
 }): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
+
   const drawn = createElement(
     "div",
     { ref: box },
     lists.map((keys, at) => createElement(Rows, { key: String(at), keys })),
   );
+
   return moving ? createElement(ListMotion, { root: box, reading, scene, children: drawn }) : drawn;
 }
 
@@ -153,9 +167,11 @@ function draw(
       document.documentElement.style.setProperty(name, value);
     }
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Lists, { lists, moving, reading, scene })));
+
   return (next, stillReading = false, nextScene = scene) =>
     act(() =>
       root?.render(
@@ -207,15 +223,18 @@ test("a row arriving fades in and slides in from the leading edge, and the row i
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
   const show = draw([["A", "B"]]);
   const box = document.querySelector("ul")?.parentElement;
+
   if (!(box instanceof HTMLElement)) throw new Error("no list box");
   Object.defineProperty(box, "offsetWidth", { configurable: true, value: COLUMN });
   Object.defineProperty(box, "offsetHeight", { configurable: true, value: 4 * ROW });
   const drawnAsLaidOut = vi.mocked(HTMLElement.prototype.getBoundingClientRect);
   const laidOut = drawnAsLaidOut.getMockImplementation();
+
   if (laidOut === undefined) throw new Error("no layout given");
   drawnAsLaidOut.mockImplementation(function (this: HTMLElement) {
     if (this === box) return new DOMRect(0, 0, COLUMN / 2, (4 * ROW) / 2);
     const { x, y, width, height } = laidOut.call(this);
+
     return new DOMRect(x / 2, y / 2, width / 2, height / 2);
   });
 
@@ -243,6 +262,7 @@ test("rows arriving together arrive a stagger apart", () => {
   const delays = ["B", "C"].map(
     (key) => played.find((each) => each.element === rowOf(key))?.timing.delay,
   );
+
   expect(delays).toEqual([0, 32]);
 });
 
@@ -270,9 +290,11 @@ test("while the lists are still read, rows arriving fade in where they stand, to
   for (const key of ["B", "C", "D"]) {
     expect(motionsOf(rowOf(key))).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   }
+
   const delays = ["B", "C"].map(
     (key) => played.find((each) => each.element === rowOf(key))?.timing.delay,
   );
+
   expect(delays).toEqual([0, 0]);
 });
 
@@ -381,14 +403,17 @@ test("a list whose rows scale rather than slide scales a leaving row out where i
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
+
   function Chips({ keys }: { keys: readonly string[] }): React.JSX.Element {
     const box = useRef<HTMLDivElement>(null);
+
     return createElement(ListMotion, {
       root: box,
       way: LIST_MOTION_WAY.SCALE,
       children: createElement("div", { ref: box }, createElement(Rows, { keys })),
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Chips, { keys: ["A", "B"] })));
@@ -407,11 +432,14 @@ test("the rows under a fold glide down as a press opens it, and up once its body
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
+
   // Note that the fold keeps its own state and its body is a row of the list, so only the fold draws the commits that move the row under it.
   let toggle = (): void => undefined;
+
   function Folded(): React.JSX.Element {
     const { state } = useDisclosureFold(false);
     toggle = state.toggle;
+
     return createElement(
       "ul",
       motionRows(),
@@ -420,13 +448,16 @@ test("the rows under a fold glide down as a press opens it, and up once its body
       createElement("li", { key: "under" }, "Under"),
     );
   }
+
   function Sidebar(): React.JSX.Element {
     const box = useRef<HTMLDivElement>(null);
+
     return createElement(ListMotion, {
       root: box,
       children: createElement("div", { ref: box }, createElement(Folded)),
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Sidebar)));

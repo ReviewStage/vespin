@@ -15,6 +15,7 @@ const listeners = new Set<() => void>();
 /** Hears each move of a fixture run's stage until the returned call stops it. */
 export function onFixtureMoved(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };

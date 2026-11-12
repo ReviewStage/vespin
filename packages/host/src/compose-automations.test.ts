@@ -181,42 +181,52 @@ const CREATE = {
   action: SUMMARY.action,
 };
 
+type Replies = {
+  change: Effect.Success<ReturnType<AutomationsClient["change"]>>;
+  create: Effect.Success<ReturnType<AutomationsClient["create"]>>;
+  createAnswered: Effect.Effect<void>;
+  run: Effect.Success<ReturnType<AutomationsClient["runNow"]>>;
+};
+
+type Live = {
+  readonly list: PolledLive<"automations", typeof LIVE_SIGNED_OUT>;
+  readonly workspaceRuns: PolledLive<"runs">;
+  /** What the runs' live read answers first, and what a poll past it answers; not found, and held, where unsaid. */
+  runs?: AutomationRunsLiveAnswer;
+  runsPolled?: { readonly failure: typeof AUTOMATION_CALL_FAILURE.NOT_FOUND };
+};
+
 /** The service as a script that writes down every ask it hears, as the ask runs. */
 function fakeService(options: { replaceRefused?: boolean } = {}) {
   const asked: unknown[] = [];
+
   /** The live reads as the service answers them polled (`testing/polled-live.ts`): a workspace's list, every run of it, and one automation's runs. */
-  const live: {
-    readonly list: PolledLive<"automations", typeof LIVE_SIGNED_OUT>;
-    readonly workspaceRuns: PolledLive<"runs">;
-    /** What the runs' live read answers first, and what a poll past it answers; not found, and held, where unsaid. */
-    runs?: AutomationRunsLiveAnswer;
-    runsPolled?: { readonly failure: typeof AUTOMATION_CALL_FAILURE.NOT_FOUND };
-  } = {
+  const live: Live = {
     list: polledLive<"automations", typeof LIVE_SIGNED_OUT>(["automations"]),
     workspaceRuns: polledLive<"runs">(["runs"]),
   };
+
   // A workspace with no automations, and none of their runs, until a test says otherwise.
   live.list.set({ automations: [] });
   live.workspaceRuns.set({ runs: [] });
+
   /** What a change, a create, and a Run now answer, and what a create waits on before it answers, which a test may replace. */
-  const replies: {
-    change: Effect.Success<ReturnType<AutomationsClient["change"]>>;
-    create: Effect.Success<ReturnType<AutomationsClient["create"]>>;
-    createAnswered: Effect.Effect<void>;
-    run: Effect.Success<ReturnType<AutomationsClient["runNow"]>>;
-  } = {
+  const replies: Replies = {
     change: { automation: SUMMARY },
     create: { automation: SUMMARY },
     createAnswered: Effect.void,
     run: { failure: AUTOMATION_CALL_FAILURE.NOT_FOUND },
   };
+
   const answer =
     <A>(name: string, value: () => A) =>
     (params: Parameters<AutomationsClient[keyof AutomationsClient]>[0]) =>
       Effect.sync(() => {
         asked.push([name, params]);
+
         return value();
       });
+
   const client: AutomationsClient = {
     create: (params) =>
       Effect.andThen(
@@ -244,6 +254,7 @@ function fakeService(options: { replaceRefused?: boolean } = {}) {
               ? live.list.poll(poll.after)
               : Effect.sync(() => {
                   asked.push(["list-live", params.workspaceId, params.userId]);
+
                   return live.list.first();
                 });
           case AUTOMATION_RUNS_READ.name:
@@ -254,6 +265,7 @@ function fakeService(options: { replaceRefused?: boolean } = {}) {
                   Effect.as(Effect.repeat(Effect.yieldNow, { times: 20 }), live.runsPolled)
               : Effect.sync(() => {
                   asked.push(["runs-live", params.id, params.userId]);
+
                   return live.runs ?? { failure: AUTOMATION_CALL_FAILURE.NOT_FOUND };
                 });
           case AUTOMATION_WORKSPACE_RUNS_READ.name:
@@ -265,6 +277,7 @@ function fakeService(options: { replaceRefused?: boolean } = {}) {
         }
       })) as AutomationsClient["liveRead"],
   };
+
   return { client, asked, live, replies };
 }
 
@@ -274,6 +287,7 @@ function subject(
   return Effect.gen(function* () {
     const service = fakeService(options);
     const emitted: { kind: GatewayEventKind; payload: WireValue }[] = [];
+
     const composer = yield* composeAutomations({
       kernel: {
         runMode: { sendsNetwork: options.sendsNetwork ?? true },
@@ -288,25 +302,31 @@ function subject(
       client: service.client,
       pool: yield* entityPool(),
     }).pipe(Effect.provide(noNetwork));
+
     /** One window's hold on what `key` names, for the caller's scope. */
     const hold = (key: AutomationFollow) => composer.acts.AUTOMATIONS_FOLLOW.hold(key);
+
     /** Each time `read`'s slice was told, in order. */
     const toldOf = <Read extends keyof AppAutomationReads>(read: Read) =>
       // SAFETY: the host tells each automations slice whole, as built.
       tellingsOf(emitted, read) as AppAutomationReads[Read][];
+
     /** What the held reads told the windows' app state, in order. */
     const told = () =>
       emitted.flatMap((each) =>
         each.kind === GATEWAY_EVENT.LIVE_READ_CHANGED ? [each.payload] : [],
       );
+
     /** The workspace's list as each tell laid it, by its automations' ids and whether each is on, where it held rows. */
     const listed = () =>
       toldOf(LIVE_READ.AUTOMATIONS).flatMap((held) => {
         const automations = held[WORKSPACE_ID]?.rows;
+
         return automations === undefined
           ? []
           : [automations.map(({ id, enabled }) => ({ id, enabled }))];
       });
+
     return {
       hold,
       /** The composer's declared acts, each handed its input as the port reads it. */
@@ -352,10 +372,12 @@ it.effect(
 
       const made = yield* acts.AUTOMATIONS_CREATE(CREATE);
       const changed = yield* acts.AUTOMATIONS_CHANGE(change);
+
       const ran = yield* acts.AUTOMATIONS_RUN({
         ...named,
         idempotencyKey: "4d5e6f70-8192-4a3b-9c4d-5e6f708192a3",
       });
+
       const deleted = yield* acts.AUTOMATIONS_DELETE(named);
 
       assert.deepEqual(made, { automation: SUMMARY });
@@ -391,10 +413,12 @@ it.effect(
         ...CREATE,
         trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
       });
+
       const changed = yield* acts.AUTOMATIONS_CHANGE({
         ...named,
         change: { trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK } },
       });
+
       const made = yield* acts.AUTOMATIONS_NEW_WEBHOOK_SECRET(named);
       const refused = yield* refusing.acts.AUTOMATIONS_NEW_WEBHOOK_SECRET(named);
       const unasked = yield* closed.acts.AUTOMATIONS_NEW_WEBHOOK_SECRET(named);
@@ -419,9 +443,11 @@ it.effect(
       );
       assert.ok(!JSON.stringify(asked).includes(secret), "the service is sent the hash alone");
       assert.ok(told().length > 1, "the writes were drawn on the held list");
+
       for (const minted of [secret, "secret-the-service-made", "secret-a-change-made"]) {
         assert.ok(!JSON.stringify(told()).includes(minted), "no window's app state holds a secret");
       }
+
       assert.deepEqual(refused, { failure: AUTOMATION_CALL_FAILURE.NOT_PERMITTED });
       assert.deepEqual(unasked, { failure: AUTOMATION_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(closed.asked, []);
@@ -519,10 +545,12 @@ it.effect("a run's agent passing its grace with no row moving is redrawn on the 
     live.runs = { ...POLLED_RUNS, queries: { runs: { ...rows, rows: [STARTING_RUN] } } };
     yield* hold(RUNS);
     yield* settled;
+
     const statuses = () =>
       toldOf(LIVE_READ.AUTOMATION_RUNS).map((held) =>
         held[AUTOMATION_ID]?.rows?.map((run) => run.agent?.status),
       );
+
     assert.deepEqual(statuses(), [[AGENT_STATUS.STARTING]]);
 
     yield* TestClock.adjust(Duration.millis(STARTING_GRACE_MILLIS + 1));
@@ -546,12 +574,14 @@ it.effect(
 
       replies.change = { automation: { ...SUMMARY, enabled: false }, txid: "2" };
       const from = listed().length;
+
       const off = yield* Effect.forkChild(
         acts.AUTOMATIONS_CHANGE({
           automationId: AUTOMATION_ID,
           change: { enabled: false },
         }),
       );
+
       yield* settled;
       // Another window's rename from before the switch landed is answered without it.
       live.list.set({ automations: [{ ...ROW, name: "Triage" }] }, ["3"]);
@@ -621,6 +651,7 @@ it.effect("a Run now answers once its workspace's held runs carry it, as its lis
 
     replies.run = { run: RUN, txid: "2" };
     let answered = false;
+
     const run = yield* Effect.forkChild(
       acts
         .AUTOMATIONS_RUN({
@@ -635,6 +666,7 @@ it.effect("a Run now answers once its workspace's held runs carry it, as its lis
           ),
         ),
     );
+
     yield* settled;
     live.list.set({ automations: [{ ...ROW, runId: RUN.id }] }, ["2"]);
     yield* nextPoll;

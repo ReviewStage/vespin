@@ -210,6 +210,7 @@ test("an automation fired by an event has no next run to name, a schedule with n
     trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
     nextRunAt: null,
   });
+
   assert.deepEqual(automationNext(webhook), { kind: AUTOMATION_NEXT.EVENT });
   assert.deepEqual(automationNext({ ...webhook, enabled: false }), { kind: AUTOMATION_NEXT.OFF });
 });
@@ -242,11 +243,13 @@ test("a run is titled by its agent where the agent has a title, else by what fir
     automationRunTitle(run({ firing: { kind: "schedule", dueAt: 1 } })),
     "Scheduled run",
   );
+
   const sentry = {
     kind: AUTOMATION_TRIGGER.INTEGRATION,
     provider: TRIGGER_PROVIDER.SENTRY,
     event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
   } as const;
+
   assert.equal(
     automationRunTitle(
       run({ agent: null, firing: { ...sentry, subject: { id: "4001", title: "TypeError" } } }),
@@ -257,12 +260,14 @@ test("a run is titled by its agent where the agent has a title, else by what fir
     automationRunTitle(run({ agent: null, firing: { ...sentry, subject: { id: "4001" } } })),
     "Sentry event",
   );
+
   const github = {
     kind: AUTOMATION_TRIGGER.GITHUB,
     event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
     repository: "acme/app",
     number: 42,
   } as const;
+
   assert.equal(
     automationRunTitle(run({ agent: null, firing: { ...github, title: "Fix the refresh" } })),
     "Fix the refresh",
@@ -273,6 +278,7 @@ test("a run is titled by its agent where the agent has a title, else by what fir
 test("an agent's run is placed among the runs that started an agent, each agent once, counted from the oldest", () => {
   const started = (id: string, agentId: string) =>
     run({ id, agent: { id: agentId, title: null, status: AGENT_STATUS.COMPLETED } });
+
   // Newest first, as the runs are read: a skipped run, and an agent handed two runs.
   const runs = [
     started("r5", "agent-c"),
@@ -351,12 +357,14 @@ test("a run's line says why it did not start, else where its agent stands, or th
     ),
     "Failed: the sandbox or checkout failed",
   );
+
   const keyRefused = run({
     agent: {
       ...agent(AGENT_STATUS.FAILED),
       failureReason: AGENT_FAILURE.PROVIDER_KEY,
     },
   });
+
   assert.equal(
     automationRunLine(keyRefused, "its creator"),
     "Failed: its creator's API key was refused or cannot be read",
@@ -367,6 +375,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
     "Failed: your API key was refused or cannot be read",
     "the reader's own key names no path to a Settings page",
   );
+
   const onTeammatesAgent = run({
     agent: {
       ...agent(AGENT_STATUS.FAILED),
@@ -374,6 +383,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
       ownKey: false,
     },
   });
+
   assert.equal(
     automationRunLine(onTeammatesAgent),
     "Failed: its owner's API key was refused or cannot be read",
@@ -442,6 +452,7 @@ test("an integration's skipped run is titled by its subject, and a same-subject 
       url: "https://acme.sentry.io/issues/4711/",
     },
   } as const;
+
   const skipped = run({
     firing,
     status: AUTOMATION_RUN_STATUS.SKIPPED,

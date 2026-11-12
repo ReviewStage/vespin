@@ -39,6 +39,7 @@ export function handleAdminFavorite(
   const { favorite, query } = options;
 
   const userId = adminUserId(query.id);
+
   if (userId === undefined) return Effect.fail(ADMIN_REFUSAL.MISSING_USER_ID);
 
   return options.writeFavorite(options.viewer.userId, userId, favorite).pipe(

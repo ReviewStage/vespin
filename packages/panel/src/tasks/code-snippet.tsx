@@ -36,15 +36,19 @@ function useNearView(): [(element: HTMLElement | null) => void, boolean] {
   const [element, setElement] = useState<HTMLElement | null>(null);
   useEffect(() => {
     if (near || element === null) return undefined;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) setNear(true);
       },
       { rootMargin: NEAR_VIEW_MARGIN },
     );
+
     observer.observe(element);
+
     return () => observer.disconnect();
   }, [near, element]);
+
   return [setElement, near];
 }
 
@@ -69,7 +73,9 @@ export function CodeSnippet({ code }: { code: SnippetLines }): React.JSX.Element
   const look = useSnippetLook();
   const patch = snippetPatch(code);
   const drawn = snippetRange(code);
+
   if (patch === undefined || drawn === undefined) return null;
+
   if (!near) {
     return (
       <div
@@ -82,6 +88,7 @@ export function CodeSnippet({ code }: { code: SnippetLines }): React.JSX.Element
       />
     );
   }
+
   return (
     <PierreDiff
       patch={patch}

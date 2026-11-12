@@ -38,16 +38,20 @@ export function keptPagesAfter(
   const latest = Math.max(0, ...standing.map((each) => each.shown));
   const at = standing.findIndex((each) => sameTab(each.tab, shown));
   let next = standing;
+
   if (shown !== undefined && at === -1) next = [...standing, { tab: shown, shown: latest + 1 }];
   else if (at !== -1 && standing[at]?.shown !== latest) {
     next = standing.map((each, index) => (index === at ? { ...each, shown: latest + 1 } : each));
   }
+
   // Note that the page shown is the one shown last, so it is never the one let go.
   if (next.length > KEPT_PAGES) {
     const oldest = Math.min(...next.map((each) => each.shown));
     next = next.filter((each) => each.shown !== oldest);
   }
+
   const unchanged =
     next.length === kept.length && next.every((each, index) => each === kept[index]);
+
   return unchanged ? kept : next;
 }

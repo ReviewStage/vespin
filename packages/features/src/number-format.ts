@@ -56,14 +56,18 @@ export function formatCompact(value: number): string {
 /** A size in bytes as a line says it: "300 B", "4.2 kB", "48 kB", "1.5 MB", counted in thousands. */
 export function formatBytes(bytes: number): string {
   const size = Math.max(0, bytes);
+
   if (size < KILOBYTE) return `${Math.round(size)} B`;
+
   const [span, unit] =
     size < MEGABYTE
       ? ([KILOBYTE, "kB"] as const)
       : size < GIGABYTE
         ? ([MEGABYTE, "MB"] as const)
         : ([GIGABYTE, "GB"] as const);
+
   const figure = size / span;
+
   return `${figure < WHOLE_FROM ? figure.toFixed(1) : Math.round(figure)} ${unit}`;
 }
 
@@ -78,6 +82,7 @@ export function formatExactBytes(bytes: number): string {
  */
 export function formatPercent(fraction: number | null, places = 0): string {
   if (fraction === null) return NO_SHARE;
+
   return `${(fraction * 100).toFixed(places)}%`;
 }
 
@@ -88,5 +93,6 @@ export function formatPercent(fraction: number | null, places = 0): string {
  */
 export function formatUsd(value: number): string {
   if (value > 0 && value < 0.005) return "<$0.01";
+
   return Math.abs(value) >= WHOLE_DOLLARS_FROM ? DOLLARS.format(value) : CENTS.format(value);
 }

@@ -1,6 +1,7 @@
 // pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as small pills under it.
 
 import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   background,
   buttonStyle,
@@ -9,7 +10,6 @@ import {
   lineLimit,
   monospacedDigit,
   padding,
-  shapes,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
@@ -46,6 +46,7 @@ type PullRequestCardProps = {
 /** A line count as the card ends with it: "+1.9k", "−312". */
 function lineCount(sign: string, count: number): string {
   const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
+
   return `${sign}${short}`;
 }
 
@@ -67,14 +68,19 @@ export function PullRequestCard({
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
   const count = [font({ textStyle: TYPE_ROLE.TIME }), monospacedDigit()];
+
   const card = (
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
         padding({ horizontal: SPACE.EDGE - 4, vertical: SPACE.ROW }),
-        background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+        ),
         strokeBorder({
           content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
           shape: "roundedRectangle",
           cornerRadius: RADIUS.CARD,
           style: { lineWidth: HAIRLINE },
@@ -104,6 +110,7 @@ export function PullRequestCard({
       )}
     </HStack>
   );
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {onOpen === undefined ? (

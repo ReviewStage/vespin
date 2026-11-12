@@ -104,6 +104,7 @@ function pinItem(pin: TabPin, subject: ShortcutSubject): MenuAction {
   const pinned = pin.agent === true ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.UNPIN_TAB;
   const unpinned = pin.agent === true ? PANEL_COMMAND.PIN_AGENT : PANEL_COMMAND.PIN_TAB;
   const command = pin.pinned ? pinned : unpinned;
+
   return {
     ...commandAction(command, pin.onToggle, subject),
     label: `${command.verb} ${command.noun}`,
@@ -201,6 +202,7 @@ export function handedCommand(
   for (const action of groups.flat()) {
     if ("onSelect" in action && actingCommand(action) === command) return action.onSelect;
   }
+
   return undefined;
 }
 
@@ -213,6 +215,7 @@ function tabActionItems(
     group.map((action) => {
       if (!("onAsk" in action)) return action;
       const { onAsk, ...item } = action;
+
       return { ...item, onSelect: () => onAsk(opener) };
     }),
   );
@@ -230,14 +233,18 @@ function tabActionItems(
  */
 function tabActionGroups(doors: TabDoors): TabActionGroups {
   const { onClose } = doors;
+
   const close: MenuAction[] =
     onClose === undefined ? [] : [commandAction(PANEL_COMMAND.CLOSE_TAB, onClose, doors.subject)];
+
   const pin: MenuAction[] = doors.pin === undefined ? [] : [pinItem(doors.pin, doors.subject)];
+
   // Note that Close others stands only where it would close something, and never on the Plan tab, whose menu is the task's.
   const closeOthers: MenuAction[] =
     doors.onCloseOthers === undefined || doors.document !== undefined
       ? []
       : [commandAction(PANEL_COMMAND.CLOSE_OTHER_TABS, doors.onCloseOthers, doors.subject)];
+
   return [[...close, ...closeOthers, ...pin], ...tabContentGroups(doors)].filter(
     (group) => group.length > 0,
   );
@@ -252,7 +259,9 @@ function tabActionGroups(doors: TabDoors): TabActionGroups {
 function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
   const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, links, subject } =
     doors;
+
   if (doors.document !== undefined) return doors.document.groups().map((group) => [...group]);
+
   return agentMenuGroups({
     subject,
     links,
@@ -276,9 +285,11 @@ function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
  */
 function tabContentGroups(doors: TabDoors): TabActionGroups {
   const { handed, links } = doors;
+
   if (handed === undefined || links === undefined || links.length === 0) {
     return [...(handed ?? []), ...contentActionGroups(doors)].filter((group) => group.length > 0);
   }
+
   return [[...links], ...handed, ...contentActionGroups({ ...doors, links: undefined })].filter(
     (group) => group.length > 0,
   );
@@ -287,7 +298,9 @@ function tabContentGroups(doors: TabDoors): TabActionGroups {
 /** Whether two items draw alike: named, said, and standing the same, a submenu by its items, and a panel by its name alone, since it draws its own. */
 function sameAction(one: TabAction, other: TabAction | undefined): boolean {
   if (other === undefined || one.label !== other.label) return false;
+
   if ("panel" in one || "panel" in other) return "panel" in one && "panel" in other;
+
   if ("items" in one || "items" in other) {
     return (
       "items" in one &&
@@ -296,6 +309,7 @@ function sameAction(one: TabAction, other: TabAction | undefined): boolean {
       one.items.every((item, at) => sameAction(item, other.items[at]))
     );
   }
+
   return (
     one.detail === other.detail &&
     one.disabled === other.disabled &&
@@ -311,10 +325,12 @@ function sameAction(one: TabAction, other: TabAction | undefined): boolean {
 /** Whether two hands of actions draw alike: the same items in the same groups, in the same order. */
 function sameActions(a: TabActionGroups | undefined, b: TabActionGroups | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return (
     a.length === b.length &&
     a.every((group, at) => {
       const other = b[at];
+
       return (
         other !== undefined &&
         group.length === other.length &&
@@ -332,20 +348,25 @@ function throughLatest(
   return actions.map((group, at) =>
     group.map((action, place) => {
       const now = () => latest.current?.[at]?.[place];
+
       if ("items" in action || "panel" in action) return action;
+
       if ("onAsk" in action) {
         return {
           ...action,
           onAsk: (opener: HTMLElement) => {
             const held = now();
+
             if (held !== undefined && "onAsk" in held) held.onAsk(opener);
           },
         };
       }
+
       return {
         ...action,
         onSelect: () => {
           const held = now();
+
           if (held !== undefined && "onSelect" in held) held.onSelect();
         },
       };
@@ -415,6 +436,7 @@ function useShownTab(
       subject: { kind, id },
       groups: (opener) => tabActionItems(groups.current, opener),
     });
+
     return () => onShown(undefined);
   }, [onShown, selected, label, kind, id]);
 }
@@ -467,6 +489,7 @@ export function DoorsTab({
 }): React.JSX.Element {
   const content = tabContentGroups(doors);
   useShownTab(onShown, look, content, doors.subject);
+
   return (
     <MenuTab
       {...look}
@@ -553,6 +576,7 @@ export function AddTabButton({
     setOpen(false);
     opener.current?.focus();
   };
+
   const pick = (id: string) => {
     const entry = entries.find((each) => each.row.id === id);
     close();
@@ -572,8 +596,10 @@ export function AddTabButton({
           onClick={() => {
             if (open) {
               close();
+
               return;
             }
+
             setOpen(true);
             onOpen?.();
           }}
@@ -613,6 +639,7 @@ export type TranscriptCopier = (read: TranscriptRead) => (copy: TranscriptCopy) 
 export function useTranscriptCopier(): TranscriptCopier {
   const copyWithToast = useCopyToast();
   const toast = useToast();
+
   const unread = (cause: unknown) =>
     toast({
       words: TRANSCRIPT_UNREAD_NOTE,
@@ -620,10 +647,13 @@ export function useTranscriptCopier(): TranscriptCopier {
       failure: { surface: FAILURE_SURFACE.TRANSCRIPT_COPY, cause },
       replayUnmasked: true,
     });
+
   return (read) => (copy) => {
     read().then((transcript) => {
       if (transcript === undefined) return unread(FAILURE_CONDITION.UNREAD);
+
       if ("unread" in transcript) return unread(transcript.unread);
+
       return copyWithToast(transcriptMarkdown(transcript, copy), TRANSCRIPT_COPIED_NOTE);
     }, unread);
   };
@@ -656,8 +686,11 @@ function sameTitles(
   b: ReadonlyMap<string, string> | undefined,
 ): boolean {
   if (a === b) return true;
+
   if (a === undefined || b === undefined || a.size !== b.size) return false;
+
   for (const [key, title] of a) if (b.get(key) !== title) return false;
+
   return true;
 }
 
@@ -672,37 +705,46 @@ function sameTitles(
  */
 export function useTabViews(): TabViews {
   const [standings, setStandings] = useState<WorkerStandings>(() => new Map());
+
   const [kept] = useState(() => ({
     agents: new Map<string, HeldTranscript>(),
     workers: new Map<string, HeldTranscript>(),
   }));
+
   const [held, setHeld] = useState<HeldTranscripts>(() => ({
     agents: kept.agents,
     workers: kept.workers,
   }));
+
   const retitled = useCallback(
     () => setHeld({ agents: kept.agents, workers: kept.workers }),
     [kept],
   );
+
   const onWorkerStatus = useCallback((callId: string, status: AgentStatus) => {
     setStandings((was) => (was.get(callId) === status ? was : new Map(was).set(callId, status)));
   }, []);
+
   const onAgentHeld = useCallback(
     (agentId: string, transcript: HeldTranscript) => {
       const was = kept.agents.get(agentId);
       kept.agents.set(agentId, transcript);
+
       if (!sameTitles(was?.subagentTitles, transcript.subagentTitles)) retitled();
     },
     [kept, retitled],
   );
+
   const onWorkerHeld = useCallback(
     (callId: string, transcript: HeldTranscript) => {
       const was = kept.workers.get(callId);
       kept.workers.set(callId, transcript);
+
       if (was?.title !== transcript.title) retitled();
     },
     [kept, retitled],
   );
+
   // The same views across draws while nothing held moves, so the panes they are handed to hold.
   return useMemo(
     () => ({ held, standings, onAgentHeld, onWorkerHeld, onWorkerStatus }),

@@ -58,11 +58,14 @@ const upsertHold = SqlSchema.findOne({
     const forgotten = sql`${forgottenBefore.toISOString()}::timestamptz`;
     // The strike this refusal counts as: the standing one while its hold stands, the first again where it lifted long ago, else the next.
     const strikes = sql`(case when ${githubRateHold.heldUntil} > ${at} then ${githubRateHold.strikes} when ${githubRateHold.heldUntil} < ${forgotten} then 1 else ${githubRateHold.strikes} + 1 end)`;
+
     const table = sql`(array[${sql.join(
       waits.map((wait) => sql`${wait}`),
       sql`, `,
     )}]::bigint[])`;
+
     const wait = sql`${table}[least(${strikes}, cardinality(${table}))]`;
+
     return Database.use((db) =>
       db
         .insert(githubRateHold)

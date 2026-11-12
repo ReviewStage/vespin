@@ -51,12 +51,14 @@ const DM_CHANNEL = "D0001";
 /** A Slack that knows every member by their email and writes down each message posted, by its arguments, each under a timestamp of its own. */
 function recordingSlack() {
   const posted: Readonly<Record<string, string>>[] = [];
+
   const api: SlackWebApi = (method, args) => {
     switch (method) {
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: SLACK_USER } });
       case "chat.postMessage":
         posted.push(args);
+
         return Effect.succeed({
           ok: true,
           channel: DM_CHANNEL,
@@ -66,6 +68,7 @@ function recordingSlack() {
         return Effect.fail(new SlackBotFailure({ method }));
     }
   };
+
   return { api, posted };
 }
 
@@ -79,6 +82,7 @@ const runOn = (automation: Pick<Automation, "id" | "userId">, agentId: string, f
         firedAt: new Date(firedAt),
       }),
     );
+
     assert.ok(yield* attachRunAgent(run.id, agentId));
   });
 
@@ -96,6 +100,7 @@ const openDeliveringRun = () =>
       teamName: "Team",
       userId: member,
     });
+
     const automation = Option.getOrThrow(
       yield* createAutomation(member, {
         organizationId,
@@ -108,6 +113,7 @@ const openDeliveringRun = () =>
         slackDelivery: true,
       }),
     );
+
     const run = Option.getOrThrow(
       yield* recordAutomationRun(automation, {
         dedupeKey: randomUUID(),
@@ -115,7 +121,9 @@ const openDeliveringRun = () =>
         firedAt: new Date(T0 - 60_000),
       }),
     );
+
     const { id: taskId } = yield* createTask(member, { organizationId, name: "Inbox digest" });
+
     const agent = Option.getOrThrow(
       yield* createAgent(member, {
         taskId,
@@ -130,7 +138,9 @@ const openDeliveringRun = () =>
         payer: AGENT_PAYER.API_KEY,
       }),
     ).agent;
+
     assert.ok(yield* attachRunAgent(run.id, agent.id));
+
     return { agent, automation, organizationId };
   });
 
@@ -142,6 +152,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         const slack = recordingSlack();
         const bot = slackBotOver(slack.api);
         const { agent } = yield* openDeliveringRun();
+
         const delivering = Layer.succeed(SettledTurnListener, {
           heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
         });
@@ -183,6 +194,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
       const slack = recordingSlack();
       const bot = slackBotOver(slack.api);
       const { agent } = yield* openDeliveringRun();
+
       const delivering = Layer.succeed(SettledTurnListener, {
         heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
       });
@@ -204,6 +216,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         const slack = recordingSlack();
         const bot = slackBotOver(slack.api);
         const { agent, automation, organizationId } = yield* openDeliveringRun();
+
         const posting = Layer.succeed(SettledTurnListener, {
           heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
         });

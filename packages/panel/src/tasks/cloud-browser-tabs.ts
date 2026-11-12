@@ -93,6 +93,7 @@ export function noteOpenedCloudTab(
   const key = browserTabsPlaceId(place);
   changeOwned(account, (owned) => {
     const standing = (owned.opened.get(key) ?? NO_TABS).filter((each) => each.id !== tab.id);
+
     return { ...owned, opened: new Map(owned.opened).set(key, [...standing, tab]) };
   });
 }
@@ -109,6 +110,7 @@ export function startCloudDraft(
     ...owned,
     drafts: new Map(owned.drafts).set(key, [...(owned.drafts.get(key) ?? NO_DRAFTS), draft]),
   }));
+
   return draft;
 }
 
@@ -120,6 +122,7 @@ export function discardCloudDraft(
 ): void {
   const key = browserTabsPlaceId(place);
   const drafts = ownedOf(held.state, account).drafts.get(key) ?? NO_DRAFTS;
+
   if (!drafts.some((each) => each.id === draftId)) return;
   changeOwned(account, (owned) => ({
     ...owned,
@@ -137,9 +140,11 @@ export function useCloudBrowserDrafts(
 ): readonly CloudBrowserDraft[] {
   const account = useWindowAccount();
   const key = place === undefined ? undefined : browserTabsPlaceId(place);
+
   const read = useSelector(held, (all) =>
     key === undefined ? NO_DRAFTS : (ownedOf(all, account).drafts.get(key) ?? NO_DRAFTS),
   );
+
   return listing ? read : NO_DRAFTS;
 }
 
@@ -149,6 +154,7 @@ function withOpened(
   mine: readonly AgentBrowserTab[],
 ): readonly AgentBrowserTab[] {
   const pending = mine.filter((tab) => !listed.some((each) => each.id === tab.id));
+
   return pending.length === 0 ? listed : [...listed, ...pending];
 }
 
@@ -167,17 +173,23 @@ export function useCloudBrowserTabs(
   const listed = useQuery(browserTabsQuery(listing ? place : undefined)).data;
   const account = useWindowAccount();
   const key = place === undefined ? undefined : browserTabsPlaceId(place);
+
   const mine = useSelector(held, (all) =>
     key === undefined ? NO_TABS : (ownedOf(all, account).opened.get(key) ?? NO_TABS),
   );
+
   useEffect(() => {
     if (key === undefined || listed === undefined || mine.length === 0) return;
     const left = mine.filter((tab) => !listed.some((each) => each.id === tab.id));
+
     if (left.length < mine.length) {
       changeOwned(account, (owned) => ({ ...owned, opened: new Map(owned.opened).set(key, left) }));
     }
   }, [account, key, listed, mine]);
+
   if (!listing) return NO_TABS;
+
   if (listed === undefined) return mine.length === 0 ? undefined : mine;
+
   return withOpened(listed, mine);
 }

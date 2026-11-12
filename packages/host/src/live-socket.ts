@@ -158,6 +158,7 @@ function responseOf(
     answer.body === ""
       ? new Response(null, { status: answer.status })
       : new Response(answer.body, { status: answer.status, headers: JSON_HEADERS });
+
   return HttpClientResponse.fromWeb(request, response);
 }
 
@@ -172,6 +173,7 @@ export function liveSocketClient(
   return Effect.gen(function* () {
     const { http } = options;
     const socketOrigin = webSocketOrigin(options.serviceBaseUrl);
+
     if (socketOrigin === undefined) return http;
     const serviceOrigin = new URL(options.serviceBaseUrl).origin;
     // The upgrade names the build as a call's headers do, in its query, since a browser's socket can carry no header of its own.
@@ -185,12 +187,15 @@ export function liveSocketClient(
       Effect.gen(function* () {
         if (standing.ended) return;
         standing.ended = true;
+
         if (connection.kind === CONNECTION.OPEN && connection.standing === standing) {
           connection = NO_CONNECTION;
         }
+
         for (const waiting of standing.waiting.values()) {
           yield* Deferred.fail(waiting, new SocketEnded());
         }
+
         standing.waiting.clear();
         yield* Scope.close(standing.scope, Exit.void);
       });
@@ -200,15 +205,18 @@ export function liveSocketClient(
       Stream.runForEach(standing.socket.arrivals, (arrival) => {
         if (!("text" in arrival)) return Effect.void;
         const answer = readAnswer(unparsedWire(arrival.text));
+
         if (Result.isFailure(answer)) return Effect.void;
         const waiting = standing.waiting.get(answer.success.id);
         standing.waiting.delete(answer.success.id);
+
         return waiting === undefined ? Effect.void : Deferred.succeed(waiting, answer.success);
       }).pipe(Effect.ensuring(end(standing)));
 
     /** A socket opened, with its reader standing; none where the open was refused or reached nothing. */
     const open = Effect.gen(function* () {
       const socketScope = yield* Scope.fork(scope);
+
       const opened = yield* Scope.provide(
         openedUnderCredential(options.credential, options.openSocket, address).pipe(
           Effect.timeoutOrElse({
@@ -218,10 +226,13 @@ export function liveSocketClient(
         ),
         socketScope,
       );
+
       if (!("socket" in opened)) {
         yield* Scope.close(socketScope, Exit.void);
+
         return undefined;
       }
+
       const standing: StandingSocket = {
         socket: opened.socket,
         scope: socketScope,
@@ -229,17 +240,22 @@ export function liveSocketClient(
         waiting: new Map(),
         ended: false,
       };
+
       yield* Effect.forkIn(read(standing), scope);
+
       return standing;
     });
 
     /** The next socket, taking asks once it stands; where its open failed, asks go over HTTP for a while. */
     const openNext = Effect.gen(function* () {
       const opened = yield* open;
+
       if (opened !== undefined) {
         connection = { kind: CONNECTION.OPEN, standing: opened };
+
         return;
       }
+
       const now = yield* Clock.currentTimeMillis;
       connection = {
         kind: CONNECTION.HTTP,
@@ -262,6 +278,7 @@ export function liveSocketClient(
      */
     const socketFor = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
+
       switch (connection.kind) {
         case CONNECTION.OPENING:
           return undefined;
@@ -270,12 +287,15 @@ export function liveSocketClient(
           break;
         case CONNECTION.OPEN: {
           const { standing } = connection;
+
           const fresh =
             now - standing.openedAt < Duration.toMillis(LIVE_SOCKET_BOUNDS.ROTATE_AFTER);
+
           if (!standing.ended && fresh) return standing;
           yield* Effect.forkIn(Effect.delay(end(standing), LIVE_SOCKET_BOUNDS.DRAIN), scope);
           break;
         }
+
         case CONNECTION.NONE:
           break;
         default: {
@@ -283,8 +303,10 @@ export function liveSocketClient(
           throw new Error(`Unknown live socket connection: ${JSON.stringify(unknown)}`);
         }
       }
+
       connection = { kind: CONNECTION.OPENING };
       yield* Effect.forkIn(openNext, scope);
+
       return undefined;
     });
 
@@ -294,13 +316,16 @@ export function liveSocketClient(
         const path = `${url.pathname}${url.search}`;
         const id = nextId++;
         const answered = yield* Deferred.make<LiveSocketAnswer, SocketEnded>();
+
         if (standing.ended) return yield* Effect.fail(new SocketEnded());
         standing.waiting.set(id, answered);
         const asked: LiveSocketAsk = { id, path };
         yield* standing.socket.send({ text: JSON.stringify(asked) });
+
         const within = isHeldRead(url)
           ? LIVE_SOCKET_BOUNDS.ANSWER_WITHIN.HELD
           : LIVE_SOCKET_BOUNDS.ANSWER_WITHIN.USUAL;
+
         return yield* Deferred.await(answered).pipe(
           Effect.mapError((): SocketEnded | SocketStalled => new SocketEnded()),
           Effect.timeoutOrElse({
@@ -319,11 +344,14 @@ export function liveSocketClient(
     const live = (request: HttpClientRequest.HttpClientRequest, url: URL) =>
       Effect.gen(function* () {
         const standing = yield* socketFor;
+
         if (standing === undefined) return yield* http.execute(request);
         const asked = yield* Effect.result(ask(standing, url));
+
         if (Result.isSuccess(asked) && asked.success.status !== UNAUTHORIZED) {
           return responseOf(request, asked.success);
         }
+
         if (Result.isFailure(asked) && asked.failure instanceof SocketStalled) {
           return yield* Effect.fail(
             new HttpClientError.HttpClientError({
@@ -334,7 +362,9 @@ export function liveSocketClient(
             }),
           );
         }
+
         yield* end(standing);
+
         return yield* http.execute(request);
       });
 

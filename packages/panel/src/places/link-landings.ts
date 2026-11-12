@@ -23,6 +23,7 @@ export function useLinkDestinationLandings(open: (link: ReadLink) => void): void
     if (landed.current === location || savesStep(location)) return;
     landed.current = location;
     const routed = landedLinkOf(router, location);
+
     if (routed !== undefined) open(routed.link);
   }, [router, location, open]);
 }

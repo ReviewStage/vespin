@@ -86,6 +86,7 @@ const memoryOn = (workspaceId: string) =>
 /** The memories' procedures, each to a signed-in caller. */
 export function memoriesProcedures(seams: MemoriesProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
+
   return {
     memories: signedIn.memories.effect(function* ({ context, input }) {
       return yield* memoriesAnswer(
@@ -95,9 +96,11 @@ export function memoriesProcedures(seams: MemoriesProcedureSeams) {
 
     forgetMemory: signedIn.forgetMemory.effect(function* ({ context, input }) {
       const { workspaceId, id } = input.query;
+
       const answer = yield* hostedStoreOrUnavailable(
         forgetWorkspaceMemory(context.userId, workspaceId, id),
       );
+
       const answered = yield* memoriesAnswer(answer);
       // Note that a forget retried after it landed answers the same, so it is counted again; the store cannot tell the two apart.
       yield* recordServerEvent(
@@ -105,12 +108,14 @@ export function memoriesProcedures(seams: MemoriesProcedureSeams) {
         { userId: context.userId, workspaceId },
         {},
       );
+
       return answered;
     }),
 
     saveMemory: signedIn.saveMemory.effect(function* ({ context, input }) {
       const { workspaceId, text, replaces } = input;
       yield* memoryOn(workspaceId);
+
       return yield* saveAnswer(
         yield* hostedStoreOrUnavailable(
           saveWorkspaceMemory(context.userId, workspaceId, text, replaces),
@@ -120,12 +125,15 @@ export function memoriesProcedures(seams: MemoriesProcedureSeams) {
 
     searchMemories: signedIn.searchMemories.effect(function* ({ context, input }) {
       yield* memoryOn(input.workspaceId);
+
       const answer = yield* hostedStoreOrUnavailable(
         searchWorkspaceMemories(context.userId, input.workspaceId, input.query),
       );
+
       if (answer.kind === WORKSPACE_MEMORY.NOT_MEMBER) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }
+
       return { memories: answer.memories, total: answer.total };
     }),
   };

@@ -50,6 +50,7 @@ export default function TabsLayout() {
   useMemberPicturesFollow();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
+
   return (
     <NativeTabs
       hidden={appSidebar}

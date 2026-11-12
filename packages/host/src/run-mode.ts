@@ -26,6 +26,7 @@ export interface RunMode {
 export function runModeFor(input: { capture: boolean; fixture: boolean }): RunMode {
   const deterministic = input.capture || input.fixture;
   const interactive = !input.capture;
+
   return {
     requiresAccount: !deterministic,
     observesProviders: !deterministic,

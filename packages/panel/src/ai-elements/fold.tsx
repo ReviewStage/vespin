@@ -32,6 +32,7 @@ export function Fold({
     defaultOpen,
     open === undefined ? undefined : { open, onOpenChange: onOpenChange ?? (() => undefined) },
   );
+
   return (
     <DisclosureScope state={state}>
       <details

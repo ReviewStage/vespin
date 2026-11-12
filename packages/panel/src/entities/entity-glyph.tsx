@@ -17,7 +17,7 @@ import { GLYPH } from "@repo/ui/icons";
  */
 
 /** Each kind's glyph. */
-const ENTITY_GLYPH: { readonly [K in EntityKind]: () => React.JSX.Element } = {
+const ENTITY_GLYPH: Readonly<Record<EntityKind, () => React.JSX.Element>> = {
   [ENTITY_KIND.PLAN]: GLYPH.TASK,
   [ENTITY_KIND.SECTION]: GLYPH.HEADING,
   [ENTITY_KIND.VERSION]: GLYPH.VERSION_CHANGES,
@@ -57,5 +57,6 @@ const ENTITY_GLYPH: { readonly [K in EntityKind]: () => React.JSX.Element } = {
 /** The glyph of an entity of `kind` where nothing more of it is known. */
 export function EntityGlyph({ kind }: { kind: EntityKind }): React.JSX.Element {
   const Glyph = ENTITY_GLYPH[kind];
+
   return <Glyph />;
 }

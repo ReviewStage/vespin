@@ -213,8 +213,10 @@ function askedOf(state: UpdateState): boolean {
  */
 function transition(state: UpdateState, event: UpdateEvent): UpdateState | undefined {
   const moves: readonly UpdateEventKind[] = UPDATE_MOVES[state.status];
+
   if (!moves.includes(event.kind)) return undefined;
   const standing = standingOf(state);
+
   switch (event.kind) {
     case UPDATE_EVENT.CHECK:
       return { status: UPDATE_STATUS.CHECKING, ...standing, asked: event.asked };
@@ -249,10 +251,13 @@ function transition(state: UpdateState, event: UpdateEvent): UpdateState | undef
     case UPDATE_EVENT.FAILED: {
       if (isNetworkErrorMessage(event.message)) {
         const idle = { status: UPDATE_STATUS.IDLE, ...standing, upToDate: false };
+
         return askedOf(state) ? { ...idle, unreachable: true } : idle;
       }
+
       const latestVersion = "latestVersion" in state ? state.latestVersion : undefined;
       const failure = updateFailureOf(event.message);
+
       return {
         status: UPDATE_STATUS.ERROR,
         ...standing,
@@ -260,6 +265,7 @@ function transition(state: UpdateState, event: UpdateEvent): UpdateState | undef
         ...(failure === undefined ? undefined : { failure }),
       };
     }
+
     case UPDATE_EVENT.INSTALL:
       return state.status === UPDATE_STATUS.READY && !state.installing
         ? { ...state, installing: true }
@@ -283,12 +289,16 @@ function snapshotOf(state: UpdateState): UpdateSnapshot {
     case UPDATE_STATUS.CHECKING:
     case UPDATE_STATUS.DOWNLOADING: {
       const { asked: _asked, ...snapshot } = state;
+
       return snapshot;
     }
+
     case UPDATE_STATUS.READY: {
       const { installing: _installing, ...snapshot } = state;
+
       return snapshot;
     }
+
     default:
       return state;
   }
@@ -398,6 +408,7 @@ export class UpdateService {
     return Effect.gen(function* () {
       const scope = yield* Effect.scope;
       const services = yield* Effect.context<never>();
+
       return new UpdateService(options, scope, services);
     });
   }
@@ -471,16 +482,21 @@ export class UpdateService {
    */
   async check({ asked = false }: { asked?: boolean } = {}): Promise<UpdateSnapshot> {
     const engine = this.#engine;
+
     if (!engine) return this.#snapshot;
+
     // Note that a pressed check landing on a run under way joins it rather
     // than asking the feed again, so that run's network failure is said.
     if (asked && this.#send({ kind: UPDATE_EVENT.JOIN })) return this.#snapshot;
+
     if (!this.#send({ kind: UPDATE_EVENT.CHECK, asked })) return this.#snapshot;
+
     try {
       await engine.checkForUpdates();
     } catch (error) {
       this.#fail(error instanceof Error ? error.message : String(error));
     }
+
     return this.#snapshot;
   }
 
@@ -492,14 +508,17 @@ export class UpdateService {
    */
   install(): void {
     const engine = this.#engine;
+
     if (!engine || !this.#send({ kind: UPDATE_EVENT.INSTALL })) return;
     engine.quitAndInstall();
+
     // A quit that never comes (Squirrel doing nothing, or the teardown holding
     // it) must not hold the guard for the rest of the run.
     const lapse = Effect.sync(() => {
       if (!this.#send({ kind: UPDATE_EVENT.INSTALL_LAPSED })) return;
       this.#report("Update install did not restart the app; the restart is offered again");
     });
+
     this.#installLapse?.interruptUnsafe();
     this.#installLapse = Effect.runSyncWith(this.#services)(
       Effect.provideService(scheduleOnce(this.#installGraceMs, lapse), Scope.Scope, this.#scope),
@@ -517,10 +536,13 @@ export class UpdateService {
     this.#life = SERVICE_LIFE.STARTED;
     const previous = this.#lastRunVersion?.read();
     const justUpdated = previous !== undefined && previous !== this.#currentVersion;
+
     if (previous !== this.#currentVersion) this.#lastRunVersion?.write(this.#currentVersion);
+
     if (justUpdated && this.#send({ kind: UPDATE_EVENT.UPDATED, previousVersion: previous })) {
       this.#report(`Updated: ${previous} -> ${this.#currentVersion}`);
     }
+
     const runSync = Effect.runSyncWith(this.#services);
     const work = Effect.sync(() => void this.check());
     // The interval never fires at the fork itself: the whole repeat is
@@ -568,11 +590,15 @@ export class UpdateService {
    */
   #fail(message: string): void {
     const failed = this.#send({ kind: UPDATE_EVENT.FAILED, message });
+
     if (!failed) return;
+
     if (this.#state.status !== UPDATE_STATUS.ERROR) {
       this.#report(`Update check could not reach the feed: ${message}`);
+
       return;
     }
+
     this.#report(`Update failed: ${message}`);
     void this.#engine?.clearCachedUpdate().catch(() => undefined);
   }
@@ -580,16 +606,20 @@ export class UpdateService {
   /** Moves the state where `event` takes it, answering whether the table allowed the move. */
   #send(event: UpdateEvent): boolean {
     const next = transition(this.#state, event);
+
     if (next === undefined) return false;
     this.#state = next;
+
     if (QUIET_EVENTS.has(event.kind)) return true;
     this.#snapshot = snapshotOf(next);
+
     try {
       this.#onChange(this.#snapshot);
     } catch {
       // A listener's failure is its own — a window torn down mid-broadcast
       // must not fail the transition that has already moved.
     }
+
     return true;
   }
 }

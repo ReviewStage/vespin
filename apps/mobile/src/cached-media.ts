@@ -10,10 +10,10 @@ import { File, Paths } from "expo-file-system";
 const WRITING_SUFFIX = ".writing";
 
 /** The extension each video type a read answers is written under. */
-const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
-  [MP4_TYPE]: "mp4",
-  [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
-};
+const VIDEO_EXTENSION: ReadonlyMap<string, string> = new Map([
+  [MP4_TYPE, "mp4"],
+  [CONVERSATION_MEDIA_TYPE.WEBM, "webm"],
+]);
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
@@ -21,10 +21,12 @@ const writing = new Map<string, Promise<string>>();
 /** A video's bytes written under a name of their own and moved into place as `file`, answering its address once they are all on disk. */
 async function written(file: File, name: string, base64: string): Promise<string> {
   const partial = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
   await partial.move(file, { overwrite: true });
+
   return file.uri;
 }
 
@@ -45,13 +47,16 @@ export async function cachedVideo(
   contentType: string,
   base64: string,
 ): Promise<string> {
-  const extension = VIDEO_EXTENSION[contentType];
+  const extension = VIDEO_EXTENSION.get(contentType);
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
   const file = new File(Paths.cache, name);
+
   if (file.exists) return file.uri;
   const under = writing.get(file.uri);
+
   if (under !== undefined) return under;
   const write = written(file, name, base64).finally(() => writing.delete(file.uri));
   writing.set(file.uri, write);
+
   return write;
 }

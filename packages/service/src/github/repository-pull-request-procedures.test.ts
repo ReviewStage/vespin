@@ -60,6 +60,7 @@ const CHAPTERS_READ = { method: HTTP_METHOD.GET, path: "/api/pull-requests/chapt
 /** `acme/relay`'s pull request 42, open, its head's checks none, as GitHub's API answers each; nothing for any other read. */
 function relayRead(sent: { readonly url: string }): Response | undefined {
   const path = new URL(sent.url).pathname;
+
   if (path === "/repos/acme/relay/pulls/42") {
     return Response.json({
       number: 42,
@@ -75,14 +76,21 @@ function relayRead(sent: { readonly url: string }): Response | undefined {
       user: { login: "octo-dev" },
     });
   }
+
   if (path === "/repos/acme/relay/commits/sha-42/check-runs")
     return Response.json({ check_runs: [] });
+
   if (path === "/repos/acme/relay/commits/sha-42/status") return Response.json({ statuses: [] });
+
   if (path === "/repos/acme/relay/issues/42/labels") return Response.json([{ name: "ready" }]);
+
   if (path === "/repos/acme/relay/labels")
     return Response.json([{ name: "ready", color: "0e8a16" }]);
+
   if (path === "/repos/acme/relay/assignees") return Response.json([]);
+
   if (path === "/repos/acme/relay/teams") return Response.json([]);
+
   return undefined;
 }
 
@@ -97,16 +105,19 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
           {},
           relayRead,
         );
+
         const member = yield* openGithubUser();
         const outsider = `user-${randomUUID()}`;
         yield* (yield* Database)
           .insert(user)
           .values({ id: outsider, name: "Test User", email: `${outsider}@app.test` });
+
         const workspace = yield* openInstallationWorkspace(member, {
           installationId: 7802,
           accountId: 9802,
           accountLogin: "acme",
         });
+
         const services = yield* Effect.context<GitHubApp>().pipe(
           Effect.provide(
             Layer.mergeAll(
@@ -117,6 +128,7 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
             ),
           ),
         );
+
         const seams = {
           resolveUserId: (incoming: Request) =>
             Effect.succeed(
@@ -125,10 +137,12 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
               ),
             ),
         };
+
         const handle = hostedFetch({
           pullRequests: repositoryPullRequestProcedures(seams),
           pullRequestChapters: pullRequestChaptersProcedures(seams),
         });
+
         const ask = (
           { method, path, body }: { method: string; path: string; body?: string },
           userId: string,
@@ -139,15 +153,18 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
             url.searchParams.append(GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace);
             url.searchParams.append(GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay");
             url.searchParams.append(GITHUB_REPOSITORIES_QUERY.NUMBER, String(number));
+
             const request = new Request(url, {
               method,
               headers: { authorization: `Bearer ${userId}`, "content-type": "application/json" },
               ...(body === undefined ? undefined : { body }),
             });
+
             // SAFETY: the procedures yield the database, the clock, the GitHub App, and its HTTP client alone, which is all a test provides of the web runtime's services.
             const response = yield* Effect.promise(() =>
               handle(request, services as Context.Context<WebServices>),
             );
+
             return { status: response.status, text: yield* Effect.promise(() => response.text()) };
           });
 
@@ -158,11 +175,13 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
           [answer.repository, answer.branch, answer.pullRequest?.number],
           ["acme/relay", "invites-42", 42],
         );
+
         const labeled = yield* ask(
           { method: HTTP_METHOD.POST, path: "/api/pull-requests/action", body: LABEL },
           member,
           42,
         );
+
         assert.deepEqual(labeled, {
           status: HOSTED_HTTP_STATUS.OK,
           text: JSON.stringify({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
@@ -174,10 +193,12 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
           `Bearer ${standingGithubRow(0).accessToken}`,
         );
         const notFound = { status: HOSTED_HTTP_STATUS.NOT_FOUND, text: '{"error":"not-found"}' };
+
         for (const numbered of NUMBERED_ASKS) {
           assert.deepEqual(yield* ask(numbered, member, 99), notFound, numbered.path);
           assert.deepEqual(yield* ask(numbered, outsider, 42), notFound, numbered.path);
         }
+
         assert.deepEqual(yield* ask(CHAPTERS_READ, outsider, 42), notFound);
         // The review options are the repository's, so a member's missing number answers and only a non-member is refused.
         const options = yield* ask(REVIEW_OPTIONS_READ, member, 99);

@@ -28,7 +28,9 @@ export function Arrival({
 }): React.JSX.Element {
   // Note that only content that waited fades in, because content standing from the start has nothing to arrive from.
   const [waited, setWaited] = useState(reading);
+
   if (reading && !waited) setWaited(true);
+
   if (reading) {
     return (
       <p className="ui-arrival-wait" role="status">
@@ -37,6 +39,7 @@ export function Arrival({
       </p>
     );
   }
+
   return (
     <div className="ui-arrival" data-waited={waited ? "" : undefined}>
       {children}

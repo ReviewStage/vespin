@@ -67,7 +67,9 @@ const otherMemberRole = Effect.fn("web/workspaceOtherMember")(function* (
 ) {
   if (otherId === userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const other = yield* hostedStoreOrUnavailable(workspaceOf(otherId, workspaceId));
+
   if (Option.isNone(other)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return other.value.role;
 });
 
@@ -101,11 +103,14 @@ export const workspaceMemberRemove = Effect.fn("web/workspaceMemberRemove")(func
 ) {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
   const removable = REMOVABLE_BY.get(workspace.role);
+
   if (removable === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const role = yield* otherMemberRole(userId, workspace.id, removed);
+
   if (!removable.has(role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, removed));
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.REMOVE);
+
   return yield* membersNow(workspace.id);
 });
 
@@ -118,9 +123,11 @@ export const workspaceMemberRoleChange = Effect.fn("web/workspaceMemberRoleChang
 ) {
   const workspace = yield* ownedWorkspace(userId, workspaceId);
   const current = yield* otherMemberRole(userId, workspace.id, changed);
+
   if (current === WORKSPACE_ROLE.OWNER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* hostedStoreOrUnavailable(setWorkspaceMemberRole(workspace.id, changed, role));
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.ROLE_CHANGE);
+
   return yield* membersNow(workspace.id);
 });
 
@@ -138,11 +145,14 @@ export const workspaceTransfer = Effect.fn("web/workspaceTransfer")(function* (
   heir: string,
 ) {
   const workspace = yield* ownedWorkspace(userId, workspaceId);
+
   if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const role = yield* otherMemberRole(userId, workspace.id, heir);
+
   if (!HEIR_ROLES.has(role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* hostedStoreOrUnavailable(handOverWorkspace(workspace.id, userId, heir));
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.TRANSFER);
+
   return yield* membersNow(workspace.id);
 });
 
@@ -152,10 +162,13 @@ export const workspaceLeave = Effect.fn("web/workspaceLeave")(function* (
   workspaceId: string,
 ) {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
+
   if (workspace.role === WORKSPACE_ROLE.OWNER) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
+
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, userId));
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.LEAVE);
+
   return { workspaceId: workspace.id };
 });

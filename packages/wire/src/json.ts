@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 
 /**
  * The wire boundary: the values that arrive from outside this build, the
@@ -32,16 +32,19 @@ export type UnparsedWireValue = WireValue | undefined;
  * decided; {@link isWireRecordValue}, {@link WireValueSchema}, and
  * {@link isPlainRecord} below all read it back rather than restating it.
  */
-function isPlainWireRecordShape(value: unknown): value is WireRecord {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+function isPlainWireRecord<T>(value: T): value is T & WireRecord {
+  if (!Predicate.isObject(value)) return false;
+
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
   const prototype = Object.getPrototypeOf(value);
+
   return prototype === Object.prototype || prototype === null;
 }
 
 /** A record whose own shape is a wire record and whose every value is itself one. */
 function isWireRecordValue(value: unknown): value is WireRecord {
-  if (!isPlainWireRecordShape(value)) return false;
+  if (!isPlainWireRecord(value)) return false;
+
   return Object.values(value).every((entry) => readsWireValue(entry));
 }
 
@@ -112,17 +115,16 @@ export function isWireBoolean(value: UnparsedWireValue): value is boolean {
 }
 
 /** A record's own shape as a Schema, for a struct field that holds a record whose values nothing reads yet. */
-export const WireRecordShapeSchema: Schema.Codec<WireRecord> =
-  Schema.declare(isPlainWireRecordShape);
+export const PlainWireRecordSchema: Schema.Codec<WireRecord> = Schema.declare(isPlainWireRecord);
 
-const readsWireRecordShape = Schema.is(WireRecordShapeSchema);
+const readsPlainWireRecord = Schema.is(PlainWireRecordSchema);
 
 /**
  * A record's own shape, not whether its values are wire values: a record
  * nested in a record `isRecord` has not yet looked inside is still a record.
  */
 export function isRecord(value: UnparsedWireValue): value is WireRecord {
-  return readsWireRecordShape(value);
+  return readsPlainWireRecord(value);
 }
 
 /**
@@ -131,12 +133,13 @@ export function isRecord(value: UnparsedWireValue): value is WireRecord {
  * tree, where that parse, not the predicate, is the cost.
  */
 export function isPlainRecord(value: WireBoundaryInput): value is WireBoundaryRecord {
-  return isPlainWireRecordShape(value);
+  return isPlainWireRecord(value);
 }
 
 export function text(value: UnparsedWireValue): string | undefined {
   if (!isWireString(value)) return undefined;
   const normalized = value.trim();
+
   return normalized || undefined;
 }
 
@@ -153,6 +156,7 @@ export function isInstant(value: UnparsedWireValue): value is number {
 
 export function wholeNumber(value: UnparsedWireValue): number | undefined {
   if (!isWireNumber(value) || !Number.isFinite(value)) return undefined;
+
   return value;
 }
 
@@ -172,6 +176,7 @@ export function wholeText(value: string | undefined): string | undefined {
     .replace(/[^\S\n]+$/gmu, "")
     .replace(/\n{3,}/gu, "\n\n")
     .replace(/^\n+|\n+$/gu, "");
+
   return normalized || undefined;
 }
 
@@ -201,16 +206,19 @@ export function jsonRoundTrip<Value>(value: Value): UnparsedWireValue {
 
 export function recordFromJsonLine(line: string): WireRecord | undefined {
   const parsed = valueFromJsonText(line);
+
   return isRecord(parsed) ? parsed : undefined;
 }
 
 export function positiveInteger(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return fallback;
+
   return Math.floor(value);
 }
 
 export function nonNegativeNumber(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value) || value < 0) return fallback;
+
   return value;
 }
 
@@ -232,19 +240,16 @@ export function resolveOptions<K extends string>(
     readonly nonNegative?: readonly K[];
   },
 ): ResolvedNumericOptions<K> {
-  let resolved = { ...defaults };
+  const resolved: Record<K, number> = { ...defaults };
+
   for (const key of bounds.positive ?? []) {
-    resolved = {
-      ...resolved,
-      [key]: positiveInteger(options[key], defaults[key]),
-    };
+    resolved[key] = positiveInteger(options[key], defaults[key]);
   }
+
   for (const key of bounds.nonNegative ?? []) {
-    resolved = {
-      ...resolved,
-      [key]: nonNegativeNumber(options[key], defaults[key]),
-    };
+    resolved[key] = nonNegativeNumber(options[key], defaults[key]);
   }
+
   return resolved;
 }
 

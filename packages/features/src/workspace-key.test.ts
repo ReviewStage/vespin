@@ -33,6 +33,7 @@ describe("keySpansIn", () => {
     ["STAG-42", "task-42"],
     ["3L-7", "task-7"],
   ]);
+
   const found = (words: string) => keySpansIn(words, known).map((span) => [span.key, span.known]);
 
   it("finds each known key standing as a word, with where it stands", () => {

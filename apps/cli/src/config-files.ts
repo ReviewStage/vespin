@@ -30,6 +30,7 @@ export interface ConfigEnvironment {
 export function configFile(environment: ConfigEnvironment, name: string): string {
   const config =
     environment.XDG_CONFIG_HOME || path.join(environment.HOME || os.homedir(), ".config");
+
   return path.join(config, CONFIG_FOLDER.NAME, name);
 }
 
@@ -41,11 +42,14 @@ export const readConfigFile = Effect.fnUntraced(function* <Contents>(
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const exists = yield* Effect.orElseSucceed(fileSystem.exists(file), () => false);
+
   if (!exists) return empty;
+
   const text = yield* Effect.mapError(
     fileSystem.readFileString(file),
     () => new CliStoreFailed({ message: `Could not read ${file}.` }),
   );
+
   return yield* Effect.mapError(
     Schema.decodeUnknownEffect(schema)(text),
     () => new CliStoreFailed({ message: `${file} is not a file this version can read.` }),

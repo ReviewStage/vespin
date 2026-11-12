@@ -49,11 +49,14 @@ export function LinkField({
   const [typed, setTyped] = useState(href ?? "");
   // Note that a field handed another link starts over from it, so Enter never applies the last one's words to it.
   const [opened, setOpened] = useState(href);
+
   if (opened !== href) {
     setOpened(href);
     setTyped(href ?? "");
   }
+
   const linked = href !== undefined;
+
   return (
     <MenuSurface ref={ref} className="ui-link-field" flow={MENU_SURFACE_FLOW.ROW}>
       <TextField

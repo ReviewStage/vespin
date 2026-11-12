@@ -51,6 +51,7 @@ afterEach(() => {
 function firstFrame() {
   // biome-ignore lint/security/noGlobalEval: the script under test is the site's own file, run as the page runs it.
   window.eval(BOOT);
+
   return {
     theme: document.documentElement.getAttribute("data-ui-theme"),
     chrome: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
@@ -77,6 +78,7 @@ test("with System chosen, or nothing yet, the first frame follows the machine", 
   for (const chosen of ["system", undefined]) {
     for (const machine of [true, false]) {
       machineDark = machine;
+
       if (chosen !== undefined) localStorage.setItem("app.theme", chosen);
 
       const frame = firstFrame();

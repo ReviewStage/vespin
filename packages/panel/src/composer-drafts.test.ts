@@ -80,6 +80,7 @@ function task(id: string, name: string, agentId: string) {
     repository: null,
     document: { body: `# ${name}`, assumptions: [] },
   };
+
   const agent: AgentSummary = {
     id: agentId,
     planId: id,
@@ -90,6 +91,7 @@ function task(id: string, name: string, agentId: string) {
     status: AGENT_STATUS.COMPLETED,
     turnId: null,
   };
+
   return { plan: summary, agent };
 }
 
@@ -98,6 +100,7 @@ const INVITES = task(
   "Teammate invitations",
   "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
 );
+
 const BILLING = task(
   "0c9a3f1e-6b2d-4e8f-a1c7-3d5e7f9a1b2c",
   "Billing export",
@@ -137,6 +140,7 @@ interface Identity {
 /** The account signed in to the window, as the panel's root hands it the drafts. */
 function SignedIn({ account }: { account: Identity | undefined }): null {
   useDraftsOwner(account);
+
   return null;
 }
 
@@ -152,6 +156,7 @@ function closeWindow(): void {
   act(() => {
     window.dispatchEvent(new Event("pagehide"));
   });
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 }
 
@@ -171,6 +176,7 @@ function openWindow() {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const show = async (
     open: typeof INVITES,
     {
@@ -180,6 +186,7 @@ function openWindow() {
     }: { onTask?: boolean; send?: MessageSender; account?: Identity } = {},
   ) => {
     const openTab = agentTab(open.agent.id);
+
     const tasks = tasksControl({
       page: TASKS_PAGE.DOCUMENT,
       tasks: [INVITES.plan, BILLING.plan],
@@ -198,6 +205,7 @@ function openWindow() {
           send(agentId, text, clientKey, attachments),
       }),
     });
+
     const rows = [INVITES.plan, BILLING.plan].map((summary) =>
       createElement(SidebarTask, {
         key: summary.id,
@@ -209,6 +217,7 @@ function openWindow() {
         onOpen: () => undefined,
       }),
     );
+
     await act(async () =>
       root.render(
         windowRouter().provide(
@@ -229,11 +238,13 @@ function openWindow() {
     );
     await settle();
   };
+
   /** The sidebar's row of a task. */
   const row = (name: string) =>
     [...container.querySelectorAll<HTMLElement>("ul > li")].find((each) =>
       each.textContent?.includes(name),
     ) ?? assert.fail(`the sidebar lists ${name}`);
+
   return {
     container,
     show,
@@ -248,6 +259,7 @@ function openWindow() {
         [...container.querySelectorAll<HTMLElement>(".ui-tab")].find(
           (each) => each.querySelector(".ui-tab-label")?.textContent === label,
         ) ?? assert.fail(`the column draws ${label}'s tab`);
+
       return tab.querySelector(`.ui-tab-end-mark [aria-label="${DRAFT_WORD}"]`) !== null;
     },
   };
@@ -296,6 +308,7 @@ function keptWords(): readonly string[] {
   const kept: { text: string }[] = JSON.parse(
     window.localStorage.getItem("app.composerDrafts") ?? "[]",
   );
+
   return kept.map((entry) => entry.text);
 }
 
@@ -309,8 +322,10 @@ function draftWrites(): () => readonly (readonly string[])[] {
     value: string,
   ) {
     write.call(this, key, value);
+
     if (key === "app.composerDrafts") writes.push(keptWords());
   });
+
   return () => writes;
 }
 
@@ -328,6 +343,7 @@ it.effect(
         yield* Effect.promise(settle);
         yield* TestClock.adjust("100 millis");
       }
+
       assert.equal(app.box(), "Expire invites after a week", "the box holds every key at once");
       assert.deepEqual(writes(), [], "nothing is written while the keys come");
 
@@ -370,10 +386,13 @@ test("a draft outlasts a reload of the window, words and mark alike", async () =
 /** Closes the window standing and opens it afresh, signed in as `account`. */
 function signedIn(account: { readonly id: string; readonly email: string }): void {
   closeWindow();
+
   const Owner = () => {
     useDraftsOwner(account);
+
     return null;
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(windowRouter().provide(withQueryClient(createElement(Owner)))));
@@ -390,6 +409,7 @@ test("lines a window keeps for its account outlast a reload, but for what storag
     fromKept: (kept) => ({ ...kept, files: [] }),
     idOf: (kept) => kept.id,
   });
+
   const ada = { id: "account-ada", email: "ada@acme.test" };
 
   signedIn(ada);
@@ -404,12 +424,16 @@ test("lines a window keeps for its account outlast a reload, but for what storag
 test("lines a window holds for an account are drawn for no other signing in to it, and wait for their writer", () => {
   const lines = heldLines<{ readonly id: string }>();
   const ada = { id: "account-ada", email: "ada@acme.test" };
+
   const Owner = ({ account }: { readonly account: typeof ada }) => {
     useDraftsOwner(account);
+
     return null;
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const signIn = (account: typeof ada) =>
     act(() =>
       root.render(windowRouter().provide(withQueryClient(createElement(Owner, { account })))),
@@ -427,14 +451,18 @@ test("lines a window holds for an account are drawn for no other signing in to i
 test("lines a window holds for an account stay once the window draws itself again as the same account", () => {
   const lines = heldLines<{ readonly id: string }>();
   const ada = { id: "account-ada", email: "ada@acme.test" };
+
   const Owner = () => {
     useDraftsOwner(ada);
+
     return null;
   };
+
   const drawWindow = () => {
     const root = createRoot(document.body.appendChild(document.createElement("div")));
     roots.push(root);
     act(() => root.render(windowRouter().provide(withQueryClient(createElement(Owner)))));
+
     return root;
   };
 
@@ -448,6 +476,7 @@ test("lines a window holds for an account stay once the window draws itself agai
 
 test("a window that read kept lines before another let them go never writes them back as it adds its own", () => {
   const key = "app.testKeptLinesStale";
+
   const lines = keptLines<{ readonly id: string }, { readonly id: string }>({
     key,
     kept: Schema.Struct({ id: Schema.String }),
@@ -455,6 +484,7 @@ test("a window that read kept lines before another let them go never writes them
     fromKept: (kept) => kept,
     idOf: (kept) => kept.id,
   });
+
   const ada = { id: "account-ada", email: "ada@acme.test" };
   signedIn(ada);
   lines.set(() => [{ id: "sent" }]);
@@ -470,10 +500,13 @@ test("a window that read kept lines before another let them go never writes them
 
 test("a message sent takes its words out of the draft, so the box comes back empty and nothing is marked", async () => {
   const sent: string[] = [];
+
   const send: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return new Promise(() => undefined);
   };
+
   const app = openWindow();
   await app.show(INVITES, { send });
   typeInComposer(app.container, "Expire invites after a week");
@@ -562,6 +595,7 @@ test("past the most drafts kept, the oldest written goes, whosever it is, and th
   const filler = Array.from({ length: 198 }, (_, at) =>
     keptEntry(DEAN.id, `plan-${at}`, `agent-${at}`, `Draft ${at}`),
   );
+
   window.localStorage.setItem(
     "app.composerDrafts",
     JSON.stringify([
@@ -579,6 +613,7 @@ test("past the most drafts kept, the oldest written goes, whosever it is, and th
   leaveWindow();
   await settle();
   assert.equal(app.rowDrafted(INVITES.plan.name), false, "the oldest is let go as it is written");
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   const sam = openWindow();
@@ -603,17 +638,22 @@ test("the files attached to a draft while only the account's address was known s
   const place = { kind: DRAFT_PLACE.EDIT, agentId: "agent-1", messageId: "message-1" } as const;
   const picture = { name: "login.png", mediaType: "image/png", data: "iVBORw0KGgo=" } as const;
   let held: DraftControl | undefined;
+
   function Box({ account }: { account: Identity }): null {
     useDraftsOwner(account);
     held = useDraft(place);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const show = (account: Identity) =>
     act(async () =>
       root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
     );
+
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() => box().update((was) => ({ ...was, text: "Like this", attachments: [picture] })));
@@ -634,19 +674,25 @@ test("an inbox answer's picture moves with it as the id lands before its words r
     agentId: INVITES.agent.id,
     itemId: "item-1",
   } as const;
+
   const picture = { name: "diagram.png", mediaType: "image/png", data: "iVBORw0KGgo=" } as const;
   let held: DraftControl | undefined;
+
   function Box({ account }: { account: Identity }): null {
     useDraftsOwner(account);
     held = useDraft(place);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const show = (account: Identity) =>
     act(async () =>
       root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
     );
+
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -671,17 +717,22 @@ test("where the id's own later words win a place its address held a picture at, 
   const place = { kind: DRAFT_PLACE.EDIT, agentId: "agent-1", messageId: "message-1" } as const;
   const picture = { name: "old.png", mediaType: "image/png", data: "iVBORw0KGgo=" } as const;
   let held: DraftControl | undefined;
+
   function Box({ account }: { account: Identity }): null {
     useDraftsOwner(account);
     held = useDraft(place);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const show = (account: Identity) =>
     act(async () =>
       root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
     );
+
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -715,6 +766,7 @@ function answerMotion(): void {
 /** No one signed in to the window drawing `element`, which reads its drafts as the window's root does. */
 function NoOneSignedIn(): null {
   useDraftsOwner(undefined);
+
   return null;
 }
 
@@ -730,6 +782,7 @@ function signedOut(element: React.ReactElement): React.ReactElement {
 async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   answerMotion();
   fakeAppBridge({});
+
   const pin = {
     task: open.plan.id,
     tab: agentTab(open.agent.id),
@@ -737,9 +790,11 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
     at: 5,
     model: open.agent.model,
   };
+
   writeListedTasks({
     taskAgentPins: pinned ? [{ agentId: open.agent.id, taskId: open.plan.id, pinnedAt: 5 }] : [],
   });
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [INVITES.plan, BILLING.plan],
@@ -754,6 +809,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
     },
     agents: agentsControl({ agents: [open.agent], agentIds: [open.agent.id] }),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -763,6 +819,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
     ),
   );
   await settle();
+
   return (name: string) =>
     (
       [...container.querySelectorAll<HTMLElement>("ul > li > button")].find(
@@ -780,6 +837,7 @@ test("a task opened from a tab pinned to the sidebar is open still, so its row w
   );
   const fromPin = await sidebarOn(INVITES, true);
   assert.equal(fromPin(INVITES.plan.name), false);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   const away = await sidebarOn(BILLING, false);
@@ -808,6 +866,7 @@ async function columnOn(
   opening = "",
 ) {
   handInboxItems(feedOf({ [INVITES.plan.id]: [approval(1)] }));
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [INVITES.plan],
@@ -832,6 +891,7 @@ async function columnOn(
       },
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -862,6 +922,7 @@ async function columnOn(
   );
   await settle();
   const pencil = `[role="img"][aria-label="${DRAFT_WORD}"]`;
+
   return {
     // Note that the task's row is the one in the list drawn first, since the column's Inbox draws rows of its own that may wear a pencil.
     rowDrafted: () => container.querySelector(`:scope > ul > li > button ${pencil}`) !== null,
@@ -890,6 +951,7 @@ test("a draft agent's first message marks its tab while another is chosen, never
     ]),
   );
   const tabs = [draftTab(DRAFT_KEY)];
+
   for (const [chosen, draftMarked] of [
     [undefined, true],
     [draftTab(DRAFT_KEY), false],
@@ -983,15 +1045,19 @@ async function taskInbox(held: HeldTask, items: readonly InboxItem[]) {
   leaveWindow();
   handInboxItems(feedOf({ [held.plan.id]: items }));
   let control: TaskInboxControl | undefined;
+
   function Probe(): null {
     useDraftsOwner(undefined);
     control = useTaskInboxOf(held);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Probe)))));
   await settle();
+
   return control ?? assert.fail("the inbox is held");
 }
 
@@ -1067,11 +1133,14 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
   leaveWindow();
   const reads = handHostReads({ items: feedOf({ [INVITES.plan.id]: [mine] }) });
   let control: TaskInboxControl | undefined;
+
   function Probe(): null {
     useDraftsOwner(undefined);
     control = useTaskInboxOf(INVITES);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Probe)))));
@@ -1137,12 +1206,16 @@ test("words another window writes for a box this window let go a moment before s
     planId: INVITES.plan.id,
     agentId: INVITES.agent.id,
   } as const;
+
   let held: { readonly box: DraftControl; readonly writer: DraftWriter } | undefined;
+
   function Box(): null {
     useDraftsOwner(DEAN);
     held = { box: useDraft(place), writer: useDraftWriter() };
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));
@@ -1170,6 +1243,7 @@ test("words another window writes for a box this window let go a moment before s
 test("files attached in this window stay as its draft when another window lets the words beside them go", async () => {
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
   let composer: AgentComposerControl | undefined;
+
   function Box(): null {
     useDraftsOwner(DEAN);
     composer = useAgentComposer({
@@ -1178,8 +1252,10 @@ test("files attached in this window stay as its draft when another window lets t
       messages: [],
       send: NEVER_ANSWERED,
     });
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));

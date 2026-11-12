@@ -47,8 +47,11 @@ interface OpenFence {
 function fenceOpened(line: string): OpenFence | undefined {
   const match = FENCE_LINE.exec(line);
   const marker = match?.[1];
+
   if (marker === undefined) return undefined;
+
   if (marker.startsWith("`") && (match?.[2] ?? "").includes("`")) return undefined;
+
   return { marker };
 }
 
@@ -56,8 +59,10 @@ function fenceOpened(line: string): OpenFence | undefined {
 function fenceCloses(line: string, fence: OpenFence): boolean {
   const match = FENCE_LINE.exec(line);
   const marker = match?.[1];
+
   if (marker === undefined) return false;
   const sameCharacter = marker[0] === fence.marker[0];
+
   return sameCharacter && marker.length >= fence.marker.length && (match?.[2] ?? "").trim() === "";
 }
 
@@ -70,8 +75,10 @@ function fenceCloses(line: string, fence: OpenFence): boolean {
  */
 function escapedLine(line: string, afterText: boolean): string {
   const opener = (afterText ? SETEXT_LINE.exec(line) : null) ?? HTML_LINE.exec(line);
+
   if (opener === null) return line;
   const at = opener[1]?.length ?? 0;
+
   return `${line.slice(0, at)}\\${line.slice(at)}`;
 }
 
@@ -85,6 +92,7 @@ function contained(text: string): string {
   const lines: string[] = [];
   let fence: OpenFence | undefined;
   let afterText = false;
+
   for (const line of text.replace(/\r\n?/gu, "\n").split("\n")) {
     if (fence !== undefined) {
       if (fenceCloses(line, fence)) fence = undefined;
@@ -92,11 +100,14 @@ function contained(text: string): string {
       afterText = false;
       continue;
     }
+
     fence = fenceOpened(line);
     lines.push(fence === undefined ? escapedLine(line, afterText) : line);
     afterText = fence === undefined && line.trim().length > 0;
   }
+
   if (fence !== undefined) lines.push(fence.marker);
+
   return lines.join("\n");
 }
 
@@ -230,6 +241,7 @@ export type DescriptionAgentEdit = typeof descriptionAgentEditSchema.Type;
 function journaledNote(note: DescriptionNote): DescriptionAgentEdit["notes"][number] {
   if (note.kind === NOTE_KIND.ADD) return note;
   const find = note.find.slice(0, JOURNAL_FIND_CHARS).trimEnd();
+
   return note.text === "" ? { kind: NOTE_KIND.REMOVE, find } : { ...note, find };
 }
 
@@ -267,13 +279,17 @@ interface Span {
  */
 function spansOf(text: string, find: string): readonly Span[] {
   const exact: Span[] = [];
+
   for (let at = text.indexOf(find); at !== -1; at = text.indexOf(find, at + find.length)) {
     exact.push({ from: at, to: at + find.length });
   }
+
   if (exact.length > 0) return exact;
   const words = find.split(/\s+/u).filter((word) => word.length > 0);
+
   if (words.length === 0) return [];
   const pattern = new RegExp(words.map(escapedPattern).join("\\s+"), "gu");
+
   return [...text.matchAll(pattern)].map((match) => ({
     from: match.index,
     to: match.index + match[0].length,
@@ -289,6 +305,7 @@ function spansOf(text: string, find: string): readonly Span[] {
  */
 export function locatedPhrase(text: string, find: string): Span | undefined {
   const located = placeOf(text, find);
+
   return Result.isSuccess(located) ? located.success : undefined;
 }
 
@@ -296,8 +313,11 @@ export function locatedPhrase(text: string, find: string): Span | undefined {
 function placeOf(text: string, find: string): Result.Result<Span, NoteMiss> {
   const spans = spansOf(text, find);
   const [first] = spans;
+
   if (first === undefined) return Result.fail({ kind: NOTE_MISS.NOWHERE });
+
   if (spans.length > 1) return Result.fail({ kind: NOTE_MISS.REPEATED, times: spans.length });
+
   return Result.succeed(first);
 }
 
@@ -306,6 +326,7 @@ function appended(current: string | null, text: string): string {
   if (current === null) return text;
   const lastLine = current.slice(current.lastIndexOf("\n") + 1);
   const joiner = LIST_ITEM_LINE.test(lastLine) && LIST_ITEM_LINE.test(text) ? "\n" : "\n\n";
+
   return `${current}${joiner}${text}`;
 }
 
@@ -315,6 +336,7 @@ function appended(current: string | null, text: string): string {
  */
 function fenceClosed(words: string): string {
   const open = openFenceAt(words, words.length + 1);
+
   return open === undefined ? words : `${words}\n${open}`;
 }
 
@@ -333,17 +355,23 @@ function addedToText(
   const heading = note.section;
   const added = contained(note.text);
   const under = descriptionSections(text).filter((each) => each.heading === heading);
+
   if (under.length > 1) {
     return Result.fail({ kind: NOTE_MISS.HEADING_REPEATED, times: under.length });
   }
+
   const section = under[0];
+
   if (section === undefined) {
     const head = fenceClosed(text.trimEnd());
+
     return Result.succeed(`${head.length === 0 ? "" : `${head}\n\n`}## ${heading}\n\n${added}\n`);
   }
+
   const words = fenceClosed(section.text);
   const lines = words.split("\n");
   const grown = lines.length > 1 ? appended(words, added) : `${words}\n\n${added}`;
+
   return Result.succeed(text.slice(0, section.from) + grown + text.slice(section.to));
 }
 
@@ -352,6 +380,7 @@ function linesOf(text: string, at: Span): Span {
   const from = text.lastIndexOf("\n", at.from - 1) + 1;
   // Note that the last line touched is the one holding the span's last character, so a span ending on a line break touches no line after it.
   const newline = text.indexOf("\n", Math.max(at.from, at.to - 1));
+
   return { from, to: newline === -1 ? text.length : newline + 1 };
 }
 
@@ -359,7 +388,9 @@ function linesOf(text: string, at: Span): Span {
 function struckFromText(text: string, lines: Span): string {
   const head = text.slice(0, lines.from);
   const tail = text.slice(lines.to);
+
   if (tail.trim().length === 0) return head.replace(/\n+$/u, "\n");
+
   return head.endsWith("\n\n") || head.length === 0
     ? head + tail.replace(/^\n+/u, "")
     : head + tail;
@@ -378,7 +409,9 @@ function struckFromText(text: string, lines: Span): string {
 function deletedFromText(text: string, at: Span): Result.Result<string, NoteMiss> {
   const lines = linesOf(text, at);
   const rest = text.slice(lines.from, at.from) + text.slice(at.to, lines.to);
+
   if (rest.trim().length === 0) return Result.succeed(struckFromText(text, lines));
+
   return keptWhole(text, text.slice(0, at.from) + text.slice(at.to));
 }
 
@@ -393,18 +426,23 @@ function replacedInText(
   note: Extract<DescriptionNote, { kind: typeof NOTE_KIND.REPLACE }>,
 ): Result.Result<string, NoteMiss> {
   const located = placeOf(text, note.find);
+
   if (Result.isFailure(located)) return Result.fail(located.failure);
   const at = located.success;
+
   if (note.text === "") return deletedFromText(text, at);
   // A replacement inside a fence is code, written as given rather than contained as prose.
   const words = openFenceAt(text, at.from) === undefined ? contained(note.text) : note.text;
+
   return keptWhole(text, text.slice(0, at.from) + words + text.slice(at.to));
 }
 
 /** A correction's text, or the miss where it would drop a mention or a picture the text held before it. */
 function keptWhole(before: string, after: string): Result.Result<string, NoteMiss> {
   if (!keepsMentions(before, after)) return Result.fail({ kind: NOTE_MISS.DROPS_MENTION });
+
   if (!keepsPictures(before, after)) return Result.fail({ kind: NOTE_MISS.DROPS_PICTURE });
+
   return Result.succeed(after);
 }
 
@@ -429,10 +467,14 @@ function keepsAddresses(
   // Note that every copy is counted, each alike, however many the description holds.
   const counted = (text: string) => {
     const counts = new Map<string, number>();
+
     for (const address of addressesIn(text)) counts.set(address, (counts.get(address) ?? 0) + 1);
+
     return counts;
   };
+
   const kept = counted(after);
+
   return [...counted(before)].every(([address, count]) => (kept.get(address) ?? 0) >= count);
 }
 
@@ -475,11 +517,14 @@ export type TextNotesTaken =
 /** Notes taken in order until one cannot be: the text so far, and the note that stopped them. */
 function takenInOrder(text: string, notes: readonly DescriptionNote[]): TextNotesTaken {
   let taken = text;
+
   for (const note of notes) {
     const next = applyNoteToText(taken, note);
+
     if (Result.isFailure(next)) return { text: taken, missed: note, why: next.failure };
     taken = next.success;
   }
+
   return { text: taken };
 }
 
@@ -491,6 +536,7 @@ function takenInOrder(text: string, notes: readonly DescriptionNote[]): TextNote
  */
 export function applyNotesToText(text: string, notes: readonly DescriptionNote[]): TextNotesTaken {
   const taken = takenInOrder(text, notes);
+
   return taken.missed === undefined ? taken : { ...taken, text };
 }
 
@@ -509,9 +555,12 @@ export interface NotesRead {
  */
 export function readNotes(answer: UnparsedWireValue): NotesRead {
   const values = isRecord(answer) && Array.isArray(answer.notes) ? answer.notes : [];
+
   const notes = values.flatMap((value: UnparsedWireValue) => {
     const read = readNote(value);
+
     return Result.isSuccess(read) ? [read.success] : [];
   });
+
   return { notes: notes.slice(0, MAX_NOTES), unread: values.length - notes.length };
 }

@@ -58,6 +58,7 @@ export const hostDrain = /* @__PURE__ */ Effect.fn("host/hostDrain")(function* (
 ): Effect.fn.Return<HostDrain> {
   const claimed = yield* Ref.make(false);
   const outcome = yield* Deferred.make<GatewayShutdownReport, HostDrainError>();
+
   const run = (options: GatewayShutdownOptions) =>
     shutdownGatewayEffect(steps, options).pipe(
       // A step that died is a defect of the coordinator's own effect, since
@@ -74,10 +75,13 @@ export const hostDrain = /* @__PURE__ */ Effect.fn("host/hostDrain")(function* (
       ),
       Effect.tapError((failure) => Effect.sync(() => report(failure.message))),
     );
+
   return (options = {}) =>
     Effect.gen(function* () {
       const taken = yield* Ref.getAndSet(claimed, true);
+
       if (!taken) yield* Deferred.into(run(options), outcome);
+
       return yield* Deferred.await(outcome);
     });
 });
@@ -127,7 +131,9 @@ export const hostStandingLayer: Layer.Layer<HostTag, never, HostAssemblyTag> = L
     const composers = layersInOrder(
       assembly.startOrder.map((composer) => Layer.effectDiscard(composer.lifetime)),
     );
+
     const armed = Layer.effectDiscard(assembly.armed);
+
     const standing = Layer.effect(
       HostTag,
       Effect.as(
@@ -135,6 +141,7 @@ export const hostStandingLayer: Layer.Layer<HostTag, never, HostAssemblyTag> = L
         { gateway: assembly.gateway, drain: assembly.drain },
       ),
     );
+
     return standing.pipe(Layer.provideMerge(armed), Layer.provideMerge(composers));
   }),
 );

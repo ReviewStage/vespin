@@ -28,6 +28,7 @@ const SIGNED_IN: AccountSnapshot = {
   name: "Dev",
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
+
 const SIGNED_OUT: AccountSnapshot = { status: ACCOUNT_STATUS.SIGNED_OUT };
 
 /** Each kind's refusal, as the window drew it before the kinds moved onto the port. */
@@ -101,18 +102,18 @@ function windowPort(
       },
       haltSessionReplay: () => happened.push(["halt"]),
       resumeSessionReplay: () => happened.push(["resume"]),
-      ...(options.askBeforeSignOut === undefined
-        ? {}
-        : { askBeforeSignOut: options.askBeforeSignOut }),
+      ...(options.askBeforeSignOut !== undefined && { askBeforeSignOut: options.askBeforeSignOut }),
     }),
   );
   const client = port.as(PANEL, { trusted: true });
+
   return { client, happened };
 }
 
 /** A call settled to the sentence of its refusal, or a failure where it answered. */
 async function refusal(call: Promise<unknown>): Promise<string> {
   const settled = await settledAct(call);
+
   return "refused" in settled
     ? settled.refused
     : assert.fail("the call was answered rather than refused");

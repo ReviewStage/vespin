@@ -19,6 +19,7 @@ import {
   type TasksDisplay,
   type TasksFilter,
 } from "@repo/ui/tasks-page-model";
+import { Match } from "effect";
 import { Activity, act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
@@ -137,9 +138,11 @@ async function mountView(
     [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, assigneeName, ...standing }) => {
       sent.push([taskId, standing]);
       named.push(assigneeName);
+
       return Promise.resolve(true);
     },
   });
+
   const draw = (listed: readonly TaskSummary[], drawing: Drawing = {}) => {
     const control = tasksControl({
       tasks: [...listed],
@@ -148,8 +151,9 @@ async function mountView(
       me: DEAN,
       listRead: true,
       shown: drawing.shown ?? true,
-      ...(drawing.pendingTasks === undefined ? {} : { pendingTasks: drawing.pendingTasks }),
+      ...(drawing.pendingTasks !== undefined && { pendingTasks: drawing.pendingTasks }),
     });
+
     const frame = {
       toolbar: null,
       chips: null,
@@ -157,6 +161,7 @@ async function mountView(
       display: drawing.display ?? display,
       onDisplay: () => undefined,
     };
+
     act(() =>
       root.render(
         withQueryClient(
@@ -185,8 +190,10 @@ async function mountView(
       ),
     );
   };
+
   draw(tasks);
   await act(async () => undefined);
+
   return { container, draw, sent, named };
 }
 
@@ -205,8 +212,10 @@ function chipOf(page: HTMLElement, key: string, standing: string): HTMLButtonEle
   const holder = [...page.querySelectorAll<HTMLElement>("li")].find(
     (each) => each.querySelector("[data-task-key]")?.textContent === key,
   );
+
   const chip = holder?.querySelector<HTMLButtonElement>(`button[aria-label^="${standing}:"]`);
   assert.ok(chip, `${key} wears its ${standing} chip`);
+
   return chip;
 }
 
@@ -215,6 +224,7 @@ function pick(label: string): void {
   const item = [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find(
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === label,
   );
+
   act(() => (item ?? assert.fail(`no ${label} item`)).click());
 }
 
@@ -225,10 +235,12 @@ function changed(number: number, change: Partial<TaskSummary>): TaskSummary[] {
 
 test("in the List, a teammate's change of status or priority moves no row while the page is shown, though the row says its new value", async () => {
   const { container, draw } = await mountView(TasksList, TASKS, DEFAULT_LIST_DISPLAY);
+
   const before = [
     ["In progress", ["ACME-42"]],
     ["Todo", ["ACME-40", "ACME-39", "ACME-41"]],
   ];
+
   assert.deepEqual(laidOut(container), before);
 
   draw(changed(41, { status: TASK_STATUS.IN_PROGRESS, priority: TASK_PRIORITY.URGENT }));
@@ -252,9 +264,14 @@ test("in the List, a group whose last task goes slides out where it stood, out o
   assert.equal(leaving?.getAttribute("aria-label"), "In progress", "its group is drawn on");
   assert.equal(leaving?.hasAttribute("inert"), true, "out of reach while it goes");
   const out = motions.played.find((each) => each.element === leaving);
-  const standing = [...container.querySelectorAll<HTMLElement>(".tasks-list-group")]
-    .filter((group) => group !== leaving)
-    .map((group) => [...group.querySelectorAll("[data-task-key]")].map((key) => key.textContent));
+
+  const standing = [...container.querySelectorAll<HTMLElement>(".tasks-list-group")].flatMap(
+    (group) =>
+      group === leaving
+        ? []
+        : [[...group.querySelectorAll("[data-task-key]")].map((key) => key.textContent)],
+  );
+
   assert.deepEqual(standing, [["ACME-40", "ACME-39", "ACME-41"]], "the rows that stay hold");
 
   act(() => out?.finish());
@@ -361,6 +378,7 @@ test("in the List ordered by name, a task the reader renamed here moves at once,
     grouping: TASKS_GROUPING.NONE,
     order: TASKS_ORDER.NAME,
   };
+
   const { container, draw } = await mountView(TasksList, TASKS, byName);
   assert.deepEqual(laidOut(container), [["Tasks", ["ACME-40", "ACME-42", "ACME-39", "ACME-41"]]]);
 
@@ -376,8 +394,10 @@ test("in the List ordered by name, a task the reader renamed here moves at once,
 test("on the Columns, a teammate's change holds a card in its column, and the reader's own pick on its chip moves it at once", async () => {
   const { container, draw } = await mountView(TasksBoard, TASKS, DEFAULT_BOARD_DISPLAY);
   const todo = (columns: [string, string[]][]) => columns.find(([name]) => name === "Todo")?.[1];
+
   const inProgress = (columns: [string, string[]][]) =>
     columns.find(([name]) => name === "In progress")?.[1];
+
   assert.deepEqual(todo(laidOut(container)), ["ACME-40", "ACME-39", "ACME-41"]);
 
   const teammate = changed(41, { status: TASK_STATUS.IN_PROGRESS });
@@ -407,11 +427,11 @@ test("in the List filtered to Todo, a task a teammate brings into Todo comes in,
 
   draw(
     TASKS.map((each) =>
-      each.number === 42
-        ? { ...each, status: TASK_STATUS.TODO }
-        : each.number === 41
-          ? { ...each, priority: TASK_PRIORITY.URGENT }
-          : each,
+      Match.value(each.number).pipe(
+        Match.when(42, () => ({ ...each, status: TASK_STATUS.TODO })),
+        Match.when(41, () => ({ ...each, priority: TASK_PRIORITY.URGENT })),
+        Match.orElse(() => each),
+      ),
     ),
     { filter: todo },
   );
@@ -424,7 +444,9 @@ function wearsAssignee(page: HTMLElement, key: string): boolean {
   const holder = [...page.querySelectorAll<HTMLElement>("li")].find(
     (each) => each.querySelector("[data-task-key]")?.textContent === key,
   );
+
   assert.ok(holder, `${key} stands`);
+
   return holder.querySelector('button[aria-label^="Assignee:"]') !== null;
 }
 
@@ -437,6 +459,7 @@ for (const [name, view, display] of [
       ...each,
       assignee: { userId: DEAN, name: "Dean Stratakos" },
     }));
+
     const byAssignee = { ...display, grouping: TASKS_GROUPING.ASSIGNEE };
     const { container, draw } = await mountView(view, assigned, byAssignee);
     const under = (key: string) => laidOut(container).find(([, keys]) => keys.includes(key))?.[0];

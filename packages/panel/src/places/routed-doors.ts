@@ -59,12 +59,15 @@ export function versionHistoryAddressOf(
   named?: string,
 ): VersionHistoryAddress | undefined {
   const { region } = held;
+
   const task =
     held.tasks.find((each) => each.id === taskId) ??
     (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId ? region.task : undefined);
+
   const home = held.workspaces.find((each) => each.id === task?.workspaceId);
   const listedStep = held.workspace === undefined ? undefined : stepOf(held.workspace);
   const under = home === undefined ? (named ?? task?.workspaceId ?? listedStep) : stepOf(home);
+
   return under === undefined
     ? undefined
     : { workspace: under, task: task === undefined ? taskId : taskLinkStep(task) };
@@ -83,6 +86,7 @@ export interface BoardDoor {
 export function useBoardDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace">): BoardDoor {
   const route = useBoardRoute();
   const { placeLeave, workspace } = tasks;
+
   return {
     open: () =>
       placeLeave.arrive(() => {
@@ -108,10 +112,12 @@ export function usePersonDoor(
 ): PersonDoor {
   const route = usePersonRoute();
   const { placeLeave, workspace, workspaces } = tasks;
+
   return {
     close: () => placeLeave.arrive(route.onClose, NOTHING),
     preload: (userId, workspaceId) => {
       const home = workspaces.find((each) => each.id === workspaceId) ?? workspace;
+
       if (home !== undefined) route.onPreload(userId, stepOf(home));
     },
   };
@@ -129,9 +135,11 @@ export interface AdminDoor {
 /** Admin's doors, under the listed workspace as the tab stands. */
 export function useAdminDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace">): AdminDoor {
   const { placeLeave, workspace } = tasks;
+
   const route = useAdminRoute({
     listedSlug: () => (workspace === undefined ? undefined : stepOf(workspace)),
   });
+
   return {
     open: (view) => placeLeave.arrive(() => route.onOpen(view), NOTHING),
     close: route.onClose,
@@ -153,6 +161,7 @@ export function useAutomationsDoor(
   // Note that the room reaches only the pages' runs, which no door here turns (`TasksControl.onAutomationRuns`).
   const route = useAutomationsRoute({ narrow: false });
   const { placeLeave, workspace } = tasks;
+
   return {
     open: (place = { kind: AUTOMATIONS_PAGE.LIST }) =>
       placeLeave.arrive(() => {
@@ -179,14 +188,17 @@ export function useInboxDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
   const route = useInboxRoute();
   const { placeLeave, workspace } = tasks;
   const { open: standing, narrowed } = route;
+
   // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`),
   // and that where the item chosen stands is held once the move lands, so a move kept at a page's leave ask holds nothing.
   const stand = (keepNarrowing: boolean, chosen: InboxChoice | undefined) => {
     if (workspace === undefined) return;
+
     const at: InboxAt = {
       workspace: stepOf(workspace),
       narrowed: keepNarrowing ? narrowed : undefined,
     };
+
     placeLeave.arrive(
       () => {
         if (chosen === undefined) route.onOpen(at);
@@ -195,10 +207,12 @@ export function useInboxDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
       () => {
         // Note that the Inbox already open has no opening to time.
         if (!standing) beginPanelSpan(PANEL_SPAN.INBOX_OPEN);
+
         if (chosen !== undefined) route.onHold(chosen);
       },
     );
   };
+
   return {
     open: () => stand(false, undefined),
     openItem: (chosen) => stand(true, chosen),
@@ -221,10 +235,12 @@ export function useVersionHistoryDoor(
 ): VersionHistoryDoor {
   // Note that the room reaches only the moves within the history standing, which no door here makes.
   const route = useVersionHistoryRoute({ narrow: false });
+
   return {
     close: route.onClose,
     preload: (taskId) => {
       const address = versionHistoryAddressOf(tasks, taskId);
+
       if (address !== undefined) route.onPreload(address.workspace, address.task);
     },
   };

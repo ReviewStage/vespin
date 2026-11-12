@@ -20,6 +20,7 @@ function PeopleRead(): null {
   useEffect(() => {
     read = !reading;
   }, [reading]);
+
   return null;
 }
 
@@ -29,6 +30,7 @@ export function withPeopleRead(
   children: ReactElement,
 ): ReactElement {
   read = false;
+
   return createElement(MemberDirectory, {
     ...props,
     children: createElement(Fragment, null, createElement(PeopleRead), children),

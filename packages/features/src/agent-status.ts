@@ -86,18 +86,22 @@ export function agentStatusAt(
   if (newest === undefined && bootHolds(standing.boot)) {
     return standing.boot === BOOT_PHASE.FAILED ? AGENT_STATUS.FAILED : AGENT_STATUS.STARTING;
   }
+
   if (newest === undefined && standing.blank === true) return AGENT_STATUS.COMPLETED;
+
   if (newest === undefined) {
     return standing.now - standing.createdAt <= STARTING_GRACE_MILLIS
       ? AGENT_STATUS.STARTING
       : AGENT_STATUS.FAILED;
   }
+
   return turnAgentStatus(newest);
 }
 
 /** Where an agent stands by its newest turn alone: as the turn's status word reads, canceled where it still runs with a Stop asked of it. */
 export function turnAgentStatus(turn: StatusTurn): AgentStatus {
   const status = STATUS_OF_TURN[turnStatusOfWord(turn.status)];
+
   return status === AGENT_STATUS.RUNNING && turn.cancelRequested ? AGENT_STATUS.CANCELED : status;
 }
 
@@ -113,6 +117,7 @@ export function statusClockEdge(
 ): number | undefined {
   if (newest !== undefined || standing.blank === true || bootHolds(standing.boot)) return undefined;
   const edge = standing.createdAt + STARTING_GRACE_MILLIS;
+
   return standing.now <= edge ? edge + 1 : undefined;
 }
 
@@ -143,6 +148,8 @@ export function newerTurn(
   b: AgentTurn | undefined,
 ): AgentTurn | undefined {
   if (a === undefined || b === undefined) return a ?? b;
+
   if (a.queuedAt !== b.queuedAt) return a.queuedAt > b.queuedAt ? a : b;
+
   return b.id > a.id ? b : a;
 }

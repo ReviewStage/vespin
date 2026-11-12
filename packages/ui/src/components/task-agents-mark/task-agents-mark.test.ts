@@ -53,6 +53,7 @@ function heard(task: Agents | undefined): string | undefined {
       pullRequests: task?.pullRequests ?? [],
     }),
   );
+
   return box.querySelector("[role='img']")?.getAttribute("aria-label") ?? undefined;
 }
 

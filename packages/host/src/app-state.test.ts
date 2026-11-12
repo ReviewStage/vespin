@@ -94,10 +94,13 @@ describe("a delivered snapshot's version and window facts", () => {
 function acrossTheWire(delivery: AppStateDelivery | undefined): AppStateDelivery {
   if (delivery === undefined) throw new Error("nothing was delivered");
   const serializer = new RPCSerializer();
+
   const decoded: unknown = serializer.deserialize(
     JSON.parse(JSON.stringify(serializer.serialize(delivery))),
   );
+
   if (!PUSH_GUARD[PUSH.APP_STATE](decoded)) throw new Error("the window refused the delivery");
+
   // SAFETY: the window's own guard for the push admitted it above.
   return decoded as AppStateDelivery;
 }
@@ -139,28 +142,34 @@ describe("a delivery that crosses the wire", () => {
     postedAt: 1,
     updatedAt: 1,
   });
+
   const page = (id: string, title: string): PageLine => ({ id, title, version: 1, at: 1 });
   const quietItem = item("quiet", "Rotate the key?");
   const quietPage = page("4b0c8e9a-9f61-4c1e-9d1a-2f7f3c6b5a10", "Rotate the key");
+
   const [alpha, bravo, charlie] = [
     item("alpha", "Alpha?"),
     item("bravo", "Bravo?"),
     item("charlie", "Charlie?"),
   ];
+
   const feed = (plans: AppInboxItems["plan"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.PLAN]: plans },
     },
   });
+
   const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans },
   });
+
   const pages = (tasks: AppPages["task"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.PAGES]: { [PAGE_OWNER.TASK]: tasks },
   });
+
   /** One task as the list names it, its name the words it is told apart by. */
   const summary = (id: string, name: string): TaskSummary => ({
     id,
@@ -170,6 +179,7 @@ describe("a delivery that crosses the wire", () => {
     updatedAt: 1,
     repository: null,
   });
+
   const [invites, billing] = [
     {
       ...summary("invites", "Teammate invitations"),
@@ -177,25 +187,31 @@ describe("a delivery that crosses the wire", () => {
     },
     summary("billing", "Billing usage alerts"),
   ];
+
   const openDescription: Task = {
     ...invites,
     document: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
   };
+
   const taskList = (tasks: readonly TaskSummary[]): AppStateSnapshot => ({
     ...document,
     tasks: { ...document.tasks, tasks, activeTaskId: openDescription.id },
   });
+
   const descriptions = (held: AppDescriptionDocuments): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.DESCRIPTION_DOCUMENT]: held,
   });
+
   const quietDescription = { rows: { task: openDescription } };
+
   /** One of an agent's messages, saying `text`. */
   const line = (id: string, text: string): AgentTranscriptMessage => ({
     id,
     role: "assistant",
     parts: [{ type: "text", text }],
   });
+
   /** The agent's own transcript held as `pages` pages left it, the last saying the agent stands at `status`. */
   const transcript = (
     messages: readonly AgentTranscriptMessage[],
@@ -207,10 +223,12 @@ describe("a delivery that crosses the wire", () => {
     word: { status, title: null, caughtUp: true },
     pages,
   });
+
   const transcripts = (own: AppTranscript): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.TRANSCRIPT]: { "agent-1": { [OWN_TRANSCRIPT]: { rows: own } } },
   });
+
   const quietLine = line("m-1", "Read the invites.");
   /** A task's description holding `body` alone. */
   const draft = (body: string): Task["document"] => ({ body, assumptions: [] });
@@ -314,13 +332,16 @@ describe("a delivery that crosses the wire", () => {
         document,
         acrossTheWire(appStateDelivery(undefined, sent)),
       );
+
       const delivered = acrossTheWire(appStateDelivery(sent, { ...next, version: 2 }));
       const adopted = withAppStateDelivery(window, delivered);
 
       assert.deepEqual(adopted, { ...next, version: 2 });
       const held = kept(window);
       assert.equal(held.includes(undefined), false);
+
       for (const [at, part] of kept(adopted).entries()) assert.equal(part, held[at]);
+
       for (const words of quiet) assert.equal(JSON.stringify(delivered).includes(words), false);
     },
   );

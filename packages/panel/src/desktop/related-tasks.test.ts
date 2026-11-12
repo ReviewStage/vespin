@@ -116,12 +116,14 @@ test("a related task's row is led by its owner's relation and ends with its open
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const tasks = tasksControl({
     tasks: [TASK],
     workspace: ACME,
     workspaces: [ACME],
     listRead: true,
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -138,9 +140,11 @@ test("a related task's row is led by its owner's relation and ends with its open
 
   const row = container.querySelector<HTMLElement>("[data-task-id='t-42']");
   assert.ok(row, "the task's row stands");
+
   const chips = [...row.querySelectorAll("[data-cell='pullRequests'] a")].map(
     (chip) => chip.textContent,
   );
+
   assert.deepEqual(chips, ["#612", "#611"]);
   assert.equal(row.querySelector("[data-cell='relation']")?.textContent, "Blocks");
 
@@ -150,12 +154,14 @@ test("a related task's row is led by its owner's relation and ends with its open
 
 test("a related task's row leads its trailing run with its stop sign and says how many of its sub-tasks are finished, even in a narrow pane", () => {
   const blocked: TaskSummary = { ...TASK, blocked: true };
+
   const child = (id: string, status: NonNullable<TaskSummary["status"]>): TaskSummary => ({
     ...TASK,
     id,
     status,
     parentTaskId: TASK.id,
   });
+
   // Note that the list is measured as a plan's narrow pane stands it, which folds the columns that fold away.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
     new DOMRect(0, 0, 360, 400),
@@ -164,12 +170,14 @@ test("a related task's row leads its trailing run with its stop sign and says ho
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const tasks = tasksControl({
     tasks: [blocked, child("t-43", TASK_STATUS.DONE), child("t-44", TASK_STATUS.TODO)],
     workspace: ACME,
     workspaces: [ACME],
     listRead: true,
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -199,12 +207,14 @@ test("under a finger, a related task's row draws no ⋯, and a long press on it 
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const tasks = tasksControl({
     tasks: [TASK],
     workspace: ACME,
     workspaces: [ACME],
     listRead: true,
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -223,8 +233,10 @@ test("under a finger, a related task's row draws no ⋯, and a long press on it 
   assert.ok(row, "the task's row stands");
   assert.ok(row.querySelector('button[aria-label="Task actions"]') === null, "the row draws no ⋯");
   longPress(row.querySelector<HTMLElement>("[data-card-press]") ?? assert.fail("no press"));
+
   const labels = [...document.querySelectorAll('[role^="menuitem"] .ui-menu-item-label')].map(
     (label) => label.textContent,
   );
+
   assert.ok(labels.includes("Rename"), "the menu offers Rename");
 });

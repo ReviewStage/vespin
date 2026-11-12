@@ -215,11 +215,14 @@ function lockedPair(
     if (pair.blockerTaskId === pair.blockedTaskId) return yield* new TaskBlockSelf();
     const taskIds = [pair.blockerTaskId, pair.blockedTaskId];
     const reached = yield* lockReachableTasks({ userId, taskIds });
+
     if (reached.length !== taskIds.length) return Option.none();
     const [first, second] = reached;
+
     if (first === undefined || first.organizationId !== second?.organizationId) {
       return yield* new TaskBlockAcrossWorkspaces();
     }
+
     return Option.some(first.organizationId);
   });
 }
@@ -236,6 +239,7 @@ export function taskBlockedFor(userId: string): SQL {
     .select({ id: task.id })
     .from(task)
     .where(and(notInArray(task.status, [...TASK_SETTLED]), taskReachableBy(userId)));
+
   return exists(
     queryBuilder
       .select({ one: sql`1` })
@@ -255,11 +259,14 @@ export function readTaskBlocks(
 ): TaskBlockEffect<Option.Option<TaskBlocks>> {
   return Effect.gen(function* () {
     const reached = yield* findReachableTask({ userId, taskId });
+
     if (Option.isNone(reached)) return Option.none();
+
     const { blockers, blocked } = yield* Effect.all(
       { blockers: findBlockers({ userId, taskId }), blocked: findBlocked({ userId, taskId }) },
       { concurrency: yield* readConcurrency },
     );
+
     return Option.some({
       blockedBy: blockers.map((row) => row.id),
       blocks: blocked.map((row) => row.id),
@@ -283,11 +290,14 @@ export function addTaskBlock(
     client.withTransaction(
       Effect.gen(function* () {
         const workspace = yield* lockedPair(userId, pair);
+
         if (Option.isNone(workspace)) return Option.none();
         // Note that the workspace's adds take turns, because two adds that each close half a cycle would each walk past the other's unwritten row.
         yield* client`select pg_advisory_xact_lock(hashtextextended(${workspace.value}, 0))`;
+
         if (Option.isSome(yield* findCycle(pair))) return yield* new TaskBlockCycle();
         const now = yield* DateTime.nowAsDate;
+
         return Option.some(writtenOf(yield* insertBlock({ ...pair, now })));
       }),
     ),
@@ -326,7 +336,9 @@ export function removeTaskBlock(
       Effect.gen(function* () {
         const taskIds = [...new Set([pair.blockerTaskId, pair.blockedTaskId])];
         const reached = yield* lockReachableTasks({ userId, taskIds });
+
         if (reached.length !== taskIds.length) return Option.none();
+
         return Option.some(writtenOf(yield* deleteBlock(pair)));
       }),
     ),

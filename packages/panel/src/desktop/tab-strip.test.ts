@@ -27,6 +27,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   moves = [];
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   document.head.innerHTML = "";
@@ -51,6 +52,7 @@ function pill(container: HTMLElement, label: string): HTMLElement {
   const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === label,
   );
+
   return tab?.closest<HTMLElement>(".ui-tab") ?? assert.fail(`${label}'s tab stands`);
 }
 
@@ -84,6 +86,7 @@ function menuItem(label: string): HTMLElement {
   const name = [...document.querySelectorAll(".ui-menu-item-label")].find(
     (each) => each.textContent === label,
   );
+
   return name?.closest<HTMLElement>('[role="menuitem"]') ?? assert.fail(`no ${label} item`);
 }
 
@@ -93,6 +96,7 @@ async function menuStripTab(label: string): Promise<HTMLElement> {
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(MenuStrip))));
+
   return pill(container, label).querySelector<HTMLElement>('[role="tab"]') ?? assert.fail("a tab");
 }
 
@@ -111,6 +115,7 @@ test("under a finger, a tab held offers Move left and Move right, and Move right
   vi.stubGlobal("matchMedia", pointerMedia(true));
   const tab = await menuStripTab("Changes");
   vi.useFakeTimers();
+
   try {
     act(() => {
       tab.dispatchEvent(touch("pointerdown"));
@@ -121,6 +126,7 @@ test("under a finger, a tab held offers Move left and Move right, and Move right
   } finally {
     vi.useRealTimers();
   }
+
   act(() => {
     tab.dispatchEvent(touch("pointerup"));
   });

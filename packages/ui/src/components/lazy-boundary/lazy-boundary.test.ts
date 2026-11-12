@@ -19,10 +19,13 @@ test("a surface whose module landed and then threw is drawn again in place on Re
   // Note that React says the failure its boundary caught on the console, as it would in the window.
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   const broken = { now: true };
+
   const Page = () => {
     if (broken.now) throw new Error("The page could not draw.");
+
     return createElement("p", null, "The page");
   };
+
   const reloads: string[] = [];
   const host = document.createElement("div");
   const root = createRoot(host);
@@ -36,9 +39,11 @@ test("a surface whose module landed and then threw is drawn again in place on Re
       }),
     ),
   );
+
   const reload = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Reload",
   );
+
   broken.now = false;
   act(() => reload?.click());
   expect(host.textContent).toBe("The page");
@@ -49,11 +54,13 @@ test("a surface whose module landed and then threw is drawn again in place on Re
 
 test("a surface whose chunk failed reloads the window from Reload", async () => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
+
   const Page = lazy(() =>
     Promise.reject<{ default: () => React.JSX.Element }>(
       new TypeError("Failed to fetch dynamically imported module"),
     ),
   );
+
   const reloads: string[] = [];
   const host = document.createElement("div");
   const root = createRoot(host);
@@ -67,9 +74,11 @@ test("a surface whose chunk failed reloads the window from Reload", async () => 
       }),
     ),
   );
+
   const reload = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Reload",
   );
+
   act(() => reload?.click());
   expect(reloads).toEqual(["window"]);
   act(() => root.unmount());

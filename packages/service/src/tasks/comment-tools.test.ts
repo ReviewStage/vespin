@@ -44,6 +44,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -56,6 +57,7 @@ const openThreadedTask = Effect.gen(function* () {
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
   yield* saveDescriptionText(owner, taskId, DESCRIPTION_TEXT);
   const from = DESCRIPTION_TEXT.indexOf(WORDS);
+
   const started = yield* startDescriptionCommentThread(
     { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: teammate },
     taskId,
@@ -68,7 +70,9 @@ const openThreadedTask = Effect.gen(function* () {
       words: "Is this in v1?",
     },
   );
+
   assert.ok("answer" in started && "thread" in started.answer);
+
   return { owner, taskId, thread: started.answer.thread };
 });
 
@@ -96,21 +100,25 @@ it.layer(getTestDB())("the comment tools", (it) => {
             words: "Not in v1; the page does not exist yet.",
           }),
         );
+
         const read = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
           unparsedWire({ taskId }),
         );
+
         yield* runCommentTool(
           AGENT_TOOL.UPDATE_COMMENT,
           writer,
           unparsedWire({ taskId, thread: thread.id, resolved: true }),
         );
+
         const openAfter = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
           unparsedWire({ taskId }),
         );
+
         const resolved = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
@@ -150,6 +158,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
       Effect.gen(function* () {
         const { owner, taskId, thread } = yield* openThreadedTask;
         const writer = asOwner(owner, taskId);
+
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -158,12 +167,14 @@ it.layer(getTestDB())("the comment tools", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         const started = yield* startDescriptionCommentThread(writer.writer, taskId, {
           clientKey: randomUUID(),
           page: { id: page.id, version: 1 },
           element: { path: "body > p", quote: "12 sent", section: "" },
           words: "Per week?",
         });
+
         assert.ok("answer" in started && "thread" in started.answer);
 
         const onPage = yield* runCommentTool(
@@ -171,6 +182,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
           writer,
           unparsedWire({ taskId, page: page.id }),
         );
+
         const onPlan = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
@@ -191,10 +203,12 @@ it.layer(getTestDB())("the comment tools", (it) => {
         );
 
         const descriptionsOff = asOwner(owner, taskId, false);
+
         const offRefused = {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: EXPERIMENT_OFF_REFUSAL,
         };
+
         assert.deepEqual(
           yield* runCommentTool(
             AGENT_TOOL.READ_COMMENTS,
@@ -229,11 +243,13 @@ it.layer(getTestDB())("the comment tools", (it) => {
         );
 
         const onThread = { taskId, thread: started.answer.thread.id };
+
         const resolvedOff = yield* runCommentTool(
           AGENT_TOOL.UPDATE_COMMENT,
           descriptionsOff,
           unparsedWire({ ...onThread, resolved: true }),
         );
+
         assert.equal(resolvedOff.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
           yield* runCommentTool(
@@ -264,16 +280,19 @@ it.layer(getTestDB())("the comment tools", (it) => {
           writer,
           unparsedWire({ taskId, thread: thread.id, words: "Still here." }),
         );
+
         yield* runCommentTool(
           AGENT_TOOL.UPDATE_COMMENT,
           writer,
           unparsedWire({ taskId, thread: thread.id, resolved: false }),
         );
+
         const taken = yield* runCommentTool(
           AGENT_TOOL.REPLY_TO_COMMENT,
           writer,
           unparsedWire({ taskId, thread: thread.id, words: "Still here." }),
         );
+
         const elsewhere = yield* runCommentTool(
           AGENT_TOOL.UPDATE_COMMENT,
           writer,

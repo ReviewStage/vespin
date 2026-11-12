@@ -74,6 +74,29 @@
     inset-block-end: calc(var(--ui-space-8) + var(--ui-space-2));
   }
 
+  /* A row that grows something under its line, a run action's command
+     folded open or a plan's steps, centers its grip on its line, as its
+     mark is, rather than on all it holds: the line is an anchor scoped to
+     its own row, its nested rows' lines left out. Note that where a browser
+     knows no anchor scope the grip stays centered on the whole row, as
+     before. */
+  @supports (anchor-scope: all) {
+    .ui-settings-ordered-row {
+      anchor-scope: --ui-settings-ordered-line;
+    }
+
+    .ui-settings-ordered-row .ui-settings-row-line:not(.ui-settings-row-below *) {
+      anchor-name: --ui-settings-ordered-line;
+    }
+
+    .ui-settings-ordered-row:has(.ui-settings-row-below) .ui-settings-ordered-grip {
+      position-anchor: --ui-settings-ordered-line;
+      inset-block-start: anchor(start);
+      inset-block-end: auto;
+      block-size: anchor-size(block);
+    }
+  }
+
   .ui-settings-ordered-grip > svg {
     width: var(--ui-space-12);
     height: var(--ui-space-12);

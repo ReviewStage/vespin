@@ -17,6 +17,7 @@ function main(): HTMLElement {
   root.innerHTML = renderToString(createElement(AboutPage));
   const region = root.querySelector("main");
   assert.ok(region !== null);
+
   return region;
 }
 
@@ -39,5 +40,6 @@ test("each founder's profiles open in a new tab, named for the founder", () => {
       "Dean Stratakos on X -> https://x.com/DeanStratakos",
     ],
   );
+
   for (const link of links) assert.equal(link.getAttribute("target"), "_blank");
 });

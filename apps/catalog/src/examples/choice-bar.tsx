@@ -42,6 +42,7 @@ const VIEW = {
   CHECKS: "checks",
   FILES: "files",
 } as const;
+
 type View = (typeof VIEW)[keyof typeof VIEW];
 
 /** A pull request's three views, each counting what it holds, its checks failing. */
@@ -80,6 +81,7 @@ const SHOW = {
   UNREAD: "unread",
   ALL: "all",
 } as const;
+
 type Show = (typeof SHOW)[keyof typeof SHOW];
 
 /** An Inbox's tabs: names and counts, one needing the reader in the attention tone. */
@@ -101,6 +103,7 @@ const EFFORT = {
   HIGH: "high",
   HIGHEST: "highest",
 } as const;
+
 type Effort = (typeof EFFORT)[keyof typeof EFFORT];
 
 const EFFORTS: readonly ChoiceItem<Effort>[] = [
@@ -131,6 +134,7 @@ function HeldTabs<Value extends string>({
   const [value, setValue] = useState<Value>(start);
   const id = useId();
   const panels = (each: Value) => ({ tab: `${id}-${each}-tab`, panel: `${id}-${each}-panel` });
+
   return (
     <Stack gap={GAP.CONTROL} align={ALIGN.START}>
       <ChoiceBar<Value>
@@ -174,6 +178,7 @@ function HeldEffort({
   disabled?: boolean;
 }): React.JSX.Element {
   const [effort, setEffort] = useState<Effort | undefined>(start);
+
   return (
     <ChoiceBar<Effort>
       label="Effort"
@@ -191,6 +196,7 @@ function HeldEffort({
 /** A clearable radio group over glyphed options the example holds, none chosen at first. */
 function HeldClearableViews(): React.JSX.Element {
   const [view, setView] = useState<View | undefined>(undefined);
+
   return (
     <ChoiceBar<View>
       label="Show only"

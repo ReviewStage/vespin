@@ -85,11 +85,13 @@ function byWorkspace<Row extends { organizationId: string }, Value>(
   pick: (row: Row) => Value,
 ): Map<string, Value[]> {
   const grouped = new Map<string, Value[]>();
+
   for (const row of rows) {
     const list = grouped.get(row.organizationId) ?? [];
     list.push(pick(row));
     grouped.set(row.organizationId, list);
   }
+
   return grouped;
 }
 
@@ -101,6 +103,7 @@ function invitationSummary(
   let pending = 0;
   let expired = 0;
   let settled = 0;
+
   for (const { status, count, pastExpiry } of counts) {
     // Note that only a pending invitation is still open, and only until its
     // expiry; whatever else became of one, it has settled.
@@ -110,9 +113,11 @@ function invitationSummary(
       settled += pastExpiry;
     } else {
       settled += count;
+
       if (status === INVITATION_STATUS.ACCEPTED) accepted += count;
     }
   }
+
   return { accepted, pending, expired, settled, acceptanceRate: ratio(accepted, settled) };
 }
 
@@ -173,6 +178,7 @@ export function handleAdminWorkspaces(
   const { query } = options;
 
   const search = adminUsersSearch(query.search);
+
   if (search === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_SEARCH);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

@@ -41,6 +41,7 @@ const openAgentConversation = Effect.gen(function* () {
   yield* db
     .insert(conversations)
     .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
+
   return { userId, conversationId } satisfies ConversationTarget;
 });
 
@@ -58,11 +59,13 @@ const claimLeftBy = (target: ConversationTarget, claim: string) =>
 /** A hand-over that counts itself and answers as given. */
 const countedDispatch = Effect.gen(function* () {
   const handed = yield* Ref.make(0);
+
   const dispatch = (taken: boolean) =>
     Effect.as(
       Ref.update(handed, (n) => n + 1),
       taken,
     );
+
   return { handed, dispatch };
 });
 
@@ -83,6 +86,7 @@ const inNoTransaction = Effect.flatMap(SqlClient.SqlClient, (sql) =>
     const xid = sql<{ readonly xid: string }>`select txid_current()::text as xid`;
     const [first] = yield* xid;
     const [second] = yield* xid;
+
     return first !== undefined && second !== undefined && first.xid !== second.xid;
   }),
 );
@@ -96,10 +100,12 @@ const inNoTransaction = Effect.flatMap(SqlClient.SqlClient, (sql) =>
 const joinedAsTimePasses = <A, E>(fiber: Fiber.Fiber<A, E>) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     while (fiber.pollUnsafe() === undefined) {
       yield* TestClock.adjust(Duration.millis(100));
       yield* sql`select 1`;
     }
+
     return yield* Fiber.join(fiber);
   });
 
@@ -107,6 +113,7 @@ const joinedAsTimePasses = <A, E>(fiber: Fiber.Fiber<A, E>) =>
 const timePasses = (millis: number) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     for (let passed = 0; passed < millis; passed += 50) {
       yield* TestClock.adjust(Duration.millis(50));
       yield* sql`select 1`;
@@ -162,6 +169,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const waiting = yield* Effect.forkChild(
           writer.writeAwaitingLine(target, line, dispatch(true)),
         );
+
         const busy = yield* joinedAsTimePasses(waiting);
         const rowsWhileBusy = yield* rowsUnder(target, "send-1");
         yield* db
@@ -195,6 +203,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const early = yield* Effect.forkChild(
           writer.writeAwaitingLine(target, next, dispatch(true)),
         );
+
         const busy = yield* joinedAsTimePasses(early);
         yield* TestClock.adjust(DISPATCH_CLAIM.EXPIRY);
         const retried = yield* writer.writeAwaitingLine(target, lost, dispatch(true));
@@ -222,6 +231,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const heard = yield* Ref.make<readonly string[]>([]);
         const began = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
+
         const send = (clientKey: string, dispatch: Effect.Effect<boolean>) =>
           writer.writeAwaitingLine(
             target,
@@ -238,6 +248,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             ),
           ),
         );
+
         yield* Deferred.await(began);
         const second = yield* Effect.forkChild(send("second", Effect.succeed(true)));
         yield* timePasses(300);
@@ -248,6 +259,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         yield* Fiber.join(first);
         yield* joinedAsTimePasses(second);
         yield* joinedAsTimePasses(third);
+
         const seqs = yield* Effect.forEach(["first", "second", "third"], (key) =>
           Effect.map(
             readMessageByClientId(target.userId, target.conversationId, {}, sentLineId(key)),
@@ -271,6 +283,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const writer = yield* storeWriter({ tools: {} });
         const db = yield* Database;
         const heard = yield* Ref.make<readonly string[]>([]);
+
         const send = (clientKey: string) =>
           writer.writeAwaitingLine(
             target,
@@ -280,6 +293,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
               true,
             ),
           );
+
         // A hand-over's claim, which stands while the sends below wait on it.
         yield* claimLeftBy(target, randomUUID());
 
@@ -314,6 +328,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
           { text: "Fix the tile.", clientKey: "fix", sender: SENDER },
           Effect.succeed(true),
         );
+
         const rewound = yield* rewindConversation(gone, randomUUID());
 
         assert.deepEqual(sent, Result.fail({ refusal: STORE_WRITE_REFUSAL.NO_CONVERSATION }));
@@ -333,6 +348,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         yield* waiterSeen(live, 0);
 
         const pastStale = yield* writer.writeAwaitingLine(stale, line, Effect.succeed(true));
+
         const behindLive = yield* Effect.forkChild(
           writer.writeAwaitingLine(live, line, Effect.succeed(true)),
         );
@@ -358,12 +374,15 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const refusing = yield* Effect.forkChild(
           writer.writeAwaitingLine(target, line, dispatch(false)),
         );
+
         const refused = yield* joinedAsTimePasses(refusing);
+
         const sentAfter = yield* sentLineStands(
           target.userId,
           target.conversationId,
           sentLineId("fix"),
         );
+
         const retried = yield* writer.writeAwaitingLine(target, line, dispatch(true));
 
         assert.deepEqual(refused, Result.succeed(Option.none()));
@@ -380,6 +399,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
       const writer = yield* storeWriter({ tools: {} });
       const services = yield* Effect.context<DatabaseServices>();
       const seen = yield* Ref.make<readonly boolean[]>([]);
+
       const looked = Effect.tap(Effect.orDie(Effect.provide(inNoTransaction, services)), (alone) =>
         Ref.update(seen, (all) => [...all, alone]),
       );
@@ -415,6 +435,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             ),
           ),
         );
+
         yield* Deferred.await(began);
         const sentMeanwhile = yield* sent;
         const rowsMeanwhile = yield* rowsUnder(target, "fix");

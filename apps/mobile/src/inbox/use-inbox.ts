@@ -64,6 +64,12 @@ const INBOX_SCOPE_KEY = "inboxScope";
 /** No holder read yet. */
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
+type UseChosenInboxResult = {
+  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly chosen: Workspace | undefined;
+  readonly workspaces: number;
+};
+
 /**
  * Every holder of Inbox items in the workspace chosen in Settings, as the
  * panel's Inbox lists the chosen workspace's alone, heard anew as another is
@@ -71,17 +77,15 @@ const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
  * them, the workspace chosen and how many the account has, which the Inbox
  * widget names (`inbox-widget/`).
  */
-export function useChosenInbox(): {
-  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
-  readonly chosen: Workspace | undefined;
-  readonly workspaces: number;
-} {
+export function useChosenInbox(): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
+
   const { data: groups = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(chosen?.id),
   });
+
   return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
 }
 
@@ -93,19 +97,24 @@ function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
 function keptScope(): InboxShow {
   const kept: unknown = Settings.get(INBOX_SCOPE_KEY);
+
   return Object.values(INBOX_SHOW).find((show) => show === kept) ?? INBOX_SHOW.OPEN;
 }
 
-/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
-export function useInboxScope(): {
+type UseInboxScopeResult = {
   readonly show: InboxShow;
   readonly choose: (show: InboxShow) => void;
-} {
+};
+
+/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
+export function useInboxScope(): UseInboxScopeResult {
   const [show, setShow] = useState(keptScope);
+
   const choose = (next: InboxShow) => {
     Settings.set({ [INBOX_SCOPE_KEY]: next });
     setShow(next);
   };
+
   return { show, choose };
 }
 
@@ -132,13 +141,17 @@ export function useInboxListing(view: {
 }): InboxListing {
   const groups = useInboxGroups();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   const { data: feed = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+
   const { show, search, chosen } = view;
+
   return useMemo(() => {
     const standing = inboxAtNow(groups, Date.now());
+
     const listed = inboxList(standing, {
       show,
       chosen,
@@ -146,7 +159,9 @@ export function useInboxListing(view: {
       whose: MINE,
       search: searchTokens(search),
     }).items;
+
     const unread = listed.filter(({ item }) => isUnread(item)).map(({ item }) => item.id);
+
     return { listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId };
   }, [groups, readerId, feed, show, search, chosen]);
 }
@@ -161,12 +176,19 @@ export function useInboxBadge(): number {
   const groups = useInboxGroups();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const now = Date.now();
+
   return groups.reduce(
     (count, { items }) =>
       count + items.filter((item) => waitsOnReaderNow(item, readerId, now)).length,
     0,
   );
 }
+
+type UseInboxThreadResult = {
+  readonly listed: InboxListed | undefined;
+  readonly readerId: string | undefined;
+  readonly feed: InboxFeed;
+};
 
 /**
  * One thread by its id, with what holds it, wherever it stands in the
@@ -179,45 +201,50 @@ export function useInboxBadge(): number {
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  */
-export function useInboxThread(id: string | undefined): {
-  readonly listed: InboxListed | undefined;
-  readonly readerId: string | undefined;
-  readonly feed: InboxFeed;
-} {
+export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
   });
+
   const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   const { data: answered = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+
   const holds = useCallback((state: AppStateSnapshot) => inboxFeedHolds(state, id), [id]);
   const { data: held = false } = useQuery({ ...appStateQuery, select: holds });
+
   const { data: tasksRead = TASKS_READ.IDLE } = useQuery({
     ...appStateQuery,
     select: selectTaskListStatus,
   });
+
   const listed = useMemo(() => {
     for (const { holder, items } of groups) {
       const item = items.find((each) => each.id === id);
+
       if (item !== undefined) return { holder, item };
     }
+
     return undefined;
   }, [groups, id]);
+
   const feed =
     listed !== undefined || !held || tasksRead === TASKS_READ.READY
       ? answered
       : tasksRead === TASKS_READ.FAILED
         ? INBOX_FEED.FAILED
         : INBOX_FEED.READING;
+
   return { listed, readerId, feed };
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
@@ -234,6 +261,7 @@ export function useInboxActs(): {
 } {
   const acts = useHostActs();
   const write = useWrite();
+
   return useMemo(
     () => ({
       mark: (itemId, unread) => {
@@ -311,13 +339,14 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   // Note that the mark is sent as a thread opens, never again as it is read, so only the thread's id moves it.
   useEffect(() => {
     if (id === undefined) return;
+
     // Note that the mark goes quietly, whatever comes back, since no person pressed for it.
     if (unread)
       acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId: id, unread: false }).catch(
         refused("The mark"),
       );
-    dismissThreadNotifications(id).catch((error: unknown) =>
-      console.error("The thread's notifications were not removed.", error),
+    dismissThreadNotifications(id).catch((cause: unknown) =>
+      console.error("The thread's notifications were not removed.", cause),
     );
   }, [id]);
 }
@@ -340,26 +369,33 @@ export function useThreadMedia(
 ): ReadonlyMap<string, string> {
   const acts = useHostActs();
   const [sources, setSources] = useState<ReadonlyMap<string, string>>(new Map());
+
   // The thread the files were asked for, and the attachments asked for on it.
   const asked = useRef<{ readonly itemId: string | undefined; readonly ids: Set<string> }>({
     itemId: undefined,
     ids: new Set(),
   });
+
   useEffect(() => {
     if (itemId === undefined) return;
+
     if (asked.current.itemId !== itemId) {
       asked.current = { itemId, ids: new Set() };
       setSources(new Map());
     }
+
     const { ids } = asked.current;
+
     for (const each of media) {
       if (ids.has(each.attachmentId)) continue;
       ids.add(each.attachmentId);
+
       // A read that fails is forgotten, so the thread's next change asks for it again.
-      const forget = (error: unknown) => {
+      const forget = (cause: unknown) => {
         if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
-        refused("Reading a thread's file")(error);
+        refused("Reading a thread's file")(cause);
       };
+
       // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
       const playable = each.kind === INBOX_MEDIA.VIDEO ? ({ playable: MP4_TYPE } as const) : {};
       acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
@@ -370,7 +406,9 @@ export function useThreadMedia(
         .then(async (read) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
+
           if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
+
           const source =
             each.kind === INBOX_MEDIA.VIDEO
               ? await cachedVideo(
@@ -380,11 +418,13 @@ export function useThreadMedia(
                   read.base64,
                 )
               : `data:${read.contentType};base64,${read.base64}`;
+
           if (asked.current.itemId !== itemId) return;
           setSources((held) => new Map(held).set(each.attachmentId, source));
         })
         .catch(forget);
     }
   }, [acts, itemId, media]);
+
   return sources;
 }

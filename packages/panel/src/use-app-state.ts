@@ -1,8 +1,12 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { type AppStateBridgeReads, followAppStateOver } from "@repo/host/app-state-reads";
+import {
+  type AppStateBridgeReads,
+  followAppStateOver,
+  shareAppState,
+} from "@repo/host/app-state-reads";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
-import { Data, Effect } from "effect";
+import { Data, Effect, Predicate } from "effect";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
@@ -84,7 +88,9 @@ const firstRead: Effect.Effect<AppStateSnapshot, AppStateUnread> = Effect.flatMa
  * never stale (`staleTime: Infinity`, as the docs' guide to data pushed over
  * a socket has it) and never read again; its `queryFn`, a read of its own, stands only for a reader on a
  * client nothing follows into. A read the bridge refused is not tried
- * again, since the window shows that failure at once.
+ * again, since the window shows that failure at once. Its structural
+ * sharing, which every reader's `select` answer shares as well, keeps the
+ * readers on the document's own objects (`shareAppState`).
  *
  * Note that the read answers the document the client holds where that is as
  * new, because the subscription may have written a later reading while the
@@ -95,9 +101,11 @@ export const appStateQuery = queryOptions({
   queryFn: ({ client }) =>
     rendererPromise(firstRead).then((read) => {
       const held: AppStateSnapshot | undefined = client.getQueryData([QUERY_ROOT.APP_STATE]);
+
       return held !== undefined && held.version >= read.version ? held : read;
     }),
   staleTime: Infinity,
+  structuralSharing: shareAppState,
   retry: false,
 });
 
@@ -110,7 +118,9 @@ export const appStateQuery = queryOptions({
 function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
-    if (typeof bridge.onAppState !== "function") return undefined;
+
+    if (!Predicate.isFunction(bridge.onAppState)) return undefined;
+
     return {
       requestAppState: () => bridge.requestAppState(),
       onAppState: (listener) => bridge.onAppState(listener),
@@ -146,12 +156,15 @@ export interface AppStateFollowing {
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
+
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
   const write = (state: AppStateSnapshot): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
       client.setQueryData(appStateQuery.queryKey, state);
+
       return undefined;
     }
+
     // Note that a staging that throws is reported and passed over, because the readings queued behind it must still land.
     const next = (staging ?? Promise.resolve())
       .then(() => staged(state))
@@ -159,28 +172,35 @@ export function followAppState(client: QueryClient): AppStateFollowing {
         (shown) => {
           if (following) client.setQueryData(appStateQuery.queryKey, shown);
         },
-        (error: unknown) => {
-          console.error("A fixture run's document could not be staged.", error);
+        (cause: unknown) => {
+          console.error("A fixture run's document could not be staged.", cause);
         },
       )
       .then(() => {
         if (staging === next) staging = undefined;
       });
+
     staging = next;
+
     return next;
   };
+
   const takeBack = handFixtureClient(client);
   const hearing = heard();
+
   const followed =
     hearing === undefined
       ? undefined
       : followAppStateOver(hearing, write, (message, cause) => {
           console.error(message, cause);
         });
+
   const stopMoves = onFixtureMoved(() => {
     const held = followed?.held();
+
     if (held !== undefined) write(held);
   });
+
   return {
     written: followed?.written ?? Promise.resolve(),
     stop: () => {

@@ -48,6 +48,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   delete document.documentElement.dataset.keyboard;
@@ -64,10 +65,13 @@ interface HeadWords {
 /** What a corner says to a reader: its text, or, where it holds marks alone, as a task's does, their words. */
 function cornerWords(corner: Element | null): string | undefined {
   if (corner === null) return undefined;
+
   if (corner.textContent !== "") return corner.textContent;
+
   const marks = [...corner.querySelectorAll('[role="img"][aria-label]')].filter(
     (each) => each.parentElement?.closest('[aria-hidden="true"]') === null,
   );
+
   return marks.map((each) => each.getAttribute("aria-label")).join(", ");
 }
 
@@ -77,6 +81,7 @@ function headOf(within: ParentNode): HeadWords {
   assert.equal(heads.length, 1, "the card has one head");
   const head = heads[0];
   assert.ok(head);
+
   return {
     glyph: head.querySelector(":scope > .ui-hover-card-glyph") !== null,
     name:
@@ -96,6 +101,7 @@ function drawn(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(element)));
+
   return container;
 }
 
@@ -106,6 +112,7 @@ function hung(view: HTMLElement, selector: string): HTMLElement {
   restOn(anchor);
   const card = document.querySelector<HTMLElement>(".ui-tooltip-card");
   assert.ok(card, "the card hangs");
+
   return card;
 }
 
@@ -132,6 +139,7 @@ const PULL_REQUEST = {
 test("a working agent's card says only how long its run has gone at its corner, its tile wearing the working mark in its harness's place", async () => {
   // Note that only the date is faked, so the count's clock reads it while its ticks still run.
   vi.useFakeTimers({ now: STARTED_AT + 65_000, toFake: ["Date"] });
+
   const card = drawn(
     createElement(AgentTabCard, {
       name: "Audit the retry paths",
@@ -153,6 +161,7 @@ test("a working agent's card says only how long its run has gone at its corner, 
       }),
     }),
   );
+
   await vi.waitFor(() =>
     assert.equal(card.querySelector(".ui-hover-card-corner")?.textContent, "1m 5s"),
   );
@@ -173,6 +182,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
       onShowAgent: ignore,
     }),
   );
+
   assert.deepEqual(headOf(task), {
     glyph: true,
     name: "Teammate invitations",
@@ -196,6 +206,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
       }),
     }),
   );
+
   const agentHead = headOf(agent);
   assert.equal(agentHead.name, "Invite flow");
   assert.equal(
@@ -241,6 +252,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
       },
     }),
   );
+
   assert.deepEqual(headOf(pullRequest), {
     glyph: true,
     name: "Expire invitations",
@@ -259,6 +271,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
         },
       ],
     });
+
   const message = drawn(
     createElement(SkillFiles, {
       source: skills,
@@ -266,6 +279,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
       children: createElement(SentWords, { text: "Cut it with /release now." }),
     }),
   );
+
   await settleFrames();
   const skill = hung(message, ":is(button, [role='button'])[data-skill-ref]");
   assert.deepEqual(headOf(skill), {
@@ -283,6 +297,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
 test("a pull request's corner says the age of the moment its state names, and nothing where the service answered only when a merged one was opened", () => {
   vi.useFakeTimers({ now: STARTED_AT, toFake: ["Date"] });
   const opened = { moment: PULL_REQUEST_MOMENT.OPENED, at: STARTED_AT - 5 * 86_400_000 };
+
   const card = (state: (typeof PULL_REQUEST_STATE)[keyof typeof PULL_REQUEST_STATE]) =>
     headOf(
       drawn(
@@ -293,6 +308,7 @@ test("a pull request's corner says the age of the moment its state names, and no
         }),
       ),
     ).corner;
+
   assert.equal(card(PULL_REQUEST_STATE.OPEN), "5d");
   assert.equal(card(PULL_REQUEST_STATE.MERGED), undefined);
 });
@@ -307,6 +323,7 @@ test("a plan's card says under its name when the task last saw activity, its age
       pullRequestTotal: 0,
     },
   };
+
   const card = drawn(
     createElement(TaskCard, {
       task: worked,
@@ -315,5 +332,6 @@ test("a plan's card says under its name when the task last saw activity, its age
       onShowAgent: ignore,
     }),
   );
+
   assert.equal(headOf(card).sub, "acme/relay · 1h");
 });

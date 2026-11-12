@@ -47,27 +47,33 @@ const WORKING_VIEW: TasksView = {
   tasks: [{ ...NOTES, agents: { total: 1, working: 1, pullRequestTotal: 0 } }],
 };
 
+type MountWritesResult = {
+  writes: () => StandingWrites;
+  payloads: unknown[];
+};
+
 /** The standing writes over `view`, drawn with their question under the window's toasts, the act port answering `standing` and writing down each payload. */
 function mountWrites(
   standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING],
   view: TasksView = VIEW,
-): {
-  writes: () => StandingWrites;
-  payloads: unknown[];
-} {
+): MountWritesResult {
   const payloads: unknown[] = [];
   fakeAppBridge({});
   fakeActPort({
     [ACT_KIND.TASKS_SET_STANDING]: (payload, ...rest) => {
       payloads.push(payload);
+
       return standing(payload, ...rest);
     },
   });
   let writes: StandingWrites | undefined;
+
   const Probe = () => {
     writes = useStandingWrites(() => view);
+
     return writes.dialog;
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -77,6 +83,7 @@ function mountWrites(
       ),
     ),
   );
+
   return { writes: () => writes ?? assert.fail("the writes are drawn"), payloads };
 }
 
@@ -112,9 +119,11 @@ test("a member assigned from a chip goes to main with the name the reader knows 
 
 test("Mark done's Undo leaves a status chosen since alone, though that choice is still unanswered", async () => {
   let answered = 0;
+
   // The Mark done is kept, and the status chosen after it waits on the service.
   const { writes, payloads } = mountWrites(() => {
     answered += 1;
+
     return answered === 1 ? Promise.resolve(true) : new Promise(() => undefined);
   });
 
@@ -136,14 +145,17 @@ test("Mark done on a task whose agent runs sends nothing until confirmed, then a
 
   act(() => writes().onSettleTasks([NOTES.id], SETTLED_STATUS.DONE));
   await settle();
+
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+
   assert.match(dialog.textContent ?? "", /Mark as Done\?/u);
   assert.deepEqual(payloads, [], "nothing is sent before the answer");
 
   const stop = [...dialog.querySelectorAll("button")].find(
     (button) => button.textContent === "Stop agents",
   );
+
   act(() => (stop ?? assert.fail("the act is offered")).click());
   await settle();
   assert.deepEqual(payloads, [{ taskId: NOTES.id, status: TASK_STATUS.DONE, stopAgents: true }]);

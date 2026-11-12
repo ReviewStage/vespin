@@ -29,6 +29,7 @@ describe("markdownBlocks", () => {
         "[@Oct 20, 2026](mention://date/2026-10-20), see [the docs](https://example.com/docs)",
       READING,
     );
+
     expect(paragraph).toEqual({
       kind: MARKDOWN_BLOCK.PARAGRAPH,
       runs: [
@@ -66,6 +67,7 @@ describe("markdownBlocks", () => {
       "[@Teammate invitations](https://vespin.dev/acme/task/42)",
       READING,
     );
+
     expect(paragraph).toMatchObject({
       runs: [
         {
@@ -132,6 +134,7 @@ describe("heardLine", () => {
         "See [the docs](https://example.com/docs)",
       READING,
     );
+
     expect(chipLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(chipLine.runs)).toBe(
       "Pull request: pull request #128 Invite a teammate by email",
     );

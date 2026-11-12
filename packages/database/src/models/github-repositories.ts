@@ -355,11 +355,13 @@ function relabel(move: typeof RelabelSchema.Type): TaskStoreEffect<void> {
     yield* relabelAutomations(move);
     yield* copyPins(move);
     yield* deleteRelabeledPins(move);
+
     // Note that the reads are keyed lowercased, so a rename that changes only the case moves none.
     if (move.from.toLowerCase() !== move.to.toLowerCase()) {
       yield* copyReads(move);
       yield* deleteRelabeledReads(move);
     }
+
     yield* deleteDuplicateChapters(move);
     yield* relabelChapters(move);
     yield* deleteDuplicateTokenRepositories(move);
@@ -380,21 +382,27 @@ function relabel(move: typeof RelabelSchema.Type): TaskStoreEffect<void> {
 export function noteGitHubRepository(sighting: RepositorySighting): TaskStoreEffect<void> {
   const seen = { id: sighting.id, fullName: sighting.fullName, updatedAt: sighting.updatedAt };
   const named = sighting.formerly !== undefined && sighting.formerly !== sighting.fullName;
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         yield* insertSeen(seen);
         const stood = yield* lockSeen({ ...seen, named });
+
         if (Option.isNone(stood) && !named) return;
         const formerNames = new Set<string>();
+
         if (Option.isSome(stood)) {
           if (stood.value.githubUpdatedAt.getTime() > sighting.updatedAt.getTime()) return;
+
           if (stood.value.fullName !== sighting.fullName) {
             yield* updateSeen(seen);
             formerNames.add(stood.value.fullName);
           }
         }
+
         if (named) formerNames.add(sighting.formerly);
+
         for (const from of formerNames) yield* relabel({ from, to: sighting.fullName });
       }),
     ),

@@ -17,6 +17,7 @@ const COLORS = [
 
 function Swatches(): React.JSX.Element {
   const [chosen, setChosen] = useState<string | undefined>("Green");
+
   return (
     <CatalogSection id="swatches-row" title="Choosing a color">
       <div style={{ display: "flex", gap: 6 }}>

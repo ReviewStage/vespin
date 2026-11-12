@@ -30,6 +30,7 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -37,6 +38,7 @@ const rows = (names: readonly string[]) => names.map((name) => ({ key: name, row
 
 test("each row of a run is an item of a named list led by a grip hidden from a reader, and a run of one draws none", () => {
   const pressed: string[] = [];
+
   const page = mount(
     createElement(SettingsOrderedRows, {
       label: "ChatGPT plans",
@@ -44,6 +46,7 @@ test("each row of a run is an item of a named list led by a grip hidden from a r
       onPointerDown: () => pressed.push("pressed"),
     }),
   );
+
   const list = page.querySelector('ol[aria-label="ChatGPT plans"]');
   expect([...(list?.querySelectorAll(":scope > li") ?? [])].map((row) => row.textContent)).toEqual([
     "first",
@@ -62,5 +65,6 @@ test("each row of a run is an item of a named list led by a grip hidden from a r
       onPointerDown: () => pressed.push("alone"),
     }),
   );
+
   expect(alone.querySelector(SETTINGS_ORDER_HANDLE)).toBeNull();
 });

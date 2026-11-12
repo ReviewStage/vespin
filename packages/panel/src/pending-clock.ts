@@ -32,11 +32,13 @@ export function usePendingNow(waiting: boolean): number | undefined {
   useEffect(() => {
     if (!waiting) return undefined;
     const stop = forkEffect(streamInto(pendingClock, now));
+
     return () => {
       stop();
       now.setState(() => undefined);
     };
   }, [waiting, now]);
   const reading = useSelector(now);
+
   return waiting ? reading : undefined;
 }

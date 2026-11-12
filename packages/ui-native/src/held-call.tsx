@@ -40,16 +40,26 @@ export type HeldCall = {
   readonly onAnswer: (answer: HeldAnswer) => void;
 };
 
-/** Deny and Allow side by side, Allow filled as the act a held call is for; the press out reads busy, and neither takes a press meanwhile. */
+/**
+ * Deny and Allow side by side, Allow filled as the act a held call is for;
+ * the press out reads busy, and neither takes a press meanwhile. Note that
+ * at an accessibility size they stack, as an alert's buttons do, because
+ * side by side under a call's indented line at AX5 Deny broke into "Den"
+ * and "y".
+ */
 function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "onAnswer">) {
+  const large = useAccessibilitySize();
   const out = answering !== undefined;
+
   const deny =
     answering === HELD_ANSWER.DENY ? APPROVAL_PRESS_WORDS.DENYING : APPROVAL_PRESS_WORDS.DENY;
+
   const allow =
     answering === HELD_ANSWER.ALLOW ? APPROVAL_PRESS_WORDS.ALLOWING : APPROVAL_PRESS_WORDS.ALLOW;
+
   // Note that each button is keyed by its words, so a busy press is drawn anew rather than left saying what it first said.
-  return (
-    <HStack spacing={SPACE.ROW}>
+  const presses = (
+    <>
       <Button
         key={deny}
         label={deny}
@@ -63,7 +73,15 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
         disabled={out}
         onPress={() => onAnswer(HELD_ANSWER.ALLOW)}
       />
-    </HStack>
+    </>
+  );
+
+  return large ? (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {presses}
+    </VStack>
+  ) : (
+    <HStack spacing={SPACE.ROW}>{presses}</HStack>
   );
 }
 
@@ -74,6 +92,7 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
  */
 export function HeldCallBody({ held }: { readonly held: HeldCall }) {
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <Text
@@ -127,6 +146,7 @@ export function HeldCallBanner({
   const large = useAccessibilitySize();
   // Note that the banner is told to VoiceOver as it stands, since an agent held for an answer waits on the reader wherever they are.
   useAnnounced(`${waiting}, ${asks}`, true);
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>

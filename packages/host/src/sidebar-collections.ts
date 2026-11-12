@@ -74,6 +74,7 @@ const SECTIONS: RowKind<SectionsRow, SectionsChange> = {
   drawn: (change, row) => {
     if (row === undefined) return undefined;
     const drawn: SectionsRow = { ...change(row), ownerId: row.ownerId };
+
     return Equal.equals(drawn, row) ? undefined : drawn;
   },
 };
@@ -151,12 +152,16 @@ export function sidebarCollections(
         open = false;
       }),
     );
+
     const confirmation = (): Confirmation | undefined => {
       const wait = dependencies.txWait();
+
       return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
     };
+
     const redraw = () => Effect.sync(() => drawn());
     const sections: HeldRows<SectionsRow> = yield* pool.stand(SECTIONS, { redraw, confirmation });
+
     // Note that every pin made is the sidebar's, since it holds every repository the account pinned.
     const pins: HeldRows<RepositoryPin> = yield* pool.stand(REPOSITORY_PIN, {
       redraw,
@@ -177,8 +182,10 @@ export function sidebarCollections(
     /** The sections answered, as the account's one row; none while nobody is signed in. */
     const sectionsRows = (answered: TaskSections): readonly SectionsRow[] => {
       const ownerId = dependencies.ownerId();
+
       if (ownerId === undefined) return [];
       const { sections: kept, entries, agentEntries } = answered;
+
       return [{ ownerId, sections: kept, entries, agentEntries }];
     };
 
@@ -190,7 +197,9 @@ export function sidebarCollections(
         ),
       keep: (txid, kept) => {
         const wait = confirmation();
+
         if (wait !== undefined && txid !== undefined) return wait(txid);
+
         return Effect.andThen(sections.answer(sectionsRows(kept)), redraw());
       },
     };
@@ -264,6 +273,7 @@ const ANSWERS: WriteAnswers<SidebarWritten> = {
  */
 export function sidebarWrites(dependencies: SidebarWriteDependencies): SidebarWrites {
   const { gate } = dependencies;
+
   return {
     pinned: {
       kind: REPOSITORY_PIN,
@@ -276,6 +286,7 @@ export function sidebarWrites(dependencies: SidebarWriteDependencies): SidebarWr
               if (!pinnedAs.ok) return untaken(pinnedAs.failure, ANSWERS);
               const answered = pinnedAs.answer;
               const kept = answered.pins.find((pin) => pin.repository === repository);
+
               return {
                 answer: true,
                 txid: answered.txid,
@@ -299,26 +310,35 @@ export function sidebarWrites(dependencies: SidebarWriteDependencies): SidebarWr
               let kept: TaskSections | undefined;
               let txid: string | undefined;
               let refused = false;
+
               for (const [call, write] of writes.entries()) {
                 const writtenAs = yield* dependencies.writeSection(write, callKey(key, call));
+
                 if (!writtenAs.ok) {
                   // Note that a call unanswered stops the drag where it stands, so the calls after it are sent again with it, each under its own key.
                   if (writtenAs.failure === WRITE_UNTAKEN.UNANSWERED) {
                     return untaken(writtenAs.failure, ANSWERS);
                   }
+
                   if (writtenAs.failure === WRITE_UNTAKEN.REFUSED) refused = true;
                   continue;
                 }
+
                 const { txid: committed, ...sections } = writtenAs.answer;
                 kept = sections;
                 txid = committed ?? txid;
               }
+
               const last = kept;
+
               if (!refused && last !== undefined) {
                 return { answer: true, txid, taken: () => last };
               }
+
               if (!refused) return { answer: true, txid: undefined, settled: true };
+
               if (last !== undefined) yield* dependencies.collections().keep(txid, last);
+
               return REFUSED;
             })
           : Effect.succeed(REFUSED),

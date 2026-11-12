@@ -79,19 +79,23 @@ export interface TabPressDoors {
  */
 export function pressTab(doors: TabPressDoors, pressed: TabPressed): void {
   const { sidePanel, onKeys } = doors;
+
   switch (pressed.kind) {
     case TAB_PRESS.PANEL:
       sidePanel.onOpen(pressed.tab, pressed.place);
       onKeys(COLUMN.SIDE);
+
       return;
     case TAB_PRESS.FILE:
       sidePanel.onOpenFile(pressed.ref, pressed.commit, pressed.reads);
       onKeys(COLUMN.SIDE);
+
       return;
     case TAB_PRESS.COLUMN:
       if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
       doors.mainTabs.onChoose(pressed.tab);
       onKeys(COLUMN.MAIN);
+
       return;
   }
 }
@@ -114,13 +118,16 @@ export interface ColumnKeysAsk {
 export function useColumnKeys(): ColumnKeysAsk {
   const [keys, setKeys] = useState<ColumnKeys | undefined>(undefined);
   const asks = useRef(0);
+
   const onKeys = useCallback((column: Column) => {
     asks.current += 1;
     setKeys({ column, ask: asks.current });
   }, []);
+
   const onKeysTaken = useCallback(
     (ask: number) => setKeys((last) => (last?.ask === ask ? undefined : last)),
     [],
   );
+
   return { keys, onKeys, onKeysTaken };
 }

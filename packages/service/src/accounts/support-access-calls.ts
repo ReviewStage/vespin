@@ -35,10 +35,12 @@ export interface SupportAccessCalls {
 function written(call: () => Promise<object | null>): Effect.Effect<number | null, MemberFailure> {
   return Effect.gen(function* () {
     const answered = yield* pluginCall(call);
+
     const grant = yield* Effect.mapError(
       decodeGrant(answered),
       (failure) => new Cause.UnknownError(failure),
     );
+
     return grant.supportAccessUntil?.getTime() ?? null;
   });
 }

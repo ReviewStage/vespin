@@ -41,10 +41,13 @@ const WINDOW = { width: 1280, height: 900 } as const;
 const PHONE_WIDTH = 390;
 
 const DEFAULT_JOBS = 4;
+
 // Time for a first paint to settle after the fonts and the page are ready.
 const SETTLE_MS = 150;
+
 // The longest a shot waits on an example that makes something before it draws, a recording say.
 const READY_TIMEOUT_MS = 10_000;
+
 // What the video player's example says while it records its stand-in (`src/examples/video-player.tsx`).
 const RECORDING_WORDS = "Recording a stand-in video";
 
@@ -95,26 +98,40 @@ interface ShotResult {
 }
 
 // Playwright's surface this script touches, typed here because the package is not installed beside it.
+interface ScreenshotOptions {
+  readonly path: string;
+  readonly animations: "disabled";
+  readonly caret: "hide";
+}
+
+interface ContextOptions {
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly hasTouch?: boolean;
+}
+
 interface PlaywrightPage {
-  goto(url: string): Promise<unknown>;
-  waitForSelector(selector: string): Promise<unknown>;
-  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<unknown>;
+  goto(url: string): Promise<void>;
+  waitForSelector(selector: string): Promise<void>;
+  waitForFunction(script: string, arg: undefined, options?: { timeout: number }): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
   on(event: "pageerror", listener: (value: never) => void): void;
   locator(selector: string): {
-    screenshot(options: Record<string, unknown>): Promise<unknown>;
+    screenshot(options: ScreenshotOptions): Promise<Buffer>;
   };
   close(): Promise<void>;
 }
+
 interface PlaywrightContext {
   addInitScript(script: string): Promise<void>;
   newPage(): Promise<PlaywrightPage>;
 }
+
 interface PlaywrightBrowser {
-  newContext(options: Record<string, unknown>): Promise<PlaywrightContext>;
+  newContext(options: ContextOptions): Promise<PlaywrightContext>;
   close(): Promise<void>;
 }
+
 interface Playwright {
   chromium: { launch(): Promise<PlaywrightBrowser> };
 }
@@ -127,11 +144,15 @@ function say(line: string): void {
 /** Playwright, from beside this script or from the global npm folder. */
 function loadPlaywright(): Playwright {
   const require = createRequire(import.meta.url);
+
   try {
+    // SAFETY: the playwright package's main export is the module `Playwright` names.
     return require("playwright") as Playwright;
   } catch {
     const root = spawnSync("npm", ["root", "-g"], { encoding: "utf8" }).stdout.trim();
+
     try {
+      // SAFETY: the global playwright package's main export is the module `Playwright` names.
       return require(path.join(root, "playwright")) as Playwright;
     } catch {
       throw new Error(
@@ -147,14 +168,18 @@ async function serveBuild(
 ): Promise<{ readonly base: string; readonly stop: () => Promise<void> }> {
   const { build, preview } = await import("vite");
   await build({ root: APP_ROOT, logLevel: "warn", build: { outDir, emptyOutDir: true } });
+
   const server = await preview({
     root: APP_ROOT,
     logLevel: "warn",
     build: { outDir },
     preview: { port: 0, host: "127.0.0.1", open: false },
   });
+
   const base = server.resolvedUrls?.local[0];
+
   if (base === undefined) throw new Error("The catalog's preview server did not say its address");
+
   return { base, stop: () => server.close() };
 }
 
@@ -165,7 +190,9 @@ function addressOf(base: string, shot: Shot): string {
     profile: shot.profile,
     theme: shot.theme,
   });
+
   if (shot.size === SIZE.PHONE) params.set("width", String(PHONE_WIDTH));
+
   return new URL(`?${params.toString()}`, base).toString();
 }
 
@@ -178,12 +205,15 @@ async function listExamples(
   const page = await context.newPage();
   await page.goto(base);
   await page.waitForSelector(".catalog-index a");
+
   const entries = await page.evaluate<ExampleEntry[]>(`
     [...document.querySelectorAll(".catalog-index a")].map((link) => ({
       id: new URLSearchParams(link.getAttribute("href")).get("example"),
       title: link.textContent.trim(),
     }))`);
+
   await page.close();
+
   return entries;
 }
 
@@ -198,6 +228,7 @@ async function shootOne(
   await page.goto(addressOf(base, shot));
   await page.waitForSelector(".catalog-example h1");
   await page.evaluate("document.fonts.ready.then(() => true)");
+
   // Note that the video player draws nothing but this line until its recording is made, some frames on.
   try {
     await page.waitForFunction(
@@ -208,12 +239,14 @@ async function shootOne(
   } catch {
     problems.push("still recording its stand-in when shot");
   }
+
   await page.waitForTimeout(SETTLE_MS);
   await page.locator(".catalog-example").screenshot({
     path: file,
     animations: "disabled",
     caret: "hide",
   });
+
   if (problems.length > 0) say(`${shot.example.id}: ${problems.join("; ")}`);
 }
 
@@ -221,6 +254,7 @@ async function shootOne(
 function indexPage(results: readonly ShotResult[], examples: readonly ExampleEntry[]): string {
   const rows = examples.map((example) => {
     const mine = results.filter((result) => result.shot.example.id === example.id);
+
     const cells = mine
       .map(
         ({ shot, file, problems }) =>
@@ -230,9 +264,12 @@ function indexPage(results: readonly ShotResult[], examples: readonly ExampleEnt
           `</figcaption></figure>`,
       )
       .join("");
+
     return `<section id="${example.id}"><h2>${example.title}</h2><div class="grid">${cells}</div></section>`;
   });
+
   const toc = examples.map((example) => `<a href="#${example.id}">${example.title}</a>`).join(" ");
+
   return `<!doctype html><meta charset="utf-8"><title>Catalog shots</title>
 <style>
 body{font:14px system-ui;margin:24px;background:#fff;color:#111}
@@ -255,10 +292,13 @@ async function work(
     [SIZE.WIDE]: await contexts[SIZE.WIDE].newPage(),
     [SIZE.PHONE]: await contexts[SIZE.PHONE].newPage(),
   };
+
   const problems: string[] = [];
+
   for (const page of Object.values(pages)) {
     page.on("pageerror", (error: { message: string }) => problems.push(error.message));
   }
+
   for (let shot = queue.shift(); shot !== undefined; shot = queue.shift()) {
     problems.length = 0;
     const file = path.join(shot.example.id, `${shot.profile}.${shot.theme}.${shot.size}.png`);
@@ -278,17 +318,21 @@ async function main(): Promise<void> {
       help: { type: "boolean", default: false },
     },
   });
+
   if (values.help) {
     say(
       "usage: shoot.ts [--out <dir>] [--base <url of a running catalog>] [--example <id>]... [--jobs <n>]",
     );
+
     return;
   }
+
   const outDir = path.resolve(values.out);
   const jobs = Math.max(1, Number(values.jobs) || DEFAULT_JOBS);
   const buildDir = mkdtempSync(path.join(tmpdir(), "catalog-"));
   let served: Awaited<ReturnType<typeof serveBuild>> | undefined;
   let browser: PlaywrightBrowser | undefined;
+
   try {
     // Playwright is looked for first, so a machine without it fails before the long build.
     const playwright = loadPlaywright();
@@ -298,21 +342,26 @@ async function main(): Promise<void> {
     const listed = await listExamples(browser, base);
     const wanted = values.example;
     const examples = wanted === undefined ? listed : listed.filter(({ id }) => wanted.includes(id));
+
     if (examples.length === 0) throw new Error("No example matches");
     rmSync(outDir, { recursive: true, force: true });
     mkdirSync(outDir, { recursive: true });
+
     const contexts = {
       [SIZE.WIDE]: await browser.newContext({ viewport: WINDOW }),
       [SIZE.PHONE]: await browser.newContext({ viewport: WINDOW, hasTouch: true }),
     };
+
     for (const context of Object.values(contexts)) {
       await context.addInitScript(STILL_MOTION_SCRIPT);
     }
+
     const queue = examples.flatMap((example) =>
       PROFILES.flatMap((profile) =>
         THEMES.flatMap((theme) => SIZES.map((size) => ({ example, profile, theme, size }))),
       ),
     );
+
     const order = [...queue];
     const results: ShotResult[] = [];
     await Promise.all(
@@ -323,6 +372,7 @@ async function main(): Promise<void> {
     writeFileSync(path.join(outDir, "index.html"), indexPage(queued, examples));
     const flagged = results.filter((result) => result.problems.length > 0).length;
     say(`${order.length} shots of ${examples.length} examples in ${outDir}/index.html`);
+
     if (flagged > 0) say(`${flagged} shot(s) logged a page error`);
   } finally {
     await browser?.close();

@@ -1,6 +1,7 @@
 import { type SearchSubject, searchHit } from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
+import { Predicate } from "effect";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ICON_SIZE } from "../../icons/icon-size.js";
@@ -240,6 +241,7 @@ function actionsSubmenu(actions: RowActions): Submenu {
 /** What a listed row opens beside itself: its submenu, or its acts. */
 function besideOf(row: MenuRow | undefined): Submenu | undefined {
   if (row?.submenu !== undefined) return row.submenu;
+
   return row?.actions === undefined ? undefined : actionsSubmenu(row.actions);
 }
 
@@ -399,9 +401,11 @@ function sectionsOf<Row extends MenuRow>(rows: readonly Row[]): Section<Row>[] {
   const sections: Section<Row>[] = [];
   rows.forEach((row, index) => {
     const last = sections.at(-1);
+
     if (last !== undefined && last.heading === row.section) last.rows.push({ row, index });
     else sections.push({ heading: row.section, rows: [{ row, index }] });
   });
+
   return sections;
 }
 
@@ -435,27 +439,35 @@ export function matchingRows<Row extends MenuRow>(
   query: string,
 ): readonly Row[] {
   if (searchTokens(query).length === 0) return rows.filter((row) => row.searchOnly !== true);
+
   const ranked = rows
     .flatMap((row) => {
       const hit = searchHit(rowSubject(row), query);
+
       return hit === undefined ? [] : [{ row, score: hit.score }];
     })
     .sort((a, b) => b.score - a.score);
+
   const bySection = new Map<string | undefined, Row[]>();
+
   for (const { row } of ranked) {
     const stood = bySection.get(row.section);
+
     if (stood === undefined) bySection.set(row.section, [row]);
     else stood.push(row);
   }
+
   return [...bySection.values()].flat();
 }
 
 /** A row's name with the stretches a search matched marked, or as it is where nothing is typed. */
 function markedLabel(row: MenuRow, query: string): React.ReactNode {
   const ranges = searchHit(rowSubject(row), query)?.label ?? [];
+
   if (ranges.length === 0) return row.label;
   const parts: React.ReactNode[] = [];
   let from = 0;
+
   for (const range of ranges) {
     if (range.start > from) parts.push(row.label.slice(from, range.start));
     // Where the query's words landed, so the row says why it matched, as the settings search marks its own.
@@ -464,7 +476,9 @@ function markedLabel(row: MenuRow, query: string): React.ReactNode {
     );
     from = range.end;
   }
+
   if (from < row.label.length) parts.push(row.label.slice(from));
+
   return parts;
 }
 
@@ -485,18 +499,24 @@ function highlightOver(input: {
   blocked: (index: number) => boolean;
 }): number {
   const moved = input.moved === undefined ? undefined : Math.min(input.moved, input.count - 1);
+
   if (moved !== undefined && !input.blocked(moved)) return moved;
+
   if (input.chosen >= 0) return input.chosen;
+
   return input.first;
 }
 
 /** What a row prints at its end: why it cannot be picked now, unless its marks say it, or its shortcut, then its own marks; or nothing. */
 function rowHint(row: MenuRow): React.ReactNode {
   const why = row.why === MENU_ROW_WHY.MARK ? undefined : row.disabled;
+
   const said =
     why ??
     (row.command === undefined ? undefined : <Shortcut chord={APP_SHORTCUTS[row.command].chord} />);
+
   if (row.end === undefined || row.end === null) return said;
+
   return (
     <>
       {said}
@@ -529,7 +549,7 @@ function optionGroups(
         ? { icon: row.icon }
         : { lead: row.faces, leadWidth: COMBOBOX_LEAD.FACES }),
       detail: rowWords(row, unmasked, row.detail),
-      detailWords: typeof row.detail === "string" ? row.detail : undefined,
+      detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
       detailUnder: row.detailUnder,
       hint: rowWords(row, unmasked, rowHint(row)),
       replayMasked: row.replayMasked,
@@ -558,6 +578,7 @@ function rowWords(row: MenuRow, unmasked: boolean, words: React.ReactNode): Reac
   if (words === undefined || words === null || (!unmasked && row.replayMasked !== true)) {
     return words;
   }
+
   return (
     <ReplayWords unmasked={unmasked} masked={row.replayMasked}>
       {words}
@@ -572,7 +593,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     label: rowWords(row, unmasked, row.label),
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
-    detailWords: typeof row.detail === "string" ? row.detail : undefined,
+    detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
     detailUnder: row.detailUnder,
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,
@@ -710,6 +731,7 @@ export function MenuRowList({
     <>
       {sectionsOf(rows).map((section) => {
         const first = section.rows[0]?.row.id;
+
         return (
           <Fragment key={first}>
             {section.heading === undefined ? null : (
@@ -805,14 +827,19 @@ export function SearchableMenu(
   // owner hands anew, such as a search answering after the arrows moved,
   // keep the highlight on that row rather than on whatever took its place.
   const [highlight, setHighlightAt] = useState<{ index: number; id: string | undefined }>();
+
   const setHighlight = (index: number | undefined) =>
     setHighlightAt(index === undefined ? undefined : { index, id: matches[index]?.id });
+
   const movedRow =
     highlight?.id === undefined ? -1 : matches.findIndex((row) => row.id === highlight.id);
+
   const chosen = matches.findIndex((row) => row.id === value);
+
   // A row that cannot be picked takes no highlight, from the arrows or from a moment ago.
   const blocked = (index: number) =>
     (matches[index] ?? foot[index - matches.length])?.disabled !== undefined;
+
   const at = highlightOver({
     moved: movedRow >= 0 ? movedRow : highlight?.index,
     chosen,
@@ -820,6 +847,7 @@ export function SearchableMenu(
     count: matches.length + foot.length,
     blocked,
   });
+
   const footAt = at - matches.length;
   const branch = footAt >= 0 ? foot[footAt]?.submenu : besideOf(matches[at]);
   // The submenu open beside the highlighted row, listed or pinned, and the highlight inside it.
@@ -829,8 +857,10 @@ export function SearchableMenu(
   const [page, setPage] = useState<SheetPage | undefined>(undefined);
   // Opened again while it was leaving, the menu starts afresh, as one opened anew does.
   const [wasLeaving, setWasLeaving] = useState(leaving);
+
   if (wasLeaving !== leaving) {
     setWasLeaving(leaving);
+
     if (!leaving) {
       setQuery("");
       setHighlightAt(undefined);
@@ -839,14 +869,17 @@ export function SearchableMenu(
       setSheet(sheeted());
     }
   }
+
   const paged =
     page === undefined
       ? undefined
       : page.pinned
         ? foot.find((row) => row.id === page.id)?.submenu
         : besideOf(rows.find((row) => row.id === page.id));
+
   const open = sheet ? paged : branch !== undefined && submenu !== undefined ? branch : undefined;
   const subChosen = open?.rows.findIndex((row) => row.id === open.value) ?? -1;
+
   const subAt = highlightOver({
     moved: submenu?.moved,
     chosen: subChosen,
@@ -854,6 +887,7 @@ export function SearchableMenu(
     count: open?.rows.length ?? 0,
     blocked: () => false,
   });
+
   const listId = useId();
   const footId = useId();
   const submenuId = useId();
@@ -863,6 +897,7 @@ export function SearchableMenu(
   const surface = useRef<HTMLElement | null>(null);
   const searching = props.placeholder !== undefined;
   const ownerRef = props.ref;
+
   // The menu's element, held here to place a listed row's submenu, and handed on to its owner's hold.
   const holdSurface = useCallback(
     (element: HTMLElement | null) => {
@@ -871,6 +906,7 @@ export function SearchableMenu(
     },
     [ownerRef],
   );
+
   // Where a listed row that opened a submenu stands in the menu, which its submenu stands beside.
   const [rowBox, setRowBox] = useState<{ top: number; height: number } | undefined>(undefined);
 
@@ -881,6 +917,7 @@ export function SearchableMenu(
   // then standing being that page's.
   useEffect(() => {
     if (leaving) return;
+
     if (sheet) list.current?.focus({ preventScroll: true });
     else (field.current ?? list.current)?.focus();
   }, [leaving, sheet, page]);
@@ -899,31 +936,41 @@ export function SearchableMenu(
   // A listed row's submenu stands beside the row as the list has it scrolled now, read before it is painted.
   useLayoutEffect(() => {
     if (listedAt === undefined) return setRowBox(undefined);
+
     const row = document
       .getElementById(comboboxOptionId(listId, listedAt))
       ?.getBoundingClientRect();
+
     const menu = surface.current?.getBoundingClientRect();
+
     if (row === undefined || menu === undefined) return setRowBox(undefined);
     setRowBox({ top: row.top - menu.top, height: row.height });
   }, [listedAt, listId]);
+
   const keepsToWindow =
     props.layer !== SEARCHABLE_MENU_LAYER.EMBEDDED && props.bounds === POPOVER_BOUNDS.WINDOW;
+
   useLayoutEffect(() => {
     const branch = panel.current?.parentElement;
+
     if (openAt === undefined || panel.current === null || branch == null) return;
     const bounds = panel.current.getBoundingClientRect();
     const row = branch.getBoundingClientRect();
+
     const room = roomAround(
       panel.current,
       keepsToWindow ? POPOVER_BOUNDS.WINDOW : POPOVER_BOUNDS.ROOM,
       clipsAround(panel.current),
     );
+
     const pastRight = Math.max(row.right + SUBMENU_GAP + bounds.width - room.right, 0);
     const pastLeft = Math.max(room.left - (row.left - SUBMENU_GAP - bounds.width), 0);
+
     const side =
       pastRight === 0 || (pastLeft > 0 && pastRight <= pastLeft)
         ? SUBMENU_SIDE.RIGHT
         : SUBMENU_SIDE.LEFT;
+
     setPlace({
       side,
       shift: side === SUBMENU_SIDE.RIGHT ? pastRight : pastLeft,
@@ -935,6 +982,7 @@ export function SearchableMenu(
     setHighlight(index);
     setSubmenu(undefined);
   };
+
   /** The submenu of the row at `index`, listed or pinned, opened beside it, or in a sheet's place. */
   const openSubmenu = (index: number) => {
     // Note that a submenu already open on this row keeps where it was placed, because a press on a row its hover opened changes nothing the placing reads.
@@ -942,33 +990,42 @@ export function SearchableMenu(
     setSubmenu({ moved: undefined });
     const pinned = index >= matches.length;
     const row = pinned ? foot[index - matches.length] : matches[index];
+
     if (sheet && row !== undefined) setPage({ pinned, id: row.id });
   };
+
   const closeSubmenu = () => {
     setSubmenu(undefined);
     setPage(undefined);
   };
+
   /** A listed row chosen: its submenu opened beside it where it has one, else it is picked. */
   const chooseRow = (row: MenuRow, index: number) => {
     if (row.disabled !== undefined) return;
+
     if (row.submenu === undefined) return onPick(row.id);
     setHighlight(index);
     openSubmenu(index);
   };
+
   /** A listed row's ⋯ pressed: its acts opened beside it, or closed where they already stand. */
   const pressMore = (index: number) => {
     setHighlight(index);
+
     if (openAt === index) closeSubmenu();
     else openSubmenu(index);
   };
+
   const pressFoot = (row: FootRow, index: number) => {
     if (row.disabled !== undefined) return;
+
     if (row.submenu !== undefined) {
       setHighlight(matches.length + index);
       openSubmenu(matches.length + index);
     } else if (row.toggle !== undefined) row.toggle.onToggle();
     else row.onPress?.();
   };
+
   // Note that a sheet is put away before a submenu's pick is handed on, as
   // an action menu's sheet is, focus already back on its trigger, because
   // an owner whose pick opens what takes the focus, as a new Browser tab
@@ -983,10 +1040,12 @@ export function SearchableMenu(
   // the list, the pinned rows, and a submenu while one is open, so every row
   // it may name stands in a popup it controls.
   const footed = foot.length > 0;
+
   const controlled =
     sheet && open !== undefined
       ? [submenuId]
       : [listId, ...(footed ? [footId] : []), ...(open === undefined ? [] : [submenuId])];
+
   // Every row's id is its place: an option's in the list, a pinned row's
   // under it, an option's in the open submenu.
   const optionId = (index: number) => comboboxOptionId(listId, index);
@@ -1006,15 +1065,21 @@ export function SearchableMenu(
   const pick = (index: number) => {
     if (open !== undefined) {
       const row = open.rows[index];
+
       if (row !== undefined) pickIn(open, row.id);
+
       return;
     }
+
     const row = index >= 0 ? matches[index] : undefined;
     const pinned = index >= matches.length ? foot[index - matches.length] : undefined;
+
     if (row !== undefined) chooseRow(row, index);
     else if (pinned !== undefined) pressFoot(pinned, index - matches.length);
   };
+
   const steered = open === undefined ? at : subAt;
+
   // The list always stands, so the keys always steer it: the submenu's rows
   // while one is open, else the matches and on through the pinned rows, a
   // row that cannot be picked passed over and never a dead stop. An Enter
@@ -1031,6 +1096,7 @@ export function SearchableMenu(
       if (!sheet) (field.current ?? list.current)?.focus();
       else if (document.activeElement !== field.current)
         list.current?.focus({ preventScroll: true });
+
       if (open === undefined) setHighlight(index);
       else setSubmenu({ moved: index });
     },
@@ -1052,11 +1118,13 @@ export function SearchableMenu(
       }
     },
   });
+
   // Enter on a control of the note or the foot is that control's own press,
   // and every other key heard there steers the rows as the field's would;
   // the field and the list hear their own keys.
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.target === field.current || event.target === list.current) return;
+
     if (event.key === "Enter") return;
     keys.onKeyDown(event);
   };
@@ -1072,6 +1140,7 @@ export function SearchableMenu(
   // sheet's place, which a press alone opens.
   const hoverRow = (index: number) => {
     if (index === at && open !== undefined) return;
+
     if (sheet || matches[index]?.submenu === undefined) return moveTo(index);
     setHighlight(index);
     openSubmenu(index);
@@ -1082,6 +1151,7 @@ export function SearchableMenu(
   const hoverFoot = (row: FootRow, index: number) => {
     if (index === footAt && (sheet || open !== undefined || row.submenu === undefined)) return;
     setHighlight(matches.length + index);
+
     if (sheet || row.submenu === undefined) setSubmenu(undefined);
     else openSubmenu(matches.length + index);
   };
@@ -1162,6 +1232,7 @@ export function SearchableMenu(
       onActiveChange={(index) => aim(() => hoverRow(index))}
       onChoose={(index) => {
         const row = matches[index];
+
         if (row !== undefined) chooseRow(row, index);
       }}
       steer={searching && !sheet ? undefined : keys}
@@ -1175,6 +1246,7 @@ export function SearchableMenu(
 
   // The submenu standing beside its row, which a sheet never draws there.
   const beside = sheet ? undefined : open;
+
   const pinnedRows = footed ? (
     <div id={footId} className={FOOT}>
       {foot.map((row, index) => {
@@ -1203,12 +1275,14 @@ export function SearchableMenu(
             onChoose={() => pressFoot(row, index)}
           />
         );
+
         const branch = (
           <div className={BRANCH}>
             {item}
             {index === footAt && beside !== undefined ? submenuSurface(beside) : null}
           </div>
         );
+
         // A row that cannot be pressed says why on hover, from around it,
         // since the item takes no handlers but its own.
         return row.disabled === undefined ? (
@@ -1221,6 +1295,7 @@ export function SearchableMenu(
       })}
     </div>
   ) : null;
+
   const footRows = (
     <>
       <MenuReplayUnmasked.Provider value={unmasked}>{pinnedRows}</MenuReplayUnmasked.Provider>
@@ -1284,7 +1359,9 @@ export function SearchableMenu(
       {footRows}
     </MenuSurface>
   );
+
   if (props.layer === SEARCHABLE_MENU_LAYER.EMBEDDED) return menu;
+
   return (
     <AnchoredPopover
       open={!leaving}

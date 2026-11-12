@@ -73,10 +73,13 @@ const LID_WORDS: readonly LidState[] = Object.values(LID_STATE);
  */
 function parseMicrophoneRouteLine(line: string): MicrophoneRoute | undefined {
   const match = /^input transport=(\S+) lid=(\S+)(?: builtin=(.+))?$/.exec(line);
+
   if (!match?.[1] || !match[2]) return undefined;
   const transport = TRANSPORT_WORDS.find((word) => word === match[1]);
   const lid = LID_WORDS.find((word) => word === match[2]);
+
   if (!transport || !lid) return undefined;
   const builtInName = match[3]?.trim();
+
   return { defaultTransport: transport, lid, ...(builtInName ? { builtInName } : undefined) };
 }

@@ -35,9 +35,11 @@ test("notes past the first three fold behind the foot, hidden until found, and a
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(EventNotes, { notes: NOTES })));
+
   const foot = [...document.querySelectorAll("button")].find((button) =>
     /Show 2 more/u.test(button.textContent ?? ""),
   );
+
   expect(foot?.getAttribute("aria-expanded")).toBe("false");
   const folded = document.querySelector("[hidden]") ?? expect.fail("No folded notes");
   expect(folded.getAttribute("hidden")).toBe("until-found");

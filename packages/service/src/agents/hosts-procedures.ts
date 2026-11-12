@@ -85,12 +85,14 @@ export function installScriptUrlOf(request: Request): string {
 const endedHostAgents = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
     const conversations = yield* hostAgentConversations(userId, deviceId);
+
     const lost = yield* Effect.forEach(conversations, (conversationId) =>
       Effect.map(runningTurnIds(conversationId), (ids) => ({
         conversationId,
         runningTurnIds: ids,
       })),
     );
+
     yield* settleLostHostTurns(lost);
   }).pipe(
     Effect.catch((failure) =>
@@ -109,6 +111,7 @@ const endedHostAgents = (userId: string, deviceId: string) =>
 export const removeAccountHost = (userId: string, id: string) =>
   Effect.gen(function* () {
     const removed = yield* hostedStoreOrUnavailable(removeHost(userId, id));
+
     if (removed === undefined) return undefined;
     yield* endedHostAgents(userId, id);
     yield* recordServerEvent(
@@ -116,6 +119,7 @@ export const removeAccountHost = (userId: string, id: string) =>
       { userId },
       { action: SERVER_HOST_PAIRING_ACTION.REMOVE },
     );
+
     return removed;
   });
 
@@ -126,6 +130,7 @@ const removedOrNotFound = (txid: string | undefined) =>
 /** A code's eight letters, or the request refused as invalid where it is none, which its schema already refused. */
 const codeOf = (typed: string) => {
   const code = hostUserCodeOf(typed);
+
   return code === undefined ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST) : Effect.succeed(code);
 };
 
@@ -144,9 +149,11 @@ const foundOrRefused = <A>(guessed: HostPairingGuessed<A>) => {
 /** The hosts resource, on the account's bearer or session. */
 export function hostsProcedures(seams: HostsProcedureSeams) {
   const hosts = hosted.hosts.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: hosts.list.effect(function* ({ context }) {
       const rows = yield* hostedStoreOrUnavailable(hostsOf(context.userId));
+
       return {
         hosts: rows.map((row) => ({
           id: row.id,
@@ -170,6 +177,7 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     presence: hosts.presence.effect(function* ({ context }) {
       const owned = yield* hostedStoreOrUnavailable(devicesSeenSince(context.userId, new Date(0)));
       const now = yield* Clock.currentTimeMillis;
+
       return {
         devices: owned.map((row) => ({
           deviceId: row.id,
@@ -183,22 +191,27 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     }),
     readPairing: hosts.readPairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
+
       const pending = yield* foundOrRefused(
         yield* hostedStoreOrUnavailable(readHostPairing(context.userId, code)),
       );
+
       return { ...pending, expiresAt: pending.expiresAt.getTime() };
     }),
     approvePairing: hosts.approvePairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
+
       // Note that the host's id is minted here, so a pairing never names a device that stands.
       const deviceId = yield* foundOrRefused(
         yield* hostedStoreOrUnavailable(approveHostPairing(context.userId, code, randomUUID())),
       );
+
       yield* recordServerEvent(
         SERVER_EVENT.HOST_PAIRING_CHANGE,
         { userId: context.userId },
         { action: SERVER_HOST_PAIRING_ACTION.APPROVE },
       );
+
       return { deviceId };
     }),
     denyPairing: hosts.denyPairing.effect(function* ({ context, input }) {
@@ -209,6 +222,7 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
         { userId: context.userId },
         { action: SERVER_HOST_PAIRING_ACTION.DENY },
       );
+
       return DONE;
     }),
   };

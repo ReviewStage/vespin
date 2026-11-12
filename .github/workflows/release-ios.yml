@@ -10,7 +10,7 @@ name: Release iOS
 # locally: an ad-hoc signature, which needs no certificate, profile, or account,
 # but under which Xcode still writes each target's entitlements into its
 # signature, and the export reads them from there. The export then signs the
-# app and its two extensions for the App Store through Apple's cloud-managed
+# app and its three extensions for the App Store through Apple's cloud-managed
 # distribution certificate, under an App Store Connect API key of its own,
 # apart from the one the Mac release notarizes with, and uploads it to App
 # Store Connect. Note that the archive never signs automatically, because a
@@ -225,9 +225,11 @@ jobs:
           ditto -x -k "$export_path/Vespin.ipa" "$payload"
           app="$payload/Payload/Vespin.app"
           # Note that a read codesign refuses fails the run rather than
-          # reading as empty, because the widget extension legitimately
-          # carries no entitlements, so an empty answer proves nothing.
-          for bundle in "$app" "$app/PlugIns/NotificationService.appex" "$app/PlugIns/AgentsLiveActivity.appex"; do
+          # reading as empty, and that every bundle must be entitled to the
+          # App Group, which the widget and the share sheet read the app's
+          # snapshots from. The group is read with PlistBuddy, whose key path
+          # splits on colons, because plutil's -extract splits the key's dots.
+          for bundle in "$app" "$app/PlugIns/NotificationService.appex" "$app/PlugIns/AgentsLiveActivity.appex" "$app/PlugIns/ShareExtension.appex"; do
             bundle_name=$(basename "$bundle")
             echo "--- $bundle_name"
             if ! signature=$(codesign -dvv "$bundle" 2>&1); then
@@ -248,6 +250,13 @@ jobs:
             fi
             if [[ "$(plutil -extract get-task-allow raw -o - - <<< "$bundle_entitlements" 2>/dev/null)" == "true" ]]; then
               echo "error: the exported $bundle_name is signed for development" >&2
+              exit 1
+            fi
+            entitlements_file="$key_directory/$bundle_name.entitlements.plist"
+            printf '%s' "$bundle_entitlements" > "$entitlements_file"
+            if ! /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups" "$entitlements_file" 2>/dev/null \
+              | grep -Eq '^[[:space:]]*group\.dev\.vespin\.ios$'; then
+              echo "error: the exported $bundle_name is not entitled to the App Group group.dev.vespin.ios" >&2
               exit 1
             fi
           done

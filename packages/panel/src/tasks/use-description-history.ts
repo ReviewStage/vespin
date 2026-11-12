@@ -157,6 +157,7 @@ function listOf(
   if (rows !== undefined) {
     return { kind: HISTORY_READ.READY, revisions: rows.revisions, earlier: rows.earlier };
   }
+
   return failed ? { kind: HISTORY_READ.FAILED } : undefined;
 }
 
@@ -185,10 +186,13 @@ function taskRevisionQueryOptions(
 /** A version's content as the view holds it: reading, a read again after a failure among them, the failure it stands for, or the content. */
 function versionRead(version: UseQueryResult<TasksRevisionAnswer>): VersionRead {
   const failed = version.isError || (version.data !== undefined && "failure" in version.data);
+
   if (version.isPending || (version.isFetching && failed)) return { kind: HISTORY_READ.READING };
+
   if (version.isError || "failure" in version.data) {
     return { kind: HISTORY_READ.FAILED };
   }
+
   return {
     kind: HISTORY_READ.READY,
     document: version.data.revision.document,
@@ -242,6 +246,7 @@ export function useDescriptionHistory(input: {
   const revisions = held?.kind === HISTORY_READ.READY ? held.revisions : [];
   // Until one is chosen, the description as it stands is, whichever revision that is now.
   const newest = revisions[0]?.seq;
+
   // A save sought is its revision once the pages read show it, which the
   // history then stands on. Note that it is sought only in a list as new as
   // the task's last edit, because a list kept from an earlier visit may lack
@@ -249,22 +254,28 @@ export function useDescriptionHistory(input: {
   const current =
     held?.kind === HISTORY_READ.READY &&
     (editedAt === undefined || (revisions[0]?.lastEdit.at ?? -1) >= editedAt);
+
   const complete = current && held.earlier === undefined;
   const seeking = reading ? seek : undefined;
+
   const sought =
     seeking === undefined || !current ? undefined : revisionOfSave(revisions, seeking, complete);
+
   // A version stood on that no page read so far shows is read for on older
   // pages as a save is, and gives way to the description as it stands where
   // the whole history read holds none.
   const returned = seeking === undefined ? chosen?.revision : undefined;
+
   const unread =
     returned !== undefined && current && !revisions.some((line) => line.seq === returned);
+
   const readBefore =
     (seeking !== undefined && sought === undefined) || unread
       ? current
         ? held.earlier
         : undefined
       : undefined;
+
   useEffect(() => {
     if (sought === undefined) return;
     latest.current.onMove({ revision: sought, opened: undefined, listed: false });
@@ -276,6 +287,7 @@ export function useDescriptionHistory(input: {
   }, [gaveWay]);
 
   const seq = !reading ? undefined : seeking === undefined ? (chosen.revision ?? newest) : sought;
+
   const versionQuery = useQuery({
     ...taskRevisionQueryOptions(taskId, seq, editedAt, name),
     // Note that the version drawn stands while a save or a rename reads it again, never another version's.
@@ -284,6 +296,7 @@ export function useDescriptionHistory(input: {
         ? previous
         : undefined,
   });
+
   const read = versionRead(versionQuery);
   const readAgain = versionQuery.refetch;
 
@@ -292,20 +305,25 @@ export function useDescriptionHistory(input: {
     (chosenSeq: number) => {
       if (chosen === undefined) return;
       const same = seeking === undefined && seq === chosenSeq;
+
       if (same && read.kind === HISTORY_READ.FAILED) void readAgain();
+
       if (same && chosen.listed !== true) return;
       latest.current.onMove({ revision: chosenSeq, opened: undefined, listed: false });
     },
     [chosen, seeking, seq, read.kind, readAgain],
   );
+
   const onRetry = history.onRetry;
   // Note that the sections stay open, since they are drawn from the very version this reads again.
   const onRetryVersion = useCallback(() => void readAgain(), [readAgain]);
   // A version whose read failed, or is still out and may have been sent while the connection was gone, is read again as the app reaches the service again, as its Try again reads it.
   useRegained(() => {
     if (chosen === undefined) return;
+
     if (read.kind === HISTORY_READ.FAILED || read.kind === HISTORY_READ.READING) onRetryVersion();
   });
+
   // Note that a revision's sections are listed where the versions are, so opening them keeps to the list.
   const onOpenSections = (sectionsOf: number) =>
     latest.current.onMove({
@@ -313,15 +331,18 @@ export function useDescriptionHistory(input: {
       opened: { seq: sectionsOf, heading: undefined },
       listed: true,
     });
+
   const onChooseSection = (heading: string | undefined) => {
     if (chosen?.opened === undefined) return;
     latest.current.onMove({ ...chosen, opened: { ...chosen.opened, heading }, listed: false });
   };
+
   // Note that a narrow room's sections close onto every version, its list, and a wide room's onto the version they were of.
   const onCloseSections = () => {
     if (chosen === undefined) return;
     latest.current.onMove({ revision: chosen.revision, opened: undefined, listed: narrow });
   };
+
   const onList = () => {
     if (chosen !== undefined) latest.current.onMove({ ...chosen, listed: true });
   };
@@ -331,7 +352,9 @@ export function useDescriptionHistory(input: {
     if (taskId === undefined || held?.kind !== HISTORY_READ.READY || held.earlier === undefined) {
       return false;
     }
+
     const answer = await source.readPage(taskId, held.earlier).catch(() => undefined);
+
     return answer !== undefined && !("failure" in answer);
   };
 
@@ -346,7 +369,9 @@ export function useDescriptionHistory(input: {
     if (readBefore === undefined || taskId === undefined) return;
     onLoadEarlier().then((landed) => {
       const now = standingOn.current;
+
       if (landed || now.taskId !== taskId) return;
+
       if (seeking !== undefined) latest.current.onSought();
       else if (now.returned === returned) {
         latest.current.onMove({ revision: undefined, opened: undefined, listed: true });
@@ -359,12 +384,14 @@ export function useDescriptionHistory(input: {
     // The version standing before the restore is the newest the list read.
     const before = newest;
     const restored = await askKept(source.restore(taskId, at));
+
     if (!restored.kept) return { ...RESTORE_REFUSED, cause: restored.cause };
     onRestored(
       before === undefined || before === at
         ? undefined
         : () => askKept(latest.current.source.restore(taskId, before)),
     );
+
     return { status: ACTION_RESULT_STATUS.ACCEPTED };
   };
 
@@ -375,12 +402,15 @@ export function useDescriptionHistory(input: {
   const revision = chosen?.revision;
   const openedSeq = opened?.seq;
   const heading = opened?.heading;
+
   const spot = useMemo((): HistorySpot | undefined => {
     if (!reading) return undefined;
+
     return { revision, opened: openedSeq === undefined ? undefined : { seq: openedSeq, heading } };
   }, [reading, revision, openedSeq, heading]);
 
   const line = revisions.find((each) => each.seq === seq);
+
   return {
     list: held ?? { kind: HISTORY_READ.READING },
     selected: seq,

@@ -32,6 +32,7 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     const width = this.dataset.drawer === undefined ? 400 : DRAWER_WIDTH;
+
     return DOMRect.fromRect({ x: 0, y: 0, width, height: 800 });
   });
 });
@@ -55,6 +56,7 @@ function Harness({ enabled, opened }: { enabled: boolean; opened: boolean }): Re
     onOpen: () => setOpen(true),
     onClose: () => setOpen(false),
   });
+
   return createElement(
     "div",
     { ref: stage },
@@ -68,11 +70,14 @@ function render(enabled = true, opened = false) {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Harness, { enabled, opened })));
+
   const find = (selector: string) => {
     const found = container.querySelector<HTMLElement>(selector);
     assert.ok(found, selector);
+
     return found;
   };
+
   return {
     drawer: find("[data-drawer]"),
     row: find("[data-row]"),
@@ -96,7 +101,9 @@ function finger(
     pointerType,
     isPrimary: true,
   });
+
   Object.defineProperty(event, "timeStamp", { value: at });
+
   return event;
 }
 
@@ -104,6 +111,7 @@ function finger(
 function touchMove(x: number, y: number): Event {
   const event = new Event("touchmove", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "touches", { value: [{ clientX: x, clientY: y }] });
+
   return event;
 }
 
@@ -120,6 +128,7 @@ function swipe(
   act(() => {
     target.dispatchEvent(finger("pointerdown", from[0], from[1], at, pointerType));
   });
+
   for (const [x, y] of steps) {
     at += stepMs;
     act(() => {
@@ -127,6 +136,7 @@ function swipe(
       target.dispatchEvent(touchMove(x, y));
     });
   }
+
   const last = steps.at(-1) ?? from;
   act(() => {
     target.dispatchEvent(finger(end, last[0], last[1], at + stepMs, pointerType));

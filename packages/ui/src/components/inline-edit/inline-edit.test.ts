@@ -33,6 +33,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -48,14 +49,17 @@ function type(field: HTMLInputElement, value: string): void {
 /** Presses a key in `field`, answering whether it went past the field. */
 function press(field: HTMLElement, init: KeyboardEventInit): boolean {
   let heard = false;
+
   const listen = () => {
     heard = true;
   };
+
   document.addEventListener("keydown", listen);
   act(() => {
     field.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
   });
   document.removeEventListener("keydown", listen);
+
   return heard;
 }
 
@@ -78,6 +82,7 @@ function Renamed({
 }): React.JSX.Element {
   const [name, setName] = useState(start);
   const [editing, setEditing] = useState(false);
+
   return createElement(
     "div",
     null,
@@ -88,7 +93,9 @@ function Renamed({
       maxLength: 40,
       onEnd: (end: InlineEditEnd) => {
         ends.push(end);
+
         if (!stays) setEditing(false);
+
         if (end.value !== undefined) setName(end.value);
       },
     }),
@@ -102,6 +109,7 @@ function rename(container: HTMLElement): HTMLInputElement {
   act(() => button.click());
   const field = container.querySelector<HTMLInputElement>('input[aria-label="Task name"]');
   assert.ok(field);
+
   return field;
 }
 
@@ -113,6 +121,7 @@ function field(container: HTMLElement): HTMLInputElement | null {
 function opened(container: HTMLElement): HTMLInputElement {
   const input = field(container);
   assert.ok(input);
+
   return input;
 }
 
@@ -128,6 +137,7 @@ test("shows the words as they stand, or what the caller draws, until it edits th
       createElement("strong", null, "Drawn name"),
     ),
   );
+
   assert.equal(drawn.textContent, "Drawn name");
 });
 

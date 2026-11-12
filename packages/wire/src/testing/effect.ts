@@ -18,6 +18,7 @@ export function runTest<A, E, R>(
     // `never`, so this restores what erasing to one implementation dropped.
     return Effect.runPromise(effect as Effect.Effect<A, E>);
   }
+
   return Effect.runPromise(Effect.provide(effect, layer));
 }
 

@@ -70,7 +70,9 @@ const STRONGER = {
 export function useColors(): BrandColors {
   const dark = useColorScheme() === "dark";
   const stronger = useIncreaseContrast();
+
   if (stronger) return dark ? STRONGER.DARK : STRONGER.LIGHT;
+
   return dark ? BRAND_COLOR.DARK : BRAND_COLOR.LIGHT;
 }
 

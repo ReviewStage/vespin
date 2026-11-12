@@ -20,6 +20,7 @@ let laid: HTMLStyleElement | undefined;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   laid?.remove();
   laid = undefined;
@@ -34,6 +35,7 @@ function layFor(touch: boolean): void {
 /** How opaque `element` is drawn, from 0 to 1, whether its rule spells the number or a percentage, as a utility does (`opacity-0` is `0%`). */
 function opacityOf(element: Element): number {
   const opacity = getComputedStyle(element).opacity;
+
   return opacity.endsWith("%") ? Number.parseFloat(opacity) / 100 : Number.parseFloat(opacity);
 }
 
@@ -68,8 +70,10 @@ function tappableMessage() {
       ),
     ),
   );
+
   const part = (selector: string) =>
     container.querySelector<HTMLElement>(selector) ?? assert.fail(selector);
+
   return {
     actions: () => part(".ui-message-actions"),
     tap: (selector: string) => act(() => part(selector).click()),

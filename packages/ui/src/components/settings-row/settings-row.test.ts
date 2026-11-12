@@ -41,6 +41,7 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -56,6 +57,7 @@ function wordsOf(element: Element, attribute: string): string {
 /** A row whose switch's write is refused once pressed, as a settings write can be. */
 function RefusedRow(): React.JSX.Element {
   const [error, setError] = useState<ShownError | undefined>(undefined);
+
   return createElement(SettingsRow, {
     label: "Show captions",
     description: "Words the call hears stand under its video.",
@@ -85,7 +87,9 @@ test("the label's id names a control and the description describes it", () => {
         }),
     }),
   );
+
   const box = container.querySelector('input[type="checkbox"]');
+
   if (box === null) throw new Error("no checkbox");
   expect(wordsOf(box, "aria-labelledby")).toBe("Launch at login");
   expect(wordsOf(box, "aria-describedby")).toBe("Vespin opens with the Mac.");
@@ -98,6 +102,7 @@ test("a refused write marks the control invalid, describes it, and is announced 
   const region = container.querySelector('[data-slot="field-error"]');
   expect(region?.textContent).toBe("");
   const control = container.querySelector<HTMLButtonElement>('button[role="switch"]');
+
   if (control === null) throw new Error("no switch");
   expect(control.hasAttribute("aria-invalid")).toBe(false);
   act(() => control.click());
@@ -126,6 +131,7 @@ test("an empty description and error say nothing, so the control is neither desc
         }),
     }),
   );
+
   const button = container.querySelector("button");
   expect(button?.textContent).toBe("Sign out");
   expect(button?.hasAttribute("aria-describedby")).toBe(false);
@@ -141,7 +147,9 @@ test("a leading mark stands in the row but names nothing: the label alone names 
         createElement("input", { type: "checkbox", "aria-labelledby": control.labelId }),
     }),
   );
+
   const box = container.querySelector('input[type="checkbox"]');
+
   if (box === null) throw new Error("no checkbox");
   expect(container.textContent).toContain("A");
   expect(wordsOf(box, "aria-labelledby")).toBe("ada@example.com");
@@ -156,7 +164,9 @@ test("an adornment rides the label's line but names nothing: the label alone nam
         createElement("input", { type: "checkbox", "aria-labelledby": control.labelId }),
     }),
   );
+
   const box = container.querySelector('input[type="checkbox"]');
+
   if (box === null) throw new Error("no checkbox");
   expect(container.textContent).toContain("Saved");
   expect(wordsOf(box, "aria-labelledby")).toBe("Theme");
@@ -171,9 +181,11 @@ test("what a row grows below its line is read after the row's words, and its err
       children: () => createElement(Button, { children: "Add key" }),
     }),
   );
+
   const words = container.textContent ?? "";
   const field = container.querySelector('input[aria-label="Anthropic API key"]');
   const error = container.querySelector('[data-slot="field-error"]');
+
   if (field === null || error === null) throw new Error("no field or error");
   expect(words.indexOf("Add key")).toBeLessThan(words.indexOf("The key was refused."));
   expect(field.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -193,7 +205,9 @@ test("a control as wide as the row stands under its words, named by the label an
         }),
     }),
   );
+
   const group = container.querySelector("fieldset");
+
   if (group === null) throw new Error("no fieldset");
   expect(wordsOf(group, "aria-labelledby")).toBe("Avatar");
   expect(wordsOf(group, "aria-describedby")).toBe(
@@ -203,6 +217,7 @@ test("a control as wide as the row stands under its words, named by the label an
   // It follows the words in reading order, and before the error that describes it.
   const words = container.querySelector(".ui-settings-row-description");
   const error = container.querySelector('[data-slot="field-error"]');
+
   if (words === null || error === null) throw new Error("no words or error");
   expect(words.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(group.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -211,6 +226,7 @@ test("a control as wide as the row stands under its words, named by the label an
 /** A switch's row whose words label its switch, holding the switch's state as a settings write would. */
 function LabeledSwitchRow({ adornment }: { adornment?: string | undefined }): React.JSX.Element {
   const [checked, setChecked] = useState(false);
+
   return createElement(SettingsRow, {
     label: "Show captions",
     description: "Words the call hears stand under its video.",
@@ -231,9 +247,11 @@ test("a press on a switch row's words sets its switch, as a press on the switch 
   for (const adornment of [undefined, "Saved"]) {
     const container = mount(createElement(LabeledSwitchRow, { adornment }));
     const control = container.querySelector<HTMLButtonElement>('button[role="switch"]');
+
     const words = [...container.querySelectorAll("*")].find(
       (element) => element.children.length === 0 && element.textContent === "Show captions",
     );
+
     if (control === null || !(words instanceof HTMLElement)) throw new Error("no row");
     act(() => words.click());
     expect(control.getAttribute("aria-checked")).toBe("true");
@@ -245,6 +263,7 @@ test("a press on a switch row's words sets its switch, as a press on the switch 
 /** A row folded under another that counts its presses, as a row keeps what it waits on, such as a refusal still to be said. */
 function CountingRow(): React.JSX.Element {
   const [count, setCount] = useState(0);
+
   return createElement(SettingsRow, {
     label: `Pressed ${count}`,
     children: () =>
@@ -261,7 +280,9 @@ test("a row folded under another keeps its own state while the fold is closed", 
       rows: createElement(CountingRow),
     }),
   );
+
   const chevron = page.querySelector<HTMLButtonElement>('button[aria-label="Slack settings"]');
+
   const press = () =>
     [...page.querySelectorAll("button")].find((each) => each.textContent === "Press");
 

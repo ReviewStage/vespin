@@ -10,6 +10,7 @@ import { agentTable } from "./agent.js";
  * once its first turn settles (`../models/agent-boot-store.ts`, the one
  * writer). `phase` is where the boot stands (`@repo/features/agent-boot`'s
  * `BOOT_PHASE`), `phase_at` when it entered it, which the bar counts from,
+ * a hand-off keeping the instant its attempt began,
  * `deadline_at` when the minute sweep fails a boot still under way,
  * `failure` why the boot failed where it did, and `attempt` how many boots
  * Retry has begun, so a delivery of an earlier attempt moves nothing. The

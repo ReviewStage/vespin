@@ -16,6 +16,7 @@ import "./catalog.css";
  */
 
 const view = readView(window.location.search);
+
 for (const [name, value] of Object.entries(
   surfaceAttributes(view.profile, view.theme, view.density),
 )) {
@@ -23,7 +24,9 @@ for (const [name, value] of Object.entries(
 }
 
 const rootElement = document.getElementById("root");
+
 if (!rootElement) throw new Error("Root element is missing");
+
 createRoot(rootElement).render(
   <StrictMode>
     <Catalog view={view} />

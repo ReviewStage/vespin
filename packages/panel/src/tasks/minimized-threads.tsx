@@ -33,9 +33,11 @@ const CHIP_WORDS = {
 /** Everyone who wrote on the threads, each once, in the order they first wrote. */
 function writersOf(threads: readonly ReviewThread[]) {
   const seen = new Map<string, ReviewThread["comments"][number]["by"]>();
+
   for (const comment of threads.flatMap((thread) => thread.comments)) {
     if (!seen.has(comment.by.login)) seen.set(comment.by.login, comment.by);
   }
+
   return [...seen.values()];
 }
 
@@ -130,10 +132,12 @@ export function MinimizedThreads({
   const writers = writersOf(threads).map(name);
   const count = threads.reduce((sum, thread) => sum + thread.comments.length + thread.more, 0);
   const open = threads.filter((thread) => !thread.resolved).length;
+
   const label = [
     `${CHIP_WORDS.comments(count)} by ${writers.map((writer) => actorName(writer)).join(", ")}`,
     `${CHIP_WORDS.open(open)}, ${chipPress(shown)}`,
   ].join(" · ");
+
   return (
     <MinimizedChip
       label={label}

@@ -53,12 +53,15 @@ function mountAlert(element: ReactElement): HTMLElement {
   const alerts = container.querySelectorAll<HTMLElement>('[role="alert"]');
   expect(alerts).toHaveLength(1);
   const [alert] = alerts;
+
   if (alert === undefined) throw new Error("no alert");
+
   return alert;
 }
 
 test("a failure is one alert saying its words and Retry, whose press tries again", () => {
   let tries = 0;
+
   const alert = mountAlert(
     createElement(FailureNote, {
       onRetry: () => {
@@ -68,6 +71,7 @@ test("a failure is one alert saying its words and Retry, whose press tries again
       children: WORDS,
     }),
   );
+
   const buttons = alert.querySelectorAll("button");
   expect([...buttons].map((button) => button.ariaLabel ?? button.textContent)).toEqual([
     "Retry",
@@ -93,6 +97,7 @@ test("a failure's mark says nothing to a reader", () => {
   const alert = mountAlert(
     createElement(FailureNote, { failure: UNREPORTED.TOOL, children: WORDS }),
   );
+
   const marks = [...alert.querySelectorAll("svg")];
 
   expect(marks).toHaveLength(1);
@@ -102,6 +107,7 @@ test("a failure's mark says nothing to a reader", () => {
 test("a failure's second act stands after Retry in the same alert, and works alone without one", () => {
   let tries = 0;
   let discards = 0;
+
   const discard = createElement(
     "button",
     {
@@ -112,6 +118,7 @@ test("a failure's second act stands after Retry in the same alert, and works alo
     },
     "Discard",
   );
+
   const both = mountAlert(
     createElement(FailureNote, {
       onRetry: () => {
@@ -122,6 +129,7 @@ test("a failure's second act stands after Retry in the same alert, and works alo
       children: WORDS,
     }),
   );
+
   expect(both.textContent).toBe(`${WORDS}RetryDiscard`);
 
   const buttons = both.querySelectorAll("button");
@@ -133,6 +141,7 @@ test("a failure's second act stands after Retry in the same alert, and works alo
   const alone = mountAlert(
     createElement(FailureNote, { also: discard, failure: FAILURE, children: WORDS }),
   );
+
   expect(alone.textContent).toBe(`${WORDS}Discard`);
 });
 

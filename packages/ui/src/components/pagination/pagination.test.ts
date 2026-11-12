@@ -37,8 +37,10 @@ function drawPages(current: number, count: number): HTMLElement {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const step = (page: number, label: string): PaginationStep | undefined =>
     page >= 1 && page <= count ? { href: pageHref(page), label } : undefined;
+
   act(() =>
     root.render(
       createElement(Pagination, {
@@ -49,15 +51,19 @@ function drawPages(current: number, count: number): HTMLElement {
       }),
     ),
   );
+
   return container;
 }
 
 /** What the row reads, item by item, as a reader meets it. */
 function items(container: HTMLElement): string[] {
   const nav = container.querySelector("nav");
-  return [...(nav?.children ?? [])]
-    .filter((item) => item.getAttribute("aria-hidden") !== "true")
-    .map((item) => item.getAttribute("aria-label") ?? item.textContent ?? "");
+
+  return [...(nav?.children ?? [])].flatMap((item) =>
+    item.getAttribute("aria-hidden") === "true"
+      ? []
+      : [item.getAttribute("aria-label") ?? item.textContent ?? ""],
+  );
 }
 
 test("the steps link to the pages beside this one, named for where they go", () => {

@@ -49,7 +49,9 @@ const answered = Effect.fn(function* (variables: Record<string, string>) {
     ),
     { disableLogger: true },
   );
+
   yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
   return yield* Effect.promise(() =>
     web.handler(new Request(`${ORIGIN}${APPLE_APP_SITE_ASSOCIATION.ROUTE}`)),
   );
@@ -80,6 +82,7 @@ it.effect(
         [APPLE_APP_ENVIRONMENT.TEAM_ID]: TEAM_ID,
         [APPLE_APP_ENVIRONMENT.IOS_BUNDLE_ID]: "dev.vespin.ios.beta",
       });
+
       const renamed = decodeDocument(yield* Effect.promise(() => named.json()));
       assert.deepEqual(renamed.webcredentials.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
     }),

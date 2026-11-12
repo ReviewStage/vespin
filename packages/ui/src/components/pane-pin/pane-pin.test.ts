@@ -25,12 +25,15 @@ beforeAll(() => {
 
 afterEach(() => {
   for (const remove of listeners.splice(0)) remove();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
 
+type MountResult = { pane: HTMLElement; heard: string[] };
+
 /** A pane holding one button, whose pins and the document's presses are recorded in order. */
-function mount(pins: boolean): { pane: HTMLElement; heard: string[] } {
+function mount(pins: boolean): MountResult {
   const heard: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -45,10 +48,12 @@ function mount(pins: boolean): { pane: HTMLElement; heard: string[] } {
     ),
   );
   const pane = container.querySelector<HTMLElement>("[aria-label=Pane]");
+
   if (pane === null) throw new Error("the pane is drawn");
   const hear = () => heard.push("document");
   document.addEventListener("pointerdown", hear);
   listeners.push(() => document.removeEventListener("pointerdown", hear));
+
   return { pane, heard };
 }
 

@@ -25,7 +25,9 @@ function mount(element: React.ReactElement): HTMLButtonElement {
   roots.push(root);
   act(() => root.render(element));
   const button = container.querySelector("button");
+
   if (button === null) throw new Error("no button drawn");
+
   return button;
 }
 
@@ -33,6 +35,7 @@ test("names itself and announces whether it is chosen", () => {
   const button = mount(
     createElement(Swatch, { color: "red", label: "Red", pressed: true, onClick: () => {} }),
   );
+
   expect(button.getAttribute("aria-label")).toBe("Red");
   expect(button.getAttribute("aria-pressed")).toBe("true");
   expect(button.type).toBe("button");
@@ -49,5 +52,6 @@ test("one that is not tabbable stays out of the tab order", () => {
   const button = mount(
     createElement(Swatch, { label: "Blue", pressed: false, tabbable: false, onClick: () => {} }),
   );
+
   expect(button.tabIndex).toBe(-1);
 });

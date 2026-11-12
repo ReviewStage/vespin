@@ -63,14 +63,18 @@ const openAccounts = () =>
   Effect.gen(function* () {
     const db = yield* Database;
     const [admin, member] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
     for (const id of [admin, member]) {
       yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
     }
+
     yield* db.update(user).set({ role: USER_ROLE.ADMIN }).where(eq(user.id, admin));
+
     const bearers = new Map([
       [`Bearer ${admin}`, admin],
       [`Bearer ${member}`, member],
     ]);
+
     const procedures = accountProcedures({
       resolveUserId: (incoming) =>
         Effect.succeed(
@@ -81,6 +85,7 @@ const openAccounts = () =>
       accountFastOffer,
       writePreferences: writeAccountPreferences,
     });
+
     return {
       admin,
       member,
@@ -96,6 +101,7 @@ const answer = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -107,10 +113,12 @@ const answer = (
       // Only a delete asks Connect anything, and this suite deletes nothing.
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
     );
+
     const response = yield* hostedAnswer({ account: procedures }, services, request);
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return {
       status: response.status,
       cacheControl: response.headers.get("cache-control"),
@@ -180,11 +188,13 @@ it.layer(getTestDB())("the account's access", (it) => {
   it.effect("a caller no bearer names is refused, and learns nothing", () =>
     Effect.gen(function* () {
       const { admin, ask } = yield* openAccounts();
+
       const refused: Answer = {
         status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
         cacheControl: null,
         body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
       };
+
       assert.deepEqual(yield* ask(request(undefined)), refused);
       assert.deepEqual(yield* ask(request("stranger", `?userId=${admin}`)), refused);
     }),

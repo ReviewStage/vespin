@@ -59,6 +59,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  */
 
 const ORIGIN = "https://app.test";
+
 const SHELL: TerminalSummary = {
   id: "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d",
   title: "zsh",
@@ -74,16 +75,19 @@ const PORTS = [3000, 5173];
 function scriptedSandbox(state: SandboxState) {
   const asked: { readonly what: string; readonly sessionId: string }[] = [];
   const shells = state === SANDBOX_STATE.RUNNING ? [SHELL] : [];
+
   const service: AgentSandboxService = {
     terminals: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "terminals", sessionId });
+
         return { sandbox: state, terminals: shells };
       }),
     listeningPorts: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "ports", sessionId });
         const running = state === SANDBOX_STATE.RUNNING;
+
         return { running, ports: running ? PORTS : [] };
       }),
     share: () => Effect.die("the tab shares nothing"),
@@ -93,6 +97,7 @@ function scriptedSandbox(state: SandboxState) {
     start: (sessionId, terminalId) =>
       Effect.sync(() => {
         asked.push({ what: "start", sessionId });
+
         return state === SANDBOX_STATE.RUNNING
           ? Result.succeed({ ...SHELL, id: terminalId })
           : Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: state });
@@ -100,16 +105,18 @@ function scriptedSandbox(state: SandboxState) {
     rename: () => Effect.succeed(Result.succeed(undefined)),
     kill: () => Effect.succeed(Result.succeed(undefined)),
     run: () => Effect.die("no test runs a run action here"),
-    interrupt: () => Effect.die("no test stops a run action here"),
+    stop: () => Effect.die("no test stops a run action here"),
     resume: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "resume", sessionId });
+
         return SANDBOX_STATE.RUNNING;
       }),
     attach: () => Effect.die("the routes attach nothing"),
     open: () => Effect.die("the routes open nothing"),
     setCredential: () => Effect.die("the routes set no credential"),
   };
+
   return { layer: Layer.succeed(AgentSandbox, service), service, asked };
 }
 
@@ -118,6 +125,7 @@ const openAgentWith = (options: { readonly claimed: boolean }) =>
   Effect.gen(function* () {
     const userId = yield* openGithubUser();
     const task = yield* startTask(userId, { name: "Terminal tab", repository: "acme/relay" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: `start-${randomUUID()}`,
@@ -129,9 +137,11 @@ const openAgentWith = (options: { readonly claimed: boolean }) =>
       repository: "acme/relay",
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
     const sessionId = `wrun_${randomUUID()}`;
+
     if (options.claimed) {
       yield* claimRuntimeSession(
         { userId, conversationId: agent.conversationId },
@@ -139,6 +149,7 @@ const openAgentWith = (options: { readonly claimed: boolean }) =>
         new Date(yield* Clock.currentTimeMillis),
       );
     }
+
     return { userId, agent, sessionId };
   });
 
@@ -169,16 +180,19 @@ const openTokenAgent = Effect.gen(function* () {
   const reader = yield* openTokenMember({ token: "fixture-reader-token" });
   const tokenless = yield* openGithubUser();
   const workspace = yield* openWorkspace(userId);
+
   for (const each of [reader, tokenless]) yield* joinWorkspace(workspace, each);
   const now = new Date(yield* Clock.currentTimeMillis);
   const sealed = (yield* readGitHubTokenRow(reader))?.sealedToken ?? "";
   const side = [{ repository: "octo-member/side", readable: true }];
   yield* recordRepositoryReads(reader, sealed, side, now);
+
   const task = yield* createTask(userId, {
     organizationId: workspace,
     repository: "octo-member/side",
     githubAccess: GITHUB_ACCESS.TOKEN,
   });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: `start-${randomUUID()}`,
@@ -190,6 +204,7 @@ const openTokenAgent = Effect.gen(function* () {
     githubAccess: GITHUB_ACCESS.TOKEN,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
   const { agent } = started.value;
   yield* claimRuntimeSession(
@@ -197,6 +212,7 @@ const openTokenAgent = Effect.gen(function* () {
     `wrun_${randomUUID()}`,
     now,
   );
+
   return { userId, reader, tokenless, agent };
 });
 
@@ -230,10 +246,12 @@ const standing = (
         ),
       ),
     );
+
     const resolveUserId = (incoming: Request) =>
       Effect.succeed(
         Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
       );
+
     const handle = hostedFetch({
       agentPorts: agentPortsProcedures({ resolveUserId, sandbox }),
       agents: agentsProcedures({
@@ -246,8 +264,10 @@ const standing = (
         keepAwake,
       }),
     });
+
     // SAFETY: the terminal procedures yield the store and the network alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     /** One request's answer as it left the handler: its status, the two headers a caller reads, and its bytes. */
     const bytes = (
       path: string,
@@ -267,6 +287,7 @@ const standing = (
           }),
           webServices,
         );
+
         return {
           status: response.status,
           contentType: response.headers.get("content-type"),
@@ -274,6 +295,7 @@ const standing = (
           text: await response.text(),
         };
       });
+
     const call = (path: string, bearer: string, init: { method?: string; body?: object } = {}) =>
       Effect.map(
         bytes(path, bearer, {
@@ -283,6 +305,7 @@ const standing = (
         // SAFETY: the router answers JSON; the test compares it as the wire value it is.
         (answered) => ({ status: answered.status, body: JSON.parse(answered.text) }),
       );
+
     return Object.assign(call, { bytes });
   });
 
@@ -300,6 +323,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         const { userId, agent, sessionId } = yield* openAgent;
         const stranger = yield* openGithubUser();
         const sandbox = scriptedSandbox(SANDBOX_STATE.RUNNING);
+
         const call = yield* standing(
           new Map([
             ["Bearer owner", userId],
@@ -337,10 +361,12 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox.layer);
 
         const listed = yield* call(terminalsOf(agent.id), "Bearer owner");
+
         const started = yield* call(terminalsOf(agent.id), "Bearer owner", {
           method: "POST",
           body: {},
         });
+
         const woken = sandbox.asked.some((asked) => asked.what === "resume");
         const resumed = yield* call(resumeOf(agent.id), "Bearer owner", { method: "POST" });
 
@@ -360,6 +386,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       Effect.gen(function* () {
         const { userId, reader, tokenless, agent } = yield* openTokenAgent;
         const sandbox = scriptedSandbox(SANDBOX_STATE.RUNNING);
+
         const call = yield* standing(
           new Map([
             ["Bearer owner", userId],
@@ -368,6 +395,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
           ]),
           sandbox.layer,
         );
+
         const refused = { status: 403, body: { error: HOSTED_API_ERROR.NOT_PERMITTED } };
 
         assert.equal((yield* call(terminalsOf(agent.id), "Bearer owner")).status, 200);
@@ -395,6 +423,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
   it.effect("a shell starts in a running sandbox under an id the service mints", () =>
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgent;
+
       const call = yield* standing(
         new Map([["Bearer owner", userId]]),
         scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
@@ -419,12 +448,14 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
         const unanswered = new SandboxUnavailable({});
+
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.RUNNING).service,
           terminals: () => Effect.fail(unanswered),
           start: () => Effect.fail(unanswered),
           resume: () => Effect.fail(unanswered),
         });
+
         const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox);
 
         const answers = [
@@ -448,11 +479,13 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         const gone = new SnapshotGone({});
         // A sandbox that stopped under a call answers unavailable, which a resume mends.
         const stopped = new SandboxUnavailable({});
+
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.STOPPED).service,
           resume: () => Effect.fail(gone),
           terminals: () => Effect.fail(stopped),
         });
+
         const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox);
 
         const resumed = yield* call(resumeOf(agent.id), "Bearer owner", { method: "POST" });
@@ -485,6 +518,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       const { userId, agent, sessionId } = yield* openAgent;
       yield* saveArchiveScript(agent.organizationId);
       const sandboxes = yield* scriptedSessionSandboxes();
+
       const call = yield* standing(
         new Map([["Bearer owner", userId]]),
         scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
@@ -517,6 +551,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
           method: "PATCH",
           body: JSON.stringify({ name: 7 }),
         });
+
         const signed = yield* call.bytes(terminalOf(agent.id, SHELL.id), "Bearer owner", {
           method: "PATCH",
           body: JSON.stringify({ name: 7 }),
@@ -559,10 +594,12 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
         yield* archiveAgent(userId, agent.id, true);
+
         const call = yield* standing(
           new Map([["Bearer owner", userId]]),
           scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
         );
+
         const refused = (status: number, error: string) => ({
           status,
           contentType: "application/json",

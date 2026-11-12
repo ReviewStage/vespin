@@ -73,11 +73,13 @@ test("a cron the picker writes reads back as its kind and time, and any other is
   for (const cron of ["15 * * * *", "30 7 * * *", "0 9 * * 1-5", "0 9 * * 3"]) {
     assert.equal(cronOf(scheduleDraftOf(cron)), cron, cron);
   }
+
   assert.equal(scheduleDraftOf("15 * * * *").kind, SCHEDULE_KIND.HOURLY);
   assert.deepEqual(
     { ...scheduleDraftOf("0 9 * * 7") },
     { kind: SCHEDULE_KIND.WEEKLY, hour: 9, minute: 0, weekday: 0, cron: "0 9 * * 7" },
   );
+
   for (const cron of ["0 9 1 * *", "*/30 9-17 * * 1-5", "0 25 * * *", "0 9 * * 1,3"]) {
     const read = scheduleDraftOf(cron);
     assert.equal(read.kind, SCHEDULE_KIND.CUSTOM, cron);
@@ -231,6 +233,7 @@ test("a save changes only what moved, the task keeping its model, and a draft th
 test("the servers a draft switches off are saved with its task, opened as saved, and a change of them in any order is a change of the task only once they differ", () => {
   const opened = automationDraft(SAVED, DEFAULTS);
   assert.deepEqual(opened.disabledServers, []);
+
   const switched = {
     ...opened,
     disabledServers: [INTEGRATION_PROVIDER.SENTRY, INTEGRATION_PROVIDER.LINEAR],
@@ -242,6 +245,7 @@ test("the servers a draft switches off are saved with its task, opened as saved,
       disabledServers: [INTEGRATION_PROVIDER.SENTRY, INTEGRATION_PROVIDER.LINEAR],
     },
   });
+
   const saved = {
     ...SAVED,
     action: {
@@ -249,6 +253,7 @@ test("the servers a draft switches off are saved with its task, opened as saved,
       disabledServers: [INTEGRATION_PROVIDER.LINEAR, INTEGRATION_PROVIDER.SENTRY],
     },
   };
+
   assert.deepEqual(automationDraft(saved, DEFAULTS).disabledServers, [
     INTEGRATION_PROVIDER.LINEAR,
     INTEGRATION_PROVIDER.SENTRY,
@@ -283,6 +288,7 @@ test("an automation fired by an event keeps its trigger: its schedule fields sto
     ...SAVED,
     trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: "issue-opened" as const },
   };
+
   const opened = automationDraft(onEvent, DEFAULTS);
   const rescheduled = { ...opened, schedule: scheduleDraftOf("*/5 * * * *") };
 
@@ -300,7 +306,9 @@ test("a GitHub trigger's settings are written as the row of choices leaves them,
     ...SAVED,
     trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED },
   };
+
   const opened = automationDraft(onEvent, DEFAULTS);
+
   const chosen = {
     ...opened,
     githubSettings: {
@@ -340,6 +348,7 @@ test("a trigger written as a GitHub event or a webhook is made and changed as on
     prompt: "Review this pull request.",
     repository: "acme/ledger",
   };
+
   const filtered = {
     ...SAVED,
     trigger: {
@@ -348,6 +357,7 @@ test("a trigger written as a GitHub event or a webhook is made and changed as on
       labels: ["bug"],
     },
   };
+
   const opened = automationDraft(filtered, DEFAULTS);
 
   assert.deepEqual(
@@ -388,6 +398,7 @@ test("two drafts are the same where every field the editor writes is, the words 
   const fresh = automationDraft(undefined, DEFAULTS);
 
   assert.ok(sameDraft(fresh, { ...fresh, name: "  " }));
+
   for (const moved of [
     { ...fresh, name: "Sweep" },
     { ...fresh, schedule: scheduleDraftOf("0 10 * * 1-5") },
@@ -408,6 +419,7 @@ test("runs land in a new agent each time on the account's default until a model 
     prompt: "Fix it.",
     repository: "acme/ledger",
   };
+
   const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" };
 
   assert.deepEqual(
@@ -437,6 +449,7 @@ test("a saved automation opens on where its runs land, and a save sends only the
     target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: AGENT_ID },
     archiveSuccessful: false,
   } as const;
+
   const opened = automationDraft(onAgent, DEFAULTS);
   assert.deepEqual(
     [opened.target, opened.agentId, opened.choice, opened.archiveSuccessful],
@@ -479,6 +492,7 @@ test("a move to another repository lets go of the agent chosen, and a hidden cho
     ...SAVED,
     target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: AGENT_ID },
   } as const;
+
   const opened = automationDraft(onAgent, DEFAULTS);
 
   assert.equal(withRepository(opened, "acme/web").agentId, null);
@@ -503,6 +517,7 @@ test("a move to another GitHub event lets go of the filters the event before was
       labels: ["bug"],
     },
   };
+
   const opened = automationDraft(filtered, DEFAULTS);
 
   assert.deepEqual(
@@ -516,11 +531,13 @@ test("a move to another GitHub event lets go of the filters the event before was
     },
   );
   assert.equal(withGithubEvent(opened, GITHUB_TRIGGER_EVENT.ISSUE_OPENED), opened);
+
   // Away and back again, the filters let go of are a change the editor can save, since it now shows none.
   const back = withGithubEvent(
     withGithubEvent(opened, GITHUB_TRIGGER_EVENT.PUSH),
     GITHUB_TRIGGER_EVENT.ISSUE_OPENED,
   );
+
   assert.ok(!sameDraft(opened, back));
   assert.deepEqual(changeOf(back, filtered, DEFAULTS), {
     trigger: {
@@ -538,8 +555,10 @@ test("a Sentry trigger opens and writes back as it was given, and moves only whe
     event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
     filters: { environment: ["production"], level: [SENTRY_LEVEL.ERROR, SENTRY_LEVEL.FATAL] },
   } as const;
+
   const saved = { ...SAVED, trigger };
   const draft = automationDraft(saved, DEFAULTS);
+
   const reordered = {
     ...draft,
     integrationTrigger: {
@@ -547,6 +566,7 @@ test("a Sentry trigger opens and writes back as it was given, and moves only whe
       filters: { ...trigger.filters, level: [SENTRY_LEVEL.FATAL, SENTRY_LEVEL.ERROR] },
     },
   };
+
   const moved = {
     ...draft,
     integrationTrigger: { ...trigger, event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED },
@@ -563,6 +583,7 @@ test("two drafts whose guards differ only in their subject cooldown are not the 
     { ...SAVED, guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 24 } },
     DEFAULTS,
   );
+
   const longer = { ...draft, guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 48 } };
 
   assert.ok(sameDraft(draft, draft));
@@ -618,6 +639,7 @@ test("a filter emptied is dropped from the trigger, and a trigger with no filter
 
 test("a new Sentry automation is made on its event, filters, and cooldown over the default guards, a day unless another is written", () => {
   const fresh = automationDraft(undefined, DEFAULTS);
+
   const sentry = withIntegrationFilters(
     {
       ...fresh,
@@ -647,15 +669,18 @@ test("a Sentry trigger stops a save where its cooldown is no whole number of hou
   const opened = automationDraft(ALERTED, DEFAULTS);
 
   assert.deepEqual(draftProblems(opened, false, NOW), {});
+
   for (const subjectCooldownHours of [undefined, 0, 169, 1.5]) {
     assert.ok(
       draftProblems({ ...opened, subjectCooldownHours }, false, NOW)[DRAFT_FIELD.COOLDOWN],
       String(subjectCooldownHours),
     );
   }
+
   const crowded = withIntegrationFilters(opened, {
     project: Array.from({ length: 11 }, (_, n) => `project-${n}`),
   });
+
   assert.ok(draftProblems(crowded, false, NOW)[DRAFT_FIELD.FILTERS]);
   // A cooldown left behind by another trigger kind stops nothing.
   assert.deepEqual(

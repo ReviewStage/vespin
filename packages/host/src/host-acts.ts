@@ -103,6 +103,6 @@ export function liveTold(
   emit: HostKernel["emit"],
   follow: AnyLiveFollowDeclaration,
   slice: AnyLiveFollowDeclaration["slice"] = follow.slice,
-): (held: unknown) => void {
+): (held: AppState[AnyLiveFollowDeclaration["slice"]]) => void {
   return (held) => emit(GATEWAY_EVENT.LIVE_READ_CHANGED, carried({ read: slice, held }));
 }

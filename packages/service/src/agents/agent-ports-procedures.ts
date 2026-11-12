@@ -33,6 +33,7 @@ export interface AgentPortsProcedureSeams {
 /** The agent ports resource: its read, and its one shared port, to a signed-in caller. */
 export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
   const signedIn = hosted.agentPorts.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** The ports listened on in the agent's sandbox, and whether it is running. */
     list: signedIn.list.effect(function* ({ input, context }) {

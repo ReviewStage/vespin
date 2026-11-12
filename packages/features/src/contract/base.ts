@@ -45,7 +45,9 @@ export function refuses<const Slugs extends readonly HostedApiError[]>(
   ...slugs: Slugs
 ): Pick<typeof HOSTED_ERRORS, Slugs[number]> {
   const declared: Partial<Record<HostedApiError, (typeof HOSTED_ERRORS)[HostedApiError]>> = {};
+
   for (const slug of slugs) declared[slug] = HOSTED_ERRORS[slug];
+
   // SAFETY: every slug named was copied from the map above, and only those.
   return declared as Pick<typeof HOSTED_ERRORS, Slugs[number]>;
 }

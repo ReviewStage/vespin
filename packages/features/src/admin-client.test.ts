@@ -67,10 +67,12 @@ it.effect(
         [500, ADMIN_UNANSWERED],
         [HTTP_STATUS.UNAUTHORIZED, ADMIN_REFUSED.SIGNED_OUT],
       ] as const;
+
       for (const [status, refused] of cases) {
         const api = fakeCloudApi({
           [`GET ${ADMIN_ROUTE_PATH.USER}`]: { answer: () => ({ error: "refused" }), status },
         });
+
         const answered = yield* Effect.provide(
           client().read({
             procedure: ADMIN_READ.USER,
@@ -78,6 +80,7 @@ it.effect(
           }),
           api.layer,
         );
+
         assert.deepEqual(answered, { refused }, `status ${status}`);
       }
     }),
@@ -179,6 +182,7 @@ it.effect(
       const reading = yield* Effect.forkChild(
         Effect.provide(client().read(USERS_READ), stalled.layer),
       );
+
       yield* TestClock.adjust("11 seconds");
 
       assert.deepEqual(yield* Fiber.join(reading), { refused: ADMIN_REFUSED.UNAVAILABLE });

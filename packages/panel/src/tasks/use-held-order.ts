@@ -47,9 +47,11 @@ export function useHeldOrder<V, P, L>(view: V, shown: boolean, order: HeldOrder<
   // Note that what was drawn is held once it is on screen, so a render React drops holds nothing.
   useLayoutEffect(() => {
     held.current = shown ? { view, places: order.placesOf(drawn, places) } : undefined;
+
     return () => {
       held.current = undefined;
     };
   });
+
   return drawn;
 }

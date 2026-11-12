@@ -1,6 +1,7 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
@@ -9,7 +10,6 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -20,8 +20,8 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
-  shapes,
 } from "@expo/ui/swift-ui/modifiers";
+import { Predicate } from "effect";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
@@ -65,7 +65,8 @@ type RowListProps = {
 /** The one row a SwiftUI `List` selection names, where it names one. */
 function selectedId(selection: readonly (string | number)[]): string | undefined {
   const first = selection[0];
-  return typeof first === "string" ? first : undefined;
+
+  return Predicate.isString(first) ? first : undefined;
 }
 
 /** The ground a list stands on: the brand's, the sidebar's for a sidebar, never the system's grays. */
@@ -85,11 +86,13 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
+
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
       onSelectionChange={(selection) => {
         const id = selectedId(selection);
+
         if (id !== undefined) onSelect?.(id);
       }}
       modifiers={[
@@ -137,13 +140,14 @@ function GroupHeader({
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
     <HStack
       spacing={SPACE.TIGHT + 2}
       modifiers={[
-        contentShape(shapes.rectangle()),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityElement("combine"),
         accessibilityAddTraits(["isHeader"]),
       ]}
@@ -200,10 +204,12 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+
   const label =
     title === undefined ? undefined : (
       <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
     );
+
   const pressable =
     label === undefined || !foldable ? (
       label
@@ -222,12 +228,14 @@ export function ListSection({
         {label}
       </Button>
     );
+
   const header =
     pressable === undefined || onDropLink === undefined ? (
       pressable
     ) : (
       <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
+
   return (
     <Section
       {...(header === undefined ? {} : { header })}

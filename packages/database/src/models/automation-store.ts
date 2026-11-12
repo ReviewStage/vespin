@@ -274,10 +274,12 @@ export function memberOfAutomationWorkspace(
 function allowedTo(userId: string, access: AutomationAccess, id?: string): SQL | undefined {
   const mine = eq(automation.userId, userId);
   const shared = eq(automation.scope, AUTOMATION_SCOPE.WORKSPACE);
+
   const managing = memberOfAutomationWorkspace(userId, [
     WORKSPACE_ROLE.OWNER,
     WORKSPACE_ROLE.ADMIN,
   ]);
+
   const rule = (() => {
     switch (access) {
       case AUTOMATION_ACCESS.READ:
@@ -291,6 +293,7 @@ function allowedTo(userId: string, access: AutomationAccess, id?: string): SQL |
         return or(mine, managing);
     }
   })();
+
   return and(
     id === undefined ? undefined : eq(automation.id, id),
     memberOfAutomationWorkspace(userId),
@@ -1079,6 +1082,7 @@ export function createAutomationCommitted(
   return Effect.gen(function* () {
     if (!(yield* isWorkspaceMember(userId, made.organizationId))) return Option.none();
     const now = yield* DateTime.nowAsDate;
+
     const [row] = yield* insertAutomation({
       ...made,
       userId,
@@ -1091,8 +1095,10 @@ export function createAutomationCommitted(
       preset: made.preset ?? null,
       now,
     });
+
     if (row === undefined) return Option.none();
     const { txid } = row;
+
     return Option.map(yield* readWritten(userId, row.id), (written) => ({
       automation: written,
       txid,
@@ -1156,8 +1162,10 @@ export function updateAutomationCommitted(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const [written] = yield* writeAutomation({ ...changes, userId, id, access, now });
+
     if (written === undefined) return Option.none();
     const { txid } = written;
+
     return Option.map(yield* readWritten(userId, id), (automation) => ({ automation, txid }));
   });
 }
@@ -1190,6 +1198,7 @@ export function recordAutomationRun(
     automationId: owner.id,
     userId: owner.userId,
   };
+
   return Effect.map(insertRun(row), (rows) => Option.fromUndefinedOr(rows[0]));
 }
 
@@ -1200,6 +1209,7 @@ export function settleAutomationRun(
 ): TaskStoreEffect<boolean> {
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
+
     const written = yield* writeRunOutcome({
       id: runId,
       status: outcome.status,
@@ -1207,6 +1217,7 @@ export function settleAutomationRun(
       agentId: outcome.status === AUTOMATION_RUN_STATUS.STARTED ? outcome.agentId : null,
       now,
     });
+
     return written.length > 0;
   });
 }
@@ -1376,9 +1387,11 @@ export function claimRunSlackDelivery(
 ): TaskStoreEffect<Option.Option<RunSlackDelivery>> {
   return Effect.gen(function* () {
     const found = yield* findUndeliveredRun({ agentId });
+
     if (Option.isNone(found)) return found;
     const now = yield* DateTime.nowAsDate;
     const claimed = yield* writeSlackDelivered({ runId: found.value.runId, now });
+
     return claimed.length === 0 ? Option.none() : found;
   });
 }

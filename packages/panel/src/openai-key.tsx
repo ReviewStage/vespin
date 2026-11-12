@@ -44,6 +44,7 @@ const OpenAiKeyContext = createContext<OpenAiKey>(OPENAI_KEY.UNKNOWN);
  */
 function keyOf(keys: readonly ProviderKeySummary[]): OpenAiKey {
   const key = keys.find((one) => one.provider === PROVIDER_KEY_PROVIDER.OPENAI);
+
   return key === undefined || key.status === PROVIDER_KEY_STATUS.UNREADABLE
     ? OPENAI_KEY.MISSING
     : OPENAI_KEY.SAVED;
@@ -60,6 +61,7 @@ export function OpenAiKeyProvider({
 }): React.JSX.Element {
   const { data: rows } = useQuery(providerKeysQuery(account));
   const key = useMemo(() => (rows === undefined ? OPENAI_KEY.UNKNOWN : keyOf(rows.keys)), [rows]);
+
   return <OpenAiKeyContext.Provider value={key}>{children}</OpenAiKeyContext.Provider>;
 }
 
@@ -71,6 +73,7 @@ export function useOpenAiKeyMissing(): boolean {
 /** Opens Settings › Agents at Codex's row, where the account's OpenAI key is saved. */
 export function useOpenApiKeys(): () => void {
   const openSettings = useOpenSettings();
+
   return useCallback(
     () => openSettings(agentKeyLink(PROVIDER_KEY_PROVIDER.OPENAI)),
     [openSettings],

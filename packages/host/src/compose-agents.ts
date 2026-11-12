@@ -228,7 +228,6 @@ export type AgentClient = Pick<
   | "switchServers"
   | "choosePermissionMode"
   | "answerApproval"
-  | "addRepository"
   | "changeQueue"
   | "archive"
   | "pin"
@@ -340,6 +339,7 @@ function transcriptKeyOf({ agentId, callId }: AgentTranscriptKey): TranscriptKey
 /** How each part of a Pull request tab is told: on its own slice, which its follow declares beside the pull request's. */
 function partsTold(emit: HostKernel["emit"]): PullRequestPartsDependencies["tell"] {
   const follow = AGENT_FOLLOWS.AGENTS_PULL_REQUEST_PART_FOLLOW;
+
   return {
     [LIVE_READ.PULL_REQUEST]: liveTold(emit, follow),
     [LIVE_READ.PULL_REQUEST_CHECKS]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_CHECKS),
@@ -366,7 +366,9 @@ const isCommitSha = Schema.is(commitShaSchema);
  */
 function isKeptImage(src: string): boolean {
   const image = githubImageOf(src);
+
   if (image?.source === GITHUB_IMAGE_SOURCE.ASSET) return true;
+
   return image?.source === GITHUB_IMAGE_SOURCE.FILE && isCommitSha(image.ref);
 }
 
@@ -377,6 +379,7 @@ export function composeAgents(
     const http = yield* HttpClient.HttpClient;
     const asked = askedOf(dependencies, http);
     const { client } = dependencies;
+
     const transcripts = yield* transcriptFollows({
       seal: (key, poll, userId, after, cursor) =>
         asked(
@@ -393,8 +396,10 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
     });
+
     const gate = gateOf(dependencies);
     const queues = yield* agentQueues(dependencies.pool);
+
     // Note that a transcript no window holds stops following, its messages standing for a window that steps back to it, since a working agent nobody looks at would otherwise stream its journal on.
     const transcriptSlice = yield* heldSlice<typeof LIVE_READ.TRANSCRIPT, TranscriptKey>({
       empty: NO_TRANSCRIPTS,
@@ -423,7 +428,9 @@ export function composeAgents(
       pause: true,
       budget: { reads: HELD_TRANSCRIPTS, bytes: HELD_BYTES, bytesEach: HELD_BYTES_EACH },
     });
+
     const accountWide = accountWideReads();
+
     const inboxes = yield* scopeInboxes({
       seal: (scope, poll, userId, after) =>
         asked(
@@ -432,18 +439,22 @@ export function composeAgents(
       accountId: dependencies.accountId,
       pool: dependencies.pool,
     });
+
     const accounts = yield* accountInboxes({
       seal: (userId, poll, after) =>
         asked(client.liveRead(ACCOUNT_INBOX_READ, { userId }, poll ? { after } : undefined)),
       pool: dependencies.pool,
       accountWide,
     });
+
     const tellItems = (read: AppHostRead<AppInboxItems>) =>
       Effect.sync(() => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_ITEMS_CHANGED, carried(read)));
+
     const holders = yield* holderInboxes(inboxes, {
       gate,
       tell: liveTold(dependencies.kernel.emit, AGENT_INBOX_FOLLOWS.AGENTS_INBOX_FOLLOW),
     });
+
     const chapters = yield* heldChapters({
       seal: (key, poll, userId, after) =>
         asked(
@@ -457,6 +468,7 @@ export function composeAgents(
       gate,
       tell: liveTold(dependencies.kernel.emit, CHAPTERS_FOLLOWS.CHAPTERS_FOLLOW),
     });
+
     const origins = yield* heldAgentOrigins({
       seal: (agentId, poll, userId, after) =>
         asked(
@@ -466,11 +478,13 @@ export function composeAgents(
       gate,
       tell: liveTold(dependencies.kernel.emit, AGENT_FOLLOWS.AGENTS_ORIGIN_FOLLOW),
     });
+
     // Note that a session's reads close before the window is told it holds none, so nothing the last account drew lands after.
     const sessionReads = yield* accountReads<LiveRead>(
       () => (gate() ? dependencies.accountId() : undefined),
       tellItems(UNREAD),
     );
+
     const followItems = (userId: string) =>
       followAccountItems(
         {
@@ -489,6 +503,7 @@ export function composeAgents(
         userId,
         tellItems,
       );
+
     const preferences = yield* heldAccountPreferences({
       seal: (userId, poll, after) =>
         asked(client.liveRead(ACCOUNT_PREFERENCES_READ, { userId }, poll ? { after } : undefined)),
@@ -497,11 +512,14 @@ export function composeAgents(
       tell: (held: AppAccountPreferences) =>
         dependencies.kernel.emit(GATEWAY_EVENT.ACCOUNT_PREFERENCES_CHANGED, carried(held)),
     });
+
     // Note that the row is held for the session rather than by a window, so the read stands until the session's reads close.
     const holdPreferences = (userId: string) =>
       Effect.scoped(Effect.andThen(preferences.hold(userId), Effect.never));
+
     const accountFollow = yield* FiberHandle.make();
     const fetched = yield* fetchedReads(dependencies, asked);
+
     const parts = yield* pullRequestParts({
       gate,
       focus: dependencies.focus,
@@ -516,6 +534,7 @@ export function composeAgents(
       listings: dependencies.pullRequestListings ?? Effect.succeed(Stream.empty),
       tell: partsTold(dependencies.kernel.emit),
     });
+
     return composed(
       dependencies,
       http,
@@ -591,6 +610,7 @@ function fetchedReads(
   return Effect.gen(function* () {
     const { client, kernel, focus, accountId } = dependencies;
     const gate = gateOf(dependencies);
+
     const tools = yield* heldFetch<typeof LIVE_READ.WORKSPACE_TOOLS, string>({
       empty: NO_KEYS_HELD,
       path: (agentId) => [agentId],
@@ -602,6 +622,7 @@ function fetchedReads(
         ),
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.AGENTS_WORKSPACE_TOOLS_FOLLOW),
     });
+
     const models = yield* heldFetch<typeof LIVE_READ.MODELS, string>({
       empty: NO_KEYS_HELD,
       path: (userId) => [userId],
@@ -615,6 +636,7 @@ function fetchedReads(
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.AGENTS_MODELS_FOLLOW),
     });
+
     return {
       tools,
       models,
@@ -644,13 +666,16 @@ function composed(
   /** What a follow the gate keeps from the service is told; no account where the gate stands open but names none. */
   const gateKept = () => gateClosed(closedBy(dependencies) ?? GATE_CLOSED_BY.NO_ACCOUNT);
   const asked = askedOf(dependencies, http);
+
   /** Content the service answers under a key it never changes under: asked behind the gate, as every ask is, and kept once it carries some. */
   const keptAsked = <Key extends KeptKey, Answer>(
     key: Key,
     call: Effect.Effect<Answer, never, HttpClient.HttpClient>,
     carries: (answer: Answer | GateClosed) => KeptAnswer<Key> | undefined,
   ) => (gate() ? kept.answer(key, dependencies.accountId, asked(call), carries) : asked(call));
+
   const listed = dependencies.listed ?? (() => Effect.void);
+
   /**
    * A write to an agent's row of the task list, as the agents' own writes
    * declare it: drawn at once over the row, sent as `send` asks, and kept on
@@ -664,8 +689,10 @@ function composed(
     // Note that a write that waits, or one the service took already, answers the agent as the list shows it, which a window reads as kept.
     const keptAs = ({ agentId }: Input): AgentAgentAnswer => {
       const agent = dependencies.agentListed?.(agentId);
+
       return agent === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { agent };
     };
+
     return {
       kind: AGENT,
       keys: ({ agentId }) => [agentId],
@@ -674,12 +701,15 @@ function composed(
         Effect.map(send(input, key), (answered) => {
           if ("agent" in answered) return { answer: answered, txid: answered.txid };
           const refused = answered;
+
           if (queue === undefined) return { refused };
+
           return untaken(writeUntakenOf(answered.cause), { kept: keptAs(input), refused });
         }),
       ...(queue === undefined ? undefined : { queue: { ...queue, queued: keptAs } }),
     };
   };
+
   /** A change of model, drawn on the agent's row at once, on the model's whole window where it names none. */
   const chosen = agentWrite<AgentChooseParams>(
     (choice) => () => ({
@@ -689,22 +719,26 @@ function composed(
     }),
     ({ agentId, ...choice }) => asked(client.choose(agentId, choice)),
   );
+
   /** A rename, drawn on the agent's row at once, an empty title clearing it. */
   const renamed = agentWrite<AgentRenameParams>(
     (request) => () => ({ title: request.title.length === 0 ? null : request.title }),
     ({ agentId, ...request }, key) => asked(client.rename(agentId, request, key)),
     { name: AGENT_QUEUED_WRITE.RENAME, input: agentRenameParamsSchema },
   );
+
   /** A switch of MCP servers, drawn on the agent's row at once, the whole list of those off. */
   const switched = agentWrite<AgentServersParams>(
     (request) => () => ({ disabledServers: request.disabledServers }),
     ({ agentId, ...request }) => asked(client.switchServers(agentId, request)),
   );
+
   /** A change of permission mode, drawn on the agent's row at once, which the agent takes from its next turn. */
   const moded = agentWrite<AgentPermissionModeParams>(
     (request) => () => ({ permissionMode: request.permissionMode }),
     ({ agentId, ...request }) => asked(client.choosePermissionMode(agentId, request)),
   );
+
   /**
    * An archive, drawn on the agent's row at once, stamped now by the member,
    * a dialog's that asked first among them. Note that an agent archived
@@ -715,6 +749,7 @@ function composed(
     ({ archived: archive }) => {
       const archiver = reader();
       const at = kernel.now();
+
       return () =>
         archive
           ? {
@@ -737,8 +772,10 @@ function composed(
           : Effect.void,
       ),
   );
+
   /** A change of an agent's queue, drawn over its own transcript's queue at once and standing until a page carries it. */
   const queued = queues.write((agentId, change) => asked(client.changeQueue(agentId, change)));
+
   /**
    * An agent deleted once its question was answered, drawn gone from the
    * list at once and kept once the list carries it; a refusal puts it back.
@@ -757,11 +794,14 @@ function composed(
     send: ({ agentId }) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.delete(agentId));
+
         if (!("deleted" in answer)) return { refused: answer };
         yield* kept.forget(keptOfAgent(agentId));
+
         return { answer, txid: answer.txid };
       }),
   };
+
   /** A pin, drawn on the agent's row at once, newest pinned and standing where it was dragged, and kept once the list carries it. */
   const pinned = agentWrite<AgentPinParams>(
     (request) => (row) =>
@@ -774,6 +814,7 @@ function composed(
     ({ agentId, ...request }, key) => asked(client.pin(agentId, request, key)),
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
+
   /**
    * A Start, on a task or from another agent, which draws no row, since
    * only the service names its agent, which the list then carries. Where
@@ -798,6 +839,7 @@ function composed(
         asked(taskId === undefined ? client.startFrom(request) : client.start(taskId, request)),
         (answered) => {
           if ("agent" in answered) return { answer: answered, txid: answered.txid };
+
           return writeUntakenOf(answered.cause) === WRITE_UNTAKEN.UNANSWERED
             ? { refused: answered, unanswered: true as const }
             : { refused: answered };
@@ -854,17 +896,21 @@ function composed(
       ),
     ...(queue === undefined ? undefined : { queue }),
   });
+
   /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
   const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
     const item = dependencies.pool.row(INBOX_ITEM, itemId);
+
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
+
   // Note that who and when are read once a write is asked, since its change is drawn again over each answer a read takes while it stands.
   /** A nod to an item, settling it. */
   const nodded = inboxWrite<AgentInboxAnswerParams, AgentInboxAnsweredView>(
     ({ itemId }) => [itemId],
     ({ itemId, revision }) => {
       const [by, at] = [reader(), kernel.now()];
+
       return {
         kind: INBOX_CHANGE.SETTLED,
         itemId,
@@ -878,11 +924,13 @@ function composed(
       queued: settledAs,
     },
   );
+
   /** An open item closed without an answer, settling it. Note that a close an older build queued held names `held`, which goes no further. */
   const closed = inboxWrite<AgentInboxCloseParams, AgentInboxAnsweredView>(
     ({ itemId }) => [itemId],
     ({ itemId, revision }) => {
       const [by, at] = [reader(), kernel.now()];
+
       return {
         kind: INBOX_CHANGE.SETTLED,
         itemId,
@@ -896,6 +944,7 @@ function composed(
       queued: settledAs,
     },
   );
+
   /**
    * The reader's own nod or close taken back, as their Undo asks, drawn open
    * at once and landing as the service answers it: still settled where it
@@ -906,10 +955,12 @@ function composed(
     ({ itemId }) => [itemId],
     ({ itemId }) => {
       const at = kernel.now();
+
       return { kind: INBOX_CHANGE.REOPENED, itemId, item: (item) => takenBackNow(item, at) };
     },
     ({ itemId, ...request }, key) => asked(client.takeBackInbox(itemId, request, key)),
   );
+
   /**
    * A message on an item's thread. Note that a reply carrying an answer
    * settles the ask while it stands open, where a plain one only leaves the
@@ -924,7 +975,9 @@ function composed(
       if (answers === undefined) {
         return { kind: INBOX_CHANGE.MARKED, itemIds: new Set([itemId]), unread: false };
       }
+
       const [by, at] = [reader(), kernel.now()];
+
       return {
         kind: INBOX_CHANGE.SETTLED,
         itemId,
@@ -936,6 +989,7 @@ function composed(
     },
     ({ itemId, ...request }) => asked(client.messageInbox(itemId, request)),
   );
+
   /** An item marked read or unread. */
   const marked = inboxWrite<AgentInboxReadStateParams, AgentInboxReadStateView>(
     ({ itemId }) => [itemId],
@@ -950,6 +1004,7 @@ function composed(
       queued: ({ itemId, unread }) => ({ id: itemId, unread }),
     },
   );
+
   /** An item's reminder set for an instant, or canceled, drawn at once; whether it is read stands as it was. */
   const reminded = inboxWrite<AgentInboxRemindParams, AgentInboxReadStateView>(
     ({ itemId }) => [itemId],
@@ -964,6 +1019,7 @@ function composed(
       }),
     },
   );
+
   /** Every item the inbox lists marked read. */
   const markedAll = inboxWrite<AgentInboxReadAllParams, AgentInboxReadAllView>(
     ({ itemIds }) => itemIds,
@@ -997,9 +1053,11 @@ function composed(
     AGENTS_START: (start) =>
       Effect.gen(function* () {
         const answer = yield* dependencies.pool.write(started, start);
+
         // Note that a Start answers once the task list carries its agent, because the window draws
         // a task's agents from the list alone, so the tab it opens finds its agent there.
         if ("txid" in answer) yield* listed(answer.txid);
+
         return answer;
       }),
     // Note that the page is read at once, since Copy transcript waits on no hold.
@@ -1008,11 +1066,14 @@ function composed(
     AGENTS_TRANSCRIPT_OLDER: ({ agentId, callId, before }) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.messagesBefore(agentId, before, callId, true));
+
         if ("failure" in answer) return answer;
         const key = new TranscriptKey({ agentId, callId });
         // Note that the page is laid only while the messages held still begin where it was asked, so one answering after a newer page took their place leaves no gap.
         const laid = withOlderPage(transcriptSlice.rowsOf(key), before, answer);
+
         if (laid !== undefined) transcriptSlice.lay(key, laid);
+
         return { landed: laid !== undefined };
       }),
     AGENTS_MESSAGE: ({ agentId, ...request }) =>
@@ -1039,8 +1100,6 @@ function composed(
     AGENTS_ARCHIVE: declaredWrite(dependencies.pool, archived),
     AGENTS_PIN: declaredWrite(dependencies.pool, pinned),
     // Note that a repository added draws nothing on the agent's row, which lists no repositories, so it is asked and answered alone.
-    AGENTS_ADD_REPOSITORY: ({ agentId, addRepository }) =>
-      asked(client.addRepository(agentId, { addRepository })),
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
       asked(client.rewind(agentId, messageId, restoreFiles === true)),
@@ -1063,6 +1122,7 @@ function composed(
       asked(client.pullRequestAction(agentId, request, number)),
     AGENTS_GITHUB_IMAGE: ({ agentId, src }) => {
       const call = client.githubImage(agentId, src);
+
       return isKeptImage(src)
         ? keptAsked(new GitHubImageKey({ agentId, src }), call, (image) =>
             "base64" in image ? image : undefined,
@@ -1112,6 +1172,7 @@ function composed(
       retry: () =>
         Effect.suspend(() => {
           const userId = dependencies.accountId();
+
           return userId === undefined ? Effect.void : models.retry(userId);
         }),
     },
@@ -1138,6 +1199,7 @@ function composed(
     AGENTS_PREFERENCES_RETRY: () =>
       Effect.suspend(() => {
         const userId = dependencies.accountId();
+
         return userId === undefined ? Effect.void : preferences.retry(userId);
       }),
   };
@@ -1148,12 +1210,16 @@ function composed(
       Effect.gen(function* () {
         const tell = (answer: AgentAccountInboxAnswerView) =>
           Effect.sync(() => kernel.emit(GATEWAY_EVENT.ACCOUNT_INBOX_CHANGED, carried(answer)));
+
         const userId = dependencies.accountId();
+
         const follow =
           gate() && userId !== undefined
             ? followAccountInbox(accounts, userId, tell)
             : tell(gateKept());
+
         yield* FiberHandle.run(accountFollow, follow);
+
         return {};
       }),
     [GATEWAY_METHOD.AGENTS_ACCOUNT_INBOX_UNFOLLOW]: () =>
@@ -1167,9 +1233,12 @@ function composed(
     yield* chapters.end;
     yield* origins.end;
     yield* FiberHandle.clear(accountFollow);
+
     for (const key of yield* RcMap.keys(transcripts)) yield* RcMap.invalidate(transcripts, key);
     yield* kept.clear;
+
     for (const scope of yield* RcMap.keys(inboxes)) yield* RcMap.invalidate(inboxes, scope);
+
     for (const userId of yield* RcMap.keys(accounts)) yield* RcMap.invalidate(accounts, userId);
     yield* sessionReads.end;
     yield* preferences.end;

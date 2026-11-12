@@ -109,6 +109,7 @@ function takenMentions(
   conversationId: string,
 ): Effect.Effect<readonly string[], never, DatabaseServices> {
   if (policy !== CONNECTION_POLICY.AGENT_SWITCHES_AND_MENTIONS) return Effect.succeed([]);
+
   return takeAgentMentionedServers(userId, conversationId).pipe(
     Effect.catchCause((cause) =>
       Effect.as(
@@ -139,6 +140,7 @@ function accountNote(
   others: readonly IntegrationConnectionRow[],
 ): string {
   const name = INTEGRATION_NAME[row.provider];
+
   // Note that two accounts called alike are told apart by their places, so no two notes read the same.
   // Note that a label is cut to a label's length before two alike are told apart, so the place that tells them apart is never cut away.
   const names = integrationAccountNames(
@@ -147,9 +149,11 @@ function accountNote(
       label: each.label?.slice(0, INTEGRATION_LABEL_MAX),
     })),
   );
+
   // Note that a label is quoted as a string literal, because a provider names it and the model reads it.
   const label = (each: IntegrationConnectionRow) =>
     JSON.stringify(names.get(each.connectionName) ?? "");
+
   return `This connection is the developer's ${label(row)} ${name} account. They also connected ${andList(others.map(label))}. If the developer hasn't said which account, ask before writing. Say which account you read from or wrote to.`;
 }
 
@@ -165,10 +169,13 @@ function providerConnections(
 ): readonly HandedConnection[] {
   const placeOf = (row: IntegrationConnectionRow) =>
     integrationConnectionOf(row.connectionName)?.place ?? Number.POSITIVE_INFINITY;
+
   const held = rows
     .filter((row) => row.provider === provider && handedRow(row))
     .toSorted((a, b) => placeOf(a) - placeOf(b));
+
   if (held.length === 0) return [{ provider, connectionName: provider, instanceKey: caller }];
+
   return held.map((row) => ({
     provider,
     connectionName: row.connectionName,
@@ -199,32 +206,40 @@ export function turnServers(
 ): Effect.Effect<ServerStanding, never, DatabaseServices | IntegrationConnect | GitHubApp> {
   return Effect.gen(function* () {
     const admitted = yield* admission;
+
     if (Result.isFailure(admitted)) return SERVERS_OFF;
     const { caller } = admitted.success;
     const { userId, conversationId } = admitted.success.target;
     // The caller's own offer, as the accounts read and every token read are the caller's.
     const connect = yield* accountIntegrationConnect(caller);
     const github = yield* githubOffered;
+
     // A provider the account's GitHub sign-in grants is offered wherever the GitHub App is.
     const offered = INTEGRATION_PROVIDER_LIST.filter((provider) =>
       INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN
         ? github
         : connect[provider].configured,
     );
+
     const rows = yield* readIntegrationConnections(caller);
     const handed = offered.flatMap((provider) => providerConnections(provider, rows, caller));
+
     if (policy === CONNECTION_POLICY.ALWAYS_ON) {
       return { on: true, account: userId, connections: handed } as const;
     }
+
     const agent = yield* readAgentOfConversation(userId, conversationId);
+
     if (Option.isNone(agent)) return SERVERS_OFF;
     const { disabledServers } = agent.value;
     // A native turn took its mentions as it started and names them here (`turnMentions`); those still on the row are taken now.
     const mentioned = [...turnMentions, ...(yield* takenMentions(policy, userId, conversationId))];
+
     const connections = handed.filter(
       ({ connectionName }) =>
         !disabledServers.includes(connectionName) || mentioned.includes(connectionName),
     );
+
     return { on: true, account: userId, connections } as const;
   }).pipe(
     Effect.catchCause((cause) =>

@@ -40,15 +40,19 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
     /** The session to the gateway, the one held while it stands, or a fresh one. */
     const sessionFor = (host: string): ClientHttp2Session => {
       const held = sessions.get(host);
+
       if (held !== undefined && !held.closed && !held.destroyed) return held;
       const session = connect(`https://${host}:443`);
+
       const forget = () => {
         if (sessions.get(host) === session) sessions.delete(host);
       };
+
       session.on("error", forget);
       session.on("goaway", forget);
       session.on("close", forget);
       sessions.set(host, session);
+
       return session;
     };
 
@@ -66,6 +70,7 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
           [HTTP2_HEADER_PATH]: request.path,
           ...request.headers,
         });
+
         let status = 0;
         const chunks: Buffer[] = [];
         stream.on("response", (headers) => {
@@ -76,16 +81,17 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
           resume(Effect.succeed({ status, body: Buffer.concat(chunks).toString("utf8") })),
         );
         // A session failing mid-flight surfaces on its streams as well, so the stream's error is the one place a send fails from.
-        stream.on("error", (error: unknown) =>
+        stream.on("error", (cause: unknown) =>
           resume(
             Effect.fail(
               new ApnsTransportFailure({
-                errorName: error instanceof Error ? error.name : undefined,
+                errorName: cause instanceof Error ? cause.name : undefined,
               }),
             ),
           ),
         );
         stream.end(request.body);
+
         return Effect.sync(() => stream.close(NGHTTP2_CANCEL));
       }).pipe(
         Effect.timeoutOrElse({

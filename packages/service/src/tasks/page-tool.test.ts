@@ -52,6 +52,7 @@ const openTask = Effect.gen(function* () {
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
   const agentId = yield* openAgent(userId, { taskId: task.id });
+
   return {
     userId,
     taskId: task.id,
@@ -63,6 +64,7 @@ const openTask = Effect.gen(function* () {
 /** A sandbox holding the files given by absolute path, each read as one stream, recording every path asked for. */
 function sandboxWith(files: Readonly<Record<string, string>>) {
   const reads: string[] = [];
+
   const sandbox: NonNullable<PageToolBinding["sandbox"]> = {
     checkout: CHECKOUT,
     door: () =>
@@ -70,7 +72,9 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
         readFile: ({ path }: { path: string }) => {
           reads.push(path);
           const text = files[path];
+
           if (text === undefined) return Promise.resolve(null);
+
           return Promise.resolve(
             new ReadableStream<Uint8Array>({
               start(controller) {
@@ -82,6 +86,7 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
         },
       }),
   };
+
   return { sandbox, reads };
 }
 
@@ -110,17 +115,22 @@ it.layer(getTestDB())("show_page", (it) => {
           [`${CHECKOUT}/funnel.html`]: FUNNEL,
           [`${CHECKOUT}/weekly.html`]: `${FUNNEL}<p>v2</p>`,
         });
+
         const task = { ...(yield* openTask), sandbox };
+
         const first = yield* show(
           task,
           { title: "Invite funnel", path: "funnel.html" },
           task.agent,
         );
+
         const page = shownPage(first);
+
         const agent: PageShower = {
           kind: PAGE_SHOWER.AGENT,
           agentId: yield* openAgent(task.userId, { taskId: task.taskId }),
         };
+
         const second = shownPage(
           yield* show(
             task,
@@ -149,9 +159,11 @@ it.layer(getTestDB())("show_page", (it) => {
           ),
           [{ id: page.id, title: "Invite funnel, by week", version: 2, shownBy: agent }],
         );
+
         const stored = Option.getOrThrow(
           yield* readPageVersion(task.userId, taskPageOwner(task.taskId), page.id, 1),
         );
+
         assert.deepEqual([stored.html, stored.shownBy], [FUNNEL, task.agent]);
       }),
   );
@@ -165,6 +177,7 @@ it.layer(getTestDB())("show_page", (it) => {
       const shown = shownPage(
         yield* show(agent, { title: "Funnel", path: "funnel.html" }, task.agent),
       );
+
       assert.equal(shown.version, 1);
       assert.deepEqual(
         yield* show(agent, { title: "Inline", html: FUNNEL }, task.agent),

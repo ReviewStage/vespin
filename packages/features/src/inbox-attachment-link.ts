@@ -62,6 +62,39 @@ export const INBOX_PICTURE_IN_WORDS =
 /** A destination that names a scheme, `https:`, `data:`, or our own, and so no file in the agent's sandbox. */
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
 
+/** Where a run of spaces and tabs from the place given ends. */
+function blanksEndAt(text: string, from: number): number {
+  let at = from;
+
+  while (text[at] === " " || text[at] === "\t") at += 1;
+
+  return at;
+}
+
+/**
+ * Where a picture closes, read on from its destination: past its caption in
+ * double or single quotes, if any, and its closing parenthesis; nothing
+ * where the words close it no way a picture closes. Note that it is a scan
+ * rather than a regular expression, so it reads each character once.
+ */
+function pictureClosedAt(text: string, from: number): number | undefined {
+  let at = blanksEndAt(text, from);
+  const quote = text[at];
+
+  if (quote === '"' || quote === "'") {
+    at += 1;
+
+    while (text[at] !== quote) {
+      if (at >= text.length || text[at] === "\n") return undefined;
+      at += text[at] === "\\" ? 2 : 1;
+    }
+
+    at = blanksEndAt(text, at + 1);
+  }
+
+  return text[at] === ")" ? at + 1 : undefined;
+}
+
 /** An item of the Inbox as its link names it: under its task, or under its agent. */
 export type InboxItemPlace = Extract<
   LinkDestination,
@@ -86,11 +119,15 @@ export function inboxAttachmentAddress(
 /** The item's picture an address names, by either scheme; nothing for any other address, the item's own among them. */
 export function inboxAttachmentOf(address: string): InboxAttachmentRef | undefined {
   const url = address.length > MAX_ADDRESS_CHARS ? undefined : parsedUrl(address);
+
   if (url === undefined || !isLinkHome(url)) return undefined;
+
   if (url.search !== "" || url.hash !== "") return undefined;
+
   const [first, workspace, holder, holderId, inbox, itemId, files, attachmentId, ...rest] =
     url.pathname.split("/");
-  const shaped =
+
+  const wellFormed =
     first === "" &&
     workspace !== undefined &&
     workspace !== "" &&
@@ -101,17 +138,22 @@ export function inboxAttachmentOf(address: string): InboxAttachmentRef | undefin
     inbox === INBOX_STEP &&
     files === FILES_STEP &&
     rest.length === 0;
-  if (!shaped || itemId === undefined || attachmentId === undefined) return undefined;
+
+  if (!wellFormed || itemId === undefined || attachmentId === undefined) return undefined;
+
   if (!UUID.test(itemId) || !UUID.test(attachmentId)) return undefined;
+
   return { itemId, attachmentId };
 }
 
 /** The ids of the item's own pictures a text names, in the order first named, each once. */
 export function inboxAttachmentIdsIn(text: string, itemId: string): readonly string[] {
   const named = new Set<string>();
+
   for (const [, item, attachment] of text.matchAll(ADDRESS_IN_TEXT)) {
     if (item === itemId && attachment !== undefined && UUID.test(attachment)) named.add(attachment);
   }
+
   return [...named];
 }
 
@@ -128,9 +170,41 @@ export function inboxPictureDestination(destination: string): string {
  */
 export function inboxSandboxPicturePaths(text: string): readonly string[] {
   const paths = new Set<string>();
+
   for (const match of text.matchAll(INBOX_PICTURE_IN_WORDS)) {
     const path = inboxPictureDestination(match[2] ?? "");
+
     if (path !== "" && !SCHEMED.test(path) && !insideCode(text, match.index)) paths.add(path);
   }
+
   return [...paths];
+}
+
+/**
+ * The words with every picture drawn from a sandbox path the predicate
+ * takes cut out whole, its alt, caption, and parentheses with it: a PDF a
+ * post names as it draws a picture, which its message keeps as a file
+ * rather than drawing. A picture in code, and one not closed as a picture
+ * is, are left as written.
+ */
+export function withoutSandboxPictures(text: string, cut: (path: string) => boolean): string {
+  let kept = "";
+  let at = 0;
+
+  for (const match of text.matchAll(INBOX_PICTURE_IN_WORDS)) {
+    // A picture written inside the caption of one already cut out went with it.
+    if (match.index < at) continue;
+    const path = inboxPictureDestination(match[2] ?? "");
+    const opened = match.index + match[0].length;
+    const closed = pictureClosedAt(text, opened);
+
+    if (SCHEMED.test(path) || insideCode(text, match.index) || closed === undefined || !cut(path)) {
+      continue;
+    }
+
+    kept += text.slice(at, match.index);
+    at = closed;
+  }
+
+  return kept + text.slice(at);
 }

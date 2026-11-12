@@ -16,8 +16,10 @@ function claimed(path: string): boolean {
       .split("*")
       .map((literal) => literal.replace(/[.+^$()[\]{}|\\]/gu, "\\$&").replaceAll("?", "."))
       .join(".*");
+
     return new RegExp(`^${pattern}$`, "u").test(path);
   });
+
   return match !== undefined && match.exclude !== true;
 }
 

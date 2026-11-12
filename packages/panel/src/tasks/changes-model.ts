@@ -172,11 +172,13 @@ const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/u;
 function frozenHunk(diffHunk: string): string | undefined {
   const [header = "", ...written] = diffHunk.split("\n");
   const match = HUNK_HEADER.exec(header);
+
   if (match === null) return undefined;
   const lines = written.at(-1) === "" ? written.slice(0, -1) : written;
   const old = lines.filter((line) => !line.startsWith("+") && !line.startsWith("\\")).length;
   const now = lines.filter((line) => !line.startsWith("-") && !line.startsWith("\\")).length;
   const [, oldStart = "", newStart = "", scope = ""] = match;
+
   return [`@@ -${oldStart},${old} +${newStart},${now} @@${scope}`, ...lines].join("\n");
 }
 
@@ -200,10 +202,13 @@ function previewRows(
   const found = rows.findLastIndex((row) => line !== null && lineOn(row, side) === line);
   const end = found === -1 ? rows.length - 1 : found;
   const startSide = thread.startSide ?? side;
+
   const first = rows.findIndex(
     (row, at) => at <= end && startLine !== null && lineOn(row, startSide) === startLine,
   );
+
   const start = first === -1 ? end : first;
+
   return {
     kept: rows.slice(Math.max(0, start - THREAD_CONTEXT_ROWS), end + 1),
     own: rows.slice(start, end + 1),
@@ -217,6 +222,7 @@ function selectionPoint(row: DiffRow): { line: number; side: DiffSelection["side
       ? undefined
       : { line: row.oldLine, side: DIFF_SELECTION_SIDE.DELETIONS };
   }
+
   return row.newLine === undefined
     ? undefined
     : { line: row.newLine, side: DIFF_SELECTION_SIDE.ADDITIONS };
@@ -233,6 +239,7 @@ const ROW_WRITTEN = {
 /** One side's start and count in a hunk's header, for its line numbers among the rows, at `before` where it holds none. */
 function sideRange(numbers: readonly (number | undefined)[], before: number): string {
   const standing = numbers.filter((line) => line !== undefined);
+
   return `${standing[0] ?? before},${standing.length}`;
 }
 
@@ -257,26 +264,32 @@ export function threadPreview(
   >,
 ): ThreadPreview | undefined {
   const hunk = frozenHunk(thread.diffHunk);
+
   if (hunk === undefined) return undefined;
   const parsed = patchHunks(hunk)?.at(-1);
   const rows = parsed?.rows ?? [];
   const { kept, own } = previewRows(rows, thread);
   const first = kept[0];
+
   if (parsed === undefined || first === undefined) return undefined;
   const before = rows.slice(0, rows.indexOf(first));
   // A side the kept rows hold no line of is written at the last line before them, as git writes an empty side.
   const oldBefore = before.findLast((row) => row.oldLine !== undefined)?.oldLine ?? 0;
   const newBefore = before.findLast((row) => row.newLine !== undefined)?.newLine ?? 0;
   const scope = HUNK_HEADER.exec(parsed.header)?.[3] ?? "";
+
   const oldRange = sideRange(
     kept.map((row) => row.oldLine),
     oldBefore,
   );
+
   const newRange = sideRange(
     kept.map((row) => row.newLine),
     newBefore,
   );
+
   const header = `@@ -${oldRange} +${newRange} @@${scope}`;
+
   const patch = [
     `diff --git a/${thread.path} b/${thread.path}`,
     `--- a/${thread.path}`,
@@ -285,14 +298,17 @@ export function threadPreview(
     ...kept.map((row) => `${ROW_WRITTEN[row.kind]}${row.text}`),
     "",
   ].join("\n");
+
   const ownFirst = own[0];
   const ownLast = own.at(-1);
   const start = ownFirst === undefined ? undefined : selectionPoint(ownFirst);
   const end = ownLast === undefined ? undefined : selectionPoint(ownLast);
+
   const selected =
     start === undefined || end === undefined
       ? undefined
       : { start: start.line, side: start.side, end: end.line, endSide: end.side };
+
   return { patch, selected };
 }
 
@@ -332,9 +348,11 @@ const DRAWN_LINES = new WeakMap<AgentChangedFile, DrawnLines>();
 /** The lines a file's diff draws a row for, on each of GitHub's sides; none where it draws no hunks. */
 function drawnLines(file: AgentChangedFile): DrawnLines {
   const kept = DRAWN_LINES.get(file);
+
   if (kept !== undefined) return kept;
   const lines = linesDrawnBy(file);
   DRAWN_LINES.set(file, lines);
+
   return lines;
 }
 
@@ -344,13 +362,17 @@ const WHOLE_LINES = new WeakMap<DiffFileTexts, DrawnLines>();
 /** The lines a file drawn whole draws a row for: every line of each side's text. */
 function wholeLines(whole: DiffFileTexts): DrawnLines {
   const kept = WHOLE_LINES.get(whole);
+
   if (kept !== undefined) return kept;
   const numbered = (text: string) => new Set(linesOf(text).lines.map((_line, index) => index + 1));
+
   const lines = {
     [DIFF_SIDE.LEFT]: numbered(whole.before),
     [DIFF_SIDE.RIGHT]: numbered(whole.after),
   };
+
   WHOLE_LINES.set(whole, lines);
+
   return lines;
 }
 
@@ -358,6 +380,7 @@ function wholeLines(whole: DiffFileTexts): DrawnLines {
 function linesDrawnBy(file: AgentChangedFile): DrawnLines {
   const patch = fileNotice(file) === undefined ? file.patch : null;
   const rows = patch === null ? [] : (patchHunks(patch) ?? []).flatMap((hunk) => hunk.rows);
+
   return {
     [DIFF_SIDE.LEFT]: new Set(
       rows.flatMap((row) => (row.oldLine === undefined ? [] : [row.oldLine])),
@@ -376,6 +399,7 @@ function linesDrawnBy(file: AgentChangedFile): DrawnLines {
 function hunkEnds(patch: string): readonly { readonly old: number; readonly now: number }[] {
   // A side a hunk holds no line of names the line before its place, as a patch does.
   const past = (start: number, count: number) => (count === 0 ? start + 1 : start + count);
+
   return (rawHunks(patch) ?? []).map((hunk) => ({
     old: past(hunk.oldStart, hunk.oldLines),
     now: past(hunk.newStart, hunk.newLines),
@@ -391,8 +415,10 @@ function hunkEnds(patch: string): readonly { readonly old: number; readonly now:
  */
 function gapLineOf(file: AgentChangedFile, side: DiffSide, line: number): number | undefined {
   if (side === DIFF_SIDE.RIGHT) return line;
+
   if (file.patch === null) return undefined;
   const before = hunkEnds(file.patch).findLast((end) => end.old <= line);
+
   return before === undefined ? line : line + before.now - before.old;
 }
 
@@ -417,14 +443,18 @@ export function gapLines(
     (thread): thread is ReviewThread & { readonly line: number } =>
       thread.path === file.path && openable(thread),
   );
+
   if (own.length === 0 || fileNotice(file) !== undefined) return [];
   const lines = drawnLines(file);
   const hidden = new Set<number>();
+
   for (const thread of own) {
     if (lines[thread.side].has(thread.line)) continue;
     const gap = gapLineOf(file, thread.side, thread.line);
+
     if (gap !== undefined) hidden.add(gap);
   }
+
   return [...hidden].toSorted((a, b) => a - b);
 }
 
@@ -452,24 +482,32 @@ export function threadsOn(
 ): FileThreads {
   const placed: PlacedThread[] = [];
   const above: PlacedThread[] = [];
+
   // Note that a file no thread is on reads none of its lines, which would parse its patch.
   if (!threads.some((thread) => thread.path === file.path)) return { placed, above };
   const lines = whole === undefined ? drawnLines(file) : wholeLines(whole);
+
   const inGap = (thread: ReviewThread) => {
     if (opened === undefined || opened.size === 0 || !openable(thread)) return false;
+
     const gap =
       fileNotice(file) === undefined ? gapLineOf(file, thread.side, thread.line) : undefined;
+
     return gap !== undefined && opened.has(gap);
   };
+
   for (const thread of threads) {
     const key = thread.comments[0]?.url;
+
     if (thread.path !== file.path || key === undefined) continue;
     const side = SELECTION_SIDE[thread.side];
     const line = thread.line;
+
     if (line !== null && (lines[thread.side].has(line) || inGap(thread))) {
       placed.push({ thread, key, side, line });
     } else above.push({ thread, key, side, line: line ?? thread.originalLine ?? 0 });
   }
+
   return { placed, above };
 }
 
@@ -480,8 +518,11 @@ export function threadsOn(
  */
 export function fileNotice(file: AgentChangedFile): string | undefined {
   if (file.omitted !== null) return CHANGES_WORDS.OMITTED[file.omitted];
+
   if (file.patch === null) return CHANGES_WORDS.OMITTED[PATCH_OMITTED.TOO_LARGE];
+
   if (file.patch.trim() !== "") return undefined;
+
   return file.status === CHANGED_FILE_STATUS.RENAMED
     ? CHANGES_WORDS.UNCHANGED_CONTENTS
     : CHANGES_WORDS.NO_HUNKS;
@@ -501,9 +542,11 @@ export function changeMarks(
   } = {},
 ): readonly FileMark[] {
   const threads = new Map<string, number>();
+
   for (const thread of beside.threads ?? []) {
     threads.set(thread.path, (threads.get(thread.path) ?? 0) + 1);
   }
+
   return files.map((file) => ({
     path: file.path,
     status: STATUS_MARK[file.status],
@@ -521,6 +564,7 @@ export function changeMarks(
  */
 export function changedFolders(paths: readonly string[]): ReadFolder {
   const folders = new Map<string, Map<string, boolean>>();
+
   for (const path of paths) {
     const segments = path.split("/");
     segments.forEach((name, at) => {
@@ -530,11 +574,13 @@ export function changedFolders(paths: readonly string[]): ReadFolder {
       entries.set(name, entries.get(name) === true || at < segments.length - 1);
     });
   }
+
   return (path) => {
     const entries: FolderEntry[] = [...(folders.get(path) ?? [])].map(([name, folder]) => ({
       name,
       folder,
     }));
+
     return Promise.resolve({ entries, truncated: false });
   };
 }
@@ -550,6 +596,7 @@ function filePatch(file: AgentChangedFile): string | undefined {
   const before = file.status === CHANGED_FILE_STATUS.ADDED ? NO_SIDE : `a/${from}`;
   const after = file.status === CHANGED_FILE_STATUS.DELETED ? NO_SIDE : `b/${file.path}`;
   const body = file.patch.endsWith("\n") ? file.patch : `${file.patch}\n`;
+
   return [`diff --git a/${from} b/${file.path}`, `--- ${before}`, `+++ ${after}`, body].join("\n");
 }
 
@@ -561,19 +608,23 @@ function filePatch(file: AgentChangedFile): string | undefined {
  */
 export function pullRequestPatch(files: readonly AgentChangedFile[]): string | undefined {
   const patches = files.flatMap((file) => filePatch(file) ?? []);
+
   return patches.length === 0 ? undefined : patches.join("");
 }
 
 /** What a pull request's patch is saved as, from its page on GitHub: `<repository>-pr-<number>.patch`, or a plain name where the page names neither. */
 export function pullRequestPatchName(url: string): string {
   const address = pullRequestAddressOf(url);
+
   if (address === undefined) return "pull-request.patch";
+
   return `${repositoryParts(address.repository).name}-pr-${address.number}.patch`;
 }
 
 /** A file's header as git writes one, with no hunks under it: what the list draws for a file whose place shows no lines. */
 export function headerPatch(file: AgentChangedFile): string {
   const from = file.previousPath ?? file.path;
+
   return [`diff --git a/${from} b/${file.path}`, `--- a/${from}`, `+++ b/${file.path}`, ""].join(
     "\n",
   );
@@ -594,9 +645,11 @@ const LIST_PATCHES = new WeakMap<AgentChangedFile, string>();
  */
 export function listPatch(file: AgentChangedFile): string {
   const kept = LIST_PATCHES.get(file);
+
   if (kept !== undefined) return kept;
   const patch = filePatch(file) ?? headerPatch(file);
   LIST_PATCHES.set(file, patch);
+
   return patch;
 }
 
@@ -607,7 +660,9 @@ export function filterFiles(
   query: string,
 ): readonly AgentChangedFile[] {
   const asked = query.trim().toLowerCase();
+
   if (asked === "") return files;
+
   return files.filter((file) => file.path.toLowerCase().includes(asked));
 }
 
@@ -615,7 +670,9 @@ export function filterFiles(
 function compareStep(a: string, aFolder: boolean, b: string, bFolder: boolean): number {
   if (aFolder !== bFolder) return aFolder ? -1 : 1;
   const aDot = a.startsWith(".");
+
   if (aDot !== b.startsWith(".")) return aDot ? -1 : 1;
+
   return a.toLowerCase().localeCompare(b.toLowerCase());
 }
 
@@ -623,12 +680,16 @@ function compareStep(a: string, aFolder: boolean, b: string, bFolder: boolean): 
 function compareTreePaths(a: string, b: string): number {
   const aSteps = a.split("/");
   const bSteps = b.split("/");
+
   for (let at = 0; at < Math.min(aSteps.length, bSteps.length); at += 1) {
     const aStep = aSteps[at] ?? "";
     const bStep = bSteps[at] ?? "";
+
     if (aStep === bStep) continue;
+
     return compareStep(aStep, at < aSteps.length - 1, bStep, at < bSteps.length - 1);
   }
+
   return aSteps.length - bSteps.length;
 }
 
@@ -640,6 +701,7 @@ export function treeOrder(files: readonly AgentChangedFile[]): readonly AgentCha
 /** Whether a file starts collapsed: deleted, changing more than `LARGE_FILE_LINES` lines, or a lockfile. Note that a file with no hunks never does, because what stands under its header is why. */
 export function startsCollapsed(file: AgentChangedFile): boolean {
   if (fileNotice(file) !== undefined) return false;
+
   return (
     file.status === CHANGED_FILE_STATUS.DELETED ||
     file.additions + file.deletions > LARGE_FILE_LINES ||
@@ -673,8 +735,10 @@ function rowAt(
         ? each.kind !== DIFF_ROW.ADDED && each.oldLine === line
         : each.newLine === line,
     );
+
     if (row !== -1) return { hunk, row };
   }
+
   return undefined;
 }
 
@@ -694,7 +758,9 @@ export function commentLines(
   const hunks = patchHunks(file.patch) ?? [];
   const from = rowAt(hunks, picked.side, picked.start);
   const to = rowAt(hunks, picked.endSide, picked.end);
+
   if (from === undefined || to === undefined || from.hunk !== to.hunk) return undefined;
+
   const [first, last] =
     from.row <= to.row
       ? [
@@ -705,7 +771,9 @@ export function commentLines(
           { line: picked.end, side: picked.endSide },
           { line: picked.start, side: picked.side },
         ];
+
   const end = { line: last.line, side: GITHUB_SIDE[last.side] };
+
   return from.row === to.row
     ? end
     : { ...end, startLine: first.line, startSide: GITHUB_SIDE[first.side] };
@@ -717,7 +785,9 @@ export function commentLinesLabel(lines: CommentLines): string {
     lines.startSide === undefined || lines.startSide === lines.side
       ? `${line}`
       : `${side === DIFF_SIDE.LEFT ? "L" : "R"}${line}`;
+
   if (lines.startLine === undefined) return `line ${lines.line}`;
+
   return `lines ${mark(lines.startLine, lines.startSide ?? lines.side)}–${mark(lines.line, lines.side)}`;
 }
 
@@ -725,6 +795,7 @@ export function commentLinesLabel(lines: CommentLines): string {
 function linesOf(text: string) {
   const endsInNewline = text.endsWith("\n");
   const body = endsInNewline ? text.slice(0, -1) : text;
+
   return {
     lines: body === "" && endsInNewline ? [""] : body === "" ? [] : body.split("\n"),
     endsInNewline,
@@ -753,8 +824,10 @@ function rawHunks(patch: string): readonly RawHunk[] | undefined {
     newLines: number;
     lines: string[];
   }[] = [];
+
   for (const line of patch.split("\n")) {
     const header = HUNK_COUNTS.exec(line);
+
     if (header !== null) {
       const [, oldStart = "", oldLines = "1", newStart = "", newLines = "1"] = header;
       hunks.push({
@@ -766,12 +839,16 @@ function rawHunks(patch: string): readonly RawHunk[] | undefined {
       });
       continue;
     }
+
     const hunk = hunks.at(-1);
+
     if (hunk === undefined) return line === "" ? hunks : undefined;
+
     // Note that a line of a hunk always starts with its mark, so an empty one is the patch's end.
     if (line === "") continue;
     hunk.lines.push(line);
   }
+
   return hunks;
 }
 
@@ -787,6 +864,7 @@ export async function blobShaOf(text: string): Promise<string> {
   whole.set(header);
   whole.set(bytes, header.length);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", whole));
+
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -794,6 +872,7 @@ export async function blobShaOf(text: string): Promise<string> {
 export function expandable(file: AgentChangedFile): boolean {
   const changedInPlace =
     file.status === CHANGED_FILE_STATUS.MODIFIED || file.status === CHANGED_FILE_STATUS.RENAMED;
+
   // Note that a secret file is never read whole, so its gaps are never offered.
   return changedInPlace && fileNotice(file) === undefined && !isSecretFile(file.path);
 }
@@ -832,8 +911,10 @@ export function textsOf(file: AgentChangedFile, after: string): DiffFileTexts | 
   // A file that only moved stood before as it stands now.
   if (movedOnly(file) && wholeable(file)) return { before: after, after };
   const patch = file.patch;
+
   if (!expandable(file) || patch === null) return undefined;
   const hunks = rawHunks(patch);
+
   if (hunks === undefined) return undefined;
   const { lines, endsInNewline } = linesOf(after);
   const before: string[] = [];
@@ -841,34 +922,43 @@ export function textsOf(file: AgentChangedFile, after: string): DiffFileTexts | 
   // Which side a "No newline at end of file" marker followed: the text before's last line, or the text after's alone.
   let beforeUnended = false;
   let afterOnlyUnended = false;
+
   for (const hunk of hunks) {
     // A hunk adding nothing names the line before its place, as a patch does.
     const start = hunk.newLines === 0 ? hunk.newStart : hunk.newStart - 1;
+
     if (start < at || start > lines.length) return undefined;
     before.push(...lines.slice(at, start));
     const beforeStart = hunk.oldLines === 0 ? hunk.oldStart : hunk.oldStart - 1;
+
     if (before.length !== beforeStart) return undefined;
     at = start;
     let previous = " ";
+
     for (const line of hunk.lines) {
       const mark = line.slice(0, 1);
       const text = line.slice(1);
+
       if (mark === "\\") {
         if (previous === "+") afterOnlyUnended = true;
         else beforeUnended = true;
         continue;
       }
+
       if (mark !== "-") {
         if (lines[at] !== text) return undefined;
         at += 1;
       }
+
       if (mark !== "+") before.push(text);
       previous = mark;
     }
   }
+
   before.push(...lines.slice(at));
   const text = before.join("\n");
   const beforeEndsInNewline = beforeUnended ? false : afterOnlyUnended ? true : endsInNewline;
+
   return { before: beforeEndsInNewline && before.length > 0 ? `${text}\n` : text, after };
 }
 
@@ -882,14 +972,19 @@ export function textsOf(file: AgentChangedFile, after: string): DiffFileTexts | 
 export function suggestedLines(file: AgentChangedFile, lines: CommentLines): string | undefined {
   const first = lines.startLine ?? lines.line;
   const sides = [lines.side, lines.startSide ?? lines.side];
+
   if (file.patch === null || sides.some((side) => side !== DIFF_SIDE.RIGHT)) return undefined;
+
   const hunk = (patchHunks(file.patch) ?? []).find(({ rows }) =>
     rows.some((row) => row.newLine === lines.line),
   );
+
   const rows = (hunk?.rows ?? []).filter(
     (row) => row.newLine !== undefined && row.newLine >= first && row.newLine <= lines.line,
   );
+
   if (rows.length !== lines.line - first + 1) return undefined;
+
   return rows.map((row) => row.text).join("\n");
 }
 
@@ -906,10 +1001,12 @@ export function rowPlace(
 ): number | undefined {
   if (file.patch === null) return undefined;
   const rows = (patchHunks(file.patch) ?? []).flatMap((hunk) => hunk.rows);
+
   const at = rows.findIndex((row) =>
     side === DIFF_SELECTION_SIDE.DELETIONS
       ? row.kind !== DIFF_ROW.ADDED && row.oldLine === line
       : row.newLine === line,
   );
+
   return at === -1 ? undefined : at;
 }

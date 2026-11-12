@@ -48,12 +48,16 @@ const openAiKeyMiddleware = middlewareGen<
   { readonly openAiKey: Redacted.Redacted<string> }
 >(function* ({ context, next }) {
   const environment = yield* HostedEnvironment;
+
   const key = yield* ownApiKeyOf(context.userId, PROVIDER_KEY_PROVIDER.OPENAI, environment).pipe(
     Effect.tapError(logStoreFailure),
     Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
   );
+
   if (key === undefined) return yield* Effect.fail(HOSTED_REFUSAL.OPENAI_KEY_MISSING);
+
   if (key === PROVIDER_KEY_UNREADABLE) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return yield* next({ context: { openAiKey: key } });
 });
 
@@ -67,9 +71,11 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
   const dictation = hosted.dictation
     .use(accountMiddleware(seams.resolveUserId))
     .use(openAiKeyMiddleware);
+
   return {
     transcribe: dictation.transcribe.effect(function* ({ input, context }) {
       const { audio, durationMs, keywords } = input;
+
       // Note that both bounds answer too large, because either is the clip being longer than a message.
       if (
         durationMs > DICTATION_BOUNDS.MAX_DURATION_MS ||
@@ -77,6 +83,7 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
       ) {
         return yield* Effect.fail(HOSTED_REFUSAL.REQUEST_TOO_LARGE);
       }
+
       const transcribed = yield* transcribeClip({
         key: context.openAiKey,
         audio: clipBytes(audio),
@@ -87,6 +94,7 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
         ),
         Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
       );
+
       const seconds = transcribed.billedSeconds ?? durationMs / MS_PER_SECOND;
       const now = yield* Clock.currentTimeMillis;
       yield* spendDictationMeter({ userId: context.userId, seconds, now }).pipe(
@@ -97,6 +105,7 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
         { userId: context.userId },
         { duration: dictationDurationOf(durationMs) },
       );
+
       return { text: transcribed.text };
     }),
   };

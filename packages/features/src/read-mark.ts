@@ -60,6 +60,7 @@ export function readsUnread(row: ReadMarked, newest: number): boolean {
  */
 export function markedAs(mark: ReadMark, standing: ReadMarked, now: number): ReadMarked {
   const readThrough = Math.max(standing.readThrough ?? now, now);
+
   switch (mark) {
     case READ_MARK.READ:
       return { readThrough, markedUnread: false };

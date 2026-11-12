@@ -96,7 +96,9 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
-- tapOn: "Settings"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-settings

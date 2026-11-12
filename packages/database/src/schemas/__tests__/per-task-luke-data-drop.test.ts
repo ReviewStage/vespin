@@ -39,6 +39,7 @@ const OLD_KIND = { CONVERSATION: "plan" } as const;
 /** The database stood where it was before the migration. */
 const undo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   for (const statement of UNDO) yield* sql.unsafe(statement);
 });
 
@@ -46,6 +47,7 @@ const undo = Effect.gen(function* () {
 const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const statements = replayable(yield* migrationStatements(MIGRATION));
+
   return yield* Effect.exit(
     sql.withTransaction(Effect.forEach(statements, (statement) => sql.unsafe(statement))),
   );
@@ -58,6 +60,7 @@ const openTask = Effect.gen(function* () {
   yield* db.insert(user).values({ id: userId, name: "Dean", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
   const task = yield* createTask(userId, { organizationId, name: "Teammate invitations" });
+
   return { userId, organizationId, taskId: task.id };
 });
 
@@ -69,12 +72,15 @@ const openConversation = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const [row] = yield* sql<{ readonly id: string }>`
       INSERT INTO conversations (user_id, kind, parent_conversation_id, runtime_session_id, deleted_at)
       VALUES (${userId}, ${kind}, ${options.parent ?? null}, ${options.sessionId ?? null}, ${options.deletedAt ?? null})
       RETURNING id
     `;
+
     assert.ok(row);
+
     return row.id;
   });
 
@@ -82,11 +88,14 @@ const openConversation = (
 const stampsOf = (ids: readonly string[]) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const rows = yield* sql<{ readonly id: string; readonly deleted_at: Date | null }>`
       SELECT id, deleted_at FROM conversations WHERE id IN ${sql.in(ids)}
     `;
+
     return ids.map((id) => {
       const stamp = rows.find((row) => row.id === id)?.deleted_at;
+
       return stamp === undefined || stamp === null ? null : new Date(stamp).toISOString();
     });
   });
@@ -123,9 +132,11 @@ it.layer(getTestDB())("the per-task Vespin's conversations", (it) => {
         const luke = yield* openConversation(userId, OLD_KIND.CONVERSATION);
         const worker = yield* openConversation(userId, "child", { parent: luke });
         const nested = yield* openConversation(userId, "child", { parent: worker });
+
         const gone = yield* openConversation(userId, OLD_KIND.CONVERSATION, {
           deletedAt: "2026-09-01T00:00:00.000Z",
         });
+
         const agent = Option.getOrThrow(
           yield* createAgent(userId, {
             taskId,
@@ -138,9 +149,11 @@ it.layer(getTestDB())("the per-task Vespin's conversations", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent;
+
         const agentsChild = yield* openConversation(userId, "child", {
           parent: agent.conversationId,
         });
+
         const others = [agent.conversationId, agentsChild];
 
         assert.ok(Exit.isSuccess(yield* migrate));

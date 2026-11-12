@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,9 +12,10 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The account's photo leads the bar, heard as Settings: the fixture's account
-# has no picture, so its letters stand in it.
-- assertVisible: "Settings"
+# The workspace's one button leads the bar, its menu holding the account and
+# Settings (`workspace.yaml`).
+- assertVisible:
+    id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
 # The ⋯ menu: Mark all as read. A tap off the menu closes it.
@@ -24,8 +25,14 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 90%"
 - waitForAnimationToEnd
-# The scope pills over the list, Open chosen: All lists the settled threads
-# too.
+# The scopes' segmented control over the list, Open chosen: All lists the settled threads
+# too. A regular window's list column holds them as a menu picker instead,
+# named for the scope chosen, so the flow opens it first there.
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Open.*"
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
@@ -36,6 +43,11 @@ appId: dev.vespin.ios
     element: "Recorded the invite flow"
     direction: UP
 - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "All"
 - tapOn: "Open.*"
 # A swipe from the leading edge reveals Mark as read or unread, which a full
 # swipe would press at once, so the flow swipes partway across "Recorded the
@@ -76,6 +88,11 @@ appId: dev.vespin.ios
 # task and title, over the row's menu, which leads with Open, since a tap on
 # the preview only closes it.
 - longPressOn: "acceptInvite can add a member twice"
+- runFlow:
+    when:
+      notVisible: "Open"
+    commands:
+      - longPressOn: "acceptInvite can add a member twice"
 - assertVisible: "Open"
 - assertVisible: "Mark as read"
 - waitForAnimationToEnd
@@ -134,8 +151,10 @@ appId: dev.vespin.ios
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread-remind
-- tapOn:
-    point: "50%, 5%"
+- swipe:
+    start: "50%, 48%"
+    end: "50%, 98%"
+    duration: 400
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
 # Back on the list, the search, a round glass button in the bar, narrows it to
@@ -156,11 +175,21 @@ appId: dev.vespin.ios
 - tapOn: "In 1 hour.*"
 - waitForAnimationToEnd
 - assertNotVisible: "Recorded the invite flow"
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Open.*"
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-reminders
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Reminders"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # A compact window's search is the bar's round button, named as the Search

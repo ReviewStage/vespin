@@ -150,6 +150,7 @@ const reached = Effect.fnUntraced(function* (
   connect: HopTransport,
 ): Effect.fn.Return<Reached> {
   let url = start;
+
   for (let hop = 0; hop <= LINK_PREVIEW_READ.MAX_REDIRECTS; hop += 1) {
     const answer = yield* connect({
       url,
@@ -160,26 +161,33 @@ const reached = Effect.fnUntraced(function* (
       },
       maxBytes,
     });
+
     if (answer === HOP_FAILURE.REFUSED) return REFUSED;
+
     if (answer === HOP_FAILURE.UNREAD) return UNREAD;
     const location = answer.headers.location;
+
     if (REDIRECT_STATUSES.has(answer.status) && location !== undefined) {
       // Note that a redirect target is read against the hop it came from, as a browser reads it, then held as any address asked for is.
       const next = URL.canParse(location, url)
         ? webPageAddressOf(new URL(location, url).href)
         : undefined;
+
       if (next === undefined) return REFUSED;
       url = next;
       continue;
     }
+
     return { outcome: READ_OUTCOME.ANSWERED, url, answer };
   }
+
   return UNREAD;
 });
 
 /** A page's bytes as its words, in the charset its headers or its head name, else UTF-8. */
 function decoded(bytes: Uint8Array, contentType: string | undefined): string {
   const label = charsetParameterOf(contentType) ?? charsetOf(bytes) ?? "utf-8";
+
   try {
     return new TextDecoder(label).decode(bytes);
   } catch {
@@ -194,19 +202,24 @@ function pictureAt(
   connect: HopTransport,
 ): Effect.Effect<LinkPreviewPicture | undefined> {
   const url = address === undefined ? undefined : webPageAddressOf(address);
+
   if (url === undefined) return Effect.succeed(undefined);
+
   const read = Effect.map(
     reached(url, ACCEPT.PICTURE, maxBytes, connect),
     (reach): LinkPreviewPicture | undefined => {
       if (reach.outcome !== READ_OUTCOME.ANSWERED || reach.answer.cut) return undefined;
       const { status, bytes } = reach.answer;
+
       if (status < 200 || status >= 300 || bytes.byteLength === 0) return undefined;
       const type = pictureTypeOf(bytes);
+
       return type === undefined
         ? undefined
         : { type, base64: Buffer.from(bytes).toString("base64") };
     },
   );
+
   return Effect.map(Effect.timeoutOption(read, LINK_PREVIEW_READ.PICTURE_DEADLINE), (picture) =>
     Option.getOrUndefined(picture),
   );
@@ -224,21 +237,29 @@ export const readLinkPreview = /* @__PURE__ */ Effect.fn("web/linkPreview")(func
   connect: HopTransport,
 ): Effect.fn.Return<LinkPreviewAnswer> {
   const url = webPageAddressOf(href);
+
   if (url === undefined) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
+
   const page = yield* Effect.timeoutOption(
     reached(url, ACCEPT.PAGE, HEAD_MAX_BYTES, connect),
     LINK_PREVIEW_READ.PAGE_DEADLINE,
   );
+
   if (Option.isNone(page)) return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
   const read = page.value;
+
   if (read.outcome === READ_OUTCOME.REFUSED) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
+
   if (read.outcome === READ_OUTCOME.UNREAD) return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
   const { status, headers, bytes } = read.answer;
   const html = mediaTypeOf(headers["content-type"]);
+
   if (status < 200 || status >= 300 || html === undefined || !HTML_TYPES.has(html)) {
     return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
   }
+
   const head = pageHeadOf(decoded(bytes, headers["content-type"]), read.url);
+
   const [icon, image] = yield* Effect.all(
     [
       pictureAt(head.iconUrl, LINK_PREVIEW_BOUNDS.MAX_ICON_BYTES, connect),
@@ -246,6 +267,7 @@ export const readLinkPreview = /* @__PURE__ */ Effect.fn("web/linkPreview")(func
     ],
     { concurrency: "unbounded" },
   );
+
   const preview: LinkPreview = {
     url: href,
     ...(head.title === undefined ? undefined : { title: head.title }),
@@ -254,5 +276,6 @@ export const readLinkPreview = /* @__PURE__ */ Effect.fn("web/linkPreview")(func
     ...(icon === undefined ? undefined : { icon }),
     ...(image === undefined ? undefined : { image }),
   };
+
   return { preview };
 });

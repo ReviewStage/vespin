@@ -54,6 +54,9 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build the daemon and the runner
+        # The daemon reports to Sentry under the DSN its build writes in.
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           pnpm --filter @repo/agent-runner build
           pnpm --filter @repo/host-daemon build
@@ -105,6 +108,9 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build the daemon and the runner
+        # The daemon reports to Sentry under the DSN its build writes in.
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           pnpm --filter @repo/agent-runner build
           pnpm --filter @repo/host-daemon build

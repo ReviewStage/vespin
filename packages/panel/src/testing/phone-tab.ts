@@ -17,18 +17,24 @@ export interface PhoneHanded {
   readonly press: (label: string, opener?: HTMLElement) => void;
 }
 
-/** `element` as a phone's panel draws it, and what it hands its header's ⋯. */
-export function onPhone(element: React.ReactNode): {
+type OnPhoneResult = {
   readonly element: React.ReactElement;
   readonly handed: PhoneHanded;
-} {
+};
+
+/** `element` as a phone's panel draws it, and what it hands its header's ⋯. */
+export function onPhone(element: React.ReactNode): OnPhoneResult {
   let held: TabActionGroups | undefined;
+
   const find = (label: string) => {
     const found = (held ?? []).flat().find((each) => each.label === label);
+
     // Note that this throws rather than asserting, because a module the panel's bundle could reach names no `node:` module (`repository-checks.sh`).
     if (found === undefined) throw new Error(`the ⋯ offers no ${label}`);
+
     return found;
   };
+
   return {
     element: createElement(
       ShellRoomContext.Provider,
@@ -48,15 +54,17 @@ export function onPhone(element: React.ReactNode): {
       item: (label) => {
         const found = find(label);
         const detail = "detail" in found ? found.detail : undefined;
+
         return {
           disabled: "disabled" in found && found.disabled === true,
-          ...(detail === undefined ? {} : { detail }),
+          ...(detail !== undefined && { detail }),
         };
       },
       press: (label, opener = document.body) => {
         const found = find(label);
         act(() => {
           if ("items" in found || "panel" in found) return;
+
           if ("onAsk" in found) found.onAsk(opener);
           else found.onSelect();
         });

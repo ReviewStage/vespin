@@ -25,9 +25,11 @@ const BEFORE_TIPTAP_KEYS = 1000;
 /** An empty line laid in at `at`, the caret in it, answering whether it was; none where the text takes no paragraph. */
 function openLine(view: EditorView, at: number): boolean {
   const line = view.state.schema.nodes.paragraph?.create();
+
   if (line === undefined) return false;
   const tr = view.state.tr.insert(at, line);
   view.dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
+
   return true;
 }
 
@@ -39,9 +41,11 @@ export const dividerLines = Extension.create({
     return {
       Enter: ({ editor }) => {
         const { selection } = editor.state;
+
         if (!(selection instanceof NodeSelection) || selection.node.type.name !== DIVIDER) {
           return false;
         }
+
         return openLine(editor.view, selection.to);
       },
     };
@@ -53,15 +57,18 @@ export const dividerLines = Extension.create({
         props: {
           handleClickOn: (view, _pos, node, at, event, direct) => {
             const line = view.nodeDOM(at);
+
             if (!direct || node.type.name !== DIVIDER || !(line instanceof Element)) return false;
             const { top, bottom } = line.getBoundingClientRect();
             const after = at + node.nodeSize;
+
             const opens =
               after === view.state.doc.content.size && event.clientY > bottom
                 ? after
                 : at === 0 && event.clientY < top
                   ? 0
                   : undefined;
+
             return opens !== undefined && openLine(view, opens);
           },
         },

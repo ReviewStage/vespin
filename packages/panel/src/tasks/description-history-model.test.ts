@@ -64,13 +64,16 @@ test("a revision is drawn under its writer: the reader by their account's pictur
     name: "Dean",
     pictureUrl: "https://avatars.githubusercontent.com/u/1",
   };
+
   const agents = [{ id: AGENT_ID, model: "openai/gpt-6-astra" }];
+
   const agentEdit = {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Invite emails",
     at: NOW,
     duringCall: false,
   };
+
   const developerEdit = {
     actor: DESCRIPTION_ACTOR.DEVELOPER,
     at: NOW,
@@ -106,7 +109,9 @@ test("a revision names its writer as the developer knows them, and says what it 
     name: "Dean",
     pictureUrl: "https://avatars.githubusercontent.com/u/1",
   };
+
   const agents = [{ id: AGENT_ID, model: "openai/gpt-6-astra" }];
+
   const named = (edit: Partial<DescriptionLastEdit>, agentId?: string) =>
     actorName(
       revisionAuthorOf(
@@ -115,6 +120,7 @@ test("a revision names its writer as the developer knows them, and says what it 
         agents,
       ),
     );
+
   assert.equal(named({}), "Vespin");
   assert.equal(named({ actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN }), "You");
   assert.equal(
@@ -194,6 +200,7 @@ test("a version against the one before it marks the words written in and struck 
     "## Goal\n\nOnly admins can invite.",
     "## Decisions\n\nInvites expire.",
   ]);
+
   const after = documentOf([
     "## Goal\n\nAny member can invite.",
     "## Decisions\n\nInvites expire.",
@@ -213,16 +220,22 @@ test("a version against the one before it marks the words written in and struck 
 
 test("a picture replaced in a version reads as the old one struck and the new one written in, each whole", () => {
   const before = documentOf(["## Approach\n\n![Old mock](https://example.com/mock_(v1).png)"]);
+
   const after = documentOf([
     '## Approach\n\n![New mock](https://example.com/mock_(v2).png "Second pass")',
   ]);
+
   const diff = versionDiff(before, after);
   const unit = diff.units[0];
   assert.ok(unit);
 
   const drawn = renderToStaticMarkup(
     withQueryClient(
-      createElement(MarkdownMessage, { words: unit.words, edit: { marks: unit.marks } }),
+      createElement(MarkdownMessage, {
+        words: unit.words,
+        link: null,
+        edit: { marks: unit.marks },
+      }),
     ),
   );
 
@@ -245,6 +258,7 @@ test("a section struck and another written in its place read as one unit changed
     "## Context\n\nOnly admins invite.",
     "## Open questions\n\n- Who withdraws?",
   ]);
+
   const after = documentOf([
     "## Context\n\nOnly admins invite.",
     "## Plan of attack\n\n1. Schema.",
@@ -267,6 +281,7 @@ test("a unit struck with nothing written in its place is drawn struck whole, and
     "## Goal\n\nInvite by email.",
     "## Open questions\n\n- Who withdraws?",
   ]);
+
   const after = documentOf(["## Goal\n\nInvite by email."]);
 
   assert.deepEqual(
@@ -292,6 +307,7 @@ test("the first version is drawn as it is against nothing, and a version like it
 
 test("a revision is compared by section, its assumptions among them, and a heading inside a fence cuts nothing", () => {
   const before = documentOf([DOCUMENT_TEXT]);
+
   const after = documentOf([
     DOCUMENT_TEXT.replace("Invites land by email.", "Invites land by email or by link.").concat(
       "\n\n# Rollout\n\nBehind a flag.",
@@ -319,6 +335,7 @@ test("a revision's changed sections are the units its diff marks, in reading ord
     body: "## Goal\n\nOnly admins.\n\n## Risks\n\nSpam.\n\n## Notes\n\nNone.",
     assumptions: [],
   };
+
   const after = {
     body: "## Goal\n\nAny member.\n\n## Notes\n\nNone.\n\n## Decisions\n\nExpire.",
     assumptions: [],
@@ -377,6 +394,7 @@ test("a revision's Open goes to its agent's tab, and nowhere for Vespin's own sa
     provider: undefined,
     state: ACTOR_STATE.REST,
   } as const;
+
   assert.equal(
     sourceLabel({ kind: REVISION_SOURCE.AGENT, agentId: AGENT_ID }, agent),
     "Open Invite emails",
@@ -387,6 +405,7 @@ test("two members of a plan each see the other's revisions under the other's nam
   const edit = (by: typeof DEAN) => ({
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: NOW, duringCall: false, by },
   });
+
   const asDean = { id: DEAN.userId, name: "Dean Stratakos", pictureUrl: undefined };
   const asCharles = { id: CHARLES.userId, name: "Charles Pan", pictureUrl: undefined };
 
@@ -400,17 +419,21 @@ test("a teammate's revision wears their face as the workspace's members list the
   const edit = (by: typeof DEAN) => ({
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: NOW, duringCall: false, by },
   });
+
   const charlesPicture = "https://avatars.githubusercontent.com/u/2";
+
   const member = (who: typeof DEAN) => ({
     ...who,
     email: `${who.userId}@example.com`,
     role: WORKSPACE_ROLE.MEMBER,
   });
+
   const reader = {
     id: DEAN.userId,
     name: "Dean Stratakos",
     pictureUrl: "https://avatars.githubusercontent.com/u/1",
   };
+
   const read = {
     ...reader,
     members: [member(DEAN), { ...member(CHARLES), pictureUrl: charlesPicture }],
@@ -439,12 +462,14 @@ test("a teammate's revision wears their face as the workspace's members list the
     name: "Charles Pan",
     userId: CHARLES.userId,
   });
+
   // And keeps their picture, and the name their account holds now, from the read of who left.
   const left = {
     ...CHARLES,
     name: "Charles Pan-Ito",
     pictureUrl: "https://avatars.githubusercontent.com/u/9",
   };
+
   assert.deepEqual(
     revisionAuthorOf(edit(CHARLES), { ...reader, members: [member(DEAN)], former: [left] }, []),
     {

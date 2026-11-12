@@ -79,9 +79,11 @@ const RESULT: MacCommandResult = {
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -105,6 +107,7 @@ const queueOtherKind = (userId: string) =>
       sql`INSERT INTO mac_command (id, user_id, kind, timeout_seconds, queued_at)
           VALUES (${id}, ${userId}, 'browser', 30, ${queuedAt})`,
     );
+
     return id;
   });
 
@@ -175,6 +178,7 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         .select({ kind: macCommand.kind })
         .from(macCommand)
         .where(eq(macCommand.id, id));
+
       const claimed = yield* claimMacCommands(owner, since, SHELL_ONLY);
 
       assert.equal(row?.kind, MAC_COMMAND_KIND.SHELL);
@@ -222,6 +226,7 @@ const openAgent = (userId: string, organizationId: string, prompt: string | null
       repository: "acme/api",
       idempotencyKey: randomUUID(),
     });
+
     return { id, conversationId };
   });
 
@@ -236,6 +241,7 @@ const openWorker = (userId: string, parentConversationId: string) =>
       kind: CONVERSATION_KIND.CHILD,
       parentConversationId,
     });
+
     return id;
   });
 
@@ -278,6 +284,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
   const people = Effect.gen(function* () {
     const { owner: starter, other: teammate } = yield* openAccounts;
     const workspace = yield* openWorkspace(starter);
+
     return { starter, teammate, workspace };
   });
 
@@ -316,6 +323,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         kind: MESSAGE_SENDER.AGENT,
         agentId: theirs.id,
       });
+
       for (const { conversationId } of [messaged, reached]) {
         assert.equal(yield* heardFromAnotherAccount({ userId: starter, conversationId }), true);
       }
@@ -332,10 +340,12 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         const agent = yield* openAgent(starter, workspace);
         const target = { userId: starter, conversationId: agent.conversationId };
         assert.equal(yield* macOwnerOf(target), starter, "no one assigned");
+
         const handed = yield* createTask(starter, {
           organizationId: workspace,
           assigneeId: teammate,
         });
+
         yield* db.update(agentTable).set({ taskId: handed.id }).where(eq(agentTable.id, agent.id));
         yield* sendLine(starter, agent.conversationId, 1, {
           kind: MESSAGE_SENDER.MEMBER,
@@ -402,9 +412,11 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
     () =>
       Effect.gen(function* () {
         const { starter, workspace } = yield* people;
+
         const heardAfter = (firing: AutomationFiring, sent = true) =>
           Effect.gen(function* () {
             const agent = yield* openAgent(starter, workspace, "Keep the desk.");
+
             const aimed = Option.getOrThrow(
               yield* createAutomation(starter, {
                 organizationId: workspace,
@@ -419,6 +431,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
                 targetAgentId: agent.id,
               }),
             );
+
             const run = Option.getOrThrow(
               yield* recordAutomationRun(aimed, {
                 dedupeKey: randomUUID(),
@@ -426,11 +439,14 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
                 firedAt: yield* now,
               }),
             );
+
             yield* claimAutomationRun(run.id, agent.id);
+
             // A send refused withdraws its line, so the run fails having handed the agent nothing.
             if (!sent) yield* failClaimedRun(run.id, AUTOMATION_RUN_REASON.UNAVAILABLE);
             // Written as a line was before it said what fired it: its sender, and nothing else.
             yield* sendLine(starter, agent.conversationId, 1, { kind: MESSAGE_SENDER.AUTOMATION });
+
             return yield* heardFromAnotherAccount({
               userId: starter,
               conversationId: agent.conversationId,
@@ -474,6 +490,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
     () =>
       Effect.gen(function* () {
         const { starter, workspace } = yield* people;
+
         const heardAfter = (line: GitHubLineMetadata) =>
           Effect.gen(function* () {
             const agent = yield* openAgent(starter, workspace, "Expire invitations.");
@@ -486,11 +503,13 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
               MESSAGE_ROLE.USER,
               line,
             );
+
             return yield* heardFromAnotherAccount({
               userId: starter,
               conversationId: agent.conversationId,
             });
           });
+
         const told = {
           channel: MESSAGE_CHANNEL.GITHUB,
           repository: "acme/api",
@@ -537,6 +556,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
     () =>
       Effect.gen(function* () {
         const { starter, workspace } = yield* people;
+
         const heardAfter = (line: SlackLineMetadata) =>
           Effect.gen(function* () {
             const agent = yield* openAgent(starter, workspace, "Fix the flaky invite test.");
@@ -548,11 +568,13 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
               MESSAGE_ROLE.USER,
               line,
             );
+
             return yield* heardFromAnotherAccount({
               userId: starter,
               conversationId: agent.conversationId,
             });
           });
+
         const said = {
           channel: MESSAGE_CHANNEL.SLACK,
           words: "Fix the flaky invite test.",

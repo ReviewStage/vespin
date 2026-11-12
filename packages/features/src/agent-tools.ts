@@ -72,7 +72,8 @@ export const AGENT_TOOL = {
   WRITE_TODOS: AGENT_TODOS_TOOL,
   POST_THREAD: INBOX_TOOL.POST,
   WITHDRAW_ASK: INBOX_TOOL.WITHDRAW,
-  READ_THREADS: INBOX_TOOL.READ,
+  LIST_THREADS: INBOX_TOOL.LIST,
+  READ_THREAD: INBOX_TOOL.READ,
   OPEN_PULL_REQUEST: "open_pull_request",
   // The retired runtime's own, which loaded one of the skills a session was offered.
   LOAD_SKILL: "load_skill",
@@ -125,7 +126,8 @@ export const CONNECTION_TOOL = {
  * had the public reads, the planning model's four tools about the
  * task's coding agents, since named as `AGENT_TOOL`'s agent tools, the
  * four about the workspace's own issues, gone with them, the inbox's
- * post and read, since named for the threads they post and read,
+ * post and read, since named for the threads they post and read, and that
+ * read of every thread, since split into a list and a read of one,
  * the four of the workspace's Chat, removed with it, the three that made,
  * changed, and moved threads between channels, removed with them, the brain's lines of
  * code put on the developer's screen and its two whiteboard tools, removed
@@ -158,6 +160,8 @@ export const RETIRED_TOOL = {
   // Renamed `post_thread` and `read_threads`, for the threads they post and read.
   POST_TO_INBOX: "post_to_inbox",
   READ_INBOX: "read_inbox",
+  // Split into `list_threads` and `read_thread`, as an agent's list and read are.
+  READ_THREADS: "read_threads",
   // The workspace's Chat, removed with it.
   POST_CHAT: "post_chat",
   READ_CHAT: "read_chat",
@@ -263,12 +267,14 @@ export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   "luke",
 ]);
 
-/** Our tool's own name from a Claude Code call's, `mcp__workspace__read_threads` being our `read_threads`; none for a tool of any other server. */
+/** Our tool's own name from a Claude Code call's, `mcp__workspace__read_thread` being our `read_thread`; none for a tool of any other server. */
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {
     const prefix = `mcp__${server}__`;
+
     if (name.startsWith(prefix)) return name.slice(prefix.length);
   }
+
   return undefined;
 }
 

@@ -34,6 +34,7 @@ function sameDrawn(was: readonly DrawnTaskRow[], now: readonly DrawnTaskRow[]): 
     was.length === now.length &&
     was.every((held, at) => {
       const next = now[at];
+
       return (
         next !== undefined &&
         next.task === held.task &&
@@ -50,10 +51,12 @@ type Depth = Pick<DrawnTaskRow, "depth">;
 /** For each drawn row, the index of the row it stands nested under; -1 for a row at the top. */
 function parentsOf(nested: readonly Depth[]): number[] {
   const above: number[] = [];
+
   return nested.map(({ depth }, at) => {
     const parent = depth === 0 ? -1 : (above[depth - 1] ?? -1);
     above[depth] = at;
     above.length = depth + 1;
+
     return parent;
   });
 }
@@ -62,6 +65,7 @@ function parentsOf(nested: readonly Depth[]): number[] {
 export function siblingsAt(nested: readonly Depth[], at: number): number[] {
   const parents = parentsOf(nested);
   const parent = parents[at];
+
   return nested.flatMap((_, each) => (parents[each] === parent ? [each] : []));
 }
 
@@ -74,11 +78,14 @@ export function nestsOf(nested: readonly Depth[]): (ListRowNest | undefined)[] {
   if (nested.every(({ depth }) => depth === 0)) return nested.map(() => undefined);
   const parents = parentsOf(nested);
   const sizes = new Map<number, number>();
+
   const positions = parents.map((parent) => {
     const position = (sizes.get(parent) ?? 0) + 1;
     sizes.set(parent, position);
+
     return position;
   });
+
   return parents.map((parent, at) => ({
     position: positions[at] ?? 1,
     size: sizes.get(parent) ?? 1,
@@ -98,6 +105,7 @@ export function listedSlot(
   to: number,
 ): number {
   const before = to > from ? drawn.slice(0, to + 1) : drawn.slice(0, to);
+
   return before.filter((entry, at) => !entry.leaving && at !== from).length;
 }
 
@@ -115,8 +123,10 @@ export function movedBeside(
   const siblings = siblingsAt(nested, from);
   const own = siblings.indexOf(from);
   const reached = siblings.findLastIndex((each) => each <= to);
+
   if (reached < 0) return undefined;
   const beside = reached === own && to > from ? own + 1 : reached;
+
   return beside === own ? undefined : siblings[beside];
 }
 
@@ -127,6 +137,7 @@ export function storedSlot(
   at: number,
 ): number {
   const next = nested.slice(at).find(({ depth }) => depth === 0);
+
   return next === undefined ? tasks.length : tasks.indexOf(next.task);
 }
 
@@ -136,7 +147,9 @@ export function childTasksFold(
   onFold: (taskId: string) => void,
 ): ListRowFold | undefined {
   const { task, open } = drawn;
+
   if (open === undefined) return undefined;
+
   return {
     open,
     onOpenChange: (asked) => {
@@ -155,7 +168,9 @@ export function useNestedRows(
 ): readonly DrawnTaskRow[] {
   const drawn = drawnTaskRows(tasks, opened, standing, every);
   const held = useRef(drawn);
+
   // Note that the ref follows the drawing as it renders, so a list that changed is handed on the same frame.
   if (!sameDrawn(held.current, drawn)) held.current = drawn;
+
   return held.current;
 }

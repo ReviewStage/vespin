@@ -17,6 +17,7 @@ export function PullRequestLabels({
   labels: readonly PullRequestLabel[];
 }): React.JSX.Element | null {
   if (labels.length === 0) return null;
+
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}

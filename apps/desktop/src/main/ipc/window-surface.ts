@@ -90,6 +90,7 @@ export function windowSurfaceProcedures(
   dependencies: WindowSurfaceDependencies,
 ): Pick<PlatformActProcedures<WebContents>, WindowSurfaceActKind> {
   const { panels } = dependencies;
+
   return {
     // A window that is not a panel, and a panel on no display, are the same refusal.
     [WINDOW_SURFACE_ACT_KIND.WINDOW_FOCUS_PANEL]: surfacePort[
@@ -97,6 +98,7 @@ export function windowSurfaceProcedures(
     ].effect(function* ({ context, errors }) {
       const { actor } = context;
       const displayId = actor.panel ? panels.displayIdFor(actor.sender) : undefined;
+
       if (displayId === undefined) return yield* Effect.fail(errors.REFUSED());
       panels.focusIfExpanded(displayId);
     }),
@@ -105,11 +107,13 @@ export function windowSurfaceProcedures(
     ].handler(async () => {
       const status = await dependencies.requestMicrophone();
       const counted = MICROPHONE_STATUS_COUNTED_AS[status];
+
       if (counted) {
         dependencies.recordProductEvent(PRODUCT_EVENT.VOICE_PERMISSION, {
           permission_result: counted,
         });
       }
+
       return status;
     }),
     // Probed rather than read from the document: the route decides which
@@ -119,6 +123,7 @@ export function windowSurfaceProcedures(
       WINDOW_SURFACE_ACT_KIND.MICROPHONE_ROUTE
     ].handler(() => {
       dependencies.microphoneRouteWatcher()?.probe();
+
       return dependencies.microphoneRoute();
     }),
     // Privacy & Security's Microphone pane, where a refused microphone is let back in.
@@ -159,13 +164,16 @@ export function windowSurfaceProcedures(
       WINDOW_SURFACE_ACT_KIND.WINDOW_SAVE_FILE
     ].handler(async ({ input, context, errors }) => {
       if (!context.actor.panel) throw errors.REFUSED();
+
       return dependencies.saveFile(context.actor.sender, input.name, input.text);
     }),
     [WINDOW_SURFACE_ACT_KIND.WINDOW_CAPTURE]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.WINDOW_CAPTURE
     ].handler(async ({ input, context, errors }) => {
       if (!context.actor.panel) throw errors.REFUSED();
+
       if (input.width === 0 || input.height === 0) return null;
+
       return dependencies.captureStill(context.actor.sender, input);
     }),
     [WINDOW_SURFACE_ACT_KIND.WINDOW_UNSAVED_WORK]: surfacePort[
@@ -209,6 +217,7 @@ export function windowSurfaceReports(
      */
     recordSurfaceEvent(_context, name, properties) {
       const read = productEventFromWire({ name, at: Date.now(), properties: properties ?? {} });
+
       if (!read) return;
       dependencies.recordProductEvent(
         name,

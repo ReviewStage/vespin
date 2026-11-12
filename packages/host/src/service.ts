@@ -38,12 +38,15 @@ export interface GatewayService {
  */
 export function createGatewayService(dependencies: GatewayServiceDependencies): GatewayService {
   const { nodes } = dependencies;
+
   const gateway = gatewayHost({
     methods: dependencies.methods,
     client: { clientId: HOST_OPERATOR_CLIENT_ID, role: GATEWAY_CLIENT_ROLE.OPERATOR },
   });
+
   nodes.onChange((list) => {
     gateway.emit(GATEWAY_EVENT.NODE_CHANGED, { nodes: list.map(nodeSnapshotToWire) });
   });
+
   return { gateway, emit: gateway.emit, nodes };
 }

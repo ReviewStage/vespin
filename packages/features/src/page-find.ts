@@ -3,6 +3,7 @@ import { PAGE_LINK_SCRIPT } from "./page-link.js";
 import { PAGE_PICK_SCRIPT } from "./page-pick.js";
 import { PAGE_SIZE_SCRIPT } from "./page-size.js";
 import { PAGE_THEME_SCRIPT } from "./page-theme.js";
+import { PAGE_ZOOM_SCRIPT } from "./page-zoom.js";
 
 /**
  * page-find.ts -- ⌘F in a plan's page as drawn: the find the page's frame runs over its own words, and the messages the side panel and the frame pass to drive it.
@@ -279,11 +280,15 @@ const DOCTYPE = /^<!doctype[^>]*>/i;
  */
 function commentEnd(html: string, at: number): number | undefined {
   const body = at + 4;
+
   if (html.startsWith(">", body)) return body + 1;
+
   if (html.startsWith("->", body)) return body + 2;
   const plain = html.indexOf("-->", body);
   const bang = html.indexOf("--!>", body);
+
   if (bang >= 0 && (plain < 0 || bang < plain)) return bang + 4;
+
   return plain < 0 ? undefined : plain + 3;
 }
 
@@ -294,12 +299,16 @@ function commentEnd(html: string, at: number): number | undefined {
  */
 export function doctypeEnd(html: string): number {
   let at = html.length - html.trimStart().length;
+
   while (html.startsWith("<!--", at)) {
     const next = commentEnd(html, at);
+
     if (next === undefined) return 0;
     at = next + (html.length - next - html.slice(next).trimStart().length);
   }
+
   const doctype = DOCTYPE.exec(html.slice(at))?.[0];
+
   return doctype === undefined ? 0 : at + doctype.length;
 }
 
@@ -315,6 +324,7 @@ export function doctypeEnd(html: string): number {
  */
 export function withPageScripts(html: string): string {
   const end = doctypeEnd(html);
-  const scripts = `<script>${PAGE_FIND_SCRIPT}</script><script>${PAGE_LINK_SCRIPT}</script><script>${PAGE_PICK_SCRIPT}</script><script>${PAGE_SIZE_SCRIPT}</script><script>${PAGE_THEME_SCRIPT}</script>`;
+  const scripts = `<script>${PAGE_FIND_SCRIPT}</script><script>${PAGE_LINK_SCRIPT}</script><script>${PAGE_PICK_SCRIPT}</script><script>${PAGE_SIZE_SCRIPT}</script><script>${PAGE_THEME_SCRIPT}</script><script>${PAGE_ZOOM_SCRIPT}</script>`;
+
   return `${html.slice(0, end)}${scripts}${html.slice(end)}`;
 }

@@ -38,6 +38,7 @@ export type CountPart = {
  */
 const PART =
   "ui-count-part inline-flex items-center gap-0.5 [&:not([data-tone=neutral])]:text-tone-ink";
+
 const GLYPH = "ui-count-glyph inline-flex [&>svg]:size-caption-glyph";
 
 /** One part, its glyph named for a reader who cannot see it. */

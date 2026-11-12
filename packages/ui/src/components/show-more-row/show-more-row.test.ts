@@ -31,6 +31,7 @@ function CappedList({ count }: { count: number }): React.JSX.Element {
   const [shown, setShown] = useState(false);
   const tasks = Array.from({ length: count }, (_, index) => `Task ${index + 1}`);
   const drawn = shown ? tasks : tasks.slice(0, CAP);
+
   return createElement(
     "div",
     null,

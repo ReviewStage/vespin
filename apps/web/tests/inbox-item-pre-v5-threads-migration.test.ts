@@ -6,6 +6,7 @@ import { MIGRATIONS_FOLDER, runWebMigrations } from "@repo/database/core/migrato
 import { joinWorkspace, openWorkspace, unmigratedPgliteSqlClient } from "@repo/database/testing";
 import { INBOX_MESSAGE_AUTHOR } from "@repo/features/inbox-wire";
 import { readInboxAttachment, readInboxItem } from "@repo/service/inbox/inbox-store";
+import type { WireValue } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
@@ -36,12 +37,15 @@ const foldersUpTo = (through: boolean) =>
     const fileSystem = yield* FileSystem;
     const path = yield* Path;
     const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-pre-v5-" });
+
     const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter((name) =>
       through ? name.localeCompare(MIGRATION) <= 0 : name.localeCompare(MIGRATION) < 0,
     );
+
     for (const name of names) {
       yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
     }
+
     return folder;
   });
 
@@ -71,11 +75,12 @@ it.effect(
         yield* sql`insert into conversations (id, user_id, kind, runtime) values (${agent.conversationId}, 'dean', 'coding_agent', 'claude_code')`;
         yield* sql`insert into coding_agent (id, task_id, organization_id, user_id, conversation_id, model, effort, plan_snapshot, repository, idempotency_key)
           values (${agent.id}, ${taskId}, ${workspaceId}, 'dean', ${agent.conversationId}, 'anthropic/claude-opus-5.5', 'high', '# Teammate invitations', 'acme/relay', ${randomUUID()})`;
+
         const item = (
           key: string,
           status: string,
-          blocks: unknown,
-          response: unknown,
+          blocks: WireValue,
+          response: WireValue,
           rest: {
             readonly answer?: unknown;
             readonly closedReason?: string;
@@ -87,9 +92,12 @@ it.effect(
             const answer = rest.answer === undefined ? null : JSON.stringify(rest.answer);
             yield* sql`insert into inbox_item (id, user_id, task_id, organization_id, agent_id, key, revision, version, title, blocks, response, needs_reply, status, answer, answer_key, answered_by, closed_reason, posted_at, updated_at)
               values (${id}, 'dean', ${taskId}, ${workspaceId}, ${agent.id}, ${key}, 1, ${rest.version ?? 4}, ${key}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(response)}::jsonb, true, ${status}, ${answer}::jsonb, ${answer === null ? null : randomUUID()}, ${answer === null ? null : "charles"}, ${rest.closedReason ?? null}, '2026-10-17T09:00:00Z', '2026-10-17T10:00:00Z')`;
+
             return id;
           });
+
         const pictureId = randomUUID();
+
         const branch = yield* item(
           "branch-protection",
           "open",
@@ -113,8 +121,10 @@ it.effect(
           ],
           { type: "task" },
         );
+
         yield* sql`insert into attachment (id, organization_id, user_id, task_id, inbox_item_id, kind, content_type, byte_count, bytes, created_at)
           values (${pictureId}, ${workspaceId}, 'dean', ${taskId}, ${branch}, 'image', 'image/png', ${PNG.length}, ${PNG}, '2026-10-17T09:00:00Z')`;
+
         const copy = yield* item(
           "invite-copy",
           "answered",
@@ -122,9 +132,11 @@ it.effect(
           { type: "choice", options: [{ label: "Join us" }, { label: "You're invited" }] },
           { answer: { reply: "chose", choices: ["Join us"], note: "Shorter reads better." } },
         );
+
         const answerFileId = randomUUID();
         yield* sql`insert into attachment (id, organization_id, user_id, task_id, inbox_item_id, kind, name, position, content_type, byte_count, bytes, created_at)
           values (${answerFileId}, ${workspaceId}, 'charles', ${taskId}, ${copy}, 'answer', 'mock.png', 0, 'image/png', ${PNG.length}, ${PNG}, '2026-10-17T10:00:00Z')`;
+
         const deploy = yield* item(
           "deploy",
           "closed",
@@ -132,6 +144,7 @@ it.effect(
           { type: "approval" },
           { closedReason: "Deployed it myself." },
         );
+
         // The version 4 tool still posted for a while after the bump: version 5, its question in its blocks, its thread asking nothing.
         const rollback = yield* item(
           "rollback",
@@ -150,9 +163,11 @@ it.effect(
 
         const read = (itemId: string) =>
           Effect.map(readInboxItem("dean", itemId), (found) => Option.getOrThrow(found).item);
+
         const [workspace] = yield* sql<{
           readonly slug: string;
         }>`select slug from organization where id = ${workspaceId}`;
+
         assert.ok(workspace !== undefined);
         const address = `https://tryluke.dev/${workspace.slug}/plan/${taskId}/inbox/${branch}/files/${pictureId}`;
         const opened = yield* read(branch);

@@ -25,11 +25,14 @@ export const pinRepository = Effect.fn("web/pinRepository")(function* (
   pinned: boolean,
 ) {
   const set = yield* hostedStoreOrUnavailable(setRepositoryPin(userId, repository, pinned));
+
   // A pin past the bound is a request the service will not keep, as a name past its bound is.
   if (Option.isNone(set)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   // Counted only where the write changed a row, which is the one that answers a transaction.
   if (set.value.txid !== undefined) {
     yield* recordServerEvent(SERVER_EVENT.REPOSITORY_PIN, { userId }, { pinned });
   }
+
   return set.value;
 });

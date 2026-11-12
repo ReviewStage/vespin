@@ -52,9 +52,11 @@ export function useSelectionKeys({
     // Note that only a focus fallen to the page is handed on, never one something else took.
     const fell = document.activeElement === null || document.activeElement === document.body;
     const list = document.getElementById(controls);
+
     // Note that a region of the app's own rows keeps no roving Tab stop, so its first row takes the focus instead.
     if (fell && list !== null && !focusRovingStop(list)) focusChoosable(list);
   }, [count, controls]);
+
   return {
     "data-roving": roving["data-roving"],
     ref: roving.ref,
@@ -66,10 +68,12 @@ export function useSelectionKeys({
     // Note that a button taken away blurs with nowhere to go, so only a focus moved somewhere lets go.
     onBlur: (event) => {
       const to = event.relatedTarget;
+
       if (to instanceof Node && !event.currentTarget.contains(to)) holding.current = false;
     },
     onKeyDown: (event) => {
       if (roving.onKeyDown(event) || event.defaultPrevented) return;
+
       if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
       event.preventDefault();
       event.stopPropagation();

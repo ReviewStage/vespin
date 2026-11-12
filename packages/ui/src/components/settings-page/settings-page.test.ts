@@ -46,6 +46,7 @@ async function render(element: React.JSX.Element): Promise<HTMLElement> {
   roots.push(root);
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   await act(async () => root.render(element));
+
   return container;
 }
 
@@ -71,6 +72,7 @@ test("the title is the page's one h1 and each section a region its h2 names", as
       children: [section("Microphone"), section("Speaker")],
     }),
   );
+
   const titles = container.querySelectorAll("h1");
   expect([...titles].map((title) => title.textContent)).toEqual(["Voice"]);
   const regions = [...container.querySelectorAll("section[aria-labelledby]")];
@@ -78,6 +80,7 @@ test("the title is the page's one h1 and each section a region its h2 names", as
     "Microphone",
     "Speaker",
   ]);
+
   for (const region of regions) {
     expect(region.querySelector("h2")?.textContent).toBe(
       named(region.getAttribute("aria-labelledby")),
@@ -93,10 +96,13 @@ test("the page's actions stand in its head beside its title", async () => {
       children: section("Microphone"),
     }),
   );
+
   const head = container.querySelector("h1")?.closest("header");
+
   const button = [...(head?.querySelectorAll("button") ?? [])].find(
     (element) => element.textContent === "Reset",
   );
+
   expect(head?.querySelector("h1")?.textContent).toBe("Voice");
   expect(button).toBeDefined();
 });
@@ -112,6 +118,7 @@ test("on a phone the bar names the page and ends with its actions, and the page 
       children: section("Microphone"),
     }),
   );
+
   const bar = container.querySelector('header[data-look="phone"]');
   expect([...(bar?.querySelectorAll("button") ?? [])].map((each) => each.textContent)).toEqual([
     "Settings",
@@ -126,6 +133,7 @@ test("a page with no actions holds only its title in its head", async () => {
   const container = await render(
     createElement(SettingsPage, { title: "Voice", children: section("Microphone") }),
   );
+
   const head = container.querySelector("h1")?.closest("header");
   expect(head?.textContent).toBe("Voice");
   expect(head?.querySelector("button")).toBeNull();

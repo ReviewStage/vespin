@@ -77,6 +77,7 @@ export function GitHubSignInCard({
   const taken = useRef(false);
   const [retried, setRetried] = useState(false);
   const retry = useAsyncAction(rejectionWords);
+
   const pressRetry = () => {
     if (taken.current) return;
     void retry.run(() =>
@@ -86,6 +87,7 @@ export function GitHubSignInCard({
       }),
     );
   };
+
   return (
     <Banner
       look={BANNER_LOOK.CARD}

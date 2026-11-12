@@ -18,7 +18,7 @@ function selectAgentPullRequests(state: AppStateSnapshot): readonly AgentPullReq
 
 /** Opens an address in Safari, saying on the console where it could not. */
 export function openInSafari(address: string): void {
-  openURL(address).catch((error: unknown) => console.error("The address did not open.", error));
+  openURL(address).catch((cause: unknown) => console.error("The address did not open.", cause));
 }
 
 /**
@@ -29,12 +29,15 @@ export function openInSafari(address: string): void {
  */
 export function useOpenLink(): (address: string) => void {
   const router = useRouter();
+
   const { data: pullRequests = NO_PULL_REQUESTS } = useQuery({
     ...appStateQuery,
     select: selectAgentPullRequests,
   });
+
   return (address) => {
     const route = iosAppRouteOfAddress(address, pullRequests);
+
     if (route === undefined) openInSafari(address);
     else router.push(route);
   };

@@ -21,14 +21,16 @@ import {
 import { FAILURE_FACT, type FailureFacts } from "@repo/features/failure-facts";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { joinedWindowRows, windowMessagesOf } from "@repo/features/transcript-window";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import {
   Data,
   Duration,
   Effect,
   Fiber,
   Option,
+  Predicate,
   RcMap,
+  Result,
   Schedule,
   type Scope,
   Stream,
@@ -89,19 +91,23 @@ import {
 
 /** How many transcripts no window holds any longer stay drawn at most, the least recently let go closed first. */
 export const HELD_TRANSCRIPTS = 8;
+
 /** How many bytes of JSON every transcript no window holds comes to at most. */
 export const HELD_BYTES = 4 * 1024 * 1024;
+
 /** How many bytes one transcript no window holds may come to; one past it is closed rather than cut, since one cut from its oldest end would no longer meet its `before`. */
 export const HELD_BYTES_EACH = HELD_BYTES / 4;
 
 /** How long a live read no follow holds is kept, so the window's next read finds it standing. */
 const IDLE = Duration.seconds(30);
+
 /** How many refusals of a read the service answered are asked for again before the follow says the transcript could not be read: on `FOLLOW_BACKOFF`, about half a minute. */
 const RESEALS = 4;
 
 /** Whether a failure's own facts say its call got no answer: it ended on the network or its deadline, anywhere down its chain (`CALL_FAULT.NETWORK`). */
 function noAnswer(facts: FailureFacts | undefined): boolean {
   if (facts === undefined) return false;
+
   return facts.fault === CALL_FAULT.NETWORK || noAnswer(facts.cause);
 }
 
@@ -113,9 +119,11 @@ function noAnswer(facts: FailureFacts | undefined): boolean {
  */
 function resealing(): (failed: Failed) => boolean {
   let refused = 0;
+
   return (failed) => {
     if (noAnswer(failed.cause)) return true;
     refused += 1;
+
     return refused <= RESEALS;
   };
 }
@@ -205,6 +213,7 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
       .filter((row) => row.role === MESSAGE_ROLE.USER && row.turnStatus === null)
       .map(({ id }) => ({ id })),
   };
+
   return JSON.stringify(
     Object.entries(parts).map(
       ([part, list]) => [part, list.map((row) => JSON.stringify(row)).toSorted()] as const,
@@ -213,9 +222,9 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
 }
 
 /** A value as JSON with every object's keys in order, so two messages alike read alike whichever read built them. */
-function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, held: unknown) =>
-    held !== null && typeof held === "object" && !Array.isArray(held)
+function canonical<Value>(value: Value): string {
+  return JSON.stringify(value, (_key, held: WireBoundaryInput) =>
+    Predicate.isObject(held)
       ? Object.fromEntries(
           Object.entries(held).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         )
@@ -228,6 +237,7 @@ function drawnOf(rows: AgentTranscriptLiveRows): Drawn {
   const seqs = rows.window.map((row) => row.seq);
   const revisions = rows.conversation.map((row) => row.revision);
   const queue = (rows.queueRevision ?? []).map((row) => row.revision);
+
   return {
     messages: windowMessagesOf(rows.window, rows.windowParts),
     lowest: seqs.length === 0 ? 0 : Math.min(...seqs),
@@ -242,9 +252,12 @@ function drawnOf(rows: AgentTranscriptLiveRows): Drawn {
   };
 }
 
+type CursorPartsResult = { readonly seq: number; readonly revision: string };
+
 /** A cursor's highest message sequence, and the journal revision it was read at. */
-function cursorParts(cursor: string): { readonly seq: number; readonly revision: string } {
+function cursorParts(cursor: string): CursorPartsResult {
   const [seq = "0", revision = "0"] = cursor.split(":");
+
   return { seq: Number(seq), revision };
 }
 
@@ -255,6 +268,7 @@ function cursorParts(cursor: string): { readonly seq: number; readonly revision:
  */
 function followedRead(sealed: AgentTranscriptLiveAnswer): SealedRead<string> {
   const { messages: _messages, ...queries } = sealed.queries;
+
   // Note that a part an older service does not answer, the queue's, is absent from its answer, so it is not followed.
   return { url: sealed.url, queries };
 }
@@ -273,16 +287,20 @@ function sealedOf(
   ) => Effect.Effect<AgentTranscriptLiveAnswer | Failed>,
 ): Effect.Effect<Option.Option<AgentTranscriptLiveAnswer>, SealUnanswered> {
   const again = resealing();
+
   return seal(false, undefined, AGENT_CURSOR_START).pipe(
     Effect.flatMap((answer) => {
       if (!("failure" in answer)) return Effect.succeed(Option.some(answer));
+
       if (
         answer.failure === AGENT_CALL_FAILURE.NOT_FOUND ||
         answer.failure === LIVE_SIGNED_OUT.failure
       ) {
         return Effect.succeed(Option.none());
       }
+
       const { failure, cause } = answer;
+
       return Effect.fail(
         new SealUnanswered(cause === undefined ? { failure } : { failure, cause }),
       );
@@ -301,6 +319,7 @@ export function transcriptFollows<Key = TranscriptKey>(
       Effect.gen(function* () {
         // The account the follow starts for, which every poll names, so one under another's session is refused as signed out.
         const userId = dependencies.accountId();
+
         const seal = (
           poll: boolean,
           after?: string,
@@ -309,7 +328,9 @@ export function transcriptFollows<Key = TranscriptKey>(
           userId === undefined
             ? Effect.succeed(LIVE_SIGNED_OUT)
             : dependencies.seal(key, poll, userId, after, cursor);
+
         const first = yield* sealedOf(seal);
+
         if (Option.isNone(first)) return { kind: LIVE_STATE.REFUSED } as const;
         const state = yield* SubscriptionRef.make<TranscriptState>({ kind: LIVE_STATE.WAITING });
         // A live read that stops for good, signed out or a row that does not decode, marks the state broken.
@@ -336,6 +357,7 @@ export function transcriptFollows<Key = TranscriptKey>(
             ),
           ),
         );
+
         return { kind: LIVE_STATE.LIVE, state } as const;
       }),
   });
@@ -347,13 +369,16 @@ export function windowsPage(
 ): AgentMessagesAnswerView {
   if (!("holds" in answer)) return answer;
   const { holds: _holds, wakeIn: _wakeIn, ...page } = answer;
+
   return page;
 }
 
 /** A page past a cursor as the follow tells it: caught up where it came back short of a page's most. */
 function toldPage(answer: TranscriptNowAnswer | AgentMessagesAnswerView): AgentTranscriptPage {
   const page = windowsPage(answer);
+
   if ("failure" in page) return page;
+
   return { ...page, caughtUp: page.messages.length < AGENT_BOUNDS.MESSAGES_PAGE };
 }
 
@@ -367,7 +392,7 @@ function movedFrom(was: TranscriptState): (state: TranscriptState) => boolean {
 }
 
 /** A page the service did not answer, which is read again after `resealWait`; not found is the service's last word. */
-function unanswered(answer: { readonly failure: string } | object): boolean {
+function unanswered<Answer extends object>(answer: Answer): boolean {
   return "failure" in answer && answer.failure !== AGENT_CALL_FAILURE.NOT_FOUND;
 }
 
@@ -420,6 +445,7 @@ function meets(
 ): boolean {
   if (page.before === undefined) return true;
   const ids = new Set(page.messages.map((message) => message.id));
+
   return held.some((message) => ids.has(message.id));
 }
 
@@ -436,21 +462,27 @@ function toldTranscript(
   queueRevision: number | undefined,
 ): AppTranscript {
   const pages = was?.pages ?? 0;
+
   if ("failure" in page) {
     // Note that a transcript the account no longer reaches holds nothing of what it held, as one drawn from before access was checked.
     if (page.failure === AGENT_CALL_FAILURE.NOT_FOUND)
       return { messages: [], pages, failure: page };
+
     return { ...(was ?? { messages: [], pages }), failure: page };
   }
+
   const { messages, cursor, before, newest, ...said } = page;
   const held = was?.messages ?? [];
+
   // Note that a newest page that does not meet what is held replaces it, older pages and all, rather
   // than leave a gap, and so does one read at another rewind, since the rewind dropped messages a join would keep.
   const replaces =
     newest === true &&
     (held.length === 0 || !meets(held, page) || said.rewound !== was?.word?.rewound);
+
   // Note that a newest page naming no older page holds the whole transcript, so nothing stands below it.
   const below = replaces || (newest === true && before === undefined) ? before : was?.before;
+
   return {
     messages: replaces ? messages : applyMessagesPage(held, messages),
     ...(below === undefined ? undefined : { before: below }),
@@ -474,6 +506,7 @@ export function withOlderPage(
   if (held === undefined || held.before !== before) return undefined;
   const ids = new Set(held.messages.map((message) => message.id));
   const { before: _laid, ...rest } = held;
+
   return {
     ...rest,
     messages: [...older.messages.filter((message) => !ids.has(message.id)), ...held.messages],
@@ -491,15 +524,19 @@ export function withOlderPage(
 function reopened(held: HeldTranscript): Effect.Effect<Option.Option<AgentNewestAnswer>> {
   return Effect.suspend(() => {
     const rows = held.rows();
+
     if (rows === undefined) return Effect.succeed(Option.none());
     const { failure, ...standing } = rows;
     const word = standing.word === undefined ? undefined : { ...standing.word, caughtUp: false };
+
     const laid =
       failure !== undefined || rows.word?.caughtUp === true
         ? held.answered(word === undefined ? standing : { ...standing, word })
         : Effect.void;
+
     if (standing.cursor === undefined || word === undefined) return Effect.as(laid, Option.none());
     const { caughtUp: _caughtUp, queueRevision: _revision, ...said } = word;
+
     return Effect.as(
       laid,
       Option.some({
@@ -518,7 +555,9 @@ function joinedWindow(
   answer: TranscriptNowAnswer | AgentMessagesAnswerView,
 ): AgentNewestAnswer {
   const read = windowsPage(answer);
+
   if ("failure" in read) return window;
+
   return {
     ...read,
     messages: applyMessagesPage(window.messages, read.messages),
@@ -530,8 +569,10 @@ function joinedWindow(
 function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
   return Effect.suspend(() => {
     const rows = held.rows();
+
     if (rows?.cursor === undefined) return Effect.void;
     const { cursor: _cursor, ...rest } = rows;
+
     return held.answered(rest);
   });
 }
@@ -565,15 +606,20 @@ export function followTranscript<Key>(
     Effect.gen(function* () {
       /** The queue revision the last page read past a cursor was read at, which its queue is at least as new as, and every page told after it carries. */
       let revision: number | undefined;
+
       const tell = (page: AgentTranscriptPage) =>
         Effect.suspend(() => held.answered(toldTranscript(held.rows(), page, revision)));
+
       let toldNotFound = false;
+
       const readNewest = Effect.suspend(() => {
         const again = resealing();
+
         return reads.newest().pipe(
           Effect.tap((answer) => {
             if (!("failure" in answer)) return tell({ ...answer, newest: true, caughtUp: false });
             toldNotFound = answer.failure === AGENT_CALL_FAILURE.NOT_FOUND;
+
             return tell(answer);
           }),
           // Note that a newest page the service keeps not answering is asked for again as the live read is (`resealing`), and then ends the follow on the failure told, so the window offers Try again.
@@ -587,32 +633,42 @@ export function followTranscript<Key>(
           ),
         );
       });
+
       // Note that a window held stands drawn before the service is asked anything, so the window draws it with no round trip; one holding nothing reads the newest page beside the live read, not after it, its cursor what makes following on from it safe.
       const recalled = yield* reopened(held);
       const opening = Option.isSome(recalled) ? undefined : yield* Effect.forkScoped(readNewest);
       const sealed = yield* Effect.result(RcMap.get(follows, key));
-      if (sealed._tag === "Failure" || sealed.success.kind === LIVE_STATE.REFUSED) {
+
+      if (Result.isFailure(sealed) || sealed.success.kind === LIVE_STATE.REFUSED) {
         if (opening !== undefined) yield* Fiber.interrupt(opening);
-        if (sealed._tag === "Failure") {
+
+        if (Result.isFailure(sealed)) {
           yield* RcMap.invalidate(follows, key);
+
           return yield* tell(unansweredPage(sealFacts(sealed.failure)));
         }
+
         // Note that not found drops what was held of the transcript, so a follow after it reads anew.
         if (toldNotFound) return;
+
         return yield* tell({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
       }
+
       const { state } = sealed.success;
+
       const opened =
         opening === undefined
           ? recalled
           : yield* Effect.map(Fiber.join(opening), (newest) =>
               "failure" in newest ? Option.none() : Option.some(newest),
             );
+
       if (Option.isNone(opened)) return;
       /** What the window was told, as one newest page: its cursor is where the next read follows on from. */
       let window = opened.value;
       // Whether the next read is the first past a held cursor, which falls back to the newest page where it is refused.
       let fromHeld = Option.isSome(recalled);
+
       /**
        * Each message told: as it was told, the journal revision that copy is
        * known to stand at or past, none where unknown, and whether a page or
@@ -627,44 +683,58 @@ export function followTranscript<Key>(
         string,
         { readonly said: string; readonly at: number | undefined; readonly paged: boolean }
       >();
+
       /** A page's messages to tell, read at its cursor's revision: every one but those the rows drew at a later revision. */
       const heardPaged = (messages: readonly AgentTranscriptMessage[], cursor: string) => {
         const at = Number(cursorParts(cursor).revision);
+
         return messages.filter((message) => {
           const was = told.get(message.id);
+
           if (was !== undefined && !was.paged && was.at !== undefined && was.at > at) return false;
           told.set(message.id, { said: canonical(message), at, paged: true });
+
           return true;
         });
       };
+
       /** The rows' messages to tell: every one drawn otherwise than it was told, but those a page told at the rows' revision or later. */
       const heardDrawn = ({ messages, revision }: Drawn) =>
         messages.filter((message) => {
           const said = canonical(message);
           const was = told.get(message.id);
+
           if (was?.said === said) return false;
+
           const pagedLater =
             was?.paged === true &&
             was.at !== undefined &&
             revision !== undefined &&
             was.at >= revision;
+
           if (pagedLater) return false;
           told.set(message.id, { said, at: revision, paged: false });
+
           return true;
         });
+
       heardPaged(window.messages, window.cursor);
+
       /** The rows' messages not yet told, beside what the last page said of the agent; the cursor moves past them where they follow on from it. */
       const tellDrawn = (page: AgentTranscriptPage, state: TranscriptState) =>
         Effect.gen(function* () {
           if (state.kind !== LIVE_STATE.STANDING || "failure" in page) return;
           const fresh = heardDrawn(state.drawn);
+
           if (fresh.length === 0) return;
           const { seq, revision } = cursorParts(window.cursor);
+
           // Note that the cursor moves only where the window holds every message past it, so a read past it misses none.
           const cursor =
             state.drawn.lowest <= seq + 1 && state.drawn.highest > seq
               ? `${state.drawn.highest}:${revision}`
               : window.cursor;
+
           // Note that a line of the developer's no turn has taken yet puts the agent to work, as the service reads
           // it (`agentStatusAt`), so it is told running rather than under the last page's word for a turn
           // it follows, which would draw that turn's end beneath it.
@@ -678,49 +748,62 @@ export function followTranscript<Key>(
           });
           window = { ...window, messages: applyMessagesPage(window.messages, fresh), cursor };
         });
+
       // Note that the newest page may have been read before the live read stood, so the page past it is read once its first rows land.
       let wake: Effect.Effect<unknown> = SubscriptionRef.changes(state).pipe(
         Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
         Stream.runHead,
       );
+
       /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
       let last: AgentTranscriptPage | undefined;
       // Note that the wait before reading again after an unanswered page doubles while they go unanswered in a row, and counts from the first again once one is answered.
       let unansweredInRow = 0;
+
       const readAgain = () => {
         unansweredInRow += 1;
+
         return waitOrRegained(resealWait(unansweredInRow));
       };
+
       while (true) {
         yield* wake;
         const was = yield* SubscriptionRef.get(state);
+
         if (was.kind === LIVE_STATE.BROKEN) {
           yield* RcMap.invalidate(follows, key);
+
           return yield* tell(unansweredPage(was.cause));
         }
+
         // Note that the rows drawn while the page is read go on being told beside it, because a
         // turn that starts moves the turns and the reply's first words land with it; the page
         // then tells only what it read at least as new as they drew (`heardPaged`).
         const lastTold = last;
+
         const besideRead =
           lastTold === undefined
             ? Effect.void
             : SubscriptionRef.changes(state).pipe(
                 Stream.runForEach((now) => tellDrawn(lastTold, now)),
               );
+
         const answer = yield* Effect.scoped(
           Effect.andThen(Effect.forkScoped(besideRead), reads.after(window.cursor)),
         );
+
         // Note that a held cursor the service refuses, gone or stale, is let go untold, and the follow opens on the newest page as one holding nothing does; the window joins it or takes it in place of what it drew.
         if (fromHeld && unanswered(answer)) {
           yield* forgetCursor(held);
           const newest = yield* readNewest;
+
           if ("failure" in newest) {
             if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
             // Note that a service that answers neither read is down rather than refusing the cursor, so the follow stays and tries both again, as any page it did not answer is read again.
             wake = readAgain();
             continue;
           }
+
           fromHeld = false;
           unansweredInRow = 0;
           window = newest;
@@ -728,15 +811,18 @@ export function followTranscript<Key>(
           wake = Effect.void;
           continue;
         }
+
         // Note that a page read at another rewind than the window's says messages the window holds were dropped, which a join would keep, so the newest page is read in its place.
         if (!("failure" in answer) && (answer.rewound ?? 0) !== (window.rewound ?? 0)) {
           fromHeld = false;
           const newest = yield* readNewest;
+
           if ("failure" in newest) {
             if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
             wake = readAgain();
             continue;
           }
+
           unansweredInRow = 0;
           window = newest;
           told.clear();
@@ -744,31 +830,38 @@ export function followTranscript<Key>(
           wake = Effect.void;
           continue;
         }
+
         fromHeld = false;
         // Note that whether the page is caught up is the whole page's word, before what it read older than the rows is left out.
         const whole = toldPage(answer);
         const fresh = "failure" in answer ? [] : heardPaged(answer.messages, answer.cursor);
         const shown = "failure" in answer ? answer : { ...answer, messages: fresh };
         const page = "failure" in whole ? whole : { ...whole, messages: fresh };
+
         if (was.kind === LIVE_STATE.STANDING) revision = was.drawn.queueRevision;
         yield* tell(page);
         last = page;
+
         if ("failure" in answer) {
           if (answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
           wake = readAgain();
           continue;
         }
+
         unansweredInRow = 0;
         window = joinedWindow(window, shown);
+
         // Note that a full page is followed by the next at once, and a short one is caught up, with no empty page read to say so.
         if (answer.messages.length >= AGENT_BOUNDS.MESSAGES_PAGE) {
           wake = Effect.void;
           continue;
         }
+
         const moved = SubscriptionRef.changes(state).pipe(
           Stream.takeUntil(movedFrom(was)),
           Stream.runForEach((now) => tellDrawn(page, now)),
         );
+
         const wakeIn = "holds" in answer && answer.holds ? answer.wakeIn : undefined;
         wake =
           wakeIn === undefined ? moved : Effect.race(moved, Effect.sleep(Duration.millis(wakeIn)));

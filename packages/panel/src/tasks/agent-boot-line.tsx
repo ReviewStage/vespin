@@ -38,6 +38,7 @@ export type BootLine =
  */
 export function bootLineOf(boot: AgentBoot | undefined): BootLine | undefined {
   if (boot === undefined) return undefined;
+
   switch (boot.phase) {
     case BOOT_PHASE.STARTING:
     case BOOT_PHASE.HANDING_OFF:
@@ -61,6 +62,7 @@ export function AgentBootLine({
   retry: string | undefined;
 }): ReactNode {
   const { mutate: boot, isPending } = useMutation(pressMutation(ACT_KIND.AGENTS_BOOT));
+
   switch (line.kind) {
     case BOOT_LINE.STARTING:
       return (

@@ -47,6 +47,7 @@ function mountRoot(element: React.ReactElement) {
   const root = createRoot(container);
   mounted.push(root);
   act(() => root.render(element));
+
   return { container, root };
 }
 
@@ -68,6 +69,7 @@ function buttons(container: HTMLElement): HTMLButtonElement[] {
 function button(container: HTMLElement, words: string): HTMLButtonElement {
   const found = buttons(container).find((each) => each.textContent === words);
   assert.ok(found, `a "${words}" button is drawn`);
+
   return found;
 }
 
@@ -81,12 +83,11 @@ test("each provider's button begins that provider's sign-in", () => {
 
 /** Every "Last used" badge drawn, with the button each describes. */
 function lastUsedBadges(container: HTMLElement) {
-  return [...container.querySelectorAll("span")]
-    .filter((each) => each.textContent === "Last used")
-    .map((badge) => ({
-      badge,
-      described: container.querySelector(`button[aria-describedby="${badge.id}"]`),
-    }));
+  return [...container.querySelectorAll("span")].flatMap((badge) =>
+    badge.textContent === "Last used"
+      ? [{ badge, described: container.querySelector(`button[aria-describedby="${badge.id}"]`) }]
+      : [],
+  );
 }
 
 test("the provider this Mac last signed in with wears the one Last used badge, outside its label", () => {
@@ -110,6 +111,7 @@ test("with no provider kept, no button wears the Last used badge", () => {
 
 test("a sign-in waited on holds both buttons, keeps the badge, and Cancel takes the wait back", () => {
   let canceled = 0;
+
   const container = mount(
     gate({
       waiting: ACCOUNT_PROVIDER.GITHUB,
@@ -117,6 +119,7 @@ test("a sign-in waited on holds both buttons, keeps the badge, and Cancel takes 
       onCancel: () => (canceled += 1),
     }),
   );
+
   const waiting = button(container, "Waiting for browser");
   assert.equal(waiting.disabled, true);
   assert.equal(button(container, "Continue with Google").disabled, true);
@@ -146,6 +149,7 @@ test("the wait on the browser is announced politely, and taken back once the wai
 
 test("a sign-in that ended without landing is reported once, under why it ended", () => {
   const codes: unknown[] = [];
+
   const recording: ShownFailureSentry = {
     captureException: () => "",
     logger: {
@@ -157,10 +161,12 @@ test("a sign-in that ended without landing is reported once, under why it ended"
       getPropagationContext: () => ({ traceId: "0af7651916cd43dd8448eb211c80319c" }),
     }),
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
   );
+
   try {
     const { root } = mountRoot(gate({ failure: SIGN_IN_FAILURE.TIMED_OUT }));
     // A draw for any other reason, with the same failure still shown, reports nothing more.
@@ -170,5 +176,6 @@ test("a sign-in that ended without landing is reported once, under why it ended"
   } finally {
     uninstall();
   }
+
   assert.deepEqual(codes, [SIGN_IN_FAILURE.TIMED_OUT]);
 });

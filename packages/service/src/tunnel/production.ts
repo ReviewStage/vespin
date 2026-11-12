@@ -25,26 +25,33 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
   Effect.gen(function* () {
     const context = yield* Effect.context<TunnelServices>();
     const sandboxes = yield* Sandbox;
+
     const run = <A, E>(effect: Effect.Effect<A, E, TunnelServices>) =>
       Effect.provideContext(effect, context);
+
     const sandbox = yield* Effect.provide(
       Effect.gen(function* () {
         return yield* AgentSandbox;
       }),
       agentSandboxLayer,
     );
+
     return {
       reach: (userId, agentId) =>
         run(
           Effect.gen(function* () {
             const found = yield* readVisibleAgent(userId, agentId);
+
             if (Option.isNone(found) || found.value.archivedAt !== null) return Option.none();
             const agent = found.value;
+
             // Note that a tunnel into an agent on its starter's own GitHub token is its starter's alone, as its Terminal is.
             if (!controlsAgent(userId, agent)) return Option.none();
+
             // An agent with no repository opens no sandbox for a tunnel to reach.
             if (!hasRepository(agent)) return Option.none();
             const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
+
             return Option.some({ sessionId: session?.sessionId });
           }),
         ),

@@ -23,6 +23,7 @@ function shipped(dockerfile: string, unit: Readonly<Record<string, string>>) {
       contents: Buffer.from(text),
     })),
   ];
+
   return new Map(
     shippedBesideFunctions(context).map((file) => [
       file.name,

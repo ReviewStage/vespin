@@ -97,6 +97,7 @@ async function drawnTurn(
       ? undefined
       : { turnId: TURN, turn: { id: TURN, queuedAt: 1000, status: TURN_STATUS.FAILED, failure } }),
   };
+
   fakeAppBridge({});
   fakeActPort({});
   handMembers(() => ({
@@ -104,10 +105,12 @@ async function drawnTurn(
   }));
   const messages = [TASK, turn(status !== AGENT_STATUS.RUNNING)];
   pushedTranscripts(() => [{ messages, cursor: "2:0", status, title: null }]);
+
   const control = agentsControl({
     agents: [agent],
     me: DEAN.userId,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -135,6 +138,7 @@ async function drawnTurn(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return (
     container.querySelector<HTMLElement>(`.is-assistant[data-message-id="${TURN}"]`) ??
     assert.fail("the turn is drawn")
@@ -144,9 +148,12 @@ async function drawnTurn(
 /** What stands on the line holding the turn's "Worked for", a line of its own under the turn's words, in reading order. */
 function footOf(message: HTMLElement): readonly string[] {
   const worked = message.querySelector("[data-worked]") ?? assert.fail("the turn says it worked");
+
   const line =
     worked.closest("[data-turn-foot]") ?? assert.fail("the worked line stands in a line");
+
   assert.notEqual(line, message, "the line is the turn's foot, not the turn itself");
+
   return [...line.querySelectorAll("[data-worked], button[aria-label]")].map((each) =>
     each.matches("[data-worked]")
       ? (each.querySelector("[data-worked-length]")?.textContent ?? "")

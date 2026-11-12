@@ -46,6 +46,7 @@ export interface PullRequestComment {
 export function usePullRequestComment(agentId: string, onWritten: ReadAgain): PullRequestComment {
   const writes = usePullRequestWrites(agentId, onWritten);
   const [body, setBody] = useState("");
+
   return { writes, body, setBody };
 }
 
@@ -59,10 +60,12 @@ export function PullRequestCommentBox({
   const sending = writes.pending !== undefined;
   const field = useRef<HTMLElement>(null);
   const blank = body.trim() === "" || overCommentBound(body);
+
   const send = () => {
     if (blank || sending) return;
     writes.write({ action: PULL_REQUEST_ACTION.COMMENT, body }, () => setBody(""));
   };
+
   return (
     <section
       className="pull-request-section pull-request-comment-box flex flex-col gap-control-gap"

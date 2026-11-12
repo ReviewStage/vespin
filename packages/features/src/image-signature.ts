@@ -28,8 +28,11 @@ function startsWith(bytes: Uint8Array, signature: readonly number[], at = 0): bo
 /** The type the bytes' signature says they are, or nothing for bytes that are none of the three. */
 export function sniffImageType(bytes: Uint8Array): InboxImageType | undefined {
   if (startsWith(bytes, PNG_SIGNATURE)) return INBOX_IMAGE_TYPE.PNG;
+
   if (startsWith(bytes, JPEG_SIGNATURE)) return INBOX_IMAGE_TYPE.JPEG;
+
   if (startsWith(bytes, RIFF) && startsWith(bytes, WEBP, 8)) return INBOX_IMAGE_TYPE.WEBP;
+
   return undefined;
 }
 
@@ -62,6 +65,7 @@ function pngDimensions(bytes: Uint8Array): ImageDimensions | undefined {
   if (bytes.length < 24 || !startsWith(bytes, IHDR, 12)) return undefined;
   const width = (bytes[16] ?? 0) * 2 ** 24 + ((bytes[17] ?? 0) << 16) + bigEndian16(bytes, 18);
   const height = (bytes[20] ?? 0) * 2 ** 24 + ((bytes[21] ?? 0) << 16) + bigEndian16(bytes, 22);
+
   return { width, height };
 }
 
@@ -78,42 +82,53 @@ function isFrameMarker(marker: number): boolean {
  */
 function jpegDimensions(bytes: Uint8Array): ImageDimensions | undefined {
   let at = 2;
+
   while (at + 9 < bytes.length) {
     if (bytes[at] !== 0xff) return undefined;
     const marker = bytes[at + 1] ?? 0;
+
     // A fill byte, or a marker that stands alone with no length after it.
     if (marker === 0xff) {
       at += 1;
       continue;
     }
+
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
       at += 2;
       continue;
     }
+
     if (isFrameMarker(marker)) {
       return { width: bigEndian16(bytes, at + 7), height: bigEndian16(bytes, at + 5) };
     }
+
     at += 2 + bigEndian16(bytes, at + 2);
   }
+
   return undefined;
 }
 
 /** A WebP's size from its first chunk: a lossy frame's, a lossless bitstream's, or the extended canvas's. */
 function webpDimensions(bytes: Uint8Array): ImageDimensions | undefined {
   if (bytes.length < 30) return undefined;
+
   if (startsWith(bytes, VP8_LOSSY, 12) && startsWith(bytes, VP8_START_CODE, 23)) {
     return {
       width: littleEndian16(bytes, 26) & 0x3fff,
       height: littleEndian16(bytes, 28) & 0x3fff,
     };
   }
+
   if (startsWith(bytes, VP8_LOSSLESS, 12) && bytes[20] === 0x2f) {
     const bits = littleEndian16(bytes, 21) + littleEndian16(bytes, 23) * 2 ** 16;
+
     return { width: (bits % 2 ** 14) + 1, height: (Math.floor(bits / 2 ** 14) % 2 ** 14) + 1 };
   }
+
   if (startsWith(bytes, VP8_EXTENDED, 12)) {
     return { width: littleEndian24(bytes, 24) + 1, height: littleEndian24(bytes, 27) + 1 };
   }
+
   return undefined;
 }
 
@@ -129,7 +144,9 @@ export function imageDimensions(
   type: InboxImageType,
 ): ImageDimensions | undefined {
   const dimensions = DIMENSIONS_OF[type](bytes);
+
   if (dimensions === undefined || dimensions.width === 0 || dimensions.height === 0)
     return undefined;
+
   return dimensions;
 }

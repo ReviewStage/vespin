@@ -17,6 +17,7 @@ declare const identifierBrand: unique symbol;
 type Identifier<Brand extends string> = string & { readonly [identifierBrand]: Brand };
 
 export type AgentId = Identifier<"agent">;
+
 export type SessionKey = Identifier<"session-key">;
 
 function isIdentifier(value: UnparsedWireValue): value is string {
@@ -25,6 +26,7 @@ function isIdentifier(value: UnparsedWireValue): value is string {
 
 function identifier<Brand extends string>(kind: Brand, value: string): Identifier<Brand> {
   if (!isIdentifier(value)) throw new TypeError(`${kind} identifier must be a non-empty string`);
+
   // SAFETY: the brand is a compile-time tag; the check above is the whole runtime validation.
   return value as Identifier<Brand>;
 }

@@ -65,6 +65,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -74,9 +75,11 @@ const pageOnTask = Effect.gen(function* () {
   const teammate = yield* openAccount;
   const task = yield* startTask(starter, { name: "Teammate invitations" });
   yield* joinWorkspace(task.workspaceId, teammate);
+
   const page = Option.getOrThrow(
     yield* writePage(starter, taskPageOwner(task.id), CHART, { kind: PAGE_SHOWER.APP }),
   );
+
   return { starter, teammate, task, page };
 });
 
@@ -93,23 +96,29 @@ const standing = (sandbox: PageSandbox | undefined) =>
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       Layer.succeed(PageLinks, { sandbox }),
     );
+
     const route = HttpRouter.toWebHandler(
       pageSandboxApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => route.dispose()));
+
     // SAFETY: the procedures yield the database, the clock, and the page links alone, which is all a test provides of the web runtime's services.
     const context = (yield* Effect.context<DatabaseServices | PageLinks>().pipe(
       Effect.provide(services),
     )) as Context.Context<WebServices>;
+
     const resolveUserId = (incoming: Request) =>
       Effect.succeed(
         Option.fromNullishOr(incoming.headers.get("authorization")?.replace("Bearer ", "")),
       );
+
     const procedures = hostedFetch({
       agentPages: agentPagesProcedures({ resolveUserId }),
       taskFiles: taskFilesProcedures({ resolveUserId }),
     });
+
     /** A load of a page's version's frame address, as the account names it, a frame's unless named. */
     const frame = (userId: string, path: string, load: Load = LOAD.FRAME) =>
       Effect.promise(() =>
@@ -120,14 +129,17 @@ const standing = (sandbox: PageSandbox | undefined) =>
           context,
         ),
       );
+
     /** A link followed as the routing hands it to the page route, a frame's load on the link's own host unless named. */
     const follow = (link: string, host = new URL(link).host, load: Load = LOAD.FRAME) => {
       const token = new URL(link).pathname.slice(`/${PAGE_LINK_ROUTE.STEP}/`.length);
       const address = `https://${host}${PAGE_LINK_ROUTE.PATH}?${PAGE_LINK_ROUTE.TOKEN_QUERY}=${token}`;
+
       return Effect.promise(() =>
         route.handler(new Request(address, { headers: loadHeaders(load) })),
       );
     };
+
     return { frame, follow };
   });
 
@@ -137,6 +149,7 @@ const framePath = (taskId: string, pageId: string, version: number) =>
 /** The link a frame's answer sends it on to, where it is a redirect. */
 function linkOf(answer: Response): string {
   assert.equal(answer.status, PAGE_FRAME_STATUS);
+
   return answer.headers.get("location") ?? "";
 }
 
@@ -145,6 +158,7 @@ function directivesOf(policy: string): ReadonlyMap<string, string> {
   return new Map(
     policy.split(";").map((directive) => {
       const [name = "", ...sources] = directive.trim().split(/\s+/u);
+
       return [name, sources.join(" ")];
     }),
   );
@@ -231,6 +245,7 @@ it.layer(getTestDB())("a page framed on the web", (it) => {
         const host = new URL(link).host;
 
         assert.equal((yield* follow(link, host, LOAD.FRAME)).status, HOSTED_HTTP_STATUS.OK);
+
         for (const load of [LOAD.TAB, LOAD.UNNAMED]) {
           assert.deepEqual(yield* refusalOf(yield* frame(teammate, path, load)), NOT_FOUND, load);
           assert.deepEqual(yield* refusalOf(yield* follow(link, host, load)), NOT_FOUND, load);

@@ -80,7 +80,6 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
     "Could not change the agent's permission mode on this system.",
   [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
-  [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: "Could not add a repository to the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
@@ -107,7 +106,7 @@ const REFUSAL = {
 } as const;
 
 /** A payload each declared act's schema takes, so a window refused it was refused for who it is alone. */
-const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput } = {
+const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_DEFAULT_WRITE: { model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_CHAPTERS_PROVIDER_WRITE: { provider: "openai" },
   AGENTS_PREFERENCES_RETRY: undefined,
@@ -132,7 +131,6 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
     approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
     answer: "allow",
   },
-  AGENTS_ADD_REPOSITORY: { agentId: AGENT_ID, addRepository: { repository: "acme/app" } },
   AGENTS_QUEUE: {
     agentId: AGENT_ID,
     change: { change: QUEUE_CHANGE.DELETE, messageId: QUEUED_ID },
@@ -177,7 +175,6 @@ const NOTED_ACTS = [
   "AGENTS_RENAME",
   "AGENTS_SERVERS",
   "AGENTS_PERMISSION_MODE",
-  "AGENTS_ADD_REPOSITORY",
   "AGENTS_STOP",
   "AGENTS_REWIND",
   "AGENTS_CLEAR",
@@ -210,15 +207,22 @@ function windowPort(
 ) {
   const asked: unknown[] = [];
   const noted: string[] = [];
-  const handler = (name: keyof NotedActs) => (input: unknown) =>
-    Effect.suspend(() => {
-      asked.push([name, input]);
-      const answer =
-        options.answers?.[name] ?? options.fallback ?? (() => Effect.succeed(UNANSWERED));
-      return answer();
-    });
+
+  const handler =
+    (name: keyof NotedActs) =>
+    <Input>(input: Input) =>
+      Effect.suspend(() => {
+        asked.push([name, input]);
+
+        const answer =
+          options.answers?.[name] ?? options.fallback ?? (() => Effect.succeed(UNANSWERED));
+
+        return answer();
+      });
+
   // SAFETY: each handler answers what its test hands it, which the procedure checks against the act's output schema; none is a row write a pool draws.
   const acts = Object.fromEntries(NOTED_ACTS.map((name) => [name, handler(name)])) as NotedActs;
+
   const notices: AgentProceduresDependencies["notices"] = {
     observeAgents: (agents) => {
       noted.push(`agents:${agents.map((agent) => `${agent.id}=${agent.status}`).join(",")}`);
@@ -239,10 +243,12 @@ function windowPort(
       noted.push(`seen:${agentId}`);
     },
   };
+
   const port = testActPort(agentProcedures({ acts, notices }));
   ports.push(port);
   /** One kind called as this window, settled to its answer or the sentence of its refusal. */
   const call = (kind: PortActKind, payload: WireBoundaryInput) => port.call(actor, kind, payload);
+
   return { call, asked, noted };
 }
 
@@ -252,6 +258,7 @@ it.effect.each(Object.values(AGENT_ACTS))(
     Effect.gen(function* () {
       const { port, requests } = yield* hostActPort();
       const noted = windowPort(OTHER_WINDOW);
+
       // Note that an act answered by hand is served by its own procedure, which the standing host's port leaves to the platform.
       const refused = act.byHand
         ? yield* Effect.promise(() => noted.call(act.kind, PAYLOAD[act.name]))
@@ -356,6 +363,7 @@ it("a noted act whose handler fails, dies, or answers what the kind cannot carry
     () => Effect.die(new Error("secret detail")),
     () => Effect.succeed({ agent: "none" }),
   ];
+
   for (const fallback of fallbacks) {
     const { call, noted } = windowPort(PANEL, { fallback });
     assert.deepEqual(await call(AGENT_ACT_KIND.AGENTS_STOP, { agentId: AGENT_ID }), {

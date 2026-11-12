@@ -39,9 +39,11 @@ function publishedOf(
   known: AgentPullRequest | undefined,
 ): AgentPullRequestAnswer | undefined {
   const read = held === undefined || "failure" in held ? undefined : held;
+
   if (read === undefined) {
     return known === undefined ? undefined : { repository: null, branch: null, pullRequest: known };
   }
+
   return known === undefined ? read : { ...read, pullRequest: known };
 }
 
@@ -54,6 +56,7 @@ export function useAgentPullRequest(input: {
 }): AgentPublished {
   const { agentId, shown, known } = input;
   const held = useQuery(pullRequestPublishedQuery(shown ? { agentId } : undefined)).data;
+
   return useMemo(() => ({ published: publishedOf(held, known) }), [held, known]);
 }
 
@@ -77,7 +80,9 @@ export function useListedPullRequests(
 ): ReadonlyMap<string, AgentPullRequest> {
   return useMemo(() => {
     const own = (listed ?? []).filter((each) => each.taskId === taskId);
+
     if (own.length === 0) return NO_PULL_REQUESTS;
+
     return new Map(own.map((each) => [each.agentId, each.pullRequest]));
   }, [listed, taskId]);
 }
@@ -96,5 +101,6 @@ export function useListedPullRequest(agentId: string): AgentPullRequest | undefi
       state.tasks.agentPullRequests?.find((each) => each.agentId === agentId)?.pullRequest,
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }

@@ -44,6 +44,7 @@ function mount(opened: unknown[][]): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   fakeActPort({ [ACT_KIND.TASKS_FILE]: () => new Promise<TasksFileAnswer>(() => undefined) });
+
   const card = createElement(InboxCodeCard, {
     block: BLOCK,
     code: {
@@ -52,15 +53,19 @@ function mount(opened: unknown[][]): HTMLElement {
       onOpenFile: (...asked) => opened.push(asked),
     },
   });
+
   act(() => root.render(withQueryClient(card)));
+
   return container;
 }
 
 test("a code card's head says its lines as Lines 3–5, hangs the file's card naming its repository, and a press on it opens the file on those lines at the item's commit", () => {
   const opened: unknown[][] = [];
+
   const head = mount(opened).querySelector<HTMLButtonElement>(
     ".ui-code-card button[data-file-ref]",
   );
+
   assert.ok(head, "the code card's head opens the file");
   assert.equal(head.textContent, `${PATH}Lines 3–5`);
 

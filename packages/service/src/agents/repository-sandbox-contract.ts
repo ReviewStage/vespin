@@ -1,13 +1,16 @@
 /**
  * repository-sandbox-contract.ts -- where a repository's checkout stands in a sandbox and the variables its scripts read.
  *
- * A leaf of its own, importing only the state folder's leaf, because the coding agent's bounds
+ * A leaf of its own, importing only the state folder's leaf and the
+ * checkout's (`@repo/features/checkout-path`, which the transcript reads a
+ * path into the checkout by), because the coding agent's bounds
  * (`coder-host/bounds.ts`) name the checkout's path and every tool file of
  * the agent reads those bounds: kept in `repository-shell.ts`, the path
  * reached GitHub's App and the auth service with it, and each tool's own
  * bundle carried them.
  */
 
+import { CLOUD_CHECKOUT_PATH } from "@repo/features/checkout-path";
 import { SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 
 /**
@@ -20,7 +23,7 @@ import { SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 export const REPOSITORY_SANDBOX_CONTRACT = {
   PATH: {
     WORKSPACE: "/workspace",
-    CHECKOUT: "/workspace/repository",
+    CHECKOUT: CLOUD_CHECKOUT_PATH,
     CHECKOUT_RECORD: `${SANDBOX_STATE_FOLDER}/repository`,
     /** What the workspace's cloud setup scripts printed as the sandbox was created, and how they exited. */
     SETUP_LOG: "/tmp/vespin-setup.log",
@@ -34,45 +37,9 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     URL: "APP_CLONE_URL",
     /** The model's command, which bash reads from the variable and never from shell text. */
     COMMAND: "APP_COMMAND",
-    /** Set on the run that brings a checkout a repository snapshot holds up to its branch; its presence is what makes a run the refresh. */
-    REFRESH: "APP_REFRESH",
-    /** The folder under the workspace an extra repository's checkout is cloned into; its presence is what makes a run an extra's clone. */
+    /** The folder under the workspace a workspace drive's repository stands in. */
     FOLDER: "APP_CHECKOUT_FOLDER",
+    /** The folders a workspace drive keeps, one `owner/name` a line; its presence is what makes a run the drive's prune. */
+    KEEP: "APP_KEEP_FOLDERS",
   },
 } as const;
-
-/** The folders under the workspace an extra checkout never takes: the agent's own checkout's and the state folder. */
-const TAKEN_FOLDERS = new Set(
-  [REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT.split("/").pop(), SANDBOX_STATE_FOLDER].map((folder) =>
-    folder?.toLowerCase(),
-  ),
-);
-
-/**
- * Where each repository an agent works in beside its own is checked out, in
- * the order given: `/workspace/<name>`, by the repository's name, or
- * `/workspace/<owner>-<name>` where another of them shares its name in any
- * case, or the name is a folder the workspace already holds, and that with
- * its place in the list after it where even that is taken. Note that the
- * folder is spliced into the launch's shell text (`sandbox-machine.ts`),
- * which is safe because an `owner/name` is held to GitHub's own letters,
- * digits, dots, underscores, and hyphens (`GITHUB_REPOSITORY_PATTERN`).
- */
-export function extraCheckoutPaths(repositories: readonly string[]): readonly string[] {
-  const nameOf = (repository: string) => repository.split("/").pop() ?? repository;
-  const named = repositories.map((repository) => nameOf(repository).toLowerCase());
-  const taken = new Set(TAKEN_FOLDERS);
-  return repositories.map((repository, index) => {
-    const name = nameOf(repository);
-    const shared = named.filter((each) => each === name.toLowerCase()).length > 1;
-    const candidates = [
-      ...(shared ? [] : [name]),
-      repository.replace("/", "-"),
-      `${repository.replace("/", "-")}-${index + 1}`,
-    ];
-    const folder =
-      candidates.find((candidate) => !taken.has(candidate.toLowerCase())) ?? candidates.at(-1);
-    taken.add(folder?.toLowerCase());
-    return `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${folder}`;
-  });
-}

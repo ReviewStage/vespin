@@ -39,9 +39,12 @@ function draw(element: React.ReactElement): void {
 function answers(): string[] {
   const card = document.querySelector('[role="dialog"]') ?? assert.fail("no dialog");
   const body = card.querySelector('[data-slot="dialog-body"]');
-  return [...card.querySelectorAll("button")]
-    .filter((each) => !body?.contains(each))
-    .map((each) => each.getAttribute("aria-label") ?? each.textContent ?? "");
+
+  return [...card.querySelectorAll("button")].flatMap((each) =>
+    body?.contains(each) === true
+      ? []
+      : [each.getAttribute("aria-label") ?? each.textContent ?? ""],
+  );
 }
 
 /** The button that says `name`. */
@@ -56,6 +59,7 @@ function button(name: string): HTMLButtonElement {
 /** A dialog that asks to archive a task, its act running once pressed. */
 function Asking(): React.JSX.Element {
   const [running, setRunning] = useState(false);
+
   return createElement(Dialog, {
     open: true,
     title: "Archive Launch plan?",
@@ -77,7 +81,9 @@ function Asking(): React.JSX.Element {
 /** A dialog that only shows a result, put away by its Done. */
 function Showing(): React.JSX.Element | null {
   const [open, setOpen] = useState(true);
+
   if (!open) return null;
+
   return createElement(Dialog, {
     open: true,
     title: "Webhook secret",

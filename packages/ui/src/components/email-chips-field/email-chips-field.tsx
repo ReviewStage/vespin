@@ -68,20 +68,26 @@ export interface EmailChip {
  */
 function endsAddress(words: string): boolean {
   if (words.lastIndexOf("<") > words.lastIndexOf(">")) return false;
+
   if ((words.split('"').length - 1) % 2 === 1) return false;
   const last = words.at(-1);
+
   if (last === "," || last === ";") return true;
+
   if (last === undefined || last.trim() !== "") return false;
   const kept = words.trimEnd();
+
   const lastWord = kept.slice(
     Math.max(kept.lastIndexOf(" "), kept.lastIndexOf("\t"), kept.lastIndexOf("\n")) + 1,
   );
+
   return lastWord.includes("@");
 }
 
 /** Whether pasted words hold more than one word, a list or a To line, rather than part of one address. */
 function pastedList(pasted: string): boolean {
   const kept = pasted.trim();
+
   return [" ", "\t", "\n", ",", ";"].some((mark) => kept.includes(mark));
 }
 
@@ -113,6 +119,7 @@ function AddressChip({
   disabled: boolean;
 }): React.JSX.Element {
   const wrong = chip.state === EMAIL_CHIP_STATE.BAD || chip.state === EMAIL_CHIP_STATE.REFUSED;
+
   const mark = {
     [EMAIL_CHIP_STATE.DRAFT]: <Avatar name={chip.words} size={AVATAR_SIZE.INLINE} decorative />,
     [EMAIL_CHIP_STATE.BAD]: <AlertIcon />,
@@ -120,6 +127,7 @@ function AddressChip({
     [EMAIL_CHIP_STATE.SENDING]: null,
     [EMAIL_CHIP_STATE.SENT]: <CheckIcon />,
   }[chip.state];
+
   const tone = {
     [EMAIL_CHIP_STATE.DRAFT]: undefined,
     [EMAIL_CHIP_STATE.BAD]: STATUS_TONE.DANGER,
@@ -127,7 +135,9 @@ function AddressChip({
     [EMAIL_CHIP_STATE.SENDING]: STATUS_TONE.WORKING,
     [EMAIL_CHIP_STATE.SENT]: STATUS_TONE.COMPLETE,
   }[chip.state];
+
   const words = <ChipName>{chip.words}</ChipName>;
+
   // Note that what was sent, or is on its way, is no longer this field's to lift, nor is anything while the field is still.
   if (disabled || !(wrong || chip.state === EMAIL_CHIP_STATE.DRAFT)) {
     return (
@@ -142,6 +152,7 @@ function AddressChip({
       </StaticChip>
     );
   }
+
   return (
     <Chip
       look={CHIP_LOOK.PILL}
@@ -195,23 +206,29 @@ export function EmailChipsField({
 
   const take = (words: string) => {
     onTyped("");
+
     if (words.trim() !== "") onAdd(words);
   };
+
   // Note that the caret comes back to the words once a chip is lifted, since the chip that held focus is gone.
   const lift = (chip: EmailChip) => {
     onRemove(chip.id);
     words.current?.focus();
   };
+
   const edit = (chip: EmailChip) => {
     lift(chip);
     onTyped(chip.typed);
   };
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (isComposingKey(event)) return;
     const blank = typed.trim() === "";
+
     if (event.key === "Enter") {
       event.preventDefault();
       take(typed);
+
       if (blank || event.metaKey || event.ctrlKey) onSubmit?.();
     } else if (event.key === "Tab" && !blank) {
       // Note that Tab with nothing typed goes on to the next control, as it would from any field.
@@ -219,16 +236,20 @@ export function EmailChipsField({
       take(typed);
     } else if (event.key === "Backspace" && typed === "") {
       const last = chips.at(-1);
+
       const locked =
         last?.state === EMAIL_CHIP_STATE.SENDING || last?.state === EMAIL_CHIP_STATE.SENT;
+
       if (last === undefined || locked) return;
       event.preventDefault();
       edit(last);
     }
   };
+
   // Note that a paste of part of one address is the browser's own, and a list replaces what is selected and lands as chips at once.
   const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
     const pasted = event.clipboardData.getData("text");
+
     if (!pastedList(pasted)) return;
     event.preventDefault();
     const { selectionStart, selectionEnd } = event.currentTarget;
@@ -275,6 +296,7 @@ export function EmailChipsField({
         aria-invalid={field?.["aria-invalid"]}
         onChange={(event) => {
           const words = event.target.value;
+
           if (endsAddress(words)) take(words);
           else onTyped(words);
         }}

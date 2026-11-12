@@ -57,6 +57,7 @@ async function mount(asks: readonly MacCommandAsk[]): Promise<MacCommandAnswer[]
   fakeActPort({
     [ACT_KIND.MAC_COMMAND_ANSWER]: (payload) => {
       answered.push(payload);
+
       return Promise.resolve();
     },
   });
@@ -64,7 +65,9 @@ async function mount(asks: readonly MacCommandAsk[]): Promise<MacCommandAnswer[]
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(MacCommandAskDialog))));
+
   if (asks.length > 0) await vi.waitFor(() => assert.equal(promptStands(), true));
+
   return answered;
 }
 
@@ -169,6 +172,7 @@ test("an ask main drops fades its card out in place, its words as they were, bef
     ...fakeAppBridgeCalls(),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       push = heard;
+
       return () => undefined;
     },
     requestAppState: () => Promise.resolve(snapshot),

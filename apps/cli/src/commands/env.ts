@@ -53,6 +53,7 @@ function namesAnswer(
   said: readonly string[],
 ) {
   const variables = found.variables.map(({ name, updatedAt }) => ({ name, updatedAt }));
+
   return answer({
     json: { workspaceId, variables },
     lines: [
@@ -71,9 +72,11 @@ const listCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const found = yield* askService(hosted.workspaceEnvironment.list, {
       workspaceId: workspace.id,
     });
+
     yield* namesAnswer(workspace.id, found, []);
   }),
 ).pipe(
@@ -89,12 +92,14 @@ const setCommand = Command.make("set", { name: NAME_ARGUMENT }, ({ name }) =>
     const { workspace } = yield* resolveWorkspace;
     const value = yield* readSecret(`Value of ${checked} (not shown):`);
     const { hosted } = yield* session;
+
     const found = yield* askService(
       hosted.workspaceEnvironment.put,
       { workspaceId: workspace.id, name: checked, value },
       HOSTED_DEADLINE.USUAL,
       NOT_PERMITTED_WORDS,
     );
+
     yield* namesAnswer(workspace.id, found, [`Set ${checked}.`]);
   }),
 ).pipe(
@@ -133,12 +138,14 @@ const deleteCommand = Command.make(
         yes,
       );
       const { hosted } = yield* session;
+
       const found = yield* askService(
         hosted.workspaceEnvironment.delete,
         { workspaceId: workspace.id, name: checked },
         HOSTED_DEADLINE.USUAL,
         NOT_PERMITTED_WORDS,
       );
+
       yield* namesAnswer(workspace.id, found, [`Deleted ${checked}.`]);
     }),
 ).pipe(

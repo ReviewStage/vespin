@@ -26,6 +26,7 @@ export function replayMotion(
   // gone before it is set again, which is what starts it anew.
   void element.offsetWidth;
   element.setAttribute(attribute, value);
+
   // Note that every animation inside it ending bubbles here too, as a pulse
   // of a button in a card does, so only the mover's takes the answer away.
   const ended = (event: Event) => {
@@ -33,5 +34,6 @@ export function replayMotion(
     element.removeAttribute(attribute);
     element.removeEventListener("animationend", ended);
   };
+
   element.addEventListener("animationend", ended);
 }

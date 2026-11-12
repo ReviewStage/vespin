@@ -112,6 +112,7 @@ const TRIP_PHASE = {
   CLAIMED: "claimed",
   WITHDRAWN: "withdrawn",
 } as const;
+
 type TripPhase = (typeof TRIP_PHASE)[keyof typeof TRIP_PHASE];
 
 /** One trip's state, from the press until its scope closes. */
@@ -151,6 +152,7 @@ function withdraw<Grant>(trip: Trip<Grant>): void {
 
 function loopbackState(prefix: string | undefined): string {
   const random = randomBytes(32).toString("base64url");
+
   return prefix ? `${prefix}.${random}` : random;
 }
 
@@ -160,6 +162,7 @@ function parameter(
   name: string,
 ): string | undefined {
   const value = parameters[name];
+
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -186,11 +189,13 @@ const serveConsent = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<number | undefined, never, Scope.Scope> {
   for (const port of ports) {
     const node = yield* Effect.sync(() => createServer());
+
     // The loopback answers this machine alone: the provider's redirect lands
     // in the user's own browser, which hands the code back across localhost.
     const bound = yield* Effect.result(
       NodeHttpServer.make(() => node, { port, host: LOOPBACK_HOST }),
     );
+
     if (Result.isFailure(bound)) continue;
     const server = bound.success;
     yield* Effect.provideService(HttpServer.serveEffect(app), HttpServer.HttpServer, server);
@@ -205,8 +210,10 @@ const serveConsent = /* @__PURE__ */ Effect.fnUntraced(function* (
     // finalizer runs ahead of the server's own close because it was added
     // after it.
     yield* Effect.addFinalizer(() => Effect.sync(() => node.closeAllConnections()));
+
     return NetAddress.isInetAddress(server.address) ? server.address.port : undefined;
   }
+
   return undefined;
 });
 
@@ -245,8 +252,10 @@ export function loopbackConsent<Grant extends object>(
     if (options.isOnline?.() === false) {
       return { reason: SHARED_REASON.OFFLINE, failure: SIGN_IN_FAILURE.OFFLINE };
     }
+
     const codeVerifier = createCodeVerifier();
     const state = loopbackState(options.statePrefix);
+
     // The trip is cancel's from here, before anything is bound.
     const trip: Trip<Grant> = {
       phase: TRIP_PHASE.PREPARING,
@@ -254,6 +263,7 @@ export function loopbackConsent<Grant extends object>(
       page: undefined,
       settled: yield* Deferred.make<LoopbackConsentOutcome<Grant>>(),
     };
+
     current = trip;
     // Assigned once a port has bound, before the browser is opened — no
     // request can arrive ahead of it.
@@ -263,15 +273,19 @@ export function loopbackConsent<Grant extends object>(
       parameters: Readonly<Record<string, string | Array<string>>>,
     ) {
       if (parameter(parameters, "state") !== state) return NOT_FOUND;
+
       // Note that a withdrawn trip still listens while the browser is being
       // opened, because the open is foreign code the trip waits out; a
       // redirect landing then is a door already closed, refused before any
       // code is exchanged for a grant nobody would keep.
       if (isWithdrawn(trip)) return NOT_FOUND;
+
       if (trip.phase === TRIP_PHASE.CLAIMED) {
         return card(RESPONSE_STATUS.ALREADY_USED, LOOPBACK_PAGE_TONE.COMPLETE, ALREADY_USED_CARD);
       }
+
       trip.phase = TRIP_PHASE.CLAIMED;
+
       // The landing card is the last thing the sign-in shows, so the trip is
       // settled only once the card has been written: this finalizer runs when
       // the request's own scope closes, which is after the last byte, and the
@@ -285,9 +299,11 @@ export function loopbackConsent<Grant extends object>(
         reason: options.reasons.refused,
         failure: SIGN_IN_FAILURE.REFUSED,
       };
+
       yield* Effect.addFinalizer(() => Deferred.succeed(trip.settled, outcome));
       const refused = parameter(parameters, "error");
       const code = parameter(parameters, "code");
+
       if (!refused && code) {
         outcome = yield* options.exchange({
           code,
@@ -297,14 +313,18 @@ export function loopbackConsent<Grant extends object>(
           clientId: parameter(parameters, "client_id"),
         });
       }
+
       const granted = !("reason" in outcome);
+
       // Note that a continuation is read only off a grant, and asked of the
       // flow inside this request, because the browser waits on the answer.
       const next =
         "reason" in outcome || !options.continueTo ? undefined : yield* options.continueTo(outcome);
+
       if (next !== undefined) {
         return HttpServerResponse.redirect(next, { status: RESPONSE_STATUS.SEE_OTHER });
       }
+
       return card(
         RESPONSE_STATUS.ANSWERED,
         granted ? LOOPBACK_PAGE_TONE.COMPLETE : LOOPBACK_PAGE_TONE.ATTENTION,
@@ -319,17 +339,22 @@ export function loopbackConsent<Grant extends object>(
     const app = Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
       const url = HttpServerRequest.toURL(request);
+
       if (Option.isNone(url) || url.value.pathname !== options.callbackPath) return NOT_FOUND;
+
       return yield* callback(HttpServerRequest.searchParamsFromURL(url.value));
     });
+
     const port = yield* serveConsent(app, options.ports ?? [EPHEMERAL_PORT], () => {
       trip.arrived = true;
     });
+
     if (port === undefined) return { reason: SHARED_REASON.UNAVAILABLE };
     redirectUri = `http://${LOOPBACK_HOST}:${port}${options.callbackPath}`;
     // The digest suspends, so it is taken here, after the cancel door is armed
     // and before the phase is read below: a press given while it ran is read.
     const challenge = yield* Effect.result(codeChallenge(codeVerifier));
+
     if (Result.isFailure(challenge)) {
       return {
         reason: isWithdrawn(trip) ? LOOPBACK_CONSENT_CANCELED : SHARED_REASON.CHALLENGE,
@@ -342,6 +367,7 @@ export function loopbackConsent<Grant extends object>(
     // has been waiting its turn since before the bind would otherwise still
     // be queued when the trip walked past this line and opened the browser.
     yield* Effect.yieldNow;
+
     if (isWithdrawn(trip)) return { reason: LOOPBACK_CONSENT_CANCELED };
 
     const authorizationUrl = options.authorizationUrl({
@@ -349,16 +375,20 @@ export function loopbackConsent<Grant extends object>(
       redirectUri,
       codeChallenge: challenge.success,
     });
+
     trip.page = authorizationUrl;
+
     // Composing the page runs the flow's own callback, which is foreign code
     // this module hands the trip's step to: a press it let through — a fiber
     // it woke, a window it drew — is a cancel given before there was ever a
     // tab, so the browser is not opened on it.
     if (isWithdrawn(trip)) return { reason: LOOPBACK_CONSENT_CANCELED };
     trip.phase = TRIP_PHASE.WAITING;
+
     const opened = yield* Effect.result(
       Effect.tryPromise(() => Promise.resolve(options.openExternal(authorizationUrl))),
     );
+
     // A page that never opened is a trip nobody can complete, and saying
     // so beats waiting out the timeout on a tab that does not exist.
     if (Result.isFailure(opened)) {
@@ -394,6 +424,7 @@ export function loopbackConsent<Grant extends object>(
         ),
       ),
     );
+
     return yield* Deferred.await(trip.settled);
   });
 
@@ -423,6 +454,7 @@ export function loopbackConsent<Grant extends object>(
     },
     reopen(): void {
       const page = current?.page;
+
       if (page === undefined) return;
       void Promise.resolve(options.openExternal(page)).catch(() => undefined);
     },

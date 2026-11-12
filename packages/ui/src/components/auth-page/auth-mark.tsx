@@ -59,7 +59,9 @@ type AuthMarkParty =
 /** The ring's artwork for `party`. */
 function partyArt({ provider, mcpClient }: AuthMarkParty): React.JSX.Element {
   if (mcpClient === true) return <McpIcon />;
+
   if (provider === undefined) return <ProductMark inherit />;
+
   return <ProviderMark provider={provider} size={PROVIDER_MARK_SIZE.SLOT} />;
 }
 
@@ -72,6 +74,7 @@ export function AuthMark({
   tone?: LandingTone | undefined;
 }): React.JSX.Element {
   const Glyph = tone === undefined ? undefined : BADGE_GLYPH[tone];
+
   return (
     <span className="ui-auth-ring relative inline-grid place-items-center size-auth-ring box-border border border-border rounded-ui-full bg-surface text-foreground">
       {partyArt(party)}

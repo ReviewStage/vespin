@@ -52,12 +52,14 @@ function matchesOf(address: string) {
     createMemoryHistory({ initialEntries: ["/app"] }),
     new QueryClient(),
   );
+
   return router.matchRoutes(new URL(address, "https://panel.invalid").pathname);
 }
 
 /** Whether Back may go to a step at `address`. */
 function stepStands(address: string, access = ACCESS, there = THERE): boolean {
   const search = new URL(address, "https://panel.invalid").searchParams;
+
   return routedStepStands(matchesOf(address), search, access, there);
 }
 
@@ -144,6 +146,7 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
       ],
     })),
   };
+
   assert.equal(stepStands(address, descriptionsOn, THERE), true, "it stands while there");
   assert.equal(stepStands(address, descriptionsOn, { ...THERE, ...gone }), false);
 });
@@ -151,6 +154,7 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
 test("each place over the plan names its step for itself, and Admin's as the place under it", () => {
   const task = { ...DOCUMENT_TASK, id: TASK_ID, name: "Auth refactor" };
   const base = tasksControl({ tasks: [task] });
+
   const titled = (
     overrides: Parameters<typeof tasksControl>[0],
     place: keyof typeof ROUTED_PLACE,

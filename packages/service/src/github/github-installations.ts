@@ -186,6 +186,7 @@ const upsertInstallation = SqlSchema.findOneOption({
   Result: Schema.Struct({ installationId: Schema.Number }),
   execute: (row) => {
     const sameWorkspace = eq(githubInstallation.organizationId, row.organizationId);
+
     return Database.use((db) =>
       db
         .insert(githubInstallation)
@@ -338,6 +339,7 @@ export function createConnectIntent(
       expiresAt: DateTime.toDateUtc(DateTime.addDuration(now, INTENT_LIFETIME)),
       now: DateTime.toDateUtc(now),
     });
+
     return state;
   });
 }
@@ -383,10 +385,13 @@ export function linkInstallation(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const { suspended, ...ids } = installation;
+
     const status = suspended
       ? GITHUB_INSTALLATION_STATUS.SUSPENDED
       : GITHUB_INSTALLATION_STATUS.ACTIVE;
+
     const written = yield* upsertInstallation({ organizationId, ...ids, status, now });
+
     return Option.isSome(written) ? LINK_OUTCOME.LINKED : LINK_OUTCOME.ALREADY_CONNECTED;
   });
 }
@@ -404,11 +409,14 @@ export function linkInstallationAs(
 ): Effect.Effect<LinkOutcome, StoreFailure, DatabaseServices> {
   const checked = Effect.gen(function* () {
     const standing = yield* lockMemberRole({ userId, organizationId });
+
     if (Option.isNone(standing) || !GITHUB_CONNECT_ROLES.has(roleOf(standing.value.role))) {
       return LINK_OUTCOME.NOT_PERMITTED;
     }
+
     return yield* linkInstallation(organizationId, installation);
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(checked));
 }
 

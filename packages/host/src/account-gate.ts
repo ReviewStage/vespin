@@ -28,6 +28,7 @@ export interface GateClosed {
 /** Why the service may not be asked now: a run that sends nothing, or no account behind the gate; none where it may. */
 export function closedBy({ kernel, account }: AccountGateDependencies): string | undefined {
   if (!kernel.runMode.sendsNetwork) return GATE_CLOSED_BY.NO_NETWORK;
+
   return account.capabilitiesActive() ? undefined : GATE_CLOSED_BY.NO_ACCOUNT;
 }
 
@@ -50,6 +51,7 @@ export function askedOf(dependencies: AccountGateDependencies, http: HttpClient.
     call: Effect.Effect<Answer, never, HttpClient.HttpClient>,
   ): Effect.Effect<Answer | GateClosed> => {
     const by = closedBy(dependencies);
+
     return by === undefined
       ? Effect.provideService(call, HttpClient.HttpClient, http)
       : Effect.succeed(gateClosed(by));

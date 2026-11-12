@@ -34,5 +34,6 @@ export function usePullRequestsOnGitHub(): boolean {
 /** Whether a press on a pull request opens its page on GitHub, read as the press lands, for a callback that cannot wait a render. */
 export function pullRequestsOnGitHubNow(client: QueryClient): boolean {
   const state = appStateIn(client);
+
   return state !== undefined && selectPullRequestsOnGitHub(state);
 }

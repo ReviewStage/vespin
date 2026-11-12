@@ -192,6 +192,7 @@ const STANDINGS: Readonly<Record<string, AppHostRead<AppLinkStanding>>> = Object
 /** Main's document holding the plan in Acme, with what the host holds of each page read through Acme, whether or not it is drawn. */
 function stateWith(workspace: Workspace): AppStateSnapshot {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
+
   return {
     ...snapshot,
     tasks: { ...IDLE_TASKS_VIEW, tasks: [TASK], workspaces: [workspace] },
@@ -238,10 +239,12 @@ async function drawnOnPage(children: ReactNode, workspace: Workspace, page = PAG
     requestAppState: () => Promise.resolve(state),
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       asked.push(request);
+
       // A link's standing is held quietly, as the host holds one, what it holds already on the document.
       if (request.kind === ACT_KIND.TASKS_LINK_STANDING_FOLLOW) {
         return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
       }
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
     },
   });
@@ -262,6 +265,7 @@ async function drawnOnPage(children: ReactNode, workspace: Workspace, page = PAG
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return { container, asked };
 }
 
@@ -285,6 +289,7 @@ function chips(container: HTMLElement): [string | null, string | null, string | 
 function issueChips(container: HTMLElement): (string | null | undefined)[][] {
   return [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].map((chip) => {
     const mark = chip.querySelector<SVGElement>("[data-issue-mark]");
+
     return [
       chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
       chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
@@ -442,6 +447,7 @@ const CHIP_CARD = ".ui-tooltip-card :is([data-mention-card], [data-pull-request-
 /** The card a chip hangs, once the pointer rests on the chip. */
 function cardOf(chip: Element): Element | undefined {
   restOn(chip);
+
   return [...document.querySelectorAll(CHIP_CARD)].at(-1);
 }
 
@@ -449,13 +455,16 @@ function cardOf(chip: Element): Element | undefined {
 function cardHead(chip: Element | undefined): [string | undefined, string | undefined] {
   assert.ok(chip, "the link is drawn as its chip");
   const card = cardOf(chip);
+
   const head: [string | undefined, string | undefined] = [
     card?.querySelector(".ui-hover-card-sub")?.textContent ?? undefined,
     card?.querySelector(".ui-hover-card-corner")?.textContent ?? undefined,
   ];
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return head;
 }
 
@@ -463,20 +472,26 @@ function cardHead(chip: Element | undefined): [string | undefined, string | unde
 function cardNotes(chip: Element | undefined): (string | null)[] {
   assert.ok(chip, "the link is drawn as its chip");
   const card = cardOf(chip);
+
   const notes = [...(card?.querySelectorAll(".ui-hover-card-note, .ui-hover-card-row") ?? [])].map(
     readable,
   );
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return notes;
 }
 
 /** A card's line as a reader hears it: its words without what is hidden from them, a face's letter and a glyph. */
 function readable(note: Element): string | null {
   const words = note.cloneNode(true);
+
   if (!(words instanceof Element)) return note.textContent;
+
   for (const hidden of words.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+
   return words.textContent;
 }
 
@@ -485,13 +500,16 @@ function openerFace(chip: Element | undefined): [string | undefined, string | nu
   assert.ok(chip, "the link is drawn as its chip");
   const card = cardOf(chip);
   const mark = card?.querySelector<HTMLElement>(".ui-hover-card-row .actor-mark");
+
   const face: [string | undefined, string | null | undefined] = [
     mark?.dataset.kind,
     mark?.querySelector("img")?.getAttribute("src"),
   ];
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return face;
 }
 
@@ -500,6 +518,7 @@ test("a pull request's and an issue's cards say who opened them, as the workspac
     `Lands after ${MERGED}, and see ${OPEN_ISSUE}, ${SHELVED_ISSUE}, and ${UNREACHED}.`,
     ACME_WITH_GITHUB,
   );
+
   const [pullRequest, opened, shelved, unreached] =
     container.querySelectorAll("[data-mention-ref]");
 
@@ -532,12 +551,15 @@ test("a pull request's and an issue's cards say who opened them, as the workspac
 function cardLabels(chip: Element | undefined): (string | null)[] {
   assert.ok(chip, "the link is drawn as its chip");
   const card = cardOf(chip);
+
   const labels = [
     ...(card?.querySelectorAll<HTMLElement>('ul[aria-label="Labels"] > li') ?? []),
   ].map((label) => label.textContent);
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return labels;
 }
 
@@ -546,6 +568,7 @@ test("a pull request's card names its labels, and one read from an older service
     `Lands after ${MERGED} and ${OLDER_SERVICE}.`,
     ACME_WITH_GITHUB,
   );
+
   const [whole, older] = container.querySelectorAll("[data-mention-ref]");
 
   assert.deepEqual(cardLabels(whole), ["service", "not a color"]);
@@ -596,6 +619,7 @@ test("a pull request's chip whose place knows no more than its line hangs the ca
     state: PULL_REQUEST_STATE.MERGED,
     checks: CHECK_SUMMARY.PASSING,
   };
+
   const { container } = await drawnOnPage(
     createElement(PullRequestChip, {
       pullRequest,

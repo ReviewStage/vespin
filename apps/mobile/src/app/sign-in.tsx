@@ -28,6 +28,7 @@ export default function SignInScreen() {
   const acts = useHostActs();
   const [opening, setOpening] = useState<AccountProvider | undefined>(undefined);
   const [failure, setFailure] = useState<SignInFailure | undefined>(undefined);
+
   const signIn = (provider: AccountProvider) => {
     setOpening(provider);
     setFailure(undefined);
@@ -40,6 +41,7 @@ export default function SignInScreen() {
       )
       .finally(() => setOpening(undefined));
   };
+
   return (
     <Screen>
       <AuthPage

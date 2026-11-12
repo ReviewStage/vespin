@@ -46,6 +46,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -165,6 +166,7 @@ function foldWithActions(pressed: string[], menuHost: HTMLElement): ReactElement
 function drawWithActions(pressed: string[]): HTMLElement {
   const menuHost = document.body.appendChild(document.createElement("div"));
   const container = render(foldWithActions(pressed, menuHost));
+
   return container;
 }
 
@@ -227,6 +229,7 @@ test("a box beside the summary still checks, and a press on the row's bare groun
 
 test("a lead stands before the summary, and a press on the row reaches its holder", () => {
   const stood: string[] = [];
+
   const container = render(
     createElement(Disclosure, {
       look: DISCLOSURE_LOOK.CARD,
@@ -235,6 +238,7 @@ test("a lead stands before the summary, and a press on the row reaches its holde
       children: createElement(DisclosureSummary, { look: DISCLOSURE_SUMMARY.HEAD, children: "M" }),
     }),
   );
+
   const lead = find(".fold");
   assert.equal(
     lead.compareDocumentPosition(summaryOf(container)) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -250,6 +254,7 @@ test("a lead stands before the summary, and a press on the row reaches its holde
       }),
     }),
   );
+
   const copy = held.querySelector<HTMLElement>(".copy") ?? assert.fail("a copy");
   act(() => copy.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
   act(() => summaryOf(held).dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
@@ -267,6 +272,7 @@ test("a row summary stays out of the tab order, and folds on a press", () => {
       }),
     }),
   );
+
   const summary = root.querySelector("summary") ?? assert.fail("the summary stands");
   assert.equal(summary.tabIndex, -1);
   assert.equal(summary.getAttribute("aria-expanded"), "true");
@@ -296,6 +302,7 @@ test("a card's head draws its body only once a press opens it", () => {
       ],
     }),
   );
+
   const card = root.querySelector("[aria-label='To-dos']") ?? assert.fail("the card stands");
   const summary = card.querySelector("summary") ?? assert.fail("the head stands");
   assert.equal(card.textContent, "2 of 5 done");

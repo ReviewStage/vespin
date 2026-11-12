@@ -37,9 +37,11 @@ import { enrollOwnDevice, hostBySecret, hostsOf, removeHost } from "../host-stor
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -47,6 +49,7 @@ const openAccounts = Effect.gen(function* () {
 const opened = Effect.gen(function* () {
   const userCode = randomUUID();
   const pollSecretHash = `poll-${randomUUID()}`;
+
   const kept = yield* openHostPairing({
     pollSecretHash,
     userCode,
@@ -56,7 +59,9 @@ const opened = Effect.gen(function* () {
     version: "0.1.0",
     ip: "203.0.113.7",
   });
+
   assert.ok(Option.isSome(kept));
+
   return { userCode, pollSecretHash };
 });
 
@@ -75,6 +80,7 @@ it.layer(getTestDB())("a box's pairings", (it) => {
         const approve = yield* approveHostPairing(owner, approved.userCode, deviceId);
         const deny = yield* denyHostPairing(owner, denied.userCode);
         const afterwards = [];
+
         for (const { userCode } of [approved, denied]) {
           afterwards.push(
             yield* readHostPairing(other, userCode),
@@ -101,12 +107,14 @@ it.layer(getTestDB())("a box's pairings", (it) => {
   it.effect("an approve under the id of a device that stands fails, and writes nothing", () =>
     Effect.gen(function* () {
       const { owner, other } = yield* openAccounts;
+
       const standing = {
         id: randomUUID(),
         version: "0.1.0",
         secretHash: `secret-${randomUUID()}`,
         machine: { name: "theirs", platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
       };
+
       yield* enrollOwnDevice(other, standing);
       const pairing = yield* opened;
 
@@ -176,6 +184,7 @@ it.layer(getTestDB())("a box's pairings", (it) => {
           (yield* hostsOf(owner)).map((host) => host.id).sort(),
           [collectedId, liveId].sort(),
         );
+
         const kept = yield* db
           .select({ ip: hostPairing.ip })
           .from(hostPairing)
@@ -186,11 +195,14 @@ it.layer(getTestDB())("a box's pairings", (it) => {
               pending.pollSecretHash,
             ]),
           );
+
         assert.deepEqual(kept, []);
+
         const windows = yield* db
           .select({ userId: hostPairingGuess.userId })
           .from(hostPairingGuess)
           .where(inArray(hostPairingGuess.userId, [owner, other]));
+
         assert.deepEqual(windows, [{ userId: owner }]);
         assert.equal((yield* readHostPairing(owner, livePending.userCode)).guess, "found");
         assert.equal(

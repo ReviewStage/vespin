@@ -31,8 +31,10 @@ const FUNNEL = page("3c1d2e4f-5a6b-4c7d-8e9f-0a1b2c3d4e51", "Invite funnel");
 const MOCKUP = page("3c1d2e4f-5a6b-4c7d-8e9f-0a1b2c3d4e52", "Invite email mockup");
 
 let root: Root | undefined;
+
 /** What the window handed main's clipboard. */
 let copied: string[] = [];
+
 /** The links the window opened in tabs of their own, as a browser's does. */
 let tabbed: string[] = [];
 
@@ -52,8 +54,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountResult = { host: HTMLElement; opened: string[] };
+
 /** The task's Pages group over `pages`, its links written under a workspace, every page opened recorded. */
-function mount(pages: readonly PageLine[]): { host: HTMLElement; opened: string[] } {
+function mount(pages: readonly PageLine[]): MountResult {
   const opened: string[] = [];
   const host = document.createElement("div");
   document.body.append(host);
@@ -74,20 +78,24 @@ function mount(pages: readonly PageLine[]): { host: HTMLElement; opened: string[
       ),
     ),
   );
+
   return { host, opened };
 }
 
 /** The menu standing open, its items' words. */
 function menuItems(): HTMLElement[] {
   const menu = document.querySelector('[role="menu"]:not([data-leaving])');
+
   return [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
 }
 
 test("a page's ⋯ offers Copy link, and pages chosen together open in tabs of their own and copy every link chosen, in the group's order", async () => {
   const { host, opened } = mount([FUNNEL, MOCKUP]);
   const rows = [...host.querySelectorAll('[aria-label="Pages"] li')];
+
   const rowOf = (title: string) =>
     rows.find((row) => row.textContent?.includes(title)) ?? assert.fail(`${title} is listed`);
+
   const moreOf = (title: string) =>
     rowOf(title).querySelector<HTMLButtonElement>('button[aria-label="Page actions"]') ??
     assert.fail(`${title} draws a ⋯`);
@@ -104,8 +112,10 @@ test("a page's ⋯ offers Copy link, and pages chosen together open in tabs of t
       const box = rowOf(title).querySelector<HTMLElement>('[role="checkbox"]');
       act(() => (box ?? assert.fail(`${title} draws its box`)).click());
     }
+
     act(() => moreOf(MOCKUP.title).click());
   };
+
   chooseBoth();
   assert.deepEqual(opened, [], "choosing opens nothing");
   const menu = document.querySelector('[role="menu"]:not([data-leaving])');

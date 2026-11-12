@@ -42,6 +42,7 @@ const openAgent = Effect.gen(function* () {
     .insert(user)
     .values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -52,8 +53,10 @@ const openAgent = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
-  assert.ok(started._tag === "Some");
+
+  assert.ok(Option.isSome(started));
   const { agent } = started.value;
+
   return { agentId: agent.id, target: { userId, conversationId: agent.conversationId } };
 });
 
@@ -101,6 +104,7 @@ const awaitedOf = (target: ConversationTarget) =>
 const started = (target: ConversationTarget, turnId: string, attempt: number) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: {} });
+
     return yield* writer.consume(target, {
       kind: RUN_EVENT.TURN_STARTED,
       conversationId: sessionKey(target.conversationId),
@@ -122,6 +126,7 @@ const ended = (
 ) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: {} });
+
     return yield* writer.consume(target, {
       kind: RUN_EVENT.TURN_ENDED,
       conversationId: sessionKey(target.conversationId),
@@ -282,11 +287,13 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         const [opened] = yield* turnsOf(target);
         assert.ok(opened !== undefined);
         yield* started(target, opened.id, 1);
+
         const snapshot = {
           commit: "0123456789abcdef0123456789abcdef01234567",
           head: "89abcdef0123456789abcdef0123456789abcdef",
           branch: "feat/invitations",
         };
+
         yield* writer.takeAwaitingLine(target, {
           clientId: sentLineId("first"),
           turnId: opened.id,
@@ -308,6 +315,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
             .from(turns)
             .where(eq(turns.id, opened.id)),
         );
+
         assert.deepEqual(row, snapshot);
       }),
   );
@@ -340,10 +348,12 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         const [running] = yield* turnsOf(runningAgent.target);
         assert.ok(running !== undefined);
         yield* started(runningAgent.target, running.id, 1);
+
         const ours = new Set([
           queuedAgent.target.conversationId,
           runningAgent.target.conversationId,
         ]);
+
         const awaiting = (before: number, now: number) =>
           Effect.map(turnsAwaitingRunner(new Date(before), new Date(now), 1000), (rows) =>
             rows.filter((row) => ours.has(row.conversationId)).map((row) => row.conversationId),
@@ -365,6 +375,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
       Effect.gen(function* () {
         // Note that the clock runs on from the cases before, so every instant is read from where it stands.
         const at = yield* Clock.currentTimeMillis;
+
         const runner = (agentId: string, sandboxName: string) => ({
           agentId,
           sandboxName,
@@ -374,6 +385,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           sandboxSessionId: `sbx-${randomUUID()}`,
           commandId: `cmd-${randomUUID()}`,
         });
+
         const queuedAgent = yield* openAgent;
         yield* sent(queuedAgent.target, "never taken");
         const queuedSandbox = `agent-sandbox-${randomUUID()}`;
@@ -393,6 +405,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           randomUUID(),
           runner(runningAgent.agentId, runningSandbox),
         );
+
         const kept = (now: number) =>
           Effect.map(runningTurnSandboxes(new Date(now), 1000), (names) =>
             names.filter((name) => name === queuedSandbox || name === runningSandbox),
@@ -436,6 +449,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         assert.ok(read !== undefined);
         yield* progressTurns(runningAgent.target.conversationId, 1, at + TURN_DEADLINE.PROGRESS_MS);
         const writer = yield* storeWriter({ tools: {} });
+
         const reaped = yield* settleLapsedTurns(
           writer,
           runningAgent.target.conversationId,
@@ -448,6 +462,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           progressPast.getTime(),
           progressPast.getTime(),
         );
+
         assert.deepEqual(reaped, []);
 
         const pastCap = new Date(at + TURN_DEADLINE.CAP_MS + 1);

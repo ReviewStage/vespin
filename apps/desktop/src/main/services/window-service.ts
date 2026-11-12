@@ -106,11 +106,14 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   const { runMode } = config;
 
   const reporters = new WeakMap<WebContents, string>();
+
   function reporterOf(sender: WebContents): string {
     const held = reporters.get(sender);
+
     if (held) return held;
     const minted = randomUUID();
     reporters.set(sender, minted);
+
     return minted;
   }
 
@@ -142,25 +145,31 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     },
     onRendererGone: (reason) => config.report(`Panel renderer gone: ${reason}`),
   });
+
   /** What stops a development build's renderer errors reaching the terminal; nothing until the start begins it. */
   let stopRendererErrors = (): void => undefined;
 
   /** Electron's own `nativeTheme`, the one appearance every window here follows. */
   const withNativeTheme = Effect.provideService(NativeTheme, nativeTheme);
+
   /** The panel windows standing now, the ones a zoom is applied to. */
   const withPanelWindows = Effect.provideService(PanelWindows, {
     standing: () => panels.windows(),
   });
+
   /** The stored zoom, applied to the panels only when it moved. */
   const steerZoom = zoomSteer();
+
   const applyAppearance = (): Effect.Effect<void> =>
     Effect.suspend(() => {
       const stored = state.snapshot().settings?.stored;
+
       return Effect.andThen(
         applyThemePreference(stored?.theme).pipe(withNativeTheme),
         steerZoom(stored?.zoom).pipe(withPanelWindows),
       );
     });
+
   function windowFactsFor(sender: WebContents): AppWindowFacts {
     return { fullScreen: panels.fullScreen(sender) };
   }
@@ -182,11 +191,14 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     const focused = (_event: Electron.Event, window: BrowserWindow) => {
       if (panels.owns(window.webContents)) listener(true);
     };
+
     const blurred = (_event: Electron.Event, window: BrowserWindow) => {
       if (panels.owns(window.webContents)) listener(false);
     };
+
     app.on("browser-window-focus", focused);
     app.on("browser-window-blur", blurred);
+
     return () => {
       app.removeListener("browser-window-focus", focused);
       app.removeListener("browser-window-blur", blurred);
@@ -201,18 +213,23 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
    * back.
    */
   const pendingWaits = new Set<ReturnType<typeof setTimeout>>();
+
   function afterDelay(delayMs: number, run: () => void): void {
     // Nothing new is scheduled once a quit has been asked for, so the last
     // act of a wait that was already running cannot arm the next one behind
     // the teardown that just cleared them.
     if (!launchStanding()) return;
+
     const wait = setTimeout(() => {
       pendingWaits.delete(wait);
+
       if (!launchStanding()) return;
       run();
     }, delayMs);
+
     pendingWaits.add(wait);
   }
+
   function applyLoginItem(openAtLogin: boolean): void {
     if (config.packaged) app.setLoginItemSettings({ openAtLogin });
   }
@@ -231,26 +248,33 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     panels.reconcile();
     panels.focusExpanded();
   };
+
   // An app link's place opens in the panels, the window brought forward.
   const openAppLink = (link: ShownLink): void => {
     panels.focusExpanded();
     panels.broadcast(PUSH.SHOW_LINK, link);
   };
+
   // The Dock tile pressed: the window comes back, whether it was closed or
   // only behind another app.
   const handleActivate = (): void => {
     panels.focusExpanded();
   };
+
   // Named one at a time because Electron's `on` is typed per event name.
   const wake = (eventName: "resume" | "unlock-screen" | "user-did-become-active") => () => {
     handleDisplayChange();
+
     // A terminal's socket may have died in the sleep without a word, and one waiting out a backoff need not wait on.
     if (eventName === "resume") void run(operator.host.terminalWake());
+
     // The devices' beats a window draws were last read before the sleep, so they are read again rather than at the next poll.
     if (eventName === "resume") void run(operator.acts.HOSTS_PRESENCE_FOLLOW.retry(undefined));
+
     // So may the task list's follow; a resume and an unlock landing together seal it again once.
     if (eventName !== "user-did-become-active") void run(operator.host.tasksResync());
   };
+
   const wakeHandlers = {
     resume: wake("resume"),
     "unlock-screen": wake("unlock-screen"),
@@ -269,6 +293,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     reporterOf,
     trustedSender: (event) => {
       const url = event.senderFrame?.url ?? event.sender.getURL();
+
       return url === rendererUrl;
     },
     applyLoginItem,
@@ -277,11 +302,13 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       const badge = config.packaged
         ? undefined
         : devBuildBadge({ instance: config.instance, commit: config.commit });
+
       const bandDockIcon = followDockIcon(
         path.join(config.resourceDirectory, "icon"),
         badge,
         config.report,
       );
+
       // Developer's Show Build Label hides the band and brings it back, so a
       // demo shows no branch.
       const buildLabelMenu = (shown: boolean): BuildLabelMenu => ({
@@ -292,7 +319,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
           config.showMenuBar({ buildLabel: buildLabelMenu(next) });
         },
       });
+
       const settings = await run(operator.ensureSettings());
+
       // A Quit landing inside one of the launch's own waits is already tearing
       // this process down; nothing is opened or armed over it. This check sits
       // after every wait that still has a window behind it.
@@ -301,6 +330,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       // every window is already drawn in the appearance it will keep.
       await run(applyThemePreference(settings?.stored.theme).pipe(withNativeTheme));
       applyLoginItem(settings?.stored.openAtLogin ?? APP_SETTING_SCHEMA.openAtLogin.default);
+
       // macOS is asked now, while the developer is here to answer, rather
       // than as the first agent ends behind the window. Note that it is
       // asked whatever the setting says, because asking posts nothing and
@@ -311,13 +341,16 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       session.defaultSession.protocol.handle(PAGE_SCHEME, (request) =>
         run(pageResponse(request.url, operator.host.tasksPage)),
       );
+
       // A development build writes its windows' errors where the run's own
       // lines go, from before the first window opens, and offers their
       // developer tools; the menu bar draws none in a packaged build. Note
       // that a capture run is offered none either, because its windows are
       // opened without them (`hardenedWebPreferences`).
       if (!config.packaged) stopRendererErrors = reportRendererErrors(config.report);
+
       if (runMode.takesFocus) config.showMenuBar({ developerTools: true });
+
       if (badge !== undefined) config.showMenuBar({ buildLabel: buildLabelMenu(true) });
       // The menu's New Task and ⌘0 bring the window back where it was
       // closed, since no window's keymap stands to answer them then.
@@ -326,6 +359,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
           isPanel: (window) => panels.windows().some((panel) => panel === window),
           onReopen: (command) => {
             panels.focusExpanded();
+
             if (command !== undefined) panels.broadcast(PUSH.MENU_COMMAND, command);
           },
         },
@@ -335,7 +369,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
 
       // A packaged app asks macOS for its own scheme; a live development run gives back a claim stock Electron holds, which would open a bare Electron.
       const linkClaim = appLinkClaim({ packaged: config.packaged, live: runMode.sendsNetwork });
+
       if (linkClaim === APP_LINK_CLAIM.CLAIM) app.setAsDefaultProtocolClient(APP_LINK_SCHEME);
+
       if (linkClaim === APP_LINK_CLAIM.RELEASE) app.removeAsDefaultProtocolClient(APP_LINK_SCHEME);
       app.on("second-instance", handleSecondInstance);
       app.on("activate", handleActivate);
@@ -357,8 +393,10 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       powerMonitor.removeListener("resume", wakeHandlers.resume);
       powerMonitor.removeListener("unlock-screen", wakeHandlers["unlock-screen"]);
       powerMonitor.removeListener("user-did-become-active", wakeHandlers["user-did-become-active"]);
+
       for (const wait of pendingWaits) clearTimeout(wait);
       pendingWaits.clear();
+
       if (session.defaultSession.protocol.isProtocolHandled(PAGE_SCHEME)) {
         session.defaultSession.protocol.unhandle(PAGE_SCHEME);
       }

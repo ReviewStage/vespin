@@ -93,6 +93,7 @@ export function fileWindowOf(query: {
       ...(query.ref === undefined ? undefined : { ref: query.ref }),
     }),
   );
+
   return Result.isFailure(read)
     ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)
     : Effect.succeed(read.success);
@@ -109,6 +110,7 @@ function folderOf(query: {
       ...(query.recursive === undefined ? undefined : { recursive: true }),
     }),
   );
+
   return Result.isFailure(read)
     ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)
     : Effect.succeed(read.success);
@@ -117,6 +119,7 @@ function folderOf(query: {
 /** The version number the path names; one that is not a whole number from one is refused as a request that does not read. */
 function pageVersionOf(version: string): Effect.Effect<number, HostedRefusal> {
   const read = readEither(pageVersionNumberSchema)(unparsedWire(Number(version)));
+
   return Result.isFailure(read)
     ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)
     : Effect.succeed(read.success);
@@ -125,10 +128,12 @@ function pageVersionOf(version: string): Effect.Effect<number, HostedRefusal> {
 /** The plan files resource: each read and the picture kept, to a signed-in caller resolved before its input is read. */
 export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
   const taskFiles = hosted.taskFiles.use(accountMiddleware(seams.resolveUserId));
+
   return {
     file: taskFiles.file.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const window = yield* fileWindowOf(input);
+
       return yield* found(
         yield* hostedStoreOrUnavailable(readTaskFile(context.userId, taskId, window)),
       );
@@ -136,12 +141,14 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
     tree: taskFiles.tree.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const folder = yield* folderOf(input);
+
       return yield* found(
         yield* hostedStoreOrUnavailable(readTaskTree(context.userId, taskId, folder)),
       );
     }),
     skills: taskFiles.skills.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
+
       return yield* found(
         yield* hostedStoreOrUnavailable(
           readTaskSkills(context.userId, taskId, input.installed !== undefined),
@@ -151,10 +158,13 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
     keepPicture: taskFiles.keepPicture.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
       const picture = pictureOfDataUrl(input.body.picture);
+
       if (picture === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       const kept = yield* hostedStoreOrUnavailable(
         keepDescriptionAttachment(context.userId, taskId, picture),
       );
+
       switch (kept.status) {
         case DESCRIPTION_ATTACHMENT_KEEP.KEPT:
           yield* recordServerEventIn(
@@ -163,6 +173,7 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
             readTaskWorkspace(context.userId, taskId),
             { tool: SERVER_AGENT_TOOL.ADD_TO_DESCRIPTION },
           );
+
           return { status: DESCRIPTION_ATTACHMENT_STATUS.KEPT, body: { id: kept.id } };
         case DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY:
           return {
@@ -180,6 +191,7 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
     }),
     pages: taskFiles.pages.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
+
       return {
         pages: yield* hostedStoreOrUnavailable(listPages(context.userId, taskPageOwner(taskId))),
       };
@@ -188,9 +200,11 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
       const taskId = yield* pathUuid(input.id);
       const pageId = yield* pathUuid(input.page);
       const version = yield* pageVersionOf(input.version);
+
       const page = yield* hostedStoreOrUnavailable(
         readPageVersion(context.userId, taskPageOwner(taskId), pageId, version),
       );
+
       return { page: yield* found(page) };
     }),
     pageFrame: taskFiles.pageFrame.effect(function* ({ input, context }) {
@@ -198,6 +212,7 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
       const pageId = yield* pathUuid(input.page);
       const version = yield* pageVersionOf(input.version);
       const owner = taskPageOwner(taskId);
+
       return yield* pageFrameAnswer(context.request, context.userId, owner, pageId, version);
     }),
   };

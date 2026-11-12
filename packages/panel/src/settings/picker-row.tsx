@@ -218,6 +218,7 @@ export function Picker({
           )}
           foot={foot?.map((pinned) => {
             const press = pinned.onPress;
+
             return press === undefined
               ? pinned
               : {

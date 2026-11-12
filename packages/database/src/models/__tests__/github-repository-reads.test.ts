@@ -32,6 +32,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -46,6 +47,7 @@ const keepToken = (userId: string) =>
       { hint: "fixture…abcd", githubUserId: "4242", githubLogin: "octo-member", expiresAt: null },
       now,
     );
+
     return sealedToken;
   });
 
@@ -53,12 +55,15 @@ const keepToken = (userId: string) =>
 const tokenWorkspace = Effect.gen(function* () {
   const owner = yield* openAccount;
   const workspace = yield* openWorkspace(owner);
+
   const tokenTask = yield* createTask(owner, {
     organizationId: workspace,
     repository: "Octo-Member/Side",
     githubAccess: GITHUB_ACCESS.TOKEN,
   });
+
   const appTask = yield* createTask(owner, { organizationId: workspace, repository: "acme/api" });
+
   const started = yield* createAgent(owner, {
     taskId: tokenTask.id,
     descriptionSnapshot: "# Side",
@@ -70,7 +75,9 @@ const tokenWorkspace = Effect.gen(function* () {
     githubAccess: GITHUB_ACCESS.TOKEN,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const agent = Option.getOrThrow(started).agent;
+
   return { owner, workspace, tokenTask, appTask, agent };
 });
 
@@ -83,6 +90,7 @@ it.layer(getTestDB())("a task and an agent on their owner's own GitHub token", (
         const reader = yield* openAccount;
         const tokenless = yield* openAccount;
         const refused = yield* openAccount;
+
         for (const each of [reader, tokenless, refused]) yield* joinWorkspace(workspace, each);
         const readerSeal = yield* keepToken(reader);
         const refusedSeal = yield* keepToken(refused);
@@ -95,11 +103,14 @@ it.layer(getTestDB())("a task and an agent on their owner's own GitHub token", (
           yield* recordRepositoryReads(tokenless, "sealed-gone", side(true), now),
           false,
         );
+
         const taskIds = (userId: string) =>
           Effect.map(listTasks(userId), (tasks) => tasks.map((each) => each.id).sort());
+
         const sees = (userId: string) =>
           Effect.gen(function* () {
             const listed = yield* listWorkspaceAgents(userId, workspace, { limit: 10 });
+
             return {
               tasks: yield* taskIds(userId),
               task: Option.isSome(yield* readTask(userId, tokenTask.id)),
@@ -107,6 +118,7 @@ it.layer(getTestDB())("a task and an agent on their owner's own GitHub token", (
               listedAgents: listed.length,
             };
           });
+
         const both = [tokenTask.id, appTask.id].sort();
         const seesAll = { tasks: both, task: true, agent: true, listedAgents: 1 };
         const seesAppOnly = { tasks: [appTask.id], task: false, agent: false, listedAgents: 0 };
@@ -141,6 +153,7 @@ it.layer(getTestDB())("a task and an agent on their owner's own GitHub token", (
         const { owner, workspace, appTask } = yield* tokenWorkspace;
         const teammate = yield* openAccount;
         yield* joinWorkspace(workspace, teammate);
+
         const started = yield* createAgent(owner, {
           taskId: appTask.id,
           descriptionSnapshot: "# API",
@@ -152,10 +165,12 @@ it.layer(getTestDB())("a task and an agent on their owner's own GitHub token", (
           githubAccess: GITHUB_ACCESS.TOKEN,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const onToken = Option.getOrThrow(started).agent;
 
         const agentsOf = (userId: string) =>
           Effect.map(listAgents(userId, appTask.id), (agents) => agents.map((a) => a.id));
+
         assert.deepEqual(yield* agentsOf(owner), [onToken.id]);
         assert.deepEqual(yield* agentsOf(teammate), []);
       }),

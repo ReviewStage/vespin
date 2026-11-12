@@ -19,6 +19,7 @@ import { startedTurnListener } from "./agents/coder-host/started-turns.js";
 import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
 import { sandboxReleasesFromEnvironment } from "./agents/session-sandboxes.js";
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
+import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
@@ -166,6 +167,7 @@ export const webServices = Layer.mergeAll(
   webSqlClient,
   hostedEnvironment,
   githubApp,
+  signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
     Layer.provide(
       Layer.mergeAll(gatedGitHubClient, githubApp, hostedEnvironment, slackBot, apnsSender),

@@ -34,6 +34,7 @@ it("a message that is not the page's own handshake forwards nothing, and leaves 
 
 it("a reloaded page, whose preload runs again, forwards a fresh port of its own", () => {
   const forwarded: string[] = [];
+
   for (const port of ["before the reload", "after the reload"]) {
     const hear = actPortForwarder<string, symbol>(PAGE, (taken) => forwarded.push(taken));
     hear({ data: ACT_PORT.REQUEST, source: PAGE, ports: [port] });

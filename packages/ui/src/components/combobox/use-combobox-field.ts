@@ -54,6 +54,7 @@ function steppedTo(
   skipped: ((index: number) => boolean) | undefined,
 ): number | undefined {
   const to = rovingStep(key, ROVING_ORIENTATION.VERTICAL, at, count, skipped);
+
   return to !== undefined && count === 0 ? 0 : to;
 }
 
@@ -81,32 +82,45 @@ export function useComboboxField(input: {
   onKey?: ((event: ComboboxKey) => void) | undefined;
 }): ComboboxField {
   const { open, active, count } = input;
+
   const onKeyDown = (event: ComboboxKey): boolean => {
     // Note that an Escape an input method is composing with is kept from the
     // surface behind even with the list shut, because it cancels candidates.
     const ime = isComposingKey(event);
+
     if (event.key === "Escape" && (open || ime)) event.stopPropagation();
+
     if (ime) return false;
     const moved = open ? steppedTo(event.key, active, count, input.skipped) : undefined;
+
     if (moved !== undefined) {
       event.preventDefault();
       input.onActiveChange(moved);
+
       return true;
     }
+
     if (open && event.key === "Escape") {
       event.preventDefault();
       input.onEscape?.();
+
       return true;
     }
+
     if (event.key !== "Enter") {
       input.onKey?.(event);
+
       return false;
     }
+
     event.preventDefault();
+
     if (open && !event.metaKey && !event.ctrlKey) input.onChoose(active);
     else input.onEnter?.();
+
     return true;
   };
+
   return {
     field: {
       role: "combobox",

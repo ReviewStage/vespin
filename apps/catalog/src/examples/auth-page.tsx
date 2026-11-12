@@ -62,6 +62,7 @@ function ProviderChoices(): React.JSX.Element {
 function TeamFields(): React.JSX.Element {
   const [name, setName] = useState("Acme");
   const [typed, setTyped] = useState("");
+
   const [chips, setChips] = useState<readonly EmailChip[]>([
     {
       id: "dana@acme.dev",
@@ -83,6 +84,7 @@ function TeamFields(): React.JSX.Element {
       reason: "Not an email address",
     },
   ]);
+
   return (
     <>
       <FormField label="Name">
@@ -120,6 +122,7 @@ function TeamFields(): React.JSX.Element {
 
 function EmailForm(): React.JSX.Element {
   const [email, setEmail] = useState("someone@acme-corporation.example");
+
   return (
     <>
       <FormField label="Work email" description={`${PRODUCT_NAME} sends a sign-in link to it.`}>

@@ -117,6 +117,7 @@ function workStats(windowDays: number): readonly StatSpec<AdminAccountSupport>[]
       hint: ({ totals }) => {
         const failed = percentOf(totals.agentsFailed, totals.agentsRead);
         const truncated = totals.agentsRead < totals.agentsStarted;
+
         return failed === undefined
           ? "none started"
           : `${failed} failed${truncated ? ` of the newest ${formatCount(totals.agentsRead)}` : ""}`;
@@ -259,6 +260,7 @@ function credentialRows(support: AdminAccountSupport): CredentialRow[] {
       at: key.statusAt,
     }),
   );
+
   const connections = support.connections.map(
     (connection): Omit<CredentialRow, "order"> => ({
       kind: "Connection",
@@ -269,6 +271,7 @@ function credentialRows(support: AdminAccountSupport): CredentialRow[] {
       at: connection.at,
     }),
   );
+
   return [...keys, ...connections].map((row, order) => ({ ...row, order }));
 }
 
@@ -305,6 +308,7 @@ const CREDENTIAL_COLUMNS = credentialColumn.columns([
 /** What failed, with the provider where a key or a connection did. */
 function failureSubject(failure: AdminAccountFailure): string {
   const subject = FAILURE_SUBJECT[failure.kind];
+
   return "provider" in failure ? `${subject} · ${failure.provider}` : subject;
 }
 
@@ -354,10 +358,12 @@ const FAILURE_COLUMNS = failureColumn.columns([
 /** The account's agent defaults and the experiments it turned on. */
 function DefaultsLines({ support }: { support: AdminAccountSupport }): React.JSX.Element {
   const { defaults } = support;
+
   const choice =
     defaults.model === null
       ? "the catalog's default"
       : `${defaults.model} · ${defaults.effort ?? NONE}${windowWords(defaults.contextWindow)}`;
+
   return (
     <Stack gap={GAP.CONTROL}>
       <Text>Agents start on {choice}.</Text>
@@ -438,6 +444,7 @@ export function AccountSupportSections({
   onOpenWorkspace: (id: string) => void;
 }): React.JSX.Element {
   const workspaceTableColumns = useMemo(() => workspaceColumns(onOpenWorkspace), [onOpenWorkspace]);
+
   return (
     <>
       <AdminSection title="Work">

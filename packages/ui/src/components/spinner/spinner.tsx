@@ -36,9 +36,17 @@ export const SPINNER_SIZE = {
 
 export type SpinnerSize = (typeof SPINNER_SIZE)[keyof typeof SPINNER_SIZE];
 
-/** The ring's box: 12px on a caption's line, 16px beside words or inside a control, 22px alone in a region, in the muted ink a wait is said in. */
+/** The ink the ring is drawn in: the muted ink a wait is said in, or the veil's, over a video's frame still loading. */
+export const SPINNER_INK = {
+  MUTED: "muted",
+  ON_VEIL: "on-veil",
+} as const;
+
+export type SpinnerInk = (typeof SPINNER_INK)[keyof typeof SPINNER_INK];
+
+/** The ring's box: 12px on a caption's line, 16px beside words or inside a control, 22px alone in a region, in the muted ink a wait is said in or the veil's. */
 const SPINNER_BOX =
-  "ui-spinner inline-flex flex-none size-spinner text-muted-foreground data-[size=small]:size-spinner-small data-[size=region]:size-spinner-region";
+  "ui-spinner inline-flex flex-none size-spinner text-muted-foreground data-[size=small]:size-spinner-small data-[size=region]:size-spinner-region data-[ink=on-veil]:text-on-veil";
 
 /** The ring's box inside a busy control, in the control's own ink, standing in the one cell it shares with the control's words. */
 const BUSY_SPINNER_BOX = "ui-spinner inline-flex flex-none size-spinner col-start-1 row-start-1";
@@ -50,7 +58,9 @@ const BUSY_SPINNER_BOX = "ui-spinner inline-flex flex-none size-spinner col-star
  */
 export function SpinnerRing({ size }: { size?: SpinnerSize }): React.JSX.Element {
   const ring = <ShadcnSpinner />;
+
   if (size === undefined) return ring;
+
   return (
     <span className={SPINNER_BOX} data-size={size} aria-hidden="true">
       {ring}
@@ -58,19 +68,22 @@ export function SpinnerRing({ size }: { size?: SpinnerSize }): React.JSX.Element
   );
 }
 
-/** A wait, said to a reader in `label` and drawn as the ring, once it has stood a moment unless `delay` is off. */
+/** A wait, said to a reader in `label` and drawn as the ring in `ink`, once it has stood a moment unless `delay` is off. */
 export function Spinner({
   label,
   size = SPINNER_SIZE.INLINE,
+  ink = SPINNER_INK.MUTED,
   delay = true,
 }: {
   label: string;
   size?: SpinnerSize;
+  ink?: SpinnerInk;
   delay?: boolean;
 }): React.JSX.Element {
   const settled = useSettled(delay);
+
   return (
-    <span className={SPINNER_BOX} data-size={size} role="status">
+    <span className={SPINNER_BOX} data-size={size} data-ink={ink} role="status">
       {delay && !settled ? null : <SpinnerRing />}
       <span className="ui-visually-hidden">{label}</span>
     </span>
@@ -111,8 +124,10 @@ export function BusyLabel({
   children: ReactNode;
 }): React.JSX.Element {
   const settled = useSettled(busy && delay);
+
   if (!busy) return <>{children}</>;
   const ringShown = !delay || settled;
+
   return (
     <span className="ui-busy-label inline-grid items-center justify-items-center gap-[inherit]">
       <span

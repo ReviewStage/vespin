@@ -30,6 +30,7 @@ const taken = (stateRoot: string, scope: Scope.Scope) =>
       Effect.andThen(Effect.yieldNow.pipe(Effect.repeat({ times: 200 }))),
       Effect.repeat({ until: () => taking.pollUnsafe() !== undefined, times: 200 }),
     );
+
     return yield* Fiber.join(taking);
   });
 

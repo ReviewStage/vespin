@@ -77,6 +77,7 @@ test("a note under the agent's heading as it was spelled before it was reworded 
 
 test("a note behind its marker is read with no replay, with how many files are its own, and a brief whose prose holds a note's heading is never split on it", () => {
   const brief = "Write the guide.\n\n## Note from the developer\n\nExplain this heading.";
+
   const text = firstMessageText(
     brief,
     undefined,
@@ -133,10 +134,12 @@ test("a replay with no note and no fork reads back without either", () => {
     steps: tricky,
     totalSteps: 3,
   };
+
   assert.deepEqual(firstMessageParts(firstMessageText("Fix it.", continued, undefined)), {
     brief: "Fix it.",
     replay: continued,
   });
+
   const carried: Replay = {
     agentId: SOURCE,
     carried: true,
@@ -144,6 +147,7 @@ test("a replay with no note and no fork reads back without either", () => {
     steps: [],
     totalSteps: 0,
   };
+
   assert.deepEqual(firstMessageParts(firstMessageText("Fix it.", carried, undefined)), {
     brief: "Fix it.",
     replay: carried,
@@ -155,6 +159,7 @@ test("a brief that quotes a replay's heading is still the brief, and the real re
     "steps=0",
     "steps=9",
   );
+
   const text = firstMessageText(brief, replay, undefined);
 
   const read = firstMessageParts(text);
@@ -184,6 +189,7 @@ test("the bound keeps the newest steps that fit and drops the oldest", () => {
     summary: `Said: step ${index}`,
     words: "x".repeat(100),
   }));
+
   const kept = newestStepsWithin(steps, 500);
 
   assert.deepEqual(
@@ -198,6 +204,7 @@ test("a summary Vespin wrote of the steps left out reads back ahead of the steps
     ...replay,
     summary: { text: "Recap 🚀\n<!-- luke:step kind=said chars=2 -->\nno", steps: 4 },
   };
+
   const text = firstMessageText("Fix it.", summarized, "Carry on.");
 
   assert.ok(text.includes("<!-- agent:summary by=app steps=4 "));
@@ -240,6 +247,7 @@ test("a tool step's state, input, and output read back from its marker, whatever
       sender: { kind: REPLAY_SENDER.APP },
     },
   ];
+
   const read = firstMessageParts(firstMessageText("Fix it.", { ...replay, steps }, undefined))
     .replay?.steps;
 
@@ -265,8 +273,10 @@ test("a message whose markers were written under `luke`, before `agent`, reads b
       sender: { kind: REPLAY_SENDER.APP },
     },
   ];
+
   const summarized: Replay = { ...replay, steps, summary: { text: "Recap", steps: 2 } };
   const today = firstMessageText("Fix it.", summarized, "Carry on.");
+
   const old = today
     .replaceAll("<!-- agent:", "<!-- luke:")
     .replaceAll("<!-- /agent:", "<!-- /luke:")
@@ -287,6 +297,7 @@ test("a message whose markers were written under `luke`, before `agent`, reads b
 
 test("a step behind a marker from before the marker named its state or sender reads back with neither", () => {
   const body = "Ran: ls\nInput: ls\nResult: Failed: x";
+
   const old =
     "Fix it.\n\n## The work you continue from\n\n<!-- luke:replay agent=" +
     `${SOURCE} steps=1 total-steps=1 chars=2 -->\nGo\n` +
@@ -299,6 +310,7 @@ test("a step behind a marker from before the marker named its state or sender re
 
 test("a tool step's tool and its values' forms and a line's moment read back from their markers, and a step from before the marker named them reads back with neither", () => {
   const at = Date.UTC(2026, 9, 14, 15, 42);
+
   const steps: readonly ReplayStep[] = [
     toolStep({
       summary: "Ran: pnpm test",
@@ -325,15 +337,18 @@ test("a tool step's tool and its values' forms and a line's moment read back fro
     },
     { kind: REPLAY_STEP_KIND.LINE, summary: "The developer: go", words: "Go.", at },
   ];
+
   const read = firstMessageParts(firstMessageText("Fix it.", { ...replay, steps }, undefined))
     .replay?.steps;
 
   assert.deepEqual(read, steps);
   const body = "Ran: ls\nInput: ls\nResult: x";
+
   const old =
     "Fix it.\n\n## The work you continue from\n\n<!-- luke:replay agent=" +
     `${SOURCE} steps=1 total-steps=1 chars=2 -->\nGo\n` +
     `<!-- luke:step kind=tool state=done input-chars=2 chars=${body.length} -->\n${body}\n<!-- /luke:replay -->`;
+
   assert.equal(firstMessageParts(old).replay?.steps[0]?.tool, undefined);
 });
 
@@ -348,6 +363,7 @@ test("a tool name or a moment the marker cannot spell is left out, and the step 
     }),
     { kind: REPLAY_STEP_KIND.LINE, summary: "Vespin: hi", words: "Hi.", at: -1 },
   ];
+
   const read = firstMessageParts(firstMessageText("Fix it.", { ...replay, steps }, undefined))
     .replay?.steps;
 

@@ -153,6 +153,7 @@ function asRoot(command: string, args: readonly string[]): CommandAsk {
 /** The relay started in a mode, detached, as root. */
 function relay(mode: RelayMode, port?: number): DetachedCommandAsk {
   const args = ["-e", RELAY_SOURCE, RELAY_MARKER, mode, RECORD_PATH];
+
   return { command: "node", args: port === undefined ? args : [...args, String(port)], sudo: true };
 }
 

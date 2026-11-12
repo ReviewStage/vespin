@@ -37,7 +37,7 @@
  * picture of that part of the window (`window.capture`). A still is a picture
  * of the window's words, so it is kept in this window's memory alone, a few
  * at a time, never written, traced, or counted, and the session recording
- * leaves it out (`ph-no-capture`). Until a screen has one, its card shows its
+ * masks its address, so it draws empty there. Until a screen has one, its card shows its
  * glyph.
  */
 
@@ -47,8 +47,8 @@ import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
-import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
+import { APP_COMMAND, commandForKey } from "@repo/settings/shortcuts";
+import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
@@ -129,10 +129,10 @@ const TASK_WORDS = "Task";
 const PERSON_WORDS = "Profile";
 
 /** The hold before the cards show: the window's one, as it has one switcher, so each press held afresh calls off the one before. */
-const holdWait = makeWait();
+const holdWait = createWait();
 
 /** The wait before a still is taken of the screen the window settled on, each settle calling off the one before. */
-const settleWait = makeWait();
+const settleWait = createWait();
 
 /** A still kept of a screen. */
 interface HeldStill {
@@ -152,6 +152,7 @@ interface CardLook extends KindLook {
 /** A tab's look where its strip never drew it in this window: its kind's glyph and word, Overview's its own, the Plan's named for its task where the window lists it. */
 function tabWordLook(tab: SidePanelTab | MainTab, task: TaskSummary | undefined): KindLook {
   const plan = task === undefined ? undefined : { name: task.name, status: task.status };
+
   return tabLook(stripTabLook(tab, { plan }));
 }
 
@@ -161,6 +162,7 @@ function automationDetail(
   workspaceId: string,
 ): Pick<CardLook, "detail" | "detailIcon"> {
   const name = automationRun(agent)?.name;
+
   return name === undefined
     ? { detail: undefined }
     : {
@@ -179,16 +181,20 @@ function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksCont
   const { taskId } = step;
   const task = tasks.tasks.find((each) => each.id === taskId);
   const side = step.side ?? (step.panel?.open === true ? step.panel.tab : undefined);
+
   const column: HeldLook | undefined =
     step.column === undefined
       ? undefined
       : (heldLook(LOOK_STRIP.COLUMN, taskId, step.column) ?? tabWordLook(step.column, task));
+
   const panel =
     side === undefined
       ? undefined
       : (heldLook(LOOK_STRIP.PANEL, taskId, side) ?? tabWordLook(side, task));
+
   // The words are the tabs as their strips drew them, where nothing names the screen now or as it stood.
   const words = [column?.label, panel?.label].filter((word) => word !== undefined);
+
   return {
     icon: <PlanGlyph status={task?.status} />,
     label: title?.label ?? TASK_WORDS,
@@ -202,6 +208,7 @@ function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksCont
 /** An agent's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
 function agentLook(agentId: string, tasks: TasksControl): CardLook {
   const agent = tasks.liveAgents?.find((each) => each.id === agentId);
+
   if (agent === undefined) {
     return {
       ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
@@ -209,6 +216,7 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
       detail: undefined,
     };
   }
+
   return {
     ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
     ...automationDetail(agent, agent.workspaceId),
@@ -219,12 +227,16 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
 /** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names. */
 function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
   const { place, title, routed, params } = step;
+
   if (place.task !== undefined) return taskLook(place.task, title, tasks);
+
   if (routed === ROUTED_PLACE.AGENT && params.agentId !== undefined) {
     return agentLook(params.agentId, tasks);
   }
+
   if (routed === ROUTED_PLACE.PERSON && params.userId !== undefined) {
     const name = title?.label ?? PERSON_WORDS;
+
     return {
       icon: <PersonStopFace userId={params.userId} name={name} />,
       label: name,
@@ -232,7 +244,9 @@ function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
       detail: title?.detail,
     };
   }
+
   const look = routed === undefined ? undefined : PLACE_LOOKS.get(routed);
+
   return {
     icon: look?.icon ?? <EntityGlyph kind={ENTITY_KIND.HOME} />,
     label: title?.label ?? look?.word ?? SCREEN_WORDS,
@@ -260,6 +274,7 @@ function ScreenCard({
   onPick: () => void;
 }): React.JSX.Element {
   const look = cardLook(step, tasks);
+
   return (
     <TabCard
       icon={look.icon}
@@ -290,9 +305,11 @@ interface Area {
 /** Where an element stands in the window, in whole CSS pixels; none where it is not drawn. */
 function areaOf(selector: string): Area | undefined {
   const box = document.querySelector(selector)?.getBoundingClientRect();
+
   if (box === undefined || box.width < 1 || box.height < 1) return undefined;
   const x = Math.max(0, Math.round(box.left));
   const y = Math.max(0, Math.round(box.top));
+
   return { x, y, width: Math.round(box.right) - x, height: Math.round(box.bottom) - y };
 }
 
@@ -320,6 +337,7 @@ export function TabSwitcher({
   const desktop =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
     true;
+
   const answers = available && desktop;
   // Note that a still is the window's own action, sent on its mutation; nothing the service holds.
   const { mutateAsync: sendCapture } = useMutation(actMutation(ACT_KIND.WINDOW_CAPTURE));
@@ -344,6 +362,7 @@ export function TabSwitcher({
   useOverlayHold(state.held);
   const titleId = useId();
   const [face, setFace] = useState<SwitcherState<RecentStep>>(state);
+
   if (state.held && state.shown && face !== state) setFace(state);
 
   const move = (next: SwitcherState<RecentStep>) => {
@@ -359,12 +378,14 @@ export function TabSwitcher({
       { place, src },
       ...stills.current.filter((held) => !sameScreen(held.place, place)),
     ].slice(0, STILLS_KEPT);
+
     if (latest.current.held) setStillsKept((count) => count + 1);
   };
 
   // A still of the work area as it is drawn now, kept once main answers; a screen no longer on screen by then keeps what it had.
   const takeStill = (place: Place) => {
     const area = areaOf(WORK_AREA);
+
     if (area === undefined) return;
     sendCapture(area).then(
       (src) => {
@@ -379,12 +400,14 @@ export function TabSwitcher({
     const standing = here();
     const before = settled.current;
     settled.current = standing;
+
     if (standing === undefined || (before !== undefined && sameScreen(before, standing))) return;
     settleWait.start(
       Effect.andThen(
         Effect.sleep(STILL_SETTLES),
         Effect.sync(() => {
           const standingOn = here();
+
           if (standingOn !== undefined && sameScreen(standingOn, standing)) takeStill(standing);
         }),
       ),
@@ -393,16 +416,20 @@ export function TabSwitcher({
 
   const pressedNow = (state: SwitcherState<RecentStep>, step: SwitchStep) => {
     const screens = doors.current.recent();
+
     return switcherPressed(state, { screens, here: screens[0]?.standing === true, step });
   };
 
   const press = (step: SwitchStep) => {
     const before = latest.current;
     const next = pressedNow(before, step);
+
     if (!next.held) return;
+
     if (!before.held) {
       // The screen being left is taken afresh, before the cards can cover it.
       const leaving = here();
+
       if (leaving !== undefined) takeStill(leaving);
       holdWait.start(
         Effect.andThen(
@@ -411,6 +438,7 @@ export function TabSwitcher({
         ),
       );
     }
+
     move(next);
   };
 
@@ -418,6 +446,7 @@ export function TabSwitcher({
     const target = going ? switcherTarget(latest.current) : undefined;
     holdWait.stop();
     move(SWITCHER_LET_GO);
+
     if (target !== undefined) doors.current.onVisitStep(target.place);
   };
 
@@ -425,8 +454,10 @@ export function TabSwitcher({
   const tap = (step: SwitchStep) => () => {
     if (latest.current.held || overlayHoldsKeyboard()) return;
     const target = switcherTarget(pressedNow(SWITCHER_LET_GO, step));
+
     if (target !== undefined) doors.current.onVisitStep(target.place);
   };
+
   useAppCommand(APP_COMMAND.NEXT_RECENT_TAB, answers ? tap(SWITCH_STEP.ON) : undefined);
   useAppCommand(APP_COMMAND.PREVIOUS_RECENT_TAB, answers ? tap(SWITCH_STEP.BACK) : undefined);
 
@@ -435,43 +466,57 @@ export function TabSwitcher({
   keys.current = { press, letGo };
   useEffect(() => {
     if (!answers) return undefined;
+
     const down = (event: KeyboardEvent) => {
-      const command = commandForKey(SWITCH_COMMANDS as readonly KeyedCommand[], event);
+      const command = commandForKey(SWITCH_COMMANDS, event);
+
       if (command === APP_COMMAND.NEXT_RECENT_TAB || command === APP_COMMAND.PREVIOUS_RECENT_TAB) {
         // A dialog or ⌘K's palette over the window keeps its keys, so nothing moves behind it.
         if (!latest.current.held && overlayHoldsKeyboard()) return;
         claim(event);
         keys.current.press(STEP_OF[command]);
+
         return;
       }
+
       const held = latest.current;
+
       if (!held.held) return;
+
       // A press without ⌃ is one made after it was let go where the window did not hear it.
       if (!event.ctrlKey && event.key !== "Control") {
         keys.current.letGo(true);
+
         return;
       }
+
       claim(event);
+
       if (event.key === "Escape") keys.current.letGo(false);
       else if (event.key === "Enter") keys.current.letGo(true);
       else if (event.key === "ArrowRight") keys.current.press(SWITCH_STEP.ON);
       else if (event.key === "ArrowLeft") keys.current.press(SWITCH_STEP.BACK);
     };
+
     const up = (event: KeyboardEvent) => {
       if (!latest.current.held || (event.key !== "Control" && event.ctrlKey)) return;
       claim(event);
       keys.current.letGo(true);
     };
+
     const moved = (event: PointerEvent) => {
       if (latest.current.held && !event.ctrlKey) keys.current.letGo(true);
     };
+
     const left = () => {
       if (latest.current.held) keys.current.letGo(true);
     };
+
     window.addEventListener("keydown", down, true);
     window.addEventListener("keyup", up, true);
     window.addEventListener("pointermove", moved, true);
     window.addEventListener("blur", left);
+
     return () => {
       window.removeEventListener("keydown", down, true);
       window.removeEventListener("keyup", up, true);
@@ -483,6 +528,7 @@ export function TabSwitcher({
   // Note that the cards are held as they last showed, so the dialog fades them out as it closes rather than drawing nothing.
   if (!face.held || !face.shown) return null;
   const { cards, chosen } = face;
+
   return (
     <Dialog
       open={state.held && state.shown}

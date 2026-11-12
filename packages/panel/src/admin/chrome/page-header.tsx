@@ -114,12 +114,14 @@ function AdminToolbar({
   const frame = useContext(AdminPlaceFrameContext);
   const section = back === undefined ? undefined : adminPlace(back.tab);
   const placed = frame !== undefined && section === undefined ? frame : undefined;
+
   const tag =
     note === undefined ? undefined : (
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
         {note}
       </Text>
     );
+
   if (frame?.phone === true) {
     return (
       <PhoneHead
@@ -141,6 +143,7 @@ function AdminToolbar({
       />
     );
   }
+
   return (
     <Toolbar
       title={placed?.title ?? title}
@@ -167,6 +170,7 @@ function AdminToolbar({
 /** The app's frame where it frames this page, a section rather than a page under one; none on the web page. */
 function usePlacedFrame(back: AdminWayBack | undefined): AdminPlaceFrame | undefined {
   const frame = useContext(AdminPlaceFrameContext);
+
   return back === undefined ? frame : undefined;
 }
 
@@ -195,6 +199,7 @@ export function AdminPage({
 }): React.JSX.Element {
   const placed = usePlacedFrame(back);
   const toolbar = <AdminToolbar title={title} note={note} back={back} controls={controls} />;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {placed === undefined ? (
@@ -250,6 +255,7 @@ export function AdminCollectionPage({
   children?: React.ReactNode;
 }): React.JSX.Element {
   const placed = usePlacedFrame(undefined);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <CollectionPage

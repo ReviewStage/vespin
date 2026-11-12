@@ -39,7 +39,12 @@ export class DuplicateHostAct extends Data.TaggedError("DuplicateHostAct")<{
 }
 
 /** A composer's act table, as the fold reads it: handlers by act name. */
-export type ActClaims = Partial<Record<keyof typeof HOST_ACTS, unknown>>;
+export type ActClaims = Partial<Record<keyof typeof HOST_ACTS, ClaimedHandler>>;
+
+/** A handler a composer claims an act by: a declared act's function, or a live follow's hold (`LiveFollowHandler`). */
+type ClaimedHandler =
+  | ((...args: never[]) => void)
+  | { readonly hold: (...args: never[]) => void };
 
 /** The tables merged into one, as the intersection their keys are disjoint for. */
 export type Folded<Tables extends readonly object[]> = Tables extends readonly [
@@ -58,15 +63,19 @@ function foldClaims<Key extends string, Handler, E>(
   refused: (key: Key) => E,
 ): Result.Result<Partial<Record<Key, Handler>>, E> {
   const merged: Partial<Record<Key, Handler>> = {};
+
   for (const table of tables) {
     // SAFETY: a handler table's keys are the names it was built from.
     for (const key of Object.keys(table) as Key[]) {
       const handler = table[key];
+
       if (handler === undefined) continue;
+
       if (Object.hasOwn(merged, key)) return Result.fail(refused(key));
       merged[key] = handler;
     }
   }
+
   return Result.succeed(merged);
 }
 

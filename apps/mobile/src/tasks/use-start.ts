@@ -16,7 +16,6 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
-  extraRepositoryRefusalWords,
   localAgentRefusalWords,
   type RefusedCall,
   startFailureWords,
@@ -50,12 +49,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   selectAccount,
   selectAgentDefault,
-  selectExperiment,
   selectModels,
   selectRepositoryList,
   selectTasks,
 } from "@repo/host/app-state-reads";
-import { EXPERIMENT } from "@repo/settings";
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
@@ -84,9 +81,7 @@ function startRefusalWords(refused: RefusedCall): string {
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
   }
-  if (refused.failure === AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) {
-    return extraRepositoryRefusalWords(refused.extraRepositoryRefusal, refused.refusedRepository);
-  }
+
   return startFailureWords(refused.failure);
 }
 
@@ -109,9 +104,11 @@ export interface ModelPick {
 
 /** The models a picker offers, each once at standard speed, its fast versions folded under it as the panel's menu folds them, named as the panel names them (`modelLabel`). */
 export function modelOptions(catalog: readonly CatalogModel[]): readonly PickOption[] {
-  return catalog
-    .filter((model) => modelSpeedOf(model.id) === MODEL_SPEED.STANDARD)
-    .map((model) => ({ id: model.id, label: modelLabel(model.id, catalog) }));
+  return catalog.flatMap((model) =>
+    modelSpeedOf(model.id) === MODEL_SPEED.STANDARD
+      ? [{ id: model.id, label: modelLabel(model.id, catalog) }]
+      : [],
+  );
 }
 
 /** The efforts a picker offers for the model, as the catalog lists them; none before a model is known. */
@@ -130,6 +127,7 @@ export function useModelCatalog(): ModelsAnswer | undefined {
   const acts = useHostActs();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
+
   return useQuery({ ...appStateQuery, select: selectModels }).data?.rows;
 }
 
@@ -142,14 +140,11 @@ export function useModelCatalog(): ModelsAnswer | undefined {
 export function useModelPick(): ModelPick {
   const read = useModelCatalog();
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
-  const { data: ownHosts = false } = useQuery({
-    ...appStateQuery,
-    select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST),
-  });
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
   const catalog = read?.models ?? NO_MODELS;
   const shown = picked ?? fallback;
   const models = useMemo(() => modelOptions(catalog), [catalog]);
+
   return {
     models,
     efforts: effortOptions(catalog, shown?.model),
@@ -157,15 +152,14 @@ export function useModelPick(): ModelPick {
     picked,
     pickModel: (model) => {
       const effort = effortFor(effortsOf(catalog, model), shown?.effort);
+
       if (effort !== undefined) setPicked({ model, effort });
     },
     pickEffort: (effort) => {
       if (shown !== undefined) setPicked({ model: shown.model, effort });
     },
     // Note that a device still setting itself up takes no agent, so it is not offered.
-    devices: ownHosts
-      ? (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined)
-      : NO_DEVICES,
+    devices: (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined),
   };
 }
 
@@ -211,18 +205,23 @@ export function useRepositoryPick(
   const { data: read } = useQuery({ ...appStateQuery, select });
   const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
   const [picked, setPicked] = useState<string | undefined>(drafted);
+
   const listed = useMemo(
     () => (read?.rows?.repositories ?? []).map(({ fullName }) => fullName),
     [read],
   );
+
   const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
+
   const reached = (repository: string) =>
     workspace !== undefined &&
     workspaceReaches(workspace, repository) &&
     (read?.rows === undefined || listed.includes(repository));
+
   const starting = recent.find(reached) ?? listed[0];
   // Note that a draft's repository may be one the workspace it opens in no longer reaches, so it stands only while it does.
   const kept = picked !== undefined && picked === drafted && !reached(picked) ? undefined : picked;
+
   return {
     options: listed.map((repository) => ({ id: repository, label: repository })),
     picked: kept ?? starting,
@@ -249,6 +248,7 @@ interface StartAsk {
 export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
+
   return async ({ prompt, attachments, picked, runsOn }) => {
     const answer = await acts[ACT_KIND.AGENTS_START]({
       taskId,
@@ -258,7 +258,9 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
     }).catch(unanswered("The agent's start"));
+
     if ("failure" in answer) return { refused: startRefusalWords(answer) };
+
     return { agentId: answer.agent.id, taskId };
   };
 }
@@ -288,8 +290,9 @@ function placeOf(workspaceId: string | undefined, { repository, relation }: Task
 
 /** A start the host refused or never answered, said as the panel's note says it. */
 function unanswered(what: string) {
-  return (error: unknown) => {
-    console.error(`${what} did not go.`, error);
+  return (cause: unknown) => {
+    console.error(`${what} did not go.`, cause);
+
     return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
   };
 }
@@ -305,6 +308,7 @@ export function useStartTask(
 ): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
+
   return async ({ prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
       ...placeOf(workspaceId, place),
@@ -317,12 +321,16 @@ export function useStartTask(
         ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
       },
     }).catch(unanswered("The task's start"));
+
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
     const started = answer.agentStart;
+
     if (started === undefined) return { taskId: answer.planId };
+
     if ("failure" in started) {
       return { taskId: answer.planId, note: startRefusalWords(started) };
     }
+
     return { agentId: started.agent.id, taskId: answer.planId };
   };
 }
@@ -338,6 +346,7 @@ export function useFileTask(
   workspaceId: string | undefined,
 ): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
+
   return async ({ filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
       ...placeOf(workspaceId, place),
@@ -345,7 +354,9 @@ export function useFileTask(
       status: TASK_STATUS.BACKLOG,
       planning: false,
     }).catch(unanswered("The task's filing"));
+
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
+
     return { taskId: answer.planId };
   };
 }

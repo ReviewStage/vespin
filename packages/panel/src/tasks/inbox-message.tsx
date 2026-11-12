@@ -1,10 +1,21 @@
-import { inboxCommentFiles } from "@repo/features/inbox-list-model";
-import { INBOX_MESSAGE_AUTHOR, type InboxMessage, optionFileIds } from "@repo/features/inbox-wire";
+import type { FileChip } from "@repo/features/attachment-model";
+import {
+  inboxCommentFiles,
+  inboxLineFiles,
+  inboxPreviewPieces,
+} from "@repo/features/inbox-list-model";
+import {
+  INBOX_MESSAGE_AUTHOR,
+  type InboxItem,
+  type InboxMessage,
+  optionFileIds,
+} from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
 import { PICTURE_STATE, type PictureRead } from "@repo/ui/picture-read";
 import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { type ReactNode, useMemo } from "react";
 import { ActorRef, commentAuthor } from "../actor-ref.js";
 import { unreadShown } from "../failure-report.js";
@@ -49,6 +60,8 @@ export function AgentName({ by }: { by: ItemAgent }): React.JSX.Element {
   return <AgentActorRef subject={by.subject} models={by.models} onOpen={by.onOpen} nameOnly />;
 }
 
+type UseMessageWriterResult = { readonly author: CommentAuthor; readonly nameRef: ReactNode };
+
 /**
  * A message's writer as its comment's head draws them: a member by their
  * face and name, which hangs their card, and the agent by its tile and its
@@ -57,11 +70,13 @@ export function AgentName({ by }: { by: ItemAgent }): React.JSX.Element {
 export function useMessageWriter(
   message: InboxMessage | undefined,
   by: ItemAgent,
-): { readonly author: CommentAuthor; readonly nameRef: ReactNode } {
+): UseMessageWriterResult {
   const member = usePerson(message?.member);
+
   if (message?.author === INBOX_MESSAGE_AUTHOR.AGENT) {
     return { author: commentAuthor(by.subject.tile), nameRef: <AgentName by={by} /> };
   }
+
   return { author: commentAuthor(member), nameRef: <ActorRef actor={member} nameOnly /> };
 }
 
@@ -85,17 +100,18 @@ export function ItemWords({
   children: ReactNode;
 }): React.JSX.Element {
   const cards = useMemo(() => (code === undefined ? undefined : { code }), [code]);
+
   const pictured = (
     <InboxPictures itemId={itemId} control={images}>
       {cards === undefined ? children : <LoneLinkCards doors={cards}>{children}</LoneLinkCards>}
     </InboxPictures>
   );
+
   return <WordsWorkspace value={workspaceId}>{pictured}</WordsWorkspace>;
 }
 
 /**
- * The files a message on the thread carried, drawn over its words, as the agent's tab draws a sent message's and every
- * box holds them over what is typed. A picture its words
+ * The files a message on the thread carried, drawn over its words. A picture its words
  * name already stands there, as an agent's do, so it is not drawn again;
  * every other picture is drawn as one in the words is, side by side where
  * several, the item's viewer walking it with the rest (`inbox-pictures.tsx`),
@@ -122,11 +138,14 @@ function CommentFiles({
     () => inboxCommentFiles(files, words, itemId),
     [files, words, itemId],
   );
+
   // Note that a picture says itself where its read did not answer (`InboxPicture`), so only the other files' are said here.
   const failed = others.flatMap((file) => {
     const read = reads.get(file.attachmentId);
+
     return read?.isError === true && !read.isFetching ? [read] : [];
   });
+
   return (
     <>
       {pictures.length === 0 ? null : (
@@ -177,6 +196,37 @@ function readUrls(reads: ReadonlyMap<string, InboxFileRead>): ReadonlyMap<string
 }
 
 /**
+ * An item's row's second line as its pieces (`inboxPreviewPieces`), each
+ * file it places as the chip its words draw (`LineWords`): a picture's bytes
+ * where the window already holds them, read by its thread, and its glyph
+ * where not. Note that a row reads no picture of its own, because a long
+ * Inbox would read every picture of every latest message just to list them.
+ */
+export function useInboxLinePieces(
+  item: InboxItem,
+  nameOf: Parameters<typeof inboxPreviewPieces>[1],
+  ticked: readonly number[],
+): readonly (string | FileChip)[] {
+  const files = inboxLineFiles(item);
+
+  const queries = useQueries({
+    queries: files.map((file) => pictureQuery(item.id, file.attachmentId)),
+  });
+
+  const urls = new Map(
+    files.flatMap((file, at) => {
+      const read = queries[at]?.data;
+
+      return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
+    }),
+  );
+
+  return inboxPreviewPieces(item, nameOf, ticked).map((piece) =>
+    Predicate.isString(piece) ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
+  );
+}
+
+/**
  * A message's files and words, as its thread draws them: the files it
  * carried over its words, the agent's words drawn as its question's are and
  * a member's as a sent message's, a Markdown document either way, each file
@@ -192,26 +242,33 @@ export function MessageWords({
   images: InboxImageReads;
 }): React.JSX.Element {
   const fromAgent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+
   // Note that the files its ask's options carry stand on their cards, so the message draws them nowhere else.
   const files = useMemo(() => {
     const carried = optionFileIds(message.ask);
     const all = message.files ?? NO_FILES;
+
     return carried.size === 0 ? all : all.filter((file) => !carried.has(file.attachmentId));
   }, [message.files, message.ask]);
+
   // Note that each file is read once, as it is first drawn, and kept as the window's pictures are.
   const queries = useQueries({
     queries: files.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),
   });
+
   const reads = new Map(
     files.flatMap((file, at) => {
       const read = queries[at];
+
       return read === undefined ? [] : [[file.attachmentId, read] as const];
     }),
   );
+
   const chips = inboxFileChips(files, readUrls(reads));
   // Note that an agent's words write no markers, so they name none of its files.
   const shown = useWordFiles(chips, fromAgent ? "" : message.text);
   const { named, viewer } = shown;
+
   return (
     <WordFilesContext.Provider value={named}>
       <CommentFiles

@@ -19,8 +19,7 @@ import { lineRuns } from "./code-card.js";
  * The colors are handed in, and may be for words a few keystrokes old: a
  * line is drawn in them only where they spell that line exactly, and plain
  * in the code's own ink otherwise, so a stale coloring never lands on the
- * wrong characters. The colored layer is left out of the screen recording
- * (`ph-no-capture`), as a code card's lines are.
+ * wrong characters.
  *
  * A numbered editor (`lineNumbers`) draws each line's number in a gutter
  * before it, as a code editor's gutter does: the colored layer draws each
@@ -34,7 +33,7 @@ import { lineRuns } from "./code-card.js";
  * takes the accent, as a changed setting's does, so an unsaved edit is seen
  * from across the page. Where it is handed `onSave`, ⌘S (Ctrl+S off a Mac)
  * in it answers it, as in any code editor, the browser's own Save Page never
- * opening; where it is handed `onEscape`, Escape in it answers that, as the
+ * opening, and so does ⌘↩ (Ctrl+Enter), as a form's multi-line field is sent; where it is handed `onEscape`, Escape in it answers that, as the
  * text field's does. A key an input method is composing is the input
  * method's.
  */
@@ -55,8 +54,7 @@ const LAYER_START = {
 } as const;
 
 /** The colored words beneath, which take no pointer. */
-const SHOWN =
-  "ui-code-editor-lines ph-no-capture pointer-events-none text-code [&_span]:text-code-run";
+const SHOWN = "ui-code-editor-lines pointer-events-none text-code [&_span]:text-code-run";
 
 /** The text area over them, its words transparent and its caret in the text's ink. */
 const TYPED =
@@ -83,20 +81,24 @@ const ZERO_WIDTH_SPACE = "\u200b";
 const LATIN_LETTER = /^[a-z]$/i;
 
 /**
- * Whether a key is the save chord: ⌘S on a Mac, Ctrl+S elsewhere, with no
- * other modifier. The character is read, as the app's shortcuts read it, so
- * a Dvorak S is S; the physical S key answers too where its character is no
- * Latin letter, as on a Cyrillic or Greek layout, which would type none.
+ * Whether a key is a save chord: ⌘S or ⌘↩ on a Mac, Ctrl+S or Ctrl+Enter
+ * elsewhere, with no other modifier. The character is read, as the app's
+ * shortcuts read it, so a Dvorak S is S; the physical S key answers too
+ * where its character is no Latin letter, as on a Cyrillic or Greek layout,
+ * which would type none.
  */
 function savingKey(event: KeyboardEvent): boolean {
   const key = event.key.toLowerCase();
   const isS = key === "s" || (event.code === "KeyS" && !LATIN_LETTER.test(key));
-  return isS && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+  const saves = isS || event.key === "Enter";
+
+  return saves && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 }
 
 /** One line as drawn beneath: in its colors where they spell it, plain where they do not. */
 function drawnLine(text: string, tokens: CodeLines[number] | undefined): ReactNode {
   const spelled = tokens?.map((token) => token.text).join("") === text;
+
   return spelled && tokens !== undefined ? lineRuns(tokens) : text;
 }
 
@@ -183,11 +185,13 @@ export function CodeEditor({
   }, []);
   const start = lineNumbers ? LAYER_START.NUMBERED : LAYER_START.PLAIN;
   const lineCount = value.split("\n").length;
+
   const gutter = lineNumbers
     ? cssCustomProperties({
         "--ui-code-editor-gutter": `${Math.max(GUTTER_DIGITS, String(lineCount).length)}ch`,
       })
     : undefined;
+
   // Note that a key taken is marked even mid-composition, so the browser's Save Page never opens, and answered only once composing ends.
   const answerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const answer =
@@ -196,10 +200,13 @@ export function CodeEditor({
         : onEscape !== undefined && event.key === "Escape"
           ? onEscape
           : undefined;
+
     if (answer === undefined) return;
     event.preventDefault();
+
     if (!isComposingKey(event)) answer();
   };
+
   return (
     <div className={WELL} style={gutter} data-changed={changed || undefined}>
       <pre className={`${LAYER_BASE} ${start} ${SHOWN}`} aria-hidden>

@@ -1,6 +1,7 @@
 import { searchHit } from "@repo/features/search-score";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { Command } from "cmdk";
+import { Predicate } from "effect";
 import { memo, type ReactNode, type Ref, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../../cn.js";
 import { SearchIcon } from "../../icons/lucide-glyphs.js";
@@ -131,6 +132,7 @@ const HEADING = cn("block", COMBOBOX_HEADING);
  */
 function matching(groups: readonly CommandGroup[], typed: string): readonly CommandGroup[] {
   if (typed === "") return groups;
+
   return groups.map((group) => ({
     ...group,
     items: group.items
@@ -164,16 +166,18 @@ const CommandRow = memo(function CommandRow({
         {words}
       </ReplayWords>
     );
+
   const option =
     unmasked || item.replayMasked === true
       ? {
           ...item,
           label: marked(item.label),
           detail: marked(item.detail),
-          detailWords: typeof item.detail === "string" ? item.detail : undefined,
+          detailWords: Predicate.isString(item.detail) ? item.detail : undefined,
           hint: marked(item.hint),
         }
       : item;
+
   const row = (
     <Command.Item
       asChild
@@ -187,7 +191,9 @@ const CommandRow = memo(function CommandRow({
       <ComboboxOptionItem option={option} />
     </Command.Item>
   );
+
   if (item.card === undefined) return row;
+
   return (
     <Tooltip label={item.words} card={item.card} cardBeside>
       {row}
@@ -297,23 +303,30 @@ export function CommandDialog({
     if (open) {
       invoker.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
       return;
     }
+
     if (invoker.current?.isConnected) invoker.current.focus({ preventScroll: true });
     invoker.current = null;
   }, [open]);
   const [ownQuery, setOwnQuery] = useState("");
   // Note that the words the dialog holds itself are cleared each time it opens, so a palette opens on every row.
   const [wasOpen, setWasOpen] = useState(open);
+
   if (open !== wasOpen) {
     setWasOpen(open);
+
     if (open) setOwnQuery("");
   }
+
   const words = query ?? ownQuery;
+
   const changeQuery = (next: string) => {
     setOwnQuery(next);
     onQueryChange?.(next);
   };
+
   const shown = filter === COMMAND_FILTER.WORDS ? matching(groups, words.trim()) : groups;
   // Note that a group's note stands whatever is typed, so a source that failed or is still reading is never taken for no match.
   const standing = shown.filter((group) => group.items.length > 0 || group.note !== undefined);
@@ -338,6 +351,7 @@ export function CommandDialog({
         // Note that no key pressed in the card goes on to the window, as no dialog's does, and ⌘W closes it as a dialog's does.
         onKeyDown={(event) => {
           event.stopPropagation();
+
           if (!closesCard(event)) return;
           event.preventDefault();
           onOpenChange(false);
@@ -367,7 +381,8 @@ export function CommandDialog({
             <Command.Input
               ref={(node) => {
                 field.current = node;
-                if (typeof inputRef === "function") inputRef(node);
+
+                if (Predicate.isFunction(inputRef)) inputRef(node);
                 else if (inputRef !== undefined && inputRef !== null) inputRef.current = node;
               }}
               className={FIELD}

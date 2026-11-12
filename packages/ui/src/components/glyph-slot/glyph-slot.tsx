@@ -136,6 +136,7 @@ export function GlyphSlot({
       </span>
     );
   }
+
   return (
     <span
       className={slotClass(ink, size, line, inset)}

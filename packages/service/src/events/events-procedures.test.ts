@@ -69,6 +69,7 @@ interface Bytes {
 /** A refusal's bytes, which carry no cache-control: its slug, and an upstream's status where it has one. */
 function refused(status: number, error: string, upstreamStatus?: number): Bytes {
   const body = upstreamStatus === undefined ? { error } : { error, upstreamStatus };
+
   return { status, contentType: JSON_TYPE, cacheControl: null, text: JSON.stringify(body) };
 }
 
@@ -76,9 +77,12 @@ function request(
   init: { method?: string; userId?: string; body?: string; length?: number } = {},
 ): Request {
   const headers = new Headers({ "content-type": JSON_TYPE });
+
   if (init.userId !== undefined) headers.set("authorization", `Bearer ${init.userId}`);
+
   if (init.length !== undefined) headers.set("content-length", String(init.length));
   const method = init.method ?? "POST";
+
   return new Request(EVENTS, {
     method,
     headers,
@@ -89,10 +93,13 @@ function request(
 /** The analytics processor, answering every batch with the status given, and what it was sent. */
 function upstream(status = 200) {
   const forwarded: string[] = [];
+
   const layer = fakeHttpClientLayer((_url, init) => {
     forwarded.push(String(init.body));
+
     return new Response("{}", { status });
   });
+
   return { layer, forwarded };
 }
 
@@ -113,20 +120,24 @@ function bytes(
         Layer.mergeAll(Layer.succeed(HostedEnvironment, environment), processor, noDatabase),
       ),
     );
+
     const handle = hostedFetch({
       events: eventsProcedures({
         resolveUserId: (asked) =>
           Effect.sync(() => {
             resolved.count += 1;
+
             return Option.fromNullishOr(
               asked.headers.get("authorization")?.match(/^Bearer (user-.+)$/u)?.[1],
             );
           }),
       }),
     });
+
     // SAFETY: the procedure yields the environment, the processor's client, and the database alone, which is all a test provides of the web runtime's services.
     const webServices = context as Context.Context<WebServices>;
     const response = yield* Effect.promise(() => handle(incoming, webServices));
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -174,6 +185,7 @@ it.effect("an unconfigured deployment is unavailable before any caller is resolv
         refused(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, "unavailable"),
       );
     }
+
     assert.equal(resolved.count, 0);
     assert.equal(posthog.forwarded.length, 0);
   }),

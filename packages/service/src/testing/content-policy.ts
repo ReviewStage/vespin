@@ -24,5 +24,6 @@ export function openedPagePolicy(headers: Headers): OpenedPagePolicy {
       .filter(([name]) => name !== undefined && name !== "")
       .map(([name = "", ...values]): [string, string[]] => [name.toLowerCase(), values]),
   );
+
   return { sandbox: directives.get("sandbox"), defaultSrc: directives.get("default-src") };
 }

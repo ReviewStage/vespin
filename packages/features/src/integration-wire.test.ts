@@ -32,6 +32,7 @@ describe("an integration account's connection name", () => {
   it("reads back as its provider and place, and nothing else reads as one", () => {
     assert.deepEqual(integrationConnectionOf("notion"), { provider: NOTION, place: 1 });
     assert.deepEqual(integrationConnectionOf("notion-12"), { provider: NOTION, place: 12 });
+
     for (const name of [
       "notion-1",
       "notion-0",

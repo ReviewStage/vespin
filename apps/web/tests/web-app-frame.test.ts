@@ -42,12 +42,14 @@ function servedRoot(): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML = served.innerHTML;
   document.body.append(root);
+
   return root;
 }
 
 test("a tab whose host cannot stand takes the frame down and says so with Reload", async () => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   const root = servedRoot();
+
   const unreachable = Layer.effect(
     HttpClient.HttpClient,
     Effect.die(new Error("The tab's client could not be made.")),

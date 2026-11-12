@@ -141,11 +141,15 @@ export function runSharePort(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
   const asked = readShareAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(PORT_TOOL_REFUSAL.UNREADABLE_SHARE));
   }
+
   const { port } = asked.success;
+
   if (port === null) return answered(unshareAgentPort(reach.userId, reach.agentId));
+
   return answered(
     Effect.map(shareAgentPort(reach.userId, reach.agentId, port), ({ url }) => ({ port, url })),
   );

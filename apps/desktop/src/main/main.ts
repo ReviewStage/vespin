@@ -9,7 +9,11 @@ import { menuBarDrawer } from "./app-menu";
 import { bootstrapDesktop } from "./bootstrap";
 import { offerMoveToApplications } from "./move-to-applications";
 import { composeDesktop, DesktopTag } from "./services/compose-desktop";
-import { initializeCrashReporting, mainSentry } from "./services/telemetry-service";
+import {
+  initializeCrashReporting,
+  mainSentry,
+  reportThisMacToSentry,
+} from "./services/telemetry-service";
 import { PAGE_SCHEME_PRIVILEGES } from "./window/page-protocol";
 
 /**
@@ -48,17 +52,22 @@ const RUNTIME_CLOSE_WAIT_MS = 15_000;
 // moment, since the one that launched the app arrives before it is ready,
 // and held until a window can open it (`@repo/features/app-links`).
 const appLinks = appLinkInbox();
+
 app.on("open-url", (event, url) => {
   event.preventDefault();
   appLinks.arrive(url);
 });
+
 // A second launch hands its link here even before the windows stand to bring
 // this one forward, which they do once they listen.
 app.on("second-instance", (_event, argv) => {
   const link = appLinkInArguments(argv);
+
   if (link !== undefined) appLinks.arrive(link);
 });
+
 const launchedWith = appLinkInArguments(process.argv);
+
 if (launchedWith !== undefined) appLinks.arrive(launchedWith);
 
 const config = bootstrapDesktop({
@@ -66,7 +75,10 @@ const config = bootstrapDesktop({
   argv: process.argv,
   environment: process.env,
   resourceDirectory: __dirname,
-  report: reportToStderr,
+  report: (message) => {
+    reportToStderr(message);
+    reportThisMacToSentry(message);
+  },
   openExternal: (url) => shell.openExternal(url),
   quit: () => app.quit(),
   showMenuBar: menuBarDrawer({ appName: app.name, packaged: app.isPackaged }, (template) =>
@@ -75,10 +87,13 @@ const config = bootstrapDesktop({
   initializeCrashReporting,
   appLinks,
 });
+
 tolerateClosedStderr();
+
 // A plan's pages are served on a scheme of their own, which Electron must be
 // told of before the app is ready (`window/page-protocol.ts`).
 protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES]);
+
 // Every color the window draws is an sRGB token, and on a wide-gamut Mac
 // display Chromium's own conversion and Core Animation's land one step
 // apart. The page's ground is drawn both ways at once while a region holds
@@ -103,10 +118,12 @@ const quit = desktopQuit();
 const closeRuntime = (runtime: { readonly disposeEffect: Effect.Effect<void> }) =>
   Effect.gen(function* () {
     const closing = yield* Effect.forkDetach(runtime.disposeEffect);
+
     const closed = yield* Effect.timeoutOption(
       Fiber.join(closing),
       Duration.millis(RUNTIME_CLOSE_WAIT_MS),
     );
+
     if (Option.isNone(closed)) {
       config.report("the runtime did not close in time; leaving it to the exit");
     }
@@ -126,6 +143,7 @@ if (app.requestSingleInstanceLock()) {
 
 async function main(): Promise<void> {
   await app.whenReady();
+
   // A copy that cannot update itself where it stands is offered the move
   // first, before anything stands that its quit would have to give back.
   if (await offerMoveToApplications(config)) return;
@@ -139,6 +157,7 @@ async function main(): Promise<void> {
   const runtime = ManagedRuntime.make(composeDesktop(config, quit));
   quit.closesThrough(() => Effect.runPromise(closeRuntime(runtime)));
   registerQuit();
+
   try {
     // Building the layer is the whole standup: every service's start is one
     // step of it, in the one order, and the host's is among them.
@@ -172,6 +191,7 @@ function registerQuit(): void {
   app.on("before-quit", (event) => {
     if (quit.stage() === QUIT_STAGE.TORN_DOWN) return;
     event.preventDefault();
+
     // A quit a hold asks about first is asked for again once it is agreed to.
     if (quit.held()) return;
     void quit.teardown().finally(() => app.quit());

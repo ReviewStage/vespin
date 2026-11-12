@@ -34,9 +34,11 @@ interface Caller {
 /** A secret field whose caller holds what is typed, as a token's form does. */
 function render(saved: boolean): Caller {
   const caller: Caller = { empty: () => undefined };
+
   function Holder(): React.JSX.Element {
     const [value, setValue] = useState("");
     caller.empty = () => setValue("");
+
     return createElement(SecretField, {
       label: "Personal access token",
       saved,
@@ -44,16 +46,19 @@ function render(saved: boolean): Caller {
       onChange: setValue,
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Holder)));
+
   return caller;
 }
 
 function field(): HTMLInputElement {
   const input = document.querySelector("input");
   assert.ok(input);
+
   return input;
 }
 
@@ -61,6 +66,7 @@ function field(): HTMLInputElement {
 function toggle(word: "Show" | "Hide"): HTMLButtonElement {
   const button = document.querySelector<HTMLButtonElement>(`button[aria-label="${word}"]`);
   assert.ok(button, `the field offers ${word}`);
+
   return button;
 }
 

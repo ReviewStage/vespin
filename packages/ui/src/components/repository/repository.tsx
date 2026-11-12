@@ -3,7 +3,7 @@ import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { Fragment, useRef, useState } from "react";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { FolderXIcon, GLYPH } from "../../icons/icons.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";
@@ -40,16 +40,12 @@ import {
 /** The mark beside a repository the developer's own GitHub token reaches rather than the App. */
 const TOKEN_LABEL = "Token";
 
-/** The mark beside the first of several repositories picked, where an agent starts and its pull requests open by default. */
-const PRIMARY_LABEL = "Primary";
-
 /** How tall a repository's line stands, in pixels: the theme's `ui-24`, which `h-ui-24` draws it at. */
 const LINE_PX = 24;
 
-/** The marks a repository's row wears after its owner: whether the developer's own token reaches it, and whether it is the primary of several picked. */
+/** The marks a repository's row wears after its owner: whether the developer's own token reaches it. */
 export interface RepositoryRowMarks {
   readonly token?: boolean | undefined;
-  readonly primary?: boolean | undefined;
 }
 
 /**
@@ -76,13 +72,15 @@ export function RepositoryPicture({
 }): React.ReactNode {
   const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined);
   const url = pictures ? repositoryOwnerPictureUrl(repository) : undefined;
+
   if (url === undefined || url === failedUrl) return <GLYPH.REPOSITORY />;
+
   return (
     <Avatar
       name=""
       src={url}
       size={size}
-      shape={AVATAR_SHAPE.TILE}
+      outline={AVATAR_OUTLINE.TILE}
       decorative
       edged
       blank
@@ -115,6 +113,7 @@ export function RepositoryName({
   pictures: boolean;
 }): React.JSX.Element {
   const words = repository === null ? NO_REPOSITORY : (label ?? repositoryParts(repository).name);
+
   return (
     <span className="ui-repository-name inline-flex min-w-0 items-center gap-icon-gap">
       <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.MEDIUM}>
@@ -152,6 +151,7 @@ export function RepositoryCard({
   pictures: boolean;
 }): React.JSX.Element {
   const { owner, name } = repositoryParts(repository);
+
   return (
     <HoverCard data-repository-card="">
       <HoverCardHead
@@ -170,8 +170,7 @@ export function RepositoryCard({
  * its name, its owner muted after it, since the owner is the part rows most
  * often share and a narrow menu cuts the end of a row, and after the owner
  * the Token mark, where the developer's own GitHub token reaches it rather
- * than the App, and the Primary mark, where it is the first of several
- * picked; found by its whole `owner/name` all the same.
+ * than the App; found by its whole `owner/name` all the same.
  */
 export function repositoryMenuRow(
   repository: string,
@@ -179,10 +178,8 @@ export function repositoryMenuRow(
   marks: RepositoryRowMarks = {},
 ): MenuRow {
   const { owner, name } = repositoryParts(repository);
-  const badges = [
-    ...(marks.token === true ? [TOKEN_LABEL] : []),
-    ...(marks.primary === true ? [PRIMARY_LABEL] : []),
-  ];
+  const badges = marks.token === true ? [TOKEN_LABEL] : [];
+
   return {
     id: repository,
     label: name,
@@ -260,6 +257,7 @@ export function RepositoryLines({
   const scroller = useRef<HTMLDivElement | null>(null);
   // Note that a line is keyed by its name as spelled, because two names that differ only in case are two lines.
   const keys = repositories.map(({ repository }) => repository);
+
   return (
     <div className="ui-repository-lines flex min-w-0 max-h-repository-lines flex-col">
       <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
@@ -274,6 +272,7 @@ export function RepositoryLines({
           >
             {(index, place) => {
               const entry = repositories[index];
+
               return entry === undefined ? null : (
                 <RepositoryLine entry={entry} pictures={pictures} place={place} />
               );

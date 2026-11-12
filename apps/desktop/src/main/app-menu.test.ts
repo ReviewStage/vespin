@@ -30,7 +30,9 @@ import {
 /** The labels of one top-level menu's items, a separator as a dash. */
 function labelsOf(template: MenuItemConstructorOptions[], menu: string): readonly string[] {
   const found = template.find((item) => item.label === menu);
+
   if (!found || !Array.isArray(found.submenu)) return assert.fail(`no ${menu} menu`);
+
   return found.submenu.map((item: MenuItemConstructorOptions) =>
     item.type === "separator" ? "-" : String(item.label),
   );
@@ -60,6 +62,7 @@ describe("the menu bar's gate", () => {
       undefined,
       (command) => command !== APP_COMMAND.INBOX,
     );
+
     assert.deepEqual(labelsOf(withoutInbox, "Go"), [
       "Command Palette",
       "-",
@@ -83,6 +86,7 @@ describe("the menu bar's gate", () => {
         command !== APP_COMMAND.TASKS &&
         command !== APP_COMMAND.AUTOMATIONS,
     );
+
     assert.deepEqual(labelsOf(withoutPlaces, "Go"), [
       "Command Palette",
       "-",
@@ -98,6 +102,7 @@ describe("the menu bar's gate", () => {
 describe("the menu bar's drawer", () => {
   test("keeps the update item it was last told when the experiments move", () => {
     const drawn: MenuItemConstructorOptions[][] = [];
+
     const show = menuBarDrawer({ appName: "Vespin", packaged: false }, (template) =>
       drawn.push(template),
     );
@@ -111,6 +116,7 @@ describe("the menu bar's drawer", () => {
       onInstall: () => undefined,
       onOpenLatest: () => undefined,
     } as const;
+
     show({ update });
     assert.ok(labelsOf(drawn.at(-1) ?? [], "Vespin").includes("Restart to Update"));
 
@@ -131,9 +137,11 @@ function everyLabel(items: readonly MenuItemConstructorOptions[]): string[] {
 describe("a workspace experiment's items", () => {
   test("stand only while the focused window offers them, whatever another workspace or the account's old choice holds", () => {
     const drawn: MenuItemConstructorOptions[][] = [];
+
     const show = menuBarDrawer({ appName: "Vespin", packaged: false }, (template) =>
       drawn.push(template),
     );
+
     // The account's store still holds Task descriptions on, as it held it for another workspace before it was each workspace's.
     show({ experiments: experimentsOn(EXPERIMENT.DESCRIPTIONS), capabilities: [] });
     assert.ok(!everyLabel(drawn.at(-1) ?? []).includes("Version History"), "no panel told yet");
@@ -181,6 +189,7 @@ describe("the menu bar's names", () => {
         onInstall: () => undefined,
         onOpenLatest: () => undefined,
       };
+
       assert.deepEqual(ellipsizedLabels(update).sort(), ASKING_ITEMS, act);
     }
   });
@@ -191,11 +200,13 @@ describe("the command palette and the task steps", () => {
     const go =
       appMenuTemplate("Vespin").find((menu) => menu.label === "Go")?.submenu ??
       assert.fail("the menu bar has Go");
+
     const items = everyItem(Array.isArray(go) ? go : []).filter((item) =>
       [APP_COMMAND.COMMAND_PALETTE, APP_COMMAND.PREVIOUS_TASK, APP_COMMAND.NEXT_TASK].some(
         (command) => command === item.id,
       ),
     );
+
     assert.deepEqual(
       items.map((item) => [item.id, item.label, item.accelerator]),
       [
@@ -212,10 +223,12 @@ describe("the menu bar's dimmed items", () => {
     const enabledIn = (template: MenuItemConstructorOptions[], menu: string) => {
       const items = template.find((each) => each.label === menu)?.submenu;
       assert.ok(Array.isArray(items), `the menu bar has ${menu}`);
+
       return items
         .filter((item) => item.type !== "separator")
         .map((item) => [item.label, item.enabled !== false]);
     };
+
     const offering = appMenuTemplate(
       "Vespin",
       undefined,
@@ -261,19 +274,24 @@ function everyItem(items: readonly MenuItemConstructorOptions[]): MenuItemConstr
 /** The menu bar a build draws once the windows have told it of their developer tools. */
 function drawnFor(packaged: boolean): MenuItemConstructorOptions[] {
   let last: MenuItemConstructorOptions[] = [];
+
   const show = menuBarDrawer({ appName: "Vespin", packaged }, (template) => {
     last = template;
   });
+
   show({ developerTools: true });
+
   return last;
 }
 
 describe("the developer tools", () => {
   test("a development build offers them under View, for the window chosen over", () => {
     const view = drawnFor(false).find((item) => item.label === "View");
+
     const developer = Array.isArray(view?.submenu)
       ? view.submenu.find((item) => item.label === "Developer")
       : undefined;
+
     assert.ok(developer, "View has a Developer submenu");
     assert.deepEqual(labelsOf([developer], "Developer"), ["Developer Tools"]);
   });
@@ -300,6 +318,7 @@ describe("the developer tools", () => {
 
 /** A window of the app's, as the menu is handed the one it was chosen over. */
 function aWindow(): BaseWindow {
+  // SAFETY: the menu only hands the window it was chosen over back to its command, reading nothing of it.
   return {} as BaseWindow;
 }
 
@@ -313,20 +332,27 @@ function pressKey(
   panelWindow: BaseWindow,
 ): readonly string[] {
   const reopened: string[] = [];
+
   const panel: PanelMenu = {
     isPanel: (candidate) => candidate === panelWindow,
     onReopen: (reopenedOn) => reopened.push(reopenedOn ?? WINDOW_ALONE),
   };
+
   let drawn: MenuItemConstructorOptions[] = [];
+
   const show = menuBarDrawer({ appName: "Vespin", packaged: true }, (template) => {
     drawn = template;
   });
+
   // The zoom's items stand only in the desktop app.
   show({ experiments: NO_EXPERIMENTS, capabilities: [HOST_CAPABILITY.DESKTOP_APP] });
   show({ panel });
   const item = everyItem(drawn).find((candidate) => candidate.id === command);
+
   if (!item?.click) return assert.fail(`no ${command} item`);
+  // SAFETY: the menu's commands read only the window and whether a key pressed the item.
   item.click({} as MenuItem, window, { triggeredByAccelerator: true } as KeyboardEvent);
+
   return reopened;
 }
 
@@ -363,11 +389,14 @@ describe("⌘0", () => {
 /** View's first item, as the menu bar draws it once main has (or has not) told it of the reload. */
 function viewReload(reload?: ReloadMenu): MenuItemConstructorOptions | undefined {
   let drawn: MenuItemConstructorOptions[] = [];
+
   const show = menuBarDrawer({ appName: "Vespin", packaged: true }, (template) => {
     drawn = template;
   });
+
   show(reload === undefined ? undefined : { reload });
   const view = drawn.find((item) => item.label === "View");
+
   return Array.isArray(view?.submenu) ? view.submenu[0] : undefined;
 }
 
@@ -377,10 +406,13 @@ describe("Reload", () => {
     const item = viewReload({ onReload: (window) => reloaded.push(window) });
     assert.equal(item?.label, "Reload");
     assert.equal(item?.accelerator, "Command+R");
+
     if (!item?.click) return assert.fail("View has no Reload item");
 
     const window = aWindow();
+    // SAFETY: the menu's commands read only the window and whether a key pressed the item.
     item.click({} as MenuItem, window, { triggeredByAccelerator: true } as KeyboardEvent);
+    // SAFETY: the menu's commands read only the window and whether a key pressed the item.
     item.click({} as MenuItem, undefined, { triggeredByAccelerator: true } as KeyboardEvent);
 
     assert.deepEqual(reloaded, [window]);

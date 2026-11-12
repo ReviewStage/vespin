@@ -17,9 +17,11 @@
  *
  * It is woken on the account's topic by a host enrolled, approved, renamed,
  * removed, or moving through an update, or reporting another platform,
- * machine, or model. Note that a beat wakes nothing, since `deviceSync`
- * ignores when a device was last seen: a window judges a host by its own
- * presence read. A box collecting its secret writes only columns Sync
+ * machine, or model, its setup moving, its first register, or its going
+ * away or coming back. Note that a beat alone wakes nothing, since
+ * `deviceSync` ignores when a device was last seen: the scheduled sweep
+ * marks a host away once its beat goes past fresh, and its next beat clears
+ * the mark, which wakes it (`markAwayDevices`). A box collecting its secret writes only columns Sync
  * ignores, but deletes its pairing, which wakes it on the account that
  * approved it (`hostPairingSync`), so the host's lapse instant goes with it.
  */
@@ -37,6 +39,12 @@ import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
 /** When the pairing that names the host lapses; null where none does, as once its box collected its secret. */
 const pairingLapsesAt: SQL<Date | null> = sql`(select ${hostPairing.expiresAt} from ${hostPairing} where ${eq(hostPairing.deviceId, device.id)} limit 1)`;
 
+/** Whether the host's program has registered since it joined. */
+const calledIn: SQL<boolean> = sql<boolean>`${device.home} is not null`;
+
+/** Whether the scheduled sweep found the host's beat past fresh since it last beat (`markAwayDevices`). */
+const away: SQL<boolean> = sql<boolean>`${device.awayAt} is not null`;
+
 export const hostsRead = bindLiveRead(HOSTS_READ, {
   reads: [deviceSync, hostPairingSync],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
@@ -51,8 +59,12 @@ export const hostsRead = bindLiveRead(HOSTS_READ, {
           machineId: device.machineId,
           model: device.model,
           update: device.updatePhase,
+          setup: device.setup,
+          // Note that a register always writes the home folder and nothing else does, so a host with none has not called in since it joined.
+          calledIn: calledIn,
+          away: away,
         },
-        instants: { pairingLapsesAt },
+        instants: { pairingLapsesAt, joinedAt: device.createdAt },
       },
       (selection) =>
         queryBuilder

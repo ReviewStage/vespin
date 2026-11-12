@@ -11,8 +11,7 @@
  * the ids that answers `queryOptions({ queryKey, queryFn, ... })`, which
  * `useQuery`, `setQueryData`, and `invalidateQueries` all take, so a key and
  * the data under it are typed together and never spelled twice. A `queryFn`
- * runs an Effect only through an edge `tools/anti-slop/effect-edges.json`
- * lists.
+ * runs an Effect only through a runtime edge.
  */
 
 import type { QueryClient } from "@tanstack/react-query";

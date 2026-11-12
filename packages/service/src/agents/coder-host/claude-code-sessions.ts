@@ -56,7 +56,6 @@ import { HostedEnvironment } from "../../environment.js";
 import { SERVER_AGENT_HARNESS } from "../../events/server-events.js";
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { LaunchRefused, type MachineLayout } from "../machine/agent-machine.js";
-import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
 import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
@@ -64,7 +63,7 @@ import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { claudeCodeCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
-import { launchPermissionMode } from "./permission-mode.js";
+import { launchAllowedCommands, launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -156,21 +155,26 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     const rows = (yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN)).filter(
       (each) => each.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
     );
+
     const row =
       subscriptionId === undefined ? rows[0] : rows.find((each) => each.id === subscriptionId);
+
     if (row === undefined) {
       return yield* new LaunchRefused({
         reason: "no setup-token",
         planRefusal: PLAN_REFUSAL.SIGNED_OUT,
       });
     }
+
     if (row.status === PROVIDER_KEY_STATUS.INVALID) {
       return yield* new LaunchRefused({
         reason: "setup-token refused",
         planRefusal: PLAN_REFUSAL.SIGNED_OUT,
       });
     }
+
     const planResetsAt = planLimitResetsAt(row, yield* Clock.currentTimeMillis);
+
     if (planResetsAt !== undefined) {
       return yield* new LaunchRefused({
         reason: "plan limit reached",
@@ -178,6 +182,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         planResetsAt,
       });
     }
+
     return row;
   });
 
@@ -195,9 +200,11 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     const environment = yield* HostedEnvironment;
     const ring = environment.providerKeyEncryptionKeys;
     const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
     if (parsed === undefined || Result.isFailure(parsed)) {
       return yield* Effect.fail(new LaunchRefused({ reason: "no key ring" }));
     }
+
     return parsed.success;
   });
 
@@ -211,15 +218,18 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   const apiKeyCredential = Effect.fnUntraced(function* (keyId: string | undefined) {
     const environment = yield* HostedEnvironment;
     const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.ANTHROPIC, environment, keyId);
+
     if (key === undefined) {
       return yield* new LaunchRefused({ reason: "no API key", keyRefusal: KEY_REFUSAL.MISSING });
     }
+
     if (key === PROVIDER_KEY_UNREADABLE) {
       return yield* new LaunchRefused({
         reason: "API key unreadable",
         keyRefusal: KEY_REFUSAL.UNREADABLE,
       });
     }
+
     return launchCredential(CLI_CREDENTIAL.API_KEY, key);
   });
 
@@ -227,6 +237,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   const planCredential = Effect.fnUntraced(function* (subscriptionId: string | undefined) {
     const ring = yield* keyRing;
     const row = yield* standingPlan(subscriptionId);
+
     const opened = openProviderKey(
       ring,
       {
@@ -236,12 +247,14 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       },
       row,
     );
+
     if (Result.isFailure(opened)) {
       return yield* new LaunchRefused({
         reason: "setup-token unreadable",
         planRefusal: PLAN_REFUSAL.UNREADABLE,
       });
     }
+
     return launchCredential(CLI_CREDENTIAL.PLAN, opened.success);
   });
 
@@ -254,17 +267,22 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   ) =>
     Effect.gen(function* () {
       const model = providerModelOf(agent.model);
+
       if (model === undefined) return yield* Effect.fail(new LaunchRefused({ reason: "model" }));
       // Note that a device whose runner reads no mode would run one that asks with full access, so it is refused rather than run unasked.
       const mode = launchPermissionMode(agent);
+
       if (mode !== undefined && !layout.permissionModes) {
         return yield* new LaunchRefused({ reason: "permission mode", modesUnsupported: true });
       }
+
       const effort = effortOf(agent.effort);
       // Note that the launch chose and recorded who pays before its config is written.
       const { payer } = yield* recordedPayer(agent);
+
       const cacheHour =
         payer === AGENT_PAYER.API_KEY && PROMPT_CACHE_HOUR_DIGITS.has(agent.id.charAt(0));
+
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
         cwd: layout.checkoutPath,
@@ -287,9 +305,11 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         ...(layout.installedSkills === undefined
           ? undefined
           : { installedSkills: layout.installedSkills }),
-        // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
+        // Note that the agent's mode and its starter's always-allowed commands are read at each launch, so a change reaches it from its next turn.
         ...mode,
+        ...(yield* launchAllowedCommands(agent, mode)),
       };
+
       return written;
     });
 
@@ -302,9 +322,11 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   const ahead = (agent: Agent) => {
     const effort = effortOf(agent.effort);
     const model = providerModelOf(agent.model);
+
     const asked = Effect.gen(function* () {
       if (agent.machine === AGENT_MACHINE.DEVICE) return;
       const recorded = yield* recordedPayer(agent);
+
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
       yield* standingPlan(recorded.subscriptionId).pipe(
         Effect.catchTag("LaunchRefused", (refused) =>
@@ -315,6 +337,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         ),
       );
     });
+
     return Effect.as(asked, {
       lines: [
         {
@@ -336,14 +359,14 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     launch: (agent) =>
       Effect.gen(function* () {
         const turn = yield* launchPayerOf(userId, agent, MODEL_PROVIDER.ANTHROPIC);
+
         if (turn.payer === AGENT_PAYER.MAC_SIGN_IN) return ON_MACHINE_LOGIN;
+
         return yield* turn.payer === AGENT_PAYER.API_KEY
           ? apiKeyCredential(turn.subscriptionId)
           : planCredential(turn.subscriptionId);
       }),
     config,
-    // Note that Claude Code reads a checkout's skills from `.claude/skills` alone.
-    skillRoots: [SKILL_ROOT.CLAUDE],
     commandRoute: claudeCodeCommandRoute,
     ahead,
   };

@@ -35,6 +35,7 @@ export function glyphStateWords(state: GlyphState, stopped: boolean): string | u
 /** Where an agent stands as its tab's glyph wears it: working while it may still write, failed, or at rest. */
 export function agentGlyphState(status: AgentStatus): GlyphState {
   if (agentStillWriting(status)) return GLYPH_STATE.WORKING;
+
   return status === AGENT_STATUS.FAILED ? GLYPH_STATE.FAILED : GLYPH_STATE.REST;
 }
 

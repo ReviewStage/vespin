@@ -202,6 +202,7 @@ const routeOver = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The handler runs on oRPC's own fiber, so it is handed the test's clock: the account rows hang off it.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -211,9 +212,11 @@ const routeOver = (
       pullRequestLinksLayer,
       logger,
     );
+
     const handled = yield* Effect.context<GitHubApp | PullRequestLinks>().pipe(
       Effect.provide(services),
     );
+
     const handle = hostedFetch({
       github: githubProcedures({
         resolveUserId: (incoming) =>
@@ -224,8 +227,10 @@ const routeOver = (
         unlinkGitHub: () => Effect.void,
       }),
     });
+
     // SAFETY: the repositories procedures yield the database, the GitHub App, its HTTP client, and the kept links alone, which is all a test provides of the web runtime's services.
     const webServices = handled as Context.Context<WebServices>;
+
     return (request: Request) => handle(request, webServices);
   });
 
@@ -236,6 +241,7 @@ const answerOn = (route: (request: Request) => Promise<Response>, request: Reque
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -253,6 +259,7 @@ const keptPullRequest = (
   url.searchParams.append(GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace);
   url.searchParams.append(GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay");
   url.searchParams.append(GITHUB_REPOSITORIES_QUERY.NUMBER, "42");
+
   return Effect.suspend(() =>
     answerOn(route, new Request(url, { headers: { authorization: `Bearer ${member}` } })),
   );
@@ -268,13 +275,17 @@ const openAccounts = (github: FakeGitHub) =>
     const owner = yield* openGithubUser();
     const other = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: other, name: "Test User", email: `${other}@app.test` });
+
     const bearers = new Map([
       [`Bearer ${owner}`, owner],
       [`Bearer ${other}`, other],
     ]);
+
     const ask = (userId: string | undefined, method = "GET", workspaceIds: string[] = []) => {
       const url = new URL(HOSTED_SERVICE_PATH.GITHUB_REPOSITORIES, ORIGIN);
+
       for (const id of workspaceIds) url.searchParams.append("workspaceId", id);
+
       return answer(
         bearers,
         github,
@@ -284,6 +295,7 @@ const openAccounts = (github: FakeGitHub) =>
         }),
       );
     };
+
     /** A read of one repository at the path given (its tree or its skills), with the queries given in order. */
     const read = (
       userId: string,
@@ -291,13 +303,16 @@ const openAccounts = (github: FakeGitHub) =>
       query: readonly (readonly [name: string, value: string])[],
     ) => {
       const url = new URL(path, ORIGIN);
+
       for (const [name, value] of query) url.searchParams.append(name, value);
+
       return answer(
         bearers,
         github,
         new Request(url, { headers: { authorization: `Bearer ${userId}` } }),
       );
     };
+
     return { owner, other, bearers, ask, read };
   });
 
@@ -315,17 +330,22 @@ const RELAY_SKILL_FILES = new Map([
 /** `acme/relay`'s skills folder and each skill's `SKILL.md` as GitHub answers them; nothing for any other read. */
 function releaseSkillRead(sent: { readonly url: string }): Response | undefined {
   const path = new URL(sent.url).pathname;
+
   if (path === "/repos/acme/relay/git/trees/main%3A.agents%2Fskills") {
     return Response.json({
       tree: [...RELAY_SKILL_FILES.keys()].map((name) => ({ path: name, type: "tree" })),
       truncated: false,
     });
   }
+
   const file = /^\/repos\/acme\/relay\/contents\/\.agents\/skills\/([a-z-]+)\/SKILL\.md$/u.exec(
     path,
   );
+
   const text = file === null ? undefined : RELAY_SKILL_FILES.get(file[1] ?? "");
+
   if (text === undefined) return undefined;
+
   return Response.json({
     type: "file",
     size: text.length,
@@ -341,7 +361,9 @@ function readOf<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's answer: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -349,7 +371,9 @@ function readOf<S extends Schema.ConstraintDecoder<unknown>>(
 function listed(answered: Answer) {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(githubRepositoriesAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's answer: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -369,7 +393,9 @@ it.layer(getTestDB())("the repositories route", (it) => {
             ],
           },
         ]);
+
         const { owner, ask } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7101,
           accountId: 9101,
@@ -440,6 +466,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
             true,
           ),
         ];
+
         const github = githubReaching(
           [
             {
@@ -456,14 +483,17 @@ it.layer(getTestDB())("the repositories route", (it) => {
               ? Response.json(own)
               : undefined,
         );
+
         const { bearers, ask } = yield* openAccounts(github);
         const member = yield* openTokenMember();
         bearers.set(`Bearer ${member}`, member);
+
         const workspace = yield* openInstallationWorkspace(member, {
           installationId: 7151,
           accountId: 9151,
           accountLogin: "acme",
         });
+
         yield* addWorkspaceTokenRepository(
           member,
           workspace,
@@ -514,18 +544,23 @@ it.layer(getTestDB())("the repositories route", (it) => {
           { id: 7201, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
           { id: 7202, login: "octocat", repositories: [{ owner: "octocat", name: "dotfiles" }] },
         ]);
+
         const { owner, ask } = yield* openAccounts(github);
+
         const acme = yield* openInstallationWorkspace(owner, {
           installationId: 7201,
           accountId: 9201,
           accountLogin: "acme",
         });
+
         const bare = yield* openWorkspace(owner);
         const ahead = yield* ask(owner);
         const personal = yield* ensurePersonalWorkspace(owner, yield* fakeWorkspaceSeams);
         assert.ok(Option.isSome(personal));
+
         const names = (answered: Answer) => {
           const reached = listed(answered);
+
           return [reached.installed, reached.repositories.map((repository) => repository.fullName)];
         };
 
@@ -549,7 +584,9 @@ it.layer(getTestDB())("the repositories route", (it) => {
             suspendedAt: "2026-10-12T00:00:00Z",
           },
         ]);
+
         const { owner, ask } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7401,
           accountId: 9401,
@@ -570,13 +607,16 @@ it.layer(getTestDB())("the repositories route", (it) => {
           { owner: "acme", name: "relay" },
           { owner: "acme", name: "ledger" },
         ];
+
         const github = githubReaching([{ id: 7501, login: "acme", repositories }]);
         const { owner, ask } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7501,
           accountId: 9501,
           accountLogin: "acme",
         });
+
         const names = (answered: Answer) =>
           listed(answered).repositories.map((repository) => repository.fullName);
 
@@ -609,12 +649,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
                 })
               : undefined,
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7601,
           accountId: 9601,
           accountLogin: "acme",
         });
+
         const place = (repository: string) =>
           [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
@@ -628,10 +671,12 @@ it.layer(getTestDB())("the repositories route", (it) => {
             ["path", "src"],
           ]),
         );
+
         const skills = readOf(
           taskSkillsAnswerSchema,
           yield* read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_SKILLS, place("acme/relay")),
         );
+
         const elsewhere = readOf(
           taskTreeAnswerSchema,
           yield* read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_TREE, place("acme/ledger")),
@@ -666,13 +711,17 @@ it.layer(getTestDB())("the repositories route", (it) => {
           {},
           releaseSkillRead,
         );
+
         const { owner, other, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7651,
           accountId: 9651,
           accountLogin: "acme",
         });
+
         yield* joinWorkspace(workspace, other, WORKSPACE_ROLE.MEMBER);
+
         const install = (
           scope: InstalledSkillOwner,
           name: string,
@@ -696,10 +745,12 @@ it.layer(getTestDB())("the repositories route", (it) => {
             }),
             (row) => Option.getOrThrow(row).id,
           );
+
         const shared: InstalledSkillOwner = {
           scope: INSTALLED_SKILL_SCOPE.WORKSPACE,
           organizationId: workspace,
         };
+
         const mine: InstalledSkillOwner = { scope: INSTALLED_SKILL_SCOPE.PERSONAL };
         yield* install(shared, "release");
         yield* install(shared, "review");
@@ -707,6 +758,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
         yield* install(shared, "model-only", { userInvocable: false });
         yield* install(mine, "triage");
         yield* install(mine, "pr-style");
+
         const skillsOf = (userId: string, repository: string | undefined) =>
           Effect.map(
             read(userId, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_SKILLS, [
@@ -792,12 +844,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
           {},
           releaseSkillRead,
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7661,
           accountId: 9661,
           accountLogin: "acme",
         });
+
         yield* installSkill(owner, {
           owner: { scope: INSTALLED_SKILL_SCOPE.PERSONAL },
           name: "pr-style",
@@ -813,6 +868,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
             },
           ],
         });
+
         // The answer as a desktop through 0.19.0 declares it: a repository, a branch, and each skill's file.
         const olderSkillsAnswer = Schema.Union([
           Schema.Struct({
@@ -835,6 +891,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
           [GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay"],
         ]);
+
         const withNone = yield* read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_SKILLS, [
           [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
         ]);
@@ -842,10 +899,13 @@ it.layer(getTestDB())("the repositories route", (it) => {
         // Note that a desktop drops a key a newer service added, as every wire read of an answer does.
         const asOlder = (answered: Answer) => {
           assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
           const decoded = readEither(olderSkillsAnswer, { excess: EXCESS_KEYS.DROP })(
             unparsedWire(answered.body),
           );
+
           if (Result.isFailure(decoded)) return assert.fail(decoded.failure.refusal);
+
           return decoded.success;
         };
 
@@ -875,12 +935,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
         const github = githubReaching([
           { id: 7701, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
         ]);
+
         const { owner, other, read } = yield* openAccounts(github);
+
         const theirs = yield* openInstallationWorkspace(other, {
           installationId: 7701,
           accountId: 9701,
           accountLogin: "acme",
         });
+
         const mine = yield* openWorkspace(owner);
 
         for (const path of [
@@ -900,6 +963,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
             path,
           );
         }
+
         assert.deepEqual(
           yield* read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_TREE, [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, mine],
@@ -927,15 +991,19 @@ it.layer(getTestDB())("the repositories route", (it) => {
           (sent) => {
             const pulled = PULL_PATH.exec(new URL(sent.url).pathname);
             const record = pulled === null ? undefined : RELAY_PULLS.get(Number(pulled[1]));
+
             return record === undefined ? undefined : Response.json(record);
           },
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7801,
           accountId: 9801,
           accountLogin: "acme",
         });
+
         const pullRequest = (number: number) =>
           read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_PULL_REQUEST, [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
@@ -989,6 +1057,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         let queueAnswer: Response | undefined;
+
         const github = githubReaching(
           [{ id: 7831, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
@@ -997,15 +1066,19 @@ it.layer(getTestDB())("the repositories route", (it) => {
             if (new URL(sent.url).pathname === "/graphql") return queueAnswer?.clone();
             const pulled = PULL_PATH.exec(new URL(sent.url).pathname);
             const record = pulled === null ? undefined : RELAY_PULLS.get(Number(pulled[1]));
+
             return record === undefined ? undefined : Response.json(record);
           },
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7831,
           accountId: 9831,
           accountLogin: "acme",
         });
+
         const pullRequest = (number: number) =>
           Effect.map(
             read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_PULL_REQUEST, [
@@ -1045,12 +1118,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
               ? Response.json(pullRecord(42, "Settle the ledger", { merged: false, draft: false }))
               : undefined,
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7802,
           accountId: 9802,
           accountLogin: "acme",
         });
+
         const pullRequest = (repository: string, number: number) =>
           read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_PULL_REQUEST, [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
@@ -1074,16 +1150,20 @@ it.layer(getTestDB())("the repositories route", (it) => {
         const github = githubReaching([
           { id: 7803, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
         ]);
+
         const { owner, other, read } = yield* openAccounts(github);
+
         const theirs = yield* openInstallationWorkspace(owner, {
           installationId: 7803,
           accountId: 9803,
           accountLogin: "acme",
         });
+
         const place = [
           [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, theirs],
           [GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay"],
         ] as const;
+
         const numbered = (...numbers: string[]) =>
           read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_PULL_REQUEST, [
             ...place,
@@ -1094,6 +1174,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           ...place,
           [GITHUB_REPOSITORIES_QUERY.NUMBER, "42"],
         ]);
+
         const unnumbered = [
           yield* numbered(),
           yield* numbered("0"),
@@ -1106,12 +1187,14 @@ it.layer(getTestDB())("the repositories route", (it) => {
           stranger,
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
         );
+
         for (const answered of unnumbered) {
           assert.deepEqual(
             answered,
             refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
           );
         }
+
         assert.equal(github.sent.length, 0);
       }),
   );
@@ -1121,26 +1204,32 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         let title = "Send invitations in batches";
+
         const github = githubReaching(
           [{ id: 7804, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
           {},
           (sent) => (PULL_PATH.test(new URL(sent.url).pathname) ? relayPull42(title) : undefined),
         );
+
         const { owner, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7804,
           accountId: 9804,
           accountLogin: "acme",
         });
+
         const route = yield* routeOver(bearers, github);
         const pullRequest = keptPullRequest(route, owner, workspace);
+
         const titleOf = (answered: Answer) =>
           readOf(githubRepositoryPullRequestAnswerSchema, answered).pullRequest?.title;
 
         const together = yield* Effect.all([pullRequest, pullRequest, pullRequest], {
           concurrency: "unbounded",
         });
+
         title = "Send invitations in batches of fifty";
         yield* TestClock.adjust(Duration.seconds(30));
         const kept = yield* pullRequest;
@@ -1162,12 +1251,14 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         let refusing = true;
+
         const github = githubReaching(
           [{ id: 7805, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
           {},
           (sent) => {
             if (!PULL_PATH.test(new URL(sent.url).pathname)) return undefined;
+
             return refusing
               ? Response.json(
                   { message: "You have exceeded a secondary rate limit." },
@@ -1176,18 +1267,23 @@ it.layer(getTestDB())("the repositories route", (it) => {
               : relayPull42("Send invitations in batches");
           },
         );
+
         const { owner, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7805,
           accountId: 9805,
           accountLogin: "acme",
         });
+
         const logged: string[] = [];
+
         const route = yield* routeOver(
           bearers,
           github,
           Logger.layer([Logger.make(({ message }) => logged.push(JSON.stringify(message)))]),
         );
+
         const pullRequest = keptPullRequest(route, owner, workspace);
 
         const refused = yield* pullRequest;
@@ -1201,6 +1297,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
           HOSTED_API_ERROR.UNAVAILABLE,
         );
+
         assert.deepEqual(refused, unavailable);
         assert.deepEqual(held, unavailable);
         assert.equal(logged.filter((line) => line.includes("GitHub answered 403")).length, 1);
@@ -1216,6 +1313,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         let refusingAll = false;
+
         const github = githubReaching(
           [{ id: 7808, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
@@ -1225,22 +1323,29 @@ it.layer(getTestDB())("the repositories route", (it) => {
               { message: "You have exceeded a secondary rate limit." },
               { status: 403, headers: { "retry-after": "900" } },
             );
+
             if (refusingAll) return refusal;
+
             return PULL_PATH.test(new URL(sent.url).pathname) ? refusal : undefined;
           },
         );
+
         const { owner, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7808,
           accountId: 9808,
           accountLogin: "acme",
         });
+
         const logged: string[] = [];
+
         const route = yield* routeOver(
           bearers,
           github,
           Logger.layer([Logger.make(({ message }) => logged.push(JSON.stringify(message)))]),
         );
+
         const pullRequest = keptPullRequest(route, owner, workspace);
 
         const refused = yield* pullRequest;
@@ -1252,6 +1357,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
           HOSTED_API_ERROR.UNAVAILABLE,
         );
+
         assert.deepEqual([refused, ...held], [unavailable, unavailable, unavailable, unavailable]);
         assert.equal(logged.filter((line) => line.includes("GitHub App read failed")).length, 1);
       }),
@@ -1264,17 +1370,21 @@ it.layer(getTestDB())("the repositories route", (it) => {
         const installations = [
           { id: 7807, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
         ];
+
         const github = githubReaching(installations, undefined, {}, (sent) =>
           PULL_PATH.test(new URL(sent.url).pathname)
             ? relayPull42("Send invitations in batches")
             : undefined,
         );
+
         const { owner, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7807,
           accountId: 9807,
           accountLogin: "acme",
         });
+
         const route = yield* routeOver(bearers, github);
         const pullRequest = keptPullRequest(route, owner, workspace);
 
@@ -1297,23 +1407,28 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         let failing = true;
+
         const github = githubReaching(
           [{ id: 7806, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
           {},
           (sent) => {
             if (!PULL_PATH.test(new URL(sent.url).pathname)) return undefined;
+
             return failing
               ? Response.json({ message: "Server Error" }, { status: 502 })
               : relayPull42("Send invitations in batches");
           },
         );
+
         const { owner, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7806,
           accountId: 9806,
           accountLogin: "acme",
         });
+
         const route = yield* routeOver(bearers, github);
         const pullRequest = keptPullRequest(route, owner, workspace);
 
@@ -1350,27 +1465,34 @@ it.layer(getTestDB())("the repositories route", (it) => {
           (sent) => {
             const named = ISSUE_PATH.exec(new URL(sent.url).pathname);
             const record = named === null ? undefined : RELAY_ISSUES.get(Number(named[1]));
+
             return record === undefined ? undefined : Response.json(record);
           },
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7811,
           accountId: 9811,
           accountLogin: "acme",
         });
+
         const issue = (number: number, repository = "acme/relay") =>
           read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_ISSUE, [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
             [GITHUB_REPOSITORIES_QUERY.REPOSITORY, repository],
             [GITHUB_REPOSITORIES_QUERY.NUMBER, String(number)],
           ]);
+
         const page = (number: number) => `https://github.com/acme/relay/issues/${number}`;
 
         const open = yield* issue(7);
+
         const states = [yield* issue(8), yield* issue(9), yield* issue(10)].map(
           (each) => readOf(githubRepositoryIssueAnswerSchema, each).issue?.state,
         );
+
         const none = [yield* issue(42), yield* issue(99), yield* issue(7, "acme/ledger")];
 
         assert.deepEqual(open, {
@@ -1391,15 +1513,19 @@ it.layer(getTestDB())("the repositories route", (it) => {
           ISSUE_STATE.NOT_PLANNED,
           ISSUE_STATE.NOT_PLANNED,
         ]);
+
         for (const answered of none) {
           assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { issue: null } });
         }
+
         // The listing that finds the repository mints its own token; every token the issue is read on is cut to issues read on the one repository.
         const mints = github.sent
           .filter((sent) => sent.url.endsWith("/access_tokens"))
           .map((sent) => JSON.parse(sent.body))
           .filter((mint) => "repositories" in mint);
+
         assert.ok(mints.length > 0);
+
         for (const mint of mints) {
           assert.deepEqual(mint, { repositories: ["relay"], permissions: { issues: "read" } });
         }
@@ -1427,17 +1553,21 @@ it.layer(getTestDB())("the repositories route", (it) => {
               ? Response.json({ message: "Issues are disabled for this repo" }, { status: 410 })
               : undefined,
         );
+
         const { owner, read } = yield* openAccounts(github);
+
         const ungranted = yield* openInstallationWorkspace(owner, {
           installationId: 7812,
           accountId: 9812,
           accountLogin: "acme",
         });
+
         const turnedOff = yield* openInstallationWorkspace(owner, {
           installationId: 7813,
           accountId: 9813,
           accountLogin: "globex",
         });
+
         const issue = (workspace: string, repository: string) =>
           read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_ISSUE, [
             [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace],
@@ -1446,6 +1576,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           ]);
 
         const notGranted = yield* issue(ungranted, "acme/relay");
+
         // The listing that looks for the repository mints its own token; none is minted for the repository, and no issue is asked.
         const forTheIssue = github.sent
           .filter(
@@ -1454,6 +1585,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
               (sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body)),
           )
           .map((sent) => sent.url);
+
         const off = yield* issue(turnedOff, "globex/ledger");
 
         const none = { status: HOSTED_HTTP_STATUS.OK, body: { issue: null } };
@@ -1475,12 +1607,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
             permissions: GRANTING_ISSUES,
           },
         ]);
+
         const { owner, other, read } = yield* openAccounts(github);
+
         const theirs = yield* openInstallationWorkspace(owner, {
           installationId: 7814,
           accountId: 9814,
           accountLogin: "acme",
         });
+
         const place = [
           [GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, theirs],
           [GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay"],
@@ -1490,6 +1625,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
           ...place,
           [GITHUB_REPOSITORIES_QUERY.NUMBER, "7"],
         ]);
+
         const unnumbered = yield* read(owner, HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_ISSUE, [
           ...place,
           [GITHUB_REPOSITORIES_QUERY.NUMBER, "0"],
@@ -1514,12 +1650,15 @@ it.layer(getTestDB())("the repositories route", (it) => {
         const github = githubReaching([
           { id: 7301, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
         ]);
+
         const { owner, other, ask } = yield* openAccounts(github);
+
         const theirs = yield* openInstallationWorkspace(other, {
           installationId: 7301,
           accountId: 9301,
           accountLogin: "acme",
         });
+
         const mine = yield* openWorkspace(owner);
 
         assert.deepEqual(
@@ -1543,9 +1682,11 @@ it.layer(getTestDB())("the repositories route", (it) => {
         const github = githubReaching([]);
         const { other, bearers } = yield* openAccounts(github);
         const route = yield* routeOver(bearers, github);
+
         const bytes = (url: string, headers: Record<string, string> = {}) =>
           Effect.promise(async () => {
             const response = await route(new Request(new URL(url, ORIGIN), { headers }));
+
             return {
               status: response.status,
               contentType: response.headers.get("content-type"),
@@ -1553,6 +1694,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
               text: await response.text(),
             };
           });
+
         const malformed = `${HOSTED_SERVICE_PATH.GITHUB_REPOSITORY_TREE}?workspaceId=a&workspaceId=b&recursive=yes`;
 
         assert.deepEqual(yield* bytes(malformed), {
@@ -1588,23 +1730,28 @@ it.layer(getTestDB())("the repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         const head = "c".repeat(40);
+
         const github = githubReaching(
           [{ id: 7901, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
           undefined,
           {},
           (sent) => {
             const path = new URL(sent.url).pathname;
+
             if (path === "/repos/acme/relay/git/trees/main%3Asrc") {
               return Response.json({
                 tree: [{ path: "invite.ts", type: "blob" }],
                 truncated: false,
               });
             }
+
             if (path === "/repos/acme/relay/git/ref/heads/main") {
               return Response.json({ object: { type: "commit", sha: head } });
             }
+
             if (path !== "/repos/acme/relay/contents/src/invite.ts") return undefined;
             const text = "export const seats = 3;\nexport const sent = 0;";
+
             return Response.json({
               type: "file",
               size: text.length,
@@ -1613,14 +1760,18 @@ it.layer(getTestDB())("the repositories route", (it) => {
             });
           },
         );
+
         const { owner, other, bearers } = yield* openAccounts(github);
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 7901,
           accountId: 9901,
           accountLogin: "acme",
         });
+
         const route = yield* routeOver(bearers, github);
         const service = recordingHttpClient((sent) => route(new Request(sent.url, sent.init)));
+
         const desktopOf = (userId: string) =>
           new HostedTaskClient({
             serviceBaseUrl: ORIGIN,
@@ -1630,33 +1781,41 @@ it.layer(getTestDB())("the repositories route", (it) => {
               readAccountKey: () => Effect.succeed(userId),
             }),
           });
+
         const desktop = desktopOf(owner);
+
         const asked = <A, E>(effect: Effect.Effect<A, E, HttpClient.HttpClient>) =>
           Effect.provide(effect, service.layer);
 
         const repositories = yield* asked(desktop.repositories(workspace));
+
         const folder = yield* asked(
           desktop.readRepositoryTree(
             { workspaceId: workspace, repository: "acme/relay" },
             { path: "src" },
           ),
         );
+
         const window = { path: "src/invite.ts", firstLine: 2, lastLine: 2 };
+
         const file = yield* asked(
           desktop.readRepositoryFile({ workspaceId: workspace, repository: "acme/relay" }, window),
         );
+
         const unreached = yield* asked(
           desktop.readRepositoryTree(
             { workspaceId: workspace, repository: "acme/ledger" },
             { path: "" },
           ),
         );
+
         const stranger = yield* asked(
           desktopOf(other).readRepositorySkills({
             workspaceId: workspace,
             repository: "acme/relay",
           }),
         );
+
         const strangerFile = yield* asked(
           desktopOf(other).readRepositoryFile(
             { workspaceId: workspace, repository: "acme/relay" },
@@ -1724,15 +1883,20 @@ const tokenGitHub = (installationId: number, also: readonly InstallationFixture[
       if (sent.headers.get("authorization") !== `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`) {
         return undefined;
       }
+
       const { pathname } = new URL(sent.url);
+
       if (pathname === "/user/repos") {
         return Response.json([
           memberRepositoryJson({ owner: "octo-member", name: "side" }, true),
           memberRepositoryJson({ owner: "octo-member", name: "fork" }, false),
         ]);
       }
+
       const named = MEMBER_REPOSITORY.exec(pathname)?.[1];
+
       if (named === undefined) return undefined;
+
       return Response.json(
         memberRepositoryJson({ owner: "octo-member", name: named }, named === "side"),
       );
@@ -1745,13 +1909,16 @@ const openTokenWorkspace = (github: FakeGitHub, installationId: number) =>
     const accounts = yield* openAccounts(github);
     const member = yield* openTokenMember();
     accounts.bearers.set(`Bearer ${member}`, member);
+
     const workspace = yield* openInstallationWorkspace(accounts.owner, {
       installationId,
       accountId: installationId + 2000,
       accountLogin: "acme",
     });
+
     yield* joinWorkspace(workspace, member);
     yield* joinWorkspace(workspace, accounts.other);
+
     return { ...accounts, member, workspace };
   });
 
@@ -1764,7 +1931,9 @@ const askTokenRepositories = (
   change?: { readonly repository: string; readonly added: boolean },
 ) => {
   const url = new URL(HOSTED_SERVICE_PATH.GITHUB_TOKEN_REPOSITORIES, ORIGIN);
+
   if (change === undefined) url.searchParams.set("workspaceId", workspaceId);
+
   return answer(
     bearers,
     github,
@@ -1783,6 +1952,7 @@ it.layer(getTestDB())("the token repositories route", (it) => {
       Effect.gen(function* () {
         const github = tokenGitHub(7301);
         const { bearers, member, other, workspace } = yield* openTokenWorkspace(github, 7301);
+
         const ask = (userId: string, change?: { repository: string; added: boolean }) =>
           askTokenRepositories(bearers, github, userId, workspace, change);
 
@@ -1790,8 +1960,10 @@ it.layer(getTestDB())("the token repositories route", (it) => {
           workspaceTokenRepositoriesAnswerSchema,
           yield* ask(member, { repository: "octo-member/side", added: true }),
         );
+
         const refused = yield* ask(member, { repository: "octo-member/fork", added: true });
         const seenByOther = readOf(workspaceTokenRepositoriesAnswerSchema, yield* ask(other));
+
         const pickerOf = (userId: string) =>
           answer(
             bearers,
@@ -1804,6 +1976,7 @@ it.layer(getTestDB())("the token repositories route", (it) => {
               { headers: { authorization: `Bearer ${userId}` } },
             ),
           ).pipe(Effect.map(listed));
+
         const pickerOfOther = yield* pickerOf(other);
         const pickerOfMember = yield* pickerOf(member);
 
@@ -1844,35 +2017,44 @@ it.layer(getTestDB())("the token repositories route", (it) => {
     () =>
       Effect.gen(function* () {
         const github = tokenGitHub(7311);
+
         const { bearers, owner, member, other, workspace } = yield* openTokenWorkspace(
           github,
           7311,
         );
+
         const ask = (
           userId: string,
           change?: { repository: string; added: boolean },
           over = github,
         ) => askTokenRepositories(bearers, over, userId, workspace, change);
+
         const side = { repository: "octo-member/side", added: true };
 
         yield* ask(member, side);
         const byOther = yield* ask(other, { ...side, added: false });
+
         const byOwner = readOf(
           workspaceTokenRepositoriesAnswerSchema,
           yield* ask(owner, { ...side, added: false }),
         );
+
         yield* ask(member, side);
+
         const installed = {
           id: 7302,
           login: "octo-member",
           repositories: [{ owner: "octo-member", name: "side" }],
         };
+
         yield* connectWorkspaceGitHub(workspace, installed);
         const reaching = tokenGitHub(7311, [installed]);
+
         const hidden = readOf(
           workspaceTokenRepositoriesAnswerSchema,
           yield* ask(member, undefined, reaching),
         );
+
         const picker = listed(
           yield* answer(
             bearers,
@@ -1916,6 +2098,7 @@ it.layer(getTestDB())("the token repositories route", (it) => {
           repository: "octo-member/side",
           added: true,
         });
+
         const silent = githubReaching(
           [{ id: 7321, login: "acme", repositories: [] }],
           GITHUB_APP_WITH_TOKENS,
@@ -1930,6 +2113,7 @@ it.layer(getTestDB())("the token repositories route", (it) => {
           workspaceTokenRepositoriesAnswerSchema,
           yield* askTokenRepositories(bearers, silent, member, workspace),
         );
+
         const removed = readOf(
           workspaceTokenRepositoriesAnswerSchema,
           yield* askTokenRepositories(bearers, silent, member, workspace, {

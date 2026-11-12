@@ -26,6 +26,7 @@ function microphoneStatusDetail(status: MicrophoneStatus): string | undefined {
       return undefined;
   }
 }
+
 /** What the Microphone row says, and what it offers. */
 interface MicrophoneAccessRow {
   /** Absent wherever the row's name and its controls already say everything. */
@@ -56,7 +57,10 @@ export function microphoneAccessRow(status: MicrophoneStatus): MicrophoneAccessR
       status === MICROPHONE_STATUS.GRANTED || status === MICROPHONE_STATUS.DENIED,
     granted: status === MICROPHONE_STATUS.GRANTED,
   };
+
   const detail = microphoneStatusDetail(status);
+
   if (detail !== undefined) row.detail = detail;
+
   return row;
 }

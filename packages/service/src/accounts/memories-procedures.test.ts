@@ -19,10 +19,10 @@ import {
   memorySearchAnswerSchema,
 } from "@repo/features/memory-wire";
 import { EXPERIMENT } from "@repo/settings";
-import { HTTP_METHOD, unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import { HTTP_METHOD, unparsedWire, type WireBoundaryInput, type WireRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option, Result, type Schema } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Predicate, Result, type Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { recordMemoryRecalls, runRecall, runRemember } from "../agents/memory-tools.js";
@@ -76,11 +76,13 @@ interface Answer {
 /** A workspace's owner and one more member, an account outside it, each behind a bearer and with Memory on. */
 const openTeam = Effect.gen(function* () {
   const db = yield* Database;
+
   const [owner, teammate, outsider] = [
     `user-${randomUUID()}`,
     `user-${randomUUID()}`,
     `user-${randomUUID()}`,
   ];
+
   for (const [id, name] of [
     [owner, "Olive Owner"],
     [teammate, "Tom Teammate"],
@@ -88,30 +90,37 @@ const openTeam = Effect.gen(function* () {
   ] as const) {
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
   }
+
   const workspaceId = yield* openWorkspace(owner);
   yield* joinWorkspace(workspaceId, teammate);
   const elsewhere = yield* openWorkspace(outsider);
+
   for (const [organizationId, by] of [
     [workspaceId, owner],
     [elsewhere, outsider],
   ] as const) {
     yield* setWorkspaceExperiment({ organizationId, experiment: EXPERIMENT.MEMORY, on: true, by });
   }
+
   const bearers = new Map([owner, teammate, outsider].map((id) => [`Bearer ${id}`, id]));
+
   const procedures = memoriesProcedures({
     resolveUserId: (incoming) =>
       Effect.succeed(
         Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
       ),
   });
+
   const ask = (request: Request) => answer(procedures, request);
   const keep = (userId: string, text: string) => runRemember({ workspaceId, userId }, { text });
+
   return { owner, teammate, outsider, workspaceId, ask, keep };
 });
 
 const answer = (procedures: ReturnType<typeof memoriesProcedures>, request: Request) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -119,10 +128,12 @@ const answer = (procedures: ReturnType<typeof memoriesProcedures>, request: Requ
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
     );
+
     const response = yield* hostedAnswer({ account: procedures }, services, request);
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -130,7 +141,7 @@ function request(
   path: string,
   userId: string | undefined,
   method: string = HTTP_METHOD.GET,
-  body?: object,
+  body?: WireRecord,
 ) {
   return new Request(new URL(path, ORIGIN), {
     method,
@@ -152,7 +163,7 @@ const forget = (userId: string | undefined, workspaceId: string, id: string) =>
     HTTP_METHOD.DELETE,
   );
 
-const save = (userId: string, body: object) =>
+const save = (userId: string, body: WireRecord) =>
   request(MEMORIES_PATH, userId, HTTP_METHOD.POST, body);
 
 const search = (userId: string, workspaceId: string, query?: string) =>
@@ -170,7 +181,9 @@ function wireOf<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(answered.body));
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -178,7 +191,9 @@ function wireOf<S extends Schema.ConstraintDecoder<unknown>>(
 function memoriesOf(answered: Answer): MemoriesAnswer {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(answered.body));
   const read = readEither(memoriesAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -221,20 +236,24 @@ it.layer(getTestDB())("the memories procedures", (it) => {
         const db = yield* Database;
         const { owner, teammate, workspaceId, ask, keep } = yield* openTeam;
         const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+
         const [agent] = yield* db
           .select({ taskId: agentTable.taskId })
           .from(agentTable)
           .where(eq(agentTable.id, agentId));
+
         assert.ok(agent !== undefined);
         const source = { agentId, messageId: randomUUID() };
         const agents = { workspaceId, userId: owner, source };
 
         yield* keep(teammate, TESTS_RUN).pipe(Effect.provide(ANALYTICS.layer));
         yield* TestClock.adjust(Duration.minutes(1));
+
         const kept = yield* runRemember(agents, { text: DEPLOYS }).pipe(
           Effect.provide(ANALYTICS.layer),
         );
-        assert.ok(isRecord(kept.memory) && typeof kept.memory.id === "string");
+
+        assert.ok(isRecord(kept.memory) && Predicate.isString(kept.memory.id));
         yield* recordMemoryRecalls(agents, [kept.memory.id], source).pipe(
           Effect.provide(ANALYTICS.layer),
         );
@@ -287,18 +306,22 @@ it.layer(getTestDB())("the memories procedures", (it) => {
         yield* keep(owner, TESTS_RUN);
         yield* TestClock.adjust(Duration.minutes(1));
         yield* keep(teammate, DEPLOYS);
+
         const [deploys, testsRun] = memoriesOf(
           yield* ask(readMemories(owner, workspaceId)),
         ).memories;
+
         assert.ok(deploys !== undefined && testsRun !== undefined);
 
         const refused = yield* ask(forget(teammate, workspaceId, testsRun.id));
         const ownForgotten = yield* ask(forget(teammate, workspaceId, deploys.id));
         const again = yield* ask(forget(teammate, workspaceId, deploys.id));
+
         const recalled = yield* runRecall(
           { workspaceId, userId: owner },
           { query: "deployments release" },
         );
+
         const byOwner = yield* ask(forget(owner, workspaceId, testsRun.id));
 
         assert.deepEqual(
@@ -409,10 +432,12 @@ it.layer(getTestDB())("the memories procedures", (it) => {
           memorySaveAnswerSchema,
           yield* ask(save(teammate, { workspaceId, text: ` ${DEPLOYS} ` })),
         );
+
         const again = wireOf(
           memorySaveAnswerSchema,
           yield* ask(save(teammate, { workspaceId, text: DEPLOYS })),
         );
+
         const corrected = wireOf(
           memorySaveAnswerSchema,
           yield* ask(
@@ -423,6 +448,7 @@ it.layer(getTestDB())("the memories procedures", (it) => {
             }),
           ),
         );
+
         const found = wireOf(
           memorySearchAnswerSchema,
           yield* ask(search(owner, workspaceId, "deployments vercel")),
@@ -460,9 +486,11 @@ it.layer(getTestDB())("the memories procedures", (it) => {
             text: `The deploy key is ghp_${"x".repeat(36)}.`,
           }),
         );
+
         const gone = yield* ask(
           save(owner, { workspaceId, text: DEPLOYS, replaces: randomUUID() }),
         );
+
         yield* setWorkspaceExperiment({
           organizationId: workspaceId,
           experiment: EXPERIMENT.MEMORY,

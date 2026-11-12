@@ -121,6 +121,7 @@ export function replayPlace(input: {
 }): ReplayPlace {
   const { agent, control, tile, target, onOpenTarget, openGitHub } = input;
   const agents = [...(control.agents ?? NO_AGENTS), ...(control.archived ?? NO_AGENTS)];
+
   return {
     agents,
     startedBy: agent.startedBy,
@@ -166,10 +167,12 @@ function useSource(agentId: string, place: ReplayPlace): AgentSummary | undefine
     void reader(agentId).then((answer) => {
       if (current) setRead(answer);
     });
+
     return () => {
       current = false;
     };
   }, [agentId, reader, unlisted]);
+
   return listed ?? (read?.id === agentId ? read : undefined);
 }
 
@@ -185,12 +188,17 @@ function useLineSender(
   readerId: string | undefined,
 ): ReactNode {
   const { members, former } = useMemberDirectory();
+
   if (view.own) return undefined;
+
   const actor =
     view.sentBy === undefined ? undefined : lineSender(view.sentBy, readerId, members, former);
+
   if (actor !== undefined) return <ActorRef actor={actor} />;
+
   // A member's line the reader sent is theirs; one the window cannot place keeps its name.
   if (readerId !== undefined && view.sentBy?.userId === readerId) return undefined;
+
   return (
     <Text
       as={TEXT_ELEMENT.SPAN}
@@ -218,6 +226,7 @@ function LineStep({
 }): React.JSX.Element {
   const sender = useLineSender(view, readerId);
   const received = sender !== undefined;
+
   return (
     <Message
       from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
@@ -255,6 +264,7 @@ function CallStep({
   const agentId = view.agent?.id;
   const listed = agentId === undefined ? undefined : place.tile(agentId);
   const title = view.agent?.title;
+
   const agent =
     listed ??
     (title === undefined
@@ -266,6 +276,7 @@ function CallStep({
           provider: view.agent?.model === undefined ? undefined : providerOf(view.agent.model),
           state: ACTOR_STATE.REST,
         });
+
   return (
     <TranscriptTool
       data-replay-step={REPLAY_STEP_KIND.TOOL}
@@ -303,6 +314,7 @@ function StepRow({
   place: ReplayPlace;
 }): React.JSX.Element {
   const view = stepView(step, todos);
+
   switch (view.kind) {
     case STEP_VIEW.LINE:
       return <LineStep view={view} readerId={place.readerId} />;
@@ -362,10 +374,12 @@ function ReplaySteps({
   // Note that the replay's calls stand in its first message's words, which the transcript's own check for a server's call never reads.
   const callsServer = useMemo(() => replayCallsServer(steps), [steps]);
   const todos = useMemo(() => replayTaskTodos(steps), [steps]);
+
   const drawMore = () => {
     if (page.next === page.from) list.current?.focus({ preventScroll: true });
     setShown(steps.length - page.from + page.next);
   };
+
   return (
     // No ring: it is focused only by script, to keep the place when Show more is spent.
     <div
@@ -414,9 +428,12 @@ function ReplayFoot({
   // Note that the task list's pull request stands first, since it moves without a read.
   const pullRequest = place.pullRequests.get(agentId) ?? published?.pullRequest;
   const branch = published?.branch ?? undefined;
+
   const words =
     pullRequest === undefined || pullRequest === null ? undefined : pullRequestLabelOf(pullRequest);
+
   if (branch === undefined && words === undefined) return null;
+
   return (
     // The branch and the pull request, over a dashed rule.
     <div className="flex flex-wrap items-center gap-x-block-gap gap-y-tight-gap border-t border-dashed border-border pt-row-inset text-caption text-muted-foreground *:min-w-0">
@@ -463,6 +480,7 @@ export function ReplayCard({
   const tile = place.tile(agentId) ?? unlistedActor(agentId, source);
   const name = actorName(tile);
   const { members, former } = useMemberDirectory();
+
   const starter =
     place.startedBy === undefined
       ? undefined
@@ -472,8 +490,10 @@ export function ReplayCard({
           members,
           former,
         );
+
   const openPlace = useOpenPlace();
   const open = place.onOpen;
+
   // Note that a source the place does not list, as on an agent's own page, opens as a link to it would.
   const openSource =
     listed && open !== undefined
@@ -486,9 +506,11 @@ export function ReplayCard({
                 ? { kind: LINK_DESTINATION.AGENT, agentId }
                 : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
             );
+
   const left = leftOutLine(replay);
   const summary = summaryLine(replay);
   const count = replayCount(replay);
+
   return (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin">
       <Plan

@@ -205,6 +205,7 @@ export function composeTerminals(
     const fibers = yield* FiberMap.make<string>();
     const views = browserLiveConcern(dependencies, yield* FiberMap.make<string>());
     const terminals = composed(dependencies, fibers, yield* HttpClient.HttpClient);
+
     return {
       methods: { ...terminals.methods, ...views.methods },
       lifetime: terminals.lifetime,
@@ -251,6 +252,7 @@ function composed(
         carried({ connectionId: connection.connectionId, data: Base64.encode(bytes) }),
       );
       connection.unacked += bytes.length;
+
       if (connection.paused || connection.unacked <= TERMINAL_FLOW.PAUSE_ABOVE_BYTES) return;
       connection.paused = true;
       yield* socket.pause;
@@ -272,30 +274,41 @@ function composed(
           tell(connection, TERMINAL_CONNECTION.RECONNECTING),
           Effect.fail(new RelayDropped()),
         );
+
         if (socketOrigin === undefined) {
           yield* tell(connection, TERMINAL_CONNECTION.GONE);
+
           return SOCKET_ENDING.ENDED;
         }
+
         const openedAt = { cols: connection.cols, rows: connection.rows };
         const address = terminalRelayAddress(socketOrigin, { ...connection, ...openedAt });
         const opening = yield* opened(address);
+
         if ("unreachable" in opening) return yield* drop;
+
         if ("refused" in opening) {
           if (opening.refused >= SERVER_ERROR_STATUS) return yield* drop;
+
           // A relay this deployment does not serve is said as such, never as a shell gone, which would close the tab.
           const ended =
             opening.refused === NOT_FOUND_STATUS
               ? TERMINAL_CONNECTION.UNAVAILABLE
               : TERMINAL_CONNECTION.GONE;
+
           yield* tell(connection, ended);
+
           return SOCKET_ENDING.ENDED;
         }
+
         const { socket } = opening;
         Object.assign(connection, { socket, unacked: 0, paused: false });
+
         // A resize while the socket opened reached no socket, so the size the address carried is set right now.
         if (connection.cols !== openedAt.cols || connection.rows !== openedAt.rows) {
           yield* socket.send({ text: resizeFrame(connection) });
         }
+
         // Note that only this socket is let go here, because a wake may already have opened the next one.
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
@@ -311,38 +324,49 @@ function composed(
         yield* Stream.runForEach(socket.arrivals, (arrival) => {
           if ("close" in arrival) {
             closeCode = arrival.close;
+
             return Effect.void;
           }
+
           if ("bytes" in arrival) return output(connection, socket, arrival.bytes);
           const frame = serviceFrame(arrival.text);
+
           if (frame?.type === TERMINAL_RELAY_FRAME.EXITED) exitCode = frame.code;
+
           if (frame?.type !== TERMINAL_RELAY_FRAME.ATTACHED) return Effect.void;
           attached = true;
           // What was typed while the socket was away reaches the shell first, in the order it was typed.
           const typed = connection.typedWhileAway.splice(0);
+
           return Effect.andThen(
             tell(connection, TERMINAL_CONNECTION.ATTACHED),
             Effect.forEach(typed, (bytes) => socket.send({ bytes }), { discard: true }),
           );
         });
         const end = socketEnding(closeCode, exitCode, attached);
+
         switch (end.kind) {
           case RELAY_SOCKET_END.EXITED:
             yield* tell(connection, TERMINAL_CONNECTION.EXITED, end.code);
+
             return SOCKET_ENDING.ENDED;
           case RELAY_SOCKET_END.STOPPED:
             yield* tell(connection, TERMINAL_CONNECTION.STOPPED);
+
             return SOCKET_ENDING.ENDED;
           case RELAY_SOCKET_END.GONE:
             yield* tell(connection, TERMINAL_CONNECTION.GONE);
+
             return SOCKET_ENDING.ENDED;
           case RELAY_SOCKET_END.STARTING:
             yield* tell(connection, TERMINAL_CONNECTION.STARTING);
+
             return yield* Effect.fail(new SandboxStarting());
           case RELAY_SOCKET_END.UNATTACHED:
             return yield* drop;
           case RELAY_SOCKET_END.DROPPED:
             yield* tell(connection, TERMINAL_CONNECTION.RECONNECTING);
+
             return SOCKET_ENDING.DROPPED;
         }
       }),
@@ -357,15 +381,19 @@ function composed(
   const opening = (connection: Connection) =>
     Effect.gen(function* () {
       let asked = 0;
+
       for (;;) {
         const ending = yield* attempt(connection).pipe(
           Effect.catchTag("SandboxStarting", () => Effect.succeed(undefined)),
         );
+
         if (ending !== undefined) return ending;
+
         if (yield* sandboxOpened(connection.agentId)) {
           asked = 0;
           continue;
         }
+
         yield* Effect.sleep(openingWait(asked));
         asked += 1;
       }
@@ -390,6 +418,7 @@ function composed(
       for (;;) {
         const left =
           connection.usedAt + Duration.toMillis(TERMINAL_IDLE) - (yield* Clock.currentTimeMillis);
+
         if (left <= 0) return;
         yield* Effect.sleep(Duration.millis(left));
       }
@@ -399,11 +428,13 @@ function composed(
   const session = (connection: Connection) =>
     Effect.gen(function* () {
       yield* tell(connection, TERMINAL_CONNECTION.CONNECTING);
+
       // Note that an idle connection's socket is closed with the race's loser, and its tab hears it idle.
       const wentIdle = yield* Effect.race(
         Effect.as(reopening(connection), false),
         Effect.as(idle(connection), true),
       );
+
       if (wentIdle) yield* tell(connection, TERMINAL_CONNECTION.IDLE);
     });
 
@@ -418,9 +449,11 @@ function composed(
     Effect.gen(function* () {
       if (!gate()) return yield* Effect.fail(new RefusedRefusal({ message: "signed out" }));
       const answer = yield* Effect.provideService(call, HttpClient.HttpClient, http);
+
       if ("failure" in answer && answer.failure === TERMINAL_REFUSAL.UNANSWERED) {
         return yield* Effect.fail(new RefusedRefusal({ message: "the service did not answer" }));
       }
+
       return carried(answer);
     });
 
@@ -437,6 +470,7 @@ function composed(
           params,
           "listing an agent's shells names the agent",
         );
+
         return yield* asked(client.list(agentId));
       }),
     [GATEWAY_METHOD.TERMINALS_CREATE]: (params) =>
@@ -446,6 +480,7 @@ function composed(
           params,
           "starting a shell names the agent, and its name where it has one",
         );
+
         return yield* asked(client.create(agentId, title));
       }),
     [GATEWAY_METHOD.TERMINALS_RENAME]: (params) =>
@@ -455,6 +490,7 @@ function composed(
           params,
           "renaming a shell names the agent, the shell, and its name",
         );
+
         return yield* asked(client.rename(agentId, terminalId, title));
       }),
     [GATEWAY_METHOD.TERMINALS_KILL]: (params) =>
@@ -464,6 +500,7 @@ function composed(
           params,
           "ending a shell names the agent and the shell",
         );
+
         return yield* asked(client.kill(agentId, terminalId));
       }),
     [GATEWAY_METHOD.TERMINALS_RESUME]: (params) =>
@@ -473,6 +510,7 @@ function composed(
           params,
           "resuming a sandbox names the agent",
         );
+
         return yield* asked(client.resume(agentId));
       }),
     [GATEWAY_METHOD.TERMINALS_CONNECT]: (params) =>
@@ -482,7 +520,9 @@ function composed(
           params,
           "attaching a shell names the connection, the agent, the shell, and the terminal's size",
         );
+
         if (!gate()) return yield* Effect.fail(new RefusedRefusal({ message: "signed out" }));
+
         const connection: Connection = {
           ...ask,
           socket: undefined,
@@ -491,8 +531,10 @@ function composed(
           typedWhileAway: [],
           usedAt: yield* Clock.currentTimeMillis,
         };
+
         connections.set(ask.connectionId, connection);
         yield* run(connection);
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_INPUT]: (params) =>
@@ -502,19 +544,26 @@ function composed(
           params,
           "typing names the connection and what was typed",
         );
+
         const connection = named(connectionId);
+
         if (connection === undefined) return {};
         yield* used(connection);
         const bytes = encoder.encode(data);
+
         if (connection.socket !== undefined) {
           yield* connection.socket.send({ bytes });
+
           return {};
         }
+
         // Note that typing on a connection that ended is let go, because the tab attaches again on a key press; one still reopening holds it.
         if (!(yield* FiberMap.has(fibers, connectionId))) return {};
         const held = connection.typedWhileAway.reduce((sum, typed) => sum + typed.length, 0);
+
         if (held + bytes.length <= TYPED_WHILE_AWAY_MAX_BYTES)
           connection.typedWhileAway.push(bytes);
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_RESIZE]: (params) =>
@@ -524,12 +573,16 @@ function composed(
           params,
           "a resize names the connection and the terminal's size",
         );
+
         const connection = named(connectionId);
+
         if (connection === undefined) return {};
         Object.assign(connection, { cols, rows });
+
         if (connection.socket !== undefined) {
           yield* connection.socket.send({ text: resizeFrame(connection) });
         }
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_ACK]: (params) =>
@@ -539,12 +592,17 @@ function composed(
           params,
           "an ack names the connection and the bytes written",
         );
+
         const connection = named(connectionId);
+
         if (connection === undefined) return {};
         connection.unacked = Math.max(0, connection.unacked - bytes);
+
         if (!connection.paused || connection.unacked >= TERMINAL_FLOW.RESUME_BELOW_BYTES) return {};
         connection.paused = false;
+
         if (connection.socket !== undefined) yield* connection.socket.resume;
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_SHOWN]: (params) =>
@@ -554,8 +612,11 @@ function composed(
           params,
           "saying a tab is shown names the connection",
         );
+
         const connection = named(connectionId);
+
         if (connection !== undefined) yield* used(connection);
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_DISCONNECT]: (params) =>
@@ -565,8 +626,10 @@ function composed(
           params,
           "detaching names the connection",
         );
+
         connections.delete(connectionId);
         yield* FiberMap.remove(fibers, connectionId);
+
         return {};
       }),
     [GATEWAY_METHOD.TERMINALS_WAKE]: () =>
@@ -575,6 +638,7 @@ function composed(
         for (const connection of connections.values()) {
           if (yield* FiberMap.has(fibers, connection.connectionId)) yield* run(connection);
         }
+
         return {};
       }),
   };
@@ -583,6 +647,7 @@ function composed(
     const ended = [...connections.values()];
     connections.clear();
     yield* FiberMap.clear(fibers);
+
     for (const connection of ended) yield* tell(connection, TERMINAL_CONNECTION.IDLE);
   });
 

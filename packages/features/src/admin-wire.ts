@@ -186,6 +186,7 @@ export const ADMIN_RELIABILITY_WINDOWS: readonly AdminMetricsWindow[] = [
  */
 export function adminMetricsWindow(value: string | undefined): AdminMetricsWindow | undefined {
   if (value === undefined) return ADMIN_METRICS_WINDOW_DEFAULT;
+
   return Object.values(ADMIN_METRICS_WINDOW).find((candidate) => String(candidate) === value);
 }
 
@@ -222,8 +223,10 @@ export function adminUsersSearch(
   value: string | undefined,
 ): { term: string | undefined } | undefined {
   if (value === undefined) return { term: undefined };
+
   if (value.length > ADMIN_USERS_SEARCH_MAX_LENGTH) return undefined;
   const term = value.trim();
+
   return { term: term.length === 0 ? undefined : term };
 }
 
@@ -267,6 +270,7 @@ const UTC_DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export function isUtcDayKey(value: string): boolean {
   if (!UTC_DAY_KEY_PATTERN.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
+
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
@@ -285,7 +289,9 @@ export const ADMIN_USER_ID_PARAM = ADMIN_QUERY.USER_ID;
  */
 export function adminUserId(value: string | undefined): string | undefined {
   const id = value?.trim() ?? "";
+
   if (id.length === 0 || id.length > 128) return undefined;
+
   return id;
 }
 

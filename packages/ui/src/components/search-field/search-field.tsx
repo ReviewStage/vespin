@@ -114,7 +114,9 @@ type SearchEnd =
 function tallyLine(tally: SearchTally): string {
   if (tally.count === 0) return "No results";
   const count = tally.more === true ? `${tally.count}+` : String(tally.count);
+
   if (tally.at !== undefined) return `${tally.at + 1} of ${count}`;
+
   return tally.more === true
     ? `${count} ${TERM.RESULT.many}`
     : countWords(tally.count, TERM.RESULT);
@@ -178,13 +180,19 @@ export function SearchField({
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (combobox !== undefined) {
       combobox.onKeyDown(event);
+
       return;
     }
+
     if (event.key === "Escape" && onEscape !== undefined) event.stopPropagation();
+
     if (isComposingKey(event)) return;
+
     if (event.key === "Escape") onEscape?.();
+
     if (event.key !== "Enter") return;
     const answer = event.shiftKey ? onShiftEnter : onEnter;
+
     if (answer === undefined) return;
     event.preventDefault();
     answer();

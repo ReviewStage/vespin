@@ -52,6 +52,7 @@ let chooseSort: ((next: Sort) => void) | undefined;
 function SortedList(): React.JSX.Element {
   const [sort, choose] = useKept(KEPT.SORT, SORT.LATEST);
   chooseSort = choose;
+
   return createElement("p", null, sort);
 }
 
@@ -102,6 +103,7 @@ function TwoLists(): React.JSX.Element {
   const [sort, choose, change] = useKept(KEPT.SORT, SORT.LATEST);
   doors = { choose, change };
   const [other] = useKept(KEPT.SORT, SORT.LATEST);
+
   return createElement("p", null, `${sort} ${other}`);
 }
 
@@ -158,6 +160,7 @@ let sortsDoors: { change: (change: (kept: Sorts) => Sorts) => void } | undefined
 function Lists(): null {
   const [, , change] = useKept<Sorts>(SORTS, {});
   sortsDoors = { change };
+
   return null;
 }
 
@@ -166,9 +169,11 @@ test("where storage refused a write, an entry another window kept since is chang
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Lists)));
+
   const refuse = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
     throw new Error("quota");
   });
+
   act(() => sortsDoors?.change((held) => ({ ...held, a: SORT.OLDEST })));
   refuse.mockRestore();
   // Another window keeps an entry of its own, which this one's next change must not undo.

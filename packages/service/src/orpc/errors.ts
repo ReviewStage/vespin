@@ -17,11 +17,7 @@
 
 import { COMMON_ERROR_STATUS_MAP } from "@orpc/openapi";
 import { type AnyProcedure, ORPCError } from "@orpc/server";
-import {
-  extraRepositoryRefusalSchema,
-  localAgentRefusalSchema,
-  refusedDeviceSchema,
-} from "@repo/features/agent-wire";
+import { localAgentRefusalSchema, refusedDeviceSchema } from "@repo/features/agent-wire";
 import { installedSkillRefusedDataSchema } from "@repo/features/installed-skill-route-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { repositoryUnreachedSchema } from "@repo/features/repository-reach-wire";
@@ -65,8 +61,6 @@ const isHostedRefusal = Schema.is(
     ...installedSkillRefusedDataSchema.fields,
     localAgentRefusal: Schema.optionalKey(localAgentRefusalSchema),
     refusedDevice: Schema.optionalKey(refusedDeviceSchema),
-    extraRepositoryRefusal: Schema.optionalKey(extraRepositoryRefusalSchema),
-    refusedRepository: Schema.optionalKey(Schema.String),
     minimumVersion: Schema.optionalKey(Schema.String),
     hostRemoved: Schema.optionalKey(Schema.Literal(true)),
   }),
@@ -78,6 +72,7 @@ const isRefusalFields = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
 /** The refusal as the error the contract declares: its slug the code, everything beside it the data. */
 function refusalError(refusal: { readonly error: string }): ORPCError<string, object> {
   const { error, ...data } = refusal;
+
   return new ORPCError(error, { data });
 }
 
@@ -153,7 +148,10 @@ export function encodeHostedError(error: ORPCError<string, unknown>): object | n
       ? { error: error.code, ...error.data }
       : { error: error.code };
   }
+
   if (error.code === ORPC_BAD_REQUEST) return HOSTED_REFUSAL.INVALID_REQUEST;
+
   if (error.code === ORPC_PAYLOAD_TOO_LARGE) return HOSTED_REFUSAL.REQUEST_TOO_LARGE;
+
   return null;
 }

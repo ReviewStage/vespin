@@ -2,7 +2,8 @@ import { jsonSchemaGoldenRoot, settleJsonSchemaGolden } from "@repo/wire/testing
 import type { Schema } from "effect";
 import { test } from "vitest";
 import {
-  inboxReadInputSchema,
+  inboxListInputSchema,
+  inboxReadThreadInputSchema,
   inboxThreadPostInputSchema,
   inboxWithdrawInputSchema,
 } from "./inbox-wire.js";
@@ -20,7 +21,8 @@ const ROOT = jsonSchemaGoldenRoot(import.meta.url);
 const TOOL_INPUTS: readonly (readonly [string, Schema.Top])[] = [
   ["inbox-wire-inboxThreadPostInputSchema", inboxThreadPostInputSchema],
   ["inbox-wire-inboxWithdrawInputSchema", inboxWithdrawInputSchema],
-  ["inbox-wire-inboxReadInputSchema", inboxReadInputSchema],
+  ["inbox-wire-inboxListInputSchema", inboxListInputSchema],
+  ["inbox-wire-inboxReadThreadInputSchema", inboxReadThreadInputSchema],
 ];
 
 test.for(TOOL_INPUTS)("%s emits the recorded JSON Schema", async ([name, schema]) => {

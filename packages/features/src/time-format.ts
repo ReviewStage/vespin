@@ -44,20 +44,25 @@ const WEEKS_COUNTED = 5 * WEEK_MS;
 const LOCALE = "en-US";
 
 const DAY_OF_YEAR = new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" });
+
 const DAY_WITH_YEAR = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
   year: "numeric",
 });
+
 const WEEKDAY = new Intl.DateTimeFormat(LOCALE, { weekday: "long" });
+
 const DAY_AND_TIME = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
 });
+
 const MOMENT = new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" });
 const TIME_OF_DAY = new Intl.DateTimeFormat(LOCALE, { timeStyle: "short" });
+
 const WEEKDAY_AND_TIME = new Intl.DateTimeFormat(LOCALE, {
   weekday: "short",
   hour: "numeric",
@@ -66,12 +71,15 @@ const WEEKDAY_AND_TIME = new Intl.DateTimeFormat(LOCALE, {
 
 /** Calendar days and instants named in UTC, as the admin page and the changelog name them: a day is a calendar day, not an instant. */
 const UTC_DAY = new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeZone: "UTC" });
+
 const UTC_DAY_TICK = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
   timeZone: "UTC",
 });
+
 const UTC_DAY_HEADING = new Intl.DateTimeFormat(LOCALE, { dateStyle: "long", timeZone: "UTC" });
+
 const UTC_INSTANT = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
@@ -110,12 +118,14 @@ const AGO_WORD = " ago";
 /** A date as a row names it, with its year only where it is not `now`'s and the row has room for it. */
 function dateText(at: number, now: number, year: boolean): string {
   const sameYear = new Date(at).getFullYear() === new Date(now).getFullYear();
+
   return (sameYear || !year ? DAY_OF_YEAR : DAY_WITH_YEAR).format(at);
 }
 
 /** The local midnight a moment's day began at. */
 function midnightOf(at: number): number {
   const date = new Date(at);
+
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
@@ -123,6 +133,7 @@ function midnightOf(at: number): number {
 function sinceCount(elapsed: number): string | undefined {
   if (elapsed >= WEEKS_COUNTED) return undefined;
   const unit = SINCE_UNITS.find(([span]) => elapsed >= span);
+
   return unit === undefined ? undefined : `${Math.floor(elapsed / unit[0])}${unit[1]}`;
 }
 
@@ -134,7 +145,9 @@ function sinceCount(elapsed: number): string | undefined {
  */
 export function sinceText(at: number, now: number, { year = true } = {}): string {
   const elapsed = Math.max(0, now - at);
+
   if (elapsed >= WEEKS_COUNTED) return dateText(at, now, year);
+
   return sinceCount(elapsed) ?? NOW_WORD;
 }
 
@@ -145,6 +158,7 @@ export function sinceText(at: number, now: number, { year = true } = {}): string
  */
 export function agoText(at: number, now: number): string {
   const count = sinceCount(Math.max(0, now - at));
+
   return count === undefined ? sinceText(at, now) : `${count}${AGO_WORD}`;
 }
 
@@ -156,10 +170,13 @@ export function agoText(at: number, now: number): string {
  */
 export function sinceHeard(at: number, now: number): string {
   const elapsed = Math.max(0, now - at);
+
   if (elapsed >= WEEKS_COUNTED) return sinceText(at, now);
   const unit = HEARD_UNITS.find(([span]) => elapsed >= span);
+
   if (unit === undefined) return NOW_WORD;
   const count = Math.floor(elapsed / unit[0]);
+
   return `${count} ${unit[1]}${count === 1 ? "" : "s"}${AGO_WORD}`;
 }
 
@@ -186,8 +203,10 @@ export function momentText(at: number): string {
 export function distanceText(deltaMs: number): string {
   const size = Math.abs(deltaMs);
   const unit = DISTANCE_UNITS.find(([span]) => size >= span);
+
   if (unit === undefined) return NOW_WORD;
   const count = `${Math.floor(size / unit[0])}${unit[1]}`;
+
   return deltaMs > 0 ? `${AHEAD_WORD}${count}` : `${count}${AGO_WORD}`;
 }
 
@@ -200,6 +219,7 @@ export function distanceText(deltaMs: number): string {
  */
 export function dueText(at: number, now: number): string {
   if (midnightOf(at) === midnightOf(now)) return TIME_OF_DAY.format(at);
+
   return at > now && at - now < WEEK_MS ? WEEKDAY_AND_TIME.format(at) : dateText(at, now, true);
 }
 
@@ -226,6 +246,7 @@ export function weekdayAndTimeText(at: number): string {
 /** A time of day a schedule names by its hour (0 to 23) and minute, on the 12-hour clock: "2:05 PM". */
 export function clockText(hour: number, minute: number): string {
   const half = hour < 12 ? "AM" : "PM";
+
   return `${hour % 12 === 0 ? 12 : hour % 12}:${String(minute).padStart(2, "0")} ${half}`;
 }
 
@@ -242,8 +263,11 @@ export function dayText(at: number): string {
 /** A day as a call's header names it: "Today", "Yesterday", a weekday this week, or a date, with its year only where it is not `now`'s. */
 function dayWord(at: number, now: number): string {
   const daysAgo = Math.round((midnightOf(now) - midnightOf(at)) / DAY_MS);
+
   if (daysAgo === 0) return "Today";
+
   if (daysAgo === 1) return "Yesterday";
+
   return daysAgo > 1 && daysAgo < 7 ? WEEKDAY.format(at) : dateText(at, now, true);
 }
 
@@ -276,18 +300,23 @@ function twoUnits(large: number, largeUnit: string, small: number, smallUnit: st
  */
 export function workingTime(elapsedMs: number): string {
   const seconds = Math.floor(Math.max(0, elapsedMs) / SECOND_MS);
+
   if (seconds < MINUTE_SECONDS) return `${seconds}s`;
   const minutes = Math.floor(seconds / MINUTE_SECONDS);
+
   if (minutes < HOUR_MINUTES) return twoUnits(minutes, "m", seconds % MINUTE_SECONDS, "s");
   const hours = Math.floor(minutes / HOUR_MINUTES);
+
   if (hours < DAYS_COUNTED_PAST * DAY_HOURS)
     return twoUnits(hours, "h", minutes % HOUR_MINUTES, "m");
+
   return twoUnits(Math.floor(hours / DAY_HOURS), "d", hours % DAY_HOURS, "h");
 }
 
 /** What a finished turn's last line says: how long it worked, and the day and time it ended, as a call's header says it from `now`: "Worked for 1m 18s · Today, 3:42 PM". */
 export function workedForText(startedAt: number, endedAt: number, now: number): string {
   const ended = callHeading(endedAt, now);
+
   return `${WORKED_WORDS}${workingTime(endedAt - startedAt)}${WORKED_SEPARATOR}${ended}`;
 }
 
@@ -303,15 +332,18 @@ export function runSpanText(startedAt: number, endedAt: number, now: number): st
   const sameDay = midnightOf(startedAt) === midnightOf(endedAt);
   // Note that ICU sets a range's dash between thin spaces and its AM or PM behind a narrow one, which no other clock here wears, so both read as plain spaces.
   const clock = TIME_OF_DAY.formatRange(startedAt, endedAt).replace(/[\u2009\u202f]/gu, " ");
+
   const span = sameDay
     ? `${dayWord(startedAt, now)}, ${clock}`
     : `${callHeading(startedAt, now)}${SPAN_DASH}${callHeading(endedAt, now)}`;
+
   return `${span}${WORKED_SEPARATOR}${workingTime(endedAt - startedAt)}`;
 }
 
 /** How far a recording or a video has run, as a player says it: minutes and two-digit seconds, "1:12". */
 export function playheadText(ms: number): string {
   const seconds = Math.floor(Math.max(0, ms) / SECOND_MS);
+
   return `${Math.floor(seconds / MINUTE_SECONDS)}:${String(seconds % MINUTE_SECONDS).padStart(2, "0")}`;
 }
 

@@ -393,18 +393,25 @@ const findLineAfter = SqlSchema.findOneOption({
 const cutPoint = (conversationId: string, messageId: string) =>
   Effect.gen(function* () {
     const line = yield* findLine({ conversationId, messageId });
+
     if (Option.isNone(line)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
     const { seq, clientId, turnId, takenAfterStep, createdAt } = line.value;
+
     if (takenAfterStep !== null) return Result.fail(REWIND_REFUSAL.INSIDE_TURN);
     let from = createdAt;
+
     if (turnId !== null) {
       const [opening] = yield* findTurnLines({ conversationId, turnId });
+
       if (opening !== undefined && opening.seq !== seq) {
         return Result.fail(REWIND_REFUSAL.INSIDE_TURN);
       }
+
       const turn = yield* findTurnQueuedAt({ conversationId, turnId });
+
       if (Option.isSome(turn)) from = turn.value.queuedAt;
     }
+
     return Result.succeed({ seq, clientId, heard: turnId !== null, from });
   });
 
@@ -413,11 +420,14 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
   Effect.gen(function* () {
     const { conversationId } = target;
     const held = yield* lockConversation(target);
+
     if (Option.isNone(held)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
+
     // A hand-over under way ends first, so the line it hands is cut with the rest after the runtime heard it,
     // and the stop that follows the cut stops whatever it started (`coder-host/rewind.ts`).
     if (yield* dispatchClaimStands(conversationId, place)) return yield* new DispatchClaimHeld();
     const point = yield* cutPoint(conversationId, messageId);
+
     if (Result.isFailure(point)) return Result.fail(point.failure);
     const { seq, clientId, heard, from } = point.success;
     const turnIds = (yield* findTurnsFrom({ conversationId, from })).map((turn) => turn.id);
@@ -425,18 +435,23 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     // Note that a cut dropping every turn keeps the first one's row, its work gone and settled, because
     // an agent with no turn at all reads as one that never started, and fails past its grace.
     const [first, ...later] = turnIds;
+
     const keepsFirst =
       first !== undefined && (yield* findTurnBefore({ conversationId, from })).length === 0;
+
     const dropped = keepsFirst ? later : turnIds;
+
     if (keepsFirst) {
       yield* settleKeptTurn(conversationId, first);
       // The kept turn's asks expire with its work, since no runner holds them now; a dropped turn's go with its row.
       yield* expireTurnApprovals(conversationId, first, new Date(yield* Clock.currentTimeMillis));
     }
+
     if (dropped.length > 0) yield* deleteTurns({ conversationId, turnIds: dropped });
     // Note that a worker a dropped turn delegated is deleted with it, its own workers by the cascade.
     yield* deleteWorkersFrom({ conversationId, from });
     yield* markRewound({ conversationId, clientId, heard, turnIds });
+
     return Result.succeed<ConversationRewound>({ clientId, turnIds });
   });
 
@@ -496,16 +511,21 @@ export function readForkCut(
   return Effect.gen(function* () {
     const { conversationId } = target;
     const message = yield* findMessageSeq({ ...target, messageId });
+
     if (Option.isNone(message)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
     const next = yield* findLineAfter({ conversationId, seq: message.value.seq });
+
     if (Option.isSome(next) && next.value.turnId !== null) {
       const { seq, clientId, turnId, takenAfterStep } = next.value;
+
       if (takenAfterStep !== null) return Result.fail(REWIND_REFUSAL.INSIDE_TURN);
       const [opening] = yield* findTurnLines({ conversationId, turnId });
+
       return opening === undefined || opening.seq === seq
         ? Result.succeed(clientId)
         : Result.fail(REWIND_REFUSAL.INSIDE_TURN);
     }
+
     // Note that a line no turn took never reached the session, so it cuts nothing there.
     return Result.succeed(Option.getOrUndefined(yield* readNativeRewind(target)));
   });
@@ -570,12 +590,15 @@ export function readTurnCheckoutRange(
 ): Effect.Effect<Option.Option<TurnCheckoutRange>, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const line = yield* findLineSnapshot({ ...target, messageId });
+
     if (Option.isNone(line) || line.value.commit === null) return Option.none();
+
     const next = yield* findNextSnapshot({
       conversationId: target.conversationId,
       turnId: line.value.turnId,
       queuedAt: line.value.queuedAt,
     });
+
     return Option.some({
       from: line.value.commit,
       to: Option.isSome(next) ? next.value.commit : null,
@@ -594,7 +617,9 @@ export function readRewindable(
 ): Effect.Effect<Result.Result<void, RewindRefusal>, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const standing = yield* findRewoundRevision(target);
+
     if (Option.isNone(standing)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
+
     return Result.map(yield* cutPoint(target.conversationId, messageId), () => undefined);
   });
 }

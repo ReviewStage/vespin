@@ -33,6 +33,7 @@ function MenuGlyph({
   menu: readonly (readonly MenuAction[])[];
 }): React.JSX.Element {
   const drop = useMenu(true);
+
   return (
     <>
       <Tooltip label={act.label}>
@@ -68,7 +69,9 @@ export function SelectionToolbar({
   controls: string;
 }): React.JSX.Element | null {
   const keys = useSelectionKeys({ count, controls, onClear });
+
   if (count <= 0) return null;
+
   return (
     <div
       {...keys}

@@ -40,8 +40,10 @@ const SENTRY_LOAD_DEADLINE_MS = 2_000;
 function LoadAfterFirstCommit({ load }: { readonly load: () => void }): null {
   useEffect(() => {
     const idle = requestIdleCallback(load, { timeout: SENTRY_LOAD_DEADLINE_MS });
+
     return () => cancelIdleCallback(idle);
   }, [load]);
+
   return null;
 }
 
@@ -55,16 +57,18 @@ export function createReportingRoot(
   element: HTMLElement,
   sentry: DesktopSentryReports,
 ): (surface: ReactNode) => void {
-  const report = (thrown: unknown): void => {
-    console.error("The window's surface failed to render.", thrown);
-    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+  const report = (cause: unknown): void => {
+    console.error("The window's surface failed to render.", cause);
+    const error = cause instanceof Error ? cause : new Error(String(cause));
     sentry.reportBlankWindow(error, BLANK_WINDOW.RENDER);
     sentry.load();
   };
+
   // Note that both stand in for React's defaults, which say a failure on the
   // console, or to the window as an uncaught error, before the SDK could
   // stand to hear it.
   const root = createRoot(element, { onCaughtError: report, onUncaughtError: report });
+
   return (surface) => {
     root.render(
       <>

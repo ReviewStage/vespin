@@ -55,6 +55,7 @@ const REASONING_PROVIDER_KEY = "openai";
 const TOOL_PART_TYPE_PREFIX = "tool-";
 
 type ToolPart = ToolUIPart<UITools>;
+
 type AssistantPart = TextUIPart | ReasoningUIPart | ToolPart | StepStartUIPart;
 
 /** The boundary before one inference's parts, as the SDK spells it. */
@@ -113,6 +114,7 @@ function reasoningPart(reasoning: ReasoningSummary): ReasoningUIPart {
 /** A tool part in the state its call settled in: the answer's output, or the error's own text. */
 export function settledToolPart(part: ToolPart, settlement: ToolCallSettlement): ToolPart {
   const call = { type: part.type, toolCallId: part.toolCallId };
+
   return settlement.state === TOOL_CALL_SETTLEMENT.OUTPUT_ERROR
     ? {
         ...call,
@@ -168,6 +170,7 @@ export class AssistantMessageBuilder {
   toolResult(callId: string, settlement: ToolCallSettlement): void {
     const index = this.#toolParts.get(callId);
     const part = index === undefined ? undefined : this.#parts[index];
+
     if (index === undefined || !part || !("toolCallId" in part)) return;
     this.#parts[index] = settledToolPart(part, settlement);
   }

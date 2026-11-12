@@ -12,8 +12,10 @@ export function packageAssetPaths({ appRoot }) {
     ...[...NATIVE_HELPERS, LIQUID_GLASS_ADDON].map((helper) => helper.binary),
     NODE_PTY.folder,
   ].map((name) => path.join(appRoot, ".build", "native", name));
+
   const hostRoot = path.join(appRoot, ".build", "host");
   const hostRelease = path.join(hostRoot, "release");
+
   // Vespin's host daemon, readied by `package-host.mjs` from the host's own release layout.
   const host = {
     launcher: path.join(appRoot, ".build", "native", BUNDLED_HOST.launcher.binary),
@@ -22,16 +24,19 @@ export function packageAssetPaths({ appRoot }) {
     lib: path.join(hostRelease, "lib"),
     plist: path.join(hostRoot, path.basename(BUNDLED_HOST.plistPath)),
   };
+
   const iconPath = path.join(appRoot, ".build", "Vespin.icns");
   const licensePath = path.join(appRoot, ".build", LICENSE_RESOURCE_NAME);
   const noticePath = path.join(appRoot, ".build", NOTICE_RESOURCE_NAME);
   const entitlementsPath = path.join(appRoot, "native", "macos", "entitlements.plist");
+
   const dmgBackgroundPath = path.join(
     appRoot,
     ".build",
     "electron-builder",
     DMG_WINDOW.BACKGROUND.FILE_NAME,
   );
+
   return {
     appRoot,
     helperPaths,
@@ -46,6 +51,7 @@ export function packageAssetPaths({ appRoot }) {
 
 export function preparePackageAssets({ repoRoot, paths }) {
   const { launcher, node, lib, plist } = paths.host;
+
   for (const helperPath of [...paths.helperPaths, launcher, node, lib, plist]) {
     // A helper missing here is a feature missing at runtime with no other sign of
     // it, so the package fails rather than shipping without one.

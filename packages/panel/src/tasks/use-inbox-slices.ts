@@ -34,9 +34,11 @@ function inWorkspace<Entry extends { readonly taskId: string }>(
   workspaceId: string | undefined,
 ): readonly Entry[] {
   if (workspaceId === undefined) return entries;
+
   const listed = new Set(
     tasks.filter((task) => task.workspaceId === workspaceId).map((task) => task.id),
   );
+
   return entries.filter((entry) => listed.has(entry.taskId));
 }
 
@@ -58,6 +60,7 @@ export function useListedInbox(control: Pick<TasksControl, "tasks" | "workspace"
   const waiting = useInboxWaitingTasks();
   const holdings = useInboxTaskHoldings();
   const workspaceId = control.workspace?.id;
+
   return useMemo(
     () => ({
       inbox: inWorkspace(waiting, control.tasks, workspaceId),

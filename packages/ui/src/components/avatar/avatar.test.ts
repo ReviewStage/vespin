@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
-import { AVATAR_SHAPE, Avatar, UnassignedAvatar } from "./avatar.js";
+import { AVATAR_OUTLINE, Avatar, UnassignedAvatar } from "./avatar.js";
 
 /**
  * avatar.test.ts -- the letter stands until the picture loads and comes back
@@ -29,6 +29,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -48,6 +49,7 @@ function drawn(props: AvatarProps): Drawn {
   roots.push(root);
   const redraw = (next: AvatarProps): void => act(() => root.render(createElement(Avatar, next)));
   redraw(props);
+
   return { container, redraw };
 }
 
@@ -120,22 +122,24 @@ test("an app's glyph stands where its letter would, until its picture loads and 
   const { container, redraw } = drawn({
     name: "Vercel",
     src: PICTURE,
-    shape: AVATAR_SHAPE.SQUARE,
+    outline: AVATAR_OUTLINE.SQUARE,
     glyph: GLYPH,
   });
+
   assert.equal(container.textContent, "");
   assert.ok(container.querySelector('[data-glyph="robot"]'));
   answer(container, "load");
   assert.equal(container.querySelector('[data-glyph="robot"]'), null);
-  redraw({ name: "Vercel", src: `${PICTURE}?v=2`, shape: AVATAR_SHAPE.SQUARE, glyph: GLYPH });
+  redraw({ name: "Vercel", src: `${PICTURE}?v=2`, outline: AVATAR_OUTLINE.SQUARE, glyph: GLYPH });
   answer(container, "error");
   assert.equal(picture(container), null);
   assert.ok(container.querySelector('[data-glyph="robot"]'));
 });
 
 test("an app's square names it to a reader as a person's disc does", () => {
-  const disc = drawn({ name: "Vercel", shape: AVATAR_SHAPE.SQUARE, glyph: GLYPH }).container
+  const disc = drawn({ name: "Vercel", outline: AVATAR_OUTLINE.SQUARE, glyph: GLYPH }).container
     .firstElementChild;
+
   assert.equal(disc?.getAttribute("role"), "img");
   assert.equal(disc?.getAttribute("aria-label"), "Vercel");
 });
@@ -150,16 +154,18 @@ test("a picture the browser had drawn before the page took over is shown without
 
 test("a blank tile draws nothing until its picture loads, lazily, and says where the picture fails", () => {
   const failed = vi.fn();
+
   const { container } = drawn({
     name: "",
     src: PICTURE,
-    shape: AVATAR_SHAPE.TILE,
+    outline: AVATAR_OUTLINE.TILE,
     decorative: true,
     edged: true,
     blank: true,
     lazy: true,
     onFail: failed,
   });
+
   const tile = container.firstElementChild;
   assert.equal(container.textContent, "");
   assert.equal(tile?.querySelector("svg"), null);

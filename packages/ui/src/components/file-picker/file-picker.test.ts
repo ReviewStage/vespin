@@ -39,6 +39,7 @@ function Probe({
   onFiles: (f: readonly File[]) => void;
 }) {
   const picker = useFilePicker({ accept: "image/*", multiple: multiple ?? false, onFiles });
+
   return createElement(
     "div",
     null,
@@ -50,6 +51,7 @@ function Probe({
 function input(): HTMLInputElement {
   const found = document.querySelector("input[type=file]");
   assert.ok(found instanceof HTMLInputElement);
+
   return found;
 }
 

@@ -74,6 +74,7 @@ export type TookBack = (typeof TOOK_BACK)[keyof typeof TOOK_BACK];
 /** What the Undo toast says: the one item by its title, or how many. */
 function resolvedNote(items: readonly InboxItem[]): string {
   const [only] = items;
+
   return items.length === 1 && only !== undefined
     ? `Resolved “${cardTitle(only.title)}”`
     : `${countWords(items.length, TERM.INBOX_ITEM)} resolved`;
@@ -91,6 +92,7 @@ function refusalWords(
   answer: AgentInboxAnsweredView | { readonly failure: AgentCallFailure },
 ): string | undefined {
   if ("failure" in answer) return messageFailureWords(answer.failure);
+
   return answer.taken ? undefined : NOT_TAKEN[answer.item.status];
 }
 
@@ -153,7 +155,8 @@ export function untakenSettles(
   words: UntakenWords,
   surface: FailureSurface,
 ): TakeBackUndoRefusal<Settles> | undefined {
-  const missed = (_: unknown, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+  const missed = <Item,>(_: Item, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+
   if (answers.some((answer) => answer === TOOK_BACK.UNREACHED)) {
     return {
       words: words.unreached,
@@ -164,11 +167,13 @@ export function untakenSettles(
       },
     };
   }
+
   const said = answers.includes(TOOK_BACK.TOLD)
     ? words.told
     : answers.includes(TOOK_BACK.MOVED_ON)
       ? words.movedOn
       : undefined;
+
   return said === undefined
     ? undefined
     : { words: said, failure: { surface, cause: said, refused: true } };
@@ -200,10 +205,14 @@ const RESOLVE_WRITE = {
     const refused = answers.flatMap((answer, at) => {
       const words = refusalWords(answer);
       const item = items[at];
+
       return words === undefined || item === undefined ? [] : [{ words, answer, item }];
     });
+
     const [first] = refused;
+
     if (first === undefined) return undefined;
+
     return {
       // Note that a close the service never answered may have landed, so only a refusal of every one is whole.
       whole: answers.every((answer) => !("failure" in answer) && !answer.taken),
@@ -227,12 +236,15 @@ export function useInboxResolver(): InboxResolver {
   const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
   const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
+
   return useCallback(
     (items: readonly InboxItem[]) => {
       const open = items.filter(
         (item) => item.status === INBOX_STATUS.OPEN && !out.current.has(item.id),
       );
+
       if (open.length === 0) return;
+
       for (const item of open) out.current.add(item.id);
       const resolving = { items: open, keys: open.map(() => crypto.randomUUID()) };
       void pressTakeBack(RESOLVE_WRITE, { close, takeBack }, resolving).then(() => {

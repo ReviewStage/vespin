@@ -30,11 +30,14 @@ function saidAt(address: string): ShownLink | undefined {
   openAt(address);
   const history = createBrowserHistory();
   const heard: ShownLink[] = [];
+
   const stop = withLoadLink(fixtureBridge(RUN_PROFILE.IDLE), history).onShowLink((link) =>
     heard.push(link),
   );
+
   stop();
   history.destroy();
+
   return heard[0];
 }
 

@@ -108,17 +108,22 @@ export function pendingThreadsOf(
   const replies = new Map<string, PendingReviewComment[]>();
   const known = new Set(threads.flatMap((thread) => (thread.id === undefined ? [] : [thread.id])));
   const starts: PendingReviewComment[] = [];
+
   for (const draft of drafts) {
     const threadId = draft.threadId;
+
     if (threadId === undefined || !known.has(threadId)) starts.push(draft);
     else replies.set(threadId, [...(replies.get(threadId) ?? []), draft]);
   }
+
   const replied = threads.map((thread) => {
     const own = thread.id === undefined ? undefined : replies.get(thread.id);
+
     return own === undefined
       ? thread
       : { ...thread, comments: [...thread.comments, ...own.map(commentOf)] };
   });
+
   return [...replied, ...starts.map(threadOf)];
 }
 
@@ -133,6 +138,7 @@ export const PendingCommentsProvider = PendingCommentsContext.Provider;
 /** The member's pending comment drawn under `key`; none for any other comment. */
 export function usePendingComment(key: string | undefined): PendingReviewComment | undefined {
   const pending = useContext(PendingCommentsContext);
+
   return key === undefined ? undefined : pending.get(key);
 }
 
@@ -183,6 +189,7 @@ export function usePendingActs(
   const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
   const [editing, setEditing] = useState(false);
   const surfaceOpen = useContext(PendingSurfaceContext);
+
   const deleting = useConfirmDialog(
     { subject: draft !== undefined, surfaceOpen },
     writes.confirmAct({
@@ -191,7 +198,9 @@ export function usePendingActs(
     }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_COMMENT_DELETE),
   );
+
   const out = writes.pending;
+
   const groups: MenuAction[][] =
     draft === undefined || writing === undefined || editing || out !== undefined
       ? []
@@ -218,6 +227,7 @@ export function usePendingActs(
             },
           ],
         ];
+
   const body = (words: ReactNode): ReactNode =>
     draft === undefined ? (
       words
@@ -262,6 +272,7 @@ export function usePendingActs(
         />
       </div>
     );
+
   return { menu: <CommentMenu groups={groups} />, body };
 }
 
@@ -279,6 +290,7 @@ export function PendingComment({
 }): React.JSX.Element {
   const acts = usePendingActs(draft);
   const writer = useNamer()(head.person);
+
   return (
     <Comment
       author={commentAuthor(writer)}

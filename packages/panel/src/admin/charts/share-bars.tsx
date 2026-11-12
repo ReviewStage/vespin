@@ -119,6 +119,7 @@ function ShareRow({
   share: number | null;
 }): React.JSX.Element {
   const percent = Math.min(100, Math.round((share ?? 0) * 100));
+
   return (
     <ShareRowFrame
       label={label}
@@ -166,6 +167,7 @@ export function FunnelChart({
 }): React.JSX.Element {
   const title = funnelTitle(windowDays);
   const signedUp = funnel.find((step) => step.step === FUNNEL_STEP.SIGNED_UP)?.accounts ?? 0;
+
   if (signedUp === 0) {
     return (
       <ChartFrame title={title}>
@@ -173,6 +175,7 @@ export function FunnelChart({
       </ChartFrame>
     );
   }
+
   return (
     <ChartFrame title={title}>
       <ShareList label="Activation funnel">
@@ -206,6 +209,7 @@ export function FunnelChartSkeleton({ windowDays }: { windowDays: number }): Rea
 export function ReachChart({ reach }: { reach: AdminOverview["reach"] }): React.JSX.Element {
   const title = REACH_TITLE;
   const aside = `of ${formatCount(reach.activeDevelopers)} active developers`;
+
   if (reach.activeDevelopers === 0) {
     return (
       <ChartFrame title={title} aside={aside}>
@@ -213,6 +217,7 @@ export function ReachChart({ reach }: { reach: AdminOverview["reach"] }): React.
       </ChartFrame>
     );
   }
+
   return (
     <ChartFrame title={title} aside={aside}>
       <ShareList label="Feature reach">
@@ -252,6 +257,7 @@ export function AgentOriginsChart({
   origins: AdminOverview["agentOrigins"];
 }): React.JSX.Element {
   const aside = originsAside(origins);
+
   if (origins.agentsStarted === 0) {
     return (
       <ChartFrame title={ORIGINS_TITLE} aside={aside}>
@@ -259,6 +265,7 @@ export function AgentOriginsChart({
       </ChartFrame>
     );
   }
+
   return (
     <ChartFrame title={ORIGINS_TITLE} aside={aside}>
       <ShareList label="Agents by origin">

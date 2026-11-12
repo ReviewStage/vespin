@@ -77,10 +77,12 @@ const OWN_CARD: EntityCard<Entity> = (_entity, at) => at.own;
 /** What a file's card says of the lines a mention pins: where they run, and the commit they were read at. */
 function linesNote(lines: MentionLines | undefined): string | undefined {
   if (lines === undefined) return undefined;
+
   const span =
     lines.startLine === lines.endLine
       ? `Line ${lines.startLine}`
       : `Lines ${lines.startLine}–${lines.endLine}`;
+
   return `${span} at ${shortCommit(lines.commit)}`;
 }
 

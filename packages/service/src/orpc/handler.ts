@@ -33,6 +33,7 @@ import { ResponseHeadersHandlerPlugin } from "@orpc/server/plugins";
 import type { StandardHandlerInterceptor } from "@orpc/server/standard";
 import { presentedClient } from "@repo/features/client-identity";
 import { getBodyCap, RETIRED_TASK_PATHS } from "@repo/features/contract";
+import { FUNCTION_BODY_LIMIT_BYTES } from "@repo/features/request-body-limit";
 import { HTTP_METHOD } from "@repo/wire";
 import type { Context } from "effect";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -74,7 +75,7 @@ const SAME_ORIGIN_ANSWER = {
  * an inbox thread, about 4.42 MB, which carries a form's values with its
  * files).
  */
-export const HOSTED_BODY_CEILING_BYTES = 4_500_000;
+export const HOSTED_BODY_CEILING_BYTES = FUNCTION_BODY_LIMIT_BYTES;
 
 /**
  * The oldest hosted API version the service still serves
@@ -110,18 +111,23 @@ function counted(request: Request): Request {
   if (request.body === null) return request;
   const allowance: BodyAllowance = { cap: HOSTED_BODY_CEILING_BYTES };
   let read = 0;
+
   const body = request.body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
         read += chunk.byteLength;
+
         if (read > allowance.cap) {
           controller.error(new ORPCError(ORPC_PAYLOAD_TOO_LARGE));
+
           return;
         }
+
         controller.enqueue(chunk);
       },
     }),
   );
+
   const init = {
     method: request.method,
     headers: request.headers,
@@ -129,9 +135,11 @@ function counted(request: Request): Request {
     signal: request.signal,
     duplex: "half",
   };
+
   // SAFETY: a streamed request body is sent half-duplex, which the DOM's RequestInit does not name.
   const countedRequest = new Request(request.url, init as RequestInit);
   BODY_ALLOWANCES.set(countedRequest, allowance);
+
   return countedRequest;
 }
 
@@ -150,10 +158,14 @@ const bodyCapInterceptor: StandardHandlerInterceptor<HostedContext> = ({
     getBodyCap(procedure) ?? HOSTED_BODY_CEILING_BYTES,
     HOSTED_BODY_CEILING_BYTES,
   );
+
   const stated = Number(context.request.headers.get("content-length") ?? 0);
+
   if (stated > cap) throw new ORPCError(ORPC_PAYLOAD_TOO_LARGE);
   const allowance = BODY_ALLOWANCES.get(context.request);
+
   if (allowance !== undefined) allowance.cap = cap;
+
   return next();
 };
 
@@ -170,6 +182,7 @@ function refusalResponse(request: Request, status: number, refusal: HostedRefusa
   if (request.method === HTTP_METHOD_HEAD) {
     return new Response(null, { status, headers: { "content-type": "application/json" } });
   }
+
   return Response.json(refusal, { status });
 }
 
@@ -178,9 +191,11 @@ function settled(response: Response): Response {
   if (response.status === HOSTED_HTTP_STATUS.INTERNAL_ERROR) {
     return new Response(null, { status: HOSTED_HTTP_STATUS.INTERNAL_ERROR });
   }
+
   if (response.status < HOSTED_HTTP_STATUS.BAD_REQUEST && !response.headers.has(CACHE_CONTROL)) {
     response.headers.set(CACHE_CONTROL, HOSTED_CACHE_CONTROL);
   }
+
   return response;
 }
 
@@ -189,6 +204,7 @@ function sameOriginOnly(response: Response): Response {
   for (const [name, value] of Object.entries(SAME_ORIGIN_ANSWER)) {
     response.headers.set(name, value);
   }
+
   return response;
 }
 
@@ -200,19 +216,27 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
     interceptors: [bodyCapInterceptor],
     plugins: [new ResponseHeadersHandlerPlugin()],
   });
+
   const matcher = new OpenAPIMatcher(router);
+
   const servedUnderAnotherMethod = async (request: Request): Promise<boolean> => {
     const { pathname } = new URL(request.url);
+
     if (!isHttpPath(pathname)) return false;
+
     for (const method of PROCEDURE_METHODS) {
       if (method === request.method) continue;
+
       if ((await matcher.match(method, pathname, undefined)) !== undefined) return true;
     }
+
     return false;
   };
+
   return async (incoming, services) => {
     const request = counted(incoming);
     const client = presentedClient(request.headers);
+
     if (client !== undefined && client.apiVersion < HOSTED_API_FLOOR) {
       return sameOriginOnly(
         refusalResponse(
@@ -222,11 +246,14 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
         ),
       );
     }
+
     const { matched, response } = await handler.handle(request, {
       context: { "effect/context": services, "effect/wrap": hostedRefusalWrap(services), request },
     });
+
     if (matched) return sameOriginOnly(settled(response));
     const { pathname } = new URL(request.url);
+
     if (RETIRED_TASK_PATHS.some((retired) => retired.test(pathname))) {
       return sameOriginOnly(
         refusalResponse(
@@ -236,6 +263,7 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
         ),
       );
     }
+
     return sameOriginOnly(
       (await servedUnderAnotherMethod(request))
         ? refusalResponse(

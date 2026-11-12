@@ -16,6 +16,7 @@ export function resolveBrowserSessionUserId(input: {
 }): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
   return Effect.tryPromise(async () => {
     const session = await auth.api.getSession({ headers: input.headers });
+
     return Option.fromNullishOr(session?.user.id);
   });
 }

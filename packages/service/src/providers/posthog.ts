@@ -131,6 +131,7 @@ export function postBatchEffect(
     credential: NO_CREDENTIAL,
     requestTimeoutMs: options.timeoutMs ?? POSTHOG_DEFAULTS.REQUEST_TIMEOUT_MS,
   });
+
   return Effect.map(
     call.send({
       method: HTTP_METHOD.POST,
@@ -182,11 +183,13 @@ export function forgetPosthogPersonEffect(
   options: PosthogForgetOptions,
 ): Effect.Effect<void, PosthogForgetError, HttpClient.HttpClient> {
   const requestTimeoutMs = positiveInteger(options.timeoutMs, POSTHOG_DEFAULTS.REQUEST_TIMEOUT_MS);
+
   const call = accountCall({
     baseUrl: resolvePosthogApiHost(options.host),
     credential: fixedBearer(options.personalApiKey),
     requestTimeoutMs,
   });
+
   // Note that the deadline spans the body's read too, because the call's own
   // deadline ends with the headers and a body that never ends would hold the
   // account's deletion behind it.
@@ -200,25 +203,33 @@ export function forgetPosthogPersonEffect(
         delete_recordings: true,
       }),
     });
+
     if (!callAnswered(answer)) {
       return yield* new PosthogForgetError({
         message: `network fault: ${answer.errorName ?? "unknown"}`,
       });
     }
+
     const status = answer.response.status;
+
     // The status alone diagnoses the refusal; the body could name the key.
     if (!answer.response.ok) {
       return yield* new PosthogForgetError({ message: `refused with status ${status}` });
     }
+
     const payload = yield* Effect.orElseSucceed(
       Effect.tryPromise(() => answer.response.json()),
       () => undefined,
     );
+
     const read = readBulkDeleteAnswer(payload);
+
     if (Result.isFailure(read)) {
       return yield* new PosthogForgetError({ message: `unreadable answer with status ${status}` });
     }
+
     const errors = read.success.deletion_errors.length;
+
     if (errors > 0) {
       return yield* new PosthogForgetError({
         message: `answered status ${status} with ${errors} deletion error(s)`,

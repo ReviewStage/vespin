@@ -12,8 +12,8 @@ import { type ActUse, PORT_ACT_KIND, PORT_ACT_USE } from "./kinds.js";
  * directly from a composer's handler table (`host-acts.ts`), relayed by
  * `act-port/declared-acts.ts`, with no Gateway method between them. Its
  * kind and use are read from `kinds.ts` by the name a call site spells,
- * never restated, so `PORT_ACT_USE` stays the one place the lint rule
- * reads a kind's use from. An act that does work of its own at the window,
+ * never restated, so `PORT_ACT_USE` stays the one place a kind's use is
+ * read from. An act that does work of its own at the window,
  * a follow's hold, a dialog, an address opened, keeps a procedure written
  * by hand, built on its declaration (`byHand`), which calls the composer's
  * handler itself and does its own work around it. A live read is not a plain act: its variant
@@ -89,6 +89,7 @@ function procedureOf<Input, InputEncoded, PortOutput, PortOutputEncoded>(
 ) {
   const refusing = actProcedure(spec.refusal);
   const marked = spec.panelOnly ? refusing.meta(panelOnlyMeta(true)) : refusing;
+
   return marked.input(exactInput(spec.input)).output(EffectSchema.flip(portOutput));
 }
 
@@ -240,12 +241,14 @@ export function declaredActs<
   const Declarations extends { readonly [Name in PortActName]?: AnyHostActDeclaration },
 >(declarations: Declarations): NamedActs<Declarations> {
   const named: Record<string, AnyHostAct> = {};
+
   for (const [name, declaration] of Object.entries(declarations)) {
     // SAFETY: the declarations' keys are port act names, by their type.
     const key = name as PortActName;
     const use: ActUse = PORT_ACT_USE[key];
     named[name] = { ...declaration, name: key, kind: PORT_ACT_KIND[key], use };
   }
+
   // SAFETY: the loop above named every declaration under its own key.
   return named as NamedActs<Declarations>;
 }
@@ -257,6 +260,7 @@ export function contractOf<const Acts extends Readonly<Record<string, AnyHostAct
   const procedures = Object.fromEntries(
     Object.values(acts).map((act) => [act.kind, act.procedure]),
   );
+
   // SAFETY: each procedure is keyed by its own act's kind, as the type maps it.
   return procedures as ActsContract<Acts>;
 }

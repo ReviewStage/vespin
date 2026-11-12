@@ -626,10 +626,12 @@ export function linkSlackInstallation(link: SlackInstallationToLink): TaskStoreE
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     yield* deleteOtherTeam({ organizationId: link.organizationId, teamId: link.teamId });
+
     const written = yield* upsertInstallation({ ...link, now }).pipe(
       // Note that an upsert writes its row whatever stood, so it always returns one.
       Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
     );
+
     return written.txid;
   });
 }
@@ -792,9 +794,11 @@ export function slackStartRepositories(organizationId: string): TaskStoreEffect<
   return Effect.gen(function* () {
     const found = yield* findDefaultRepository(organizationId);
     const channels = yield* findChannelRepositories(organizationId);
+
     const defaultRepository = Option.getOrNull(
       Option.flatMapNullishOr(found, (row) => row.repository),
     );
+
     return { defaultRepository, channels };
   });
 }
@@ -823,6 +827,7 @@ export function writeSlackChannelRepository(
   if (repository === null) {
     return Effect.map(deleteChannelRepository({ organizationId, channelId }), txidOf);
   }
+
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(upsertChannelRepository({ organizationId, channelId, repository, now }), txidOf),
   );

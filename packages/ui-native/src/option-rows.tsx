@@ -42,6 +42,7 @@ type SwitchRowProps = {
 /** A setting that is on or off, as the system's switch in a Form's row, tinted with the brand's copper. */
 export function SwitchRow({ label, detail, on, onSwitch, testId }: SwitchRowProps) {
   const colors = useColors();
+
   return (
     <Toggle
       isOn={on}
@@ -79,6 +80,7 @@ type HintPickRowsProps = {
  */
 export function HintPickRows({ label, options, picked, onPick }: HintPickRowsProps) {
   const colors = useColors();
+
   return (
     <Picker<string | null>
       label={label}
@@ -141,6 +143,7 @@ export function RenameAsk({
   useEffect(() => {
     if (presented) text.set(name);
   }, [presented, name, text]);
+
   return (
     <Host matchContents style={{ position: "absolute" }}>
       <Alert

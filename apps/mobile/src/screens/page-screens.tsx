@@ -27,7 +27,9 @@ function usePageAddress(
 ): string | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === workspaceId);
+
   if (workspace === undefined || taskId === undefined) return undefined;
+
   return linkOf(
     { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId },
     workspace.slug ?? workspace.id,
@@ -57,6 +59,7 @@ export function PageScreen({
   const read = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
+
   return (
     <>
       <Stack.Screen options={{ title: named }} />
@@ -100,7 +103,9 @@ export function TaskPageScreen() {
     version: string;
     title: string;
   }>();
+
   const chosen = useTasksWorkspace();
+
   return (
     <PageScreen
       workspaceId={workspace === "" ? chosen?.id : workspace}

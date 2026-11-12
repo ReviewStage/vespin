@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
+import { DEVICE_SETUP } from "@repo/features/device-agent-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
@@ -11,7 +12,7 @@ import { handBeats } from "./testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "./testing/copy-feedback.js";
 
 /**
- * device-presence.test.ts -- the shared presence judges each device by how long ago its beat was on this machine's clock, and says it cannot check, not offline, where its read failed.
+ * device-presence.test.ts -- the shared presence says a host setting up or failed by its setup, and otherwise offline only where the sweep marked it away, and says it cannot check, not offline, where its read failed.
  * Synthetic ids.
  */
 
@@ -27,6 +28,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -37,6 +39,7 @@ const deviceOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12
 /** What a surface draws of each device it names: its standing as the shared book says it, or nothing where the book does not name it. */
 function Standings({ ids }: { ids: readonly string[] }): React.JSX.Element {
   const book = useDevicePresence(true);
+
   return createElement("p", null, ids.map((id) => presenceStanding(book, id) ?? "none").join(","));
 }
 
@@ -52,25 +55,16 @@ async function draw(ids: readonly string[]): Promise<HTMLElement> {
   await vi.waitFor(() =>
     assert.equal(container.textContent?.includes(DEVICE_STANDING.CHECKING), false),
   );
+
   return container;
 }
 
-test("a beat delayed by 25 seconds still reads online, and a device quiet for four beats reads offline", async () => {
+test("a host the sweep marked away reads offline, and one it did not reads online", async () => {
   fakeActPort({});
-  handBeats({ [deviceOf(1)]: 25_000 + 15_000, [deviceOf(2)]: 61_000 });
+  handBeats({ [deviceOf(1)]: 1_000, [deviceOf(2)]: 61_000 });
   const container = await draw([deviceOf(1), deviceOf(2)]);
 
   assert.equal(container.textContent, `${DEVICE_STANDING.ONLINE},${DEVICE_STANDING.OFFLINE}`);
-});
-
-test("a device a read found online is not called offline because the next read is late, only once a read that landed lately finds it quiet", async () => {
-  fakeActPort({});
-  // The read 31 seconds ago found the beat 50 seconds old, so the window alone reckons it 81 seconds old now.
-  handBeats({ [deviceOf(1)]: 81_000 }, { askedAgoMs: 31_000 });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
-
-  handBeats({ [deviceOf(1)]: 81_000 });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.OFFLINE);
 });
 
 test("a device the read does not name as the account's own has no standing", async () => {
@@ -81,11 +75,29 @@ test("a device the read does not name as the account's own has no standing", asy
   assert.equal(container.textContent, `${DEVICE_STANDING.ONLINE},none`);
 });
 
-test("a read that failed says unknown, never offline, whether or not one answered before it", async () => {
+test("a read that failed says unknown, never offline", async () => {
   fakeActPort({});
   handBeats(undefined);
   assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
+});
 
-  handBeats({ [deviceOf(1)]: 61_000 }, { stale: true });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
+test("a host still fetching its tools, one whose setup failed, and one that never called in ten minutes after joining read setting up, failed, and failed, though none is away", async () => {
+  fakeActPort({});
+  const host = (n: number) => ({ id: deviceOf(n), name: `host-${n}` });
+  handBeats(
+    { [deviceOf(1)]: 1_000, [deviceOf(2)]: 1_000, [deviceOf(3)]: 1_000 },
+    {
+      hosts: [
+        { ...host(1), setup: DEVICE_SETUP.PREPARING, calledIn: true },
+        { ...host(2), setup: DEVICE_SETUP.FAILED, calledIn: true },
+        { ...host(3), calledIn: false, joinedAt: Date.now() - 11 * 60 * 1_000 },
+      ],
+    },
+  );
+  const container = await draw([deviceOf(1), deviceOf(2), deviceOf(3)]);
+
+  assert.equal(
+    container.textContent,
+    `${DEVICE_STANDING.SETTING_UP},${DEVICE_STANDING.FAILED},${DEVICE_STANDING.FAILED}`,
+  );
 });

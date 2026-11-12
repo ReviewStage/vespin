@@ -8,6 +8,7 @@ import {
 } from "@repo/ui";
 import { PlusIcon } from "@repo/ui/icons";
 import { useDisclosure } from "@repo/ui/use-disclosure";
+import { Predicate } from "effect";
 import { useId, useRef, useState } from "react";
 
 /**
@@ -51,10 +52,12 @@ export function AddMenuButton({
   const menuId = useId();
   const holder = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     button.current?.focus();
   };
+
   return (
     <span
       className="settings-picker relative inline-flex min-w-0 flex-initial items-center"
@@ -83,7 +86,7 @@ export function AddMenuButton({
           placeholder={placeholder}
           rows={rows}
           value={undefined}
-          note={typeof note === "function" ? note(close) : note}
+          note={Predicate.isFunction(note) ? note(close) : note}
           noMatch={noMatch}
           align={POPOVER_ALIGN.END}
           width={POPOVER_WIDTH.NARROW}

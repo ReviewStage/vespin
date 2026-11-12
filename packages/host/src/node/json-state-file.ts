@@ -38,19 +38,24 @@ export interface JsonStateFile<T> {
  */
 export function jsonStateFile<T>(options: JsonStateFileOptions<T>): JsonStateFile<T> {
   const filePath = () => path.join(options.directory(), options.fileName);
+
   const read = (): T | undefined => {
     let parsed: UnparsedWireValue;
+
     try {
       parsed = JSON.parse(fs.readFileSync(filePath(), "utf8"));
     } catch {
       return undefined;
     }
+
     return isRecord(parsed) ? options.read(parsed) : undefined;
   };
+
   return {
     read,
     update: (mutate) => {
       const next = mutate(read());
+
       try {
         fs.writeFileSync(filePath(), `${JSON.stringify(options.write(next))}\n`);
       } catch (error) {
@@ -58,6 +63,7 @@ export function jsonStateFile<T>(options: JsonStateFileOptions<T>): JsonStateFil
           `Could not persist ${options.fileName}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
+
       return next;
     },
   };

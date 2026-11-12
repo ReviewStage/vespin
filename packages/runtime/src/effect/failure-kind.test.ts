@@ -5,8 +5,8 @@ import { SqlError, UnknownError } from "effect/sql/SqlError";
 import { failureDetail } from "./failure-kind.js";
 
 /** A `SqlError` the way the pg client builds one it has no kind for: the driver's error beneath an `UnknownError`. */
-function unknownSqlError(driver: unknown): SqlError {
-  return new SqlError({ reason: new UnknownError({ cause: driver, message: "row 42 refused" }) });
+function unknownSqlError(cause: unknown): SqlError {
+  return new SqlError({ reason: new UnknownError({ cause, message: "row 42 refused" }) });
 }
 
 describe("failureDetail", () => {

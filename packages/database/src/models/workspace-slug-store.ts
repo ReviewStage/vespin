@@ -184,10 +184,13 @@ export function setWorkspaceSlug(
       Effect.gen(function* () {
         yield* client`select pg_advisory_xact_lock(hashtextextended(lower(${slug}), 0))`;
         const current = yield* findCurrentSlug(organizationId);
+
         if (Option.isNone(current) || current.value.slug === slug) return;
+
         if (Option.isSome(yield* findSlugHolder({ slug, organizationId }))) {
           return yield* new WorkspaceSlugTaken();
         }
+
         const now = yield* DateTime.nowAsDate;
         yield* deleteOwnFormer({ slug, organizationId });
         yield* insertFormer({ slug: current.value.slug, organizationId, now });

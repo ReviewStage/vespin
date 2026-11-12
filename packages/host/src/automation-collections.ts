@@ -94,6 +94,7 @@ export function writtenFields(
 ): Pick<AutomationRow, "name" | "enabled" | "trigger" | "action" | "guards" | "nextRunAt"> &
   Partial<AutomationRow> {
   const { scope, repositories, target, archiveSuccessful, slackDelivery, preset } = automation;
+
   return {
     name: automation.name,
     enabled: automation.enabled,
@@ -202,10 +203,12 @@ export function automationListCollections(
         open = false;
       }),
     );
+
     const automations: HeldRows<AutomationRow> = yield* dependencies.pool.stand(AUTOMATION, {
       redraw: () => Effect.suspend(() => drawn),
       confirmation: () => {
         const wait = dependencies.txWait();
+
         return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
       },
       adopts: (row) => row.organizationId === dependencies.workspaceId,
@@ -216,6 +219,7 @@ export function automationListCollections(
       if (!answered || !open) return undefined;
       const rows = { automations: automations.rows() };
       dependencies.draw(automationsOfLiveRows(rows, at, dependencies.serviceBaseUrl));
+
       return automationsGraceEdge(rows, at);
     });
 
@@ -225,6 +229,7 @@ export function automationListCollections(
           automations.answer(rows.automations),
           Effect.suspend(() => {
             answered = true;
+
             return drawn;
           }),
         ),

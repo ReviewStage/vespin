@@ -21,6 +21,7 @@ const DAILY = [
   { day: "2026-10-14", calls: 3 },
   { day: "2026-10-15", calls: 5 },
 ];
+
 const GENERATED_AT = Date.UTC(2026, 9, 15, 12);
 const TREND = { days: 7, recent: 3, prior: 2 };
 
@@ -36,6 +37,7 @@ function render(element: React.ReactElement): HTMLElement {
   document.body.replaceChildren(container);
   root = createRoot(container);
   act(() => root?.render(element));
+
   return container;
 }
 
@@ -53,7 +55,9 @@ function renderUsageChart(): HTMLElement {
 /** The chart's plot, the one stop a keyboard reader lands on. */
 function plot(page: HTMLElement): SVGElement {
   const surface = page.querySelector<SVGElement>("svg[tabindex='0']");
+
   if (surface === null) throw new Error("the chart drew no plot");
+
   return surface;
 }
 

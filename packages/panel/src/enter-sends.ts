@@ -33,6 +33,7 @@ function coarsePointer(): boolean {
 /** Whether a press is the box's send: Enter without Shift, and on a coarse pointer only with ⌘ or Ctrl. */
 export function enterSends(press: EnterPress): boolean {
   if (press.key !== "Enter" || press.shiftKey) return false;
+
   return press.metaKey || press.ctrlKey || !coarsePointer();
 }
 

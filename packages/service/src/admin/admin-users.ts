@@ -113,9 +113,11 @@ export function handleAdminUsers(
   const { query } = options;
 
   const windowDays = adminMetricsWindow(query.window);
+
   if (windowDays === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_WINDOW);
 
   const search = adminUsersSearch(query.search);
+
   if (search === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_SEARCH);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

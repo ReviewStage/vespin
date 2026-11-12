@@ -21,6 +21,7 @@ import {
   useComboboxField,
   writingRow,
 } from "@repo/ui";
+import { Predicate } from "effect";
 import { type ReactNode, type RefObject, useEffect, useId, useState } from "react";
 import {
   type ComposerTrigger,
@@ -172,15 +173,20 @@ function folded(words: string): string {
 function answers(entry: SlashEntry, query: string): boolean {
   const asked = folded(query);
   const terms = [entry.row.label, ...entry.row.label.split(/\s+/u), ...entry.aliases].map(folded);
+
   return terms.some((term) => term.startsWith(asked));
 }
 
 /** Whether the text takes what a block lays in, and the document keeps its row. */
 function offered(entry: SlashEntry, offers: BlockPickerOffers, rows: BlockPickerRows): boolean {
-  if (typeof entry.block !== "string") return true;
+  if (!Predicate.isString(entry.block)) return true;
+
   if (rows.dropped.has(entry.block)) return false;
+
   if (entry.block === SLASH_INSERT.PICTURE) return offers.pictures;
+
   if (entry.block === SLASH_INSERT.MENTION) return offers.mentions;
+
   return true;
 }
 
@@ -195,13 +201,14 @@ function slashGroups(
   offers: BlockPickerOffers,
   rows: BlockPickerRows,
 ): readonly SlashGroup[] {
-  return SLASH_GROUPS.map((group) => ({
-    label: group.label,
-    entries: [
+  return SLASH_GROUPS.flatMap((group) => {
+    const entries = [
       ...group.entries,
       ...rows.added.filter((added) => added.group === group.label).map(documentEntry),
-    ].filter((entry) => offered(entry, offers, rows) && answers(entry, query)),
-  })).filter((group) => group.entries.length > 0);
+    ].filter((entry) => offered(entry, offers, rows) && answers(entry, query));
+
+    return entries.length > 0 ? [{ label: group.label, entries }] : [];
+  });
 }
 
 /** The `/` word as reported, and where the box the editor stands in stood then, which the menu is carried with as it scrolls. */
@@ -255,18 +262,23 @@ export function useBlockPicker({
   const groups = trigger === undefined ? [] : slashGroups(trigger.query, offers, rows);
   const entries = groups.flatMap((group) => group.entries);
   const open = trigger !== undefined && closed !== trigger.start && entries.length > 0 && !held;
+
   const kept =
     highlight !== undefined &&
     trigger !== undefined &&
     highlight.start === trigger.start &&
     highlight.query === trigger.query;
+
   const at = kept ? Math.min(highlight.at, entries.length - 1) : 0;
+
   const moveTo = (index: number) => {
     if (trigger !== undefined)
       setHighlight({ start: trigger.start, query: trigger.query, at: index });
   };
+
   const choose = (index: number) => {
     const entry = entries[index];
+
     if (entry !== undefined) onChoose(entry.block);
   };
 
@@ -289,21 +301,28 @@ export function useBlockPicker({
   const onKey = (event: KeyboardEvent): boolean => {
     if (!open) return false;
     const bare = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+
     if (event.key === "Tab" && bare) {
       choose(at);
+
       return true;
     }
+
     if (event.key === "Enter" && event.shiftKey) return false;
+
     if ((event.key === "Home" || event.key === "End") && !bare) return false;
+
     return field.onKeyDown(event);
   };
 
   // The `/` where it stands now: where it was reported, carried as far as the room has moved since.
   const slash = (): EditorBox | undefined => {
     const now = room.current?.getBoundingClientRect();
+
     if (said === undefined || now === undefined || said.room === undefined) return undefined;
     const left = said.trigger.rect.left + now.left - said.room.left;
     const shift = now.top - said.room.top;
+
     return {
       left,
       right: left,
@@ -311,6 +330,7 @@ export function useBlockPicker({
       bottom: said.trigger.rect.bottom + shift,
     };
   };
+
   // The menu fades as it closes, drawing the rows it last showed.
   const menu = (
     <RectFloat open={open} anchor={slash} side={POPOVER_SIDE.BELOW}>

@@ -26,6 +26,7 @@ import { workspacesProcedures } from "./workspaces-procedures.js";
 
 const ORIGIN = "https://app.test";
 const USER_ID = "user-1";
+
 /** The bound on every workspace write's body but the photo's: a name's, or an id's. */
 const BODY_BYTES = 1_024;
 
@@ -57,25 +58,31 @@ interface Asked {
 const answer = ({ path, method = HTTP_METHOD.POST, body, caller }: Asked) =>
   Effect.gen(function* () {
     const headers = new Headers();
+
     if (caller === "account") headers.set("authorization", "Bearer token");
+
     if (body !== undefined) {
       headers.set("content-type", "application/json");
       headers.set("content-length", String(new TextEncoder().encode(body).byteLength));
     }
+
     const request = new Request(new URL(path, ORIGIN), {
       method,
       headers,
       ...(body === undefined ? undefined : { body }),
     });
+
     // SAFETY: no refusal here yields a service, so an empty context stands in for the web runtime's.
     const services = Context.empty() as Context.Context<WebServices>;
     const response = yield* Effect.promise(() => handle(request, services));
+
     return { status: response.status, body: yield* Effect.promise(() => response.text()) };
   });
 
 /** A JSON body padded with a key of its own to the exact length given. */
 function bodyOf(fields: Readonly<Record<string, string>>, length: number): string {
   const bare = JSON.stringify({ ...fields, pad: "" });
+
   return JSON.stringify({ ...fields, pad: "x".repeat(length - bare.length) });
 }
 
@@ -90,6 +97,7 @@ it.effect("an unsigned request is unauthenticated, whatever its body says", () =
       HOSTED_HTTP_STATUS.UNAUTHORIZED,
       HOSTED_API_ERROR.INVALID_TOKEN,
     );
+
     assert.deepEqual(
       yield* answer({ path: HOSTED_SERVICE_PATH.WORKSPACES, body: '{"name":7}' }),
       unauthenticated,
@@ -113,6 +121,7 @@ it.effect(
         HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE,
         HOSTED_API_ERROR.REQUEST_TOO_LARGE,
       );
+
       const invalid = refused(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
       const rename = { workspaceId: "w-1", name: "Acme" };
       assert.deepEqual(

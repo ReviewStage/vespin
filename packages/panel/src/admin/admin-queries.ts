@@ -29,6 +29,7 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Option, Schema } from "effect";
 import { QUERY_ROOT } from "../query-keys.js";
 import { showToast } from "../toast.js";
 import type { AdminReads } from "./admin-doors.js";
@@ -131,12 +132,8 @@ interface FavoritePress {
   readonly favorite: boolean;
 }
 
-/** Whether a mutation's variables are a press of the star of account `id`. */
-function pressOf(variables: unknown, id: string): boolean {
-  return (
-    typeof variables === "object" && variables !== null && "id" in variables && variables.id === id
-  );
-}
+/** A mutation's variables, read as a press of an account's star. */
+const readPress = Schema.decodeUnknownOption(Schema.Struct({ id: Schema.String }));
 
 /**
  * The star's write: the press draws at once in every roster held (the
@@ -151,12 +148,14 @@ export function useFavoriteMutation(reads: AdminReads) {
   const queryClient = useQueryClient();
   const rosters = { queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.USERS] };
   const mutationKey = [QUERY_ROOT.ADMIN, ADMIN_WRITE.FAVORITE];
+
   const draw = ({ id, favorite }: FavoritePress) =>
     queryClient.setQueriesData<AdminUserList>(rosters, (list) =>
       list === undefined
         ? undefined
         : { ...list, rows: list.rows.map((row) => (row.id === id ? { ...row, favorite } : row)) },
     );
+
   return useMutation({
     mutationKey,
     scope: { id: ADMIN_WRITE.FAVORITE },
@@ -175,11 +174,14 @@ export function useFavoriteMutation(reads: AdminReads) {
         tone: STATUS_TONE.DANGER,
         failure: { surface: FAILURE_SURFACE.ADMIN_WRITE, cause },
       });
+
       // Note that this press is still counted while its onError runs.
       const newer = queryClient.isMutating({
         mutationKey,
-        predicate: (mutation) => pressOf(mutation.state.variables, press.id),
+        predicate: (mutation) =>
+          Option.exists(readPress(mutation.state.variables), (read) => read.id === press.id),
       });
+
       if (newer <= 1) draw({ ...press, favorite: !press.favorite });
     },
     // Note that the rosters are read again once the last press of any star
@@ -202,6 +204,7 @@ export function useFavoriteMutation(reads: AdminReads) {
 export function useAdminSignOut(signOut: () => Promise<void>) {
   const queryClient = useQueryClient();
   const reads = { queryKey: [QUERY_ROOT.ADMIN] };
+
   return useMutation({
     mutationKey: [QUERY_ROOT.ADMIN, ADMIN_WRITE.SIGN_OUT],
     mutationFn: async () => {

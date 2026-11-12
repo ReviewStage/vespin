@@ -91,9 +91,11 @@ function mark(stream: WindowStream): void {
 function takeUnsent(stream: WindowStream): PushEvent | undefined {
   const latest = stream.unsent;
   stream.unsent = undefined;
+
   if (latest === undefined) return undefined;
   const delivery = appStateDelivery(stream.sent, latest);
   stream.sent = latest;
+
   return delivery === undefined ? undefined : { push: PUSH.APP_STATE, payload: delivery };
 }
 
@@ -103,6 +105,7 @@ function offerEvent(stream: WindowStream, event: EventPush): void {
   // event must never be heard ahead of a document pushed before it, and a
   // marker read while held would send nothing.
   const latest = stream.held ? takeUnsent(stream) : undefined;
+
   if (latest !== undefined) void stream.publisher.publish(PUSHED, latest);
   void stream.publisher.publish(PUSHED, event);
 }
@@ -110,6 +113,7 @@ function offerEvent(stream: WindowStream, event: EventPush): void {
 /** One document queued on one stream, in its unsent one's place, queued only while the window's document is not held. */
 function offerDocument(stream: WindowStream, document: AppStateSnapshot): void {
   stream.unsent = document;
+
   if (!stream.held) mark(stream);
 }
 
@@ -129,10 +133,13 @@ export class WindowPushes<Sender = unknown> {
     payload: PushPayload<Name>,
   ): boolean {
     const streams = this.#windows.get(sender);
+
     if (streams === undefined) return false;
     // SAFETY: `push` and `payload` are paired by this method's own signature, which is the pairing PushEvent names.
     const event = { push, payload } as EventPush;
+
     for (const stream of streams) offerEvent(stream, event);
+
     return true;
   }
 
@@ -144,8 +151,11 @@ export class WindowPushes<Sender = unknown> {
    */
   pushState(sender: Sender, document: AppStateSnapshot): boolean {
     const streams = this.#windows.get(sender);
+
     if (streams === undefined) return false;
+
     for (const stream of streams) offerDocument(stream, document);
+
     return true;
   }
 
@@ -159,8 +169,10 @@ export class WindowPushes<Sender = unknown> {
   holdState(sender: Sender, held: boolean): void {
     if (held) this.#held.add(sender);
     else if (!this.#held.delete(sender)) return;
+
     for (const stream of this.#windows.get(sender) ?? []) {
       stream.held = held;
+
       if (!held) mark(stream);
     }
   }
@@ -182,14 +194,19 @@ export class WindowPushes<Sender = unknown> {
       marked: false,
       held: this.#held.has(sender),
     };
+
     const streams = this.#windows.get(sender) ?? new Set<WindowStream>();
     this.#windows.set(sender, streams);
     streams.add(stream);
+
     const close = () => {
       if (!streams.delete(stream)) return;
+
       if (streams.size === 0 && this.#windows.get(sender) === streams) this.#windows.delete(sender);
     };
+
     signal?.addEventListener("abort", close, { once: true });
+
     // Note that the subscription is made here, before the stream is read, so
     // a push made the moment the window's call resolves is already held.
     return untilClosed(stream, stream.publisher.subscribe(PUSHED, { signal }), close);
@@ -212,9 +229,12 @@ async function* untilClosed(
         yield queued;
         continue;
       }
+
       stream.marked = false;
+
       if (stream.held) continue;
       const latest = takeUnsent(stream);
+
       if (latest !== undefined) yield latest;
     }
   } finally {

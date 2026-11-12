@@ -68,6 +68,7 @@ function PromptField({
   onSave: () => void;
 }): React.JSX.Element {
   const statuses = useIntegrationStatuses();
+
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
@@ -87,6 +88,7 @@ function PromptField({
     escapeClimbs: true,
     aria: { "aria-invalid": invalid ? "true" : undefined },
   });
+
   return (
     <MessageField
       box={box}
@@ -133,6 +135,7 @@ export function AutomationPrompt({
   // An `@` offers the workspace's coding agents, each named by its task.
   const tasks = useQuery({ ...appStateQuery, select: selectListedTasks }).data?.tasks ?? NO_TASKS;
   const readAgents = useMentionAgentsReader(workspaceId, tasks, useMentionedPlace().models);
+
   const mentions = useMemo(
     () =>
       workspaceId === undefined
@@ -144,10 +147,13 @@ export function AutomationPrompt({
           ),
     [workspaceId, slug, repository, onOpenTask, readAgents],
   );
+
   // A `/` offers the repository's skills, none while the Skills experiment is off.
   const queryClient = useQueryClient();
+
   const skillsOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.SKILLS) }).data === true;
+
   const skills = useMemo(
     () =>
       workspaceId === undefined || !skillsOn
@@ -161,6 +167,7 @@ export function AutomationPrompt({
           ),
     [queryClient, workspaceId, repository, skillsOn],
   );
+
   // A skill's chip opens its `SKILL.md` on GitHub, as New task's does.
   const openSkill = (skill: SkillWithFile) => {
     if (mentions === undefined || repository === null) return;
@@ -168,6 +175,7 @@ export function AutomationPrompt({
       encodeMention({ kind: MENTION_KIND.FILE, path: skill.path }, mentions.doors.place),
     );
   };
+
   return (
     <TaskMentions value={mentions}>
       <SkillFiles source={skills} onOpen={openSkill}>

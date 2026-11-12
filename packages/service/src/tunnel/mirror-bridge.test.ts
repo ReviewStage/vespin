@@ -6,6 +6,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { MIRROR_BOUNDS, mirrorFrameSchema } from "@repo/features/sandbox-mirror-wire";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import type { WireRecord } from "@repo/wire";
 import { Schema } from "effect";
 import { it, type TestContext } from "vitest";
 import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
@@ -28,8 +29,10 @@ const sha256 = (text: string) => createHash("sha256").update(text).digest("hex")
 async function checkout(t: TestContext) {
   const upstream = await temporaryDirectory(t, "mirror-upstream-");
   const root = await temporaryDirectory(t, "mirror-");
+
   const git = (cwd: string, ...args: string[]) =>
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd });
+
   git(upstream, "init", "--quiet", "--initial-branch=main");
   fs.writeFileSync(path.join(upstream, ".gitignore"), "*.log\n");
   fs.writeFileSync(path.join(upstream, "a.txt"), "tracked");
@@ -39,6 +42,7 @@ async function checkout(t: TestContext) {
   fs.writeFileSync(path.join(root, "b.sh"), "#!/bin/sh\n", { mode: 0o755 });
   fs.writeFileSync(path.join(root, "out.log"), "ignored");
   fs.symlinkSync("a.txt", path.join(root, "link"));
+
   return { root, head: git(root, "rev-parse", "HEAD").toString().trim() };
 }
 
@@ -47,20 +51,26 @@ function bridge(t: TestContext, root: string) {
   const child = spawn(process.execPath, ["--no-warnings", "-e", MIRROR_BRIDGE_SOURCE, root], {
     stdio: ["pipe", "pipe", "inherit"],
   });
+
   t.onTestFinished(() => void child.kill());
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const frame = async () => JSON.parse(String((await lines.next()).value));
+
   const next = async () => {
     const data = await frame();
     assert.equal(data.type, "data");
     assert.equal(data.channel, CHANNEL);
+
     return readMessage(JSON.parse(Buffer.from(data.data, "base64").toString("utf8")));
   };
-  const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+
+  const send = (frame: WireRecord) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+
   const ask = (paths: string[]) => {
     const request = JSON.stringify({ type: "request", paths });
     send({ type: "data", channel: CHANNEL, data: Buffer.from(request).toString("base64") });
   };
+
   return { frame, next, send, ask };
 }
 
@@ -72,7 +82,7 @@ function shown(message: Awaited<ReturnType<ReturnType<typeof bridge>["next"]>>) 
 }
 
 /** The path a message names, for putting messages that arrive in no set order in one. */
-const pathOf = (message: object) => ("path" in message ? String(message.path) : "");
+const pathOf = (message: WireRecord) => ("path" in message ? String(message.path) : "");
 
 it("the open sends git's files without ignored ones or symlinks, and a request is answered in order", async (t) => {
   const { root, head } = await checkout(t);

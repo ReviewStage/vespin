@@ -16,8 +16,7 @@
  * every concurrent caller then joins is one uninterruptible step regardless of
  * when — or whether — a caller runs the await that follows. That is what both
  * runs here are for — the `Effect.runSync` of the decision and the
- * `Effect.runFork` of the flight it decided on — and it is why this file is on
- * the permanent-adaptor list in root AGENTS.md's "Effect idioms" section.
+ * `Effect.runFork` of the flight it decided on.
  * The flight is a daemon of the default runtime rather than a fiber of
  * whoever asked first, because a caller that gives up on its await must not
  * take the rotation the other callers are waiting on with it. What ends a
@@ -45,6 +44,7 @@ export function singleFlightEffect<E>(
             flight = undefined;
             Deferred.doneUnsafe(own, exit);
           });
+
           return own;
         }),
       ),

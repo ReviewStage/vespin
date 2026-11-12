@@ -207,11 +207,14 @@ function runAgentOf(
   handedOn = false,
 ): AutomationRunSummary["agent"] {
   if (row.agentId === null || row.agentCreatedAt === null) return null;
+
   const status = handedOn
     ? AGENT_STATUS.COMPLETED
     : agentStatusAt(turnOf(row), { createdAt: row.agentCreatedAt, now });
+
   const failureReason =
     status === AGENT_STATUS.FAILED && row.failureWord !== null ? row.failureWord : undefined;
+
   return {
     id: row.agentId,
     title: row.agentTitle,
@@ -224,12 +227,14 @@ function runAgentOf(
 /** The next instant past `now` the clock alone moves a run's agent; none where only a row moves it. */
 function clockEdgeOf(row: RunAgentRow, now: number): number | undefined {
   if (row.agentCreatedAt === null) return undefined;
+
   return statusClockEdge(turnOf(row), { createdAt: row.agentCreatedAt, now });
 }
 
 /** The earliest of the edges given; none where there is none. */
 function earliest(edges: readonly (number | undefined)[]): number | undefined {
   const standing = edges.filter((edge): edge is number => edge !== undefined);
+
   return standing.length === 0 ? undefined : Math.min(...standing);
 }
 
@@ -245,11 +250,14 @@ function handedOnRuns(
 ): ReadonlySet<string> {
   const taken = new Set<string>();
   const handedOn = new Set<string>();
+
   for (const row of rows) {
     if (row.agentId === null) continue;
+
     if (taken.has(row.agentId)) handedOn.add(row.id);
     taken.add(row.agentId);
   }
+
   return handedOn;
 }
 
@@ -266,6 +274,7 @@ function lastRunOf(
   ) {
     return null;
   }
+
   return {
     id: row.runId,
     firing: row.runFiring,
@@ -283,6 +292,7 @@ export function withWebhookUrl(
   automation: AutomationSummary,
 ): AutomationSummary {
   if (automation.trigger.kind !== AUTOMATION_TRIGGER.WEBHOOK) return automation;
+
   return { ...automation, webhookUrl: `${serviceBaseUrl}${automationWebhookPath(automation.id)}` };
 }
 
@@ -336,6 +346,7 @@ export function automationRunsOfLiveRows(
 ): readonly AutomationRunSummary[] {
   const runs = orderedLiveRows(AUTOMATION_RUNS_READ.parts.runs, rows.runs);
   const handedOn = handedOnRuns(runs);
+
   return runs.map((row) => ({
     id: row.id,
     firing: row.firing,
@@ -354,6 +365,7 @@ export function automationWorkspaceRunsOfLiveRows(
 ): readonly AutomationWorkspaceRun[] {
   const runs = orderedLiveRows(AUTOMATION_WORKSPACE_RUNS_READ.parts.runs, rows.runs);
   const handedOn = handedOnRuns(runs);
+
   return runs.map((row) => ({
     id: row.id,
     firing: row.firing,

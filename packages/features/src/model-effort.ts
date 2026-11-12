@@ -29,6 +29,7 @@ const EFFORT_SCALE: readonly string[] = [
 /** Where an effort stands on the scale; nothing for a name the scale does not know. */
 function effortRank(effort: string): number | undefined {
   const rank = EFFORT_SCALE.indexOf(effort);
+
   return rank === -1 ? undefined : rank;
 }
 
@@ -45,12 +46,19 @@ export function effortFor(
 ): string | undefined {
   if (chosen !== undefined && efforts.includes(chosen)) return chosen;
   const wanted = chosen === undefined ? undefined : effortRank(chosen);
+
   if (wanted === undefined) return efforts[0];
+
   const ranked = efforts
-    .map((effort) => ({ effort, rank: effortRank(effort) }))
-    .filter((each): each is { effort: string; rank: number } => each.rank !== undefined)
+    .flatMap((effort) => {
+      const rank = effortRank(effort);
+
+      return rank === undefined ? [] : [{ effort, rank }];
+    })
     .sort((a, b) => a.rank - b.rank);
+
   const below = ranked.filter((each) => each.rank < wanted).at(-1);
+
   return below?.effort ?? ranked[0]?.effort ?? efforts[0];
 }
 
@@ -119,6 +127,7 @@ export function choiceOn(
   window: ContextWindow | undefined,
 ): ModelChoice {
   const choice = { model: pair.model, effort: pair.effort };
+
   return windowOf(models, { ...choice, contextWindow: window ?? CONTEXT_WINDOW.LONG }) ===
     CONTEXT_WINDOW.STANDARD
     ? { ...choice, contextWindow: CONTEXT_WINDOW.STANDARD }

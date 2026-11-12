@@ -34,6 +34,7 @@ const LUCIDE_DYNAMIC_IMPORT = /\bimport\(\s*["']lucide-react["']\s*\)/;
 /** Every file under a directory, as its path relative to that directory. */
 async function filesUnder(directory: string): Promise<readonly string[]> {
   const entries = await readdir(directory, { recursive: true, withFileTypes: true });
+
   return entries
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)));
@@ -51,6 +52,7 @@ export function panelResolve(): Plugin {
     enforce: "pre",
     resolveId(source, importer) {
       if (source === LUCIDE_WHOLE_ID) return LUCIDE_WHOLE_ID;
+
       return redirectOf(source, importer);
     },
     load(id) {
@@ -59,6 +61,7 @@ export function panelResolve(): Plugin {
     transform(code, id) {
       if (id.includes("/node_modules/") || !LUCIDE_DYNAMIC_IMPORT.test(code)) return undefined;
       const whole = new RegExp(LUCIDE_DYNAMIC_IMPORT.source, "g");
+
       return { code: code.replace(whole, `import("${LUCIDE_WHOLE_ID}")`), map: null };
     },
   };
@@ -74,9 +77,11 @@ function panelDefine(): Plugin {
     name: "panel-define",
     async config() {
       const worker = await build(HIGHLIGHT_WORKER_BUILD);
+
       const { "process.env.NODE_ENV": _mode, ...define } = panelDefines(
         worker.outputFiles?.[0]?.text ?? "",
       );
+
       return { define };
     },
   };
@@ -88,7 +93,9 @@ function panelStaticFiles(assetBase: string): Plugin {
     from,
     prefix: `${assetBase}${to}/`,
   }));
+
   let ssr = false;
+
   return {
     name: "panel-static-files",
     configResolved(config) {
@@ -98,13 +105,16 @@ function panelStaticFiles(assetBase: string): Plugin {
       server.middlewares.use((request, response, next) => {
         const url = decodeURIComponent((request.url ?? "").split("?")[0] ?? "");
         const found = served.find(({ prefix }) => url.startsWith(prefix));
+
         if (found === undefined) return next();
         const file = path.join(found.from, url.slice(found.prefix.length));
+
         // Note that a path climbing out of the folder (`..`) is refused rather than served.
         if (!file.startsWith(found.from + path.sep)) return next();
         readFile(file).then(
           (bytes) => {
             const type = CONTENT_TYPES.get(path.extname(file));
+
             if (type !== undefined) response.setHeader("content-type", type);
             response.end(bytes);
           },
@@ -114,6 +124,7 @@ function panelStaticFiles(assetBase: string): Plugin {
     },
     async generateBundle() {
       if (ssr) return;
+
       for (const { from, prefix } of served) {
         for (const file of await filesUnder(from)) {
           this.emitFile({

@@ -211,11 +211,13 @@ const claimStanding = /* @__PURE__ */ Effect.fnUntraced(function* (
   row: Option.Option<{ readonly claim: string | null; readonly claimedAt: Date | null }>,
 ) {
   if (Option.isNone(row) || row.value.claim === null || row.value.claimedAt === null) return false;
+
   if (claimLive(row.value.claimedAt, yield* DateTime.nowAsDate)) return true;
   yield* Effect.logWarning("a dispatch claim past its expiry was taken over", {
     conversationId,
     claimedAt: row.value.claimedAt.toISOString(),
   });
+
   return false;
 });
 
@@ -230,8 +232,10 @@ export const dispatchClaimStands = /* @__PURE__ */ Effect.fnUntraced(function* (
   place: number,
 ): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
   const row = yield* lockClaim({ conversationId });
+
   if (yield* claimStanding(conversationId, row)) return true;
   const ahead = yield* findWaiterAhead({ conversationId, place });
+
   return ahead.length > 0;
 });
 
@@ -250,6 +254,7 @@ export const takeDispatchClaim = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* writeClaim({ conversationId, claim, at: yield* DateTime.nowAsDate, line: line ?? null });
   yield* removeWaiter({ place });
   yield* removeStaleWaiters({ conversationId });
+
   return claim;
 });
 
@@ -304,8 +309,10 @@ export function waitingOutDispatchClaim<A, E, R>(
     // Note that the claimant queues before it first asks, because a claim cleared between a refused
     // first ask and a queueing after it would let a later arrival claim ahead of it.
     const [waiter] = yield* queueWaiter({ conversationId });
+
     // A conversation that stands no longer queues nothing, and the attempt answers it absent as it reads it.
     if (waiter === undefined) return yield* attempt(NO_PLACE);
+
     const [waited, exit] = yield* Effect.timed(
       Effect.exit(
         // Note that the waiter is kept live in a statement of its own, committed before the try, because the
@@ -319,13 +326,16 @@ export function waitingOutDispatchClaim<A, E, R>(
         ),
       ),
     );
+
     yield* removeWaiter({ place: waiter.place });
+
     if (Duration.isGreaterThanOrEqualTo(waited, CLAIM_WAIT_LOGGED)) {
       yield* Effect.logInfo("a write waited for its conversation's dispatch claim", {
         conversationId,
         waitedMs: Duration.toMillis(waited),
       });
     }
+
     return yield* exit;
   });
 }
@@ -343,16 +353,19 @@ export function underDispatchClaim<A, E, R>(
 ): Effect.Effect<A, E | DispatchClaimHeld | StoreFailure, R | DatabaseServices> {
   return Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     const claim = yield* waitingOutDispatchClaim(conversationId, (place) =>
       client.withTransaction(
         Effect.gen(function* () {
           if (yield* dispatchClaimStands(conversationId, place)) {
             return yield* new DispatchClaimHeld();
           }
+
           return yield* takeDispatchClaim(conversationId, place);
         }),
       ),
     );
+
     return yield* work.pipe(
       Effect.ensuring(Effect.ignore(releaseDispatchClaim(conversationId, claim))),
     );

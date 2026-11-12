@@ -31,6 +31,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -52,6 +53,7 @@ test("a badge that gives up its words in a narrow room still holds them for a re
   const view = render(
     createElement(Badge, { hideWordsUnder: VISUALLY_HIDDEN_UNDER.SNUG, children: "Ready" }),
   );
+
   assert.equal(view.textContent, "Ready");
 });
 

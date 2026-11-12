@@ -82,6 +82,7 @@ export function handleAdminDay(
   const { query } = options;
 
   const day = adminDayKey(query.date);
+
   if (day === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_DAY);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

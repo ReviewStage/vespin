@@ -2,13 +2,20 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { type InboxAttachmentRef, inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import { LINK_ORIGIN } from "@repo/features/link-home";
-import { type Picture, type PictureType, pictureTypeSchema } from "@repo/features/picture-wire";
+import {
+  type Picture,
+  type PictureType,
+  pictureMediaTypeSchema,
+  pictureTypeSchema,
+} from "@repo/features/picture-wire";
 import { type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 import { logStoreFailure } from "../http/store-failure.js";
+import { readInboxAttachment } from "../inbox/inbox-store.js";
 import type { DescriptionDocumentBinding } from "./description-notes.js";
 
 /**
@@ -49,9 +56,10 @@ const PICTURE_LOOK = {
 
 /** Why a call shows nothing, in words the model can act on. */
 export const PICTURE_LOOK_REFUSAL = {
-  UNREADABLE: "Not looked: name the picture by its address, copied from the description's text.",
-  ELSEWHERE: "Not looked: that address is not a picture in a description of your workspace.",
+  UNREADABLE: "Not looked: name the picture by its address, copied from the text it stands in.",
+  ELSEWHERE: "Not looked: that address is not a picture of your workspace that you may see.",
   NO_PICTURE: "Not looked: that description holds no such picture.",
+  NO_THREAD_PICTURE: "Not looked: that thread holds no such picture.",
   VIDEO:
     "Not looked: that address is a video, which is never shown to a model. Its alt text and caption in the description's text say what it shows.",
   UNAVAILABLE: "Not looked: the picture could not be read just now. The call may be made again.",
@@ -71,33 +79,80 @@ export type PictureLookResult =
     }
   | { readonly status: typeof PICTURE_LOOK_STATUS.NOT_LOOKED; readonly reason: string };
 
-const LOOK_INPUT = Schema.Struct({
-  address: describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(PICTURE_LOOK.MAX_ADDRESS_CHARS)),
-    `The picture's address exactly as the description's text writes it, inside its ![alt](address): ${LINK_ORIGIN}/<workspace>/task/<task>/files/<picture>, or under /plan/ in place of /task/ for a picture written before the rename.`,
-  ),
-});
+/** A thread's picture's address, as its message writes it. */
+const THREAD_ADDRESS = `${LINK_ORIGIN}/<workspace>/task/<task>/inbox/<thread>/files/<picture>`;
 
+/** What a look's address and the tool's own words say, in a workspace with Task descriptions on, and off, where they name threads alone. */
+const LOOK_WORDS = {
+  on: {
+    address: `The picture's address exactly as the description's or the thread's text writes it, inside its ![alt](address): ${LINK_ORIGIN}/<workspace>/task/<task>/files/<picture> in a description, or under /plan/ in place of /task/ for a picture written before the rename; ${THREAD_ADDRESS} in a thread's message.`,
+    tool: "See one of the pictures in a description of your workspace, your own task's or another's, or in a message of a thread",
+  },
+  off: {
+    address: `The picture's address exactly as the thread's text writes it, inside its ![alt](address): ${THREAD_ADDRESS}.`,
+    tool: "See one of the pictures in a message of a thread",
+  },
+} as const;
+
+/** The longest address a look takes, as every input of it bounds it. */
+const ADDRESS = Schema.String.check(
+  Schema.isNonEmpty(),
+  Schema.isMaxLength(PICTURE_LOOK.MAX_ADDRESS_CHARS),
+);
+
+function lookInputOf(words: string) {
+  return Schema.Struct({ address: describeWire(ADDRESS, words) });
+}
+
+const LOOK_INPUT = lookInputOf(LOOK_WORDS.on.address);
+
+const THREAD_LOOK_INPUT = lookInputOf(LOOK_WORDS.off.address);
+
+// Note that either input reads one way, since they differ in their words alone.
 const readInput = readEither(LOOK_INPUT);
 
-/** The tool as a planning model and a coding agent are offered it: its name, its words, and its input schema. */
+/** The tool's words, opening as the workspace's experiments word them. */
+function lookWordsOf(opening: string): string {
+  return (
+    `${opening} ${AGENT_TOOL.READ_THREAD} reads, such as a screenshot or a mockup, by the address its text writes it at. ` +
+    'Every picture is written as ![alt text](address "caption"), and its alt text and caption ' +
+    "already say what it shows: look only when they do not tell you enough for what you are " +
+    "doing. Answers the picture, or `not-looked` and why."
+  );
+}
+
+/** The tool as a coding agent is offered it where its workspace has Task descriptions on: its name, its words, and its input schema. */
 export const LOOK_AT_PICTURE_TOOL = {
   name: AGENT_TOOL.LOOK_AT_PICTURE,
-  description:
-    "See one of the pictures in a description of your workspace, your own task's or another's, such as a " +
-    "screenshot or a mockup, by the address its description's text writes it at. Every picture " +
-    'is written in the description as ![alt text](address "caption"), and its alt text and caption ' +
-    "already say what it shows: look only when they do not tell you enough for what you are " +
-    "doing. Answers the picture, or `not-looked` and why.",
+  description: lookWordsOf(LOOK_WORDS.on.tool),
   inputSchema: LOOK_INPUT,
 } as const;
+
+/** The tool in the words of the agent's workspace's experiments: a thread's pictures alone where Task descriptions are off. */
+export function lookAtPictureToolOf(on: { readonly descriptionsOn: boolean }) {
+  if (on.descriptionsOn) return LOOK_AT_PICTURE_TOOL;
+
+  return {
+    name: AGENT_TOOL.LOOK_AT_PICTURE,
+    description: lookWordsOf(LOOK_WORDS.off.tool),
+    inputSchema: THREAD_LOOK_INPUT,
+  } as const;
+}
 
 /** The plan a call's address names, whose picture it looks at; nothing where the call names no picture's address. */
 export function lookedTaskOf(input: UnparsedWireValue): string | undefined {
   const read = readInput(input);
+
   return Result.isSuccess(read)
     ? descriptionAttachmentOf(read.success.address.trim())?.taskId
     : undefined;
+}
+
+/** The thread's picture a call's address names; nothing where it names no thread's picture. */
+export function lookedThreadPictureOf(input: UnparsedWireValue): InboxAttachmentRef | undefined {
+  const read = readInput(input);
+
+  return Result.isSuccess(read) ? inboxAttachmentOf(read.success.address.trim()) : undefined;
 }
 
 /** A call that showed nothing, and why. */
@@ -107,11 +162,15 @@ export function pictureNotLooked(reason: string): PictureLookResult {
 
 const isImageType = Schema.is(pictureTypeSchema);
 
+/** Whether a kept file is a picture, an image or a video, rather than any other file a message carried. */
+const isPictureMediaType = Schema.is(pictureMediaTypeSchema);
+
 /** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video, whose bytes go nowhere. */
 function looked(picture: Picture): PictureLookResult {
   if (!isImageType(picture.contentType)) {
     return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
   }
+
   return {
     status: PICTURE_LOOK_STATUS.LOOKED,
     mediaType: picture.contentType,
@@ -129,18 +188,47 @@ export function runLookAtPicture(
   input: UnparsedWireValue,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   const read = readInput(input);
+
   if (Result.isFailure(read))
     return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNREADABLE));
   const named = descriptionAttachmentOf(read.success.address.trim());
+
   if (named === undefined || named.taskId !== description.taskId) {
     return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
   }
+
   return readDescriptionAttachment(description.userId, description.taskId, named.attachmentId).pipe(
     Effect.map((picture) =>
       Option.isNone(picture)
         ? pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE)
         : looked(picture.value),
     ),
+    Effect.tapError(logStoreFailure),
+    Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),
+  );
+}
+
+/**
+ * One look at a thread's picture: the picture of the message the reference
+ * names, where it is an image of a thread the account may read; `not-looked`
+ * and why otherwise, a video among them, and a file that is no picture.
+ * Note that the thread's workspace is its caller's to hold to the agent's.
+ */
+export function runLookAtThreadPicture(
+  userId: string,
+  named: InboxAttachmentRef,
+): Effect.Effect<PictureLookResult, never, DatabaseServices> {
+  return readInboxAttachment(userId, named.itemId, named.attachmentId).pipe(
+    Effect.map((file) => {
+      if (Option.isNone(file)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
+      const { contentType, bytes } = file.value;
+
+      if (isImageType(contentType)) return looked({ contentType, bytes });
+
+      return isPictureMediaType(contentType)
+        ? pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO)
+        : pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
+    }),
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),
   );

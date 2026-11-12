@@ -38,10 +38,13 @@ export async function settleResponseGolden(
 ): Promise<void> {
   const text = `${JSON.stringify(recorded, undefined, 2)}\n`;
   const file = path.join(root, `${name}${GOLDEN_SUFFIX}`);
+
   if (UPDATE_FIXTURES) {
     await fs.mkdir(root, { recursive: true });
     await fs.writeFile(file, text);
+
     return;
   }
+
   assert.equal(text, await fs.readFile(file, "utf8"));
 }

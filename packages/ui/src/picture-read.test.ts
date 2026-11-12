@@ -48,33 +48,41 @@ async function drawPicture(
   failed: (unread: PictureUnread) => ReportedFailure = FAILED,
 ): Promise<{ readonly now: () => PictureState }> {
   let drawn: PictureState = { kind: PICTURE_STATE.READING };
+
   const query = queryOptions({
     queryKey: ["picture", id],
     queryFn: () => readPicture(read()),
     retry: false,
   });
+
   function Picture(): null {
     drawn = usePicture(query, failed);
+
     return null;
   }
+
   const client = new QueryClient();
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   await act(async () =>
     root.render(createElement(QueryClientProvider, { client }, createElement(Picture))),
   );
+
   return { now: () => drawn };
 }
 
 test("a read that did not land draws as failed, and its retry reads it again until it lands", async () => {
   const base64 = "iVBORw==";
   let reads = 0;
+
   const read = () => {
     reads += 1;
+
     return reads === 1
       ? Promise.reject(new Error("the host did not answer"))
       : Promise.resolve<PictureAnswer>({ contentType: "image/png", base64 });
   };
+
   const picture = await drawPicture("a", read);
   await vi.waitFor(() => expect(picture.now().kind).toBe(PICTURE_STATE.FAILED));
 
@@ -103,6 +111,7 @@ test("a failure the read answers draws as failed, and a picture gone draws as mi
 
 test("a read whose call never reached the service is reported as the network's failure, opening no issue", async () => {
   const unreads: PictureUnread[] = [];
+
   const unreached = await drawPicture(
     "a",
     () =>
@@ -113,21 +122,26 @@ test("a read whose call never reached the service is reported as the network's f
       }),
     (unread) => {
       unreads.push(unread);
+
       return UNREAD;
     },
   );
+
   await vi.waitFor(() => expect(unreached.now().kind).toBe(PICTURE_STATE.FAILED));
 
   const issues: Error[] = [];
+
   const sentry: ShownFailureSentry = {
     captureException: (error) => {
       issues.push(error);
+
       return "event-fixture";
     },
     logger: { warn: () => undefined, error: () => undefined },
     getActiveSpan: () => undefined,
     getCurrentScope: () => ({ getPropagationContext: () => ({ traceId: "trace-fixture" }) }),
   };
+
   for (const unread of unreads) {
     sendShownFailure(sentry, {
       surface: FAILURE_SURFACE.PICTURE_READ,

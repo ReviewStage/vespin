@@ -56,18 +56,23 @@ export function SelectionPicker({
 }): React.JSX.Element {
   const drop = useMenu(true);
   const any = count > 0;
+
   // Note that the focus goes to the list before the rows are let go, since the box goes with them.
   const handingFocus = (choose: () => void) => () => {
     const list = document.getElementById(controls);
+
     // Note that a region of the app's own rows keeps no roving Tab stop, so its first row takes the focus instead.
     if (list !== null && !focusRovingStop(list)) focusChoosable(list);
     choose();
   };
+
   const none = handingFocus(onNone);
+
   const ways: readonly MenuAction[] = by.map((choice) => ({
     label: choice.label,
     onSelect: choice.count === 0 ? handingFocus(choice.onSelect) : choice.onSelect,
   }));
+
   const groups: readonly (readonly MenuAction[])[] = [
     [
       { label: SELECTION_WORDS.ALL, onSelect: onAll },
@@ -75,6 +80,7 @@ export function SelectionPicker({
     ],
     ...(ways.length === 0 ? [] : [ways]),
   ];
+
   return (
     <span className="ui-selection-picker inline-flex flex-none items-center gap-tight-gap">
       {/* Note that a press on a box partly checked asks for checked, which is read here as a press that lets every row go. */}

@@ -30,6 +30,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -46,6 +47,7 @@ const openAgent = (userId: string, taskId: string) =>
       repository: "acme/relay",
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const { agent } = Option.getOrThrow(started);
     const now = yield* Clock.currentTimeMillis;
     const db = yield* Database;
@@ -53,6 +55,7 @@ const openAgent = (userId: string, taskId: string) =>
       .update(agentTable)
       .set({ createdAt: new Date(now - 60 * 60_000) })
       .where(eq(agentTable.id, agent.id));
+
     return agent;
   });
 
@@ -64,6 +67,7 @@ const turnOf = (
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const db = yield* Database;
+
     const [row] = yield* db
       .insert(turns)
       .values({
@@ -76,6 +80,7 @@ const turnOf = (
         settledAt: status === TURN_STATUS.SETTLED ? new Date(now - 60_000) : null,
       })
       .returning({ id: turns.id });
+
     return row?.id ?? assert.fail("the turn was not written");
   });
 

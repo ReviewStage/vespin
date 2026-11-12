@@ -78,7 +78,9 @@ const parentWritten = (
 const parentCleared = (userId: string, childId: string, parentTaskId: string): Written =>
   Effect.flatMap(readTaskHeader(userId, childId), (header) => {
     if (Option.isNone(header)) return Effect.succeed(Option.none());
+
     if (header.value.parentTaskId !== parentTaskId) return Effect.succeed(Option.some({}));
+
     // A clear never fails for a task reached, so its failures are the store's alone.
     return Effect.catchTags(parentWritten(userId, childId, null), {
       TaskParentUnreached: Effect.die,
@@ -145,17 +147,23 @@ export function moveTaskRelation(
   DatabaseServices
 > {
   const otherId = change.taskId;
+
   if (otherId === taskId) return Effect.fail(new TaskBlockSelf());
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const reached = yield* lockTasksForBlocks(userId, [taskId, otherId]);
+
         if (reached !== 2) return Option.none();
         const removed = yield* relationTakenAway(userId, taskId, otherId, change.from);
+
         if (Option.isNone(removed)) return Option.none();
         const added = yield* relationAdded(userId, taskId, otherId, change.to);
+
         if (Option.isNone(added)) return Option.none();
         const txid = added.value.txid ?? removed.value.txid;
+
         return Option.some(txid === undefined ? {} : { txid });
       }),
     ),

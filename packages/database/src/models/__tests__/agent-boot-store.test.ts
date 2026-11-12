@@ -47,6 +47,7 @@ const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -57,6 +58,7 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, agentId: Option.getOrThrow(started).agent.id };
 });
 
@@ -85,8 +87,9 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
 
         assert.ok(Option.isNone(heldWhileStarting), "nothing goes while the machine boots");
         assert.deepEqual(
-          Option.map(up, (boot) => boot.phase),
-          Option.some(BOOT_PHASE.HANDING_OFF),
+          Option.map(up, (boot) => [boot.phase, boot.phaseAt.getTime()]),
+          Option.some([BOOT_PHASE.HANDING_OFF, AT.getTime()]),
+          "a hand-off still counts from when its attempt began",
         );
         assert.deepEqual(
           Option.map(handedOn, (message) => message.text),
@@ -202,11 +205,12 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
 
         const mine = (boots: readonly { readonly agentId: string }[]) =>
-          boots
-            .map((boot) => boot.agentId)
-            .filter((id) =>
-              [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(id),
-            );
+          boots.flatMap(({ agentId }) =>
+            [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(agentId)
+              ? [agentId]
+              : [],
+          );
+
         assert.deepEqual(mine(before), []);
         assert.deepEqual(mine(after).toSorted(), [starting.agentId, handingOff.agentId].toSorted());
         // The sweep fails the stuck hand-off as it fails a boot that never came up, so Retry can boot it again.
@@ -227,6 +231,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agentId } = yield* openAccount;
+
         const automation = {
           id: randomUUID(),
           sendKey: JSON.stringify({ run: "run-1" }),
@@ -240,16 +245,20 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
             serverWords: "Triage the inbox.",
           },
         };
+
         const beforeBoot = yield* queueWhileBooting(agentId, userId, automation);
         yield* beginAgentBoot(agentId, AT, undefined);
         const queued = yield* queueWhileBooting(agentId, userId, automation);
+
         const repeated = yield* queueWhileBooting(agentId, userId, {
           ...automation,
           id: randomUUID(),
         });
+
         const read = yield* agentQueueNow(agentId);
         yield* agentBootRunnerUp(agentId, past(1_000), 1);
         yield* agentBootHandedOff(agentId, past(2_000));
+
         const afterBoot = yield* queueWhileBooting(agentId, userId, {
           ...automation,
           sendKey: randomUUID(),

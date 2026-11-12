@@ -11,6 +11,8 @@
  * linear in the words' length.
  */
 
+import { checkoutRelativePath } from "@repo/features/checkout-path";
+
 /** What an inline span of code opens. */
 export const INLINE_CODE_TARGET = {
   FILE: "file",
@@ -54,15 +56,6 @@ const PORT = /^\d{1,5}$/u;
 const EXTENSION = /^(?=[a-z\d]{0,15}[a-z])[a-z\d]{1,16}$/iu;
 
 /**
- * The folder every agent's checkout stands in, in the cloud
- * (`/workspace/repository`) and on a Mac (`…/<agent>/repository`), which an
- * absolute path is read under. Note that an absolute path through no such
- * folder opens nothing, because nothing in its words says where the
- * checkout begins.
- */
-const CHECKOUT_FOLDER = "/repository/";
-
-/**
  * The extensions a file named alone, with no folder, is taken to be a
  * file by. Note that a name with a folder takes any extension, but one
  * alone takes only these, because `console.log`, `process.env`, and
@@ -104,49 +97,47 @@ function webTarget(words: string): InlineCodeTarget | undefined {
   if (WEB_SCHEME.test(words)) {
     return URL.canParse(words) ? { kind: INLINE_CODE_TARGET.WEB, href: words } : undefined;
   }
+
   const slash = words.indexOf("/");
+
   if (slash <= 0) return undefined;
   const [name = "", port, ...rest] = words.slice(0, slash).split(":");
+
   if (rest.length > 0 || (port !== undefined && !PORT.test(port))) return undefined;
   const labels = name.split(".");
   const last = labels.at(-1) ?? "";
+
   if (labels.length < 2 || !TOP_LEVEL_DOMAIN.test(last)) return undefined;
+
   if (!labels.every((label) => HOST_LABEL.test(label))) return undefined;
   const href = `https://${words}`;
-  return URL.canParse(href) ? { kind: INLINE_CODE_TARGET.WEB, href } : undefined;
-}
 
-/** A path as written, read as a path in the checkout: a relative one as it is, past a leading `./`; an absolute one under the checkout's folder, as a harness's own file tools name every file; none for one that climbs out or names no file. */
-export function checkoutPath(written: string): string | undefined {
-  let path = written;
-  if (path.startsWith("/")) {
-    const at = path.indexOf(CHECKOUT_FOLDER);
-    if (at < 0) return undefined;
-    path = path.slice(at + CHECKOUT_FOLDER.length);
-  } else if (path.startsWith("./")) {
-    path = path.slice(2);
-  }
-  const steps = path.split("/");
-  if (steps.some((step) => step === "" || step === "." || step === "..")) return undefined;
-  return path;
+  return URL.canParse(href) ? { kind: INLINE_CODE_TARGET.WEB, href } : undefined;
 }
 
 /** The words as a file of the checkout at its line; none for any other. */
 function fileTarget(words: string): InlineCodeTarget | undefined {
   const suffix = LINE_SUFFIX.exec(words);
   const written = suffix === null ? words : words.slice(0, suffix.index);
+
   if (!PATH_ONLY_CHARACTERS.test(written) || written.startsWith("~")) return undefined;
-  const path = checkoutPath(written);
+  const path = checkoutRelativePath(written);
+
   if (path === undefined) return undefined;
   const name = path.slice(path.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");
   const extension = dot < 0 ? "" : name.slice(dot + 1);
+
   if (!EXTENSION.test(extension)) return undefined;
+
   if (!written.includes("/") && !BARE_NAME_EXTENSIONS.has(extension.toLowerCase())) {
     return undefined;
   }
+
   const line = suffix === null ? undefined : Number(suffix[1]);
+
   if (line === 0) return undefined;
+
   return { kind: INLINE_CODE_TARGET.FILE, path, line };
 }
 
@@ -162,5 +153,6 @@ export function inlineCodeTarget(words: string): InlineCodeTarget | undefined {
   if (words.length === 0 || words.length > MAX_CHARS || !PATH_CHARACTERS.test(words)) {
     return undefined;
   }
+
   return webTarget(words) ?? fileTarget(words);
 }

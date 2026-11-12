@@ -22,6 +22,7 @@ export function holdFrames(): void {
   vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((frame) => {
     asked += 1;
     held.set(asked, frame);
+
     return asked;
   });
   vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id) => {
@@ -32,12 +33,15 @@ export function holdFrames(): void {
 /** Lets the frames held so far pass, then the ones those asked for: the frame a paint belongs to and the one after it; answers whether any was held. */
 function passFrames(): boolean {
   let passed = false;
+
   for (let frame = 0; frame < 2; frame += 1) {
     const due = [...held.values()];
     held.clear();
+
     for (const run of due) run(performance.now());
     passed ||= due.length > 0;
   }
+
   return passed;
 }
 
@@ -56,6 +60,7 @@ export async function settleFrames(): Promise<void> {
     act(() => {
       passed = passFrames();
     });
+
     if (!passed) return;
   }
 }

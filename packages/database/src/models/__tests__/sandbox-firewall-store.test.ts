@@ -28,6 +28,7 @@ const openOwner = Effect.gen(function* () {
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const agentId = yield* openAgentOnOwnTask(userId, yield* openWorkspace(userId));
+
   return { userId, sandboxSessionId: `sbx_${randomUUID()}`, agentId };
 });
 
@@ -75,11 +76,13 @@ it.layer(getTestDB())("the launch kept at a sandbox session's firewall", (it) =>
       Effect.gen(function* () {
         const ended = yield* openOwner;
         const relaunched = { userId: ended.userId, sandboxSessionId: `sbx_${randomUUID()}` };
+
         const neighbor = {
           userId: ended.userId,
           sandboxSessionId: `sbx_${randomUUID()}`,
           agentId: yield* openAgentOnOwnTask(ended.userId, yield* openWorkspace(ended.userId)),
         };
+
         yield* keepFirewallLaunch(ended, launchOf(ended.agentId, "sealed-ended"), AT);
         yield* keepFirewallLaunch(neighbor, launchOf(neighbor.agentId, "sealed-neighbor"), AT);
 

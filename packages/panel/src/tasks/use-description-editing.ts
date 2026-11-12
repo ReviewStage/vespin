@@ -79,6 +79,7 @@ const titlesUnsavedStore = createStore<readonly string[]>([]);
 function mark<Key>(marks: Store<readonly Key[]>, key: Key, unsaved: boolean): void {
   marks.setState((held) => {
     const others = held.filter((standing) => standing !== key);
+
     return unsaved ? [...others, key] : others;
   });
 }
@@ -104,15 +105,17 @@ interface LeftTask {
 function takeLeft(taskId: string): DocumentEditor | undefined {
   const held = leftUnsavedStore.state;
   const kept = held.get(taskId);
+
   if (kept === undefined) return undefined;
   const rest = new Map(held);
   rest.delete(taskId);
   leftUnsavedStore.setState(() => rest);
+
   return kept;
 }
 
 /** A save's answer where it refused the words, for the toast to report; none where it saved them. */
-function failureOf(answered: object): object | undefined {
+function failureOf<Answered extends object>(answered: Answered): Answered | undefined {
   return "failure" in answered ? answered : undefined;
 }
 
@@ -125,31 +128,39 @@ function failureOf(answered: object): object | undefined {
  */
 function keepLeft(left: LeftTask, now: DocumentEditor, saving: symbol, cause?: unknown): void {
   const { taskId } = left;
+
   // Note that a save answered after another account signed in keeps nothing
   // and lets go of nothing kept, because its words are no longer the account's
   // signed in and what is kept for the task now is the next account's.
   if (!sameAccount(left.signedIn(), left.owner)) {
     mark(savingLeftStore, saving, false);
+
     return;
   }
+
   const kept = editorLeft(now);
   const held = new Map(leftUnsavedStore.state);
+
   if (kept === undefined) held.delete(taskId);
   else held.set(taskId, kept);
   leftUnsavedStore.setState(() => held);
   mark(savingLeftStore, saving, false);
+
   if (kept === undefined) return;
   const { state } = kept;
   const conflict = state.kind === DOCUMENT_EDITOR_STATE.CONFLICT;
+
   const press = () => {
     const standing = takeLeft(taskId);
+
     if (standing !== undefined) saveLeft(left, editorKeptMine(standing));
   };
+
   left.toast({
     // Note that a conflict's detail names who wrote over the section, so it stays masked.
     replayUnmasked: !conflict,
     words: LEFT_UNSAVED.WORDS,
-    ...(conflict ? { detail: conflictWords(state.by, left.place).note } : {}),
+    ...(conflict && { detail: conflictWords(state.by, left.place).note }),
     tone: STATUS_TONE.DANGER,
     subject: taskId,
     persists: true,
@@ -188,14 +199,19 @@ function saveLeft(
   // Note that words are never sent once another account has signed in, because they would save as it.
   if (!sameAccount(left.signedIn(), left.owner)) {
     mark(savingLeftStore, saving, false);
+
     return;
   }
+
   mark(savingLeftStore, saving, true);
   const request = leavingSave(now);
+
   if (request === undefined) {
     keepLeft(left, now, saving, cause);
+
     return;
   }
+
   const sent = editorSent(now, request);
   left.save(request).then(
     (answered) => keepLeft(left, editorAnswered(sent, answered), saving, failureOf(answered)),
@@ -256,6 +272,7 @@ export function useDescriptionWordsUnsaved(): boolean {
   const saving = useSelector(savingLeftStore, (held) => held.length > 0);
   const left = useSelector(leftUnsavedStore, (held) => held.size > 0);
   const titles = useSelector(titlesUnsavedStore, (held) => held.length > 0);
+
   return open || saving || left || titles;
 }
 
@@ -274,7 +291,9 @@ export function useDescriptionWordsOwner(): void {
   useLayoutEffect(() => {
     const held = wordsOwnerStore.state;
     wordsOwnerStore.setState(() => account);
+
     if (sameAccount(held, account)) return;
+
     for (const taskId of leftUnsavedStore.state.keys()) withdrawToast(taskId);
     leftUnsavedStore.setState(() => new Map());
   }, [withdrawToast, account]);
@@ -287,6 +306,7 @@ export function useDescriptionWordsOwner(): void {
  */
 export function useMarkTitleUnsaved(): (unsaved: boolean) => void {
   const key = useId();
+
   return useCallback((unsaved: boolean) => mark(titlesUnsavedStore, key, unsaved), [key]);
 }
 
@@ -347,18 +367,23 @@ export function useDescriptionEditing(
   // so a pause and a close landing in one flush start one save, not two.
   const send = () => {
     const held = latest.current;
+
     if (held === undefined || !sameAccount(signedInNow(), wroteAs.current)) return;
     const request = pendingSave(held);
+
     if (request === undefined) return;
     const sentFrom = opening.current;
+
     const landed = (next: (now: DocumentEditor) => DocumentEditor) =>
       setEditor((now) => (now !== undefined && opening.current === sentFrom ? next(now) : now));
+
     latest.current = editorSent(held, request);
     setEditor(latest.current);
     flight.current = save(request);
     flight.current.then(
       (answered) => {
         landed((now) => editorAnswered(now, answered));
+
         if ("saved" in answered && opening.current === sentFrom) setSaves((count) => count + 1);
       },
       (refused: Error) => landed((now) => editorRefused(now, refused.message)),
@@ -388,6 +413,7 @@ export function useDescriptionEditing(
   useEffect(() => {
     if (!unsaved) return;
     mark(openUnsavedStore, taskId, true);
+
     return () => mark(openUnsavedStore, taskId, false);
   }, [taskId, unsaved]);
 
@@ -397,8 +423,10 @@ export function useDescriptionEditing(
   useEffect(() => {
     if (sameAccount(wroteAs.current, owner)) {
       wroteAs.current = owner;
+
       return;
     }
+
     if (latest.current === undefined) return;
     opening.current += 1;
     latest.current = undefined;
@@ -414,6 +442,7 @@ export function useDescriptionEditing(
   // An editor asked to close saves what is left, then goes once nothing is.
   useEffect(() => {
     if (editor === undefined || !editor.closing) return;
+
     if (editorCloses(editor)) setEditor(undefined);
     else send();
   });
@@ -426,18 +455,22 @@ export function useDescriptionEditing(
   useEffect(() => {
     opening.current += 1;
     const kept = text === undefined ? undefined : takeLeft(taskId);
+
     if (kept !== undefined) withdrawToast(taskId);
     wroteAs.current = signedInNow();
     latest.current = kept;
     setEditor(kept);
     setSelecting(undefined);
     setCursor(undefined);
+
     return () => {
       heldWords.current?.();
       const held = latest.current;
+
       if (held === undefined) return;
       // Note that words left save through a mutation of the task they were typed in, which outlives this editor and runs in that plan's order.
       const leaving = new MutationObserver(queryClient, writes.current);
+
       const left: LeftTask = {
         taskId,
         owner: wroteAs.current,
@@ -446,10 +479,13 @@ export function useDescriptionEditing(
         place: drawnPlace.current,
         toast,
       };
+
       if (held.sending === undefined) {
         saveLeft(left, held);
+
         return;
       }
+
       // Note that words typed while a save was out go once it lands, from
       // what it saved, and are unsaved work while they wait on it.
       const saving = Symbol(taskId);
@@ -466,6 +502,7 @@ export function useDescriptionEditing(
     placement,
     open: (place) => {
       if (text === undefined) return;
+
       if (editor !== undefined && !editorCloses(editorCloseAsked(editor))) return;
       opening.current += 1;
       wroteAs.current = signedInNow();
@@ -481,6 +518,7 @@ export function useDescriptionEditing(
     // be focus leaving for another task that takes the document with it.
     close: (select) => {
       if (latest.current === undefined) return;
+
       if (select !== undefined) setSelecting(select);
       latest.current = editorCloseAsked(latest.current);
       setEditor(latest.current);
@@ -492,6 +530,7 @@ export function useDescriptionEditing(
     select: setCursor,
     holdWords: (handOver) => {
       heldWords.current = handOver;
+
       if (handOver === undefined) setHolding(false);
     },
     holdingWords: () => setHolding(true),

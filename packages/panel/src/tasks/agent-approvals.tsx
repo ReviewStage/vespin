@@ -19,6 +19,7 @@ import {
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { providerOf } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
@@ -49,6 +50,7 @@ import {
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import {
   createContext,
   type ReactNode,
@@ -98,7 +100,9 @@ import type { HeldCall } from "./transcript-blocks.js";
  * line reads "Waiting for approval" in the working mark's place, its body
  * says who asks where a subagent does and the CLI's own words for why, and
  * `@repo/ui`'s `ApprovalActions` stand under it, Allow, Always allow, and
- * Deny, as a row's own presses do (`heldCallOf`). One whose row is not
+ * Deny, as a row's own presses do (`heldCallOf`), Always allow naming the
+ * command's first words where the harness proposed them
+ * (`commandPrefix`), since then it lasts for every agent of the member's. One whose row is not
  * drawn, a subagent's, whose calls the transcript does not keep among them,
  * is drawn as a row of its own at the transcript's foot over the working
  * line, from what the ask says of the call (`heldCallPart`). An answer goes
@@ -193,12 +197,14 @@ export function useAgentPermissionMode(input: {
   const latest = useRef(input);
   latest.current = input;
   const writes = useRef(0);
+
   if (
     agent === undefined ||
     (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
   ) {
     return undefined;
   }
+
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
@@ -215,6 +221,7 @@ export function useAgentPermissionMode(input: {
       setNote({ agentId: agent.id, words: MODE_CHANGE_FAILED });
     });
   };
+
   return {
     mode: modeOf(agent),
     choose,
@@ -244,7 +251,9 @@ export function useNewAgentPermissionMode(input: {
   const fallback =
     useQuery({ ...appStateQuery, select: selectDefaultMode }).data ??
     AGENT_PERMISSION_MODE.FULL_ACCESS;
+
   if (input.model === undefined || providerOf(input.model) === undefined) return undefined;
+
   return {
     mode: input.picked ?? fallback,
     choose: input.choose,
@@ -264,6 +273,7 @@ export function modeShown(control: AgentModeControl | undefined): AgentPermissio
 export function modeMenuRows(): readonly MenuRow[] {
   return MODES.map((mode) => {
     const Glyph = MODE_GLYPH[mode];
+
     return {
       id: mode,
       label: PERMISSION_MODE_LABEL[mode],
@@ -314,13 +324,17 @@ export function useAgentApprovals(input: {
   const { agent } = input;
   const pending = agent.pendingApprovals ?? NO_ASKS;
   const running = agent.status === AGENT_STATUS.RUNNING;
+
   const [state, setState] = useState<{
     agentId: string;
     held: ReadonlyMap<string, HeldAsk>;
   }>(() => ({ agentId: agent.id, held: new Map() }));
+
   const fresh =
     state.agentId === agent.id ? state : { agentId: agent.id, held: new Map<string, HeldAsk>() };
+
   const held = heldWith(fresh.held, pending, running);
+
   if (fresh !== state || !sameHeld(held, state.held)) setState({ ...fresh, held });
   const latest = useRef(input);
   latest.current = input;
@@ -329,7 +343,9 @@ export function useAgentApprovals(input: {
     (agentId: string, id: string, change: (ask: HeldAsk) => HeldAsk) =>
       setState((was) => {
         const ask = was.held.get(id);
+
         if (was.agentId !== agentId || ask === undefined) return was;
+
         return { ...was, held: new Map(was.held).set(id, change(ask)) };
       }),
     [],
@@ -338,10 +354,12 @@ export function useAgentApprovals(input: {
   const answer = useCallback(
     (agentId: string, id: string, card: ApprovalAction, message?: string) => {
       settle(agentId, id, (ask) => ({ ...ask, answering: card, error: undefined }));
+
       const request: ApprovalAnswerRequest =
         message === undefined
           ? { answer: WIRE_ANSWER[card] }
           : { answer: WIRE_ANSWER[card], message };
+
       latest.current
         .write(agentId, id, request)
         .then((answered) => settle(agentId, id, (ask) => answeredAsk(ask, answered, agentId)));
@@ -353,17 +371,23 @@ export function useAgentApprovals(input: {
   const messageSent = useCallback((sent: Promise<AgentActAnswer>) => {
     const { agent: sentTo } = latest.current;
     const waitingIds = (sentTo.pendingApprovals ?? NO_ASKS).map((each) => each.id);
+
     if (waitingIds.length === 0) return;
+
     const mark = (messaged: boolean) =>
       setState((was) => {
         if (was.agentId !== sentTo.id) return was;
         const next = new Map(was.held);
+
         for (const id of waitingIds) {
           const ask = next.get(id);
+
           if (ask !== undefined) next.set(id, markedAsk(ask, messaged, latest.current.agent));
         }
+
         return { ...was, held: next };
       });
+
     mark(true);
     sent.then((answer) => {
       if ("failure" in answer) mark(false);
@@ -385,6 +409,7 @@ export function useAgentApprovals(input: {
         ),
     [held, answer, agent.id],
   );
+
   return {
     asks,
     waiting: asks.filter((ask) => ask.settled === undefined).length,
@@ -397,11 +422,14 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
   if ("approval" in answered) {
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approval.status] };
   }
+
   if ("approvalStatus" in answered && answered.approvalStatus !== undefined) {
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approvalStatus] };
   }
+
   // Note that a refusal names why, and only an answer not heard back asks for another press.
   const { words, refused } = answerFailedOf(answered.failure);
+
   return {
     ...ask,
     answering: undefined,
@@ -428,11 +456,13 @@ const NO_ASKS: readonly AgentPendingApproval[] = [];
  */
 function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
   const [words, setWords] = useState("");
+
   const deny = () => {
     if (busy) return;
     const message = words.trim();
     onDeny(message === "" ? undefined : message);
   };
+
   const box = useMessageBox({
     draft: words,
     setDraft: setWords,
@@ -445,6 +475,7 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
     takesFiles: false,
     focus: true,
   });
+
   return (
     <MessageBox
       box={box}
@@ -485,6 +516,11 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
           error={ask.error}
           noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
           note={(doors) => <DenyNoteBox {...doors} />}
+          command={
+            ask.approval.commandPrefix === undefined
+              ? undefined
+              : allowedCommandWords(ask.approval.commandPrefix)
+          }
           onAnswer={ask.onAnswer}
         />
       ) : undefined,
@@ -507,15 +543,18 @@ export function ApprovalsProvider({
   children: ReactNode;
 }): React.JSX.Element {
   const value = useMemo(() => ({ asks }), [asks]);
+
   return <ApprovalsContext.Provider value={value}>{children}</ApprovalsContext.Provider>;
 }
 
 /** The ask the agent holds on the call `callId`, as its row draws it; none where none is. */
 export function useCallHeld(callId: string): HeldCall | undefined {
   const asks = useContext(ApprovalsContext)?.asks;
+
   const ask = asks?.find(
     (each) => each.approval.toolUseId === callId && each.approval.subagentId === undefined,
   );
+
   return ask === undefined ? undefined : heldCallOf(ask);
 }
 
@@ -524,12 +563,15 @@ export function transcriptCallIds(
   messages: readonly { readonly parts: readonly unknown[] }[],
 ): ReadonlySet<string> {
   const ids = new Set<string>();
+
   for (const message of messages) {
     for (const part of message.parts) {
-      if (typeof part !== "object" || part === null || !("toolCallId" in part)) continue;
-      if (typeof part.toolCallId === "string") ids.add(part.toolCallId);
+      if (!Predicate.isObjectOrArray(part) || !("toolCallId" in part)) continue;
+
+      if (Predicate.isString(part.toolCallId)) ids.add(part.toolCallId);
     }
   }
+
   return ids;
 }
 

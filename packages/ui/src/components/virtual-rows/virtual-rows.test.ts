@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement, createRef, type RefObject, useLayoutEffect, useRef } from "react";
+import { act, createElement, createRef, useLayoutEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import {
@@ -70,6 +70,7 @@ test("the rows are the items of a list, each saying the run's size and its own p
   const list = container.querySelector('[role="list"]') ?? assert.fail("the run is a list");
   const items = [...list.querySelectorAll<HTMLElement>(':scope > [role="listitem"]')];
   assert.ok(items.length > 0 && items.length < keys.length, "only rows near the view are drawn");
+
   for (const item of items) {
     const key = item.querySelector("p")?.textContent ?? "";
     assert.equal(item.getAttribute("aria-setsize"), "500");
@@ -87,6 +88,7 @@ test("a run read from its top, placed by a box inside its scroller, draws the ro
     this: HTMLElement,
   ) {
     if (this.classList.contains("ui-virtual-rows")) return box("body");
+
     return this.id === "body" || this.id === "scroller" ? box("list") : null;
   });
   vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (
@@ -104,6 +106,7 @@ test("a run read from its top, placed by a box inside its scroller, draws the ro
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   // Note that the scroller stands before the run is drawn in it, as a list's does when it is narrowed to another scope.
   const frame = (run: boolean) =>
     createElement(
@@ -128,6 +131,7 @@ test("a run read from its top, placed by a box inside its scroller, draws the ro
         ),
       ),
     );
+
   act(() => root.render(frame(false)));
   act(() => root.render(frame(true)));
   const drawn = [...container.querySelectorAll("li")].map((row) => row.textContent);
@@ -144,6 +148,7 @@ test("a run drawn again with what it measured lays its rows out by those sizes f
     this: HTMLElement,
   ) {
     if (this.classList.contains("ui-virtual-rows")) return box("body");
+
     return this.id === "body" || this.id === "scroller" ? box("list") : null;
   });
   vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (
@@ -157,6 +162,7 @@ test("a run drawn again with what it measured lays its rows out by those sizes f
     return this.id === "scroller" ? 2000 : 0;
   });
   const keys = Array.from({ length: 100 }, (_, index) => `row-${index}`);
+
   const measurements = keys.slice(0, 20).map((key, index) => ({
     key,
     index,
@@ -165,10 +171,12 @@ test("a run drawn again with what it measured lays its rows out by those sizes f
     size: 50,
     lane: 0,
   }));
+
   const scroller = createRef<HTMLDivElement>();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   // Note that the scroller stands before the run is drawn in it, as a page's does when its rows are drawn again.
   const frame = (run: boolean) =>
     createElement(
@@ -194,6 +202,7 @@ test("a run drawn again with what it measured lays its rows out by those sizes f
         ),
       ),
     );
+
   act(() => root.render(frame(false)));
   act(() => root.render(frame(true)));
   const drawn = [...container.querySelectorAll("li")].map((row) => row.textContent);
@@ -208,6 +217,7 @@ test("a row moved to another place, the run's length unchanged, is drawn under i
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const frame = (keys: readonly string[]) =>
     createElement(
       "div",
@@ -220,6 +230,7 @@ test("a row moved to another place, the run's length unchanged, is drawn under i
         children: (index: number) => createElement("p", null, keys[index]),
       }),
     );
+
   act(() => root.render(frame(["a", "b", "c", "d"])));
   // Note that the thread that moved to the top of an Inbox is one row taken from the foot, so the run holds as many rows as before.
   act(() => root.render(frame(["d", "a", "b", "c"])));
@@ -297,22 +308,29 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
   );
   shown = true;
   act(() => {
-    for (const hear of heard) hear([], {} as ResizeObserver);
+    for (const hear of heard) {
+      // SAFETY: the rows read no member of the observer that called them.
+      hear([], {} as ResizeObserver);
+    }
   });
   assert.equal(top, 49_400);
 });
 
+type Held = { runs?: VirtualRuns };
+
 test("a list's runs answer every row's key, those left undrawn among them, in the order the runs stand", () => {
   vi.stubGlobal("ResizeObserver", StandInResizeObserver);
   const scroller = createRef<HTMLDivElement>();
-  const held: { runs?: VirtualRuns } = {};
+  const held: Held = {};
   const keysOf = (name: string) => Array.from({ length: 200 }, (_, index) => `${name}-${index}`);
+
   function Run({ name, runs }: { name: string; runs: VirtualRuns }) {
     const handle = useRef<VirtualRowsHandle>(null);
     useLayoutEffect(() => runs.hold(handle), [runs]);
     const keys = keysOf(name);
+
     return createElement(VirtualRows, {
-      scroller: scroller as RefObject<HTMLElement | null>,
+      scroller,
       keys,
       estimate: 100,
       anchor: VIRTUAL_ROWS_ANCHOR.START,
@@ -321,9 +339,11 @@ test("a list's runs answer every row's key, those left undrawn among them, in th
       children: (index, place) => createElement("li", place, keys[index]),
     });
   }
+
   function List({ above }: { above: boolean }) {
     const runs = useVirtualRuns();
     held.runs = runs;
+
     return createElement(
       "div",
       { ref: scroller },
@@ -331,6 +351,7 @@ test("a list's runs answer every row's key, those left undrawn among them, in th
       createElement(Run, { key: "b", name: "b", runs }),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

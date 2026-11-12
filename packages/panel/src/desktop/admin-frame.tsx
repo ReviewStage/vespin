@@ -35,6 +35,7 @@ const APP_SECTIONS = ADMIN_PLACES.map((place) => ({ value: place.tab, label: pla
 /** Open in browser: a link to the web page in a browser tab, a press the shell answers in the Mac app. */
 function OpenInBrowser(): React.JSX.Element {
   const way = appPlatform().adminDashboard();
+
   return (
     <Tooltip label={OPEN_IN_BROWSER}>
       {"href" in way ? (

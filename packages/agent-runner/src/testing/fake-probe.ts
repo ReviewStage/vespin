@@ -21,14 +21,17 @@ interface ProbeRecord {
  */
 export function fakeProbe(refusals = 0) {
   const record: ProbeRecord = { targets: [] };
+
   const layer = Layer.succeed(ProviderProbe, {
     reach: (target) =>
       Effect.suspend(() => {
         record.targets.push(target);
+
         return record.targets.length > refusals
           ? Effect.void
           : Effect.fail(new Unreachable({ target }));
       }),
   });
+
   return { layer, record };
 }

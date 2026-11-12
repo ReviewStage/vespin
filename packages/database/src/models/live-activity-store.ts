@@ -390,13 +390,16 @@ export function registerLiveActivityToken(
 ): LiveActivityEffect<boolean> {
   return Effect.gen(function* () {
     const own = yield* findOwnPhone({ userId, ...phone });
+
     if (Option.isNone(own)) return false;
     const pushDeviceId = own.value.id;
+
     if (kind === LIVE_ACTIVITY_TOKEN.START) {
       yield* upsertStartToken({ pushDeviceId, token });
     } else {
       yield* upsertActivityToken({ pushDeviceId, token, now: yield* DateTime.nowAsDate });
     }
+
     return true;
   });
 }
@@ -414,6 +417,7 @@ export function endLiveActivityOnPhone(
 ): LiveActivityEffect<void> {
   return Effect.gen(function* () {
     const own = yield* findOwnPhone({ userId, ...phone });
+
     if (Option.isNone(own)) return;
     const pushDeviceId = own.value.id;
     yield* activityToken === undefined
@@ -502,6 +506,7 @@ export function listRunningAgentTurns(
 export function listLiveActivityMembers(limit: number): LiveActivityEffect<readonly string[]> {
   return Effect.gen(function* () {
     const rows = yield* takeStandingMembers({ limit, now: yield* DateTime.nowAsDate });
+
     return [...new Set(rows.map((row) => row.userId))];
   });
 }

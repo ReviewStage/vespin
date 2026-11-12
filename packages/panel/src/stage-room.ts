@@ -72,19 +72,24 @@ export interface StageRoom {
  */
 export function useStageRoom(): StageRoom {
   const [lines, setLines] = useState<StageLines>(UNMEASURED);
+
   const ref = useCallback((element: HTMLElement | null) => {
     if (element === null) return undefined;
+
     const measure = () => {
       const { width } = element.getBoundingClientRect();
+
       if (width <= 0) return;
       const screenSide = Math.min(window.screen.width, window.screen.height);
       const coarse = coarsePointerNow();
       setLines((was) => {
         const narrow = narrowStage({ width, screenSide, coarse }, was.narrow);
         const compact = compactStage(width, was.compact);
+
         return narrow === was.narrow && compact === was.compact ? was : { narrow, compact };
       });
     };
+
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -92,17 +97,21 @@ export function useStageRoom(): StageRoom {
     // which no resize reports, and a short stage's room turns on it.
     const pointer = window.matchMedia(COARSE_POINTER);
     pointer.addEventListener("change", measure);
+
     return () => {
       observer.disconnect();
       pointer.removeEventListener("change", measure);
     };
   }, []);
+
   const room = lines.narrow ? SHELL_ROOM.NARROW : SHELL_ROOM.WIDE;
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.setAttribute(ROOM_ATTRIBUTE, room);
+
     return () => root.removeAttribute(ROOM_ATTRIBUTE);
   }, [room]);
+
   return {
     ref,
     room,

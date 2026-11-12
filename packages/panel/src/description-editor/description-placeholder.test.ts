@@ -43,6 +43,7 @@ function mounted(markdown: string, offersBlocks = true): Editor {
     }),
   );
   const element = host.querySelector<TiptapEditorHTMLElement>(".description-document-text");
+
   return element?.editor ?? assert.fail("the editor is running");
 }
 

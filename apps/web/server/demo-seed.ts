@@ -53,12 +53,15 @@ const DEMO_ENVIRONMENT = {
 const demoCredential = Effect.gen(function* () {
   const token = yield* Config.option(Config.Redacted(DEMO_ENVIRONMENT.CLAUDE_TOKEN));
   const apiKey = yield* Config.option(Config.Redacted(DEMO_ENVIRONMENT.ANTHROPIC_API_KEY));
+
   const handed = Option.orElse(
     Option.map(token, (key) => ({ kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN, key })),
     () => Option.map(apiKey, (key) => ({ kind: PROVIDER_KEY_KIND.API_KEY, key })),
   );
+
   if (Option.isNone(handed)) return Option.none<DemoCredential>();
   const ring = yield* Config.Redacted(DEMO_ENVIRONMENT.KEY_RING);
+
   return Option.some<DemoCredential>({ ...handed.value, ring });
 });
 
@@ -66,7 +69,9 @@ const demoCredential = Effect.gen(function* () {
 const demoHost = Effect.gen(function* () {
   const stateRoot = yield* Config.option(Config.String(DEMO_ENVIRONMENT.HOST_STATE));
   const serviceOrigin = yield* Config.option(Config.String(DEMO_ENVIRONMENT.SERVICE_ORIGIN));
+
   if (Option.isNone(stateRoot) && Option.isNone(serviceOrigin)) return Option.none();
+
   if (Option.isNone(stateRoot) || Option.isNone(serviceOrigin)) {
     return yield* Effect.fail(
       new Error(
@@ -74,6 +79,7 @@ const demoHost = Effect.gen(function* () {
       ),
     );
   }
+
   return Option.some({
     stateRoot: stateRoot.value,
     serviceOrigin: serviceOrigin.value,
@@ -84,6 +90,7 @@ const demoHost = Effect.gen(function* () {
 const seedConfiguredDatabase = Effect.gen(function* () {
   const named = Redacted.value(yield* Config.Redacted(DEMO_ENVIRONMENT.DATABASE_URL));
   const url = demoDatabaseUrl(named);
+
   if (Result.isFailure(url)) {
     return yield* Effect.fail(
       new Error(
@@ -91,25 +98,31 @@ const seedConfiguredDatabase = Effect.gen(function* () {
       ),
     );
   }
+
   const credential = yield* demoCredential;
   const host = yield* demoHost;
+
   // Better Auth writes through a pool of its own, as the deployment's does, ended once the seed is.
   const pool = yield* Effect.acquireRelease(
     Effect.sync(() => new Pool({ connectionString: url.success })),
     (opened) => Effect.promise(() => opened.end()),
   );
+
   const seeded = yield* seedDemoWorld(
     demoAuth(drizzle({ client: pool })),
     credential,
     Option.map(host, ({ minted }) => ({ secretHash: minted.hash })),
   ).pipe(Effect.provide(sqlClientOverUrl(url.success)));
+
   yield* Effect.logInfo(
     `Seeded the acme world: ${seeded.taskIds.length} tasks, ${seeded.memberIds.length + 1} members`,
     { memberId: seeded.deanId, workspaceId: seeded.workspaceId },
   );
+
   if (Option.isSome(credential)) {
     yield* Effect.logInfo(`Saved the ${credential.value.kind} the demo's agents run on`);
   }
+
   if (Option.isSome(host)) {
     const { stateRoot, serviceOrigin, minted } = host.value;
     yield* writeHostDevice(stateRoot, {
@@ -122,6 +135,7 @@ const seedConfiguredDatabase = Effect.gen(function* () {
 });
 
 const executedPath = process.argv[1];
+
 if (executedPath && import.meta.url === pathToFileURL(executedPath).href) {
   NodeRuntime.runMain(Effect.scoped(seedConfiguredDatabase));
 }

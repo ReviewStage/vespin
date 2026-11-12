@@ -215,7 +215,8 @@ hand on an iPad with a trackpad.
 
 ## The share extension
 
-Vespin stands in the system's share sheet for text and a web link: a share
+Vespin stands in the system's share sheet for text, a web link and up to
+four pictures: a share
 extension `app.config.ts` adds beside the other two, whose Swift is under
 `share-extension/`. An extension runs with no React Native and no host, so
 its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
@@ -227,12 +228,18 @@ token, which the app keeps in one Keychain item it and the extension alone
 share (`modules/share-token/`, written through `@repo/host`'s `issued-token-account-source.ts`
 on every sign-in and renewal and deleted on sign-out; the Keychain group is
 each target's `VespinShareKeychainGroup`). The refresh token never leaves the
-app, since it rotates on every use. With no token, a stale one, or no answer,
-Start keeps the words and picks as a draft in the group instead, and the app
-opens New task on it, prefilled, the next time it comes forward, since no
+app, since it rotates on every use. Once the task is made, the sheet names
+it and posts a local notification (`share-extension/ShareNotice.swift`) whose
+tap the app routes as a push of `PUSH_KIND.SHARE_STARTED`
+(`@repo/features/inbox-push-wire`), to the agent's page or the task, since
+no public API lets an extension open its app. With no token, a stale one, or no answer,
+Start keeps the words and picks as a draft in the group instead, its
+pictures as JPEGs beside it under fixed names
+(`SHARE_DRAFT_PICTURE_FILES`), and the app opens New task on it, prefilled
+and with the pictures attached, the next time it comes forward, since no
 public API lets an extension bring its app forward. Every file the app
 and its extensions share goes through `src/app-group.ts`, flat JSON at the
-group's root, and each Swift target reads the group from its Info.plist's
+group's root but for those pictures, and each Swift target reads the group from its Info.plist's
 `VespinAppGroup`.
 
 ## Tests
@@ -261,8 +268,7 @@ pull request with UI shows its screenshots to the developer in a thread.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`, which lint refuses
-  (`anti-slop/no-raw-press-outside-ui-native`); the app still declares both,
+  `expo-glass-effect`; the app still declares both,
   since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends

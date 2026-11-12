@@ -34,10 +34,12 @@ test("what a portaled control in the fence takes never reaches the tree around i
   const elsewhere = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const viewer = createPortal(
     createElement(Button, { onClick: () => heard.push("viewer"), children: "Close" }),
     elsewhere,
   );
+
   act(() =>
     root.render(
       createElement(
@@ -53,6 +55,7 @@ test("what a portaled control in the fence takes never reaches the tree around i
     ),
   );
   const close = elsewhere.querySelector("button");
+
   if (close === null) throw new Error("the viewer is drawn");
   act(() => {
     close.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));

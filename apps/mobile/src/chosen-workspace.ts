@@ -10,6 +10,7 @@
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
+import { Predicate } from "effect";
 import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
 
@@ -19,7 +20,8 @@ const CHOSEN_WORKSPACE_KEY = "chosenWorkspace";
 /** The id kept, or none where nothing was ever chosen. */
 function keptChoice(): string | undefined {
   const kept: unknown = Settings.get(CHOSEN_WORKSPACE_KEY);
-  return typeof kept === "string" ? kept : undefined;
+
+  return Predicate.isString(kept) ? kept : undefined;
 }
 
 /** The screens reading the choice, each told when it is made here. */
@@ -34,6 +36,7 @@ const readers = new Set<() => void>();
 function watchChoice(listener: () => void): () => void {
   readers.add(listener);
   const watching = Settings.watchKeys([CHOSEN_WORKSPACE_KEY], listener);
+
   return () => {
     readers.delete(listener);
     Settings.clearWatch(watching);
@@ -43,15 +46,19 @@ function watchChoice(listener: () => void): () => void {
 /** Keeps `id` as the workspace the phone works in, and tells every screen reading it. */
 function choose(id: string): void {
   Settings.set({ [CHOSEN_WORKSPACE_KEY]: id });
+
   for (const reader of readers) reader();
 }
 
-/** The workspace the phone works in, among `workspaces`, and the choice of another, which is kept and heard by every screen reading it. */
-export function useChosenWorkspace(workspaces: readonly Workspace[]): {
+type UseChosenWorkspaceResult = {
   readonly chosen: Workspace | undefined;
   readonly choose: (id: string) => void;
-} {
+};
+
+/** The workspace the phone works in, among `workspaces`, and the choice of another, which is kept and heard by every screen reading it. */
+export function useChosenWorkspace(workspaces: readonly Workspace[]): UseChosenWorkspaceResult {
   const kept = useSyncExternalStore(watchChoice, keptChoice);
   const chosen = workspaces.find((workspace) => workspace.id === kept) ?? workspaces[0];
+
   return { chosen, choose };
 }
