@@ -208,6 +208,7 @@ test("a tool pressed on the Tools page opens its description and input schema", 
     loading: ADMIN_TOOL_LOADING.SEARCH,
     gate: null,
   };
+
   const catalog = async () => ({
     generatedAt: Date.UTC(2026, 9, 24),
     tools: [tool],
@@ -229,6 +230,7 @@ test("a tool pressed on the Tools page opens its description and input schema", 
 
     return found;
   });
+
   expect(dialog?.textContent).toContain("Read tomorrow's forecast for a city.");
   expect(dialog?.textContent).toContain('"type": "object"');
 });
