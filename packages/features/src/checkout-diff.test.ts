@@ -3,9 +3,28 @@
  */
 
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, test } from "vitest";
 import { CHANGED_FILE_STATUS, CHANGES_BOUNDS, PATCH_OMITTED } from "./agent-wire.js";
-import { CHECKOUT_DIFF_BOUNDS, checkoutDiffEnv, checkoutDiffFiles } from "./checkout-diff.js";
+import {
+  CHECKOUT_DIFF_BOUNDS,
+  CHECKOUT_DIFF_SCRIPT,
+  checkoutDiffEnv,
+  checkoutDiffFiles,
+} from "./checkout-diff.js";
+
+const GIT_ENV = {
+  ...(process.env.PATH === undefined ? undefined : { PATH: process.env.PATH }),
+  GIT_AUTHOR_NAME: "Test",
+  GIT_AUTHOR_EMAIL: "test@example.invalid",
+  GIT_COMMITTER_NAME: "Test",
+  GIT_COMMITTER_EMAIL: "test@example.invalid",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+};
 
 const DIFF = [
   "diff --git a/src/invite.ts b/src/invite.ts",
@@ -56,6 +75,78 @@ const DIFF = [
   "+TOKEN=new",
   "",
 ].join("\n");
+
+const made: string[] = [];
+
+afterEach(() => {
+  for (const cwd of made.splice(0)) rmSync(cwd, { recursive: true });
+});
+
+/** A git command run in the repository, its output trimmed. */
+function git(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", env: GIT_ENV }).trim();
+}
+
+/** Lines `1` to `count` of a file, each its own number, with line `at` spelled `words` where given. */
+function numbered(count: number, at?: { readonly line: number; readonly words: string }): string {
+  return Array.from({ length: count }, (_, index) =>
+    index + 1 === at?.line ? at.words : String(index + 1),
+  ).join("\n");
+}
+
+/**
+ * A turn during which the agent merged its upstream in: `origin/HEAD` moved
+ * past the commit the turn started on, editing `upstream.txt` and the end of
+ * `shared.txt`, and the agent merged it, then edited `agent.txt` and the
+ * start of `shared.txt`. Where `clashing`, upstream also edited line 5 of
+ * `clash.txt`, which the agent had already edited before the turn, so the
+ * merge conflicted and the agent settled it on its own words. Answers the
+ * turn's diff of its snapshot to the working tree, as the script reads it,
+ * by path and lines added.
+ */
+function turnAcrossAMerge(clashing: boolean) {
+  const cwd = mkdtempSync(join(tmpdir(), "checkout-diff-"));
+  made.push(cwd);
+  const write = (path: string, words: string) => writeFileSync(join(cwd, path), `${words}\n`);
+  git(cwd, "init", "--quiet", "--initial-branch=main");
+
+  for (const path of ["agent.txt", "upstream.txt", "clash.txt"]) write(path, numbered(10));
+  write("shared.txt", numbered(40));
+  git(cwd, "add", "-A");
+  git(cwd, "commit", "--quiet", "-m", "first");
+  git(cwd, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
+  // Upstream moves on while the agent works on a branch of its own.
+  git(cwd, "checkout", "--quiet", "-b", "upstream");
+  write("upstream.txt", numbered(10, { line: 2, words: "from upstream" }));
+  write("shared.txt", numbered(40, { line: 38, words: "from upstream" }));
+
+  if (clashing) write("clash.txt", numbered(10, { line: 5, words: "upstream's five" }));
+  git(cwd, "commit", "--quiet", "-am", "upstream");
+  git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
+  git(cwd, "checkout", "--quiet", "-b", "agent", "main");
+  write("clash.txt", numbered(10, { line: 5, words: "the agent's five" }));
+  git(cwd, "commit", "--quiet", "-am", "the agent's earlier work");
+  // The snapshot before the turn, committed on HEAD without moving it, as the runner takes one.
+  const tree = git(cwd, "write-tree");
+  const from = git(cwd, "commit-tree", tree, "-p", "HEAD", "-m", "The checkout before a turn");
+  // The turn: upstream merged in, a clash settled on the agent's words, then the agent's own edits, left uncommitted.
+  git(cwd, "merge", "--quiet", "--no-commit", "-X", "ours", "refs/remotes/origin/main");
+  git(cwd, "commit", "--quiet", "--no-edit");
+  write("agent.txt", numbered(10, { line: 3, words: "the agent's three" }));
+  write(
+    "shared.txt",
+    numbered(40, { line: 2, words: "the agent's two" }).replace("\n38\n", "\nfrom upstream\n"),
+  );
+
+  const output = execFileSync("sh", ["-c", CHECKOUT_DIFF_SCRIPT], {
+    cwd,
+    encoding: "utf8",
+    env: { ...GIT_ENV, ...checkoutDiffEnv({ from, to: null }) },
+  });
+
+  return checkoutDiffFiles(output).files.map((file) => [file.path, file.additions] as const);
+}
 
 test("each file of a diff is read with its paths, a space in one among them, kind, counts, and hunks, a binary one and a secret one left out by name", () => {
   assert.deepEqual(checkoutDiffFiles(DIFF), {
@@ -200,4 +291,15 @@ test("the script's variables carry the two commits, the second empty for the wor
     APP_DIFF_FROM: "abc",
     APP_DIFF_TO: "",
   });
+});
+
+test("a turn that merged its upstream in names only the agent's own changes, leaving out what the merge brought", () => {
+  assert.deepEqual(turnAcrossAMerge(false), [
+    ["agent.txt", 1],
+    ["shared.txt", 1],
+  ]);
+});
+
+test("where upstream clashes with the checkout before the turn, the files upstream changed are left out and the agent's others kept", () => {
+  assert.deepEqual(turnAcrossAMerge(true), [["agent.txt", 1]]);
 });

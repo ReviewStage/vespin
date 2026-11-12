@@ -56,6 +56,18 @@ const { FROM, TO } = CHECKOUT_DIFF_VARIABLE;
  * checkout at once never read each other's; and that the diff is written
  * to a file before it is bounded, so a git that fails ends the script
  * rather than printing a diff cut short.
+ *
+ * What git brought in from upstream during the turn is not the turn's: a
+ * snapshot is a commit on the `HEAD` it was taken over, so where the merge
+ * base of that `HEAD` with `origin/HEAD` moved between the two sides (a
+ * merge, a rebase, or a pull), upstream's change between the two bases is
+ * replayed onto the side before the turn first (`git merge-tree`), and the
+ * turn is diffed from what that makes. Where the replay clashes with the
+ * checkout before the turn, or the machine's git has no such merge, the
+ * paths upstream changed are taken as the side after the turn holds them
+ * instead, so they drop out of the diff whoever changed them. A checkout
+ * with no `origin/HEAD`, or a side with no `HEAD` under it, is diffed as it
+ * stands.
  */
 export const CHECKOUT_DIFF_SCRIPT = [
   "set -eu",
@@ -64,14 +76,37 @@ export const CHECKOUT_DIFF_SCRIPT = [
   "git_dir=$(git rev-parse --git-dir)",
   'run=$(mktemp -d "$git_dir/vespin-diff.XXXXXX")',
   "trap 'rm -rf \"$run\"' EXIT",
+  `from="$${FROM}"`,
   `to="$${TO}"`,
   'if [ -n "$to" ]; then',
   `  if ! git cat-file -e "$to^{commit}" 2>/dev/null; then exit ${CHECKOUT_DIFF_EXIT.MISSING}; fi`,
+  '  to_head=$(git rev-parse -q --verify "$to^1^{commit}" 2>/dev/null || true)',
   "else",
   '  if [ -f "$git_dir/index" ]; then cp "$git_dir/index" "$run/index"; fi',
   "  to=$(GIT_INDEX_FILE=\"$run/index\" sh -c 'git add -A -- . >/dev/null && git write-tree')",
+  "  to_head=$(git rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null || true)",
   "fi",
-  `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$${FROM}" "$to" > "$run/out"`,
+  'from_head=$(git rev-parse -q --verify "$from^1^{commit}" 2>/dev/null || true)',
+  "upstream=$(git rev-parse -q --verify 'refs/remotes/origin/HEAD^{commit}' 2>/dev/null || true)",
+  'if [ -n "$from_head" ] && [ -n "$to_head" ] && [ -n "$upstream" ]; then',
+  '  was=$(git merge-base "$from_head" "$upstream" 2>/dev/null || true)',
+  '  now=$(git merge-base "$to_head" "$upstream" 2>/dev/null || true)',
+  '  if [ -n "$was" ] && [ -n "$now" ] && [ "$was" != "$now" ]; then',
+  '    if replayed=$(git merge-tree --write-tree --merge-base "$was" "$from" "$now" 2>/dev/null); then',
+  '      from=$(printf "%s\\n" "$replayed" | head -n 1)',
+  "    else",
+  '      git diff --name-only -z --no-renames "$was" "$now" > "$run/upstream"',
+  '      GIT_INDEX_FILE="$run/before" git read-tree "$from"',
+  '      if [ -s "$run/upstream" ]; then',
+  '        GIT_INDEX_FILE="$run/before" xargs -0 git update-index --force-remove -- < "$run/upstream"',
+  '        xargs -0 git ls-tree -r -z --full-tree "$to" -- < "$run/upstream" > "$run/after"',
+  '        GIT_INDEX_FILE="$run/before" git update-index -z --index-info < "$run/after"',
+  "      fi",
+  '      from=$(GIT_INDEX_FILE="$run/before" git write-tree)',
+  "    fi",
+  "  fi",
+  "fi",
+  `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$from" "$to" > "$run/out"`,
   `head -c ${CHECKOUT_DIFF_BOUNDS.MAX_BYTES} "$run/out"`,
 ].join("\n");
 
