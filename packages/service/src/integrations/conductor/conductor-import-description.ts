@@ -6,7 +6,9 @@
  * creator, its dates, and its link in Conductor) and lists its chats, each
  * by name with the opening of its first message. Words from Conductor are
  * written as plain text, each on one line, so nothing in them opens a
- * heading, a list, or a link of its own.
+ * heading, a list, or a link of its own. Where GitHub confirmed the branch
+ * or the pull request its chats name (`conductor-import-published.ts`), it
+ * names them; where it confirmed neither, it says so.
  */
 
 import type { ConductorChat, ConductorWorkspace } from "./conductor-client.js";
@@ -21,6 +23,12 @@ const MARKDOWN_MARKS = /[\\`*_[\]<>#|~]/gu;
 export interface DescribedChat {
   readonly chat: Pick<ConductorChat, "id" | "name">;
   readonly firstMessage: string | undefined;
+}
+
+/** The branch and pull request GitHub confirmed for the workspace, each where it did. */
+export interface ConfirmedPublished {
+  readonly branch?: string;
+  readonly pullRequest?: { readonly number: number; readonly title: string; readonly url: string };
 }
 
 /** Words from Conductor as one line of plain text, cut at `max` characters where given. */
@@ -39,6 +47,28 @@ function dayOf(instant: string | null | undefined): string | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString().slice(0, 10);
 }
 
+/** The lines naming the confirmed branch and pull request, or saying none was found. */
+function publishedLines({ branch, pullRequest }: ConfirmedPublished): readonly string[] {
+  if (branch === undefined && pullRequest === undefined) {
+    return [
+      "No branch or pull request was confirmed from its chats; an agent started on this task can look for them.",
+    ];
+  }
+
+  const url = pullRequest === undefined || /[<>\s]/u.test(pullRequest.url) ? "" : pullRequest.url;
+
+  return [
+    ...(branch === undefined ? [] : [`- Branch: ${plain(branch)}`]),
+    ...(pullRequest === undefined
+      ? []
+      : [
+          url === ""
+            ? `- Pull request: #${pullRequest.number} ${plain(pullRequest.title)}`
+            : `- Pull request: [#${pullRequest.number} ${plain(pullRequest.title)}](<${url}>)`,
+        ]),
+  ];
+}
+
 /** The task's name: the workspace's, or its number where it has none. */
 export function importedTaskName(workspace: ConductorWorkspace): string {
   const named = workspace.name == null ? "" : plain(workspace.name);
@@ -54,6 +84,7 @@ export function importedTaskName(workspace: ConductorWorkspace): string {
 export function importedTaskDescription(
   workspace: ConductorWorkspace,
   chats: readonly DescribedChat[],
+  published: ConfirmedPublished,
 ): string {
   const facts = [
     workspace.creatorName == null ? undefined : `created by ${plain(workspace.creatorName)}`,
@@ -92,6 +123,10 @@ export function importedTaskDescription(
     "",
     origin,
     ...link.flatMap((line) => ["", line]),
+    "",
+    "## Branch and pull request",
+    "",
+    ...publishedLines(published),
     "",
     "## Chats",
     "",

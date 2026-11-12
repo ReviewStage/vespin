@@ -15,7 +15,12 @@
  * written from its facts (`conductor-import-description.ts`), assigned to
  * the member whose name is its creator's where exactly one is, else to the
  * member who ran the import, Done where it was archived and To do
- * otherwise, and publishes one message per chat it has not imported. A
+ * otherwise, and publishes one message per chat it has not imported. To
+ * write the description it reads each chat's whole transcript, within
+ * `TRANSCRIPT_READ_BUDGET`, for the branch and pull request it names
+ * (`conductor-import-published.ts`), which GitHub confirms before the
+ * description names them; each chat's own delivery reads it again, since a
+ * queue message cannot carry a transcript. A
  * chat's delivery reads its whole transcript and writes it. Each workspace
  * and chat of a run stands as an item the form reads, settled imported,
  * skipped, or failed with why; once none is queued, the run's key is
@@ -67,6 +72,7 @@ import { causeKind } from "@repo/runtime/effect";
 import type { WireValue } from "@repo/wire";
 import { send } from "@vercel/queue";
 import {
+  Clock,
   Config,
   ConfigProvider,
   Context,
@@ -78,6 +84,7 @@ import {
   Random,
   type Redacted,
   Result,
+  Schedule,
   Schema,
 } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -87,6 +94,11 @@ import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../../auth/
 import type { HostedEnvironment } from "../../environment.js";
 import { SERVER_TASK_SOURCE } from "../../events/server-events.js";
 import { GitHubApp } from "../../github/github-app.js";
+import {
+  branchStands,
+  pullRequestByNumber,
+  pullRequestOfBranch,
+} from "../../github/pull-requests.js";
 import { workspaceRepository } from "../../github/workspace-repository.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { hostedKeyRing } from "../../orpc/base.js";
@@ -101,6 +113,7 @@ import { importConductorChat } from "./conductor-chat-import.js";
 import {
   CONDUCTOR_READ_FAILURE,
   ConductorChatSchema,
+  type ConductorMessage,
   type ConductorReadFailed,
   type ConductorWorkspace,
   ConductorWorkspaceSchema,
@@ -111,10 +124,16 @@ import {
 } from "./conductor-client.js";
 import { CONDUCTOR_IMPORTS } from "./conductor-import-bounds.js";
 import {
+  type ConfirmedPublished,
   type DescribedChat,
   importedTaskDescription,
   importedTaskName,
 } from "./conductor-import-description.js";
+import {
+  newestCandidates,
+  type PublishedCandidates,
+  publishedCandidates,
+} from "./conductor-import-published.js";
 
 /** Conductor's word for a workspace that was archived, which lands as a Done task. */
 const CONDUCTOR_ARCHIVED = "archived";
@@ -282,29 +301,139 @@ const assigneeOf = (organizationId: string, workspace: ConductorWorkspace, impor
     return named.length === 1 && only !== undefined ? only : importer;
   });
 
-/** Each chat with the first message the developer sent it, read from its first page; one whose page did not read is listed by name alone. */
-const describedChats = (key: Redacted.Redacted<string>, chats: readonly ChatMessage["chat"][]) =>
-  Effect.forEach(
-    chats,
-    (chat) =>
-      Effect.map(
-        Effect.option(readConductorFirstMessages(key, chat.id)),
-        (messages): DescribedChat => {
-          const first = Option.flatMapNullishOr(messages, (read) =>
-            read.find((message) => message.type === "userMessage"),
-          );
+/** The first message the developer sent a chat, among what was read of it. */
+function firstMessageOf(messages: readonly ConductorMessage[]): string | undefined {
+  const first = messages.find((message) => message.type === "userMessage");
 
-          return {
+  return first !== undefined && "message" in first.content ? first.content.message : undefined;
+}
+
+/** A chat's whole transcript, asked again after a doubling wait while Conductor answers it rate limited, or none once `until` passes. */
+const transcriptUntil = (key: Redacted.Redacted<string>, chatId: string, until: number) =>
+  Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+
+    if (now >= until) return Option.none<readonly ConductorMessage[]>();
+
+    return yield* readConductorMessages(key, chatId).pipe(
+      Effect.retry({
+        schedule: Schedule.exponential(CONDUCTOR_IMPORTS.RATE_LIMITED_BACKOFF),
+        while: (failure) => failure.reason === CONDUCTOR_READ_FAILURE.RATE_LIMITED,
+      }),
+      Effect.timeoutOption(Duration.millis(until - now)),
+    );
+  });
+
+/**
+ * Each chat with the first message the developer sent it, and the newest
+ * branch and pull request of the repository its chats name. Each chat's
+ * whole transcript is read within `TRANSCRIPT_READ_BUDGET` of the first; one
+ * not read by then, or whose read failed, is read from its first page for
+ * its first message alone, and one whose first page did not read either is
+ * listed by name alone.
+ */
+const readChats = (
+  key: Redacted.Redacted<string>,
+  chats: readonly ChatMessage["chat"][],
+  repository: string | undefined,
+) =>
+  Effect.gen(function* () {
+    const until =
+      (yield* Clock.currentTimeMillis) +
+      Duration.toMillis(CONDUCTOR_IMPORTS.TRANSCRIPT_READ_BUDGET);
+
+    const read = yield* Effect.forEach(
+      chats,
+      (chat) =>
+        Effect.gen(function* () {
+          const whole = Option.flatten(yield* Effect.option(transcriptUntil(key, chat.id, until)));
+
+          if (Option.isSome(whole)) {
+            const described: DescribedChat = { chat, firstMessage: firstMessageOf(whole.value) };
+
+            const candidates: PublishedCandidates =
+              repository === undefined ? {} : publishedCandidates(repository, whole.value);
+
+            return { described, candidates };
+          }
+
+          const page = yield* Effect.option(readConductorFirstMessages(key, chat.id));
+
+          const described: DescribedChat = {
             chat,
-            firstMessage: Option.match(first, {
-              onNone: () => undefined,
-              onSome: (message) =>
-                "message" in message.content ? message.content.message : undefined,
-            }),
+            firstMessage: Option.match(page, { onNone: () => undefined, onSome: firstMessageOf }),
           };
-        },
+
+          return { described, candidates: {} };
+        }),
+      { concurrency: CONDUCTOR_IMPORTS.CHAT_READ_CONCURRENCY },
+    );
+
+    return {
+      described: read.map((each) => each.described),
+      candidates: newestCandidates(read.map((each) => each.candidates)),
+    };
+  });
+
+/**
+ * The branch and pull request the chats name, as GitHub confirms them on the
+ * workspace's reach of the repository: the pull request where the
+ * repository holds that number; the branch where it still stands and is not
+ * the default branch, else the confirmed pull request's head, since a merged
+ * branch is often deleted; and, with a branch and no pull request named, the
+ * branch's newest pull request. A GitHub that does not answer confirms
+ * nothing, and the description says so.
+ */
+const confirmedPublished = (
+  run: ConductorImportRunRow,
+  repository: string,
+  candidates: PublishedCandidates,
+) =>
+  Effect.gen(function* () {
+    if (candidates.branch === undefined && candidates.pullRequest === undefined) return {};
+    const app = yield* GitHubApp;
+
+    const minted = yield* app.repositoryPullRequestToken(
+      run.organizationId,
+      repository,
+      run.userId,
+    );
+
+    if (Option.isNone(minted)) return {};
+    const { token } = minted.value;
+    const named = candidates.branch?.value;
+
+    const namedPullRequest =
+      candidates.pullRequest === undefined
+        ? Option.none()
+        : yield* pullRequestByNumber(token, repository, candidates.pullRequest.value);
+
+    const standing =
+      named !== undefined && named !== minted.value.repository.defaultBranch
+        ? yield* branchStands(token, repository, named)
+        : false;
+
+    const branch = standing ? named : Option.getOrUndefined(namedPullRequest)?.headRef;
+
+    const pullRequest =
+      Option.isNone(namedPullRequest) && standing && named !== undefined
+        ? yield* pullRequestOfBranch(token, repository, named)
+        : namedPullRequest;
+
+    return {
+      ...(branch === undefined ? undefined : { branch }),
+      ...Option.match(pullRequest, {
+        onNone: () => undefined,
+        onSome: ({ number, title, url }) => ({ pullRequest: { number, title, url } }),
+      }),
+    } satisfies ConfirmedPublished;
+  }).pipe(
+    Effect.catch(() =>
+      Effect.as(
+        Effect.logWarning("a Conductor import's branch and pull request were not confirmed"),
+        {} satisfies ConfirmedPublished,
       ),
-    { concurrency: CONDUCTOR_IMPORTS.FIRST_PAGE_CONCURRENCY },
+    ),
   );
 
 /** The publishes of a run or a workspace, a few at once; a publish that failed is said in the log and its item left queued. */
@@ -327,7 +456,13 @@ const publishAll = (messages: readonly ImportMessage[]) =>
 const workspaceTask = Effect.fnUntraced(function* (
   run: ConductorImportRunRow,
   workspace: ConductorWorkspace,
-  chats: () => Effect.Effect<readonly DescribedChat[], never, ConductorImportServices>,
+  chats: (
+    repository: string | undefined,
+  ) => Effect.Effect<
+    { readonly described: readonly DescribedChat[]; readonly candidates: PublishedCandidates },
+    never,
+    ConductorImportServices
+  >,
 ) {
   const imported = (yield* readConductorImports(run.organizationId, [workspace.id])).get(
     workspace.id,
@@ -357,7 +492,13 @@ const workspaceTask = Effect.fnUntraced(function* (
   }
 
   const assigneeId = yield* assigneeOf(run.organizationId, workspace, run.userId);
-  const text = importedTaskDescription(workspace, yield* chats());
+  const read = yield* chats(Option.getOrUndefined(repository));
+
+  const published: ConfirmedPublished = Option.isSome(repository)
+    ? yield* confirmedPublished(run, repository.value, read.candidates)
+    : {};
+
+  const text = importedTaskDescription(workspace, read.described, published);
 
   const made = yield* Effect.result(
     createTaskAsked(
@@ -405,7 +546,10 @@ const consumeWorkspace = Effect.fnUntraced(function* (
 
   if (Result.isFailure(listed)) return readFailure(listed.failure);
   const chats = listed.success;
-  const task = yield* workspaceTask(run, workspace, () => describedChats(key, chats));
+
+  const task = yield* workspaceTask(run, workspace, (repository) =>
+    readChats(key, chats, repository),
+  );
 
   if (Result.isFailure(task)) return task.failure;
   const { taskId, repository, made } = task.success;
