@@ -55,7 +55,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
@@ -348,6 +348,7 @@ export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
+  const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
@@ -426,6 +427,15 @@ export function AgentScreen() {
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
+
+  // An agent archived or deleted gives way to where its own stack opened it from, or to the Tasks list it stands in where it was opened first, as from a launch or a notification; nothing moves once the reader has left its page.
+  const leave = () => {
+    if (!navigation.isFocused()) return;
+
+    if (router.canDismiss()) router.back();
+    else router.replace("/tasks");
+  };
+
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
@@ -565,9 +575,7 @@ export function AgentScreen() {
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(() => {
-            if (router.canGoBack()) router.back();
-          });
+          actions.archive(leave);
         }}
         onDismiss={() => setArchiving(false)}
       />
@@ -579,9 +587,7 @@ export function AgentScreen() {
         presented={deleting}
         onAct={() => {
           setDeleting(false);
-          actions.remove(() => {
-            if (router.canGoBack()) router.back();
-          });
+          actions.remove(leave);
         }}
         onDismiss={() => setDeleting(false)}
       />
