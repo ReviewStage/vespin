@@ -159,12 +159,16 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
  */
 export function GoalDock({
   messages,
+  older,
   working,
   onBringIn,
   onClear,
   onResume,
 }: {
+  /** The transcript as the service stored it: a line still on its way, or refused, says nothing of the goal. */
   messages: readonly AgentTranscriptMessage[];
+  /** Whether older pages of the transcript stand unread, which may hold the goal's setting. */
+  older: boolean;
   /** Whether the agent is at work now, which a running goal's row counts its time by. */
   working: boolean;
   /** Takes the transcript to a message, by its id. */
@@ -172,7 +176,7 @@ export function GoalDock({
   onClear: (() => void) | undefined;
   onResume: (() => void) | undefined;
 }): ReactNode {
-  const goal = useMemo(() => agentGoal(messages), [messages]);
+  const goal = useMemo(() => agentGoal(messages, older), [messages, older]);
   const coarse = useCoarsePointer();
   const copy = useCopyToast();
   if (goal === undefined) return null;

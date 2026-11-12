@@ -78,6 +78,17 @@ describe("agentGoal", () => {
     expect(goal).toMatchObject({ condition, turns: 2, reason: "2 warnings." });
   });
 
+  it("takes a goal up from its newest notice where its setting is on an older page, unread", () => {
+    const newest = [turn("t9", [notice(GOAL_EVENT.NOT_MET, { reason: "1 test fails." })])];
+    expect(agentGoal(newest, true)).toMatchObject({
+      condition: CONDITION,
+      state: AGENT_GOAL_STATE.ACTIVE,
+      reason: "1 test fails.",
+    });
+    // A whole transcript that never set the goal holds a project's own Stop hook's word, which moves nothing.
+    expect(agentGoal(newest, false)).toBeUndefined();
+  });
+
   it("stands settled until the developer writes again, and stands nowhere once cleared", () => {
     const met = [
       turn("t1", [
@@ -97,6 +108,21 @@ describe("agentGoal", () => {
     ).toMatchObject({
       state: AGENT_GOAL_STATE.MET,
     });
+
+    // A line steered into the turn before the goal was met is stored behind the turn, but was read before the goal settled.
+    const steered = [
+      {
+        ...turn("t1", [notice(GOAL_EVENT.SET)]),
+        parts: [
+          { type: "step-start" },
+          { type: GOAL_PART, id: "0", data: notice(GOAL_EVENT.SET) },
+          { type: "step-start" },
+          { type: GOAL_PART, id: "1", data: notice(GOAL_EVENT.MET, { reason: "All pass." }) },
+        ],
+      },
+      { ...line("s"), arrivedIn: { journalId: "t1", afterStep: 1 } },
+    ];
+    expect(agentGoal(steered)).toMatchObject({ state: AGENT_GOAL_STATE.MET });
 
     const cleared = [
       turn("t1", [notice(GOAL_EVENT.SET)]),

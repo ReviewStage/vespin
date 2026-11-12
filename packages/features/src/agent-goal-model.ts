@@ -6,7 +6,8 @@
  * read back from those moves in order rather than held anywhere of the
  * service's own. A verdict whose condition is no goal set is a project's own
  * blocking Stop hook, which Claude Code says in the same shape, and moves
- * nothing. A goal that settled stands until the developer writes again, so
+ * nothing, but where older pages of the transcript stand unread, whose
+ * setting of it may be on them. A goal that settled stands until the developer writes again, so
  * its end is seen and then makes way; a cleared one stands nowhere.
  * Nothing here draws.
  */
@@ -142,19 +143,81 @@ function moved(
   }
 }
 
-/** The agent's goal as its transcript's notices leave it; none where it set none, cleared it, or wrote again after it settled. */
-export function agentGoal(messages: readonly AgentTranscriptMessage[]): AgentGoal | undefined {
-  let goal: AgentGoal | undefined;
+/** The steps of its turn a line arrived after, as the transcript draws it (`agent-parts.ts`); none for a line no turn took in under way. */
+function afterStepOf(line: AgentTranscriptMessage): number {
+  return line.arrivedIn?.afterStep ?? 0;
+}
+
+/** The goal a notice of it says stands, where the transcript read holds no setting of it: older pages, unread, hold that. */
+function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal | undefined {
+  if (notice.event === GOAL_EVENT.CLEARED) return undefined;
+  const standing: AgentGoal = {
+    condition: notice.condition,
+    state: AGENT_GOAL_STATE.ACTIVE,
+    setAt: undefined,
+    turns: 0,
+    tokens: null,
+    tokenBudget: null,
+    reason: null,
+    messageId: message.id,
+  };
+  return moved(standing, notice, message);
+}
+
+/**
+ * The agent's goal as its transcript's notices leave it; none where it set
+ * none, cleared it, or wrote again after it settled. A line the developer
+ * steered into a turn under way is read where it arrived among the turn's
+ * steps, as the transcript draws it, not after the turn it is stored behind.
+ * `older` says whether older pages of the transcript stand unread: then a
+ * notice of a goal whose setting is on them stands for it.
+ */
+export function agentGoal(
+  messages: readonly AgentTranscriptMessage[],
+  older = false,
+): AgentGoal | undefined {
+  const journals = new Set(messages.map((message) => message.id));
+  const arrived = new Map<string, AgentTranscriptMessage[]>();
   for (const message of messages) {
-    // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
+    const journalId = message.arrivedIn?.journalId;
+    if (journalId === undefined || !journals.has(journalId)) continue;
+    arrived.set(journalId, [...(arrived.get(journalId) ?? []), message]);
+  }
+  let goal: AgentGoal | undefined;
+  // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
+  const seen = (line: AgentTranscriptMessage) => {
+    if (goal !== undefined && goalSettled(goal) && developersLine(line)) goal = undefined;
+  };
+  for (const message of messages) {
     if (message.role === MESSAGE_ROLE.USER) {
-      if (goal !== undefined && goalSettled(goal) && developersLine(message)) goal = undefined;
+      const journalId = message.arrivedIn?.journalId;
+      if (journalId === undefined || !journals.has(journalId)) seen(message);
       continue;
     }
+    const waiting = (arrived.get(message.id) ?? []).toSorted(
+      (a, b) => afterStepOf(a) - afterStepOf(b),
+    );
+    let begun = 0;
+    const arrive = (steps: number) => {
+      while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
+        const line = waiting.shift();
+        if (line !== undefined) seen(line);
+      }
+    };
     for (const stored of message.parts) {
       const part = agentPart(stored);
-      if (part.kind === AGENT_PART.GOAL) goal = moved(goal, part.notice, message);
+      if (part.kind === AGENT_PART.STEP_START) {
+        arrive(begun);
+        begun += 1;
+        continue;
+      }
+      if (part.kind !== AGENT_PART.GOAL) continue;
+      goal =
+        goal === undefined && older && part.notice.event !== GOAL_EVENT.SET
+          ? takenUp(part.notice, message)
+          : moved(goal, part.notice, message);
     }
+    arrive(Number.POSITIVE_INFINITY);
   }
   return goal;
 }

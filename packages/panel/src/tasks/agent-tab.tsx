@@ -3630,7 +3630,8 @@ function AgentTabView({
           readerId={readerId}
         />
         <GoalDock
-          messages={lines}
+          messages={kept}
+          older={transcript.hasOlder}
           working={standing.working}
           onBringIn={(messageId) => bringIn?.current?.(messageId, () => undefined)}
           onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
