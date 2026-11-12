@@ -49,10 +49,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
+# Note that this row is the Open list's last, which fits without scrolling, so it is scrolled to without centering, which a list that cannot scroll never reaches.
 - scrollUntilVisible:
     element: "What the expired invite page says"
     direction: DOWN
-    centerElement: true
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
