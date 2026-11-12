@@ -577,7 +577,9 @@ function publishedAs(
   const windowMillis = Duration.toMillis(GITHUB_DELIVERY_READ.WINDOW);
   const window = Math.floor(now / windowMillis);
 
+  // Note that the event is named, so a check run's burst never stands in for a suite's, which alone reads the branches again.
   const about = JSON.stringify({
+    event,
     repository: target?.repository ?? checks?.repository,
     branches: target?.branches ?? checks?.branches,
     sha: checks?.sha,
