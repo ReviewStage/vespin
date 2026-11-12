@@ -9,7 +9,8 @@
  * or one typed in the box, rather than once the harness says the goal moved
  * (`goalAsShown`). A goal that wants the
  * developer says so on its own row, in its tone (`goalTone`): paused or out
- * of budget in the attention tone, a paused one's Resume standing on it, and
+ * of budget in the attention tone, a paused one's play standing at its end where
+ * Pause stood, and
  * a blocked one in the danger tone. The notices are what the goal
  * did, where it did it: its setting and each verdict of the checker as a
  * card a check's line is drawn as (`line-cards.tsx`), the checker's reason
@@ -30,10 +31,7 @@ import {
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  AttentionMark,
   BUTTON_SIZE,
-  BUTTON_VARIANT,
-  Button,
   DISCLOSURE_FILL,
   HoverCard,
   HoverCardFigures,
@@ -144,12 +142,7 @@ function turnWords(turns: number): string {
 function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   switch (goal.state) {
     case AGENT_GOAL_STATE.PAUSED:
-      return (
-        <span className={`${STANDING_CLASS} font-label text-attention`}>
-          <AttentionMark />
-          Paused
-        </span>
-      );
+      return <span className={`${STANDING_CLASS} font-label text-attention`}>Paused</span>;
     case AGENT_GOAL_STATE.MET:
       // Note that the tick says the goal was met, in the ink a passed check wears, and its words say what it took.
       return (
@@ -165,12 +158,7 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
     case AGENT_GOAL_STATE.IMPOSSIBLE:
       return <span className={`${STANDING_CLASS} font-label text-danger`}>Blocked</span>;
     case AGENT_GOAL_STATE.BUDGET_LIMITED:
-      return (
-        <span className={`${STANDING_CLASS} font-label text-attention`}>
-          <AttentionMark />
-          Budget reached
-        </span>
-      );
+      return <span className={`${STANDING_CLASS} font-label text-attention`}>Budget reached</span>;
     default:
       // Note that a goal whose agent stopped working is still set, and the harness picks it up again on the next message.
       return working ? (
@@ -219,8 +207,8 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
  * command, and are none where the reader may not write to the agent or the
  * harness takes no such command (only Codex pauses a goal). Its acts stand
  * at its end as a queued message's do (`agent-queue-dock.tsx`), on hover:
- * Pause while it runs and Clear until it settles; a paused goal's Resume
- * stands at rest, since the agent waits on it.
+ * Pause while it runs and Clear until it settles; a paused goal's play, in
+ * Pause's place, stands at rest, since the agent waits on it.
  */
 export function GoalDock({
   messages,
@@ -271,14 +259,12 @@ export function GoalDock({
     resume === undefined && pause === undefined && clear === undefined ? undefined : (
       <>
         {resume === undefined ? null : (
-          <Button
+          <IconButton
             size={BUTTON_SIZE.COMPACT}
-            variant={BUTTON_VARIANT.OUTLINE}
+            label="Resume goal"
             icon={<PlayIcon />}
             onClick={resume}
-          >
-            Resume
-          </Button>
+          />
         )}
         {pause === undefined ? null : (
           <IconButton
