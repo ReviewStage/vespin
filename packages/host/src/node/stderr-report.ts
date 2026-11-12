@@ -1,3 +1,5 @@
+import type { ReportAttributes } from "../effect/seams.js";
+
 /**
  * Writes one line to stderr, and loses it rather than throwing when stderr is
  * gone. A development launch's stderr is a pipe to the terminal that started
@@ -14,9 +16,9 @@ function writeLine(message: string): void {
   }
 }
 
-/** The reporter every caller holds. */
-export function reportToStderr(message: string): void {
-  writeLine(message);
+/** The reporter every caller holds: the line, and why after it where it says. */
+export function reportToStderr(message: string, attributes?: ReportAttributes): void {
+  writeLine(attributes === undefined ? message : `${message} (${attributes.reason})`);
 }
 
 /**
