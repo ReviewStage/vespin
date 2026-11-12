@@ -39,7 +39,7 @@ import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-switcher.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
