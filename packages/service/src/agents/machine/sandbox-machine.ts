@@ -14,8 +14,9 @@
  * workspace's drive (`../workspace-drive.ts`), every repository the
  * workspace connects in a folder of its own, the picked repository's folder
  * moved to where the checkout stands, a link left in its place, and fetched
- * up to the agent's branch (`claimAgentCheckout`); or from the image alone,
- * the repository cloned whole (`../coder-host/checkout.ts`), the agent's
+ * up to the agent's branch (`claimAgentCheckout`); or from the image with an
+ * empty drive of its own (`AGENT_OWN_DRIVE`), the repository cloned whole
+ * onto it (`../coder-host/checkout.ts`), the agent's
  * write token written at the firewall ahead of either, in the run's first
  * write, to stand on past it. A snapshot or a drive found gone at the create
  * is passed by for the next. Nothing is installed on either: the agent
@@ -66,10 +67,17 @@
  * write from its sources and the swaps its launch keeps
  * (`../sandbox-firewall.ts`), and a stop is the run's, which a snapshot
  * of another agent's sandbox carries none of. A resume of a
- * sandbox under its session's name is the same `getOrCreate`, which makes
- * it anew from the image where its snapshot expired, its checkout cloned
- * again before the relaunch, and says so, since the harness's own session
- * and whatever the agent never pushed went with the old disk. A legacy
+ * sandbox under its session's name is the same `getOrCreate`, asking for the
+ * agent's own drive (`AGENT_OWN_DRIVE`): one stopped on a drive of its own is
+ * never resumed from its snapshot but made anew from the current image with
+ * that drive mounted, its checkout, its turns' restore points, and whatever
+ * the agent never pushed all on it; one from before drives resumes from its
+ * snapshot as it did, and is made anew from the image on an empty drive of
+ * its own where that snapshot expired, its checkout cloned again before the
+ * relaunch. Either way made anew, it says so, since the installed skills
+ * and whatever else stood on the old disk went with it; the harness's own
+ * session is kept in our store, not on the disk, and is resumed from there
+ * (`../coder-host/runner-sessions.ts`). A legacy
  * sandbox, opened before `getOrCreate` under a UUID, is used where it runs,
  * and otherwise moved to its session's name from its last snapshot
  * (`reopenedOf`), never resumed in place.
@@ -128,6 +136,7 @@ import {
 } from "effect";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import {
+  AGENT_OWN_DRIVE,
   type AgentSnapshotSource,
   agentSandboxName,
   agentSandboxOf,
@@ -171,6 +180,7 @@ import {
   placeholderSwap,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
+import { SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 import {
   recordedSandboxBooted,
   recordedSandboxBootFailed,
@@ -191,6 +201,7 @@ import {
 import {
   AgentMachine,
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   type DeliveredCredentials,
   type FoundPlace,
   type MachineKept,
@@ -209,13 +220,35 @@ import {
 } from "./agent-machine.js";
 import { phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
 
+/** Our state folder on the agent's own drive, beside the checkout, which a sandbox made again mounts as it stood. */
+const DRIVE_STATE_FOLDER = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}`;
+
 /**
  * Where a message's files that the harness takes no block of are written
  * in its sandbox, one folder per message line: outside the checkout, so no
- * commit picks them up, and readable by `agent`, since the API writes them
- * as its default user with the mode the caller names.
+ * commit picks them up, on the agent's own drive, so a file from an earlier
+ * message is still there after a resume, and readable by `agent`, since the
+ * API writes them as its default user with the mode the caller names.
  */
-const ATTACHMENT_DIRECTORY = "/tmp/agent-attachments";
+const ATTACHMENT_DIRECTORY = `${DRIVE_STATE_FOLDER}/attachments`;
+
+/** Where the files an agent saves in the shared folder (`SHARED_FILES_DIRECTORY`) stand: on its own drive, the shared folder a link to it. */
+const DRIVE_SHARED_FILES = `${DRIVE_STATE_FOLDER}/shared`;
+
+/**
+ * The shared folder linked to its folder on the agent's own drive on each
+ * launch, root's, so a file saved in one session can still be posted after
+ * a resume, which makes the sandbox again with nothing of its old disk. The
+ * state folder is made the workspace's owner's where it is missing, as the
+ * checkout's record would make it, and a shared folder the old disk still
+ * holds as a folder, as one resumed from a snapshot from before the link,
+ * is moved onto the drive first.
+ */
+const LINK_SHARED_FILES = [
+  `if [ ! -d ${DRIVE_STATE_FOLDER} ]; then install -d -o "$(stat -c %u ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE})" -g "$(stat -c %g ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE})" -m 0775 ${DRIVE_STATE_FOLDER}; fi`,
+  `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${DRIVE_SHARED_FILES}`,
+  `if [ ! -L ${SHARED_FILES_DIRECTORY} ]; then if [ -d ${SHARED_FILES_DIRECTORY} ]; then cp -a ${SHARED_FILES_DIRECTORY}/. ${DRIVE_SHARED_FILES}/ && rm -rf ${SHARED_FILES_DIRECTORY}; fi; ln -s ${DRIVE_SHARED_FILES} ${SHARED_FILES_DIRECTORY}; fi`,
+];
 
 /** Where a sandbox keeps an agent's things: the same for every agent, since each has a sandbox of its own. */
 const SANDBOX_LAYOUT: MachineLayout = {
@@ -319,6 +352,14 @@ const CHECKOUT_CONFIG_PATH = `${CHECKOUT_GIT_PATH}/config`;
 const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not be read";
 
 /**
+ * The mark a launch's readying leaves on the sandbox's own disk, which a
+ * sandbox made again starts without: one that stands up without it was made
+ * by a caller that launches nothing (the Terminal, the agent's browser, a
+ * preview's wake), so the next launch sets it up as one it made itself.
+ */
+const READIED_MARK = "/var/lib/vespin/readied";
+
+/**
  * The launch's readying, run by bash as root through `sudo`, waited on before the runner starts:
  * `agent` put in the `docker` group, the deploy's runner unit the launch
  * uploaded copied whole over the one the sandbox's disk holds, root's and
@@ -334,8 +375,9 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
  * another user installed in its checkout handed to it where it is not
  * `agent`'s already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
- * `agent`'s and readable by the default user the service reads as
- * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written
+ * `agent`'s on its own drive and readable by the default user the service
+ * reads as, the shared folder a link to it (`LINK_SHARED_FILES`), and the
+ * disk marked readied (`READIED_MARK`). Note that the checkout's git config is written
  * only where it does not already say so, because a `config.lock` an agent's
  * git left behind when its runner was killed would otherwise fail every
  * relaunch after it.
@@ -351,7 +393,8 @@ function readyScript(): string {
     ...sharedCheckout(CODER.CHECKOUT_PATH),
     OPEN_DRIVE_STORE,
     HAND_INSTALL_TO_AGENT,
-    `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${SHARED_FILES_DIRECTORY}`,
+    ...LINK_SHARED_FILES,
+    `install -d -m 0755 $(dirname ${READIED_MARK}) && : > ${READIED_MARK}`,
   ].join("\n");
 }
 
@@ -364,14 +407,20 @@ const SETUP_FILE = {
   REPOSITORY: "/tmp/vespin-setup/setup.sh",
 } as const;
 
+/** The mark the repository's setup script leaves on the agent's own drive once it succeeded, so it runs once for the checkout there, a resume and a fork of the drive carrying it. */
+const SETUP_RAN_MARK = `${DRIVE_STATE_FOLDER}/setup-ran`;
+
 /**
  * The workspace's cloud setup scripts run in a sandbox just created, after
  * its checkout, by bash as its default user, as a detached command nothing
  * waits on, as Conductor runs its setup
  * script once a workspace is created and checked out: the install script as
- * root from the workspace folder, then, where it succeeded, the repository's
- * setup script from the checkout, its writes the group's as the clone's are
- * (`GROUP_WRITES`), each failing on its first failed command. What they print,
+ * root from the workspace folder, on every boot, since what it installs
+ * stands outside the drive, then, where it succeeded and the drive holds no
+ * mark of an earlier run (`SETUP_RAN_MARK`), the repository's setup script
+ * from the checkout, its writes the group's as the clone's are
+ * (`GROUP_WRITES`), each failing on its first failed command, the mark left
+ * once it succeeded. What they print,
  * and how they exited (`--- exit N`, once they finish), goes to `SETUP_LOG`,
  * which every user reads, the agent among them; the run's own stderr says
  * only which ran and how each exited, a `<script> <exit>` line apiece
@@ -382,7 +431,7 @@ const SETUP_RUN_SCRIPT = [
   `: > ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   "status=0",
   `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${SETUP_EXIT_MARK} ${CLOUD_SETUP_SCRIPT.INSTALL} $status" >&2; fi`,
-  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${SETUP_EXIT_MARK} ${CLOUD_SETUP_SCRIPT.SETUP} $status" >&2; fi`,
+  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ] && [ ! -e ${SETUP_RAN_MARK} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${SETUP_EXIT_MARK} ${CLOUD_SETUP_SCRIPT.SETUP} $status" >&2; if [ "$status" -eq 0 ]; then mkdir -p ${DRIVE_STATE_FOLDER} && : > ${SETUP_RAN_MARK}; fi; fi`,
   `echo "--- exit $status" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   'exit "$status"',
 ].join("\n");
@@ -474,11 +523,11 @@ interface CreateAttempt {
   readonly drive: SandboxDrive | undefined;
 }
 
-/** The image alone, which every open falls back to. */
+/** The image with the agent's own drive, which every open falls back to and every resume takes: the drive it stood on mounted again, else one made empty. */
 const FROM_IMAGE: CreateAttempt = {
   from: CREATED_FROM.IMAGE,
   snapshot: undefined,
-  drive: undefined,
+  drive: AGENT_OWN_DRIVE,
 };
 
 /** Whether a create failed because the snapshot or the drive it named is gone, expired, deleted, or never filled, so the next way is tried. */
@@ -825,6 +874,18 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         ),
       ),
 
+    // Note that the API writes as the sandbox's default user, so the file's mode is what lets `agent` read it.
+    writeFile: (session, file) =>
+      Effect.gen(function* () {
+        const running = yield* runningSession(session);
+        const path = `${ATTACHMENT_DIRECTORY}/${file.name}`;
+        yield* api.writeFiles(running, [
+          { path, contents: file.contents, mode: ATTACHMENT_FILE_MODE },
+        ]);
+
+        return path;
+      }),
+
     restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
 
     diffCheckout: (session, range) => diffCheckout(api, { sessionId: session, range }),
@@ -871,7 +932,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * and is cloned only where that fork holds none; on a fork of the workspace's
    * drive the repository's folder there is claimed and brought up to the
    * agent's branch, or cloned where the fork holds none (`claimAgentCheckout`);
-   * from the image alone the repository is cloned whole.
+   * from the image the repository is cloned whole onto its own drive.
    */
   const checkedOutAs = (
     agent: WithRepository<Agent>,
@@ -995,6 +1056,19 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.withSpan("web/sandboxSetup"),
     );
 
+  /** The workspace's cloud setup scripts run in a sandbox made again outside an open's `onCreate` (`setUp`), over the caller's store; nothing where none was handed. */
+  const setUpAgain = (
+    agent: Agent,
+    opened: SandboxRunning,
+    setup: Effect.Effect<SandboxSetup | undefined> | undefined,
+  ) =>
+    Effect.gen(function* () {
+      if (setup === undefined) return;
+      const context = yield* Effect.context<DatabaseServices>();
+      const later = yield* Effect.serviceOption(AfterResponse);
+      yield* setUp(context, later, agent, opened, yield* setup);
+    });
+
   /**
    * A sandbox `getOrCreate` created set up for a launch, in its `onCreate`
    * beside the `agent` user it makes (`../agent-sandbox-open.ts`): the
@@ -1027,7 +1101,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * for, created as the attempt says where none stands, with whether it was
    * created, its checkout made in its `onCreate` where the agent has a
    * repository and the sandbox was created (`checkedOutIn`), and the open
-   * recorded as its use (`../sandbox-use.ts`).
+   * recorded as its use (`../sandbox-use.ts`), on a fresh disk where it was
+   * created on any drive but its own as it stood.
    * A setup that fails fails the open, and what it made is
    * left as it stands. Note that the setup's own failure is the open's,
    * because `onCreate`'s rejection is handed on as the call's, which
@@ -1046,7 +1121,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
 
-      const { sandbox, created } = yield* openAgentSandbox(
+      const { sandbox, created, driveKept } = yield* openAgentSandbox(
         {
           sessionId,
           tags: agentSandboxTags(sessionId, agent.id),
@@ -1073,9 +1148,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.mapError((failure) => refused ?? failure),
       );
 
-      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created);
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created && !driveKept);
 
-      return { ...runningOf(sandbox), created, from: attempt.from };
+      return { ...runningOf(sandbox), created, driveKept, from: attempt.from };
     });
 
   /**
@@ -1094,10 +1169,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         const opened = yield* Effect.result(gotOn(agent, sessionId, attempt, checkout));
 
         // Note that a sandbox standing under the name failed after its create, in its setup, so the
-        // next attempt would resume it with nothing checked out; only a create refused is passed by.
+        // next attempt would resume it with nothing checked out; only a create refused is passed by,
+        // and never the image's, whose own drive is made where none stands.
         const gone =
           Result.isFailure(opened) &&
-          (attempt.snapshot !== undefined || attempt.drive !== undefined) &&
+          attempt.from !== CREATED_FROM.IMAGE &&
           snapshotUnusable(opened.failure) &&
           (yield* api.get(agentSandboxName(sessionId)).pipe(
             Effect.map((standing) => standing === undefined),
@@ -1115,7 +1191,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         }
       }
 
-      // The image alone is always the last attempt, and is never passed by.
+      // The image is always the last attempt, and is never passed by.
       return yield* Effect.die(new Error("an agent's sandbox was opened from nothing"));
     });
 
@@ -1125,9 +1201,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * from the image with a fork of the drive its source's sandbox owns where
    * a Start handed one (`../coder-host/takeover.ts`), else from the image
    * with a fork of its workspace's drive where no fill holds it, else from
-   * the image alone, each drive found gone at the create passed by for the
-   * next. The repository is read on the write token its start minted
-   * (`read`). Nothing fills the workspace's drive here:
+   * the image with an empty drive of its own, each drive found gone at the
+   * create passed by for the next. The repository is read on the write token
+   * its start minted (`read`). Nothing fills the workspace's drive here:
    * its fills keep it (`../workspace-drive.ts`), and a start that finds none
    * clones.
    */
@@ -1202,7 +1278,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * failed leaves its sandbox for the next message, which resumes it and
    * checks nothing out, and a sandbox made anew in place of one whose
    * snapshot lapsed holds none, so its runner would start in a folder that is
-   * not there.
+   * not there. Answers whether it cloned.
    */
   const ownCheckoutRestored = (
     place: SandboxRunning,
@@ -1215,7 +1291,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         args: ["config", "--file", CHECKOUT_CONFIG_PATH, "--get", "user.email"],
       });
 
-      if (finished.exitCode === 0) return;
+      if (finished.exitCode === 0) return false;
       const holds = yield* api.run(place, { command: "test", args: ["-d", CHECKOUT_GIT_PATH] });
       const read = yield* agentRepositoryRead(target, agent);
       const sandbox = yield* checkoutIn(place, agent.userId);
@@ -1241,6 +1317,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ? "A relaunch found its agent's checkout unfinished and finished it"
           : "A relaunch found no checkout of its agent's repository and cloned it",
       );
+
+      return holds.exitCode !== 0;
     });
 
   return {
@@ -1308,16 +1386,18 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         );
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(ask.session)))),
 
-    // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
-    // where it stands, or made again from the image where its snapshot is gone, with the drive its
-    // first open forked mounted again where the agent has a repository, its checkout and unpushed
-    // work on it, and set up with nothing to check out, since the relaunch clones the checkout it
-    // finds missing (`ownCheckoutRestored`), as where it forked no drive.
+    // The session's sandbox is run again through `getOrCreate` (`gotOn`) from the image with its own
+    // drive (`FROM_IMAGE`): one up is used as it runs; one stopped on a drive of its own is made
+    // again from the current image with that drive mounted, its checkout and unpushed work on it;
+    // one from before drives resumes from its snapshot, or where that is gone is made again on an
+    // empty drive of its own. A sandbox made again is set up with nothing to check out, since the
+    // relaunch clones the checkout it finds missing (`ownCheckoutRestored`) and sets it up then; one
+    // made again on the checkout its drive kept is set up here (`setUpAgain`).
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is used where it runs, and otherwise made anew
     // under the session's name from its last snapshot (`reopenedOf`), its disk kept, or from the
     // image where that snapshot is gone, so it is never resumed in place; it is read again on each
     // try, so one that was still stopping is seen stopped.
-    resume: (found, agent) =>
+    resume: (found, agent, setup) =>
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
 
@@ -1332,20 +1412,28 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         const { snapshot } = yield* reopenedOf(found.session, standing);
 
         const attempts: readonly CreateAttempt[] =
-          snapshot !== undefined
-            ? [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE]
-            : hasRepository(agent)
-              ? [{ ...FROM_IMAGE, drive: { own: true, at: WORKSPACE_DRIVE.MOUNT } }, FROM_IMAGE]
-              : [FROM_IMAGE];
+          snapshot === undefined
+            ? [FROM_IMAGE]
+            : [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE];
 
         const opened = yield* openedFromFirst(agent, found.session, attempts, undefined);
 
         if (Result.isFailure(opened)) return yield* opened.failure;
-        const { name, running, created, from } = opened.success;
+        const { name, running, created, driveKept, from } = opened.success;
+
+        // A sandbox up that no launch readied was made again by a caller that launches nothing, so it
+        // is set up as one made here, its installed skills written again (`READIED_MARK`).
+        const remade =
+          !created &&
+          (yield* api.run({ name, running }, { command: "test", args: ["-e", READIED_MARK] }))
+            .exitCode !== 0;
+
+        // A sandbox made again on the checkout its drive kept is set up now; one on an empty drive, once its checkout is cloned (`checkOutMissing`).
+        if ((created && driveKept) || remade) yield* setUpAgain(agent, { name, running }, setup);
 
         return {
           place: sandboxPlace(found.session, name, running),
-          created: created && from === CREATED_FROM.IMAGE,
+          created: (created && from === CREATED_FROM.IMAGE) || remade,
         };
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(found.session)))),
 
@@ -1359,11 +1447,15 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     // finds it. A runner started but never configured is ended, and the caller undoes what it
     // recorded of it, so the next message relaunches whole rather than writing to a runner that
     // waits for its config.
-    // Before a relaunch, the agent's own checkout is cloned where the place holds none (`ownCheckoutRestored`).
-    checkOutMissing: (place, target, agent) =>
+    // Before a relaunch, the agent's own checkout is cloned where the place holds none (`ownCheckoutRestored`), and the
+    // workspace's cloud setup run after that clone, as a create runs it after its own.
+    checkOutMissing: (place, target, agent, setup) =>
       Effect.gen(function* () {
         if (!hasRepository(agent)) return;
-        yield* ownCheckoutRestored(place, target, agent);
+
+        if (yield* ownCheckoutRestored(place, target, agent)) {
+          yield* setUpAgain(agent, place, setup);
+        }
       }),
 
     launchRunner: (place, launch) =>

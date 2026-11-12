@@ -536,6 +536,11 @@ body {
   max-width: 400px;
 }
 
+/* Wide enough for a page at the wide measure to stand at it. */
+.catalog-settings-frame-wide {
+  max-width: 1120px;
+}
+
 /* A key's field and its presses, grown under its row: the field takes the
    line's room. */
 .catalog-settings-key {

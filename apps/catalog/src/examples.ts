@@ -18,6 +18,7 @@ import { BLOCK_MENU_EXAMPLE } from "./examples/block-menu";
 import { BREADCRUMBS_EXAMPLE } from "./examples/breadcrumbs";
 import { BUTTONS_EXAMPLE } from "./examples/buttons";
 import { CALENDAR_EXAMPLE } from "./examples/calendar";
+import { CAPTION_FIELDS_EXAMPLE } from "./examples/caption-fields";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
@@ -238,6 +239,7 @@ export const EXAMPLES: readonly Example[] = [
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,
   TEXT_FIELDS_EXAMPLE,
+  CAPTION_FIELDS_EXAMPLE,
   TEXT_LINKS_EXAMPLE,
   LINE_BUTTONS_EXAMPLE,
   TOASTS_EXAMPLE,

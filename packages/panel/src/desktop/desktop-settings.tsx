@@ -45,6 +45,7 @@ import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
   settingsGroupHeadingOf,
   settingsPageOf,
+  settingsPageWidthOf,
   shownSettingsPageGroups,
 } from "../settings/pages.js";
 import { pageResetControl } from "../settings/reset.js";
@@ -549,6 +550,7 @@ export function DesktopSettings({
           actions={reset}
           lead={onList === undefined ? undefined : <ListBack onList={onList} />}
           look={onList === undefined ? TOOLBAR_LOOK.WINDOW : TOOLBAR_LOOK.PHONE}
+          width={settingsPageWidthOf(settings.view)}
         >
           <SettingsPanel
             {...settings}

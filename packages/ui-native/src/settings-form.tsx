@@ -343,16 +343,48 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
   );
 }
 
+/**
+ * A code to hold against another screen, such as the one a machine shows
+ * while it pairs: in the monospaced face at a heading's size, VoiceOver
+ * hearing it letter by letter so each can be checked.
+ */
+export function CodeRow({ code, testId }: { readonly code: string; readonly testId?: string }) {
+  const colors = useColors();
+  const spelled = [...code].filter((letter) => letter !== "-").join(" ");
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, design: "monospaced", weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        listRowBackground(colors.SURFACE),
+        accessibilityLabel(spelled),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
+    >
+      {code}
+    </Text>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
   /** Whether the act ends something, such as Sign out, which the system draws red. */
   readonly destructive?: boolean | undefined;
+  /** Whether it takes no press, such as while another act on the page is out. */
+  readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
 };
 
 /** A row a person presses to act, in the accent, or the system's red where it ends something. */
-export function ActionRow({ label, symbol, destructive = false, onPress }: ActionRowProps) {
+export function ActionRow({
+  label,
+  symbol,
+  destructive = false,
+  disabled: off = false,
+  onPress,
+}: ActionRowProps) {
   const colors = useColors();
 
   return (
@@ -360,7 +392,7 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
       {...actContent(label, symbol)}
       role={destructive ? "destructive" : "default"}
       onPress={onPress}
-      modifiers={[listRowBackground(colors.SURFACE)]}
+      modifiers={[listRowBackground(colors.SURFACE), disabled(off)]}
     />
   );
 }
@@ -585,8 +617,6 @@ type NoteRowProps = {
   readonly detail?: string | undefined;
   /** A quiet line under them, such as who kept it and when. */
   readonly line: string;
-  /** A word beside the line, such as New, in the muted ink. */
-  readonly badge?: string | undefined;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
   /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
@@ -607,18 +637,8 @@ type NoteRowProps = {
  * VoiceOver hears the row as one element, its words then its line, and
  * offers its acts among its actions.
  */
-export function NoteRow({
-  symbol,
-  words,
-  detail,
-  line,
-  badge,
-  onPress,
-  edit,
-  remove,
-}: NoteRowProps) {
+export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
   const colors = useColors();
-  const said = badge === undefined ? line : `${badge} · ${line}`;
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -633,7 +653,7 @@ export function NoteRow({
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >
-        {said}
+        {line}
       </Text>
     </VStack>
   );
@@ -668,7 +688,7 @@ export function NoteRow({
     listRowBackground(colors.SURFACE),
     accessibilityElement("combine"),
     accessibilityLabel(words),
-    accessibilityValue(detail === undefined ? said : `${detail}, ${said}`),
+    accessibilityValue(detail === undefined ? line : `${detail}, ${line}`),
   ];
 
   if (edit === undefined && remove === undefined) {

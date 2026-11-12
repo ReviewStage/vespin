@@ -17,7 +17,7 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
 import { hostedUsage } from "@repo/database/schemas/usage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   type AdminCost,
   type AdminCostAccountInfo,
@@ -91,11 +91,21 @@ const TURN_SOURCE = sql<string>`case when ${conversations.kind} = ${CONVERSATION
  */
 const TURN_SHARES = sql`jsonb_array_elements(case when jsonb_typeof(${turns.usage}->'byModel') = 'array' and jsonb_array_length(${turns.usage}->'byModel') > 0 then ${turns.usage}->'byModel' else jsonb_build_array(${turns.usage} || jsonb_build_object('model', ${turns.model}::text)) end)`;
 
+/**
+ * What answered a coding agent's turn: its own conversation's runtime, or
+ * its parent's for a worker's turn; null for the app's own turns and a
+ * conversation from before the column.
+ */
+const TURN_RUNTIME = sql<
+  string | null
+>`coalesce(${conversations.runtime}, ${parentConversation.runtime})`;
+
 const TokenRowSchema = Schema.Struct({
   day: Schema.String,
   source: Schema.Literals([COST_SOURCE.AGENTS, COST_SOURCE.APP]),
   userId: Schema.String,
   model: Schema.NullOr(Schema.String),
+  runtime: Schema.NullOr(Schema.Literals(Object.values(CONVERSATION_RUNTIME))),
   fastRefused: Schema.Boolean,
   inputTokens: NullableAggregateColumnSchema,
   outputTokens: NullableAggregateColumnSchema,
@@ -114,6 +124,7 @@ const findTokenUsage = SqlSchema.findAll({
           day: utcDay(TURN_INSTANT).as("day"),
           source: TURN_SOURCE.as("source"),
           userId: turns.userId,
+          runtime: TURN_RUNTIME.as("runtime"),
           fastRefused: turns.fastRefused,
           share: TURN_SHARES.as("share"),
         })
@@ -137,6 +148,7 @@ const findTokenUsage = SqlSchema.findAll({
           source: shares.source,
           userId: shares.userId,
           model,
+          runtime: shares.runtime,
           fastRefused: shares.fastRefused,
           inputTokens: counted("inputTokens"),
           outputTokens: counted("outputTokens"),
@@ -145,7 +157,14 @@ const findTokenUsage = SqlSchema.findAll({
           cacheWriteTokens: counted("cacheWriteTokens"),
         })
         .from(shares)
-        .groupBy(shares.day, shares.source, shares.userId, model, shares.fastRefused);
+        .groupBy(
+          shares.day,
+          shares.source,
+          shares.userId,
+          model,
+          shares.runtime,
+          shares.fastRefused,
+        );
     }),
 });
 

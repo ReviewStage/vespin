@@ -36,6 +36,8 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
   /** One of the account's subscriptions named, or its name cleared (PUT). */
   ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
+  /** One of a ChatGPT plan's rate-limit reset credits spent (POST). */
+  ACCOUNT_RESET_CREDIT: "/api/account/provider-keys/reset-credit",
   /** The account's subscriptions of a kind put in a new order (PUT). */
   ACCOUNT_SUBSCRIPTION_ORDER: "/api/account/provider-keys/order",
   /** A ChatGPT plan's connection through Codex's device-code login begun (POST): the code to enter, and the login to poll. */

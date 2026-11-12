@@ -16,6 +16,7 @@ import {
   workspaceHref,
 } from "@repo/panel/admin/routing";
 import { AccountScreen } from "@repo/panel/admin/screens/account";
+import { AgentsScreen } from "@repo/panel/admin/screens/agents";
 import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
@@ -227,6 +228,20 @@ function AdminDashboardPage(): React.JSX.Element {
         onSignOut={signOut}
         onOpenAccount={openAccount}
         frame={(content) => shell(ADMIN_TAB.RELIABILITY, content)}
+      />
+    );
+  }
+
+  if (view.kind === ADMIN_TAB.AGENTS) {
+    return (
+      <AgentsScreen
+        hideAdmins={hideAdmins}
+        onHideAdminsChange={changeHideAdmins}
+        windowDays={windowDays}
+        onWindowDaysChange={changeWindow}
+        account={viewer}
+        onSignOut={signOut}
+        frame={(content) => shell(ADMIN_TAB.AGENTS, content)}
       />
     );
   }

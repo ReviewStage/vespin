@@ -19,7 +19,7 @@
   }
 
   [data-ui-profile="web"] .ui-collection-page {
-    --ui-collection-page-width: 1040px;
+    --ui-collection-page-width: var(--ui-wide-measure);
   }
 
   /* Under 480px of room a desktop page gives back half its inset. */

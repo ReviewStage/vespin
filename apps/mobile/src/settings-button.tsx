@@ -18,6 +18,8 @@ export const SETTINGS_ROUTE = {
   AGENTS: "/settings/agents",
   INTEGRATIONS: "/settings/integrations",
   MACHINES: "/settings/machines",
+  /** A machine's pairing, approved or denied by the `code` its link named. */
+  MACHINE_CONNECT: "/settings/machine-connect",
   MEMORY: "/settings/memory",
   /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
   MEMORY_EDIT: "/settings/memory-edit",
@@ -26,6 +28,8 @@ export const SETTINGS_ROUTE = {
   SKILLS: "/settings/skills",
   /** One skill's file, by the `skill` and `name` it is pushed with. */
   SKILL: "/settings/skill",
+  /** Add skill's paste. */
+  SKILL_ADD: "/settings/skill-add",
   /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;

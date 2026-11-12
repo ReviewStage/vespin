@@ -171,6 +171,7 @@ import {
   runSharePort,
   SHARE_PORT_TOOL,
 } from "../port-tools.js";
+import { ADD_SUGGESTION_TOOL, runAddSuggestion } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   CREATE_SECTION_TOOL,
@@ -547,8 +548,8 @@ const CATALOG = [
   // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
   served(
     LOOK_AT_PICTURE_TOOL,
-    (admitted, input, { standing }) =>
-      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS)),
+    (admitted, input, { standing, sandbox }) =>
+      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS), sandbox),
     {
       reads: true,
       variant: lookAtPictureToolOf,
@@ -574,6 +575,10 @@ const CATALOG = [
   agentTool(LIST_AGENTS_TOOL, runListAgents, { ...LOADED, ...READS }),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent, READS),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
+  agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
+    gate: TOOL_GATE.REPLY_BUTTONS,
+    alwaysLoad: true,
+  }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
   agentTool(LIST_MODELS_TOOL, runListModels, READS),
   // Tasks and sections.

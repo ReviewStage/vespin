@@ -186,6 +186,7 @@ import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
+import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -1231,7 +1232,7 @@ function AgentPartView({
 }): ReactNode {
   switch (part.kind) {
     case AGENT_PART.USAGE_LIMIT:
-      return <UsageLimitNotice notice={part.notice} />;
+      return <TranscriptUsageLimitNotice notice={part.notice} />;
     case AGENT_PART.CONNECTION_LOST:
       return <ConnectionLostNotice notice={part.notice} />;
     case AGENT_PART.COMPACTED:
@@ -2574,10 +2575,13 @@ function AgentTranscriptView({
   bringIn,
   holding = false,
   boot,
+  payerSubscriptionId,
 }: {
   messages: readonly AgentTranscriptMessage[];
   /** What the empty transcript says in its starting line's place while the agent's first launch stands (`AgentBootLine`); none otherwise. */
   boot?: ReactNode;
+  /** The plan the agent runs on, whose reset credit its pause's notice offers where the plan is the reader's own. */
+  payerSubscriptionId?: string | undefined;
   /** Whether the log waits to draw for what stands around it, saying it is loading meanwhile. */
   holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view, which a link to the message asks through; none where nothing asks. */
@@ -2847,7 +2851,7 @@ function AgentTranscriptView({
     });
 
     return (
-      <TranscriptAgent value={agentId}>
+      <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ConnectionNames needed={callsServer}>
             <Conversation list={log} onNearTop={onOlder}>
@@ -2948,7 +2952,7 @@ function AgentTranscriptView({
             </Conversation>
           </ConnectionNames>
         </LiveDoors>
-      </TranscriptAgent>
+      </TranscriptAgentOn>
     );
   }
 
@@ -3359,6 +3363,7 @@ function AgentTabView({
                             origin={origin}
                             readerId={readerId}
                             agentId={agent.id}
+                            payerSubscriptionId={transcript.payerSubscriptionId}
                             taskId={agent.planId}
                             replay={replay}
                             delegation={{

@@ -54,7 +54,7 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
-import { queuedTurnOf } from "@repo/database/models/turn-state";
+import { queuedTurnOf, recordTurnSnapshot } from "@repo/database/models/turn-state";
 import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
@@ -88,7 +88,7 @@ import {
   REPOSITORY_SCRIPT_KIND,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
@@ -148,7 +148,14 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
-import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
+import {
+  AGENT_TAG,
+  agentSandboxName,
+  openAgentSandboxPromptly,
+  reopenedOf,
+  SANDBOX_NAME,
+  SESSION_TAG,
+} from "../agent-sandbox-open.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -976,6 +983,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "start_agent",
             "stop_agent",
             "message_agent",
+            "add_suggestion",
             "update_agent",
             "create_task",
             "update_task",
@@ -1805,8 +1813,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
-        const firstPath = `/tmp/agent-attachments/${firstId}/2-Spec-v2.pdf`;
-        const laterPath = `/tmp/agent-attachments/${laterId}/2-etc-notes.pdf`;
+        const firstPath = `/workspace/.agent/attachments/${firstId}/2-Spec-v2.pdf`;
+        const laterPath = `/workspace/.agent/attachments/${laterId}/2-etc-notes.pdf`;
         const written = new Map(api.uploads.flatMap((upload) => [...upload]));
         assert.equal(written.get(firstPath), pdf);
         assert.equal(written.get(laterPath), pdf);
@@ -2176,11 +2184,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(api.sandboxes.length, 1);
-        assert.equal(api.sandboxes[0]?.status, "running");
+        assert.equal(api.sandboxes.filter((each) => !each.deleted).length, 1);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
         assert.equal(api.commands.length, 2);
         const relaunch = api.commands[1];
-        assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
+        assert.equal(relaunch?.sandboxSessionId, sandboxOfAgent(api, agent)?.currentSessionId);
         const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.resume, CLI_SESSION);
@@ -2209,7 +2217,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         }).pipe(Effect.provide(api.layer));
 
         assert.equal(late, RUNNER_ENDED.STALE);
-        assert.equal(api.sandboxes[0]?.status, "running");
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
       }),
   );
 
@@ -2259,7 +2267,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(api.sandboxes.length, 1);
+        assert.equal(api.sandboxes.filter((each) => !each.deleted).length, 1);
         const relaunch = api.commands[1];
         const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
@@ -2317,7 +2325,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.sandboxes[0]?.status, "stopped");
         assert.equal(api.commands.length, 1);
         yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
-        assert.equal(api.sandboxes[0]?.status, "running");
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
         assert.equal(api.commands.length, 2);
         const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
@@ -2391,7 +2399,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
-        assert.equal(api.sandboxes.length, 1);
+        assert.equal(api.sandboxes.filter((each) => !each.deleted).length, 1);
         const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, undefined);
         const [line] = yield* handedLines(userId, api.commands[1]);
@@ -2831,7 +2839,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         yield* sessions.warm(opened.sessionId, agent.conversationId);
 
-        assert.equal(api.sandboxes[0]?.status, "running");
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
         assert.equal(api.commands.length, 2);
         const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
@@ -4245,7 +4253,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start in a workspace with no drive yet is created from the image alone and clones its repository whole, filling no drive, and reports the drive gone",
+    "a Start in a workspace with no drive yet is created from the image on an empty drive of its own and clones its repository whole onto it, filling no workspace drive, and reports the drive gone",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4272,13 +4280,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 1);
         const own = sandboxOfAgent(api, agent);
-        assert.deepEqual(
-          [own?.image, own?.sourceSnapshotId, mountedDrive(api, own)],
-          [IMAGE, undefined, undefined],
-        );
+        const drive = mountedDrive(api, own);
+        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.ok(drive !== undefined && drive.forkedFrom === undefined);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 1);
-        assert.deepEqual(api.drives, [], "no drive was made or filled");
+        assert.deepEqual(api.drives, [drive], "no drive but its own was made or filled");
         assert.deepEqual(
           reported.filter((each) => each.broken !== undefined),
           [{ workspaceId: agent.organizationId, broken: "gone" }],
@@ -4474,7 +4481,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
   it.effect(
-    "a message after a drive agent's stopped sandbox's snapshot expired mounts the drive its first open forked in the fresh sandbox from the image",
+    "a message after a drive agent's sandbox stopped makes it again from the image with the drive its first open forked mounted, never resuming its snapshot, and its turns' restore points are still offered",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4483,9 +4490,19 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         filledWorkspaceDrive(api, agent);
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const expired = sandboxOfAgent(api, agent);
-        const drive = mountedDrive(api, expired);
-        assert.ok(expired !== undefined && drive !== undefined);
+        const stopped = sandboxOfAgent(api, agent);
+        const drive = mountedDrive(api, stopped);
+        assert.ok(stopped !== undefined && drive !== undefined);
+        // The turn's checkout as its runner recorded it, whose refs stand in the checkout on the drive.
+        const turnId = yield* turnUnderWay(userId, agent);
+
+        const before = {
+          commit: "0123456789abcdef0123456789abcdef01234567",
+          head: null,
+          branch: "main",
+        };
+
+        yield* recordTurnSnapshot({ userId, conversationId: agent.conversationId }, turnId, before);
         yield* runnerTook(agent.id);
         yield* runnerEnded({
           target: { userId, conversationId: agent.conversationId },
@@ -4493,15 +4510,27 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sequence: 0,
         }).pipe(Effect.provide(api.layer));
         api.idleStop();
-        expired.snapshotExpired = true;
 
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const fresh = sandboxOfAgent(api, agent);
-        assert.ok(fresh !== undefined && fresh !== expired);
-        assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [IMAGE, undefined]);
+        assert.ok(fresh !== undefined && fresh !== stopped);
+        assert.equal(stopped.deleted, true);
+        assert.deepEqual(
+          [fresh.name, fresh.image, fresh.sourceSnapshotId],
+          [stopped.name, IMAGE, undefined],
+        );
         assert.equal(mountedDrive(api, fresh), drive);
+
+        const kept = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ commit: turns.snapshotCommit, branch: turns.snapshotBranch })
+            .from(turns)
+            .where(eq(turns.id, turnId)),
+        );
+
+        assert.deepEqual(kept, [{ commit: before.commit, branch: before.branch }]);
       }),
   );
 
@@ -4538,6 +4567,55 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       return { api, drive, source, own: sandboxOfAgent(api, continued) };
     });
 
+  it.effect(
+    "a message after another caller woke a drive agent's stopped sandbox, made again with no launch, writes its installed skills again rather than relaunching on a disk without them",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        filledWorkspaceDrive(api, agent);
+        yield* writeAccountPreferences(userId, { experiments: { [EXPERIMENT.SKILLS]: true } });
+        yield* installSkill(userId, {
+          owner: { scope: INSTALLED_SKILL_SCOPE.PERSONAL },
+          name: "incident-notes",
+          description: "Write incident notes.",
+          userInvocable: false,
+          source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+          files: [{ path: "SKILL.md", bytes: new TextEncoder().encode("Write them.\n") }],
+        });
+
+        const skillUploads = () =>
+          api.uploads.filter((upload) =>
+            [...upload.keys()].some((path) => path.startsWith("/tmp/agent-installed-skills/")),
+          ).length;
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        yield* runnerEnded({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 0,
+        }).pipe(Effect.provide(api.layer));
+        api.idleStop();
+
+        // The Terminal wakes it as it does (`reopenedOf`), making it again from the image on its drive.
+        yield* Effect.gen(function* () {
+          const standing = yield* (yield* Sandbox).get(agentSandboxName(opened.sessionId));
+          assert.ok(standing !== undefined);
+          yield* openAgentSandboxPromptly(yield* reopenedOf(opened.sessionId, standing));
+        }).pipe(Effect.provide(Layer.merge(api.layer, FIXTURE_IMAGE)));
+
+        // Its fresh disk holds no mark of a launch's readying.
+        api.hooks.runExit = (args) => (args.includes("/var/lib/vespin/readied") ? 1 : 0);
+
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(skillUploads(), 2);
+      }),
+  );
   it.effect(
     "an agent continued from one on a drive is created from the image with a fork of the source's drive, and clones, fetches, and installs nothing",
     () =>
@@ -4754,7 +4832,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
   it.effect(
-    "each message counts how it reached the runner: written to the runner up, or by its turn's delivery relaunched in a sandbox still up, or resumed from its snapshot",
+    "each message counts how it reached the runner: written to the runner up, or by its turn's delivery relaunched in a sandbox still up, or, its sandbox stopped, made fresh from the image on its own drive",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4797,7 +4875,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [
             { userId, harness: "claude_code", path: "warm", turn_running: false },
             { userId, harness: "claude_code", path: "relaunched", turn_running: false },
-            { userId, harness: "claude_code", path: "resumed", turn_running: false },
+            { userId, harness: "claude_code", path: "fresh", turn_running: false },
           ],
         );
       }),

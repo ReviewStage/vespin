@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { afterEach, test } from "vitest";
-import type {
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-  DescriptionEditorPlacement,
-  PictureTaken,
+import { afterEach, test, vi } from "vitest";
+import {
+  type DescriptionEditorHandle,
+  type DescriptionEditorPictures,
+  type DescriptionEditorPlacement,
+  PICTURE_LEAVE,
+  type PictureNodeDoors,
+  type PictureTaken,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
@@ -14,8 +16,9 @@ import { mountDescriptionEditor } from "./description-editor.js";
  * A description's pictures in its editor: a file pasted, chosen, or dropped on the drawn text is laid in as a
  * picture below the caret's line, or in place of an empty one, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
- * one still being kept out; and a picture of another description pasted in is kept
- * again on this one. Synthetic description and pictures.
+ * one still being kept out; a picture of another description pasted in is kept
+ * again on this one; and the caret leaving a picture's caption for what follows
+ * stands on a line after it. Synthetic description and pictures.
  */
 
 const TASK_ID = "5d8e2a61-7c3b-4f0e-9b1a-2c6d4e8f0a13";
@@ -30,14 +33,28 @@ const handles: DescriptionEditorHandle[] = [];
 afterEach(() => {
   for (const handle of handles.splice(0)) handle.destroy();
   document.body.innerHTML = "";
+  vi.useRealTimers();
 });
 
 /** The editor on `TEXT`, its caret at the end of the Approach section unless `placement` says, with the panel's pictures stood in for. */
 function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { section: 0 }) {
   const taken: PictureTaken[] = [];
+  // The pictures drawn now, each by the upload it waits on, "" once kept.
+  const drawn = new Map<number, string>();
+  // Each picture's doors, in the order the pictures were drawn.
+  const doors: PictureNodeDoors[] = [];
 
   const pictures: DescriptionEditorPictures = {
-    draw: () => ({ redraw: () => undefined, undraw: () => undefined }),
+    draw: (_element, picture, its) => {
+      doors.push(its);
+      const key = drawn.size + taken.length + Math.random();
+      drawn.set(key, picture.upload);
+
+      return {
+        redraw: (next) => drawn.set(key, next.upload),
+        undraw: () => drawn.delete(key),
+      };
+    },
     take: (each) => taken.push(...each),
     copies: (src) => src.includes(OTHER_TASK_ID),
   };
@@ -58,7 +75,14 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
 
   handles.push(handle);
 
-  return { handle, taken, host };
+  return { handle, taken, host, drawn, doors };
+}
+
+/** ⌘Z, or ⇧⌘Z with `redo`, pressed in the editor, as Ctrl outside a Mac. */
+function pressUndo(host: HTMLElement, redo = false): void {
+  const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+  const key = { key: "z", ctrlKey: true, shiftKey: redo, bubbles: true, cancelable: true };
+  editable.dispatchEvent(new KeyboardEvent("keydown", key));
 }
 
 const PNG = () =>
@@ -202,4 +226,97 @@ test("a picture laid in after the text's last block stands apart from it by a bl
     handle.markdown(),
     `## Approach\n\nThe invite email follows the mock.\n\n![members](${KEPT})\n`,
   );
+});
+
+test("undo takes a dropped picture kept since out whole, and redo brings it back kept, never waiting on an upload already settled", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const landed = { section: 1, text: "Single use.", occurrence: 0, offset: 4, code: false, top: 0 };
+
+  const { handle, taken, host, drawn } = opened(TEXT, {
+    x: 0,
+    y: 0,
+    words: landed,
+    pictures: [PNG()],
+  });
+
+  // Note that the upload settles well after the drop, as a real one does, past the pause that groups changes for undo.
+  vi.advanceTimersByTime(5_000);
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+  vi.advanceTimersByTime(5_000);
+  pressUndo(host);
+  const undone = handle.markdown();
+  const waitingAfterUndo = [...drawn.values()].filter((upload) => upload !== "");
+  pressUndo(host, true);
+
+  assert.equal(undone, TEXT);
+  assert.deepEqual(waitingAfterUndo, []);
+  assert.equal(handle.markdown(), `${TEXT}\n![members](${KEPT})\n`);
+});
+
+test("a dropped picture undone while its upload is out, then redone after it settled, comes back kept", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const landed = { section: 1, text: "Single use.", occurrence: 0, offset: 4, code: false, top: 0 };
+
+  const { handle, taken, host, drawn } = opened(TEXT, {
+    x: 0,
+    y: 0,
+    words: landed,
+    pictures: [PNG()],
+  });
+
+  vi.advanceTimersByTime(5_000);
+  pressUndo(host);
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+  vi.advanceTimersByTime(5_000);
+  pressUndo(host, true);
+
+  assert.deepEqual([...drawn.values()], [""]);
+  assert.equal(handle.markdown(), `${TEXT}\n![members](${KEPT})\n`);
+});
+
+test.each([
+  {
+    where: "before the text's first block",
+    markdown: TEXT,
+    words: "Single use.",
+    section: 1,
+    landing: { first: true } as const,
+    landed: `![members](${KEPT})\n\n${TEXT}`,
+  },
+  {
+    where: "after the list, at the top level, from an item's line",
+    markdown: "## Beats\n\n- Open on the inbox.\n- End on the logo.\n\n## Next\n\nShip.\n",
+    words: "Open on the inbox.",
+    section: 0,
+    landing: { depth: 0 },
+    landed: `## Beats\n\n- Open on the inbox.\n- End on the logo.\n\n![members](${KEPT})\n\n## Next\n\nShip.\n`,
+  },
+  {
+    where: "at the end of the outer item, from a nested item's line",
+    markdown: "## Beats\n\n- Open on the inbox.\n  - Zoom in.\n- End on the logo.\n",
+    words: "Zoom in.",
+    section: 0,
+    landing: { depth: 1 },
+    landed: `## Beats\n\n- Open on the inbox.\n  - Zoom in.\n\n  ![members](${KEPT})\n- End on the logo.\n`,
+  },
+])("a picture dropped $where lands there", ({ markdown, words, section, landing, landed }) => {
+  const caret = { section, text: words, occurrence: 0, offset: 2, code: false, top: 0 };
+  const placement = { x: 0, y: 0, words: caret, pictures: [PNG()], landing };
+  const { handle, taken } = opened(markdown, placement);
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+
+  assert.equal(handle.markdown(), landed);
+});
+
+test("leaving the caption of the text's last picture for what follows puts the caret on a line after it", () => {
+  const markdown = `## Approach\n\nThe invite email follows the mock.\n\n![members](${KEPT} "The invite")\n`;
+  const words = "The invite email follows the mock.";
+  const caret = { section: 0, text: words, occurrence: 0, offset: 2, code: false, top: 0 };
+  const { handle, taken, doors } = opened(markdown, { x: 0, y: 0, words: caret });
+
+  doors[0]?.leave(PICTURE_LEAVE.DOWN);
+  handle.insertPictures([PNG()]);
+  handle.settlePicture(taken[0]?.upload ?? "", OTHERS);
+
+  assert.equal(handle.markdown(), `${markdown}\n![members](${OTHERS})\n`);
 });

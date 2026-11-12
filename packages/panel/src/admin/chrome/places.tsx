@@ -5,6 +5,7 @@
 
 import {
   ActivityIcon,
+  BotIcon,
   Building2Icon,
   CircleDollarSignIcon,
   GaugeIcon,
@@ -25,6 +26,7 @@ const PLACE_BY_TAB = {
   [ADMIN_TAB.DASHBOARD]: { label: "Overview", icon: <LayoutDashboardIcon /> },
   [ADMIN_TAB.COST]: { label: "Cost", icon: <CircleDollarSignIcon /> },
   [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
+  [ADMIN_TAB.AGENTS]: { label: "Agents", icon: <BotIcon /> },
   [ADMIN_TAB.WORKSPACES]: { label: "Workspaces", icon: <Building2Icon /> },
   [ADMIN_TAB.USERS]: { label: "Users", icon: <UsersIcon /> },
   [ADMIN_TAB.LIMITS]: { label: "Limits", icon: <GaugeIcon /> },

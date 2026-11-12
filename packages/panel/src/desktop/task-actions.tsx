@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/features/task-list-model";
+import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   DESCRIPTION_ACTOR,
@@ -111,11 +112,7 @@ import {
   taskLinkItems,
   versionHistoryItem,
 } from "../tasks/task-menu-items.js";
-import {
-  type TaskRelationDoor,
-  type TaskRelationSubject,
-  taskRelationMenuPanel,
-} from "../tasks/task-relation-menu.js";
+import { type TaskRelationDoor, taskRelationMenuPanel } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";

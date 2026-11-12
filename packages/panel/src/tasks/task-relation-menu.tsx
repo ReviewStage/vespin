@@ -1,9 +1,16 @@
-import { sameRepository } from "@repo/features/github-repositories-wire";
+import {
+  NO_TASKS_MATCH,
+  relationWhyNot,
+  TASK_RELATION_MENU,
+  TASK_RELATION_ORDER,
+  TASK_RELATION_SEARCH,
+  TASK_RELATION_VERBS,
+  type TaskRelationSubject,
+} from "@repo/features/task-relation-model";
 import {
   TASK_BLOCK_CHANGE,
   TASK_CREATE_RELATION_KIND,
   TASK_RELATION_KIND,
-  type Task,
   type TaskBlockRequest,
   type TaskCreateRelationKind,
   type TaskRelationKind,
@@ -58,17 +65,6 @@ import { useEffect, useId, useRef, useState } from "react";
  * the kinds.
  */
 
-/** What the menu is called wherever it opens, New task's + among them. */
-export const TASK_RELATION_MENU = "Task relation";
-
-/** The kinds in the order the kind submenu and the task's menus stand them. */
-export const TASK_RELATION_ORDER: readonly TaskRelationKind[] = [
-  TASK_RELATION_KIND.SUB_TASK,
-  TASK_RELATION_KIND.PARENT,
-  TASK_RELATION_KIND.BLOCKED_BY,
-  TASK_RELATION_KIND.BLOCKS,
-];
-
 /** Each kind's icon, which leads its row wherever a kind is offered, as a status leads by its mark. */
 export function TaskRelationIcon({ kind }: { kind: TaskRelationKind }): React.JSX.Element {
   switch (kind) {
@@ -83,44 +79,6 @@ export function TaskRelationIcon({ kind }: { kind: TaskRelationKind }): React.JS
   }
 }
 
-/** Each kind as what choosing it does, which the kinds list and the search's head say. */
-const KIND_VERBS = {
-  [TASK_RELATION_KIND.SUB_TASK]: { choose: "Add sub-task…", head: "Add sub-task" },
-  [TASK_RELATION_KIND.PARENT]: { choose: "Set parent…", head: "Set parent" },
-  [TASK_RELATION_KIND.BLOCKED_BY]: {
-    choose: "Mark as blocked by…",
-    head: "Mark as blocked by",
-  },
-  [TASK_RELATION_KIND.BLOCKS]: { choose: "Mark as blocking…", head: "Mark as blocking" },
-} as const satisfies Record<TaskRelationKind, { choose: string; head: string }>;
-
-/** Each kind's search field, saying which way round the task picked stands, and its New task, the one it makes. */
-const KIND_SEARCH = {
-  [TASK_RELATION_KIND.SUB_TASK]: {
-    find: "Find a task to add as a sub-task",
-    create: "New sub-task",
-  },
-  [TASK_RELATION_KIND.PARENT]: { find: "Find the parent task", create: "New parent task" },
-  [TASK_RELATION_KIND.BLOCKED_BY]: {
-    find: "Find the task this waits on",
-    create: "New blocking task",
-  },
-  [TASK_RELATION_KIND.BLOCKS]: {
-    find: "Find the task that waits on this",
-    create: "New blocked task",
-  },
-} as const satisfies Record<TaskRelationKind, { find: string; create: string }>;
-
-/** Why a task cannot take a kind, printed at its row's end. */
-const WHY = {
-  [TASK_RELATION_KIND.BLOCKED_BY]: { already: "Already blocks this", loop: "Waits on this task" },
-  [TASK_RELATION_KIND.BLOCKS]: { already: "Already waits on this", loop: "This task waits on it" },
-  [TASK_RELATION_KIND.SUB_TASK]: { already: "Already a sub-task", loop: "A parent of this task" },
-  [TASK_RELATION_KIND.PARENT]: { already: "Already the parent", loop: "A sub-task of this task" },
-} as const satisfies Record<TaskRelationKind, { already: string; loop: string }>;
-
-const OTHER_REPOSITORY = "Another repository";
-
 /** The pinned New task row's id, apart from every task's. */
 const NEW_TASK_ROW_ID = "new-task";
 
@@ -131,13 +89,6 @@ const NEW_TASK_KIND = {
   [TASK_RELATION_KIND.BLOCKED_BY]: TASK_CREATE_RELATION_KIND.BLOCKS,
   [TASK_RELATION_KIND.BLOCKS]: TASK_CREATE_RELATION_KIND.BLOCKED_BY,
 } as const satisfies Record<TaskRelationKind, TaskCreateRelationKind>;
-
-/**
- * The task the menu relates: a list's row of it, or the open task, whose
- * blocks the list does not carry, so a row's menu judges only the tree's
- * kinds and leaves a block already standing to the service's refusal.
- */
-export type TaskRelationSubject = TaskSummary & Pick<Task, "blockedBy" | "blocks">;
 
 /** What the menu reads and sends through: the workspace's name, which a key is drawn from, its tasks, and where a block, a parent, and a new related task go; a kind whose door is missing is offered nowhere. */
 export interface TaskRelationDoor {
@@ -175,56 +126,6 @@ function sentKinds(door: TaskRelationDoor): readonly TaskRelationKind[] {
   return TASK_RELATION_ORDER.filter((kind) => kindSent(door, kind));
 }
 
-/** The tasks standing above one whose parent is `parentId`, walking up by parents through the tasks the list holds and stopping at a loop. */
-function ancestors(
-  byId: ReadonlyMap<string, TaskSummary>,
-  parentId: string | undefined,
-): Set<string> {
-  const above = new Set<string>();
-  let at = parentId;
-
-  while (at !== undefined && !above.has(at)) {
-    above.add(at);
-    at = byId.get(at)?.parentTaskId;
-  }
-
-  return above;
-}
-
-/** Why `other` cannot take `kind` against `task`; none where it can. */
-function whyNot(
-  task: TaskRelationSubject,
-  other: TaskSummary,
-  kind: TaskRelationKind,
-  byId: ReadonlyMap<string, TaskSummary>,
-): string | undefined {
-  const blockedBy = task.blockedBy ?? [];
-  const blocks = task.blocks ?? [];
-
-  switch (kind) {
-    case TASK_RELATION_KIND.BLOCKED_BY:
-      if (blockedBy.includes(other.id)) return WHY[kind].already;
-
-      return blocks.includes(other.id) ? WHY[kind].loop : undefined;
-    case TASK_RELATION_KIND.BLOCKS:
-      if (blocks.includes(other.id)) return WHY[kind].already;
-
-      return blockedBy.includes(other.id) ? WHY[kind].loop : undefined;
-    case TASK_RELATION_KIND.SUB_TASK:
-      if (other.parentTaskId === task.id) return WHY[kind].already;
-
-      if (ancestors(byId, task.parentTaskId).has(other.id)) return WHY[kind].loop;
-
-      return sameRepository(task.repository, other.repository) ? undefined : OTHER_REPOSITORY;
-    case TASK_RELATION_KIND.PARENT:
-      if (task.parentTaskId === other.id) return WHY[kind].already;
-
-      if (ancestors(byId, other.parentTaskId).has(task.id)) return WHY[kind].loop;
-
-      return sameRepository(task.repository, other.repository) ? undefined : OTHER_REPOSITORY;
-  }
-}
-
 /**
  * The tasks the menu lists for a kind: the workspace's others, by name,
  * their status mark, and their key, which a search matches too, each one
@@ -241,7 +142,7 @@ function relationRows(
     .filter((each) => each.id !== task.id)
     .map((each) => {
       const key = each.number === undefined ? undefined : taskKey(door.workspaceName, each.number);
-      const disabled = whyNot(task, each, kind, byId);
+      const disabled = relationWhyNot(task, each, kind, byId);
 
       return {
         id: each.id,
@@ -287,7 +188,7 @@ function kindOf(id: string): TaskRelationKind | undefined {
 function kindRows(door: TaskRelationDoor): readonly MenuRow[] {
   return sentKinds(door).map((kind) => ({
     id: kind,
-    label: KIND_VERBS[kind].choose,
+    label: TASK_RELATION_VERBS[kind].choose,
     icon: <TaskRelationIcon kind={kind} />,
   }));
 }
@@ -359,7 +260,7 @@ export function TaskRelationMenu({
   const back = opened === undefined ? () => setChosen(undefined) : undefined;
 
   const head: MenuHead = {
-    words: KIND_VERBS[kind].head,
+    words: TASK_RELATION_VERBS[kind].head,
     ...(back !== undefined && { back: { label: TASK_RELATION_MENU, onBack: back } }),
   };
 
@@ -371,7 +272,7 @@ export function TaskRelationMenu({
       : [
           {
             id: NEW_TASK_ROW_ID,
-            label: KIND_SEARCH[kind].create,
+            label: TASK_RELATION_SEARCH[kind].create,
             icon: <GLYPH.ADD />,
             onPress: () => {
               onPicked();
@@ -386,12 +287,12 @@ export function TaskRelationMenu({
       {...place}
       key={kind}
       id={id}
-      label={KIND_VERBS[kind].head}
+      label={TASK_RELATION_VERBS[kind].head}
       head={head}
-      placeholder={KIND_SEARCH[kind].find}
+      placeholder={TASK_RELATION_SEARCH[kind].find}
       rows={relationRows(task, door, kind)}
       value={undefined}
-      noMatch="No tasks match"
+      noMatch={NO_TASKS_MATCH}
       foot={foot}
       leaving={leaving}
       ref={menuRef}

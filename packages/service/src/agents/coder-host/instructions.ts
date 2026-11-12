@@ -72,31 +72,41 @@ const AGENT_EDIT_DESCRIPTION_TOOL = EDIT_DESCRIPTION_TOOL.name;
  * another started on its own task leaves it to the starter.
  */
 
+/**
+ * What an agent handed a prompt or started blank is told of a request that
+ * names a goal but not what to make: ask in a thread and make nothing until
+ * the developer answers, rather than guessing a spec and building it. One no
+ * one is waiting on, an automation's or another agent's, goes on and names
+ * its assumption, since no answer would come.
+ */
+function askFirstWords(request: string, kind: string): string {
+  return `Where ${request} names a goal but not what to make, such as "I want to make a launch video together", and nothing else you were handed or can read says it, ask the developer in a thread what they have in mind and end your turn, making nothing until they answer: no code, no write-up, and no page. ${kind} that says what to build, however short, is enough to start on. Where it is unclear only in a smaller way, or no one is there to answer, as in a turn an automation opened or one another agent started, go on under the assumption you name in your final message rather than guessing at a larger job.`;
+}
+
 /** The words the instructions say of what the agent was handed, a description, a prompt, or nothing, for one started blank, whose asks come in the conversation, where they differ. */
 const BRIEF_WORDS = {
   [AGENT_BRIEF.DESCRIPTION]: {
     job: "implement the task's description given as the first message of this conversation",
-    brief: "description",
     reread:
       "Reread the code the description names before you change it. The description was written against the repository as it stood when it was written; the code may have moved since. Where the code no longer fits the description, say so plainly in your final message, decide whether what the description asks still makes sense, and do not publish work that implements a description the code has outgrown.",
+    unclear:
+      "Where the description is unclear, say so plainly in your final message rather than guessing at a larger job.",
     whole: "implements the description whole",
     none: "the description could not be implemented",
     describe: "say in its description what the task's description asked",
   },
   [AGENT_BRIEF.PROMPT]: {
     job: "carry out the prompt the developer gave as the first message of this conversation",
-    brief: "prompt",
-    reread:
-      "Read the code the prompt touches before you change it. Where the prompt is unclear or the code does not fit what it asks, say so plainly in your final message rather than guessing at a larger change.",
+    reread: `Read the code the prompt touches before you change it, and say plainly in your final message where it does not fit what the prompt asks. ${askFirstWords("the prompt", "A prompt")}`,
+    unclear: askFirstWords("the prompt", "A prompt"),
     whole: "does what the prompt asks, whole",
     none: "the prompt could not be carried out",
     describe: "say in its description what the prompt asked",
   },
   [AGENT_BRIEF.BLANK]: {
     job: "do what the developer asks of you in this conversation",
-    brief: "request",
-    reread:
-      "Read the code what the developer asks touches before you change it. Where what they ask is unclear or the code does not fit it, say so plainly rather than guessing at a larger change.",
+    reread: `Read the code what the developer asks touches before you change it, and say plainly where it does not fit what they ask. ${askFirstWords("what the developer asks", "A request")}`,
+    unclear: askFirstWords("what the developer asks", "A request"),
     whole: "does what the developer asked, whole",
     none: "what the developer asked could not be done",
     describe: "say in its description what the developer asked",
@@ -105,8 +115,9 @@ const BRIEF_WORDS = {
   AgentBrief,
   {
     job: string;
-    brief: string;
     reread: string;
+    /** What the agent does where what it was handed is unclear, said alike with a repository or without one. */
+    unclear: string;
     whole: string;
     none: string;
     describe: string;
@@ -784,7 +795,7 @@ ${sandboxSection(tools, machine, standing)}
 
 ${tools.browser}## How to work
 
-Where the ${words.brief} is unclear, say so plainly in your final message rather than guessing at a larger job. Where what you were asked for is a plan, a proposal, a design, or research, ${writeUpPlace(brief, planTask !== null)}.
+${words.unclear} Where what you were asked for is a plan, a proposal, a design, or research, ${writeUpPlace(brief, planTask !== null)}.
 
 `,
     search: `${tools.searchWeb} when a fact lies outside what you were handed, such as a library's documentation. A query leaves for the public web, so never put private names or words into one.
@@ -819,6 +830,22 @@ const CODER_SECTION_WORDS: SectionWords = {
   messages: `Your messages are read by the developer in ${PRODUCT_NAME}'s own window as a transcript, beside your tool calls. Lead with the outcome. Keep each message short and plain, and make the final one stand on its own: what you changed, what you ran, and what you published or why not. Put words the developer will send elsewhere, such as a Slack message or an email, in a fence named for where they go, \`\`\`slack with Slack's \`*bold*\`, \`_italic_\`, \`~strike~\`, \`\` \`code\` \`\`, and \`<url|label>\` links, \`\`\`email with an optional \`Subject:\` first line, or \`\`\`draft, the last two in plain text with no marks, which ${PRODUCT_NAME} draws as they will look when sent, with a Copy that keeps their formatting.`,
   createTask: CREATE_TASK_WORDS,
 };
+
+/**
+ * What the agent is told of the suggestions it may put in its reply
+ * (`../reply-buttons/add-suggestion.ts`) where it is offered
+ * `add_suggestion`, as where its starter turned Suggestions on
+ * (`../tool-catalog/gates.ts`'s `REPLY_BUTTONS`), and nothing where not.
+ */
+function replyButtonWords(standing: AgentStanding): string {
+  return offers(standing, AGENT_TOOL.ADD_SUGGESTION)
+    ? `## Suggestions in your reply
+
+Where your reply names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a suggestion beside the line it is about with \`${AGENT_TOOL.ADD_SUGGESTION}\` rather than asking them to start it by hand: a new agent on a brief you write, or your words for that agent. A member who presses it opens it filled in, may edit it, and sends it as themselves, only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line. A suggestion is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
+
+`
+    : "";
+}
 
 /**
  * What the agent is told of its workspace's memory (`../memory-tools.ts`)
@@ -945,7 +972,7 @@ ${tools.worker(place.worker)}${editing.updating}${place.status}
 
 The developer may keep their tasks in sections of the workspace's sidebar, their own and no teammate's. \`${AGENT_TOOL.LIST_TASKS}\` names each task's section and the sections the developer keeps; \`${AGENT_TOOL.CREATE_SECTION}\` makes a section, \`${AGENT_TOOL.UPDATE_TASK}\`'s sectionId moves a task into one or back under Tasks, and \`${AGENT_TOOL.DELETE_SECTION}\` deletes one, its tasks going back under Tasks and none of them deleted. ${sections.sorting} Say in your message what you changed.
 
-${memoryWords(standing)}${turnEndWords(standing)}## What your messages are
+${replyButtonWords(standing)}${memoryWords(standing)}${turnEndWords(standing)}## What your messages are
 
 ${sections.messages}
 

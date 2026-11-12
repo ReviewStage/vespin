@@ -1,6 +1,6 @@
 import { Schema as EffectSchema, Option, Predicate, SchemaTransformation } from "effect";
 import { MODEL_PROVIDER } from "./models-wire.js";
-import { countedNumber } from "./service-wire.js";
+import { countedNumber, wireUuidSchema } from "./service-wire.js";
 
 /**
  * provider-key-wire.ts -- the account's own Anthropic and OpenAI API keys, as the desktop saves, reads, and removes them.
@@ -238,7 +238,27 @@ const subscriptionKeySummarySchema = EffectSchema.Struct({
   usageWindows: EffectSchema.optionalKey(EffectSchema.Array(planUsageSchema)),
   /** When its usage windows were last heard, in epoch milliseconds, where that is known. */
   usageHeardAt: EffectSchema.optionalKey(countedNumber),
+  /** How many rate-limit reset credits a ChatGPT plan holds, as its usage read last counted; absent until counted. */
+  resetCredits: EffectSchema.optionalKey(countedNumber),
+  /** When each credit ChatGPT listed expires, in epoch milliseconds, soonest first and null for one that never expires; absent where it listed none. The first is the one a spend uses. */
+  resetCreditExpiries: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.NullOr(countedNumber)),
+  ),
 });
+
+/** How ChatGPT took a reset credit's spend, as Codex's app-server names it. */
+export const RESET_CREDIT_OUTCOME = {
+  /** One credit spent: the limit is lifted. */
+  RESET: "reset",
+  /** No limit stood to lift, so nothing was spent. */
+  NOTHING_TO_RESET: "nothingToReset",
+  /** The plan holds no credit. */
+  NO_CREDIT: "noCredit",
+  /** This very spend was taken before, as a retry finds it: no second credit spent. */
+  ALREADY_REDEEMED: "alreadyRedeemed",
+} as const;
+
+export type ResetCreditOutcome = (typeof RESET_CREDIT_OUTCOME)[keyof typeof RESET_CREDIT_OUTCOME];
 
 export type SubscriptionKeySummary = typeof subscriptionKeySummarySchema.Type;
 
@@ -258,6 +278,8 @@ export const providerKeysAnswerSchema = EffectSchema.Struct({
    * disconnect the app in ChatGPT's settings to end it there.
    */
   revocationUnconfirmed: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  /** How a reset credit's spend went, on the spend's own answer alone. */
+  resetCredit: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(RESET_CREDIT_OUTCOME))),
 });
 
 export type ProviderKeysAnswer = typeof providerKeysAnswerSchema.Type;
@@ -321,6 +343,16 @@ const subscriptionLabelSchema = EffectSchema.NullOr(
     EffectSchema.isMaxLength(SUBSCRIPTION_LABEL_MAX_CHARS),
   ),
 );
+
+/**
+ * Spending one of a ChatGPT plan's reset credits (POST): the plan, and the
+ * key the press minted, which a retry sends again so ChatGPT spends one
+ * credit for it.
+ */
+export const providerKeyResetCreditRequestSchema = EffectSchema.Struct({
+  subscriptionId: subscriptionIdSchema,
+  idempotencyKey: wireUuidSchema,
+});
 
 /**
  * Naming one of the account's subscriptions or API keys (PUT): the

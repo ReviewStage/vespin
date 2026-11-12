@@ -9,6 +9,7 @@ import { NOTIFICATIONS_STATUS, type NotificationsControl } from "@repo/settings/
 import { SettingsSection } from "@repo/ui";
 import { NotificationsOff } from "./notifications-off.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
 
 /** What the line says where macOS refused the app's last notification, by whether this is the packaged app. */
@@ -59,7 +60,7 @@ export function MacCommandsSection({
         ) : null}
       </SettingsSection>
       {startup ? (
-        <SettingsSection title="Startup">
+        <SettingsSection {...settingsSectionHead(SECTION.STARTUP)}>
           <SchemaSettingRows
             page={SCHEMA_SETTINGS_PAGE.THIS_MAC}
             section={SETTING_SECTION.STARTUP}

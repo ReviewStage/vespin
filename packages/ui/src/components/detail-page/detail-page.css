@@ -20,7 +20,7 @@
   }
 
   [data-ui-profile="web"] .ui-detail-page {
-    --ui-detail-page-width: 1040px;
+    --ui-detail-page-width: var(--ui-wide-measure);
     --ui-detail-page-secondary-width: 320px;
   }
 

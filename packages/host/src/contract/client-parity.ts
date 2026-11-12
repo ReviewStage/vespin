@@ -13,9 +13,10 @@
  * stands and read from its task's own inbox; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task moved into a section from its menu or
- * dragged into one on an iPad, its repository changed, and a task's
- * description, pages, and comment threads followed, with a reply on a
- * thread; an agent's page: a message sent or
+ * dragged into one on an iPad, its repository changed, its parent, sub-tasks,
+ * and blocks added, changed, and taken away, and a task's
+ * description, pages, and comment threads followed, with a thread started
+ * on one block of the description and a reply on a thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
@@ -119,8 +120,8 @@ const IOS = {
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
-  COPY_RICH: notYet(
-    "iOS draws no draft card yet; a message's long press copies its Markdown as plain words",
+  COPY_RICH: byDesign(
+    "iOS copies a draft card's message to the system's pasteboard itself, as rich text and plain words (expo-clipboard)",
   ),
   PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
   SAVE_FILE: byDesign(
@@ -133,14 +134,8 @@ const IOS = {
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
-  HOSTS_PAIRING: notYet(
-    "iOS's Machines page lists and removes machines; a pairing link opens in Safari",
-  ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
-  ),
-  SKILL_INSTALL: notYet(
-    "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
   ),
   INTEGRATION_EXTRAS: notYet(
     "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
@@ -197,6 +192,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.PROVIDER_KEYS_SAVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.PROVIDER_KEYS_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.PROVIDER_KEYS_FOR_AGENTS]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SUBSCRIPTION_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SUBSCRIPTIONS_REORDER]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.CHATGPT_DEVICE_START]: panel(IOS.SETTINGS),
@@ -242,9 +238,9 @@ export const CLIENT_PARITY = {
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
   ),
-  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: panel(IOS.HOSTS_PAIRING),
+  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_LIST]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
@@ -323,8 +319,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SKILL_INSTALL),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
@@ -377,9 +373,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_PARENT]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_BLOCK]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.TASKS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
@@ -420,7 +416,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_COMMENT_START]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENT_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_ACT]: EVERYWHERE,
 
   [PORT_ACT_KIND.TERMINAL_LIST]: panel(IOS.DESK_TOOLS),

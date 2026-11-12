@@ -6,6 +6,7 @@ import {
   Editor,
   Extension,
   type JSONContent,
+  type MarkdownTokenizer,
   type NodeViewRenderer,
 } from "@tiptap/core";
 import Code from "@tiptap/extension-code";
@@ -59,6 +60,7 @@ import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
   droppedPictures,
+  LIST_ITEMS,
   laidInPictures,
   pastedPictures,
   pictureNode,
@@ -153,6 +155,20 @@ function withWordsLine(item: JSONContent): JSONContent {
   return worded ? item : { ...item, content: [{ type: "paragraph" }, ...content] };
 }
 
+/** A numbered item's first line as GFM reads one: up to nine digits, then `.` or `)`. */
+const NUMBERED_ITEM = /^[^\S\n]*\d{1,9}[.)](?:\s|$)/u;
+
+/** TipTap's ordered list tokenizer, taking a list that opens on a number alone. */
+function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokenizer {
+  if (tokenizer === undefined) throw new Error("TipTap's ordered list reads no Markdown");
+
+  return {
+    ...tokenizer,
+    tokenize: (src, tokens, lexer) =>
+      NUMBERED_ITEM.test(src) ? tokenizer.tokenize(src, tokens, lexer) : undefined,
+  };
+}
+
 /**
  * A numbered list whose empty item opens as an empty line to type on. Note
  * that TipTap's own reads an item with no words (`1.`, as an agent leaves
@@ -162,8 +178,16 @@ function withWordsLine(item: JSONContent): JSONContent {
  * typed went there. A bulleted item already opens with its empty line. This
  * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
  * once a TipTap carrying that fix is installed.
+ *
+ * It opens only on a number, as GFM and the read view do. Note that TipTap's
+ * own also reads one or two letters or a roman numeral as an item's marker,
+ * so a paragraph opening `Mr. Smith asked` opened as a numbered item, and an
+ * edit saved it as `1. Smith asked`. This is TipTap's own fix waiting
+ * upstream (ueberdosis/tiptap#8395), so it goes once a TipTap carrying that
+ * fix is installed.
  */
 const DocumentOrderedList = OrderedList.extend({
+  markdownTokenizer: numberedOnly(OrderedList.config.markdownTokenizer),
   parseMarkdown(token, helpers) {
     const read = this.parent?.(token, helpers) ?? [];
 
@@ -789,13 +813,16 @@ export function mountDescriptionEditor(
   const onWords = placedOnWords(editor, placement);
   editor.view.dispatch(editor.state.tr.setSelection(onWords ?? placed(editor, placement)));
 
-  // Pictures dropped on the drawn text are laid in at the caret the drop opened the editor at, as a drop in the open editor is.
-  const dropped =
-    placement !== undefined && "pictures" in placement ? placement.pictures : undefined;
+  // Files dropped on the text are laid in at the caret the drop put, whether it opened the editor or moved its caret.
+  const laidInDropped = (at: DescriptionEditorPlacement | undefined) => {
+    const dropped = at !== undefined && "pictures" in at ? at : undefined;
 
-  if (dropped !== undefined && pictures !== undefined) {
-    laidInPictures(editor.view, dropped, pictures);
-  }
+    if (dropped?.pictures !== undefined && pictures !== undefined) {
+      laidInPictures(editor.view, dropped.pictures, pictures, undefined, dropped.landing);
+    }
+  };
+
+  laidInDropped(placement);
 
   // The text and caret as the editor opened on the words a click landed on,
   // which stand for those words only until either changes: a merged answer
@@ -835,6 +862,7 @@ export function mountDescriptionEditor(
       const selection = placedOnWords(editor, placement) ?? placed(editor, placement);
       editor.view.dispatch(editor.state.tr.setSelection(selection));
       editor.view.focus();
+      laidInDropped(placement);
     },
     wordsTop: () => {
       const { doc, selection } = editor.state;
@@ -885,9 +913,6 @@ export function mountDescriptionEditor(
     destroy: () => editor.destroy(),
   };
 }
-
-/** The nodes a list's bullets are, each commented on alone. */
-const LIST_ITEMS: ReadonlySet<string> = new Set(["listItem", "taskItem"]);
 
 /** The document's stretch from `from` to `to` as a thread started on it anchors it, in `text`, the Markdown the editor would hand over now; nothing where it holds no word the text keeps. */
 function editorSpan(

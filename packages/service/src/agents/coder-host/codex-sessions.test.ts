@@ -983,11 +983,13 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(api.sandboxes.length, 1);
-        assert.equal(api.sandboxes[0]?.status, "running");
+        // The stopped sandbox was made again from the image on its own drive, under the same name.
+        const live = api.sandboxes.filter((each) => !each.deleted);
+        assert.deepEqual([live.length, live[0]?.name], [1, api.sandboxes[0]?.name]);
+        assert.equal(live[0]?.status, "running");
         assert.equal(api.commands.length, 2);
         const relaunch = api.commands[1];
-        assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
+        assert.equal(relaunch?.sandboxSessionId, live[0]?.currentSessionId);
         assert.equal(openai.state.renewals, 1);
         const { config } = yield* launchRead(relaunch, readCodexConfig);
         const [line] = yield* handedLines(userId, relaunch);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { ADMIN_METRICS_WINDOW } from "@repo/features/admin-wire";
-import { AGENT_FAILURE } from "@repo/features/agent-wire";
+import { AGENT_FAILURE, AGENT_RUNTIME } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
 import { test } from "vitest";
 import { type AdminReliabilitySource, buildAdminReliability } from "./admin-reliability.js";
@@ -29,6 +29,23 @@ function source(overrides: Partial<AdminReliabilitySource["daily"]> = {}): Admin
       [AGENT_FAILURE.SANDBOX, 2],
       [AGENT_FAILURE.MODEL, 5],
       [AGENT_FAILURE.GITHUB, 0],
+    ]),
+    agentHarnesses: new Map([
+      [
+        AGENT_RUNTIME.CODEX,
+        { runs: { failed: 2, total: 10 }, failures: new Map([[AGENT_FAILURE.MODEL, 2]]) },
+      ],
+      [
+        AGENT_RUNTIME.CLAUDE_CODE,
+        {
+          runs: { failed: 5, total: 40 },
+          failures: new Map([
+            [AGENT_FAILURE.SANDBOX, 2],
+            [AGENT_FAILURE.MODEL, 3],
+            [AGENT_FAILURE.GITHUB, 0],
+          ]),
+        },
+      ],
     ]),
     automationReasons: new Map([
       [AUTOMATION_RUN_REASON.CONCURRENCY, { skipped: 1, failed: 0 }],
@@ -97,5 +114,21 @@ test("the breakdowns come most first, a class with nothing counted left out", ()
   assert.deepEqual(answer.automationReasons, [
     { reason: AUTOMATION_RUN_REASON.UNAVAILABLE, skipped: 0, failed: 3 },
     { reason: AUTOMATION_RUN_REASON.CONCURRENCY, skipped: 1, failed: 0 },
+  ]);
+  // The harness with the most runs first, each one's classes most first.
+  assert.deepEqual(answer.agentHarnesses, [
+    {
+      runtime: AGENT_RUNTIME.CLAUDE_CODE,
+      runs: { failed: 5, total: 40 },
+      failures: [
+        { failure: AGENT_FAILURE.MODEL, count: 3 },
+        { failure: AGENT_FAILURE.SANDBOX, count: 2 },
+      ],
+    },
+    {
+      runtime: AGENT_RUNTIME.CODEX,
+      runs: { failed: 2, total: 10 },
+      failures: [{ failure: AGENT_FAILURE.MODEL, count: 2 }],
+    },
   ]);
 });

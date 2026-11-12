@@ -205,7 +205,8 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-function actionButton(action: RowAction, colors: BrandColors) {
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and in the muted ink otherwise. */
+export function actionButton(action: RowAction, colors: BrandColors) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (

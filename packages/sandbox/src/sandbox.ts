@@ -33,6 +33,7 @@ import {
   type CommandAsk,
   type CommandExit,
   type CommandRun,
+  type CreatedSandbox,
   type DetachedCommandAsk,
   type InteractiveShell,
   type ListedSandbox,
@@ -81,14 +82,16 @@ export interface SandboxService {
    * The sandbox under the name: the one standing, resumed where it was
    * stopped; else one created as `create` opens it; and where the one
    * standing can never resume, its snapshot gone, that one deleted and
-   * another created under the same name. A sandbox it created has the user
-   * the ask names, where it names one, made in it, and is then handed to the
-   * caller's `onCreate` where it gives one, before the call answers; a
-   * failure of either fails the call.
+   * another created under the same name, as is a stopped one whose own drive
+   * stands where the ask names its own (`SandboxDrive`). A sandbox it created
+   * has the user the ask names, where it names one, made in it, and is then
+   * handed to the caller's `onCreate` where it gives one, with whether it
+   * mounted its own drive as it stood, before the call answers; a failure of
+   * either fails the call.
    */
   readonly getOrCreate: (
     ask: SandboxGetOrCreate,
-    onCreate?: (created: OpenedSandbox) => Promise<void>,
+    onCreate?: (created: CreatedSandbox) => Promise<void>,
   ) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
    * Deletes the named sandbox with the snapshots no other sandbox uses and

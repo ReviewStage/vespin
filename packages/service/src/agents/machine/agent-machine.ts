@@ -380,6 +380,9 @@ export interface RunnerLaunch<A, E, R, EL, RL, ES = never, RS = never> {
   readonly abandon: (ready: A) => Effect.Effect<void, { readonly _tag: string }, RL>;
 }
 
+/** How a file written for the agent under its attachments folder is kept: readable by every user, written by none but the machine's. */
+export const ATTACHMENT_FILE_MODE = 0o644;
+
 export interface AgentMachineService {
   /** Where the machine keeps the agent's things. */
   readonly layout: (
@@ -429,11 +432,14 @@ export interface AgentMachineService {
   readonly firewall: MachineFirewall;
   /**
    * The agent's found place run again, where it is not, and where it runs
-   * now: made anew on the machine's own terms where its disk is lost.
+   * now: made anew on the machine's own terms where its disk is lost, the
+   * workspace's cloud setup scripts run in it where it was made anew on a
+   * checkout it kept (`setup`).
    */
   readonly resume: (
     found: FoundPlace,
     agent: Agent,
+    setup?: Effect.Effect<SandboxSetup | undefined>,
   ) => Effect.Effect<
     ResumedPlace,
     SandboxError | CheckoutRefused | AgentImageMissing,
@@ -452,13 +458,15 @@ export interface AgentMachineService {
   ) => Effect.Effect<void, SandboxError | LaunchRefused>;
   /**
    * The agent's own checkout cloned before a relaunch where the running
-   * place holds none. Nothing on a machine that clones nothing for a
+   * place holds none, the workspace's cloud setup scripts run after that
+   * clone (`setup`). Nothing on a machine that clones nothing for a
    * launch, a device's, nor for an agent with no repository.
    */
   readonly checkOutMissing: (
     place: MachinePlace,
     target: ConversationTarget,
     agent: Agent,
+    setup?: Effect.Effect<SandboxSetup | undefined>,
   ) => Effect.Effect<void, CheckoutRefused | SandboxError, CheckoutServices>;
   /** The runner launched in the place once `started` is done, recorded, and handed its first lines once `ready` is; ended again where they were not taken, or where `ready` failed. */
   readonly launchRunner: <A, E, R, EL, RL, ES = never, RS = never>(
@@ -535,6 +543,18 @@ export interface AgentMachineService {
     path: string,
     bound: number,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * One file written into the session's place, under the folder a message's
+   * files are written under (`MachineLayout`'s `attachments`) at the
+   * relative path given, readable by the agent's own user, as a message's
+   * file is (`ATTACHMENT_FILE_MODE`); answers where it stands there once it
+   * does. Unavailable where the place is not up, and refused
+   * (`LaunchRefused`'s `deviceAway`) where it would go to a Mac that is away.
+   */
+  readonly writeFile: (
+    session: string,
+    file: { readonly name: string; readonly contents: Uint8Array },
+  ) => Effect.Effect<string, SandboxError | LaunchRefused>;
   /**
    * An H.264 MP4 of the WebM recording at the path, made on the session's
    * place as the agent's own user (`phone-video.ts`), for a player that

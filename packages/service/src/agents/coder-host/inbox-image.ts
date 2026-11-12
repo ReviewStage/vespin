@@ -37,13 +37,19 @@ import type { InboxImage } from "../../inbox/inbox-store.js";
  * The sandbox as the inbox reaches it: one file read as a stream of bytes,
  * or nothing where there is no file; and, where the door can, an MP4 made
  * of a WebM recording there (`../machine/phone-video.ts`), or nothing where
- * it made none.
+ * it made none, and one file written under its attachments folder at the
+ * relative path given, answering where it stands
+ * (`../machine/agent-machine.ts`'s `writeFile`).
  */
 interface InboxSandbox {
   readonly readFile: (options: {
     readonly path: string;
   }) => PromiseLike<ReadableStream<Uint8Array> | null>;
   readonly phoneVideo?: (options: { readonly path: string }) => PromiseLike<Uint8Array | null>;
+  readonly writeFile?: (file: {
+    readonly name: string;
+    readonly contents: Uint8Array;
+  }) => PromiseLike<string>;
 }
 
 /** The door to the session's sandbox, opened on first use, or a test's double. */

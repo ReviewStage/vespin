@@ -2,6 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
@@ -22,6 +23,14 @@ import {
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
+import {
+  CHANGE_RELATION,
+  REMOVE_PARENT,
+  REMOVE_RELATION,
+  TASK_RELATION_MENU,
+  TASK_RELATION_ORDER,
+  TASK_RELATION_VERBS,
+} from "@repo/features/task-relation-model";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -38,11 +47,12 @@ import {
 import {
   TASK_RELATION_KIND,
   TASK_STATUS,
+  type TaskRelationKind,
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { readingWords, VERB } from "@repo/features/words";
+import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -96,7 +106,13 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { threadComments, threadOpen, useTaskComments } from "../tasks/use-comments.js";
+import {
+  threadComments,
+  threadOpen,
+  threadsOnBlocks,
+  useTaskComments,
+} from "../tasks/use-comments.js";
+import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
   type TaskAgentLine,
@@ -117,6 +133,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
+import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -320,6 +337,35 @@ function barSubmenu(submenu: RowSubmenu): BarMenu {
   };
 }
 
+/** A task's Task relation as a menu, as the panel's offers it: each kind as what choosing it does, opening the Task relation sheet on it. */
+function relationSubmenu(task: TaskSummary, openRelation: OpenRelation): RowSubmenu {
+  return {
+    label: TASK_RELATION_MENU,
+    symbol: GLYPH.RELATIONS,
+    choices: [],
+    actions: TASK_RELATION_ORDER.map((kind) => ({
+      label: TASK_RELATION_VERBS[kind].choose,
+      symbol: RELATION_KIND_SYMBOL[kind],
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => openRelation(task.id, kind),
+    })),
+  };
+}
+
+/** A task's Remove parent, which takes it out from under its parent, as the panel's does; none for a task at the top level. */
+function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): readonly RowAction[] {
+  if (task.parentTaskId === undefined) return [];
+
+  return [
+    {
+      label: REMOVE_PARENT,
+      symbol: GLYPH.UNLINK,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => relations.removeParent(task.id),
+    },
+  ];
+}
+
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
@@ -332,13 +378,19 @@ type RowActsResult = {
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
  * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Move to section and its repository (`placingSubmenus`), then
- * the panel's order: Copy link, which raises the share sheet, Rename, in
+ * after those, Task relation, which opens the Task relation sheet on a kind,
+ * Move to section, and its repository (`placingSubmenus`), then Remove
+ * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
  * the system's name alert, Mark as read or unread, whichever the task is
  * not, Open in browser, and Permanently delete last, which asks first.
  * Priority and assignee are left to the desktop and the web.
  */
-function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): RowActsResult {
+function rowActs(
+  task: TaskSummary,
+  unread: boolean,
+  listing: TasksListing,
+  openRelation: OpenRelation,
+): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
   const markDone: readonly RowSwipe[] =
@@ -363,8 +415,9 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
-    menuSubmenus: placingSubmenus(task, listing.placing),
+    menuSubmenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
     menuActions: [
+      ...removeParentActs(task, listing.relations),
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
@@ -465,6 +518,7 @@ export function TaskListRow({
   readonly fold?: TaskFold | undefined;
 }) {
   const look = listing.lookOf(task);
+  const openRelation = useOpenRelation();
 
   return (
     <TaskRow
@@ -477,7 +531,7 @@ export function TaskListRow({
       agents={look.agents}
       taskKey={keyOf(task, listing.workspace)}
       depth={depth}
-      {...rowActs(task, look.unread, listing)}
+      {...rowActs(task, look.unread, listing, openRelation)}
       preview={taskPreview(task, listing)}
       link={
         listing.workspace === undefined
@@ -724,12 +778,13 @@ export function useSidebarTasks(): SidebarTasks {
   };
 }
 
-/** What a task's ⋯ asks first, and what opens New task for a sub-task of it. */
+/** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
 interface TaskMenuDoors {
   readonly askDelete: (task: TaskSummary) => void;
   readonly newSubTask: (task: TaskSummary) => void;
   /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
   readonly history: ((task: TaskSummary) => void) | undefined;
+  readonly openRelation: OpenRelation;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -750,10 +805,10 @@ function historyActions(
 
 /**
  * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Open
- * in browser, and Permanently delete, red, which asks first;
- * then its Status, each status checked where it stands, Move to section,
- * and its repository.
+ * history where the workspace's descriptions stand on, New sub-task, Remove
+ * parent where it has one, Open in browser, and Permanently delete, red,
+ * which asks first; then its Status, each status checked where it stands,
+ * Task relation, Move to section, and its repository.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -778,6 +833,11 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         symbol: GLYPH.ADD,
         onPress: () => doors.newSubTask(task),
       },
+      ...removeParentActs(task, overview.relations).map((action) => ({
+        label: action.label,
+        symbol: action.symbol,
+        onPress: action.onPress,
+      })),
       {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
@@ -793,7 +853,10 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     ],
     submenus: [
       { ...statusSubmenu(task, overview.setStatus), actions: [] },
-      ...placingSubmenus(task, overview.placing).map(barSubmenu),
+      ...[
+        relationSubmenu(task, doors.openRelation),
+        ...placingSubmenus(task, overview.placing),
+      ].map(barSubmenu),
     ],
   };
 }
@@ -856,20 +919,68 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The task's relations as the panel's two groups list them: its sub-tasks, New sub-task after them, which opens New task for one, and the tasks it waits on and holds up. */
+/**
+ * A related row's swipe, as the panel's row menu offers it: Change relation,
+ * its four kinds with the current one checked, a pick moving it in one call,
+ * and Remove relation, which asks nothing, as the panel's does, since the
+ * Task relation sheet adds it back; neither runs on a full swipe, since the
+ * first is a menu.
+ */
+function relationSwipes(
+  taskId: string,
+  otherId: string,
+  kind: TaskRelationKind,
+  relations: TaskRelationWrites,
+): readonly RowSwipe[] {
+  return [
+    {
+      label: CHANGE_RELATION,
+      symbol: GLYPH.RELATIONS,
+      choices: TASK_RELATION_ORDER.map((to) => ({
+        label: TASK_RELATION_WORDS[to],
+        on: to === kind,
+        onPress: () => relations.change(taskId, otherId, kind, to),
+      })),
+    },
+    {
+      label: REMOVE_RELATION,
+      symbol: GLYPH.REMOVE,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => relations.remove(taskId, kind, otherId),
+    },
+  ];
+}
+
+/** The page's own words for its relation rows. */
+const RELATION_WORDS = {
+  LINK_SUB_TASK: "Link existing task",
+  ADD_RELATION: "Add task relation",
+} as const;
+
+/**
+ * The task's relations as the panel's two groups list them: its sub-tasks,
+ * then New sub-task, which opens New task for one, and Link existing task,
+ * which opens the Task relation sheet on Add sub-task; and its parent and the
+ * tasks it waits on and holds up, then Add task relation, which opens the
+ * sheet on the four kinds. Each related row's swipe and long press change
+ * its kind or take it away (`relationSwipes`).
+ */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
-  const { task, document, tasks } = overview;
+  const openRelation = useOpenRelation();
+  const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
+    {
+      kind: TASK_RELATION_KIND.PARENT,
+      ids: task.parentTaskId === undefined ? [] : [task.parentTaskId],
+    },
     { kind: TASK_RELATION_KIND.BLOCKED_BY, ids: document?.blockedBy ?? [] },
     { kind: TASK_RELATION_KIND.BLOCKS, ids: document?.blocks ?? [] },
   ] as const;
-
-  const related = sides.some(({ ids }) => ids.length > 0);
 
   return (
     <>
@@ -881,32 +992,47 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             name={sub.name}
             status={sub.status}
             relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
+            trailingActions={relationSwipes(
+              task.id,
+              sub.id,
+              TASK_RELATION_KIND.SUB_TASK,
+              relations,
+            )}
           />
         ))}
         <LinkRow symbol={GLYPH.ADD} label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
+        <LinkRow
+          symbol={GLYPH.LINK}
+          label={RELATION_WORDS.LINK_SUB_TASK}
+          onPress={() => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK)}
+        />
       </ListSection>
-      {!related ? null : (
-        <ListSection
-          title={WORDS.TASK_RELATIONS}
-          count={sides.reduce((sum, { ids }) => sum + ids.length, 0)}
-        >
-          {sides.map(({ kind, ids }) =>
-            ids.map((id) => {
-              const other = byId.get(id);
+      <ListSection
+        title={WORDS.TASK_RELATIONS}
+        count={sides.reduce((sum, { ids }) => sum + ids.length, 0)}
+      >
+        {sides.map(({ kind, ids }) =>
+          ids.map((id) => {
+            const other = byId.get(id);
 
-              return (
-                <RelationRow
-                  key={id}
-                  id={id}
-                  name={other?.name ?? WORDS.UNLISTED_TASK}
-                  status={other?.status}
-                  relation={TASK_RELATION_WORDS[kind]}
-                />
-              );
-            }),
-          )}
-        </ListSection>
-      )}
+            return (
+              <RelationRow
+                key={id}
+                id={id}
+                name={other?.name ?? WORDS.UNLISTED_TASK}
+                status={other?.status}
+                relation={TASK_RELATION_WORDS[kind]}
+                trailingActions={relationSwipes(task.id, id, kind, relations)}
+              />
+            );
+          }),
+        )}
+        <LinkRow
+          symbol={GLYPH.ADD}
+          label={RELATION_WORDS.ADD_RELATION}
+          onPress={() => openRelation(task.id)}
+        />
+      </ListSection>
     </>
   );
 }
@@ -1113,6 +1239,95 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** What a long press on a block of the description offers, and how its count of open comments is heard. */
+const COMMENT_WORDS = {
+  COMMENT: "Comment",
+  heard: (count: number) => countWords(count, TERM.COMMENT),
+} as const;
+
+/**
+ * The description, read-only, as one row per block (a paragraph, a heading,
+ * a list, a picture, a rule), so a long press on a block that holds words
+ * lifts it over the system's menu with Comment, which opens a new thread on
+ * that block, as a document's block offers one; where open threads stand on
+ * a block, their count stands at its trailing edge and opens the oldest. A
+ * description read as no block stands whole, with nothing to comment on.
+ */
+function OverviewDescription({
+  overview,
+  body,
+}: {
+  readonly overview: TaskOverview;
+  readonly body: string;
+}) {
+  const router = useRouter();
+  const openLink = useOpenLink();
+  const { task } = overview;
+  const threads = useTaskComments(task.id);
+  const blocks = useMemo(() => descriptionBlocks(body), [body]);
+  const onBlocks = threadsOnBlocks(threads, blocks);
+
+  const openThread = (threadId: string) =>
+    router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
+
+  if (blocks.length === 0) {
+    return (
+      <ListSection title={WORDS.DESCRIPTION}>
+        <WordsRow words={body} repository={task.repository} onOpenLink={openLink} />
+      </ListSection>
+    );
+  }
+
+  return (
+    <ListSection title={WORDS.DESCRIPTION}>
+      {blocks.map((block, index) => {
+        const standing = onBlocks.get(block.from) ?? [];
+        const oldest = standing[0];
+
+        return (
+          <WordsRow
+            key={`${block.from}`}
+            words={block.drawn}
+            repository={task.repository}
+            onOpenLink={openLink}
+            last={index === blocks.length - 1}
+            menuActions={
+              block.quote === undefined
+                ? undefined
+                : [
+                    {
+                      label: COMMENT_WORDS.COMMENT,
+                      symbol: GLYPH.COMMENT,
+                      tone: ROW_ACTION_TONE.NEUTRAL,
+                      onPress: () =>
+                        router.push({
+                          pathname: "/tasks/comments/new",
+                          params: {
+                            task: task.id,
+                            from: `${block.from}`,
+                            to: `${block.to}`,
+                            quote: block.quote,
+                          },
+                        }),
+                    },
+                  ]
+            }
+            comments={
+              oldest === undefined
+                ? undefined
+                : {
+                    count: standing.length,
+                    heard: COMMENT_WORDS.heard(standing.length),
+                    onOpen: () => openThread(oldest.id),
+                  }
+            }
+          />
+        );
+      })}
+    </ListSection>
+  );
+}
+
 /**
  * The description's comment threads that still stand open, as the panel's
  * comments list holds them, the oldest started first: each its first
@@ -1164,7 +1379,6 @@ function OverviewPage({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
-  const openLink = useOpenLink();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1191,13 +1405,7 @@ function OverviewPage({
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
       {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
-        <ListSection title={WORDS.DESCRIPTION}>
-          <WordsRow
-            words={document.document.body}
-            repository={task.repository}
-            onOpenLink={openLink}
-          />
-        </ListSection>
+        <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1273,6 +1481,7 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
+  const openRelation = useOpenRelation();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1325,6 +1534,7 @@ function TasksSplitScreen({
                     askDelete: listing.askDelete,
                     newSubTask,
                     history,
+                    openRelation,
                   }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
@@ -1371,6 +1581,7 @@ export function TaskScreen() {
   // Note that a task deleted from its own page gives way to the list it stood in, rather than saying it is not found.
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
+  const openRelation = useOpenRelation();
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
@@ -1379,7 +1590,7 @@ export function TaskScreen() {
   const menu =
     overview === undefined
       ? undefined
-      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history });
+      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history, openRelation });
 
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);

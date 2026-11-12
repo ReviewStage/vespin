@@ -215,6 +215,7 @@ import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sent
 import {
   AgentMachine,
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -418,9 +419,6 @@ function runnerBearer(bearer: string, host: string): RunnerCredential {
   };
 }
 
-/** How a file written for the agent is kept: readable by every user, written by none but the API's. */
-const ATTACHMENT_MODE = 0o644;
-
 /** How long a written file's name may be, which a tar header holds whole. */
 const ATTACHMENT_NAME_CHARS = 80;
 
@@ -589,7 +587,7 @@ function runnerContent(
     files.push({
       path,
       contents: new Uint8Array(Buffer.from(base64, "base64")),
-      mode: ATTACHMENT_MODE,
+      mode: ATTACHMENT_FILE_MODE,
     });
 
     return [
@@ -785,6 +783,12 @@ function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
     ),
   );
 }
+
+/** The agent's workspace's cloud setup scripts as `sandboxSetupOf` reads them, bound to the caller's services, for a relaunch whose place may be made anew. */
+const cloudSetupOf = (agent: Agent, machine: AgentMachineKind) =>
+  Effect.map(Effect.context<DatabaseServices | HostedEnvironment>(), (services) =>
+    Effect.provideContext(sandboxSetupOf(agent, machine), services),
+  );
 
 /** How a message reached its runner, as the handoff counts it. */
 type HandoffPath = (typeof SERVER_HANDOFF_PATH)[keyof typeof SERVER_HANDOFF_PATH];
@@ -1618,7 +1622,8 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
-          (opened.turnEndOn ?? false) !== standing.turnEndOn
+          (opened.turnEndOn ?? false) !== standing.turnEndOn ||
+          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn
         );
       });
 
@@ -1890,7 +1895,11 @@ export const runnerSessions = <
             placed.pipe(
               Effect.tap((place) => Deferred.succeed(created, place.created)),
               // Note that the agent's own checkout is cloned here where the place holds none, as a launch whose checkout failed leaves it.
-              Effect.tap((place) => machine.checkOutMissing(place.place, target, agent)),
+              Effect.tap((place) =>
+                Effect.flatMap(cloudSetupOf(agent, kind), (setup) =>
+                  machine.checkOutMissing(place.place, target, agent, setup),
+                ),
+              ),
             ),
             Effect.exit(
               Effect.flatMap(harness.launch(agent, layout), (credential) =>
@@ -2219,7 +2228,7 @@ export const runnerSessions = <
         yield* relaunched(
           agent,
           sessionId,
-          machine.resume(standing, agent),
+          machine.resume(standing, agent, yield* cloudSetupOf(agent, standing.machine)),
           standing.machine,
           wasUp,
           layout,
@@ -2429,7 +2438,7 @@ export const runnerSessions = <
         const resumed = yield* relaunched(
           agent,
           sessionId,
-          machine.resume(found.value, agent),
+          machine.resume(found.value, agent, yield* cloudSetupOf(agent, found.value.machine)),
           found.value.machine,
           wasUp,
           layout,

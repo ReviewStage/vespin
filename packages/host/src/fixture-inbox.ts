@@ -52,9 +52,11 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
+import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
+import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -77,7 +79,13 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
-import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
+import {
+  type InstalledSkillCandidate,
+  type InstalledSkillPreview,
+  type InstalledSkillSummary,
+  SKILL_PASTE_KIND,
+  UNSUPPORTED_PREVIEW,
+} from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
@@ -1042,6 +1050,23 @@ const MEMORIES: readonly MemorySummary[] = [
   },
 ];
 
+/** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
+const PENDING_PAIRING_CODE = "BCDFGHJK";
+
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+const PENDING_PAIRING: HostPairingAnswer = {
+  name: "Ada's Mac mini",
+  platform: DEVICE_PLATFORM.DARWIN,
+  arch: DEVICE_ARCH.ARM64,
+  ip: "203.0.113.7",
+  expiresAt: LANDED + 10 * 60_000,
+};
+
+/** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
+function pairingAnswer<Answer>(code: string, answer: Answer) {
+  return code === PENDING_PAIRING_CODE ? answer : { failure: HOST_PAIRING_CALL_FAILURE.NOT_FOUND };
+}
+
 /** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
 const HOSTS: readonly HostLine[] = [
   {
@@ -1059,6 +1084,83 @@ const HOSTS: readonly HostLine[] = [
     away: true,
   },
 ];
+
+/** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
+const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
+  {
+    name: "frontend-design",
+    description: "Lay out a screen from the team's design tokens.",
+    path: "skills/frontend-design",
+    bytes: 2_048,
+    selected: true,
+    fileCount: 2,
+    problems: [],
+  },
+  {
+    name: "changelog",
+    description: "Write a changelog entry from the commits since the last tag.",
+    path: "skills/changelog",
+    bytes: 1_536,
+    selected: false,
+    fileCount: 1,
+    problems: [],
+  },
+];
+
+/** The repository a fixture run's Add skill reads. */
+const SKILL_SOURCE_PREVIEW: InstalledSkillPreview = {
+  kind: SKILL_PASTE_KIND.SOURCE,
+  owner: "acme",
+  repo: "agent-skills",
+  ref: "main",
+  sha: "7a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4",
+  skills: SOURCE_SKILLS,
+  missing: [],
+};
+
+/** A frontmatter line's value, such as a pasted skill's `name:`. */
+function frontmatterValue(text: string, key: string): string | undefined {
+  const line = text.split("\n").find((each) => each.startsWith(`${key}:`));
+
+  return line?.slice(key.length + 1).trim();
+}
+
+/** What a fixture run's Add skill reads a paste as: a skill's text where it opens on frontmatter, a GitHub source where it names one, and nothing we install from otherwise. */
+function skillPreviewOf(text: string): InstalledSkillPreview {
+  const pasted = text.trim();
+
+  if (!pasted.startsWith("---")) {
+    return /github\.com|^npx skills add |^[\w.-]+\/[\w.-]+$/.test(pasted)
+      ? SKILL_SOURCE_PREVIEW
+      : UNSUPPORTED_PREVIEW;
+  }
+
+  // Note that a key the frontmatter leaves out reads as empty, as the page fills an absent one.
+  return {
+    kind: SKILL_PASTE_KIND.TEXT,
+    name: frontmatterValue(pasted, "name") ?? "",
+    description: frontmatterValue(pasted, "description") ?? "",
+    bytes: pasted.length,
+    problems: [],
+  };
+}
+
+/** A skill a fixture run's Add skill installed, as the service answers it: the account's own, by Ada. */
+function installedSkill(name: string, description: string): InstalledSkillSummary {
+  return {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e59",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name,
+    description,
+    userInvocable: true,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED,
+    updatedAt: LANDED,
+  };
+}
 
 /** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
 const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
@@ -2060,6 +2162,24 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
+  [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
+  [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
+    pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
+  [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
+  // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
+  [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
+  [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({
+    skills:
+      request.skills === undefined
+        ? [installedSkill(request.name ?? "", request.description ?? "")]
+        : request.skills.map((name) =>
+            installedSkill(
+              name,
+              SOURCE_SKILLS.find((each) => each.name === name)?.description ?? "",
+            ),
+          ),
+  }),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
     const read = INSTALLED_SKILL_FILES.get(skillId);
 

@@ -32,6 +32,18 @@ export interface StoredUsageWindow {
 }
 
 /**
+ * A ChatGPT plan's rate-limit reset credits as its usage read last heard
+ * them: how many it holds, and where ChatGPT listed them, each available
+ * one's id and expiry in epoch milliseconds (none for one that never
+ * expires), soonest first. The list may be shorter than the count, since
+ * ChatGPT may cap it.
+ */
+export interface StoredResetCredits {
+  readonly count: number;
+  readonly credits?: readonly { readonly id: string; readonly expiresAt?: number }[];
+}
+
+/**
  * One of an account's own provider credentials, an API key or a
  * subscription's credential as its kind says, sealed by
  * `models/provider-key-seal.ts`: no column holds the key or the data key in
@@ -107,6 +119,8 @@ export const accountProviderKey = pgTable(
      * passing for fresh.
      */
     usageAskedAt: timestamptz("usage_asked_at"),
+    /** A ChatGPT plan's rate-limit reset credits, as its usage read last heard them; null until heard. */
+    resetCredits: jsonb("reset_credits").$type<StoredResetCredits>(),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription or API key; null for the name it is shown by default. */

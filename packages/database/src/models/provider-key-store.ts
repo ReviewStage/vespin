@@ -12,7 +12,11 @@ import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseClient, type DatabaseServices } from "../core/query.js";
-import { accountProviderKey, type StoredUsageWindow } from "../schemas/account-provider-key.js";
+import {
+  accountProviderKey,
+  type StoredResetCredits,
+  type StoredUsageWindow,
+} from "../schemas/account-provider-key.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { SealedProviderKey } from "./provider-key-seal.js";
 import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
@@ -57,6 +61,15 @@ const UsageWindowSchema = Schema.Struct({
   resetsAt: Schema.optionalKey(Schema.Number),
 });
 
+const ResetCreditsSchema = Schema.Struct({
+  count: Schema.Int,
+  credits: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ id: Schema.String, expiresAt: Schema.optionalKey(Schema.Number) }),
+    ),
+  ),
+});
+
 const SealedRowSchema = Schema.Struct({
   id: Schema.String,
   provider: ProviderSchema,
@@ -74,6 +87,7 @@ const SealedRowSchema = Schema.Struct({
   usageWindows: Schema.NullOr(Schema.Array(UsageWindowSchema)),
   usageHeardAt: Schema.NullOr(InstantColumnSchema),
   usageAskedAt: Schema.NullOr(InstantColumnSchema),
+  resetCredits: Schema.NullOr(ResetCreditsSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -115,6 +129,7 @@ const ROW_COLUMNS = {
   usageWindows: accountProviderKey.usageWindows,
   usageHeardAt: accountProviderKey.usageHeardAt,
   usageAskedAt: accountProviderKey.usageAskedAt,
+  resetCredits: accountProviderKey.resetCredits,
   position: accountProviderKey.position,
   label: accountProviderKey.label,
   accountEmail: accountProviderKey.accountEmail,
@@ -235,6 +250,7 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
   usageWindows: null,
   usageHeardAt: null,
   usageAskedAt: null,
+  resetCredits: null,
   createdAt: write.now,
 });
 
@@ -514,13 +530,18 @@ const replacePlanUsage = SqlSchema.void({
     userId: Schema.String,
     subscriptionId: Schema.String,
     windows: Schema.Array(UsageWindowSchema),
+    resetCredits: Schema.NullOr(ResetCreditsSchema),
     askedAt: Schema.Date,
   }),
   execute: (write) =>
     Database.use((db) =>
       db
         .update(accountProviderKey)
-        .set({ usageWindows: write.windows, usageHeardAt: write.askedAt })
+        .set({
+          usageWindows: write.windows,
+          resetCredits: write.resetCredits,
+          usageHeardAt: write.askedAt,
+        })
         .where(
           and(
             eq(accountProviderKey.userId, write.userId),
@@ -955,16 +976,17 @@ export function claimPlanUsageAsk(
 /**
  * Writes every usage window a read of the plan's provider made `askedAt`
  * answered for the account's subscription of this id, in place of all it
- * held, unless a turn on the plan heard a reading after the ask, which
- * stands.
+ * held, with the reset credits it counted, unless a turn on the plan heard a
+ * reading after the ask, which stands.
  */
 export function setPlanUsageWindows(
   userId: string,
   subscriptionId: string,
   windows: readonly StoredUsageWindow[],
   askedAt: Date,
+  resetCredits: StoredResetCredits | null = null,
 ): TaskStoreEffect<void> {
-  return replacePlanUsage({ userId, subscriptionId, windows, askedAt });
+  return replacePlanUsage({ userId, subscriptionId, windows, resetCredits, askedAt });
 }
 
 /** Writes what a fast call on the key a step ran on showed of its organization, where the row still holds that key. */

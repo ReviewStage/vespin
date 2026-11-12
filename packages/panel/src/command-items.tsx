@@ -23,6 +23,7 @@ import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { CHANGE_REPOSITORY } from "@repo/features/task-list-model";
+import { REMOVE_PARENT } from "@repo/features/task-relation-model";
 import { MOVE_TO_SECTION } from "@repo/features/task-sections-model";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import {
@@ -154,7 +155,7 @@ export const PANEL_COMMAND = {
   MOVE_AGENT: unkeyed("Move to", <GLYPH.MOVE />),
   NEW_CHILD_TASK: unkeyed("New sub-task", <GLYPH.ADD />),
   ADD_RELATION: unkeyed("Add task relation", <NetworkIcon />),
-  REMOVE_PARENT: unkeyed("Remove parent", <UnlinkIcon />),
+  REMOVE_PARENT: unkeyed(REMOVE_PARENT, <UnlinkIcon />),
   OPEN_ON_GITHUB: keyed(APP_COMMAND.OPEN_ON_GITHUB, <GLYPH.OPEN_ON_GITHUB />),
   /** A pull request in its agent's Pull request tab, offered where a press opens its page on GitHub instead (`pull-request-opens.ts`). */
   OPEN_IN_APP: unkeyed(`Open in ${PRODUCT_NAME}`, <GLYPH.PULL_REQUEST />),
