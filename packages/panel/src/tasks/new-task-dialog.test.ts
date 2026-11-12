@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL_DEFAULT } from "@repo/features/chapters-model-choice";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import {
@@ -185,6 +185,7 @@ async function mount(
 
   const links: SettingsLink[] = [];
   let listed = control.newTask.workspaceId;
+  let opened = preset;
   let openAgain = (): void => undefined;
 
   function Owner() {
@@ -197,7 +198,7 @@ async function mount(
         ...control.newTask,
         workspaceId: listed,
         open,
-        preset: reopened ?? preset,
+        preset: reopened ?? opened,
         repositoriesIn: () => repositories,
         models,
         start: (
@@ -316,8 +317,9 @@ async function mount(
       act(() => openAgain());
       await settle();
     },
-    /** Stands the window again from what it stored, as a relaunch does, the card open. */
+    /** Stands the window again from what it stored, as a relaunch does, the card open on no preset, which the window alone held. */
     relaunch: async () => {
+      opened = undefined;
       act(() => {
         window.dispatchEvent(new Event("pagehide"));
       });
@@ -922,6 +924,34 @@ test("a start whose outcome is unknown opens the card again on no words, saying 
   );
   assert.notEqual(keys[3], keys[0], "words changed are another start");
   assert.equal(card.note(), undefined, "Remove lets the kept start go");
+});
+
+test("a start whose outcome is unknown, its file let go by a relaunch, is not started again without it: Edit then Start holds, saying to attach it", async () => {
+  const prompt = "Chart the build times";
+  const file = { name: "times.png", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" };
+  const agent = { prompt, attachments: [file], choice: undefined, disabledServers: [] };
+
+  const press = {
+    key: "start-key",
+    taskId: "6f1c2a52-8d3e-4b7a-9c40-2e5d8b1f0a77",
+    ask: { repository: "acme/web", workspaceId: undefined, relations: [], agent },
+  };
+
+  const card = await mount(OUTCOME_UNKNOWN, {
+    refused: {
+      card: { relations: [], repository: "acme/web", choice: undefined, press, words: prompt },
+      note: startUnknownNote(),
+      unknown: true,
+    },
+  });
+
+  await card.relaunch();
+  act(() => card.button("Edit").click());
+  await settle();
+  await card.key("Enter");
+
+  assert.deepEqual(card.agents, [], "nothing starts without the file, under any key");
+  assert.match(card.note() ?? "", /Attach this task's file again/u);
 });
 
 test("a workspace switch lets the pick go for the new workspace's recent repository", async () => {
