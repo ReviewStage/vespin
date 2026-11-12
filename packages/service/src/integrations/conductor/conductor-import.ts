@@ -109,6 +109,7 @@ import {
   queueConsumer,
 } from "../../queues/queue-consumer.js";
 import { createTaskAsked } from "../../tasks/task-create-relation.js";
+import { carryOverConductorScripts } from "../../workspace-sandbox-setup/conductor-scripts.js";
 import { importConductorChat } from "./conductor-chat-import.js";
 import {
   CONDUCTOR_READ_FAILURE,
@@ -436,6 +437,34 @@ const confirmedPublished = (
     ),
   );
 
+/**
+ * The repository's Conductor scripts carried over into the member's
+ * workspace where it has none of its own (`conductor-scripts.ts`), read on
+ * the workspace's reach of the repository. Note that scripts are no part of
+ * the transcripts the import is for, so a GitHub that does not answer, or a
+ * write that fails, is said in the log and the workspace still settles
+ * imported.
+ */
+const carriedScripts = (run: ConductorImportRunRow, repository: string, now: Date) =>
+  Effect.gen(function* () {
+    const app = yield* GitHubApp;
+    const minted = yield* app.repositoryReadToken(run.organizationId, repository, run.userId);
+
+    if (Option.isNone(minted)) return;
+    const { token, repository: reached } = minted.value;
+
+    yield* carryOverConductorScripts(
+      token,
+      run.organizationId,
+      { fullName: reached.fullName, defaultBranch: reached.defaultBranch },
+      now,
+    );
+  }).pipe(
+    Effect.catch(() =>
+      Effect.logWarning("a Conductor import's repository scripts were not carried over"),
+    ),
+  );
+
 /** The publishes of a run or a workspace, a few at once; a publish that failed is said in the log and its item left queued. */
 const publishAll = (messages: readonly ImportMessage[]) =>
   Effect.gen(function* () {
@@ -593,7 +622,8 @@ const consumeWorkspace = Effect.fnUntraced(function* (
       })),
   );
 
-  // The place for one call per repository that carries the workspace's Conductor scripts over, once per task made.
+  if (made && repository !== null) yield* carriedScripts(run, repository, now);
+
   return made
     ? { status: CONDUCTOR_IMPORT_STATUS.IMPORTED }
     : { status: CONDUCTOR_IMPORT_STATUS.SKIPPED };

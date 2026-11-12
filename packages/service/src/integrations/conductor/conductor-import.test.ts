@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readConductorImportRun } from "@repo/database/models/conductor-import-store";
 import { readTask } from "@repo/database/models/task-store";
+import { readRepositorySetup } from "@repo/database/models/workspace-sandbox-script-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
@@ -13,6 +14,7 @@ import {
 } from "@repo/features/conductor-import-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import type { WireValue } from "@repo/wire";
 import type { JsonValue } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -21,7 +23,6 @@ import { HostedEnvironment, type HostedEnvironmentValues } from "../../environme
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import {
   connectWorkspaceGitHub,
-  fakeGitHub,
   githubReaching,
   type InstallationFixture,
   memberRepositoryJson,
@@ -40,12 +41,13 @@ import {
 
 /**
  * An import from Conductor run twice over a real store and a fake Conductor:
- * the first makes the archived workspace's task Done and writes its chat as
- * an agent, and the second, as a member running it again would, makes
- * nothing twice. Each publish is delivered by hand, in order, as the queue
- * would. A repository GitHub renamed since Conductor kept its remote is
- * reached, and its task made, under its name now. Synthetic accounts, ids,
- * key, and transcript throughout.
+ * the first makes the archived workspace's task Done, writes its chat as an
+ * agent, and fills its repository's empty setup script from the
+ * repository's `conductor.json`, and the second, as a member running it
+ * again would, makes nothing twice. Each publish is delivered by hand, in
+ * order, as the queue would. A repository GitHub renamed since Conductor kept
+ * its remote is reached, and its task made, under its name now. Synthetic
+ * accounts, ids, key, and transcript throughout.
  */
 
 const KEY = Redacted.make("synthetic-conductor-key");
@@ -68,7 +70,7 @@ const WORKSPACE = {
   name: "Fix the flaky check",
   number: 7,
   state: "archived",
-  repoUrl: null,
+  repoUrl: "https://github.com/acme/relay.git",
   creatorName: "Someone Else",
   createdAt: "2026-10-01T08:00:00.000Z",
   deepLink: "conductor://workspace/cw-1",
@@ -105,13 +107,27 @@ const CONDUCTOR = new Map<string, JsonValue>([
   ["/v0/sessions/cc-1/messages", { data: MESSAGES, hasMore: false }],
 ]);
 
-/** Conductor answering over the one client, which no request to GitHub reaches with no repository named. */
-const conductor = fakeGitHub(({ url }) => {
-  const answer = CONDUCTOR.get(new URL(url).pathname);
+/** The installation the member's workspace is connected to, reaching the workspace's repository. */
+const INSTALLATION: InstallationFixture = {
+  id: 72,
+  login: "acme",
+  repositories: [{ owner: "acme", name: "relay" }],
+};
 
-  return Response.json(answer ?? { error: "not found" }, {
-    status: answer === undefined ? 404 : 200,
-  });
+/** The repository's legacy Conductor scripts file, as GitHub's contents API answers it. */
+const CONDUCTOR_JSON = JSON.stringify({ scripts: { setup: "pnpm install" } });
+
+/** Conductor and GitHub answering over the one client: Conductor by its paths, and the repository holding `conductor.json` alone. */
+const conductor = githubReaching([INSTALLATION], undefined, {}, ({ url }) => {
+  const { pathname } = new URL(url);
+  const answer = CONDUCTOR.get(pathname);
+
+  if (answer !== undefined) return Response.json(answer);
+
+  if (pathname !== "/repos/acme/relay/contents/conductor.json") return undefined;
+  const content = Buffer.from(CONDUCTOR_JSON).toString("base64");
+
+  return Response.json({ type: "file", size: CONDUCTOR_JSON.length, encoding: "base64", content });
 });
 
 const SERVICES = Layer.mergeAll(
@@ -164,6 +180,7 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
           .insert(user)
           .values({ id: userId, name: "Test User", email: `${userId}@app.test` });
         const workspaceId = yield* openWorkspace(userId);
+        yield* connectWorkspaceGitHub(workspaceId, INSTALLATION);
 
         const first = yield* runDelivered(userId, workspaceId);
         assert.ok("runId" in first);
@@ -192,6 +209,14 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
           firstRun?.items.find((item) => item.conductorId === "cw-1")?.taskId,
           agent.taskId,
         );
+
+        const setup = yield* readRepositorySetup(
+          workspaceId,
+          "acme/relay",
+          REPOSITORY_SCRIPT_KIND.SETUP,
+        );
+
+        assert.match(Option.getOrThrow(setup).script, /\npnpm install$/u);
 
         yield* runDelivered(userId, workspaceId);
         const second = (yield* conductorImportProgress(userId, workspaceId)).run;
