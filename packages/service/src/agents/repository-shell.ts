@@ -171,15 +171,18 @@ const WORKSPACE_SYNC_SCRIPT = [
  * `WORKSPACE_SYNC_SCRIPT` syncs one, `BATCH_PARALLEL` at a time: one line of
  * the list per repository, its folder, branch, and clone address, and one
  * line out for each that failed, `failed <folder>`. Note that a
- * repository's own output is dropped, since only whether it failed is read.
+ * repository's own output is dropped, since only whether it failed is read,
+ * and that each line is handed over whole and split by `read`, since
+ * `xargs` would read a quote a branch's name may hold as its own.
  */
 const WORKSPACE_BATCH_SCRIPT = [
   `export ${SANDBOX_VARIABLE.SYNC_ONE}`,
   "synced() {",
-  `  ${SANDBOX_VARIABLE.FOLDER}="$1" ${SANDBOX_VARIABLE.BRANCH}="$2" ${SANDBOX_VARIABLE.URL}="$3" bash -c "$${SANDBOX_VARIABLE.SYNC_ONE}" >/dev/null 2>&1 || echo "failed $1"`,
+  '  read -r folder branch url <<< "$1"',
+  `  ${SANDBOX_VARIABLE.FOLDER}="$folder" ${SANDBOX_VARIABLE.BRANCH}="$branch" ${SANDBOX_VARIABLE.URL}="$url" bash -c "$${SANDBOX_VARIABLE.SYNC_ONE}" >/dev/null 2>&1 || echo "failed $folder"`,
   "}",
   "export -f synced",
-  `printf '%s\n' "$${SANDBOX_VARIABLE.SYNC_LIST}" | xargs -r -P ${REPOSITORY_SHELL_BOUNDS.BATCH_PARALLEL} -L 1 bash -c 'synced "$@"' _`,
+  `printf '%s\\n' "$${SANDBOX_VARIABLE.SYNC_LIST}" | xargs -r -d '\\n' -n 1 -P ${REPOSITORY_SHELL_BOUNDS.BATCH_PARALLEL} bash -c 'synced "$1"' _`,
 ].join("\n");
 
 /** One repository of a workspace drive's batch: where it goes, and the read token its sync runs on. */

@@ -281,7 +281,9 @@ const reportedFailed = (workspaceId: string) => (cause: Cause.Cause<unknown>) =>
  * A batch of repositories each brought to its default branch in its folder,
  * in one run, on read tokens minted for them now, all at once; one the
  * workspace no longer reaches is left out, and each that failed, to mint or
- * to sync, is reported and passed by.
+ * to sync, is reported and passed by. Note that a run that failed whole, its
+ * firewall or the sandbox, fails the step, so the step comes again from the
+ * same place rather than passing the whole batch by.
  */
 const heldBatch = (
   sandbox: RepositorySandbox,
@@ -327,7 +329,7 @@ const heldBatch = (
       () => reportedBroken(workspaceId, DRIVE_BROKEN.REPOSITORY_FAILED, "the sync failed"),
       { discard: true },
     );
-  }).pipe(Effect.catchCause(reportedFailed(workspaceId)));
+  });
 
 /** What a fill's steps run against: the store, GitHub, and the sandboxes. */
 export type DriveFillServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
