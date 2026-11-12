@@ -139,6 +139,7 @@ import {
   mendInstallationStatus,
   type WorkspaceInstallation,
 } from "./github-installations.js";
+import { GitHubBackground } from "./github-rate-gate.js";
 import {
   GITHUB_TOKEN_ABSENCE,
   type MemberGitHubToken,
@@ -247,6 +248,10 @@ const KEPT = {
   TOKEN_LIFETIME: Duration.hours(1),
   TOKEN_MARGIN: Duration.minutes(10),
 } as const;
+
+/** A lookup a cache keeps, run in the member's lane rather than the lane of whoever missed first (`./github-rate-gate.ts`). */
+const inForeground = <A, E, R>(lookup: Effect.Effect<A, E, R>) =>
+  Effect.provideService(lookup, GitHubBackground, false);
 
 /** Whether a repository token is kept for the instance's later asks, or minted afresh for each, as a write token leaving for a sandbox's whole run is. */
 const TOKEN_KEEPING = { KEPT: "kept", FRESH: "fresh" } as const;
@@ -2072,8 +2077,9 @@ function githubAppService(
    * repository is reached, and why not, reads GitHub afresh.
    */
   return Effect.gen(function* () {
+    // Note that a lookup runs in the member's lane whoever missed first, because every asker of its key waits on it.
     const reaches = yield* Cache.makeWith(
-      (key: ReachKey) => reach(key.organizationId, key.fullName, key.member),
+      (key: ReachKey) => inForeground(reach(key.organizationId, key.fullName, key.member)),
       {
         capacity: KEPT.CAPACITY,
         requireServicesAt: "lookup",
@@ -2082,7 +2088,7 @@ function githubAppService(
       },
     );
 
-    const tokens = yield* Cache.makeWith(repositoryTokenOf, {
+    const tokens = yield* Cache.makeWith((key: TokenKey) => inForeground(repositoryTokenOf(key)), {
       capacity: KEPT.CAPACITY,
       requireServicesAt: "lookup",
       timeToLive: (exit) => (Exit.isSuccess(exit) ? exit.value.keepFor : Duration.zero),

@@ -4,14 +4,12 @@ import {
   PULL_REQUEST_STATE,
   type PullRequestState,
 } from "@repo/features/agent-wire";
-import { CHECK_SUMMARY_WORDS } from "@repo/features/pull-request-model";
 import {
-  PULL_REQUEST_GLYPH,
+  CHECK_SUMMARY_WORDS,
   PULL_REQUEST_MARK_QUEUED,
   pullRequestMarkState,
-  STATUS_TONE,
-  type StatusTone,
-} from "@repo/ui";
+} from "@repo/features/pull-request-model";
+import { PULL_REQUEST_GLYPH, STATUS_TONE, type StatusTone } from "@repo/ui";
 import { pullRequestNumberLabel, pullRequestPillLabel } from "./agent-model.js";
 
 /**

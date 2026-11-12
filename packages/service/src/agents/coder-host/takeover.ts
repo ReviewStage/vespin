@@ -426,14 +426,15 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
 
 /**
  * Where the source's work reaches the new agent. A source whose sandbox
- * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
- * hands that sandbox, whose latest snapshot the new agent's is created from at its
- * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
- * other has its work copied to a branch (`snapshot.ts`), and a source on a
- * Mac hands only the branch it pushed, since nothing of the Mac's is read
- * for a Start, whoever asks it. Note that a
- * sandbox still running is copied rather than handed, because its snapshot
- * is its last stop's, behind what it holds now; that a source in another
+ * stands stopped (`agentSandboxOf`) owning a drive of its own hands that
+ * sandbox, whose drive the new agent's is created from the image with a
+ * fork of at its first open (`../machine/sandbox-machine.ts`), so it is
+ * never woken; any other has its work copied to a branch (`snapshot.ts`),
+ * a source with no drive of its own among them, and a source on a Mac
+ * hands only the branch it pushed, since nothing of the Mac's is read for
+ * a Start, whoever asks it. Note that a sandbox still running is copied
+ * rather than handed, because Vercel does not document forking a drive a
+ * running sandbox holds read-write; that a source in another
  * repository than the one the new agent works in hands no sandbox, since
  * its checkout would be none of the new agent's; and that a sandbox that
  * could not be read is a miss, logged, as a copy that failed is.
@@ -465,9 +466,10 @@ const sourceWorkOf = (
         : [];
 
     if (session !== undefined) {
-      const found = yield* agentSandboxOf(yield* Sandbox, session.sessionId);
+      const sandbox = yield* Sandbox;
+      const found = yield* agentSandboxOf(sandbox, session.sessionId);
 
-      if (found?.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
+      if (found?.status === SANDBOX_STATUS.STOPPED && (yield* sandbox.ownDriveStands(found.name))) {
         return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
       }
     }

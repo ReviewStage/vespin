@@ -480,8 +480,11 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
 
         const drive = workspaceDriveName(workspaceId);
 
-        const folders = filling.sandbox.state.commands.flatMap(
-          (command) => command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER] ?? [],
+        // A fill's sync lists its batch's repositories one a line, each led by its folder.
+        const folders = filling.sandbox.state.commands.flatMap((command) =>
+          (command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.SYNC_LIST] ?? "")
+            .split("\n")
+            .flatMap((line) => (line === "" ? [] : [line.split(" ")[0]])),
         );
 
         assert.deepEqual(answered, { status: 200, body: { read: 0 } });
@@ -937,78 +940,120 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
 
-  it.effect("a failed check suite queues a run, but not on a coding agent's own luke/ branch", () =>
-    Effect.gen(function* () {
-      const owner = yield* openGithubUser();
-      yield* connectAgentApiKeys(owner);
-      const repositoryName = `Acme/ci-${randomUUID()}`;
-      const task = yield* startTask(owner, { name: "CI", repository: repositoryName });
+  it.effect(
+    "a failed check suite queues a run on a branch it keeps to or on the repository's default branch, but not on a coding agent's own luke/ branch",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/ci-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "CI", repository: repositoryName });
 
-      const made = Option.getOrThrow(
+        const made = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            organizationId: task.workspaceId,
+            repositories: task.repository === null ? [] : [task.repository],
+            name: "Fix main",
+            trigger: {
+              kind: AUTOMATION_TRIGGER.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+              branches: ["main", "luke/fix-ci"],
+            },
+            action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make main green." },
+            guards: AUTOMATION_DEFAULT_GUARDS,
+            nextRunAt: null,
+            webhookSecretHash: null,
+          }),
+        );
+
         yield* createAutomation(owner, {
           organizationId: task.workspaceId,
           repositories: task.repository === null ? [] : [task.repository],
-          name: "Fix main",
+          name: "Fix the default branch",
           trigger: {
             kind: AUTOMATION_TRIGGER.GITHUB,
             event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-            branches: ["main", "luke/fix-ci"],
+            defaultBranch: true,
           },
-          action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make main green." },
+          action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make trunk green." },
           guards: AUTOMATION_DEFAULT_GUARDS,
           nextRunAt: null,
           webhookSecretHash: null,
-        }),
-      );
+        });
 
-      const github = githubReaching([]);
+        const github = githubReaching([]);
 
-      const suite = (branch: string, conclusion: string) => ({
-        action: "completed",
-        repository: { full_name: repositoryName, html_url: `https://github.com/${repositoryName}` },
-        check_suite: { head_branch: branch, head_sha: "f00dfeed", conclusion, pull_requests: [] },
-      });
-
-      const failedMain = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("main", "failure")),
-      );
-
-      const passedMain = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("main", "success")),
-      );
-
-      const failedAgent = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("luke/fix-ci", "failure")),
-      );
-
-      assert.deepEqual(
-        [failedMain.body, passedMain.body, failedAgent.body],
-        [
-          { read: 0, queued: 1, told: 0 },
-          { read: 0, queued: 0, told: 0 },
-          { read: 0, queued: 0, told: 0 },
-        ],
-      );
-      assert.deepEqual(
-        (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
-        [
-          {
-            kind: AUTOMATION_FIRING.GITHUB,
-            event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-            repository: repositoryName,
-            branch: "main",
-            url: `https://github.com/${repositoryName}/commit/f00dfeed`,
+        // The repository's default branch is trunk, so neither main nor a feature branch is it.
+        const suite = (branch: string, conclusion: string) => ({
+          action: "completed",
+          repository: {
+            full_name: repositoryName,
+            html_url: `https://github.com/${repositoryName}`,
+            default_branch: "trunk",
           },
-        ],
-        "the failed commit is kept by its address",
-      );
-    }),
+          check_suite: { head_branch: branch, head_sha: "f00dfeed", conclusion, pull_requests: [] },
+        });
+
+        const failedMain = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("main", "failure")),
+        );
+
+        const passedMain = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("main", "success")),
+        );
+
+        const failedAgent = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("luke/fix-ci", "failure")),
+        );
+
+        const failedTrunk = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("trunk", "failure")),
+        );
+
+        const failedFeature = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("ada/feature", "failure")),
+        );
+
+        assert.deepEqual(
+          [
+            failedMain.body,
+            passedMain.body,
+            failedAgent.body,
+            failedTrunk.body,
+            failedFeature.body,
+          ],
+          [
+            { read: 0, queued: 1, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+            { read: 0, queued: 1, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+          ],
+        );
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+              repository: repositoryName,
+              branch: "main",
+              url: `https://github.com/${repositoryName}/commit/f00dfeed`,
+            },
+          ],
+          "the failed commit is kept by its address",
+        );
+      }),
   );
   it.effect(
     "a person's review on an agent's branch wakes the agent through its harness acting for its owner",

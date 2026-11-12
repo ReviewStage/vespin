@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
+import { UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
 import { Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { type UpdaterEngine, type UpdaterEngineEvents, UpdateService } from "./update-service.js";
@@ -99,6 +99,26 @@ it.effect("a restart that never quit can be pressed again once its time has pass
     service.install();
 
     assert.deepEqual(quits, ["quit and install", "quit and install"]);
+  }).pipe(Effect.scoped),
+);
+
+it.effect("a build whose signature Squirrel refuses is told as that failure", () =>
+  Effect.gen(function* () {
+    const { service, events, told } = yield* serviceFixture();
+    events().onAvailable("2.0.0");
+    // Squirrel.Mac's own words, as electron-updater hands them on.
+    events().onError(
+      "Code signature at URL file:///path/to/Update.app did not pass validation: code failed to satisfy specified code requirement(s)",
+    );
+
+    assert.equal(service.snapshot().status, UPDATE_STATUS.ERROR);
+    assert.deepEqual(told.at(-1), {
+      status: UPDATE_STATUS.ERROR,
+      currentVersion: "1.0.0",
+      installSupported: true,
+      latestVersion: "2.0.0",
+      failure: UPDATE_FAILURE.SIGNATURE,
+    });
   }).pipe(Effect.scoped),
 );
 

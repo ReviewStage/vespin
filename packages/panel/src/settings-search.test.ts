@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { APP_SETTING_ID, EXPERIMENT } from "@repo/settings";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { test } from "vitest";
@@ -207,6 +207,8 @@ test("an experiment is found by its name, what it brings, and what other apps ca
 
   const experiments = [
     "Merge queue",
+    "Turn changes",
+    "Reply buttons",
     "Rewind restores files",
     "Done and follow-ups",
     "Run actions",
@@ -322,6 +324,25 @@ test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", 
 test("cli sign-in and set up the cli each find the CLI section's row", () => {
   assert.deepEqual(labelsFound("cli sign-in"), ["CLI sign-in"]);
   assert.deepEqual(labelsFound("set up the cli"), ["Install the vespin command"]);
+});
+
+test("run actions finds Cloud environment's Run actions while the workspace has the experiment on, and only its Experimental row while off", () => {
+  const environmentFound = (input: SettingsSearchInput) =>
+    (searchSettings(settingsSearchCorpus(input), "run actions")?.groups ?? []).map((group) => [
+      group.page,
+      group.items.map((entry) => entry.id),
+    ]);
+
+  const runActionsRow = [SETTINGS_VIEW.EXPERIMENTAL, [EXPERIMENT_ANCHOR[EXPERIMENT.RUN_ACTIONS]]];
+
+  assert.deepEqual(
+    environmentFound({
+      ...FULL_INPUT,
+      settings: settingsView({ experiments: experimentsOn(EXPERIMENT.RUN_ACTIONS) }),
+    }),
+    [[SETTINGS_VIEW.ENVIRONMENT, [SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS]], runActionsRow],
+  );
+  assert.deepEqual(environmentFound(FULL_INPUT), [runActionsRow]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {

@@ -99,6 +99,10 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Options" }}
           />
           <Stack.Screen
+            name="agent-ports"
+            options={{ presentation: sheetPresentation, title: "Ports" }}
+          />
+          <Stack.Screen
             name="new-workspace"
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />

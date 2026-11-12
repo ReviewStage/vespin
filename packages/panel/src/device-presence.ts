@@ -1,7 +1,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING, type DeviceStanding } from "@repo/features/agent-wire";
-import { DEVICE_SETUP, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import type { HostLine } from "@repo/features/host-live";
+import { hostStanding } from "@repo/features/machines-settings-words";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { hostsQuery } from "./live-reads.js";
@@ -16,14 +16,11 @@ import { appStateQuery, selectAccount } from "./use-app-state.js";
  * its beat goes past fresh, and its next beat clears the mark, so no window
  * keeps a clock or asks on a timer. A host is setting up while it joins,
  * fetches its agents' tools, or updates; failed where its setup failed or it
- * never called in within `CALL_IN_CEILING_MS` of joining; offline while it
+ * never called in within ten minutes of joining; offline while it
  * is marked away; and online otherwise. A device the read does not name is
  * not the account's own (a teammate's, say), and `presenceStanding` says
  * nothing of it; where the read failed, it cannot be checked.
  */
-
-/** How long a host may take to call in after joining before it reads failed. */
-const CALL_IN_CEILING_MS = 10 * 60 * 1_000;
 
 /** Where the hosts read stands: the account's hosts by id, whether it has answered, and whether it failed. */
 export interface PresenceBook {
@@ -37,21 +34,6 @@ const NO_BOOK: PresenceBook = { hosts: new Map(), settled: false, failed: false 
 
 /** The read failed before it ever answered. */
 const FAILED_BOOK: PresenceBook = { hosts: new Map(), settled: true, failed: true };
-
-/** Where a host's setup keeps it from taking an agent, whatever its presence; none for a host that is ready. */
-function setupStanding(host: HostLine): DeviceStanding | undefined {
-  if (host.update === HOST_UPDATE.UPDATING) return DEVICE_STANDING.SETTING_UP;
-
-  if (host.setup === DEVICE_SETUP.FAILED) return DEVICE_STANDING.FAILED;
-
-  if (host.calledIn === false) {
-    const waited = Date.now() - (host.joinedAt ?? Date.now());
-
-    return waited > CALL_IN_CEILING_MS ? DEVICE_STANDING.FAILED : DEVICE_STANDING.SETTING_UP;
-  }
-
-  return host.setup === DEVICE_SETUP.PREPARING ? DEVICE_STANDING.SETTING_UP : undefined;
-}
 
 /**
  * Where `deviceId` stands now: checking before the first read lands, by its
@@ -70,9 +52,7 @@ export function presenceStanding(
 
   if (host === undefined) return book.failed ? DEVICE_STANDING.UNKNOWN : undefined;
 
-  return (
-    setupStanding(host) ?? (host.away === true ? DEVICE_STANDING.OFFLINE : DEVICE_STANDING.ONLINE)
-  );
+  return hostStanding(host, Date.now());
 }
 
 /** The book the hosts read stands at: nothing known before it answers, and failed where it never could. */

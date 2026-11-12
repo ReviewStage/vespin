@@ -4,13 +4,14 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import { machineName } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { GLYPH } from "@repo/ui/icons";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
-import { machineName, useThisMac } from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 

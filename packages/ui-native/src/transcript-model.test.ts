@@ -1,5 +1,6 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import { NO_TOGGLES, openCuts, TRANSCRIPT_ITEM, transcriptItems } from "./transcript-model.js";
@@ -77,6 +78,15 @@ describe("transcriptItems", () => {
       card: {
         title: "Invite a teammate by email",
         state: PULL_REQUEST_STATE.MERGED,
+        additions: 412,
+        deletions: 37,
+      },
+    },
+    {
+      held: [{ ...HELD, state: PULL_REQUEST_STATE.OPEN, queued: true as const }],
+      card: {
+        title: "Invite a teammate by email",
+        state: PULL_REQUEST_MARK_QUEUED,
         additions: 412,
         deletions: 37,
       },

@@ -17,6 +17,7 @@ import { CLI_EXIT } from "@repo/features/cli-exit";
 import { DESCRIPTION_EDIT_REFUSAL } from "@repo/features/description-edit";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { type DescriptionRevisionLine, TASK_BOUNDS } from "@repo/features/task-wire";
+import { withoutTrailingNewlines } from "@repo/features/trailing-newlines";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, columns, readInput } from "../output.js";
@@ -99,7 +100,7 @@ const showCommand = Command.make(
         const { body } = read.revision.document;
         yield* answer({
           json: { id, revision: seq, body },
-          lines: [body.replace(/\n+$/u, "")],
+          lines: [withoutTrailingNewlines(body)],
           ids: [id],
         });
 
@@ -110,7 +111,7 @@ const showCommand = Command.make(
       yield* answer({
         json: { id: plan.id, name: plan.name, body: plan.document.body },
         // Note that the closing line break is dropped, since each line printed ends in one.
-        lines: [plan.document.body.replace(/\n+$/u, "")],
+        lines: [withoutTrailingNewlines(plan.document.body)],
         ids: [plan.id],
       });
     }),

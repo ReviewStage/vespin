@@ -13,7 +13,13 @@ export const HOST_OPERATOR_CLIENT_ID = "operator";
 export const HOST_NATIVE_NODE_ID = "native";
 
 export const HOST_NODE_CAPABILITY = {
-  /** Hands an address to the operating system, as a row press does: the pressing panel has stood itself down already. */
+  /**
+   * Hands an address to the operating system, as a row press does: the
+   * pressing panel has stood itself down already. A sign-in's address names
+   * the page it lands on once settled (`landing`), where a node that shows a
+   * sign-in in a sheet of its own, as the iOS app's authentication sheet,
+   * closes the sheet; a node with none opens the address as any other.
+   */
   OPEN_EXTERNAL: "os.openExternal",
 } as const;
 

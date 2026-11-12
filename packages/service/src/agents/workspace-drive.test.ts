@@ -42,22 +42,26 @@ const installationOf = (id: number, names: readonly string[]): InstallationFixtu
   repositories: names.map((name) => ({ owner: "acme", name })),
 });
 
-/** The folder a sync brought to its default branch. */
-const folderOf = (command: MemoryCommand) => command.ask.env?.[VARIABLE.FOLDER];
+/** The folders a batch's sync brought to its default branch, one a line of its list. */
+const foldersOf = (command: MemoryCommand) =>
+  (command.ask.env?.[VARIABLE.SYNC_LIST] ?? "").split("\n").map((line) => line.split(" ")[0]);
 
-const isSync = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.FOLDER);
+const isSync = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.SYNC_LIST);
+
+/** Every folder the commands synced, in the order their batches listed them. */
+const syncedOf = (commands: readonly MemoryCommand[]) => commands.filter(isSync).flatMap(foldersOf);
 
 const isInstall = (command: MemoryCommand) =>
   command.ask.args.some((arg) => arg.includes("pnpm install"));
 
 const isPrune = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.KEEP);
 
-/** The sandboxes kept in memory, each command a success but the sync of the folder named to fail. */
+/** The sandboxes kept in memory, each command a success but the sync of the folder named, which its batch says failed. */
 function fixture(failing?: string) {
   return memorySandbox({
     run: (command) =>
-      isSync(command) && folderOf(command) === failing
-        ? { exitCode: 1, stdout: "", stderr: "fatal: could not read from remote repository" }
+      failing !== undefined && isSync(command) && foldersOf(command).includes(failing)
+        ? { exitCode: 0, stdout: `failed ${failing}\n`, stderr: "" }
         : undefined,
   });
 }
@@ -97,10 +101,7 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
         const name = workspaceDriveName(workspace.workspaceId);
         const { commands } = memory.state;
         assert.deepEqual([...memory.state.drives.keys()], [name]);
-        assert.deepEqual(commands.filter(isSync).map(folderOf).toSorted(), [
-          "acme/ledger",
-          "acme/relay",
-        ]);
+        assert.deepEqual(syncedOf(commands).toSorted(), ["acme/ledger", "acme/relay"]);
         assert.deepEqual(commands.filter(isInstall), []);
         assert.deepEqual(memory.state.deleted, [name]);
       }),
@@ -116,7 +117,7 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
       assert.equal(yield* filled(memory, installation, workspace), true);
 
       const { commands } = memory.state;
-      assert.deepEqual(commands.filter(isSync).map(folderOf), ["acme/ledger", "acme/relay"]);
+      assert.deepEqual(syncedOf(commands), ["acme/ledger", "acme/relay"]);
       // The failed repository is still connected, so its folder is kept as it stood.
       const kept = commands.filter(isPrune).at(-1)?.ask.env?.[VARIABLE.KEEP];
       assert.deepEqual(kept?.split("\n").toSorted(), ["acme/ledger", "acme/relay"]);
@@ -137,7 +138,7 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
         yield* filled(memory, installationOf(7203, ["relay"]), workspace);
 
         const ran = memory.state.commands.slice(before);
-        assert.deepEqual(ran.filter(isSync).map(folderOf), ["acme/relay"]);
+        assert.deepEqual(syncedOf(ran), ["acme/relay"]);
         assert.deepEqual(
           ran.filter(isPrune).map((each) => each.ask.env?.[VARIABLE.KEEP]),
           ["acme/relay"],
@@ -149,7 +150,13 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
     "a step that outruns its time hands the rest to the next step from the repository it reached, and leaves the drive unfinished",
     () =>
       Effect.gen(function* () {
-        const installation = installationOf(7204, ["relay", "ledger"]);
+        // One more repository than a batch holds, so the step outruns its time past its first batch.
+        const names = Array.from(
+          { length: WORKSPACE_DRIVE_FILL.BATCH + 1 },
+          (_, index) => `repo-${String(index).padStart(2, "0")}`,
+        );
+
+        const installation = installationOf(7204, names);
         const workspace = yield* connected(installation);
         let syncs = 0;
         const handed: number[] = [];
@@ -162,7 +169,7 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
           },
         });
 
-        // Note that each sync moves the clock a whole step on, so the step outruns its time after its first repository.
+        // Note that each batch's sync moves the clock a whole step on, so the step outruns its time after its first.
         const outrun = Effect.map(Clock.Clock, (base) => {
           const now = () =>
             base.currentTimeMillisUnsafe() + syncs * Duration.toMillis(WORKSPACE_DRIVE_FILL.STEP);
@@ -181,8 +188,11 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
         );
 
         assert.equal(took, true);
-        assert.deepEqual(handed, [1]);
-        assert.deepEqual(memory.state.commands.filter(isSync).map(folderOf), ["acme/ledger"]);
+        assert.deepEqual(handed, [WORKSPACE_DRIVE_FILL.BATCH]);
+        assert.deepEqual(
+          syncedOf(memory.state.commands),
+          names.slice(0, WORKSPACE_DRIVE_FILL.BATCH).map((name) => `acme/${name}`),
+        );
         assert.deepEqual(memory.state.commands.filter(isPrune), []);
         assert.deepEqual(memory.state.deleted, []);
       }),

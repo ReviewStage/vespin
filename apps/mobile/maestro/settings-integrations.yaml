@@ -1,0 +1,32 @@
+# settings-integrations.yaml -- Settings › Integrations on the Inbox fixture: the account's servers under Connected and Not connected, an expired one offering Reconnect, two accounts at one provider named apart, and Disconnect asked first and canceled.
+#
+# Launched on the host's Inbox fixture, whose account holds Linear, two
+# Notion accounts, and an expired Sentry (`@repo/host/fixture-inbox`), so no
+# server is reached and no sign-in opens.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Integrations"
+- tapOn: "Integrations"
+- waitForAnimationToEnd
+- assertVisible: "Connected"
+- assertVisible: "Not connected"
+- assertVisible: "Notion · Relay"
+- assertVisible: "Reconnect"
+- takeScreenshot: settings-integrations
+# A long press on a connected account offers Disconnect, which asks first.
+- longPressOn: "Linear"
+- tapOn: "Disconnect"
+- assertVisible: "Disconnect Linear?"
+- waitForAnimationToEnd
+- takeScreenshot: settings-integrations-disconnect
+- tapOn: "Cancel"

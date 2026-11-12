@@ -147,7 +147,6 @@
     "./live/live-socket": "./src/live/live-socket.js",
     "./live/reads/workspaces": "./src/live/reads/workspaces.js",
     "./local/local-server-guard": "./src/local/local-server-guard.js",
-    "./maintenance/base-drive-refresh-app": "./src/maintenance/base-drive-refresh-app.js",
     "./maintenance/maintenance-app": "./src/maintenance/maintenance-app.js",
     "./member-mcp/admission": "./src/member-mcp/admission.js",
     "./member-mcp/app": "./src/member-mcp/app.js",

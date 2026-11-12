@@ -1,0 +1,40 @@
+# settings-skills.yaml -- Settings › Skills on the Inbox fixture: the account's own skills, each saying where its files came from, one opened to its SKILL.md and its files, and a skill's Delete asked first and canceled.
+#
+# Launched on the host's Inbox fixture, whose account holds two skills of
+# its own and answers a skill's read itself (`@repo/host/fixture-inbox`), so
+# no server is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Skills"
+- tapOn: "Skills"
+- waitForAnimationToEnd
+# Note that a row is one element, heard as its name, so a skill is found by it.
+- assertVisible: "Only you"
+- assertVisible: "release-notes"
+- assertVisible: "pr-style"
+- takeScreenshot: settings-skills
+# A press opens the skill's file as written, and its files.
+- tapOn: "release-notes"
+- assertVisible: "Files"
+- waitForAnimationToEnd
+- takeScreenshot: settings-skill
+- tapOn:
+    id: "BackButton"
+# A long press offers Delete, which asks first.
+- longPressOn: "pr-style"
+- tapOn: "Delete"
+- assertVisible: "Delete pr-style?"
+- waitForAnimationToEnd
+- takeScreenshot: settings-skills-delete
+- tapOn: "Cancel"
+- assertVisible: "pr-style"

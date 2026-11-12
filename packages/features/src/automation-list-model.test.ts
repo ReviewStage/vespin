@@ -159,6 +159,18 @@ test("a GitHub event is said as what happens, by whom, where, and the labels, br
     "When a check fails in acme/ledger",
   );
   assert.equal(
+    automationTriggerText(
+      {
+        kind: AUTOMATION_TRIGGER.GITHUB,
+        event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+        defaultBranch: true,
+        branches: ["release"],
+      },
+      ["acme/ledger"],
+    ),
+    "When a check fails in acme/ledger on the default branch or release",
+  );
+  assert.equal(
     automationTriggerText({ kind: AUTOMATION_TRIGGER.WEBHOOK }, ["acme/ledger"]),
     "When its webhook is called",
   );
@@ -345,7 +357,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
         reason: AUTOMATION_RUN_REASON.AGENT_REPLACED,
       }),
     ),
-    "Working · Started a fresh agent: the one its runs went to was gone or archived.",
+    "Working. Started a fresh agent: the one its runs went to was gone or archived.",
   );
   assert.equal(automationRunLine(run({ agent: null })), "Its agent is gone");
   assert.equal(automationRunLine(run({ agent: agent(AGENT_STATUS.FAILED) })), "Failed");
@@ -434,13 +446,13 @@ test("a Sentry trigger is said as its event in Sentry, then the projects, enviro
         level: [SENTRY_LEVEL.FATAL, SENTRY_LEVEL.ERROR],
       }),
     ),
-    "When a new issue is created in Sentry · web, api · production · error, fatal",
+    "When a new issue is created in Sentry, for web or api, in production, at error or fatal level",
   );
   assert.equal(
     automationTriggerText(
       sentry(SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED, { level: [SENTRY_LEVEL.WARNING] }),
     ),
-    "When an alert fires in Sentry · warning",
+    "When an alert fires in Sentry, at warning level",
   );
 });
 

@@ -9,7 +9,10 @@ import { repositoryPinsContract } from "./contract/repository-pins.js";
 import { taskFilesContract } from "./contract/task-files.js";
 import { taskSectionsContract } from "./contract/task-sections.js";
 import { tasksContract } from "./contract/tasks.js";
-import { descriptionAttachmentTypeSchema } from "./description-attachment-wire.js";
+import {
+  descriptionAttachmentTypeSchema,
+  descriptionFileDataUrlSchema,
+} from "./description-attachment-wire.js";
 import {
   descriptionCommentActionRequestSchema,
   descriptionCommentStartRequestSchema,
@@ -31,7 +34,6 @@ import {
   pageVersionNumberSchema,
   taskPageVersionAnswerSchema,
 } from "./page-wire.js";
-import { pictureDataUrlSchema } from "./picture-wire.js";
 import { pinPositionSchema } from "./pin-order.js";
 import { readMarkSchema } from "./read-mark.js";
 import {
@@ -773,10 +775,10 @@ export const tasksPictureAnswerSchema = EffectSchema.Union([
 
 export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
-/** A picture kept on a description, as the editor that took it asks: the plan, and the picture or video as a `data:` URL. */
+/** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
   planId: EffectSchema.NonEmptyString,
-  picture: pictureDataUrlSchema,
+  picture: descriptionFileDataUrlSchema,
 });
 
 /** Why a picture was not kept: the description holds its bound of pictures, or of videos, as the service answers in band, or how its procedure failed: the plan is not the account's to write, or no answer. */

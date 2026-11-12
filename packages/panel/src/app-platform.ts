@@ -15,6 +15,7 @@
  */
 
 import type { ProductEventPropertiesFor, ProductSurfaceEventName } from "@repo/features/analytics";
+import type { HandoffActivity } from "@repo/features/ios-system-activity";
 import type { FramedPage } from "@repo/features/page-frame";
 import {
   type AppCommand,
@@ -142,6 +143,12 @@ export interface AppPlatform {
    * this out.
    */
   menuOffers?(commands: readonly AppCommand[]): void;
+  /**
+   * Hears the thread, task, agent, or pull request the window shows, or none,
+   * each time that changes, so a shell on a Mac hands it off to the member's
+   * iPhone. A browser tab cannot advertise one, so the web leaves this out.
+   */
+  handoff?(activity: HandoffActivity | null): void;
   /**
    * Ends a maintainer's sign-in as the member signed in (`impersonated` on
    * the account) and takes them back to that member's page of the admin

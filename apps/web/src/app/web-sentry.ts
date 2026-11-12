@@ -6,7 +6,8 @@
  * functions report under (`packages/service/src/observability/sentry.ts`),
  * read from the build's environment as the desktop reads its own: Vercel's
  * `SENTRY_DSN`, `VERCEL_ENV`, and `VERCEL_GIT_COMMIT_SHA`, written into the
- * bundle by `vite.config.ts`. A build without a DSN, a development server
+ * bundle by `vite.config.ts`; the commit is also the version the tab
+ * reports itself as (`webDeploymentCommit`). A build without a DSN, a development server
  * among them unless its shell sets one, loads nothing and sends nothing.
  * The SDK runs with its default data collection, as the desktop's does
  * (root `AGENTS.md`), and traces the share of page loads the desktop does
@@ -103,7 +104,7 @@ const UNNAMED_DEPLOYMENT = "development";
 
 declare const WEB_SENTRY_DSN: string | undefined;
 declare const WEB_DEPLOYMENT: string | undefined;
-declare const WEB_SENTRY_RELEASE: string | undefined;
+declare const WEB_DEPLOYMENT_COMMIT: string | undefined;
 
 /**
  * One free identifier `vite.config.ts` replaces, or `fallback` where the
@@ -124,12 +125,22 @@ export function webDeployment(): string {
   return buildDefine(() => WEB_DEPLOYMENT, "");
 }
 
+/**
+ * The commit this build was deployed from, or empty where the build names
+ * none, as a development server's does: the version the tab reports itself
+ * as, since the web app is deployed from `main` on every merge and has no
+ * version of its own, and the release its reports to Sentry file under.
+ */
+export function webDeploymentCommit(): string {
+  return buildDefine(() => WEB_DEPLOYMENT_COMMIT, "");
+}
+
 /** What this build carries; a build with no DSN, as in a test, reports nothing. */
 export function webSentryBuild(): WebSentryBuild {
   return {
     dsn: buildDefine(() => WEB_SENTRY_DSN, ""),
     environment: webDeployment() || UNNAMED_DEPLOYMENT,
-    release: buildDefine(() => WEB_SENTRY_RELEASE, ""),
+    release: webDeploymentCommit(),
   };
 }
 

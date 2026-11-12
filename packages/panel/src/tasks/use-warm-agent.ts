@@ -1,4 +1,5 @@
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_WARM_EVERY_MS, agentWarmable } from "@repo/features/agent-warm";
+import type { AgentSummary } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { Duration, Effect, Schedule } from "effect";
 import { useEffect } from "react";
@@ -21,23 +22,13 @@ import { usePageFocused } from "../use-page-focused.js";
  * window runs out on its own.
  */
 
-/** How often an agent on screen is said to be there. */
-const WARM_EVERY = Duration.minutes(1);
-
-/** Whether an agent is one the service keeps warm: a cloud agent's, started, and not archived. */
-function warmable(agent: AgentSummary): boolean {
-  return (
-    agent.machine === undefined &&
-    agent.mac === undefined &&
-    agent.status !== AGENT_STATUS.STARTING &&
-    agent.archivedAt === undefined
-  );
-}
+/** How often an agent on screen is said to be there (`@repo/features/agent-warm`). */
+const WARM_EVERY = Duration.millis(AGENT_WARM_EVERY_MS);
 
 /** Calls the service's warm, and asks for the mirror, for `agent` at once and every minute while it is on screen and the window is visible and focused; nothing for none. */
 export function useWarmAgent(agent: AgentSummary | undefined): void {
   const focused = usePageFocused();
-  const warmId = focused && agent !== undefined && warmable(agent) ? agent.id : undefined;
+  const warmId = focused && agent !== undefined && agentWarmable(agent) ? agent.id : undefined;
   useEffect(() => {
     if (warmId === undefined) return undefined;
 

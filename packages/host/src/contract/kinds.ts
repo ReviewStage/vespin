@@ -870,6 +870,12 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * nothing in the focused panel would run.
    */
   WINDOW_MENU_OFFERS: "window.menuOffers",
+  /**
+   * The thread, task, agent, or pull request the asking panel shows now,
+   * told whenever it changes, or none, so the Mac hands it off to the
+   * member's iPhone as the phone's own screen for it would.
+   */
+  WINDOW_HANDOFF: "window.handoff",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -1188,6 +1194,7 @@ export const PORT_ACT_USE = {
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
+  WINDOW_HANDOFF: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,

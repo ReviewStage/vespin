@@ -16,7 +16,7 @@ import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositorie
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { providerOf } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
@@ -38,7 +38,9 @@ import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
 import { Predicate } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
+  type AppHistories,
   type AppHostRead,
+  type AppMemories,
   type AppStateDelivery,
   type AppStateSnapshot,
   type AppTranscript,
@@ -534,15 +536,11 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks, an agent with no title yet left out. Made anew only as the list moves. */
-export const selectAgentTitles = memoizedSelect(
+/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as the list moves. */
+export const selectAgentNames = memoizedSelect(
   (state: AppStateSnapshot) => [state.tasks],
   (tasks): ReadonlyMap<string, string> =>
-    new Map(
-      (tasks.taskAgents ?? []).flatMap(({ id, title }) =>
-        title === null ? [] : [[id, title] as const],
-      ),
-    ),
+    new Map((tasks.taskAgents ?? []).map((agent) => [agent.id, agentName(agent)] as const)),
 );
 
 /** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */
@@ -652,6 +650,13 @@ export function selectTranscript(
     state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
 }
 
+/** One task's description history as the host follows it (`ACT_KIND.TASKS_HISTORY_FOLLOW`): its newest page, then each older page read, as a `select`; none before it is read. */
+export function selectTaskHistory(
+  taskId: string,
+): (state: AppStateSnapshot) => AppHistories[string] | undefined {
+  return (state) => state[LIVE_READ.HISTORY][taskId];
+}
+
 /** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */
 export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
   const accountId = signedInAccountId(state.account);
@@ -666,6 +671,13 @@ export function selectIntegrations(
   const accountId = signedInAccountId(state.account);
 
   return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
+}
+
+/** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
+export function selectWorkspaceMemories(
+  workspaceId: string,
+): (state: AppStateSnapshot) => AppMemories[string] | undefined {
+  return (state) => state[LIVE_READ.MEMORIES][workspaceId];
 }
 
 /** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */

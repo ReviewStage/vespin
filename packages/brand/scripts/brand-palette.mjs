@@ -7,8 +7,8 @@
 // The brand's colors: every --ui-color-* role a change of brand changes,
 // in the light theme and the dark, for the desktop and the site alike. The
 // roles a brand leaves alone (the fills and edges drawn as alphas of the ink,
-// shadows, the identity and chart hues, find's yellows) stay in @repo/ui's
-// palettes.css. Each entry is one brand; `BRAND` names the one the product
+// shadows, the chart hues, find's yellows) stay in @repo/ui's palettes.css,
+// but for the identity hues below, which the iOS app draws too. Each entry is one brand; `BRAND` names the one the product
 // wears, so a rebrand is a new entry and that one name, and a second theme
 // is a second entry the generator writes under a selector of its own.
 //
@@ -112,3 +112,16 @@ const BRAND_PALETTES = {
 };
 
 export const BRAND = BRAND_PALETTES.COPPER;
+
+// A person's disc and a workspace's tile: six muted hues read off an id
+// (@repo/features/workspace-tile's identityHue, from 1), each holding its
+// white letter at AA on either ground. None is copper, so no one's disc reads
+// as attention's beside a row. No brand changes them, but the window
+// (identity.css) and the iOS app (identity-hues.ts) both draw them, so they
+// are written from here rather than kept twice.
+export const IDENTITY = {
+  LIGHT: ["#4a5fc0", "#23766f", "#237293", "#a8435f", "#6a4fbd", "#3f7434"],
+  DARK: ["#4f63b8", "#2b7f78", "#2a7899", "#a24a63", "#6c55b3", "#477a3a"],
+  // The letter's ink on every hue.
+  ON: "#ffffff",
+};

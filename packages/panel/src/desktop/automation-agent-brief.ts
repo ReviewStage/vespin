@@ -9,7 +9,7 @@
  */
 
 import { LINK_ORIGIN } from "@repo/features/link-home";
-import { fencedBlock } from "../tasks/markdown-fence.js";
+import { fencedBlock } from "@repo/features/markdown-fence";
 
 /** The brief every Create with an agent opens with, ahead of the request. */
 const BRIEF = `# Create an automation

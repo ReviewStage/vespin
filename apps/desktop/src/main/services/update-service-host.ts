@@ -1,12 +1,19 @@
 import {
   PRODUCT_EVENT,
   PRODUCT_UPDATE_ACTION,
+  PRODUCT_UPDATE_FAILURE,
+  type ProductUpdateFailure,
   type RecordProductEvent,
 } from "@repo/features/analytics";
 import type { AppStateStore } from "@repo/host/client";
 import { jsonStateFile } from "@repo/host/node";
 import { UPDATE_ENDPOINT, type UpdaterEngine, UpdateService } from "@repo/host/update-service";
-import type { UpdateSnapshot } from "@repo/settings/update";
+import {
+  UPDATE_FAILURE,
+  UPDATE_STATUS,
+  type UpdateFailure,
+  type UpdateSnapshot,
+} from "@repo/settings/update";
 import { text } from "@repo/wire";
 import { Effect, type Scope } from "effect";
 import { type UpdateMenuAct, updateMenuAct } from "../app-menu";
@@ -27,6 +34,12 @@ export interface UpdateServiceHost {
   openLatestRelease: () => void;
   openChangelog: () => void;
 }
+
+/** The counted kind of each failure the row names; one it names none for counts as `other`. */
+const PRODUCT_UPDATE_FAILURE_OF: Record<UpdateFailure, ProductUpdateFailure> = {
+  [UPDATE_FAILURE.READ_ONLY_VOLUME]: PRODUCT_UPDATE_FAILURE.READ_ONLY_VOLUME,
+  [UPDATE_FAILURE.SIGNATURE]: PRODUCT_UPDATE_FAILURE.SIGNATURE,
+};
 
 /** What the updater reads of the launch, and of its run mode whether it may reach the network. */
 type UpdaterConfig = Pick<
@@ -80,8 +93,8 @@ interface UpdateServiceHostDependencies {
  * into it directly, so they are interrupted by the
  * launch's own scope closing at quit rather than a scope this function made
  * and had to give back itself. `UpdateService` holds the feed and the
- * schedule; what is here is when it begins and the counted event
- * each press files. Construction alone does not start it: the caller's own
+ * schedule; what is here is when it begins and the counted events: the one
+ * each press files, and the one each failure the row draws files. Construction alone does not start it: the caller's own
  * `start()` is what the launch calls once it has reached the right point in
  * its own order, never this function's own return.
  */
@@ -130,11 +143,26 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
 
     const engine = dependencies.engine;
 
+    // Note that each failure moves the row to error exactly once, so the
+    // move is the count: its kind and the build it failed on, never the
+    // error's words.
+    const countFailure = (update: UpdateSnapshot) => {
+      if (update.status !== UPDATE_STATUS.ERROR) return;
+      recordProductEvent(PRODUCT_EVENT.UPDATE_FAIL, {
+        update_failure:
+          update.failure === undefined
+            ? PRODUCT_UPDATE_FAILURE.OTHER
+            : PRODUCT_UPDATE_FAILURE_OF[update.failure],
+        app_version: config.appVersion,
+      });
+    };
+
     const service = yield* UpdateService.make({
       currentVersion: config.appVersion,
       onChange: (update) => {
         dependencies.state.update({ update });
         showMenu(update);
+        countFailure(update);
       },
       engine:
         engine === undefined

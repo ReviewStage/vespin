@@ -8,6 +8,7 @@ import {
   type JSONContent,
   type NodeViewRenderer,
 } from "@tiptap/core";
+import Code from "@tiptap/extension-code";
 import Heading from "@tiptap/extension-heading";
 import { OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -171,6 +172,19 @@ const DocumentOrderedList = OrderedList.extend({
       : { ...read, content: (read.content ?? []).map(withWordsLine) };
   },
 });
+
+/**
+ * Inline code that takes a link or bold around it. Note that TipTap's own
+ * excludes every other mark, so a link or bold around inline code
+ * (``[`store.ts`](url)``, as agents write constantly) opened schema-invalid,
+ * and an edit on its line saved it with the link or bold dropped. It ranks
+ * after every other mark, so it is written innermost (``**`x`**``), and the
+ * serializer half of that fix, which closes a code span where another mark
+ * changes while it goes on, is a pnpm patch on `@tiptap/markdown`. This is
+ * TipTap's own fix waiting upstream (ueberdosis/tiptap#8662, for #8637), so it
+ * goes once a TipTap carrying that fix is installed.
+ */
+const DocumentCode = Code.extend({ excludes: "code", priority: 99 });
 
 /** What an empty task item's words are written as: TipTap's own mark for an empty paragraph. */
 const EMPTY_TASK_WORDS = "&nbsp;";
@@ -365,6 +379,7 @@ export function markdownExtensions(
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
+    code: false,
     heading: false,
     orderedList: false,
     paragraph: false,
@@ -375,6 +390,7 @@ export function markdownExtensions(
 
   return [
     blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader))),
+    withoutTipTapChords(DocumentCode),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
     blockRulesOutOfCells(withoutTipTapChords(DocumentHeading)),

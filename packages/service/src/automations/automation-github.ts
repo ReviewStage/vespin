@@ -33,7 +33,8 @@ import { AutomationCadence, type AutomationCadenceUnavailable } from "./automati
  * for either. Only what the run's history shows is
  * read off the delivery: the repository, the number, title, and address of
  * the issue or pull request, the branch, and a failed check's commit by its
- * address, never a body. The firing is
+ * address, never a body; beside it, the repository's default branch, which
+ * a trigger may keep to and no history shows. The firing is
  * published under GitHub's own delivery id, which a redelivery carries
  * again, so a delivery GitHub sends twice records one run per automation;
  * the automation-runs queue's consumer records and starts it
@@ -102,7 +103,13 @@ const AGENT_OPENING_ACTIONS: ReadonlySet<string> = new Set([
 const MAXIMUM_AUTOMATIONS = 100;
 
 const LabelSchema = Schema.Struct({ name: Schema.String });
-const RepositorySchema = Schema.Struct({ full_name: Schema.String });
+
+// Note that every delivery's repository names its default branch, read as optional so a delivery that left it out is still read, its default branch then matching nothing.
+const RepositorySchema = Schema.Struct({
+  full_name: Schema.String,
+  default_branch: Schema.optionalKey(Schema.String),
+});
+
 const SenderSchema = Schema.Struct({ type: Schema.String, login: Schema.String });
 
 const PullRequestSchema = Schema.Struct({
@@ -144,7 +151,11 @@ const IssueSchema = Schema.Struct({
 
 const CheckSuiteSchema = Schema.Struct({
   action: Schema.String,
-  repository: Schema.Struct({ full_name: Schema.String, html_url: Schema.String }),
+  repository: Schema.Struct({
+    full_name: Schema.String,
+    html_url: Schema.String,
+    default_branch: Schema.optionalKey(Schema.String),
+  }),
   check_suite: Schema.Struct({
     head_branch: Schema.NullOr(Schema.String),
     head_sha: Schema.String,
@@ -164,6 +175,7 @@ const PushSchema = Schema.Struct({
  * One delivery read as a trigger: the event, the repository, the firing the
  * history keeps, the labels a label filter is read against (the one just
  * applied, or every label of what was opened), the branch a branch filter
+ * is read against, the repository's default branch a trigger kept to it
  * is read against, who sent it (none for a check, which names no sender),
  * the moment of a pull request's update, whether it is a push, and whether
  * a pull request is a draft or a fork's.
@@ -174,6 +186,7 @@ interface GitHubEventRead {
   readonly firing: AutomationFiring;
   readonly labels: readonly string[];
   readonly branch: string | undefined;
+  readonly defaultBranch: string | undefined;
   readonly sender: GitHubSender | undefined;
   readonly moment: PullRequestMoment | undefined;
   readonly pushed: boolean;
@@ -266,6 +279,7 @@ function pullRequestEvents(
     repository: repository.full_name,
     labels: label === undefined ? pull.labels.map((one) => one.name) : [label.name],
     branch: pull.base.ref,
+    defaultBranch: repository.default_branch,
     sender: pullRequestSender(read, agentLogin, fork),
     pushed: moment === PULL_REQUEST_MOMENT.PUSHED,
     draft: pull.draft === true,
@@ -344,6 +358,7 @@ function githubEventOf(
         repository: repository.full_name,
         labels: label === undefined ? issue.labels.map((each) => each.name) : [label.name],
         branch: undefined,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: kind,
@@ -379,6 +394,7 @@ function githubEventOf(
         repository: repository.full_name,
         labels: [],
         branch,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
@@ -407,6 +423,7 @@ function githubEventOf(
         repository: repository.full_name,
         labels: [],
         branch,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: GITHUB_TRIGGER_EVENT.PUSH,
@@ -427,7 +444,7 @@ function githubEventOf(
  * hears (people's alone where it names none), the moments of an update it
  * fires on (every one where it names none), a draft or a fork's pull
  * request only where it asks for them, and its label and branch filters
- * where it names any. Note that a push by our agents fires nothing
+ * where it names any, the repository's default branch among them. Note that a push by our agents fires nothing
  * whatever the trigger says, because an agent answering its own run with
  * a push would start that run again.
  */
@@ -460,8 +477,16 @@ function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): bool
       read.labels.some((label) => label.toLowerCase() === wanted.toLowerCase()),
     );
 
+  // A trigger kept to the default branch matches the one the delivery names, beside any branches named.
+  const onDefault =
+    trigger.defaultBranch === true &&
+    read.branch !== undefined &&
+    read.branch === read.defaultBranch;
+
   const branched =
-    branches.length === 0 || (read.branch !== undefined && branches.includes(read.branch));
+    (branches.length === 0 && trigger.defaultBranch !== true) ||
+    onDefault ||
+    (read.branch !== undefined && branches.includes(read.branch));
 
   return labeled && branched;
 }

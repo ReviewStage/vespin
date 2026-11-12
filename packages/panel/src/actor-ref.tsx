@@ -54,7 +54,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { BotIcon, HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
-import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
+import { automationNextText, automationOwnerFor } from "./desktop/automation-words.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
 import { StateGlyph } from "./state-glyph.js";
@@ -881,19 +881,20 @@ export function AutomationCard({
     <HoverCard data-actor-card={actor.kind}>
       <ActorHead
         actor={actor}
-        sub={subLine(
-          automationTriggerText(automation.trigger, automation.repositories ?? []),
-          automationOwnerName(automationOwner(automation), workspaceName, automation.mine === true),
-        )}
+        sub={`${automationTriggerText(automation.trigger, automation.repositories ?? [])}, ${automationOwnerFor(automationOwner(automation), workspaceName, automation.mine === true)}`}
         onOpen={onOpen}
       />
       {nextWords === undefined ? null : <HoverCardNote>{nextWords}</HoverCardNote>}
       {lastRun === null ? null : (
-        <HoverCardNote>
-          {"Last ran "}
-          <Time at={lastRun.firedAt} now={now} hint={false} look={TIME_LOOK.AGO} />
-          {` · ${automationRunLine(lastRun, automation.mine === true ? undefined : "its creator")}`}
-        </HoverCardNote>
+        <>
+          <HoverCardNote>
+            {"Last ran "}
+            <Time at={lastRun.firedAt} now={now} hint={false} look={TIME_LOOK.AGO} />
+          </HoverCardNote>
+          <HoverCardNote>
+            {automationRunLine(lastRun, automation.mine === true ? undefined : "its creator")}
+          </HoverCardNote>
+        </>
       )}
       <AutomationMaker automation={automation} now={now} />
     </HoverCard>

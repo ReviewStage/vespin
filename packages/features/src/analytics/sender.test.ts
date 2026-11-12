@@ -278,6 +278,24 @@ it.effect(
     }),
 );
 
+it.effect("a build naming no version sends none, and still says which app it is", () =>
+  Effect.gen(function* () {
+    const { sender, requests } = yield* sharingSender({
+      appVersion: "",
+      platform: PRODUCT_PLATFORM.WEB,
+    });
+
+    sender.record(PRODUCT_EVENT.ACCOUNT_SIGN_IN, {});
+    yield* sender.flush;
+
+    assert.equal(requests.length, 1);
+    assert.deepEqual(JSON.parse(requests[0]?.body ?? "{}").build, {
+      packaged: true,
+      platform: PRODUCT_PLATFORM.WEB,
+    });
+  }),
+);
+
 it.effect(
   "usage data turned off sends nothing, queued before or recorded after, until it is on again",
   () =>

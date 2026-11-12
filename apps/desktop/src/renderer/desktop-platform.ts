@@ -35,6 +35,7 @@ export const DESKTOP_PLATFORM: AppPlatform = {
   saveFile: ({ name, text }) => askAct(ACT_KIND.WINDOW_SAVE_FILE, { name, text }),
   focusPanel: () => tellAct(ACT_KIND.WINDOW_FOCUS_PANEL),
   menuOffers: (commands) => tellAct(ACT_KIND.WINDOW_MENU_OFFERS, { commands }),
+  handoff: (activity) => tellAct(ACT_KIND.WINDOW_HANDOFF, { activity }),
   pageFrameUrl,
   assetBase: () => new URL(".", document.baseURI).href,
   onMenuCommand: (listener) => appBridge().onMenuCommand(listener),

@@ -1,13 +1,16 @@
-import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "@repo/features/agent-view";
+import type { MemorySaveAnswerView } from "@repo/features/agent-view";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
+  ADD_MEMORY,
   forgetQuestion as forgetWords,
   MEMORY_ACT,
+  MEMORY_EDITOR_WORDS,
   MEMORY_PAGE_WORDS,
   MEMORY_RECALLS_WORDS,
   MEMORY_USE_WORDS,
   memoriesByUse,
+  memorySaveRefusal,
   memoryUse,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
@@ -198,32 +201,6 @@ const PAGE_LINE = {
 /** What the Filter is called, on its tooltip and its menu, and its one field. */
 const FILTER = "Filter";
 const KEPT_BY = "Saved by";
-
-/** What the button that keeps a new memory says. */
-const ADD_MEMORY = "Add memory";
-
-/** What the card a memory's words are written in says: its head as it edits or adds, its hint, and its send. */
-const EDITOR_WORDS = {
-  EDIT: "Edit memory",
-  ADD: "New memory",
-  PLACEHOLDER: "A fact your agents should remember",
-  SAVE: "Save",
-} as const;
-
-/** What a save that came to no answer says. */
-const SAVE_FAILED = "The memory could not be saved. Try again.";
-
-/** What a save the service refused says, by why. */
-const SAVE_REFUSAL = {
-  [MEMORY_SAVE_FAILURE.MEMORY_OFF]: "Turn on Memory in Settings › Experimental to save a memory.",
-  [MEMORY_SAVE_FAILURE.NOT_FOUND]: "This memory no longer exists.",
-  [MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL]:
-    "That looks like it holds a credential, which a memory never keeps.",
-  [MEMORY_SAVE_FAILURE.MEMORY_FULL]: `This workspace holds ${MEMORY_BOUNDS.MAX_MEMORIES.toLocaleString("en-US")} memories, the most it can. Delete one first.`,
-  [MEMORY_SAVE_FAILURE.UNANSWERED]: SAVE_FAILED,
-  // Note that a save is always a POST, so the method refused is never the window's; it reads as no answer.
-  [MEMORY_SAVE_FAILURE.METHOD_NOT_ALLOWED]: SAVE_FAILED,
-} as const satisfies Record<(typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE], string>;
 
 /** The table's columns, by id, which its sort names. */
 const COLUMN = {
@@ -775,9 +752,11 @@ function memoriesForgetMutation(workspaceId: string) {
 
 /** A save's answer as the editor's act reads it: taken, or refused in the service's own words. */
 function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
-  return "failure" in answer
-    ? { status: ACTION_RESULT_STATUS.REJECTED, reason: SAVE_REFUSAL[answer.failure] }
-    : ANSWER_ACCEPTED;
+  const refusal = memorySaveRefusal(answer);
+
+  return refusal === undefined
+    ? ANSWER_ACCEPTED
+    : { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
 }
 
 /** A memory's words as its row draws them: lit where the search landed, hanging the card of whose they are, with New or Unused and the agent that saved them under them. */
@@ -879,12 +858,12 @@ function MemoryCard({
     [],
   );
 
-  const title = editing.replaces === undefined ? EDITOR_WORDS.ADD : EDITOR_WORDS.EDIT;
+  const title = editing.replaces === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
 
   const box = useMessageBox({
     draft: editing.text,
     setDraft: onChange,
-    placeholder: EDITOR_WORDS.PLACEHOLDER,
+    placeholder: MEMORY_EDITOR_WORDS.PLACEHOLDER,
     label: title,
     maxLength: MEMORY_BOUNDS.MAX_CHARS,
     onSubmit: onSave,
@@ -917,7 +896,11 @@ function MemoryCard({
           <MessageBox
             box={box}
             className="memory-field"
-            send={{ label: EDITOR_WORDS.SAVE, empty: editing.text.trim() === "", held: busy }}
+            send={{
+              label: MEMORY_EDITOR_WORDS.SAVE,
+              empty: editing.text.trim() === "",
+              held: busy,
+            }}
             note={editing.refusal}
           />
         </ReplayMask>

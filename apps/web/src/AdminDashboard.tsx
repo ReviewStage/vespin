@@ -19,6 +19,7 @@ import { AccountScreen } from "@repo/panel/admin/screens/account";
 import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
+import { LimitsScreen } from "@repo/panel/admin/screens/limits";
 import { ReliabilityScreen } from "@repo/panel/admin/screens/reliability";
 import { UsersScreen } from "@repo/panel/admin/screens/users";
 import { WorkspaceScreen } from "@repo/panel/admin/screens/workspace";
@@ -242,6 +243,10 @@ function AdminDashboardPage(): React.JSX.Element {
         frame={(content) => shell(ADMIN_TAB.WORKSPACES, content)}
       />
     );
+  }
+
+  if (view.kind === ADMIN_TAB.LIMITS) {
+    return <LimitsScreen frame={(content) => shell(ADMIN_TAB.LIMITS, content)} />;
   }
 
   if (view.kind === ADMIN_TAB.USERS) {

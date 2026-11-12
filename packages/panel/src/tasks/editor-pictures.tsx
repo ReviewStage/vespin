@@ -1,13 +1,18 @@
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
   descriptionAttachmentAddress,
   descriptionAttachmentOf,
 } from "@repo/features/description-attachment-link";
+import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
+import { startsLikePdf } from "@repo/features/media-signature";
+import { formatBytes } from "@repo/features/number-format";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { PICTURE_KEEP_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  ATTACHMENT_CHIP_STATE,
   BUTTON_VARIANT,
   CARD_CORNER,
   CARD_ELEMENT,
@@ -41,13 +46,17 @@ import type {
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { encodeImage } from "../feedback-images.js";
 import {
+  isPdfDataUrl,
+  PdfFile,
   PICTURE_BLOCK_CLASS,
   PICTURE_FRAME_CLASS,
   PICTURE_IMAGE_CLASS,
   PICTURE_PENDING_CLASS,
   PictureBlock,
 } from "../picture-block.js";
+import { isPdfUpload } from "../picture-files.js";
 import { keepPictureRead, pictureQuery } from "../picture-query.js";
+import { base64Of } from "./attached-files.js";
 import {
   type DescriptionPicturesDoor,
   useDescriptionPicturesDoor,
@@ -67,7 +76,8 @@ import { documentScrollerOf } from "./document-frame.js";
  * Retry and Remove. A picture of another description pasted in is read as that
  * description's and kept again on this one, so this description's readers can see it; a
  * video an agent recorded is carried across as it is, and waits as a quiet
- * box, since its bytes draw no picture.
+ * box, since its bytes draw no picture, and so does a PDF laid in, which
+ * once kept is drawn as its file's chip (`picture-block.tsx`).
  * Selected, a picture offers its tools: Alt text and Caption, each a field
  * under it, Enlarge, and Delete. They hang above the picture from its left
  * edge, as wide as their own names, so a skinny picture neither squeezes
@@ -85,6 +95,8 @@ const UPLOAD_WORDS = {
   TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
   NOT_COPIED: "The picture could not be read from its description.",
   FAILED: "The image could not be uploaded.",
+  NOT_A_PDF: "This file is not a PDF a description can keep.",
+  PDF_TOO_LARGE: `This PDF is larger than the ${formatBytes(AGENT_BOUNDS.MAX_PDF_BYTES)} a description keeps.`,
 } as const;
 
 /** What each of a selected picture's tools is called. */
@@ -155,10 +167,25 @@ function dataUrlOf(mediaType: string, base64: string): string {
   return `data:${mediaType};base64,${base64}`;
 }
 
-/** The picture a file is, re-encoded within the bound, as a `data:` URL; or why it cannot be one. */
+/** The PDF a file is, as it is, within a PDF's bound, as a `data:` URL; or why it cannot be one. */
+async function pdfUrl(file: File): Promise<{ readonly url: string } | { readonly reason: string }> {
+  if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) return { reason: UPLOAD_WORDS.PDF_TOO_LARGE };
+
+  const bytes = await file.arrayBuffer().then(
+    (buffer) => new Uint8Array(buffer),
+    () => undefined,
+  );
+
+  if (bytes === undefined || !startsLikePdf(bytes)) return { reason: UPLOAD_WORDS.NOT_A_PDF };
+
+  return { url: dataUrlOf(DESCRIPTION_FILE_TYPE.PDF, base64Of(bytes)) };
+}
+
+/** The picture a file is, re-encoded within the bound, or the PDF it is, as a `data:` URL; or why it cannot be one. */
 async function encodedUrl(
   file: File,
 ): Promise<{ readonly url: string } | { readonly reason: string }> {
+  if (isPdfUpload(file)) return pdfUrl(file);
   const read = await encodeImage(file, PICTURE_BOUNDS.MAX_BYTES);
 
   if ("unreadable" in read) return { reason: read.unreadable ?? UPLOAD_WORDS.NOT_A_PICTURE };
@@ -182,24 +209,36 @@ function UploadingPicture({
 
   return (
     <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
-      <Card
-        as={CARD_ELEMENT.SPAN}
-        corner={CARD_CORNER.CONTROL}
-        padding={CARD_PADDING.FLUSH}
-        className={PICTURE_FRAME_CLASS}
-      >
-        {url === undefined || isVideoDataUrl(url) ? (
-          <span className={PICTURE_PENDING_CLASS} />
-        ) : (
-          // The Mac's own bytes at half strength while the upload waits.
-          <img
-            className={`${PICTURE_IMAGE_CLASS} opacity-50`}
-            src={url}
-            alt={alt}
-            draggable={false}
-          />
-        )}
-      </Card>
+      {url !== undefined && isPdfDataUrl(url) ? (
+        <PdfFile
+          url={url}
+          name={alt}
+          state={
+            upload?.kind === UPLOAD.SENDING
+              ? ATTACHMENT_CHIP_STATE.UPLOADING
+              : ATTACHMENT_CHIP_STATE.FAILED
+          }
+        />
+      ) : (
+        <Card
+          as={CARD_ELEMENT.SPAN}
+          corner={CARD_CORNER.CONTROL}
+          padding={CARD_PADDING.FLUSH}
+          className={PICTURE_FRAME_CLASS}
+        >
+          {url === undefined || isVideoDataUrl(url) ? (
+            <span className={PICTURE_PENDING_CLASS} />
+          ) : (
+            // The Mac's own bytes at half strength while the upload waits.
+            <img
+              className={`${PICTURE_IMAGE_CLASS} opacity-50`}
+              src={url}
+              alt={alt}
+              draggable={false}
+            />
+          )}
+        </Card>
+      )}
       {upload?.kind === UPLOAD.SENDING ? (
         <span className="picture-status mt-item-gap flex items-center gap-item-gap text-caption text-muted-foreground">
           <Spinner delay label={UPLOAD_WORDS.SENDING} />

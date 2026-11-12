@@ -689,7 +689,7 @@ test("an automation's chip is called by its name now, its workspace's automation
   assert.match(called ?? "", /Nightly sweep/u, "the chip says the name the automation has now");
   assert.equal(card.card, "data-actor-card");
   assert.equal(card.name, "Nightly sweep");
-  assert.match(card.sub ?? "", / · Acme$/u, "whose it is joins what fires it");
+  assert.match(card.sub ?? "", /, for Acme$/u, "whose it is follows what fires it");
   assert.equal(card.corner, undefined);
   assert.deepEqual(card.detailWords, ["Created by Sam Okafor · 1d ago"]);
 });

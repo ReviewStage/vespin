@@ -4,6 +4,12 @@ import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
+import { isThisMac, type ListedMachine, machineName, THIS_MAC } from "@repo/features/machine-name";
+import {
+  MACHINE_STANDING_WORDS,
+  MACHINES_WORDS,
+  removeMachineQuestion,
+} from "@repo/features/machines-settings-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -60,13 +66,7 @@ import { copyThroughShell } from "../copy-feedback.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
-import {
-  isThisMac,
-  type ListedMachine,
-  machineName,
-  THIS_MAC,
-  useThisMac,
-} from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -129,16 +129,12 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION_TITLE = {
-  HOSTS: "Your machines",
+  HOSTS: MACHINES_WORDS.TITLE,
   ADD: "Add a machine",
 } as const;
 
 const WORDS = {
-  NONE: "No machines yet.",
-  ONLINE: "Online",
-  OFFLINE: "Offline",
-  SETTING_UP: "Setting up…",
-  FAILED: "Failed",
+  NONE: MACHINES_WORDS.NONE,
   INSTALL_LABEL: "Run this on a Mac or Linux server",
   APPROVE: "Open the link it prints, and approve its code",
   LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
@@ -163,7 +159,7 @@ const UNREACHED: ActionResult = {
 /** A remove the service answered with a refusal, said in the dialog that asked. */
 const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not remove this machine. Try again.",
+  reason: MACHINES_WORDS.REMOVE_FAILED,
 };
 
 /** Turning This Mac on or off where its host is another account's, which only that account, or an uninstall on this Mac, removes. */
@@ -187,10 +183,22 @@ function machineOf(host: HostLine): ListedMachine {
 
 /** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
 const STANDING_LINE = {
-  [DEVICE_STANDING.ONLINE]: { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED },
-  [DEVICE_STANDING.OFFLINE]: { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION },
-  [DEVICE_STANDING.SETTING_UP]: { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN },
-  [DEVICE_STANDING.FAILED]: { words: WORDS.FAILED, state: SETTINGS_ROW_STATE.ATTENTION },
+  [DEVICE_STANDING.ONLINE]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.ONLINE],
+    state: SETTINGS_ROW_STATE.CONNECTED,
+  },
+  [DEVICE_STANDING.OFFLINE]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE],
+    state: SETTINGS_ROW_STATE.ATTENTION,
+  },
+  [DEVICE_STANDING.SETTING_UP]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP],
+    state: SETTINGS_ROW_STATE.PLAIN,
+  },
+  [DEVICE_STANDING.FAILED]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED],
+    state: SETTINGS_ROW_STATE.ATTENTION,
+  },
 } as const;
 
 /**
@@ -287,13 +295,6 @@ function deleteFoldersWords(count: number): DeleteFoldersWordsResult {
   };
 }
 
-/** What Remove says goes, whatever the machine: the host removes itself from the machine as it hears so (`apps/host`'s `removeItself`). */
-const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
-
-/** What Remove adds for a host that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
-const REMOVED_OFFLINE =
-  "It's offline, so it does that the next time it's online. If it won't be, run this on it:";
-
 /** One machine's row: its mark, what it is called, whether it is online and what it is, and its ⋯ holding Remove. */
 function HostRow({
   host,
@@ -319,7 +320,7 @@ function HostRow({
       thing={label}
       actions={[
         {
-          label: "Remove",
+          label: MACHINES_WORDS.REMOVE,
           icon: <GLYPH.REMOVE />,
           danger: true,
           disabled: locked,
@@ -364,14 +365,21 @@ function ThisMacRow({
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
   // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed.
-  useAnnounce(ANNOUNCE.ALERT, on && setupFailed ? `${THIS_MAC} ${WORDS.FAILED}` : "");
+  useAnnounce(
+    ANNOUNCE.ALERT,
+    on && setupFailed ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}` : "",
+  );
 
   const description = !on ? (
     THIS_MAC_WORDS.OFF
   ) : setupFailed ? (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>{WORDS.FAILED}</SettingsRowStateLine>
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+      {MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}
+    </SettingsRowStateLine>
   ) : host === undefined ? (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>{WORDS.SETTING_UP}</SettingsRowStateLine>
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
+      {MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP]}
+    </SettingsRowStateLine>
   ) : (
     <StandingLine host={host} book={book} joined={true} />
   );
@@ -440,10 +448,7 @@ function RemoveHostDialog({
       open
       confirm={confirm}
       question={{
-        title: `Remove ${asked?.label ?? ""}?`,
-        body: REMOVED,
-        verb: "Remove",
-        running: "Removing",
+        ...removeMachineQuestion(asked?.label ?? ""),
         loss: CONFIRM_LOSS.IRREVERSIBLE,
         replayUnmasked: true,
         titleReplayMasked: true,
@@ -451,9 +456,9 @@ function RemoveHostDialog({
     >
       {asked?.offline === true ? (
         <>
-          <Text tone={TEXT_TONE.MUTED}>{REMOVED_OFFLINE}</Text>
+          <Text tone={TEXT_TONE.MUTED}>{MACHINES_WORDS.REMOVED_OFFLINE}</Text>
           <CopyField
-            label="Uninstall command"
+            label={MACHINES_WORDS.UNINSTALL_FIELD}
             value={HOST_UNINSTALL_COMMAND}
             what="command"
             copy={copyThroughShell}
@@ -565,7 +570,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const askRemove = (host: HostLine, label: string) => {
     // Note that a host the sweep marked away hears of its removal only once it is back, whatever its setup says.
     const offline =
-      host.away === true || standingOf(host, book, joinedNow(host))?.words === WORDS.OFFLINE;
+      host.away === true ||
+      standingOf(host, book, joinedNow(host))?.words ===
+        MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE];
 
     setAsked({ accountId, host, label, offline });
     removing.ask();

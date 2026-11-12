@@ -158,7 +158,9 @@ export const PULL_REQUEST_DEFAULT_MOMENTS: readonly PullRequestMoment[] =
  * An event of the automation's repositories. `labels` keeps a labeled
  * event to those labels and `branches` an event to those branches (a pull
  * request's base, a push's or a check's branch); an empty or absent list
- * keeps nothing out. `senders` says whose events fire it, people's alone
+ * keeps nothing out. `defaultBranch` keeps it to the repository's default
+ * branch, whatever it is called, as GitHub's delivery names it; beside
+ * `branches`, an event on either is kept. `senders` says whose events fire it, people's alone
  * where absent; `moments` which moments of a pull request an update fires
  * on, every one where absent. A draft pull request fires it only where
  * `drafts` is true, and one from a fork only where `forks` is.
@@ -168,6 +170,7 @@ export const githubTriggerSchema = EffectSchema.Struct({
   event: EffectSchema.Literals(Object.values(GITHUB_TRIGGER_EVENT)),
   labels: EffectSchema.optionalKey(filterValuesSchema),
   branches: EffectSchema.optionalKey(filterValuesSchema),
+  defaultBranch: EffectSchema.optionalKey(EffectSchema.Boolean),
   senders: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(GITHUB_SENDER))),
   ),

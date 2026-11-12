@@ -1,3 +1,4 @@
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import type { ComponentPropsWithRef, ReactNode } from "react";
 import { GLYPH, OctagonMinusIcon, PencilLineIcon } from "../../icons/icons.js";
 
@@ -40,9 +41,6 @@ const KIND_CLASS = {
   [ROW_MARK.DRAFT]: "draft-mark text-muted-foreground",
   [ROW_MARK.BLOCKED]: "blocked-mark text-muted-foreground",
 } as const satisfies Record<RowMarkKind, string>;
-
-/** What a failed mark is called. */
-const FAILED_WORDS = "Failed";
 
 /** What a blocked mark is called. */
 export const BLOCKED_WORDS = "Blocked";
@@ -90,7 +88,7 @@ export function FailedMark(anchor: MarkAnchor): React.JSX.Element {
     <RowMark
       {...anchor}
       kind={ROW_MARK.FAILED}
-      label={FAILED_WORDS}
+      label={GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
       glyph={<GLYPH.FAILED aria-hidden="true" />}
     />
   );

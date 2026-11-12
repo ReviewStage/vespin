@@ -1,6 +1,12 @@
 import type { ServerRow } from "@repo/features/agent-servers-model";
 import { CONNECTION_HEALTH, type ConnectionHealth } from "@repo/features/integration-health";
 import {
+  disconnectQuestion,
+  grantLabel,
+  INTEGRATION_REFUSED,
+  INTEGRATION_ROW_WORDS,
+} from "@repo/features/integration-settings-words";
+import {
   SIGN_IN,
   SIGN_IN_ACTION,
   type SignIn,
@@ -19,7 +25,7 @@ import {
   integrationAccountLabel,
 } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords, VERB } from "@repo/features/words";
+import { readFailedWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AccountWords,
@@ -81,17 +87,17 @@ import { MenuRow } from "./settings/menu-row.js";
 /** The words a row says on its line and under it, fixed by the build. */
 const ROW_LINE = {
   CONNECTED: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.CONNECTED],
-  CHECKING: "Checking…",
+  CHECKING: INTEGRATION_ROW_WORDS.CHECKING,
   TOOLS_NOT_READ: readFailedWords("the tools"),
-  NOT_OPENED: "Your browser could not be opened to sign in. Try again.",
-  GITHUB_SIGN_IN: "Uses your GitHub sign-in",
+  NOT_OPENED: INTEGRATION_ROW_WORDS.NOT_OPENED,
+  GITHUB_SIGN_IN: INTEGRATION_ROW_WORDS.GITHUB_SIGN_IN,
 } as const;
 
 /** What a row offers to mend its connection, on its button or in its ⋯. */
 const ROW_ACT = {
-  RECONNECT: VERB.RECONNECT,
-  ADD_ACCOUNT: "Add another account",
-  RENAME: "Rename",
+  RECONNECT: INTEGRATION_ROW_WORDS.RECONNECT,
+  ADD_ACCOUNT: INTEGRATION_ROW_WORDS.ADD_ACCOUNT,
+  RENAME: INTEGRATION_ROW_WORDS.RENAME,
 } as const;
 
 /** Where a row's own grant stands: at rest, a sign-in being begun, or one being called off. */
@@ -193,19 +199,6 @@ function rowLine(
 }
 
 /**
- * What a row's grant button says: Reconnect over a connection that broke,
- * GitHub's included, else Try again after a sign-in that did not connect,
- * else Connect or Reconnect.
- */
-function grantLabel(status: IntegrationStatus | undefined, signIn: SignIn | undefined): string {
-  if (status === INTEGRATION_STATUS.CONNECTED) return ROW_ACT.RECONNECT;
-
-  if (signIn !== undefined) return SIGN_IN_ACTION.TRY_AGAIN;
-
-  return status === INTEGRATION_STATUS.EXPIRED ? ROW_ACT.RECONNECT : "Connect";
-}
-
-/**
  * A row's line, with the ring before a wait's words, and where the server or
  * the sign-in said words of its own, those quoted on a plain line under ours.
  */
@@ -250,7 +243,7 @@ function disconnectAccount(
 
   const refused: ActionResult = {
     status: ACTION_RESULT_STATUS.REJECTED,
-    reason: `${name} could not be disconnected. Try again.`,
+    reason: INTEGRATION_REFUSED.DISCONNECT(name),
   };
 
   if (grantedBySignIn(provider)) return github.disconnect().then(() => ACCEPTED);
@@ -324,7 +317,7 @@ export function IntegrationRow({
     if (outcome === GRANT_OUTCOME.NOT_OPENED) setRejection(ROW_LINE.NOT_OPENED);
 
     if (outcome === GRANT_OUTCOME.REFUSED) {
-      setRejection(`${name} could not be connected. Try again.`);
+      setRejection(INTEGRATION_REFUSED.CONNECT(name));
     }
   };
 
@@ -346,7 +339,7 @@ export function IntegrationRow({
     void cancelSignIn(connection).then((canceled) => {
       setStage(ROW_GRANT.IDLE);
 
-      if (!canceled) setRejection(`The sign-in to ${name} could not be canceled. Try again.`);
+      if (!canceled) setRejection(INTEGRATION_REFUSED.CANCEL(name));
     });
   }, [cancelSignIn, connection, name]);
 
@@ -403,7 +396,7 @@ export function IntegrationRow({
   };
 
   const leave = {
-    label: "Disconnect",
+    label: INTEGRATION_ROW_WORDS.DISCONNECT,
     icon: <GLYPH.DISCONNECT />,
     danger: true,
     onSelect: disconnect.ask,
@@ -480,7 +473,7 @@ export function IntegrationRow({
             ),
           // Note that a rename's refusal is the rename's own, so a connect begun meanwhile neither erases it nor is hidden by it.
           error: refusedShown(
-            [rename.refused ? `${name} could not be renamed. Try again.` : undefined, rejection]
+            [rename.refused ? INTEGRATION_REFUSED.RENAME(name) : undefined, rejection]
               .filter((words) => words !== undefined)
               .join(" "),
             FAILURE_SURFACE.INTEGRATION_RENAME,
@@ -526,14 +519,7 @@ export function IntegrationRow({
         open
         confirm={disconnect}
         question={{
-          title: `Disconnect ${name}?`,
-          body: bySignIn
-            ? "Agents lose GitHub until you connect it again."
-            : several
-              ? `Agents lose this account. Your other ${INTEGRATION_NAME[provider]} accounts stay connected.`
-              : `Agents lose ${INTEGRATION_NAME[provider]} until you connect it again.`,
-          verb: `Disconnect ${INTEGRATION_NAME[provider]}`,
-          running: "Disconnecting",
+          ...disconnectQuestion(name, provider, { bySignIn, several }),
           loss: CONFIRM_LOSS.AFFECTS_OTHERS,
           replayUnmasked: true,
           titleReplayMasked: true,

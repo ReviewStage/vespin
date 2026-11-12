@@ -15,6 +15,7 @@ import {
 import { filedTaskOf } from "@repo/features/tasks-model";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  ActionRow,
   AttachRow,
   BAR_TITLE,
   BUZZ,
@@ -25,6 +26,7 @@ import {
   type PickOption,
   Screen,
   SettingsForm,
+  SkillRow,
   useColors,
   ValueRow,
   WordsField,
@@ -48,6 +50,7 @@ import {
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
+import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
@@ -63,12 +66,12 @@ const WORDS = {
   RUNS_ON: "Runs on",
   START: "Start",
   FILE_FOR_LATER: "File for later",
-  TASK_RELATION: "Task relation",
   RELATION: "Relation",
   TASK: "Task",
   NO_RELATION: "None",
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /** The names each sheet's flow finds its words and its + by. */
@@ -148,7 +151,7 @@ function SheetBar({
   );
 }
 
-/** The agent's section: its model and effort, and where it runs where the account may run one on its own device. */
+/** The agent's section: its model and effort, and where it runs where the account may run one on its own device; where the models could not be read, why, with Try again. */
 function AgentSection({
   pick,
   runsOn,
@@ -159,13 +162,16 @@ function AgentSection({
   readonly onRunsOn: (place: string) => void;
 }) {
   return (
-    <ListSection title={WORDS.AGENT}>
+    <ListSection title={WORDS.AGENT} footer={pick.failed}>
       <MenuPickRow
         label={WORDS.MODEL}
         options={pick.models}
         picked={pick.shown?.model}
         onPick={pick.pickModel}
       />
+      {pick.failed === undefined ? null : (
+        <ActionRow label={WORDS.TRY_AGAIN} symbol="arrow.clockwise" onPress={pick.retry} />
+      )}
       {pick.efforts.length <= 1 ? null : (
         <MenuPickRow
           label={WORDS.EFFORT}
@@ -186,18 +192,21 @@ function AgentSection({
   );
 }
 
-/** The sheet's words and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
+/** The sheet's words, the skills a `/` in them offers, and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
 function DraftSection({
   placeholder,
+  words,
   onWords,
-  initialWords,
+  skills,
   pictures,
   note,
   testIds,
 }: {
   readonly placeholder: string;
+  readonly words: string;
   readonly onWords: (words: string) => void;
-  readonly initialWords?: string | undefined;
+  /** The skills a `/` being typed offers; none while no `/` word ends the words. */
+  readonly skills: SkillsOffered | undefined;
   readonly pictures: AttachedPictures;
   readonly note: string | undefined;
   /** The names a flow finds the field and the + by. */
@@ -207,11 +216,14 @@ function DraftSection({
     <ListSection footer={note}>
       <WordsField
         placeholder={placeholder}
+        words={words}
         onWords={onWords}
-        initialWords={initialWords}
         autoFocus
         testId={testIds.WORDS}
       />
+      {skills === undefined ? null : (
+        <SkillRow skills={skills.skills} empty={skills.empty} onPick={skills.pick} />
+      )}
       <AttachRow
         pictures={pictures.attached}
         onAdd={pictures.attach}
@@ -304,6 +316,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
 
   const start = () =>
     go(
@@ -324,7 +337,9 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
         <SettingsForm>
           <DraftSection
             placeholder={WORDS.AGENT_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_AGENT}
@@ -423,7 +438,8 @@ function useRelationPick(
 /** New task's relation: its kind, and the task it names once a kind is picked. */
 function RelationSection({ pick }: { readonly pick: RelationPick }) {
   return (
-    <ListSection title={WORDS.TASK_RELATION}>
+    // Note that the section has no header, since its first row already names it, as a system form's single-purpose group stands.
+    <ListSection>
       <MenuPickRow
         label={WORDS.RELATION}
         options={RELATION_OPTIONS}
@@ -496,6 +512,19 @@ export function NewTaskScreen({
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
 
+  // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
+  const skillsRepository = tree === undefined ? repository.picked : (tree.repository ?? undefined);
+
+  const skills = useSkillOffer(
+    prompt,
+    setPrompt,
+    workspaceId === undefined
+      ? undefined
+      : skillsRepository === undefined
+        ? { workspaceId }
+        : { workspaceId, repository: skillsRepository },
+  );
+
   const start = () => {
     if (!drafted) return;
     go(
@@ -531,24 +560,42 @@ export function NewTaskScreen({
         <SettingsForm>
           <DraftSection
             placeholder={WORDS.TASK_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
-            initialWords={draft?.prompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_TASK}
           />
           <RelationSection pick={relation} />
+          {/* Note that the section has no header, since its one row already names it, as a system form's single-row group stands. */}
           <ListSection
-            title={WORDS.REPOSITORY}
             footer={
-              tree === undefined && repository.options.length === 0
-                ? WORDS.NO_REPOSITORIES
-                : undefined
+              tree !== undefined
+                ? undefined
+                : (repository.failed ??
+                  (repository.read && repository.options.length === 0
+                    ? WORDS.NO_REPOSITORIES
+                    : undefined))
             }
           >
             {tree !== undefined ? (
               <ValueRow label={WORDS.REPOSITORY} value={tree.repository ?? NO_REPOSITORY} />
-            ) : repository.options.length === 0 ? null : (
+            ) : repository.options.length === 0 ? (
+              <>
+                {/* Note that the repository a start still names, taken from the account's recent tasks, stands while the list is read or could not be, so it never starts in one the sheet did not show. */}
+                {repository.picked === undefined ? null : (
+                  <ValueRow label={WORDS.REPOSITORY} value={repository.picked} />
+                )}
+                {repository.failed === undefined ? null : (
+                  <ActionRow
+                    label={WORDS.TRY_AGAIN}
+                    symbol="arrow.clockwise"
+                    onPress={repository.retry}
+                  />
+                )}
+              </>
+            ) : (
               <MenuPickRow
                 label={WORDS.REPOSITORY}
                 options={repository.options}

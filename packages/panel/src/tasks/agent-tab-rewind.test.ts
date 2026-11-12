@@ -9,7 +9,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, type ExperimentChoices } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -130,12 +130,12 @@ async function settle(): Promise<void> {
 /**
  * The agent's tab over the transcript, every rewind and send it makes written
  * down in order, a rewind that puts the files back marked `:files`; the
- * agent's workspace has the files-back experiment on where `restoring`.
+ * reader has the account's experiments named in `experiments` on.
  */
 async function drawnTab(
   holdSends = false,
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
-  restoring = false,
+  experiments: ExperimentChoices = {},
 ) {
   const opened: string[] = [];
   const turns: [string, string, string][] = [];
@@ -160,29 +160,26 @@ async function drawnTab(
     },
   };
 
-  if (restoring) {
-    handState(
-      { [EXPERIMENT.REWIND_FILES]: true },
-      {
-        tasks: {
-          ...IDLE_TASKS_VIEW,
-          taskAgents: [
-            {
-              id: AGENT,
-              planId: TASK,
-              turnId: null,
-              title: AGENT_SUMMARY.title,
-              model: AGENT_SUMMARY.model,
-              effort: AGENT_SUMMARY.effort,
-              status: AGENT_SUMMARY.status,
-              createdAt: AGENT_SUMMARY.createdAt,
-              workspaceId: "workspace-1",
-              repository: "acme/relay",
-            },
-          ],
-        },
+  if (Object.keys(experiments).length > 0) {
+    handState(experiments, {
+      tasks: {
+        ...IDLE_TASKS_VIEW,
+        taskAgents: [
+          {
+            id: AGENT,
+            planId: TASK,
+            turnId: null,
+            title: AGENT_SUMMARY.title,
+            model: AGENT_SUMMARY.model,
+            effort: AGENT_SUMMARY.effort,
+            status: AGENT_SUMMARY.status,
+            createdAt: AGENT_SUMMARY.createdAt,
+            workspaceId: "workspace-1",
+            repository: "acme/relay",
+          },
+        ],
       },
-    );
+    });
   } else {
     fakeAppBridge({});
   }
@@ -319,7 +316,7 @@ test("a line sent and not yet read back follows the last message, so editing it 
   assert.deepEqual(tab.calls, ["send:And the docs."], "nothing was cut yet");
 });
 
-test("an edited message whose turn recorded the files offers them back in its box while the workspace has the experiment on, and Send in the question hands the choice on with the rewind", async () => {
+test("an edited message whose turn recorded the files offers them back in its box while the reader has the experiment on, and Send in the question hands the choice on with the rewind", async () => {
   const recorded = MESSAGES.map((each) =>
     each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
   );
@@ -342,7 +339,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const tab = await drawnTab(false, recorded, true);
+  const tab = await drawnTab(false, recorded, { [EXPERIMENT.REWIND_FILES]: true });
   const edit = tab.message("middle").querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
   assert.ok(edit);
   await act(async () => edit.click());
@@ -368,7 +365,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
   ]);
 });
 
-test("a turn that edited a file says which, with its lines added and removed, over its Worked for line while the workspace has the experiment on, and says nothing of it while it is off", async () => {
+test("a turn that edited a file says which, with its lines added and removed, over its Worked for line while the reader has Turn changes on, and says nothing of it while it is off", async () => {
   const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
   const off = await drawnTab(false, edited);
   assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
@@ -376,7 +373,7 @@ test("a turn that edited a file says which, with its lines added and removed, ov
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const on = await drawnTab(false, edited, true);
+  const on = await drawnTab(false, edited, { [EXPERIMENT.TURN_CHANGES]: true });
   const row = on.message("reply-2").querySelector<HTMLElement>("[data-turn-files]");
   assert.ok(row, "the row stands");
   assert.ok(row.textContent?.includes("1 file changed +2 −1"), row.textContent ?? "");

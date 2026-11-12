@@ -1,11 +1,11 @@
-// start-task.tsx -- New task, Home's composer as a sheet, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
+// index.tsx -- New task, Home's composer as a sheet, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
 
 import { SHARE_DRAFT_PICTURE_FILES } from "@repo/features/ios-share-wire";
 import { useLocalSearchParams } from "expo-router";
-import { appGroupFileUri } from "../app-group.js";
-import { NewTaskScreen } from "../screens/start-screens.js";
+import { appGroupFileUri } from "../../app-group.js";
+import { NewTaskScreen } from "../../screens/start-screens.js";
 
-export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
+export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /**
  * The addresses of the draft's picture files that `param`, a JSON list of
