@@ -31,6 +31,9 @@ export const MENTION_NODE = "mention";
 /** The link mark's name, as StarterKit spells it. */
 const LINK_MARK = "link";
 
+/** An address GitHub's dialect links written bare. */
+const WEB_ADDRESS = /^https?:\/\/\S+$/u;
+
 /** A mention as markdown writes it. */
 export function mentionLink(mention: MentionNode): string {
   return mentionMarkdownLink(mention.name, mention.target);
@@ -140,8 +143,13 @@ export function mentionNode(drawMention: MentionDrawer | undefined) {
 
       if (words === undefined) return mentionLink({ name: String(held.attrs?.name ?? ""), target });
 
-      // Note that an address written bare is written bare again, as GitHub's dialect links one.
-      if (words.length === 1 && words[0]?.marks === undefined && words[0]?.text === target) {
+      // Note that a web address written bare is written bare again, as GitHub's dialect links one; any other is no autolink.
+      if (
+        words.length === 1 &&
+        words[0]?.marks === undefined &&
+        words[0]?.text === target &&
+        WEB_ADDRESS.test(target)
+      ) {
         return target;
       }
 
@@ -211,7 +219,10 @@ function mentionsOfRun(
         type: MENTION_NODE,
         attrs: { name: words.slice(MENTION_SIGIL.length), target: href },
       });
-    } else if (namesChip?.(href) === true && run.every((each) => each.type === "text")) {
+    } else if (
+      namesChip?.(href) === true &&
+      run.every((each) => each.type === "text" && !titled(each))
+    ) {
       read.push({
         type: MENTION_NODE,
         attrs: { name: words, target: href, words: run.map(withoutLink) },
@@ -224,6 +235,13 @@ function mentionsOfRun(
   }
 
   return read;
+}
+
+/** Whether a run's link carries a title, which a chip has no place to keep, so it stays the link. */
+function titled(word: JSONContent): boolean {
+  const title: unknown = word.marks?.find((mark) => mark.type === LINK_MARK)?.attrs?.title;
+
+  return title !== undefined && title !== null && title !== "";
 }
 
 /** A run of a link's words without the link. */

@@ -48,8 +48,8 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
  */
 const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
 
-/** A line opening or closing a code fence, past the quote and list markers holding it: its run of backticks or tildes, and what follows it. */
-const FENCE_LINE = /^[\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*(`{3,}|~{3,})(.*)$/u;
+/** A line opening or closing a code fence: the quote and list markers holding it, its run of backticks or tildes, and what follows it. */
+const FENCE_LINE = /^([\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*)(`{3,}|~{3,})(.*)$/u;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -212,6 +212,11 @@ export function sourcesOf(doc: PmNode, opened: OpenedDocument): HeldSources {
   return { sources: map, lead: opened.lead, ending: opened.ending };
 }
 
+/** How many quotes deep a line's markers stand. */
+function quoteDepth(markers: string): number {
+  return markers.split(">").length - 1;
+}
+
 /** The trailing whitespace of a source. */
 function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
@@ -235,24 +240,25 @@ function reprinted(manager: MarkdownManager, node: PmNode): string {
  * writes code raw, so a backslash there is the code's own.
  */
 function alertsUnescaped(markdown: string): string {
-  let fence: string | undefined;
+  let fence: { run: string; depth: number } | undefined;
 
   return markdown
     .split("\n")
     .map((line) => {
-      const [, run, rest = ""] = FENCE_LINE.exec(line) ?? [];
+      const [, markers = "", run, rest = ""] = FENCE_LINE.exec(line) ?? [];
 
       if (fence === undefined) {
-        fence = run;
+        fence = run === undefined ? undefined : { run, depth: quoteDepth(markers) };
 
         return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
       }
 
-      // Note that a fence closes on a run as long or longer of its own mark, with nothing after it.
+      // Note that a fence closes on a run as long or longer of its own mark, as many quotes deep, with nothing after it.
       const closes =
         run !== undefined &&
-        run[0] === fence[0] &&
-        run.length >= fence.length &&
+        run[0] === fence.run[0] &&
+        run.length >= fence.run.length &&
+        quoteDepth(markers) === fence.depth &&
         rest.trim() === "";
 
       if (closes) fence = undefined;

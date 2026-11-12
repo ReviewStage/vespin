@@ -75,6 +75,9 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
 /** What every editor's room wears: the box the toolbar and the menus over its words are placed in. */
 const ROOM_CLASS = "markdown-editor relative";
 
+/** What a dialog's card is, which focus may go into from the room. */
+const DIALOG = '[role="dialog"]';
+
 /** What the room says while the editor's bundle could not be loaded. */
 const EDITOR_LOAD_FAILED = "The editor could not be loaded.";
 
@@ -257,6 +260,8 @@ export function MarkdownEditor({
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
+  // A leaving into a dialog, which stays where the dialog's focus reaches the room as its own.
+  const leaving = useRef<{ stays: boolean } | undefined>(undefined);
 
   const once = (close: () => void) => {
     if (sending) held.current = close;
@@ -368,10 +373,27 @@ export function MarkdownEditor({
       ref={room}
       className={roomClass}
       aria-label={roomLabel}
+      onFocus={() => {
+        if (leaving.current !== undefined) leaving.current.stays = true;
+      }}
       onBlur={(event) => {
         const into = event.relatedTarget;
 
         if (onLeave === undefined || event.currentTarget.contains(into) || toolbar.holds(into)) {
+          return;
+        }
+
+        // Note that focus going into a dialog waits to hear whether the dialog is the room's own, a
+        // diagram's Full screen, since a portal's focus reaches the room as its own after the blur.
+        if (into instanceof Element && into.closest(DIALOG) !== null) {
+          const leave = { stays: false };
+          leaving.current = leave;
+          queueMicrotask(() => {
+            if (leaving.current === leave) leaving.current = undefined;
+
+            if (!leave.stays) once(onLeave);
+          });
+
           return;
         }
 

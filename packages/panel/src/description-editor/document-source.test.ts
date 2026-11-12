@@ -520,6 +520,12 @@ test.each([
     saved: "```md\n> \\[!NOTE\\]\nRun it now\n```\n",
   },
   {
+    block: "a code line written as a quoted fence leaves the code open",
+    text: "```md\n> ```\n> \\[!NOTE\\]\nRun it\n```\n",
+    words: "> ```\n> \\[!NOTE\\]\nRun it",
+    saved: "```md\n> ```\n> \\[!NOTE\\]\nRun it now\n```\n",
+  },
+  {
     block: "a table gains no blank line over it",
     text: "The steps:\n\n| Step | Command    |\n| ---- | ---------- |\n| Run  | `pnpm dev` |\n",
     words: "Run",
@@ -559,15 +565,18 @@ test("a paragraph wrapped onto a second line draws as one line and keeps its wra
 
 test("links the read view draws as chips open as chips and are saved as written when their line is edited", () => {
   const text =
-    "Shipped in https://github.com/acme/app/pull/12 with [`store.ts`](https://github.com/acme/app/blob/HEAD/store.ts).\n";
+    'Shipped in https://github.com/acme/app/pull/12 with [`store.ts`](https://github.com/acme/app/blob/HEAD/store.ts), [mention://file/app.ts](mention://file/app.ts), and [the app](https://github.com/acme/app "Open the app").\n';
 
-  const { editor, handedOver } = opened(text, BLANK_ENDS.KEPT, (target) =>
-    target.startsWith("https://github.com/"),
+  const { editor, handedOver } = opened(
+    text,
+    BLANK_ENDS.KEPT,
+    (target) => target.startsWith("https://github.com/") || target.startsWith("mention://"),
   );
 
   typedAtEnd(editor, " Done.");
   const chips = editor.getJSON().content?.[0]?.content?.filter((node) => node.type === "mention");
 
-  assert.equal(chips?.length, 2);
+  // Note that a titled link stays a link, since a chip has no place for its title.
+  assert.equal(chips?.length, 3);
   assert.equal(handedOver(), text.replace(").\n", "). Done.\n"));
 });

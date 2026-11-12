@@ -1,7 +1,7 @@
 import { CODE_CARD_CLASS, CODE_LINES_CLASS } from "@repo/ui/code-face";
 import { type AnyExtension, Extension, type NodeViewRenderer } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { Selection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import { Predicate } from "effect";
 import { codeColoring } from "./code-coloring.js";
 import type {
@@ -101,6 +101,9 @@ function codeBlockView({ drawCodeHeader, drawDiagram }: CodeDrawers): NodeViewRe
     const card =
       drawDiagram !== undefined && drawnAsDiagram(node) ? document.createElement("div") : undefined;
 
+    // Note that the code card stands in the diagram's card from the start, until the panel's drawing lays it in its place, so a caret the editor opens on in it lands.
+    card?.append(frame);
+
     const setLanguage = (language: string) => {
       const at = getPos();
 
@@ -130,15 +133,21 @@ function codeBlockView({ drawCodeHeader, drawDiagram }: CodeDrawers): NodeViewRe
       setLanguage,
     });
 
-    // Note that the diagram shown again puts a caret standing in the hidden code after the block, so no key types there.
+    // Note that the diagram shown again puts a caret standing in the hidden code after the block, so no key types there:
+    // before it where nothing follows it, and on the block itself where nothing stands either side.
     const showCode = (showing: boolean) => {
       opened = showing ? CODE_OPENED.PRESS : undefined;
       const at = getPos();
-      const { head: caret } = editor.state.selection;
+      const { doc, selection } = editor.state;
+      const caret = selection.head;
 
       if (!showing && Predicate.isNumber(at) && caret > at && caret < at + current.nodeSize) {
-        const after = editor.state.doc.resolve(at + current.nodeSize);
-        editor.view.dispatch(editor.state.tr.setSelection(Selection.near(after)));
+        const outside =
+          Selection.findFrom(doc.resolve(at + current.nodeSize), 1, true) ??
+          Selection.findFrom(doc.resolve(at), -1, true) ??
+          NodeSelection.create(doc, at);
+
+        editor.view.dispatch(editor.state.tr.setSelection(outside));
       }
 
       diagramDrawing?.redraw(diagramOf(current));

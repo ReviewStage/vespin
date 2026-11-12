@@ -99,6 +99,17 @@ test("Show code shows the code, and Show diagram hides it and puts a caret stand
   assert.equal(editor.state.selection.$head.parent.textContent, "After.");
 });
 
+test("Show diagram on the text's last block puts a caret standing in its code before it", () => {
+  const { editor, latest } = mounted(`Intro.\n\n\`\`\`mermaid\n${FLOW}\n\`\`\`\n`);
+  const end = editor.state.doc.content.size - 1;
+
+  editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, end)));
+  latest()?.showCode(false);
+
+  assert.equal(latest()?.showingCode, false);
+  assert.equal(editor.state.selection.$head.parent.textContent, "Intro.");
+});
+
 test("a caret landing in the code shows it until it leaves", () => {
   const { editor, latest } = mounted(TEXT);
   let start: number | undefined;
