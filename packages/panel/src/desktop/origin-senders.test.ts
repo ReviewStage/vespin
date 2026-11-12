@@ -10,7 +10,7 @@ import {
 import type { Task } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab, subagentTab } from "@repo/ui/tab-strip-model";
-import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -197,7 +197,8 @@ test("an agent started from a suggestion opens on its card, which draws the file
       },
     ],
     metadata: {
-      channel: MESSAGE_CHANNEL.SUGGESTION,
+      channel: MESSAGE_CHANNEL.START,
+      brief: START_LINE_BRIEF.PROMPT,
       suggested_by: { agent_id: "agent-a", name: "Invite flow", button_id: "button-1" },
     },
     sentAt: BRIEF_SENT_AT,
@@ -216,6 +217,38 @@ test("an agent started from a suggestion opens on its card, which draws the file
       (chip) => chip.getAttribute("aria-label"),
     ),
     ["Open flow.png"],
+  );
+});
+
+test("an agent started blank whose first line a suggestion sent opens on that line, headed by who suggested it, never a card", async () => {
+  const sent: AgentTranscriptMessage = {
+    id: "sent",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      {
+        type: "text",
+        text: "Suggested by [@Invite flow](https://app.test/agent/a):\n\nCount invites apart.",
+      },
+    ],
+    metadata: {
+      channel: MESSAGE_CHANNEL.SUGGESTION,
+      suggested_by: { agent_id: "agent-a", name: "Invite flow", button_id: "button-2" },
+    },
+    sentAt: BRIEF_SENT_AT,
+  };
+
+  const { container } = await mount({
+    reader: CHARLES.userId,
+    main: agentTab(AGENT.id),
+    messages: [sent],
+    agent: { ...AGENT, brief: AGENT_BRIEF.BLANK },
+  });
+
+  assert.equal(container.querySelector(".agent-origin"), null);
+  assert.ok(
+    container
+      .querySelector('[data-message-id="sent"]')
+      ?.textContent?.includes("Count invites apart."),
   );
 });
 

@@ -1684,6 +1684,13 @@ export function suggestedByOf(message: AgentTranscriptMessage): SuggestedBy | un
   return read?.channel === MESSAGE_CHANNEL.START ? read.suggested_by : undefined;
 }
 
+/** The suggestion an agent was started from, as its first line carries it; nothing for any other line, a suggestion sent to a running agent among them. */
+export function suggestionStartOf(message: AgentTranscriptMessage): SuggestedBy | undefined {
+  const read = userMetadataOf(message);
+
+  return read?.channel === MESSAGE_CHANNEL.START ? read.suggested_by : undefined;
+}
+
 /** What GitHub said on the agent's pull request that a line steered into the agent carries; nothing for any other line. */
 export function githubLineOf(message: AgentTranscriptMessage): GitHubLineMetadata | undefined {
   const read = userMetadataOf(message);

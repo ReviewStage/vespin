@@ -237,6 +237,7 @@ import {
   SENT_LINE_STATE,
   slackLineOf,
   suggestedByOf,
+  suggestionStartOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
   tabTurnOf,
@@ -1459,7 +1460,8 @@ function suggestionOrigin(
   first: AgentTranscriptMessage | undefined,
   starter: Actor | undefined,
 ): TranscriptOrigin | undefined {
-  const suggestedBy = first === undefined ? undefined : suggestedByOf(first);
+  // Note that only a start line opens on the card, because a suggestion sent to an agent started blank is a line as any other is.
+  const suggestedBy = first === undefined ? undefined : suggestionStartOf(first);
 
   if (first === undefined || suggestedBy === undefined) return undefined;
 

@@ -588,7 +588,7 @@ export function useAgentComposer(input: {
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
 
     if (suggestion !== undefined) {
-      sendThroughSuggestion(suggestion, text, attachments, lead !== undefined);
+      sendThroughSuggestion(suggestion, text, attachments, lead);
 
       return;
     }
@@ -612,7 +612,7 @@ export function useAgentComposer(input: {
     suggestion: DraftSuggestion,
     text: string,
     attachments: readonly AgentAttachment[],
-    carriesLead: boolean,
+    sentLead: string | undefined,
   ) => {
     const sendSuggestion = latest.current.sendSuggestion;
 
@@ -624,8 +624,10 @@ export function useAgentComposer(input: {
           if ("reached" in result) {
             update(() => EMPTY_DRAFT);
 
-            // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again.
-            if (carriesLead) latest.current.onLeadSent?.();
+            // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again,
+            // but only while they are still the ones ticked: one ticked while the send was out stays, with those it joined.
+            if (sentLead !== undefined && latest.current.lead === sentLead)
+              latest.current.onLeadSent?.();
 
             return;
           }
