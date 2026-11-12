@@ -19,10 +19,13 @@
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
- * its transcript carried cut read whole as its call opens, and the agent
- * renamed, pinned, archived, and deleted; New agent on a task and
- * New task, a sub-task or a related task among it, or one filed for later
- * with no agent, with the models and the repositories they pick among followed;
+ * its transcript carried cut read whole as its call opens, a cloud agent's
+ * listening ports listed and shared by a public link, opened in Safari or
+ * no longer shared, its repository's run actions run and stopped in its
+ * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
+ * on a task and New task, a sub-task or a related task among it, or one
+ * filed for later with no agent, with the models and the repositories they
+ * pick among followed, and read again where they could not be;
  * Settings' Account page: Share usage data, support access, and the
  * account's deletion; Settings' Send feedback, its words and pictures
  * sent as the panel's form sends them; a workspace made from the switcher, which New
@@ -449,7 +452,7 @@ export const CLIENT_PARITY = {
     notYet("iOS v1 has no editor to hold unsaved work"),
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
-[PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
+  [PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
