@@ -9,6 +9,10 @@
  * the list and the thread read it settled at once, and stands until a read
  * carries it; a refused one is let go, its words and picks put back on the
  * box, the refusal said under it, and the phone buzzes as a refusal does.
+ * A resolve that went, and a notice's Got it, which nods to it with nothing
+ * written (`AGENTS_INBOX_ANSWER`), say so in the app's one notice with Undo
+ * (`useSettleUndo`), in the panel's words, which takes the settle back by
+ * the key it went under (`AGENTS_INBOX_TAKE_BACK`), the thread open again.
  * Note that the drafts and the sends are kept in one store beside the
  * screens rather than in a screen's state, so folding or unfolding the
  * iPhone Duo, which draws the thread on another screen, keeps both.
@@ -36,12 +40,22 @@ import { INBOX_PUSH_PRESS, type InboxPushPress } from "@repo/features/inbox-push
 import {
   INBOX_ASK,
   INBOX_FIELD,
+  INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
   type InboxMessage,
-  type InboxStatus,
   openAskOf,
 } from "@repo/features/inbox-wire";
+import {
+  ACKNOWLEDGE_UNTAKEN,
+  acknowledgedWords,
+  NOT_ACKNOWLEDGED,
+  NOT_RESOLVED,
+  RESOLVE_UNTAKEN,
+  resolvedWords,
+  TOOK_BACK,
+  untakenSaid,
+} from "@repo/features/inbox-write-words";
 import {
   INBOX_SENDING,
   type InboxReader,
@@ -50,7 +64,7 @@ import {
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
-import { BUZZ, buzz } from "@repo/ui-native";
+import { BUZZ, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
@@ -79,12 +93,13 @@ export function refusedWords(failure: AgentCallFailure): string {
   return "The message could not be sent. Try again.";
 }
 
-/** What a resolve the service did not take says, by what had become of the item, in the panel's words. */
-export const NOT_RESOLVED = {
-  [INBOX_STATUS.OPEN]: "The agent changed this item before you resolved it.",
-  [INBOX_STATUS.ANSWERED]: "This item was already answered.",
-  [INBOX_STATUS.CLOSED]: "This item was already resolved.",
-} as const satisfies Record<InboxStatus, string>;
+/** What a settle's Undo notice says it did, and what its take-back says where the service did not take it, in the panel's words: a resolve's, or a Got it's. */
+export const SETTLE = {
+  RESOLVE: { words: resolvedWords, untaken: RESOLVE_UNTAKEN },
+  ACKNOWLEDGE: { words: acknowledgedWords, untaken: ACKNOWLEDGE_UNTAKEN },
+} as const;
+
+export type Settle = (typeof SETTLE)[keyof typeof SETTLE];
 
 /** The label of the open ask's first number field whose words read as no number, which the box holds the answer back for; none where every number reads. */
 function unreadableNumber(thread: readonly InboxMessage[], draft: InboxDraft): string | undefined {
@@ -170,6 +185,17 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
   }
 }
 
+/** The store with the thread's closes let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back. */
+function letGoCloses(itemId: string): void {
+  if (held.get(itemId)?.sending.size === undefined) return;
+  hold(itemId, (was) => ({
+    ...was,
+    sending: new Map(
+      [...was.sending].filter(([, sending]) => sending.kind !== INBOX_SENDING.CLOSE),
+    ),
+  }));
+}
+
 /** Holds a notification's action for its thread's box to send once it stands, in place of any held before it. */
 export function pressFromNotification(press: InboxPushPress): void {
   hold(press.itemId, (was) => ({ ...was, pressed: press }));
@@ -222,6 +248,46 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
   }, [groups, store, reader]);
 }
 
+/* ----- Undo ----- */
+
+/**
+ * Says a settle that went in the app's one notice, the thread by its title,
+ * with Undo, which takes it back by the key it went under, as the panel's
+ * toast does: the thread open again, waiting on the reader; or, where the
+ * service did not take it back, says why, with Try again where the take-back
+ * was not reached.
+ */
+export function useSettleUndo(): (item: InboxItem, key: string, settle: Settle) => void {
+  const notices = useFailureNotices();
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return useCallback(
+    (item, key, settle) => {
+      const takeBack = () => {
+        letGoCloses(item.id);
+        void write(
+          () => acts[ACT_KIND.AGENTS_INBOX_TAKE_BACK]({ itemId: item.id, clientKey: key }),
+          {
+            refused: (answer) =>
+              untakenSaid(
+                ["failure" in answer ? TOOK_BACK.UNREACHED : answer.outcome],
+                settle.untaken,
+              ),
+            unanswered: settle.untaken.unreached,
+            // Note that only a take-back the service never answered offers Try again, under the same key; one it refused never takes.
+            retry: (answer) => "failure" in answer,
+            went: BUZZ.SUCCESS,
+          },
+        );
+      };
+
+      notices.say({ kind: NOTICE_KIND.DONE, words: settle.words([item]), undo: takeBack });
+    },
+    [notices, acts, write],
+  );
+}
+
 /* ----- The thread's box ----- */
 
 /** A thread's box as its screen draws and presses it. */
@@ -234,14 +300,22 @@ export interface ThreadAnswer {
   readonly answerReady: boolean;
   /** Sends what the draft holds, or the draft given, such as one Mark done was just pressed on; or says what it lacks. */
   readonly send: (pressed?: InboxDraft) => void;
-  /** Resolves the thread without an answer. */
+  /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
+  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, and the box empty, the nod drawn by the host at once once pressed. */
+  readonly nods: boolean;
+  /** Settles the notice with Got it, messaging nobody, with Undo once it went. */
+  readonly acknowledge: () => void;
 }
 
-/** The box of the thread `listed` stands for: its draft, and its Send and Resolve. */
+/** The nods out, by the item's id, so a second press of Got it before the first lands sends nothing. */
+const nodding = new Set<string>();
+
+/** The box of the thread `listed` stands for: its draft, and its Send, Got it, and Resolve. */
 export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
   const acts = useHostActs();
   const write = useWrite();
+  const settled = useSettleUndo();
   const { item } = listed;
   const itemId = item.id;
   const store = useSyncExternalStore(subscribe, heldNow);
@@ -345,7 +419,46 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         inPlace: (words) => refuse(key, draft, words),
         went: BUZZ.SUCCESS,
       },
-    );
+    ).then((went) => {
+      if (went) settled(item, key, SETTLE.RESOLVE);
+    });
+  };
+
+  // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
+  const acknowledge = () => {
+    if (nodding.has(itemId)) return;
+    nodding.add(itemId);
+    const key = randomUUID();
+    let taken = false;
+    hold(itemId, (was) => ({ ...was, note: undefined }));
+    void write(
+      () =>
+        acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
+          itemId,
+          revision: item.revision,
+          reply: INBOX_REPLY.ACKNOWLEDGED,
+          clientKey: key,
+        }).then((answer) => {
+          taken = !("failure" in answer) && answer.taken;
+
+          return answer;
+        }),
+      {
+        refused: (answer) =>
+          "failure" in answer
+            ? refusedWords(answer.failure)
+            : answer.taken || answer.item.status !== INBOX_STATUS.OPEN
+              ? undefined
+              : NOT_ACKNOWLEDGED,
+        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        inPlace: (words) => hold(itemId, (was) => ({ ...was, note: words })),
+        went: BUZZ.SUCCESS,
+      },
+    ).then((went) => {
+      nodding.delete(itemId);
+
+      if (went && taken) settled(item, key, SETTLE.ACKNOWLEDGE);
+    });
   };
 
   // A notification's action held for this thread, taken once and sent as though pressed here.
@@ -367,5 +480,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
+    nods: awaitsNod(item) && draft.note.trim() === "" && draft.attachments.length === 0,
+    acknowledge,
   };
 }

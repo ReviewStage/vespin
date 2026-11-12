@@ -117,9 +117,6 @@ const NEW_THREAD_PLACEHOLDER = "Start a new thread";
 /** What the checkbox under the card says before the agent's chip. */
 const SEND_AS_NEW = "Send as a new thread to";
 
-/** What Send reads on an empty notice that waits on the reader's nod, which settles it without messaging the agent. */
-const GOT_IT = "Got it";
-
 /** What the press after an archived agent's note says. */
 const UNARCHIVE = "Unarchive";
 
@@ -390,7 +387,7 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
+          send: nod ? INBOX_BOX_WORDS.GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}
