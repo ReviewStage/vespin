@@ -316,7 +316,11 @@ function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRo
 
     if (!connected && !expired) return [];
 
+    // Note that a working connection is signed in again from its menu, as the panel's ⋯ offers it; a broken one carries Reconnect as its own button.
     return [
+      ...(row.kind === SERVER_ROW.SWITCH
+        ? [{ label: INTEGRATION_ROW_WORDS.RECONNECT, onPress: () => connect(row) }]
+        : []),
       ...(statuses.canAdd(row.provider)
         ? [{ label: INTEGRATION_ROW_WORDS.ADD_ACCOUNT, onPress: () => connect(row, true) }]
         : []),

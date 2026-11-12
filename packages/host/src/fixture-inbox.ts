@@ -1077,15 +1077,34 @@ const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
   },
 ];
 
-/** What Open reads of a fixture skill: its SKILL.md, and the one file beside it. */
-const INSTALLED_SKILL_FILE = {
-  skillFile:
-    "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
-  files: [
-    { path: "SKILL.md", bytes: 214 },
-    { path: "template.md", bytes: 1_204 },
+/** What Open reads of each fixture skill, by its id: its SKILL.md, and the files beside it. */
+const INSTALLED_SKILL_FILES: ReadonlyMap<
+  string,
+  {
+    readonly skillFile: string;
+    readonly files: readonly { readonly path: string; readonly bytes: number }[];
+  }
+> = new Map([
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    {
+      skillFile:
+        "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
+      files: [
+        { path: "SKILL.md", bytes: 214 },
+        { path: "template.md", bytes: 1_204 },
+      ],
+    },
   ],
-} as const;
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    {
+      skillFile:
+        "---\nname: pr-style\ndescription: Title and describe a pull request the way this team does.\n---\n\n# Pull request style\n\nTitle it as a Conventional Commit, and say what changed and why.\n",
+      files: [{ path: "SKILL.md", bytes: 196 }],
+    },
+  ],
+]);
 
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
@@ -1691,8 +1710,15 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
-    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
-    [LIVE_READ.INSTALLED_SKILLS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS } },
+    // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
+    [LIVE_READ.MEMORIES]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
+      [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.INSTALLED_SKILLS]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },
+      [TEAM_WORKSPACE.id]: { rows: INSTALLED_SKILLS },
+    },
     [LIVE_READ.HOSTS]: {
       [ADA.userId]: {
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
@@ -1923,10 +1949,13 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
-  [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) =>
-    INSTALLED_SKILLS.some((skill) => skill.id === skillId)
-      ? { id: skillId, ...INSTALLED_SKILL_FILE }
-      : { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
+  [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
+    const read = INSTALLED_SKILL_FILES.get(skillId);
+
+    return read === undefined
+      ? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND }
+      : { id: skillId, skillFile: read.skillFile, files: [...read.files] };
+  },
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
 
