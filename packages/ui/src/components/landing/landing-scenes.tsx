@@ -1,5 +1,6 @@
 import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, type RefObject, useRef } from "react";
 import {
@@ -23,6 +24,8 @@ import {
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
+import { ProductMark } from "../../marks/product-mark.js";
+import { MARK_PROVIDER, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
@@ -31,10 +34,12 @@ import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
+import { CARD_LOOK, Card } from "../card/card.js";
 import { Checkbox } from "../checkbox/checkbox.js";
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { CountParts, linesCount } from "../choice/count-part.js";
 import { CHOICE_LOOK, CHOICE_SELECT, ChoiceList } from "../choice-list/choice-list.js";
+import { CODE_CARD_TITLE, CodeCard } from "../code-card/code-card.js";
 import { Comment, type CommentAuthor } from "../comment/comment.js";
 import { ComposerBody } from "../composer-frame/composer-body.js";
 import { ComposerFoot } from "../composer-frame/composer-foot.js";
@@ -76,6 +81,7 @@ import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
 import { TEXT_ELEMENT, TEXT_TONE, Text } from "../text/text.js";
 import { TEXT_VARIANT } from "../text/text-role.js";
 import { TEXT_AREA_LOOK, TextArea } from "../text-field/text-field.js";
+import { TextLink } from "../text-link/text-link.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET, TOOLBAR_LOOK } from "../toolbar/toolbar-frame.js";
@@ -101,14 +107,15 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  * log, folded calls and all, starting another agent and trading messages
  * with it, the plan's sub-tasks beside it; an automation's page fires a run;
  * the phone holds the same Inbox; and Settings › Agents connects Claude on
- * its plan and Codex on an API key. None is pressed: each plays its story on a clock that
+ * its plan and Codex on an API key; and a Slack mention and the `vespin`
+ * command each start an agent. None is pressed: each plays its story on a clock that
  * runs only while it is on screen (`landing-story.ts`). On a page too narrow
  * for a whole window, the Inbox and the task play only from their telling
  * moment, the ask and the hand-off, which is all their crop shows.
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
+const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500, STARTS: 1600 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
@@ -137,6 +144,7 @@ export const LANDING_SCENE = {
   AUTOMATIONS: "automations",
   DEVICES: "devices",
   KEYS: "keys",
+  STARTS: "starts",
 } as const;
 
 export type LandingScene = (typeof LANDING_SCENE)[keyof typeof LANDING_SCENE];
@@ -1210,12 +1218,100 @@ function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
   );
 }
 
+/** What the member asks for from both places, the repository it is asked in, and the task the command makes of it. */
+const START = {
+  ASK: "the invite link 404s on staging, can you fix it?",
+  REPOSITORY: "acme/relay",
+  COMMAND: 'vespin task create "Invite link" -F bug.md --start',
+  // What `vespin task create` prints once its agent starts (`apps/cli/src/commands/task.ts`).
+  ANSWER: [
+    "Created ACME-58 Invite link in acme/relay.",
+    "Started agent 4f1c9a2e on claude-opus-5-5 (high).",
+  ],
+} as const;
+
+/** The clipboard's act for a card nothing presses. */
+function stillCopy(): Promise<void> {
+  return Promise.resolve();
+}
+
+/** A Slack thread at `step`: a member's mention of the bot, and the bot's line once its agent has started. */
+function SlackThread({ step }: { step: number }): React.JSX.Element {
+  return (
+    <Card look={CARD_LOOK.SURFACE}>
+      <div className="ui-landing-starts-cards">
+        <span className="ui-landing-crumb">
+          <ProviderMark provider={MARK_PROVIDER.SLACK} size={PROVIDER_MARK_SIZE.ICON} />
+          #eng-web
+        </span>
+        <Comment author={{ name: MEMBER }} at={STORY_NOW - MINUTE} now={STORY_NOW}>
+          <Text>
+            <InlineRef look={INLINE_REF_LOOK.PILL} label={`@${PRODUCT_NAME}`} hint={false} />{" "}
+            {START.ASK}
+          </Text>
+        </Comment>
+        {step >= 1 ? (
+          <div className="ui-landing-enter">
+            <Comment
+              author={{
+                name: PRODUCT_NAME,
+                outline: AVATAR_OUTLINE.SQUARE,
+                glyph: <ProductMark small />,
+              }}
+              at={STORY_NOW}
+              now={STORY_NOW}
+            >
+              <Text>
+                On it in {START.REPOSITORY}. <TextLink href="#">Open in {PRODUCT_NAME}</TextLink>
+              </Text>
+            </Comment>
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Note that the section stands in no device, as the keys' does, so it is made
+ * a picture the same way: a reader is told what it shows, and its cards are
+ * inert.
+ */
+function StartsScene(): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  const step = useStory(ref, 5, BEAT.STARTS);
+  const answered = step >= 2 ? `\n${START.ANSWER.join("\n")}` : "";
+
+  return (
+    <div
+      ref={ref}
+      className="ui-landing-scene ui-landing-starts"
+      role="img"
+      aria-label={`A Slack message mentioning @${PRODUCT_NAME} and a vespin command in a terminal, each starting an agent`}
+      {...DESKTOP_SURFACE}
+    >
+      <div className="ui-landing-starts-cards" inert>
+        <SlackThread step={step} />
+        <CodeCard
+          glyph={<GLYPH.TERMINAL />}
+          title="Terminal"
+          titleIs={CODE_CARD_TITLE.WORDS}
+          code={`$ ${START.COMMAND}${answered}`}
+          copied={START.COMMAND}
+          copy={stillCopy}
+        />
+      </div>
+    </div>
+  );
+}
+
 const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Element>> = {
   [LANDING_SCENE.INBOX]: InboxScene,
   [LANDING_SCENE.AGENTS]: AgentsScene,
   [LANDING_SCENE.AUTOMATIONS]: AutomationsScene,
   [LANDING_SCENE.DEVICES]: DevicesScene,
   [LANDING_SCENE.KEYS]: KeysScene,
+  [LANDING_SCENE.STARTS]: StartsScene,
 };
 
 /** The scene that shows `scene`'s feature. */
