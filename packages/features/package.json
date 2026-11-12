@@ -98,6 +98,7 @@
     "./agent-boot": "./src/agent-boot.js",
     "./agent-boot-words": "./src/agent-boot-words.js",
     "./agent-transcript-live": "./src/agent-transcript-live.js",
+    "./agent-warm": "./src/agent-warm.js",
     "./agent-wire": "./src/agent-wire.js",
     "./allowed-command-model": "./src/allowed-command-model.js",
     "./allowed-command-wire": "./src/allowed-command-wire.js",

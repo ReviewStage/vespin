@@ -26,6 +26,7 @@ import {
   type PickOption,
   Screen,
   SettingsForm,
+  SkillRow,
   useColors,
   ValueRow,
   WordsField,
@@ -49,6 +50,7 @@ import {
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
+import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
@@ -190,18 +192,21 @@ function AgentSection({
   );
 }
 
-/** The sheet's words and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
+/** The sheet's words, the skills a `/` in them offers, and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
 function DraftSection({
   placeholder,
+  words,
   onWords,
-  initialWords,
+  skills,
   pictures,
   note,
   testIds,
 }: {
   readonly placeholder: string;
+  readonly words: string;
   readonly onWords: (words: string) => void;
-  readonly initialWords?: string | undefined;
+  /** The skills a `/` being typed offers; none while no `/` word ends the words. */
+  readonly skills: SkillsOffered | undefined;
   readonly pictures: AttachedPictures;
   readonly note: string | undefined;
   /** The names a flow finds the field and the + by. */
@@ -211,11 +216,14 @@ function DraftSection({
     <ListSection footer={note}>
       <WordsField
         placeholder={placeholder}
+        words={words}
         onWords={onWords}
-        initialWords={initialWords}
         autoFocus
         testId={testIds.WORDS}
       />
+      {skills === undefined ? null : (
+        <SkillRow skills={skills.skills} empty={skills.empty} onPick={skills.pick} />
+      )}
       <AttachRow
         pictures={pictures.attached}
         onAdd={pictures.attach}
@@ -308,6 +316,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
 
   const start = () =>
     go(
@@ -328,7 +337,9 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
         <SettingsForm>
           <DraftSection
             placeholder={WORDS.AGENT_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_AGENT}
@@ -501,6 +512,19 @@ export function NewTaskScreen({
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
 
+  // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
+  const skillsRepository = tree === undefined ? repository.picked : (tree.repository ?? undefined);
+
+  const skills = useSkillOffer(
+    prompt,
+    setPrompt,
+    workspaceId === undefined
+      ? undefined
+      : skillsRepository === undefined
+        ? { workspaceId }
+        : { workspaceId, repository: skillsRepository },
+  );
+
   const start = () => {
     if (!drafted) return;
     go(
@@ -536,8 +560,9 @@ export function NewTaskScreen({
         <SettingsForm>
           <DraftSection
             placeholder={WORDS.TASK_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
-            initialWords={draft?.prompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_TASK}
