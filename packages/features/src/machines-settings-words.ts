@@ -71,13 +71,15 @@ export function hostStanding(host: HostLine, now: number): HostStanding {
   );
 }
 
-/** When the first of `hosts` still to call in reads failed, past its wait since joining; none where none waits. */
-export function nextCallInLapse(hosts: readonly HostLine[]): number | undefined {
-  const lapses = hosts.flatMap((host) =>
-    host.calledIn === false && host.joinedAt !== undefined
-      ? [host.joinedAt + CALL_IN_CEILING_MS]
-      : [],
-  );
+/** The first moment after `now` that one of `hosts` still to call in reads failed, past its wait since joining; none where none waits still. */
+export function nextCallInLapse(hosts: readonly HostLine[], now: number): number | undefined {
+  // Note that a host reads failed once its wait is strictly past, so the moment after it is the one to draw again at.
+  const lapses = hosts.flatMap((host) => {
+    if (host.calledIn !== false || host.joinedAt === undefined) return [];
+    const lapse = host.joinedAt + CALL_IN_CEILING_MS + 1;
+
+    return lapse > now ? [lapse] : [];
+  });
 
   return lapses.length === 0 ? undefined : Math.min(...lapses);
 }

@@ -112,7 +112,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
   const now = Date.now();
   // Note that a machine that has not called in reads failed once its wait runs out, which no read moves, so the page draws again then.
   const [, setLapsed] = useState(0);
-  const lapse = hosts === undefined ? undefined : nextCallInLapse(hosts);
+  const lapse = hosts === undefined ? undefined : nextCallInLapse(hosts, now);
   useEffect(() => {
     if (lapse === undefined) return;
     const wait = setTimeout(() => setLapsed((each) => each + 1), Math.max(0, lapse - Date.now()));
