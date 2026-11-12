@@ -349,46 +349,54 @@ function onControl(event: Event): boolean {
   return event.target instanceof Element && event.target.closest(PICTURE_CONTROLS) !== null;
 }
 
-/** A message box's copied file chip, as its copy writes it: a picture's image, or another file's chip carrying it (`./copied-files.ts`). */
-const COMPOSER_CHIP = '[data-chip="fileChip"]';
+/** A message box's copied file chip, as its copy writes it (`./copied-files.ts`). */
+const COMPOSER_CHIP = "fileChip";
 
-/** The image a message box's copied chip is read in as: its file's name its alt, its data address its source. */
-const COMPOSER_PICTURE = 'img[data-chip="fileChip"]';
+/** The file a message box's copied chip carried, by its marker's name and its data address: a picture's image carries it in its source, another file's chip beside its words. */
+function chipFile(element: HTMLElement) {
+  const picture = element.tagName === "IMG";
+  const name = fileMarkers(picture ? (element.getAttribute("alt") ?? "") : element.textContent)[0]
+    ?.name;
+  const address = element.getAttribute(picture ? "src" : "data-file");
+  const file = copiedFileOf(address);
 
-/**
- * A paste's markup with each of a message box's copied chips that carried a
- * picture or a PDF written as its image, its alt the file's name, so it is
- * read in as a picture; every other chip as it was, which pastes as its
- * marker's words.
- */
-function composerChipsAsPictures(html: string): string {
-  if (!html.includes(COMPOSER_CHIP.slice(1, -1))) return html;
-  const template = document.createElement("template");
-  template.innerHTML = html;
-
-  for (const chip of template.content.querySelectorAll(COMPOSER_CHIP)) {
-    const address = chip.getAttribute(chip.tagName === "IMG" ? "src" : "data-file");
-    const name = fileMarkers(chip.getAttribute("alt") ?? chip.textContent)[0]?.name;
-    const file = copiedFileOf(address);
-    const kind = { name: name ?? "", type: file?.mediaType ?? "" };
-
-    if (name === undefined || file === undefined || !(isPictureFile(kind) || isPdfUpload(kind))) {
-      continue;
-    }
-
-    const image = template.ownerDocument.createElement("img");
-    image.dataset.chip = "fileChip";
-    image.alt = name;
-    image.setAttribute("src", address ?? "");
-    chip.replaceWith(image);
-  }
-
-  return template.innerHTML;
+  return name === undefined || file === undefined
+    ? undefined
+    : { name, address, type: file.mediaType };
 }
 
-/** The picture of a message box's copied chip, rewritten by `composerChipsAsPictures`, which TipTap's own image leaves out for its data address. */
-function composerPictureRule() {
-  return { tag: COMPOSER_PICTURE };
+/**
+ * How a message box's copied chip is read in as a picture, a picture's or a
+ * PDF's, which TipTap's own image leaves out for its data address; every
+ * other chip pastes as its marker's words. Note that the address and the
+ * name are read by the node's own attributes (`chipAttribute`), which TipTap
+ * reads over what a rule answers.
+ */
+function composerChipRules() {
+  const taken = (element: HTMLElement) => {
+    const file = chipFile(element);
+
+    return file !== undefined && (isPictureFile(file) || isPdfUpload(file)) ? {} : false;
+  };
+
+  return [
+    { tag: `img[data-chip="${COMPOSER_CHIP}"]`, getAttrs: taken },
+    { tag: `span[data-chip="${COMPOSER_CHIP}"][data-file]`, getAttrs: taken },
+  ];
+}
+
+/** A picture attribute read from its element: a message box's copied chip's from the file it carried, any other image's as TipTap reads it. */
+function chipAttribute(name: "src" | "alt") {
+  return {
+    default: null,
+    parseHTML: (element: HTMLElement) => {
+      const file = element.dataset.chip === COMPOSER_CHIP ? chipFile(element) : undefined;
+
+      if (file === undefined) return element.getAttribute(name);
+
+      return name === "src" ? file.address : file.name;
+    },
+  };
 }
 
 /**
@@ -399,7 +407,12 @@ function composerPictureRule() {
 export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
   const node = Image.extend({
     addAttributes() {
-      return { ...this.parent?.(), upload: { default: "", rendered: false } };
+      return {
+        ...this.parent?.(),
+        src: chipAttribute("src"),
+        alt: chipAttribute("alt"),
+        upload: { default: "", rendered: false },
+      };
     },
     renderMarkdown: (held: JSONContent) => pictureMarkdown(held.attrs),
   }).configure({ inline: true });
@@ -408,15 +421,10 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
 
   return node.extend({
     parseHTML() {
-      return [composerPictureRule(), ...(this.parent?.() ?? [])];
+      return [...composerChipRules(), ...(this.parent?.() ?? [])];
     },
     addProseMirrorPlugins() {
-      return [
-        ...(this.parent?.() ?? []),
-        settledPictures(),
-        pictureCaret(),
-        new Plugin({ props: { transformPastedHTML: composerChipsAsPictures } }),
-      ];
+      return [...(this.parent?.() ?? []), settledPictures(), pictureCaret()];
     },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
