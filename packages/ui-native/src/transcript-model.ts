@@ -264,14 +264,28 @@ const ORIGIN_WORDS = {
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
 
+/** How many characters of one line a block draws, since a block's lines never wrap and one long line lays out as one wide view. */
+const BLOCK_LINE_CHARS = 500;
+
+/** What ends a line cut short. */
+const LINE_CUT = "…";
+
 /** What the block a failed call's body ends with is headed. */
 const ERROR_TITLE = "Error";
 
-/** A block's words cut to the lines its card draws. */
-function cutLines(text: string): string {
-  const lines = text.trimEnd().split("\n");
+/** One line of a block cut to the characters it draws. */
+function cutLine(line: string): string {
+  return line.length <= BLOCK_LINE_CHARS ? line : `${line.slice(0, BLOCK_LINE_CHARS)}${LINE_CUT}`;
+}
 
-  return lines.length <= BLOCK_LINES ? lines.join("\n") : lines.slice(0, BLOCK_LINES).join("\n");
+/**
+ * A block's words cut to the lines its card draws, each cut to the
+ * characters it draws. Note that a block draws its lines unwrapped in a
+ * sideways scroll, so a long minified line, such as a webhook's JSON body,
+ * would otherwise lay out as one view tens of thousands of points wide.
+ */
+function cutLines(text: string): string {
+  return text.trimEnd().split("\n").slice(0, BLOCK_LINES).map(cutLine).join("\n");
 }
 
 /** Whether a reader turned a fold from how it stands on its own. */
@@ -443,7 +457,8 @@ export function transcriptOriginOf(input: {
   return {
     prompt: run?.prompt,
     from: from.filter((part) => part !== undefined),
-    body: run?.body,
+    // Note that the body is cut as a call's block is, since a caller may send up to 64 KB.
+    body: run?.body === undefined ? undefined : cutLines(run.body),
   };
 }
 

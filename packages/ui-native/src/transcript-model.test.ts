@@ -101,6 +101,23 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it("cuts a webhook's body as a call's block is cut: its first 40 lines, each to 500 characters", () => {
+    const lines = ["x".repeat(600), ...Array.from({ length: 59 }, (_, at) => `line ${at + 2}`)];
+
+    const origin = transcriptOriginOf({
+      automationId: "a1",
+      automationName: "Morning triage",
+      automationAddress: undefined,
+      run: { prompt: "Triage.", body: lines.join("\n") },
+    });
+
+    const shown = origin.body?.split("\n");
+
+    expect(shown).toHaveLength(40);
+    expect(shown?.[0]).toBe(`${"x".repeat(500)}…`);
+    expect(shown?.[39]).toBe("line 40");
+  });
+
   const OPENED = {
     id: "work",
     role: MESSAGE_ROLE.ASSISTANT,
