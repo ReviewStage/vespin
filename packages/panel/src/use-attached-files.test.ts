@@ -196,8 +196,8 @@ async function drop(container: HTMLElement, files: readonly File[]): Promise<voi
   await read();
 }
 
-/** Files pasted into the box's editor, as the clipboard hands a screenshot over; answers whether the editor let the paste go by. */
-async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+/** Files pasted into the box's editor, as the clipboard hands a screenshot over, before they are read; answers whether the editor let the paste go by. */
+function pasteUnread(container: HTMLElement, files: readonly File[]): boolean {
   const event = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", {
     value: { files, types: ["Files"], getData: () => "" },
@@ -205,9 +205,16 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   act(() => {
     composerEditor(container).dispatchEvent(event);
   });
-  await read();
 
   return !event.defaultPrevented;
+}
+
+/** Files pasted into the box's editor, and read off the disk before they land; answers whether the editor let the paste go by. */
+async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+  const passed = pasteUnread(container, files);
+  await read();
+
+  return passed;
 }
 
 /** What the box shows of its files: its chips beside the words by name, the files its words hold by what their chips open, and its note. */
@@ -254,6 +261,16 @@ test("a picture pasted into the agent's box is held as its chip in the words, th
     assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
     assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
   }
+});
+
+test("a picture pasted stands as its chip at once, before the words typed while it is read", async () => {
+  const container = await mounted("agent");
+  pasteUnread(container, [png("pasted.png")]);
+  typeInComposer(container, "here");
+  await read();
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] here");
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
 
 test("a word typed after a file laid in as its chip stands a space apart from it", async () => {

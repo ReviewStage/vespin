@@ -1147,6 +1147,24 @@ function insertedFilesAt(
   return true;
 }
 
+/** The chips of the files named taken out, each with the space after it, kept out of the undo history, since what undo would bring back is a file the box never held. */
+function removedFiles(editor: Editor, names: readonly string[]): void {
+  const { doc } = editor.state;
+  const ranges: { from: number; to: number }[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== FILE_NODE || !names.includes(String(node.attrs.name))) return;
+    const end = pos + node.nodeSize;
+    const spaced = doc.textBetween(end, Math.min(end + 1, doc.content.size)) === SPACE;
+    ranges.push({ from: pos, to: spaced ? end + SPACE.length : end });
+  });
+
+  if (ranges.length === 0) return;
+  const tr = editor.state.tr;
+
+  for (const range of ranges.reverse()) tr.delete(range.from, range.to);
+  editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta("addToHistory", false));
+}
+
 /** The word a trigger found written as the chip given, spaced as every chip is (`spacedChip`). */
 function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmNode): void {
   if (word === undefined) return;
@@ -1354,6 +1372,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
 
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
+    removeFiles: (names) => removedFiles(editor, names),
     setInput: (input) => {
       state.input = input;
       editor.setEditable(input !== COMPOSER_INPUT.DISABLED, false);
