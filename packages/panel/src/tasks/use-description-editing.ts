@@ -25,7 +25,11 @@ import { MutationObserver, useMutation, useQuery, useQueryClient } from "@tansta
 import { createStore, type Store, useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { DescriptionEditorPlacement } from "../description-editor/contract.js";
+import type {
+  DescriptionEditorPlacement,
+  EditorHistory,
+  HistoryStep,
+} from "../description-editor/contract.js";
 import { type ToastNotice, useToast, useWithdrawToast } from "../toast.js";
 import {
   appStateQuery,
@@ -230,6 +234,12 @@ export const EDITOR_PLACE = {
 /** A block of the document the keyboard selects: a section, by its unit's id, the title, or an empty description's placeholder. */
 export type EditorHost = number | (typeof EDITOR_PLACE)[keyof typeof EDITOR_PLACE];
 
+/** The undo history an editor of a task left as it closed, by the task it was left on. */
+interface KeptHistory {
+  readonly taskId: string;
+  readonly history: EditorHistory;
+}
+
 /** The document's one editor, the block the keyboard stands on, and their doors. */
 export interface DescriptionEditing {
   readonly editor: DocumentEditor | undefined;
@@ -259,6 +269,14 @@ export interface DescriptionEditing {
   readonly retry: () => void;
   /** How many of this task's saves the service answered saved, which a Saved tick confirms each of. */
   readonly saves: number;
+  /** The undo history the editor left as it last closed, which it opens with again; none where the text has changed since, or none was left. */
+  readonly history: EditorHistory | undefined;
+  /** The step through that history the editor takes as it opens, ⌘Z's or ⇧⌘Z's in the drawn text; none for any other opening. */
+  readonly step: HistoryStep | undefined;
+  /** Keeps the undo history an editor of this task left as it closed. */
+  readonly keepHistory: (history: EditorHistory) => void;
+  /** Opens the editor a step back or forward through the history it left, as ⌘Z and ⇧⌘Z do in the drawn text. */
+  readonly stepHistory: (step: HistoryStep) => void;
 }
 
 /**
@@ -332,6 +350,9 @@ export function useDescriptionEditing(
   const [saves, setSaves] = useState(0);
   // Whether the open editor holds words typed since its last hand-over.
   const [holding, setHolding] = useState(false);
+  // The history the last editor left, and the step the next one opens taking through it.
+  const [closedWith, setClosedWith] = useState<KeptHistory | undefined>(undefined);
+  const [step, setStep] = useState<HistoryStep | undefined>(undefined);
   const owner = useQuery({ ...appStateQuery, select: selectSignedIn }).data;
   // Note that whose words are sent is read from main's document as it stands
   // at the send, never as a render drew it, so no order of draws sends them as another.
@@ -427,6 +448,9 @@ export function useDescriptionEditing(
       return;
     }
 
+    // Note that the history goes too, since what it would take back was typed as the last account.
+    setClosedWith(undefined);
+
     if (latest.current === undefined) return;
     opening.current += 1;
     latest.current = undefined;
@@ -462,6 +486,9 @@ export function useDescriptionEditing(
     setEditor(kept);
     setSelecting(undefined);
     setCursor(undefined);
+    // Note that the history the last task's editor left goes with it, so ⌘Z never reaches into another task's text.
+    setClosedWith(undefined);
+    setStep(undefined);
 
     return () => {
       heldWords.current?.();
@@ -497,19 +524,28 @@ export function useDescriptionEditing(
     };
   }, [taskId]);
 
+  const open = (place?: DescriptionEditorPlacement) => {
+    if (text === undefined) return;
+
+    if (editor !== undefined && !editorCloses(editorCloseAsked(editor))) return;
+    opening.current += 1;
+    wroteAs.current = signedInNow();
+    setEditor(editorOpened(text));
+    setPlacement(place);
+    setSelecting(undefined);
+    setStep(undefined);
+  };
+
+  // The history is the editor's to open with only on the text it ended on, so a change made since, by anyone, drops it rather than take a step against other words.
+  const history =
+    closedWith !== undefined && closedWith.taskId === taskId && closedWith.history.markdown === text
+      ? closedWith.history
+      : undefined;
+
   return {
     editor,
     placement,
-    open: (place) => {
-      if (text === undefined) return;
-
-      if (editor !== undefined && !editorCloses(editorCloseAsked(editor))) return;
-      opening.current += 1;
-      wroteAs.current = signedInNow();
-      setEditor(editorOpened(text));
-      setPlacement(place);
-      setSelecting(undefined);
-    },
+    open,
     typeText: (words, anchors) => {
       setHolding(false);
       changed((now) => editorTyped(now, words, anchors));
@@ -551,5 +587,13 @@ export function useDescriptionEditing(
       send();
     },
     saves,
+    history,
+    step,
+    keepHistory: (left) => setClosedWith({ taskId, history: left }),
+    stepHistory: (next) => {
+      if (editor !== undefined || history === undefined) return;
+      open();
+      setStep(next);
+    },
   };
 }

@@ -237,6 +237,39 @@ export interface DescriptionEditorProps {
   readonly format?: EditorFormatDoors | undefined;
   /** What the `/` menu over the text hears of its `/` word and its keys; none where no menu stands over it, which an empty line then does not offer. */
   readonly blocks?: DescriptionEditorBlocks | undefined;
+  /** An earlier editor's undo history on this text, which this one takes up, and the step it takes through it as it opens; none where it opens with a history of its own. */
+  readonly history?: OpenedHistory | undefined;
+}
+
+/**
+ * An editor's undo history as it was taken down, which an editor opened on
+ * the same text takes up: the text it ends on, and whether it holds a change
+ * to take back or one to put back. What it holds beside, the steps
+ * themselves, only the editor bundle reads.
+ */
+export interface EditorHistory {
+  readonly markdown: string;
+  readonly undoes: boolean;
+  readonly redoes: boolean;
+}
+
+/** A step through an editor's history: ⌘Z's, which takes the last change back, or ⇧⌘Z's, which puts it back. */
+export const HISTORY_STEP = {
+  UNDO: "undo",
+  REDO: "redo",
+} as const;
+
+export type HistoryStep = (typeof HISTORY_STEP)[keyof typeof HISTORY_STEP];
+
+/**
+ * The history an editor opens with: one an earlier editor left, taken up
+ * only where the text it opens on is the very document that history ends
+ * on, and dropped otherwise, so no step is taken against another text; and
+ * the step taken through it as it opens, where one is asked.
+ */
+export interface OpenedHistory {
+  readonly kept: EditorHistory;
+  readonly step?: HistoryStep | undefined;
 }
 
 /** The words one comment thread is on, as offsets into a description's Markdown. */
@@ -463,7 +496,7 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   readonly setAria: (aria: EditorAria) => void;
   /** The caret put where the placement says and the editor focused, as a press on the text's room does while it is open, and the files a drop carries laid in there as pictures. */
   readonly focusAt: (placement: DescriptionEditorPlacement) => void;
-  /** Where the line of the words a click opened the editor on stands in the window, down from its top; none where it opened elsewhere, the words not found, or the caret has since been put elsewhere, or where it cannot be measured. */
+  /** Where the line of the words a click opened the editor on, or of the change a step through its history took as it opened, stands in the window, down from its top; none where it opened elsewhere, the words not found, or the caret has since been put elsewhere, or where it cannot be measured. */
   readonly wordsTop: () => number | undefined;
   /** The words the caret stands in, as the drawn text finds them again, and where their line stands in the window; none off any words, or where nothing is laid out. The panel keeps them where they stood as the editor closes. */
   readonly caretWords: () => PlacedWords | undefined;
@@ -477,6 +510,8 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   readonly selectionSpan: () => EditorSpan | undefined;
   /** The block `element` is drawn in, whole, as a thread started on it anchors it; nothing where it is no block of the text, a diagram's preview say. */
   readonly blockSpan: (element: Element) => EditorSpan | undefined;
+  /** The undo history as it stands, for an editor opened later on the same text to take up. */
+  readonly history: () => EditorHistory;
   readonly destroy: () => void;
 }
 
