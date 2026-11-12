@@ -1,0 +1,87 @@
+/**
+ * memory-settings-words.ts -- what Settings › Memory says, and how it orders and marks the workspace's memories, on the desktop, the web, and the iOS app alike.
+ */
+
+import { MEMORY_RECALL_WINDOW_DAYS, type MemorySummary } from "./memory-wire.js";
+import { PRODUCT_NAME } from "./product-name.js";
+import { countWords, readFailedWords, readingWords, TERM } from "./words.js";
+
+/** One day, in milliseconds. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How long a memory reads as New after it was kept. */
+const NEW_FOR_MS = 7 * DAY_MS;
+
+/** How far back a memory's recalls are counted, as the service counts them. */
+const RECALL_WINDOW_MS = MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
+
+/** What the page says while it cannot read or write, and with nothing to show. */
+export const MEMORY_PAGE_WORDS = {
+  TITLE: "Memories",
+  READING: readingWords(`${PRODUCT_NAME}'s memory`),
+  FAILED: readFailedWords(`${PRODUCT_NAME}'s memory`),
+  EMPTY: `${PRODUCT_NAME} hasn't remembered anything yet.`,
+  FORGET_FAILED: "The memory could not be deleted. Try again.",
+  NO_MATCH: "No memories match",
+  SEARCH: "Search memories",
+} as const;
+
+/** What a memory's acts say, in its menu and the selection's bar. */
+export const MEMORY_ACT = {
+  EDIT: "Edit",
+  FORGET: "Delete",
+  COPY: "Copy text",
+} as const;
+
+/** What a memory says of how agents use it: New or Unused under its words, and its recall columns where it has none. */
+export const MEMORY_USE_WORDS = {
+  NEW: "New",
+  UNUSED: "Unused",
+  NONE: "—",
+  NEVER: "Never",
+} as const;
+
+export type MemoryUse = typeof MEMORY_USE_WORDS.NEW | typeof MEMORY_USE_WORDS.UNUSED;
+
+/** What a caption says Recalls counts. */
+export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
+
+/** How often agents were handed a memory in the recall window, as a line says it: "3 recalls". */
+export function recallsText(recalls: number): string {
+  return `${recalls.toLocaleString("en-US")} ${recalls === 1 ? "recall" : "recalls"}`;
+}
+
+/** New on a memory kept in the last week, Unused on one older than the recall window that no agent was handed in it, and none otherwise. */
+export function memoryUse(memory: MemorySummary, now: number): MemoryUse | undefined {
+  const age = now - memory.createdAt;
+
+  if (age < NEW_FOR_MS) return MEMORY_USE_WORDS.NEW;
+
+  return age > RECALL_WINDOW_MS && memory.recalls30d === 0 ? MEMORY_USE_WORDS.UNUSED : undefined;
+}
+
+/** The memories as the page orders them: most recalled in the recall window first, then most recently kept or corrected, as the service lists them. */
+export function memoriesByUse(memories: readonly MemorySummary[]): readonly MemorySummary[] {
+  return [...memories].sort(
+    (one, other) => other.recalls30d - one.recalls30d || other.updatedAt - one.updatedAt,
+  );
+}
+
+/** What Delete asks, of `count` memories, and what it says of the `left` the reader may not delete. */
+export function forgetQuestion(count: number, left: number) {
+  const one = count === 1;
+  const them = one ? "it" : "them";
+  const body = `No agent will recall ${them} in any later task in this workspace, for anyone.`;
+
+  const kept =
+    left === 0
+      ? ""
+      : ` ${countWords(left, TERM.MEMORY)} you may not delete ${left === 1 ? "stays" : "stay"}.`;
+
+  return {
+    title: one ? "Delete this memory?" : `Delete ${countWords(count, TERM.MEMORY)}?`,
+    body: `${body}${kept}`,
+    verb: `${MEMORY_ACT.FORGET} ${one ? TERM.MEMORY.one : TERM.MEMORY.many}`,
+    running: "Deleting",
+  } as const;
+}
