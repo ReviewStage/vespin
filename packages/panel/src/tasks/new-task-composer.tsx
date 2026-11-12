@@ -30,9 +30,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useAgentDefault } from "../account-choices.js";
 import { appPlatform } from "../app-platform.js";
 import {
-  DRAFT_PLACE,
   type Draft,
-  type DraftPlace,
   EMPTY_DRAFT,
   type KeptStart,
   useDraft,
@@ -71,9 +69,11 @@ import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-m
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
 import {
+  keptStartOf,
   type NewTaskAgent,
   type NewTaskRefusal,
   type NewTaskStart,
+  newTaskPlace,
   startUnknownNote,
 } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -286,6 +286,8 @@ export interface NewTaskPress {
   readonly ask: AgentAsk;
   readonly key: string;
   readonly taskId: string;
+  /** How many files it carried that a relaunch let go, which a Start must attach again to be this press; none where the window holds its files. */
+  readonly filesLost?: number | undefined;
 }
 
 /** Where a start goes beside its agent: the task's repository, none for a tree's, its workspace and relations, and where its agents run. */
@@ -300,37 +302,14 @@ interface StartGoes {
 /** The kept starts a card has said were settled, each said once however often a card mounts on it, as strict mode mounts one twice. */
 const SETTLED = new Set<string>();
 
-/** A press whose outcome is unknown as the draft keeps it: everything but its files, and the words the card held. */
-function keptOf({ key, taskId, ask }: NewTaskPress, words: string): KeptStart {
-  const { choice, permissionMode } = ask.agent;
-
-  return {
-    key,
-    taskId,
-    words,
-    ask: {
-      repository: ask.repository,
-      ...(ask.workspaceId === undefined ? undefined : { workspaceId: ask.workspaceId }),
-      ...(ask.deviceId === undefined ? undefined : { deviceId: ask.deviceId }),
-      ...(ask.runsOn === undefined ? undefined : { runsOn: ask.runsOn }),
-      relations: ask.relations,
-      agent: {
-        prompt: ask.agent.prompt,
-        disabledServers: ask.agent.disabledServers,
-        ...(choice === undefined ? undefined : { choice }),
-        ...(permissionMode === undefined ? undefined : { permissionMode }),
-      },
-    },
-  };
-}
-
-/** The press a draft kept, its files none, since storage keeps none. */
-function pressOfKept({ key, taskId, ask }: KeptStart): NewTaskPress {
+/** The press a draft kept, its files none, since storage keeps none, counted as lost where it carried some. */
+function pressOfKept({ key, taskId, ask, files }: KeptStart): NewTaskPress {
   const { agent } = ask;
 
   return {
     key,
     taskId,
+    ...(files === undefined ? undefined : { filesLost: files }),
     ask: {
       repository: ask.repository,
       workspaceId: ask.workspaceId,
@@ -353,6 +332,26 @@ function pressOfKept({ key, taskId, ask }: KeptStart): NewTaskPress {
 /** A draft with no start kept. */
 function withoutStart(draft: Draft): Draft {
   return { ...draft, start: undefined };
+}
+
+/** A draft with the start under `key` let go, as its outcome is known; any other kept start stays. */
+function settledUnder(key: string): (draft: Draft) => Draft {
+  return (draft) => (draft.start?.key === key ? withoutStart(draft) : draft);
+}
+
+/** An agent's press lets the box's words go and keeps whatever start stands kept, until its own outcome is known. */
+function boxLetGo(draft: Draft): Draft {
+  return { ...EMPTY_DRAFT, start: draft.start };
+}
+
+/** Whether a press asks what a held one asked: as `sameAsk`, the files counted alone where a relaunch let the held press's go. */
+function asksAsHeld(held: NewTaskPress, ask: AgentAsk): boolean {
+  if (held.filesLost === undefined) return sameAsk(held.ask, ask);
+
+  return (
+    ask.agent.attachments.length === held.filesLost &&
+    sameAsk({ ...held.ask, agent: { ...held.ask.agent, attachments: ask.agent.attachments } }, ask)
+  );
 }
 
 /** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
@@ -382,14 +381,6 @@ function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
 /** Whether two names are one repository, as GitHub spells it or not. */
 function sameRepository(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
-}
-
-/** A card's draft place: its purpose's, in its workspace, none before the workspaces are read. */
-function newTaskPlace(workspaceId: string | undefined, purpose: NewTaskPurpose): DraftPlace {
-  const kind =
-    purpose === NEW_TASK_PURPOSE.AUTOMATION ? DRAFT_PLACE.NEW_AUTOMATION : DRAFT_PLACE.NEW_TASK;
-
-  return { kind, workspaceId: workspaceId ?? null };
 }
 
 /**
@@ -447,10 +438,21 @@ export function NewTaskComposer({
   // draft once it is known, over one it kept, as the words written last win.
   const loose = useDraft(newTaskPlace(undefined, purpose)).draft;
   const writer = useDraftWriter();
+  // Note that a start kept before then moves with them, or alone where there are none, so its Retry and its settling find it.
   useEffect(() => {
-    if (workspaceId === undefined || !hasWordsOrFiles(loose.text, loose.attachments)) return;
-    writer.update(newTaskPlace(workspaceId, purpose), () => loose);
-    writer.update(newTaskPlace(undefined, purpose), () => EMPTY_DRAFT);
+    if (workspaceId === undefined) return;
+
+    if (hasWordsOrFiles(loose.text, loose.attachments)) {
+      writer.update(newTaskPlace(workspaceId, purpose), (now) => ({
+        ...loose,
+        start: loose.start ?? now.start,
+      }));
+      writer.update(newTaskPlace(undefined, purpose), () => EMPTY_DRAFT);
+    } else if (loose.start !== undefined) {
+      const { start } = loose;
+      writer.update(newTaskPlace(workspaceId, purpose), (now) => ({ ...now, start }));
+      writer.update(newTaskPlace(undefined, purpose), withoutStart);
+    }
   }, [workspaceId, loose, writer, purpose]);
   // A card opened again on a start refused after it closed starts where it was left, saying why.
   const refused = newTask.preset?.refused;
@@ -505,17 +507,19 @@ export function NewTaskComposer({
   // takes its words back into the box.
   const keptStart = draft.draft.start;
 
+  // Note that a kept start whose files this window does not hold says so, and offers Edit to attach them again rather than Retry without them.
   const keptNote = useMemo(
     () =>
       keptStart === undefined || keptStart.edited === true
         ? undefined
         : refused?.unknown === true && refused.card.press.key === keptStart.key
           ? refused.note
-          : startUnknownNote(),
+          : startUnknownNote(undefined, keptStart.files !== undefined),
     [keptStart, refused],
   );
 
-  const note = starts.refusal ?? handed ?? keptNote;
+  // Note that a kept start asked again is out while it is, so the card says nothing of it meanwhile.
+  const note = starts.refusal ?? handed ?? (starting ? undefined : keptNote);
 
   // The relations the press that opened the card chose, or the refused card's, which the + menu and the rows change.
   const [related, setRelated] = useState<readonly NewTaskRelation[]>(
@@ -557,14 +561,18 @@ export function NewTaskComposer({
     PUT_BACK.add(refused);
     const { words: pressedWords, press } = refused.card;
 
+    // Note that the flow kept it as it heard it (`use-new-task.ts`); the card keeps it again as it opens on it, the same.
     if (refused.unknown === true) {
       writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => ({
         ...now,
-        start: keptOf(press, pressedWords),
+        start: keptStartOf(press, pressedWords),
       }));
 
       return;
     }
+
+    // Note that a kept start the service refused is settled, its words coming back below.
+    writer.update(newTaskPlace(workspaceNow.current, purpose), settledUnder(press.key));
 
     putBackRefused({
       went: { text: pressedWords, attachments: press.ask.agent.attachments },
@@ -752,7 +760,7 @@ export function NewTaskComposer({
   const begin = (
     handing: Pick<NewTaskStart, "handed" | "card" | "taskId"> = {},
     goes: StartGoes = goesNow(),
-    letGo: (was: Draft) => Draft = () => EMPTY_DRAFT,
+    letGo: (was: Draft) => Draft = boxLetGo,
   ) => {
     if (devicesUnread) return;
     void starts.run(() => {
@@ -760,9 +768,11 @@ export function NewTaskComposer({
       setHanded(undefined);
       // Note that an agent's start lets its words go as it is pressed, because the card closes at
       // once and a New task opened before the service answers must open empty; a refused card
-      // opened again brings its own words back (`refused.card.words`). A kept start asked again
-      // lets only itself go, the box's words being none of its.
+      // opened again brings its own words back (`refused.card.words`). A kept start stays until its
+      // own outcome is known, so a relaunch meanwhile keeps its key, and one asked again leaves the
+      // box's words alone, being none of its.
       const agentStart = handing.handed !== undefined;
+      const key = handing.handed?.idempotencyKey;
 
       if (agentStart) draft.update(letGo);
 
@@ -775,10 +785,11 @@ export function NewTaskComposer({
         })
         .then((refused) => {
           if (refused === undefined) {
-            // A task started lets its words go, so the next New task opens empty.
+            // A task started lets its words go, so the next New task opens empty, and a start kept under its key.
             pressed.current = undefined;
 
             if (!agentStart) draft.update(() => EMPTY_DRAFT);
+            else if (key !== undefined) draft.update(settledUnder(key));
           }
 
           return refused;
@@ -816,7 +827,7 @@ export function NewTaskComposer({
     const held = pressed.current ?? (keptStart === undefined ? undefined : pressOfKept(keptStart));
 
     const press: NewTaskPress =
-      held !== undefined && sameAsk(held.ask, ask)
+      held !== undefined && asksAsHeld(held, ask)
         ? { ask, key: held.key, taskId: held.taskId }
         : { ask, key: crypto.randomUUID(), taskId: crypto.randomUUID() };
 
@@ -835,10 +846,14 @@ export function NewTaskComposer({
     });
   };
 
+  // A kept start's press: this window's where it pressed it, its files among it, else as the draft kept it.
+  const keptPressOf = (start: KeptStart): NewTaskPress =>
+    pressed.current?.key === start.key ? pressed.current : pressOfKept(start);
+
   // A kept start asked again goes as it was pressed, under its key and task id, whatever the card holds
   // now, its files this window's where it pressed it, and the relations it names that the window lists.
   const resend = (start: KeptStart) => {
-    const press = pressed.current?.key === start.key ? pressed.current : pressOfKept(start);
+    const press = keptPressOf(start);
     const { ask } = press;
     pressed.current = press;
 
@@ -870,7 +885,7 @@ export function NewTaskComposer({
         runsOn: ask.runsOn,
         device: devices.find((each) => each.deviceId === ask.deviceId),
       },
-      withoutStart,
+      (was) => was,
     );
   };
 
@@ -878,7 +893,7 @@ export function NewTaskComposer({
   // ahead of what it holds, keeping the press marked so, so a Start of them unchanged is still that
   // start, after a relaunch too, and words changed are another; Remove lets it go.
   const editKept = (start: KeptStart) => {
-    const held = pressed.current?.key === start.key ? pressed.current : pressOfKept(start);
+    const held = keptPressOf(start);
     pressed.current = held;
     draft.update((was) => ({
       ...was,
@@ -893,12 +908,14 @@ export function NewTaskComposer({
     if (pressed.current?.key === start.key) pressed.current = undefined;
   };
 
-  // A kept start the window's tasks now list made its task: the card lets it go and says so, with Open.
-  // Note that a start out holds it, since the task it is making is drawn in the list as it is asked.
+  // A kept start the window's tasks now list, an agent at work on it, made its task and its agent: the
+  // card lets it go and says so, with Open. Note that a start out holds it, since the task it is making
+  // is drawn in the list as it is asked, and that a task listed with no agent keeps it, since its Retry
+  // starts the agent the task was made for under its key.
   const keptLanded =
     keptStart !== undefined &&
     !starting &&
-    newTask.tasks.some((task) => task.id === keptStart.taskId);
+    newTask.tasks.some((task) => task.id === keptStart.taskId && (task.agents?.total ?? 0) > 0);
 
   const settledTaskId = keptLanded ? keptStart.taskId : undefined;
   const settle = useRef({ said: newTask.onStartSettled, letGo: draft.update });
@@ -968,7 +985,11 @@ export function NewTaskComposer({
         : start,
     noteActs:
       !devicesFailed && keptNote !== undefined && note === keptNote && keptStart !== undefined
-        ? { edit: () => editKept(keptStart), remove: () => removeKept(keptStart) }
+        ? {
+            edit: () => editKept(keptStart),
+            remove: () => removeKept(keptStart),
+            retries: keptPressOf(keptStart).filesLost === undefined,
+          }
         : undefined,
     sent: [],
   };

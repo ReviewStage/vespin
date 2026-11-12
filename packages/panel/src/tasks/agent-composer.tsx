@@ -591,7 +591,11 @@ export function AgentComposer({
                 : { label: remedyWords, onClick: remedy },
           onRemove: composer.noteActs?.remove,
           onRetry:
-            remedyWords === undefined || retriesBesideRemedy(sendNote) ? composer.retry : undefined,
+            composer.noteActs?.retries === false
+              ? undefined
+              : remedyWords === undefined || retriesBesideRemedy(sendNote)
+                ? composer.retry
+                : undefined,
         });
 
   const sendLabel = wording?.send ?? BUTTON.SEND;

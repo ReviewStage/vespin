@@ -37,6 +37,12 @@ import { agentTab, draftTab } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
+import {
+  DRAFT_PLACE,
+  type DraftPlace,
+  type KeptStart,
+  useDraftWriter,
+} from "../composer-drafts.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useToast } from "../toast.js";
 import {
@@ -64,15 +70,51 @@ const TASK_STARTED_AGENT_REFUSED_NOTE = "Task started, but its agent did not";
 /** That toast's action, which opens the task. */
 const OPEN_STARTED_TASK = "Open";
 
-/** What the card says of an agent's start whose outcome is unknown, which may have started its task. */
-const START_UNKNOWN_NOTE = `${PRODUCT_NAME} couldn't tell whether this task started. Retry to make sure; it won't start twice.`;
+/** What the card says of an agent's start whose outcome is unknown, which may have started its task, and of one whose files a relaunch let go. */
+const START_UNKNOWN_NOTE = {
+  RETRY: `${PRODUCT_NAME} couldn't tell whether this task started. Retry to make sure; it won't start twice.`,
+  FILES_LOST: `${PRODUCT_NAME} couldn't tell whether this task started, and its files are no longer here. Edit to attach them again; it won't start twice.`,
+} as const;
 
-/** The card's note for an agent's start whose outcome is unknown, keeping the answer that left it so where there is one. */
-export function startUnknownNote(cause?: unknown): ComposerNote {
+/** The card's note for an agent's start whose outcome is unknown, keeping the answer that left it so where there is one, and asking for its files again where they are gone. */
+export function startUnknownNote(cause?: unknown, filesLost = false): ComposerNote {
   return {
     reason: FAILURE_REASON.OTHER,
-    text: START_UNKNOWN_NOTE,
+    text: filesLost ? START_UNKNOWN_NOTE.FILES_LOST : START_UNKNOWN_NOTE.RETRY,
     ...(cause === undefined ? undefined : { cause }),
+  };
+}
+
+/** A card's draft place: its purpose's, in its workspace, none before the workspaces are read. */
+export function newTaskPlace(workspaceId: string | undefined, purpose: NewTaskPurpose): DraftPlace {
+  const kind =
+    purpose === NEW_TASK_PURPOSE.AUTOMATION ? DRAFT_PLACE.NEW_AUTOMATION : DRAFT_PLACE.NEW_TASK;
+
+  return { kind, workspaceId: workspaceId ?? null };
+}
+
+/** A press whose outcome is unknown as the draft keeps it: everything but its files, which it counts, and the words the card held. */
+export function keptStartOf({ key, taskId, ask }: NewTaskPress, words: string): KeptStart {
+  const { choice, permissionMode, attachments } = ask.agent;
+
+  return {
+    key,
+    taskId,
+    words,
+    ...(attachments.length === 0 ? undefined : { files: attachments.length }),
+    ask: {
+      repository: ask.repository,
+      ...(ask.workspaceId === undefined ? undefined : { workspaceId: ask.workspaceId }),
+      ...(ask.deviceId === undefined ? undefined : { deviceId: ask.deviceId }),
+      ...(ask.runsOn === undefined ? undefined : { runsOn: ask.runsOn }),
+      relations: ask.relations,
+      agent: {
+        prompt: ask.agent.prompt,
+        disabledServers: ask.agent.disabledServers,
+        ...(choice === undefined ? undefined : { choice }),
+        ...(permissionMode === undefined ? undefined : { permissionMode }),
+      },
+    },
   };
 }
 
@@ -413,6 +455,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const { shown, place, agents, showTab } = doors;
   const sendTaskStart = useTaskStartMutation();
   const toast = useToast();
+  const writer = useDraftWriter();
 
   const opensNewTask =
     useQuery({ ...appStateQuery, select: selectOpensNewTask }).data ??
@@ -517,6 +560,17 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.TASK_START, cause: note.cause },
         });
+      }
+
+      // Note that a start whose outcome is unknown is kept with its card's draft as it is heard, so a
+      // card put away meanwhile, as Settings taking the window puts it, loses neither key nor task id.
+      if (unknown && card !== undefined) {
+        const kept = keptStartOf(card.press, card.words);
+        const purpose = card.purpose ?? NEW_TASK_PURPOSE.TASK;
+        writer.update(newTaskPlace(card.press.ask.workspaceId, purpose), (now) => ({
+          ...now,
+          start: kept,
+        }));
       }
 
       if (handed !== undefined) {

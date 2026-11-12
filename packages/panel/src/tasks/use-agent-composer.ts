@@ -133,7 +133,14 @@ export interface AgentComposerControl {
   /** The message the note's remedy is for, as it was sent, whether or not its row is still drawn; none where the note is of no message. */
   notedLine?: SentLine | undefined;
   /** What the note offers beside Retry for a send it keeps whose outcome is unknown: Edit, which takes its words back into the box, and Remove, which lets it go; none for any other note. */
-  noteActs?: { readonly edit: () => void; readonly remove: () => void } | undefined;
+  noteActs?:
+    | {
+        readonly edit: () => void;
+        readonly remove: () => void;
+        /** Whether Retry stands beside them: not for a send whose files are gone, which Edit attaches again. */
+        readonly retries: boolean;
+      }
+    | undefined;
   /** The lines sent that the transcript has not read back yet, in order. */
   sent: readonly SentLine[];
 }
