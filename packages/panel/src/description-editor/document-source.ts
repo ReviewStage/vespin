@@ -65,18 +65,18 @@ export type BlankEnds = (typeof BLANK_ENDS)[keyof typeof BLANK_ENDS];
 /** The blocks a bullet list opens as, a run of plain items or of task items (`tokenSources`). */
 const LIST_BLOCKS = new Set([BulletList.name, TaskList.name]);
 
-/** The locked block a source the editor cannot draw faithfully opens as. */
+/** The locked block a source the editor cannot draw faithfully opens as, drawn as its words, as the read view draws them (`@repo/ui`'s note). */
 export const RawBlock = Node.create({
   name: "rawBlock",
   group: "block",
   atom: true,
   selectable: true,
   addAttributes: () => ({ source: { default: "" } }),
-  parseHTML: () => [{ tag: "pre[data-raw-block]" }],
+  parseHTML: () => [{ tag: "p[data-raw-block]" }, { tag: "pre[data-raw-block]" }],
   renderHTML: ({ node }) => [
-    "pre",
+    "p",
     { "data-raw-block": "", class: "description-raw-block", contenteditable: "false" },
-    node.attrs.source,
+    String(node.attrs.source).trimEnd(),
   ],
   renderMarkdown: (node: JSONContent) => String(node.attrs?.source ?? "").trimEnd(),
 });

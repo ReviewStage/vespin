@@ -283,12 +283,12 @@
 }
 
 /* What the editor keeps byte for byte but does not draw as its own: inline
-   HTML, a footnote, a link's definition, a block of HTML. */
+   HTML, a footnote, a link's definition, a block of HTML. It reads as the
+   read view draws it, its source as a paragraph's words, so opening the
+   text moves nothing; it is one block, selected or deleted whole. */
 .description-raw-block {
   margin: 0;
-  color: var(--ui-color-text-muted);
-  font: inherit;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 /* What stands under the editor (`markdown-editor.tsx`'s
