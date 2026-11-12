@@ -80,7 +80,12 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     // SAFETY: a repository change or a start yields the store, the clock, and GitHub alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
 
-    return (method: string, path: string, bearer: string, body: object) =>
+    return (
+      method: string,
+      path: string,
+      bearer: string,
+      body: Readonly<Record<string, unknown>>,
+    ) =>
       Effect.promise(async () => {
         const response = await handle(
           new Request(new URL(path, ORIGIN), {
@@ -116,7 +121,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           ]),
         );
 
-        const patch = (taskId: string, bearer: string, body: object) =>
+        const patch = (taskId: string, bearer: string, body: Readonly<Record<string, unknown>>) =>
           send("PATCH", `/api/plans/${taskId}`, bearer, body);
 
         const accessOf = Effect.map(readTask(owner, task.id), (read) => {
@@ -166,7 +171,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
 
         const send = yield* standing(new Map([["Bearer owner", owner]]));
 
-        const start = (body: object) =>
+        const start = (body: Readonly<Record<string, unknown>>) =>
           send("POST", "/api/plans", "Bearer owner", { workspaceId: workspace, ...body });
 
         const made = yield* start({

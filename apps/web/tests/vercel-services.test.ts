@@ -13,6 +13,7 @@ import { functionPublicPath, webFunctions } from "../server/function-layout";
 import {
   generatedRewrites,
   readVercelConfig,
+  type VercelConfig,
   vercelConfigSource,
 } from "../server/function-rewrites";
 import { changelogRoutes } from "../src/changelog-releases";
@@ -30,7 +31,9 @@ const WEB = fileURLToPath(new URL("..", import.meta.url));
 const vercel = await readVercelConfig(WEB);
 
 /** Whether a route or a top-level rewrite is held to one host, as the sandbox's are. */
-const heldToAHost = (route: object) => "has" in route;
+const heldToAHost = (
+  route: VercelConfig["services"]["web"]["routes"][number] | VercelConfig["rewrites"][number],
+) => "has" in route;
 
 test("the /api/ rewrites are generated into the web service's routes, ahead of its other routes but the sandbox host's", async () => {
   const generated = generatedRewrites(await webFunctions(WEB));

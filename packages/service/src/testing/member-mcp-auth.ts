@@ -315,7 +315,10 @@ export function registration(scope: readonly string[]) {
 }
 
 /** One registration as a client posts it, answered as the provider answers it. */
-export async function register(auth: MemberMcpTestAuth, body: object): Promise<Response> {
+export async function register(
+  auth: MemberMcpTestAuth,
+  body: Readonly<Record<string, unknown>>,
+): Promise<Response> {
   return auth.handler(
     new Request(`${MEMBER_MCP_TEST.ORIGIN}${AUTH_BASE_PATH}/oauth2/register`, {
       method: "POST",

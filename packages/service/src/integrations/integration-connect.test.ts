@@ -33,7 +33,8 @@ const FAR_FUTURE = Date.UTC(2100, 0, 1);
 
 /** A deployment's own Vercel OIDC token, as the SDK reads it from the environment: unsigned, and good past any test. */
 function deploymentOidcToken(): string {
-  const encoded = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const encoded = (value: Readonly<Record<string, unknown>>) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
 
   return `${encoded({ alg: "none" })}.${encoded({ exp: Math.floor(FAR_FUTURE / 1000) })}.`;
 }

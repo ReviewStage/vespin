@@ -420,7 +420,7 @@ function drawnRow<Row extends object, Change>(
   key: string,
 ): Row | undefined {
   const stored = rows.synced.collection.get(key);
-  let row = stored === undefined ? undefined : rowOf<Row>(stored);
+  let row = stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
 
   for (const write of rows.standing) {
     if (!write.keys.includes(key)) continue;

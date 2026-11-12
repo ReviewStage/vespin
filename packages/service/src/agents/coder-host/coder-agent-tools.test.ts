@@ -499,7 +499,7 @@ function harnessRecording(
     path: string,
     account: string,
     message: SessionMessage | undefined,
-    body: object,
+    body: Readonly<Record<string, unknown>>,
   ) =>
     sent.push({
       path,

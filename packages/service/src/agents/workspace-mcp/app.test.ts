@@ -516,7 +516,7 @@ const HARNESS_TOOLS = [
 ] as const;
 
 /** A tool's result as the server answers it, its first block's JSON. */
-function firstJson(called: object) {
+function firstJson<Called extends object>(called: Called) {
   // SAFETY: every result but a picture's is one text block (`app.ts`'s `toolResult`).
   const [content] = (called as { content: readonly { type: string; text: string }[] }).content;
 

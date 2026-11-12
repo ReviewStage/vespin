@@ -4,7 +4,7 @@ import { parseSkillPaste } from "./skill-paste.js";
 
 /** What Add skill's one box reads a paste as: a GitHub source, a skill's text, or nothing we install from. */
 
-const source = (rest: object = {}) => ({
+const source = (rest: Readonly<Record<string, unknown>> = {}) => ({
   kind: SKILL_PASTE_KIND.SOURCE,
   owner: "o",
   repo: "r",

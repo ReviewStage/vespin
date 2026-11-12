@@ -99,7 +99,7 @@ it.effect(
           { disableLogger: true },
         );
 
-        const post = (path: string, body: object) =>
+        const post = (path: string, body: Readonly<Record<string, unknown>>) =>
           Effect.promise(() =>
             handler(
               new Request(`${BASE_URL}/api/auth/${path}`, {

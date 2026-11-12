@@ -252,7 +252,7 @@ export function liveFollows<
 }
 
 /** Whether a declared act is a live follow rather than a plain act. */
-export function isLiveFollow(act: object): act is AnyLiveFollow {
+export function isLiveFollow<Act extends object>(act: Act): act is Act & AnyLiveFollow {
   return "slice" in act;
 }
 

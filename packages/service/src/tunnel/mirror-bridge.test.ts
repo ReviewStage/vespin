@@ -63,7 +63,8 @@ function bridge(t: TestContext, root: string) {
     return readMessage(JSON.parse(Buffer.from(data.data, "base64").toString("utf8")));
   };
 
-  const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+  const send = (frame: Readonly<Record<string, unknown>>) =>
+    child.stdin.write(`${JSON.stringify(frame)}\r\n`);
 
   const ask = (paths: string[]) => {
     const request = JSON.stringify({ type: "request", paths });
@@ -81,7 +82,8 @@ function shown(message: Awaited<ReturnType<ReturnType<typeof bridge>["next"]>>) 
 }
 
 /** The path a message names, for putting messages that arrive in no set order in one. */
-const pathOf = (message: object) => ("path" in message ? String(message.path) : "");
+const pathOf = (message: Readonly<Record<string, unknown>>) =>
+  "path" in message ? String(message.path) : "";
 
 it("the open sends git's files without ignored ones or symlinks, and a request is answered in order", async (t) => {
   const { root, head } = await checkout(t);

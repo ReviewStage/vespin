@@ -307,7 +307,7 @@ const checkOutAndFinish = (
   });
 
 /** A rule that sets the authorization given, on every request to its host or on those whose path matches. */
-const authorizing = (authorization: string, path?: object) =>
+const authorizing = (authorization: string, path?: Readonly<Record<string, string>>) =>
   path === undefined ? { set: { authorization } } : { path, set: { authorization } };
 
 /** The App's installation token for the repository, as the session's firewall carries it: on GitHub's two hosts, as Basic credentials, every other host open. */

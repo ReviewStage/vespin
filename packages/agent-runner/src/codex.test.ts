@@ -379,7 +379,9 @@ it.effect(
         catalog.models.map((model: { slug: string }) => model.slug),
         JSON.parse(CODEX_BUNDLED_MODELS_JSON).models.map((model: { slug: string }) => model.slug),
       );
-      assert.ok(catalog.models.every((model: object) => !("multi_agent_version" in model)));
+      assert.ok(
+        catalog.models.every((model: { slug: string }) => !("multi_agent_version" in model)),
+      );
       yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);

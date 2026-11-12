@@ -38,7 +38,9 @@ function bridge(port: number) {
 
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const next = async () => JSON.parse(String((await lines.next()).value));
-  const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+
+  const send = (frame: Readonly<Record<string, unknown>>) =>
+    child.stdin.write(`${JSON.stringify(frame)}\r\n`);
 
   return { child, next, send };
 }

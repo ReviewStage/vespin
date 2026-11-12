@@ -44,9 +44,9 @@ const GATE_WORDS = {
  * procedure answers, or a refusal by its word; a read that failed for any
  * other reason rejects as the screen's own failure.
  */
-async function readThroughHost<T>(
+async function readThroughHost<T, Query extends object>(
   procedure: AdminReadParams["procedure"],
-  query: object,
+  query: Query,
 ): Promise<T> {
   // SAFETY: every admin query is a set of optional string parameters (`admin-wire.ts`).
   const params: AdminReadParams = { procedure, query: query as Record<string, string> };

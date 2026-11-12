@@ -487,7 +487,7 @@ it.layer(getTestDB())("a ChatGPT plan's renewal and revocation", (it) => {
           scopes: ["chatgpt.tokens.use.direct", "offline_access", "openid"],
         };
 
-        const sealRetired = (seal: object) =>
+        const sealRetired = (seal: Readonly<Record<string, unknown>>) =>
           saveProviderKey(
             owner,
             PROVIDER_KEY_PROVIDER.OPENAI,

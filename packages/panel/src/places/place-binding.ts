@@ -32,7 +32,7 @@
  * developer went anywhere since they pressed.
  */
 
-import { useRouter } from "@tanstack/react-router";
+import { type RouterHistory, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RoutedPlace } from "./routed-places.js";
 
@@ -126,10 +126,10 @@ interface Arrivals {
 }
 
 /** The arrivals counted beside each window's router history. */
-const arrivalsBeside = new WeakMap<object, Arrivals>();
+const arrivalsBeside = new WeakMap<RouterHistory, Arrivals>();
 
 /** The arrivals counted beside `history`, made as they are first read. */
-function arrivalsOf(history: object): Arrivals {
+function arrivalsOf(history: RouterHistory): Arrivals {
   const kept = arrivalsBeside.get(history);
 
   if (kept !== undefined) return kept;

@@ -70,7 +70,12 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     // SAFETY: setting where a task runs yields the store and the clock alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
 
-    return (method: string, path: string, bearer: string, body: object) =>
+    return (
+      method: string,
+      path: string,
+      bearer: string,
+      body: Readonly<Record<string, unknown>>,
+    ) =>
       Effect.promise(async () => {
         const response = await handle(
           new Request(new URL(path, ORIGIN), {

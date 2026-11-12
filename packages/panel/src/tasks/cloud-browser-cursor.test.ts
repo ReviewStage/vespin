@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
-import { BROWSER_LIVE_SERVER } from "@repo/features/browser-live-wire";
+import {
+  BROWSER_LIVE_SERVER,
+  type BrowserLiveServerMessage,
+} from "@repo/features/browser-live-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -71,7 +74,7 @@ async function settle(): Promise<void> {
 
 /** The pane of `tab`, its page painted at 1280 by 800, and a door to say more on its live view. */
 async function paneOf(tab: AgentBrowserTab): Promise<{
-  say: (message: object) => Promise<void>;
+  say: (message: BrowserLiveServerMessage) => Promise<void>;
   redraw: (next: AgentBrowserTab) => Promise<void>;
 }> {
   let listener: BrowserLiveListener | undefined;
@@ -100,7 +103,7 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
   act(() => root.render(pane(tab)));
   await settle();
 
-  const say = async (message: object) => {
+  const say = async (message: BrowserLiveServerMessage) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };

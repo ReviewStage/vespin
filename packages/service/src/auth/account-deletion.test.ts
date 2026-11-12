@@ -183,7 +183,7 @@ const openAuthRoute = (
 
     yield* Effect.addFinalizer(() => Effect.promise(() => dispose()));
 
-    const post = (path: string, body: object, cookie?: string) =>
+    const post = (path: string, body: Readonly<Record<string, unknown>>, cookie?: string) =>
       Effect.promise(() =>
         handler(
           new Request(`${BASE_URL}/api/auth/${path}`, {

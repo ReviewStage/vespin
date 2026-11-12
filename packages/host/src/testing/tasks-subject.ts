@@ -1758,7 +1758,7 @@ export function subject(
 class WindowHold extends Data.Class<{ readonly name: string; readonly [field: string]: unknown }> {}
 
 /** `name`'s hold at `key`, equal to another of the same follow and the same key, field by field. */
-function windowHoldOf(name: string, key: object): WindowHold {
+function windowHoldOf<Key extends object>(name: string, key: Key): WindowHold {
   return new WindowHold({ ...key, name });
 }
 

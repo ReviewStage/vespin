@@ -166,7 +166,12 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
     const call = resendCall(sender.value.key, REQUEST_TIMEOUT_MS);
 
     // One call, whose refusal is logged by what was asked and its status alone, because the body carries the address.
-    const send = (asked: string, method: HttpMethod, path: string, body?: object) =>
+    const send = (
+      asked: string,
+      method: HttpMethod,
+      path: string,
+      body?: Readonly<Record<string, unknown>>,
+    ) =>
       Effect.gen(function* () {
         const answer = yield* call.send({
           method,

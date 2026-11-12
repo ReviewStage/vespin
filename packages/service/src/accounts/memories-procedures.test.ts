@@ -141,7 +141,7 @@ function request(
   path: string,
   userId: string | undefined,
   method: string = HTTP_METHOD.GET,
-  body?: object,
+  body?: Readonly<Record<string, unknown>>,
 ) {
   return new Request(new URL(path, ORIGIN), {
     method,
@@ -163,7 +163,7 @@ const forget = (userId: string | undefined, workspaceId: string, id: string) =>
     HTTP_METHOD.DELETE,
   );
 
-const save = (userId: string, body: object) =>
+const save = (userId: string, body: Readonly<Record<string, unknown>>) =>
   request(MEMORIES_PATH, userId, HTTP_METHOD.POST, body);
 
 const search = (userId: string, workspaceId: string, query?: string) =>
