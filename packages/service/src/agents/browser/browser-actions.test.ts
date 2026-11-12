@@ -134,9 +134,14 @@ function pageCommands(sent: readonly FakeCdpCommand[]) {
   return sent.flatMap(({ method, params, sessionId }) => {
     if (method === "Target.getTargets") return [];
 
-    if (method === "Runtime.evaluate") return [{ method, sessionId }];
+    const command =
+      method === "Runtime.evaluate"
+        ? { method, sessionId }
+        : sessionId === undefined
+          ? { method, params }
+          : { method, params, sessionId };
 
-    return [sessionId === undefined ? { method, params } : { method, params, sessionId }];
+    return [command];
   });
 }
 
