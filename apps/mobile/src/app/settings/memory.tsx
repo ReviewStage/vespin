@@ -7,7 +7,6 @@ import {
   MEMORY_PAGE_WORDS,
   MEMORY_RECALLS_WORDS,
   memoriesByUse,
-  memoryUse,
   recallsText,
 } from "@repo/features/memory-settings-words";
 import type { MemorySummary } from "@repo/features/memory-wire";
@@ -135,7 +134,6 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
               key={memory.id}
               words={memory.text}
               line={memoryLine(memory, now)}
-              badge={memoryUse(memory, now)}
               edit={
                 memory.forgettable
                   ? {
