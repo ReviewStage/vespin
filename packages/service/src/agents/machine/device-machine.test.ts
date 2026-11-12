@@ -85,6 +85,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
+import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
 import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
 import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
@@ -163,8 +164,13 @@ const untilQueued = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
-/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
-const NO_REACH = Layer.merge(NO_GITHUB, memorySandbox().layer);
+/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches, nor the Terminal's wake of one. */
+const NO_REACH = Layer.mergeAll(
+  NO_GITHUB,
+  memorySandbox().layer,
+  // SAFETY: a Mac's agent has no sandbox to wake, so no call of it is ever made.
+  Layer.succeed(AgentSandbox, {} as AgentSandboxService),
+);
 
 it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_REACH))(
   "a local agent's machine",

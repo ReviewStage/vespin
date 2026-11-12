@@ -26,6 +26,7 @@ import {
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { LaunchRefused, RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
 
@@ -105,7 +106,11 @@ export function refusedByMachine(cause: unknown): HostedRefusal {
 const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
   snapshot: TurnCheckoutSnapshot,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
+): Effect.fn.Return<
+  void,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
+> {
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
 
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
@@ -139,7 +144,11 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   agent: Agent,
   messageId: string,
   restoreFiles = false,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
+): Effect.fn.Return<
+  void,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
+> {
   // An agent on its starter's own GitHub token takes words from its starter alone, and so is rewound by them alone.
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);

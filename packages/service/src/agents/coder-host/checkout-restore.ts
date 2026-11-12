@@ -7,7 +7,10 @@
  * that restores the files is made (`rewind.ts`), once the agent's runner is
  * ended, the service reaches the agent's sandbox by its session's name
  * (`../agent-sandbox-open.ts`), wakes it where it stopped, as the Terminal
- * tab's resume does, and runs the one restore script both machines run
+ * tab's resume does (`AgentSandbox`'s `resume`), so one with its own drive
+ * is made again from the image on that drive, since a stop kept nothing
+ * else of it, while one from before drives resumes from its snapshot; and
+ * runs the one restore script both machines run
  * (`@repo/features/checkout-restore`) in the checkout, with the snapshot
  * in its variables: the working tree and the checked-out branch go back,
  * and no commit is moved. Nothing leaves the sandbox: no push, no
@@ -57,6 +60,7 @@ import {
 } from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
+import { AgentSandbox } from "../terminal/agent-sandbox.js";
 
 export const CHECKOUT_RESTORE = {
   /** The most a rewind waits on the restore, the sandbox woken included. */
@@ -87,6 +91,15 @@ function stderrTail(stderr: string): string {
     .slice(-CHECKOUT_RESTORE.STDERR_TAIL);
 }
 
+/** The stopped sandbox made again on its own drive as the Terminal wakes it, read again for the run it is up in; none where it is not up yet, as on an image still being prepared. */
+const wokenOnDrive = (sandboxes: SandboxService, sessionId: string, name: string) =>
+  Effect.gen(function* () {
+    yield* (yield* AgentSandbox).resume(sessionId);
+    const woken = yield* sandboxes.get(name);
+
+    return woken === undefined ? undefined : runningOf(woken);
+  });
+
 /**
  * One script run in the checkout of the agent's sandbox, woken where it
  * stopped, with the variables given; none where no sandbox holding the
@@ -108,16 +121,17 @@ const ranInCheckout = (
       return undefined;
     }
 
-    // A stopped sandbox whose snapshot the provider dropped holds no checkout to put back.
+    // A stopped sandbox with its own drive is made again on it, as the Terminal wakes it; one whose snapshot the provider dropped holds no checkout to put back.
     const running =
       runningOf(sandbox) ??
-      (yield* resumedRunning(sandbox.name).pipe(
-        Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
-        Effect.provideService(Sandbox, sandboxes),
-      ));
+      ((yield* sandboxes.ownDriveStands(sandbox.name))
+        ? yield* wokenOnDrive(sandboxes, sessionId, sandbox.name)
+        : yield* resumedRunning(sandbox.name).pipe(
+            Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
+          ));
 
     if (running === undefined) return undefined;
-    yield* touchAgentSandbox(sandbox.name).pipe(Effect.provideService(Sandbox, sandboxes));
+    yield* touchAgentSandbox(sandbox.name);
 
     return yield* sandboxes.run(running, {
       command: "sh",
@@ -125,7 +139,7 @@ const ranInCheckout = (
       cwd: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
       env,
     });
-  });
+  }).pipe(Effect.provideService(Sandbox, sandboxes));
 
 /** The restore in the agent's sandbox, woken where it stopped. */
 const restoreIn = (sandboxes: SandboxService, ask: RestoreAsk) =>
@@ -196,7 +210,7 @@ const diffIn = (sandboxes: SandboxService, ask: DiffAsk) =>
 export const diffCheckout = /* @__PURE__ */ Effect.fn("web/diffCheckout")(function* (
   sandboxes: SandboxService,
   ask: DiffAsk,
-): Effect.fn.Return<CheckoutDiffOutcome, never, DatabaseServices> {
+): Effect.fn.Return<CheckoutDiffOutcome, never, DatabaseServices | AgentSandbox> {
   const outcome = yield* diffIn(sandboxes, ask).pipe(
     Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
     Effect.catch((failure) =>
@@ -221,7 +235,7 @@ export const diffCheckout = /* @__PURE__ */ Effect.fn("web/diffCheckout")(functi
 export const restoreCheckout = /* @__PURE__ */ Effect.fn("web/restoreCheckout")(function* (
   sandboxes: SandboxService,
   ask: RestoreAsk,
-): Effect.fn.Return<RestoreOutcome, never, DatabaseServices> {
+): Effect.fn.Return<RestoreOutcome, never, DatabaseServices | AgentSandbox> {
   const outcome = yield* restoreIn(sandboxes, ask).pipe(
     Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
     Effect.catch((failure) =>

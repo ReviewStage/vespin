@@ -608,11 +608,13 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
       return {
-        agent: yield* rewoundAgentById(
-          context.userId,
-          input.params.id,
-          input.body.messageId,
-          input.body.restoreFiles === true,
+        agent: yield* inSandbox(
+          rewoundAgentById(
+            context.userId,
+            input.params.id,
+            input.body.messageId,
+            input.body.restoreFiles === true,
+          ),
         ),
       };
     }),
@@ -620,7 +622,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     turnChanges: signedIn.turnChanges.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.id);
 
-      return yield* turnChangesOf(context.userId, agent, input.messageId);
+      return yield* inSandbox(turnChangesOf(context.userId, agent, input.messageId));
     }),
     /**
      * The agent's changes: the files of the pull request its kept published

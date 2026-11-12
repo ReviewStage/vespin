@@ -81,6 +81,7 @@ import {
   SESSION_TURN,
   type SessionMessage,
 } from "../sessions/agent-sessions.js";
+import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
 import { macOffers, THIS_MAC } from "./agent-runtime-choice.js";
 import { clearedAgent } from "./clear.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
@@ -289,8 +290,13 @@ let installationsConnected = 0;
 /** GitHub, reaching the repository through each workspace's installation. */
 const GITHUB = githubReaching(INSTALLATIONS).layer;
 
-/** GitHub as the installations reach it, and sandboxes kept in memory. */
-const REACHED = Layer.merge(GITHUB, memorySandbox().layer);
+/** GitHub as the installations reach it, and sandboxes kept in memory, with no wake of a stopped one, which no rewind here restores files in. */
+const REACHED = Layer.mergeAll(
+  GITHUB,
+  memorySandbox().layer,
+  // SAFETY: no rewind here restores files, so the Terminal's wake is never asked anything.
+  Layer.succeed(AgentSandbox, {} as AgentSandboxService),
+);
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
 

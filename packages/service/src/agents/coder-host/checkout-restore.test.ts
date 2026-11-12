@@ -16,11 +16,13 @@ import {
   checkoutRestoreEnv,
 } from "@repo/features/checkout-restore";
 import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
-import { memorySandbox } from "@repo/sandbox/testing";
-import { Effect } from "effect";
-import { agentSandboxName } from "../agent-sandbox-open.js";
+import { type MemorySandbox, memorySandbox } from "@repo/sandbox/testing";
+import { Effect, Layer } from "effect";
+import { AGENT_OWN_DRIVE, agentSandboxName } from "../agent-sandbox-open.js";
 import { CHECKOUT_DIFF_OUTCOME, RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { agentSandboxLayer } from "../terminal/agent-sandbox.js";
+import { AgentImage } from "./agent-image.js";
 import { diffCheckout, restoreCheckout } from "./checkout-restore.js";
 
 const SESSION = "session-for-restore";
@@ -30,6 +32,19 @@ const SNAPSHOT = {
   head: "89abcdef0123456789abcdef0123456789abcdef",
   branch: "feat/invitations",
 };
+
+/** The memory's sandboxes, with the Terminal's wake of a stopped one over them on a fixture image. */
+const withWake = (memory: MemorySandbox) =>
+  Layer.provideMerge(
+    agentSandboxLayer,
+    Layer.merge(
+      memory.layer,
+      Layer.succeed(AgentImage, {
+        reference: Effect.succeed("agent-image:fixture"),
+        runner: Effect.succeed([]),
+      }),
+    ),
+  );
 
 /** The restore asked of the agent's sandbox, up under its session's name, whose run exits as scripted. */
 const restored = (exitCode: number, sessionId = SESSION) =>
@@ -46,7 +61,7 @@ const restored = (exitCode: number, sessionId = SESSION) =>
       });
 
       return yield* restoreCheckout(sandboxes, { sessionId, snapshot: SNAPSHOT });
-    }).pipe(Effect.provide(memory.layer));
+    }).pipe(Effect.provide(withWake(memory)));
 
     return { outcome, state: memory.state };
   });
@@ -69,7 +84,7 @@ const diffed = (exitCode: number, stdout = "", sessionId = SESSION) =>
         sessionId,
         range: { from: SNAPSHOT.commit, to: null },
       });
-    }).pipe(Effect.provide(memory.layer));
+    }).pipe(Effect.provide(withWake(memory)));
 
     return { outcome, state: memory.state };
   });
@@ -122,9 +137,45 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
         const outcome = yield* restoreCheckout(memory.service, {
           sessionId: SESSION,
           snapshot: SNAPSHOT,
-        });
+        }).pipe(Effect.provide(withWake(memory)));
 
         assert.deepEqual([outcome, memory.state.commands], [RESTORE_OUTCOME.MISSING, []]);
+      }),
+  );
+
+  it.effect(
+    "makes a stopped sandbox, which kept no disk, again from the image on its own drive, and runs the restore there",
+    () =>
+      Effect.gen(function* () {
+        const memory = memorySandbox();
+
+        const outcome = yield* Effect.gen(function* () {
+          const sandboxes = yield* Sandbox;
+
+          const first = yield* sandboxes.getOrCreate({
+            name: agentSandboxName(SESSION),
+            from: { image: "agents" },
+            drive: AGENT_OWN_DRIVE,
+            tags: { sessionId: SESSION },
+            env: {},
+          });
+
+          yield* sandboxes.stop(first);
+
+          return yield* restoreCheckout(sandboxes, { sessionId: SESSION, snapshot: SNAPSHOT });
+        }).pipe(Effect.provide(withWake(memory)));
+
+        assert.equal(outcome, RESTORE_OUTCOME.RESTORED);
+        assert.deepEqual(memory.state.deleted, [agentSandboxName(SESSION)]);
+        assert.deepEqual(
+          memory.state.commands.map((command) => [command.ask.args, command.running]),
+          [
+            [
+              ["-c", CHECKOUT_RESTORE_SCRIPT],
+              memory.state.sandboxes.get(agentSandboxName(SESSION))?.running,
+            ],
+          ],
+        );
       }),
   );
 });

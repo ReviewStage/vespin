@@ -67,6 +67,7 @@ import type {
   PlaceholderSwap,
 } from "../sandbox-firewall.js";
 import type { KeyRefusal, PlanRefusal } from "../sessions/agent-sessions.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 
 /** Where a session runs now, as its machine names it: a sandbox's run, or a local agent's id on its Mac. Opaque to every caller but the machine. */
 export type MachineRunning = string & Brand.Brand<"MachineRunning">;
@@ -510,7 +511,7 @@ export interface AgentMachineService {
   readonly restoreCheckout: (
     session: string,
     snapshot: TurnCheckoutSnapshot,
-  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
+  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices | AgentSandbox>;
   /**
    * The diff of the session's checkout between two snapshots its runner
    * recorded, or one and the working tree, by the one diff script both
@@ -522,7 +523,11 @@ export interface AgentMachineService {
   readonly diffCheckout: (
     session: string,
     range: CheckoutDiffRange,
-  ) => Effect.Effect<CheckoutDiffOutcome, SandboxError | LaunchRefused, DatabaseServices>;
+  ) => Effect.Effect<
+    CheckoutDiffOutcome,
+    SandboxError | LaunchRefused,
+    DatabaseServices | AgentSandbox
+  >;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,
