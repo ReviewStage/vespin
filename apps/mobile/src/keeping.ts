@@ -37,6 +37,7 @@ import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
 import { cachedFile } from "./cached-media.js";
+import { richPasteboardModule } from "./rich-pasteboard-module.js";
 
 /** What each act that did not go says, in the panel's words for a copy that failed. */
 const KEEP_FAILED = {
@@ -102,22 +103,27 @@ async function copied(kept: Kept): Promise<void> {
 }
 
 /**
- * Copies a draft's body as rich text: the system reads its HTML into the
- * pasteboard's rich text, HTML, and plain words at once (expo-clipboard's
- * HTML input), as the desktop writes HTML and plain words together. Note
- * that the words are set in the system's face, since HTML read with no face
- * of its own pastes into Mail in Times; and that the plain words are the
- * system's reading of the HTML, each link by its label alone, since one
- * item cannot hold words of our own beside it without native code. Note
- * that the HTML names its encoding, since the system reads HTML that names
- * none as Latin-1, which garbles a curly quote, a dash, or an emoji; and
- * that an HTML the system could not read leaves the pasteboard empty
- * though expo-clipboard answers it went, which no read here can tell.
+ * Copies a draft's body as one pasteboard item holding its HTML, the rich
+ * text the system reads from it, and its plain words, a link's address after
+ * its label, as the desktop writes HTML and plain words together
+ * (`modules/rich-pasteboard/`). Note that the words are set in the system's
+ * face, since HTML read with no face of its own pastes into Mail in Times;
+ * and that the HTML names its encoding, since the system reads HTML that
+ * names none as Latin-1, which garbles a curly quote, a dash, or an emoji.
+ * A build without the module copies through expo-clipboard's HTML input,
+ * whose plain words are the system's reading of the HTML, each link by its
+ * label alone.
  */
 async function copiedRich(copy: DraftCopy): Promise<void> {
-  await setStringAsync(`${RICH_HEAD}<span style="${RICH_FACE}">${copy.html}</span>`, {
-    inputFormat: StringFormat.HTML,
-  });
+  const html = `${RICH_HEAD}<span style="${RICH_FACE}">${copy.html}</span>`;
+
+  if (richPasteboardModule !== null) {
+    await richPasteboardModule.copy(html, copy.text);
+
+    return;
+  }
+
+  await setStringAsync(html, { inputFormat: StringFormat.HTML });
 }
 
 /** Saves a picture or a recording to Photos, asking for add-only access the first time. */
