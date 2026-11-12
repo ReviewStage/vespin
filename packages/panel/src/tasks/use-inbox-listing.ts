@@ -5,9 +5,11 @@ import {
   INBOX_WHOSE,
   type InboxGroup,
   type InboxListed,
+  type InboxRun,
   inboxAtNow,
   inboxCounts,
   inboxGroups,
+  inboxRunOf,
   listedItems,
   taskGroups,
 } from "@repo/features/inbox-list-model";
@@ -15,7 +17,7 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
 import { useInboxView } from "../inbox-route.js";
@@ -64,8 +66,16 @@ import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
  * which it leaves as it stands (`TASK_LISTS`).
  */
 
-/** What an Inbox narrowed to a task lists: every item the task holds, open or settled, whoever it is addressed to. */
-const TASK_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES, pinnedFirst: false } as const;
+/** No run folded. */
+const NO_RUNS: readonly InboxRun[] = [];
+
+/** What an Inbox narrowed to a task lists: every item the task holds, open or settled, whoever it is addressed to, in one run. */
+const TASK_LISTS = {
+  show: INBOX_SHOW.ALL,
+  whose: EVERYONES,
+  pinnedFirst: false,
+  folded: NO_RUNS,
+} as const;
 
 /**
  * The tasks the list holds items of, in main's order: each holding one that
@@ -160,6 +170,36 @@ function useChoiceFirst(
   const stands = newest !== undefined && unmoved(newest, chosen, handed.current);
 
   return { chosen: stands ? newest.choice : chosen, settling: stands, choose, clear };
+}
+
+/**
+ * Opens the run a newly chosen item stands folded in, as a link, a
+ * notification, or a search opens it, since a row's press and K and J reach
+ * no item of a folded run. Note that an item is handled once, as it is
+ * found, so the reader folding the chosen item's run afterwards keeps it
+ * folded.
+ */
+function useFoldOpensOnChoice(
+  standing: readonly InboxGroup[],
+  chosenId: string | undefined,
+  folded: ReadonlySet<InboxRun> | undefined,
+  onFold: (run: InboxRun, folded: boolean) => void,
+): void {
+  const handled = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (chosenId === undefined || chosenId === handled.current) return;
+
+    const group = standing.find(({ items }) => items.some((item) => item.id === chosenId));
+    const item = group?.items.find((each) => each.id === chosenId);
+
+    if (group === undefined || item === undefined) return;
+
+    handled.current = chosenId;
+    const run = inboxRunOf({ holder: group.holder, item });
+
+    if (folded?.has(run) === true) onFold(run, false);
+  }, [standing, chosenId, folded, onFold]);
 }
 
 /**
@@ -279,14 +319,22 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const search = useMemo(() => searchTokens(query), [query]);
   const me = tasks.me;
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
-  const { show, whose, pinnedFirst } = narrowedTask === undefined ? choices : TASK_LISTS;
+  const { show, whose, pinnedFirst, folded } = narrowedTask === undefined ? choices : TASK_LISTS;
+  const foldedRuns = useMemo(() => new Set(folded), [folded]);
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
   // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
   const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
 
   const filter = useMemo(
-    () => ({ show, whose, search, readerId: me, pinnedFirst }),
-    [show, whose, search, me, pinnedFirst],
+    () => ({ show, whose, search, readerId: me, pinnedFirst, folded: foldedRuns }),
+    [show, whose, search, me, pinnedFirst, foldedRuns],
+  );
+
+  useFoldOpensOnChoice(
+    standing,
+    asked?.itemId,
+    pinnedFirst ? foldedRuns : undefined,
+    choices.onFold,
   );
 
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,

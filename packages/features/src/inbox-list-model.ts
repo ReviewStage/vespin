@@ -3,7 +3,7 @@
  *
  * The list holds every item of every holder it is handed, the latest
  * changed first, in one run with no groups unless the reader asked for
- * their pinned tasks' items first, under a heading of their own
+ * their pinned tasks' items first, under a heading of their own that folds
  * (`inboxPinnedRuns`), the items its scope takes: what
  * needs the reader, what they are not done with, everything, or what they
  * set a reminder on, each scope counting its own. An item is the reader's
@@ -859,9 +859,29 @@ function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
 export interface InboxListView {
   readonly readerId: string | undefined;
   readonly items: readonly InboxListed[];
-  /** Whether the pinned tasks' items stand first, under a heading of their own (`inboxPinnedRuns`); none where every item stands in one run. */
-  readonly pinnedFirst?: boolean | undefined;
+  /** Where the pinned tasks' items stand first, each run's count and which are folded (`inboxPinnedRuns`); none where every item stands in one run. */
+  readonly runs?: InboxRunsView | undefined;
 }
+
+/** The two runs a list stands its items in where the pinned tasks' items stand first: theirs, then everything else. */
+export const INBOX_RUN = {
+  PINNED: "pinned",
+  REST: "rest",
+} as const;
+
+export type InboxRun = (typeof INBOX_RUN)[keyof typeof INBOX_RUN];
+
+/** Every run, in the order a list stands them. */
+export const INBOX_RUNS: readonly InboxRun[] = [INBOX_RUN.PINNED, INBOX_RUN.REST];
+
+/** A list's runs as it drew them: how many items each holds, folded or not, and which the reader folded. */
+export interface InboxRunsView {
+  readonly counts: Readonly<Record<InboxRun, number>>;
+  readonly folded: ReadonlySet<InboxRun>;
+}
+
+/** No run folded. */
+const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
 
 /**
  * Whether an item is the reader's: it waits on them (`inboxWaitsOn`), or on
@@ -1003,7 +1023,9 @@ function scopedItem(
  * the reader asks for their pinned tasks first (`pinnedFirst`), a pinned
  * task's items stand before every other, the latest first within each, so
  * an agent's reply on a pinned task lands at the top of Pinned rather than
- * the top of everything.
+ * the top of everything; and a run the reader folded (`folded`) lists none
+ * of its items but the chosen one, though its count says how many it holds,
+ * so K and J step past it. A search folds nothing, so no match is hidden.
  */
 export function inboxList(
   tasks: readonly InboxGroup[],
@@ -1020,6 +1042,8 @@ export function inboxList(
     readonly places?: ReadonlyMap<string, InboxPlace> | undefined;
     /** Whether the pinned tasks' items stand first (`inboxPinnedRuns`); none lists every item in one run. */
     readonly pinnedFirst?: boolean | undefined;
+    /** The runs the reader folded where the pinned tasks' items stand first; none folds nothing. */
+    readonly folded?: ReadonlySet<InboxRun> | undefined;
   },
 ): InboxListView {
   const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
@@ -1040,7 +1064,25 @@ export function inboxList(
     )
     .toSorted((a, b) => rank(b) - rank(a) || at(b.item) - at(a.item));
 
-  return pinnedFirst ? { items, readerId, pinnedFirst } : { items, readerId };
+  const pinned = pinnedFirst ? items.filter(({ holder }) => isPinned(holder)).length : 0;
+
+  // Note that a reader with nothing pinned listed sees the one run they would see without it, and no fold.
+  if (pinned === 0) return { items, readerId };
+
+  const folded = search.length > 0 ? NO_FOLDS : (view.folded ?? NO_FOLDS);
+
+  const shown = items.filter(
+    (listed) => !folded.has(inboxRunOf(listed)) || listed.item.id === view.chosen,
+  );
+
+  return {
+    items: shown,
+    readerId,
+    runs: {
+      counts: { [INBOX_RUN.PINNED]: pinned, [INBOX_RUN.REST]: items.length - pinned },
+      folded,
+    },
+  };
 }
 
 /** Whether a holder's task is pinned in the reader's sidebar. */
@@ -1048,26 +1090,43 @@ function isPinned(holder: InboxHolder): boolean {
   return holder.task.pinnedAt !== undefined;
 }
 
-/** A list's rows split where its pinned tasks' items stand first: those, then everything else. */
-export interface InboxPinnedRuns {
-  readonly pinned: readonly InboxListed[];
-  readonly rest: readonly InboxListed[];
+/** The run a listed item stands in where the pinned tasks' items stand first. */
+export function inboxRunOf({ holder }: InboxListed): InboxRun {
+  return isPinned(holder) ? INBOX_RUN.PINNED : INBOX_RUN.REST;
+}
+
+/** One run as a list draws it: which it is, the rows it draws, how many items it holds, and whether it is folded. */
+export interface InboxPinnedRun {
+  readonly run: InboxRun;
+  readonly items: readonly InboxListed[];
+  readonly count: number;
+  readonly folded: boolean;
 }
 
 /**
  * Where a list stands its pinned tasks' items first (`inboxList`'s
- * `pinnedFirst`), its rows split into those and the rest, each drawn under
- * a heading of its own; none where it does not, or where no item listed is
- * a pinned task's, so a reader with nothing pinned sees the one run they
- * would see without it.
+ * `pinnedFirst`), its runs, each drawn under a heading of its own: Pinned,
+ * then everything else where it holds anything; none where it does not, or
+ * where no item listed is a pinned task's, so a reader with nothing pinned
+ * sees the one run they would see without it.
  */
-export function inboxPinnedRuns(view: InboxListView): InboxPinnedRuns | undefined {
-  if (view.pinnedFirst !== true) return undefined;
-  const pinned = view.items.filter(({ holder }) => isPinned(holder));
+export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] | undefined {
+  const { runs } = view;
 
-  if (pinned.length === 0) return undefined;
+  if (runs === undefined) return undefined;
 
-  return { pinned, rest: view.items.filter(({ holder }) => !isPinned(holder)) };
+  return INBOX_RUNS.flatMap((run) =>
+    runs.counts[run] === 0
+      ? []
+      : [
+          {
+            run,
+            items: view.items.filter((listed) => inboxRunOf(listed) === run),
+            count: runs.counts[run],
+            folded: runs.folded.has(run),
+          },
+        ],
+  );
 }
 
 /**

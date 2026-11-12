@@ -888,10 +888,37 @@ test("a focused row whose task is pinned on another Mac keeps the keyboard as it
   rowNamed(page, "Expire after 7 days?").focus();
   act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
   await settle();
-  assert.equal(page.querySelector(".inbox-tasks .ui-group-header-head")?.textContent, "Pinned");
+  assert.ok(
+    page.querySelector(".inbox-tasks .ui-group-header-head")?.textContent?.startsWith("Pinned"),
+    "the row's task heads the list under Pinned",
+  );
   assert.ok(
     document.activeElement === rowNamed(page, "Expire after 7 days?"),
     "the keyboard stays on the row",
+  );
+});
+
+test("a run folded under its heading draws none of its rows, and opens again once a link chooses one of its items", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const { page } = mount();
+  await settle();
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+
+  const heading = [
+    ...page.querySelectorAll<HTMLElement>(".inbox-tasks .ui-group-header-head"),
+  ].find((head) => head.textContent?.startsWith("Everything else") === true);
+
+  const fold = heading?.querySelector<HTMLElement>("button") ?? heading;
+  assert.ok(fold, "Everything else is headed");
+  act(() => fold.click());
+  await settle();
+  assert.deepEqual(listed(page), ["*Expire after 7 days?"], "folded, its rows are drawn nowhere");
+  act(() => world.chooseFromOutside({ ...ON_THRESHOLD, opened: true }));
+  await settle();
+  assert.ok(
+    listed(page).some((row) => row.includes("Alert at 80%?")),
+    "the link opened the run",
   );
 });
 

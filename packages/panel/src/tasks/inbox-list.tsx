@@ -2,6 +2,7 @@ import { inboxShownTicks } from "@repo/features/inbox-draft";
 import {
   EVERYONES,
   INBOX_NOT_READ,
+  INBOX_RUN,
   INBOX_SCOPES,
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
@@ -10,6 +11,7 @@ import {
   type InboxCounts,
   type InboxListed,
   type InboxListView,
+  type InboxRun,
   type InboxShow,
   type InboxWhose,
   inboxLineKind,
@@ -43,6 +45,9 @@ import {
   type EmptyStateAction,
   ERROR_STATE_PLACEMENT,
   ErrorState,
+  GROUP_HEAD,
+  GROUP_HEADING,
+  GROUP_LOOK,
   GroupHeader,
   IconButton,
   INSET,
@@ -59,6 +64,7 @@ import {
   ListRow,
   MENU_ITEM_MARK,
   motionRows,
+  NAV_COUNT_SHOWN,
   NOTE_LINE_LOOK,
   NoteLine,
   PaneBar,
@@ -146,7 +152,7 @@ import {
   useAskedMenu,
   useMenuAsk,
 } from "../desktop/phone-head.js";
-import { sidebarHead } from "../desktop/sidebar-fold.js";
+import { groupCount } from "../desktop/sidebar-fold.js";
 import { type TabActionGroups, useTabActions } from "../desktop/strip-tabs.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
@@ -330,9 +336,6 @@ const WHOSE = "Addressed to";
 
 /** What the view's switch that stands the pinned tasks' items first is called. */
 const PINNED_FIRST = "Pinned tasks first";
-
-/** The headings the list stands its rows under where the pinned tasks' items stand first, the sidebar's word for the pinned. */
-const PINNED_RUN_WORDS = { PINNED: "Pinned", REST: "Everything else" } as const;
 
 /** What the chip over the list says its × does, in full, since a reader hears it apart from the empty state's short press. */
 const CLEAR_WHOSE = "Show what's addressed to me";
@@ -1586,20 +1589,32 @@ function InboxRows({
   );
 }
 
+/** What each run's heading is called, Pinned as the sidebar calls the pinned. */
+const RUN_WORDS = {
+  [INBOX_RUN.PINNED]: "Pinned",
+  [INBOX_RUN.REST]: "Everything else",
+} as const satisfies Record<InboxRun, string>;
+
 /**
  * The list's rows: in one run, or, where the pinned tasks' items stand
  * first and one is listed (`inboxPinnedRuns`), those under Pinned and the
- * rest under Everything else, each headed as the sidebar heads its groups
- * (`sidebarHead`).
+ * rest under Everything else, each a section's heading over its rows: its
+ * chevron standing at rest at the list's edge, its name where the rows' marks
+ * stand, and how many items it holds, so it reads as a section folded or
+ * open. A heading's press folds its run or opens it, as `onFold` keeps it,
+ * and a folded run draws none of its rows.
  */
 function InboxRuns({
   view,
   place,
   row,
+  onFold,
 }: {
   view: InboxListView;
   place: RowsPlace;
   row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
+  /** Folds a run or opens it; none where the runs never fold. */
+  onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
 }): React.JSX.Element {
   const runs = inboxPinnedRuns(view);
 
@@ -1607,14 +1622,23 @@ function InboxRuns({
 
   return (
     <>
-      <GroupHeader {...sidebarHead(undefined)} label={PINNED_RUN_WORDS.PINNED}>
-        <InboxRows items={runs.pinned} place={place} row={row} />
-      </GroupHeader>
-      {runs.rest.length === 0 ? null : (
-        <GroupHeader {...sidebarHead(undefined)} label={PINNED_RUN_WORDS.REST}>
-          <InboxRows items={runs.rest} place={place} row={row} />
+      {runs.map(({ run, items, count, folded }) => (
+        <GroupHeader
+          key={run}
+          look={GROUP_LOOK.SECTION}
+          heading={GROUP_HEADING.NONE}
+          head={GROUP_HEAD.STICKS}
+          label={RUN_WORDS[run]}
+          count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
+          fold={
+            onFold === undefined
+              ? undefined
+              : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
+          }
+        >
+          {folded ? null : <InboxRows items={items} place={place} row={row} />}
         </GroupHeader>
-      )}
+      ))}
     </>
   );
 }
@@ -1805,7 +1829,7 @@ export function InboxList({
       data-empty={String(listedItems(view).length === 0)}
       {...motionRows()}
     >
-      <InboxRuns view={view} place={rowsPlace} row={row} />
+      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.view?.onFold} />
       {note}
     </div>
   );
