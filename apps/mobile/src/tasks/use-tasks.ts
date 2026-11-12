@@ -476,6 +476,8 @@ export function useTasksListing(search: string): ReadListing {
           }),
         {
           refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+          // Note that the move offers no Try again, but voids an older menu move's, which would put the task back.
+          subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
           went: BUZZ.SUCCESS,
         },
       );

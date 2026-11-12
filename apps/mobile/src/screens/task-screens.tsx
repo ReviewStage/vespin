@@ -1296,7 +1296,12 @@ function OverviewDescription({
                       onPress: () =>
                         router.push({
                           pathname: "/tasks/comments/new",
-                          params: { task: task.id, from: `${block.from}`, to: `${block.to}` },
+                          params: {
+                            task: task.id,
+                            from: `${block.from}`,
+                            to: `${block.to}`,
+                            quote: block.quote,
+                          },
                         }),
                     },
                   ]

@@ -34,6 +34,13 @@ function refusedNote(answer: RelationAnswer): string | undefined {
   return "failure" in answer ? relationRefusedNote(answer.failure) : undefined;
 }
 
+/** The task whose parent a relation of `kind` sets: the task itself for its parent, the other task for its sub-task, none for a block. */
+function parentChild(kind: TaskRelationKind, taskId: string, otherId: string): readonly string[] {
+  if (kind === TASK_RELATION_KIND.PARENT) return [taskId];
+
+  return kind === TASK_RELATION_KIND.SUB_TASK ? [otherId] : [];
+}
+
 /** A task's relation writes. */
 export interface TaskRelationWrites {
   /** Relates `otherId` to `taskId` as `kind`, as the panel's Task relation does once a task is picked. */
@@ -113,13 +120,18 @@ export function useTaskRelationWrites(): TaskRelationWrites {
       relate: (taskId, kind, otherId) => sendRelation(TASK_BLOCK_CHANGE.ADD, taskId, kind, otherId),
       change: (taskId, otherId, from, to) => {
         if (from === to) return;
+        // Note that a change into or out of a parent or a sub-task sets that child's parent, so it voids an older parent set's Try again, and a newer one voids its own.
+        const children = [from, to].flatMap((kind) => parentChild(kind, taskId, otherId));
         void write(
           () =>
             acts[ACT_KIND.TASKS_CHANGE_RELATION]({
               taskId,
               relation: { taskId: otherId, from, to },
             }),
-          saying,
+          {
+            ...saying,
+            subject: [...new Set(children)].map((id) => ({ kind: WRITE_SUBJECT.TASK_PARENT, id })),
+          },
         );
       },
       remove: (taskId, kind, otherId) =>

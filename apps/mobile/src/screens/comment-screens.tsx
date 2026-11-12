@@ -128,11 +128,12 @@ export function CommentThreadScreen() {
 
 /**
  * A new thread on one block of a task's description, named by the route's
- * `from` and `to` on the task its `task` names, as a long press on the block
- * opens it: the block's words quoted as its heading, as the thread they start
- * will quote them, and the comment field docked over its foot, whose send
- * starts the thread and opens it in this screen's place, as a document's
- * comment opens its thread once posted. A send that did not land keeps its
+ * `from`, `to`, and `quote` (the block's words) on the task its `task`
+ * names, as a long press on the block opens it: the block's words quoted as
+ * its heading, as the thread they start will quote them, and the comment
+ * field docked over its foot, whose send starts the thread and opens it in
+ * this screen's place, as a document's comment opens its thread once
+ * posted. A send that did not land keeps its
  * words and says why in the field's head. The block is kept as it stood
  * when the screen first found it, so an edit elsewhere in the description
  * never takes the field away; where the route names no block of the
@@ -143,7 +144,8 @@ export function NewCommentScreen() {
     task: taskId = "",
     from = "",
     to = "",
-  } = useLocalSearchParams<{ task: string; from: string; to: string }>();
+    quote = "",
+  } = useLocalSearchParams<{ task: string; from: string; to: string; quote: string }>();
 
   const router = useRouter();
   const colors = useColors();
@@ -151,12 +153,13 @@ export function NewCommentScreen() {
   const overview = useTaskOverview(taskId);
   const body = overview?.document?.document.body ?? "";
 
+  // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.
   const found = useMemo(
     () =>
       descriptionBlocks(body).find(
-        (each) => `${each.from}` === from && `${each.to}` === to && each.quote !== undefined,
+        (each) => `${each.from}` === from && `${each.to}` === to && each.quote === quote,
       ),
-    [body, from, to],
+    [body, from, to, quote],
   );
 
   // Note that the block is kept as it stood when first found, with the text it was measured in, because an edit elsewhere moves its offsets while it is being commented on, and the service carries a span measured in that text over to the text as it stands.

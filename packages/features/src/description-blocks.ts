@@ -34,11 +34,13 @@ const BLOCK_PARENTS: ReadonlySet<string> = new Set([
   "tableRow",
 ]);
 
-/** A node's words with no Markdown: its text, inline code, and pictures' alternative words, a block parent's children each on a line, a table row's cells apart by a tab. */
+/** A node's words with no Markdown: its text, inline code, pictures' alternative words, and a hard line break as a line, a block parent's children each on a line, a table row's cells apart by a tab. */
 function plainWords(node: Nodes): string {
   if (node.type === "text" || node.type === "inlineCode" || node.type === "code") return node.value;
 
   if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
+
+  if (node.type === "break") return "\n";
 
   if (!("children" in node)) return "";
   const parts = node.children.map((child: Nodes) => plainWords(child));
