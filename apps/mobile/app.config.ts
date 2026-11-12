@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
@@ -265,6 +266,9 @@ const SHARE_EXTENSION: AppExtension = {
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
 
+// The version TestFlight lists the build under, beside its number.
+const VERSION = "0.1.0";
+
 // The Sentry project the app reports to and uploads its symbols under: the
 // desktop's, under the one DSN the release secrets hold for both
 // (`SENTRY_DSN`), written into the build's `extra` for `src/crash-reports.ts`
@@ -276,6 +280,36 @@ const SENTRY = {
   ORGANIZATION: "stage-review",
   PROJECT: "vespin-desktop",
   URL: "https://sentry.io/",
+  DSN: process.env.SENTRY_DSN ?? "",
+  /** Whether this is a TestFlight build, the one whose number release-ios.yml names, whose reports are filed as production's. */
+  RELEASED: process.env.VESPIN_IOS_BUILD_NUMBER !== undefined,
+} as const;
+
+// The environment the native half files a launch's reports under, as
+// `src/crash-reports.ts` files the rest. Note that it is spelled out under
+// `SentryEnvironment`'s type rather than read from `SENTRY_ENVIRONMENT`,
+// because Expo's config loader cannot resolve the host package's `.js` door
+// to its `.ts` source.
+const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "production" : "test";
+
+// What the SDK's native half starts on as the app launches, before React
+// Native loads: the plugin writes `RNSentrySDK.start()` into the AppDelegate,
+// which reads these options from the `sentry.options.json` it copies into the
+// bundle. So a crash before the JavaScript bundle runs, or in the first native
+// draw, is reported on the next launch, where a start from JavaScript alone
+// never saw it. They name the DSN, environment, release and build number
+// `src/crash-reports.ts` starts the SDK under once the bundle runs, which
+// starts the native half again on its own options, and off for a fixture run.
+// Note that the JavaScript filters cannot reach this window, so it sends only
+// what a native crash report holds, with no request breadcrumbs; a build
+// without a DSN starts nothing.
+const SENTRY_LAUNCH_OPTIONS = {
+  dsn: SENTRY.DSN,
+  enabled: SENTRY.DSN !== "",
+  environment: SENTRY_LAUNCH_ENVIRONMENT,
+  release: `${BUNDLE_IDENTIFIER}@${VERSION}+${BUILD_NUMBER}`,
+  dist: BUILD_NUMBER,
+  enableNetworkBreadcrumbs: false,
 } as const;
 
 // The splash's ground and mark are the brand's, in both appearances: the
@@ -728,7 +762,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   withAccentColor({
     name: "Vespin",
     slug: "vespin",
-    version: "0.1.0",
+    version: VERSION,
     scheme: URL_SCHEME,
     orientation: "default",
     userInterfaceStyle: "automatic",
@@ -817,16 +851,12 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
+          useNativeInit: true,
+          options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
     ],
-    // A TestFlight build is the one whose number release-ios.yml names, and its reports are filed as production's.
-    extra: {
-      sentry: {
-        dsn: process.env.SENTRY_DSN ?? "",
-        released: process.env.VESPIN_IOS_BUILD_NUMBER !== undefined,
-      },
-    },
+    extra: { sentry: { dsn: SENTRY.DSN, released: SENTRY.RELEASED } },
     // Builds come from GitHub's macOS runners and TestFlight, never an
     // over-the-air update, so Expo's update client is left out of the app.
     updates: { enabled: false },
