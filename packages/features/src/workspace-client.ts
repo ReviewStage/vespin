@@ -9,6 +9,12 @@ import {
   callAnswered,
   jsonOf,
 } from "./account-call.js";
+import {
+  type ConductorImportCheckAnswer,
+  type ConductorImportProgressAnswer,
+  type ConductorImportRunAnswer,
+  conductorImportRequestSchema,
+} from "./conductor-import-wire.js";
 import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
@@ -602,6 +608,48 @@ export class HostedWorkspaceClient {
 
     return resultOf(
       hostedCall(this.#hosted.workspaceEnvironment.delete, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** A Conductor key checked for an import into the workspace: how many workspaces it sees and the repositories among theirs not reached yet, or why Conductor refused; a key the service would refuse by shape never travels. */
+  checkConductorImport(
+    workspaceId: string,
+    apiKey: string,
+  ): Effect.Effect<WorkspaceCallResult<ConductorImportCheckAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(conductorImportRequestSchema)({ workspaceId, apiKey }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(hostedCall(this.#hosted.conductorImport.check, admitted), (answer) => answer);
+  }
+
+  /** An import from Conductor begun in the workspace with that key, answering the run once its workspaces are queued, or why Conductor refused. */
+  runConductorImport(
+    workspaceId: string,
+    apiKey: string,
+  ): Effect.Effect<WorkspaceCallResult<ConductorImportRunAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(conductorImportRequestSchema)({ workspaceId, apiKey }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(hostedCall(this.#hosted.conductorImport.run, admitted), (answer) => answer);
+  }
+
+  /** The caller's newest import from Conductor in the workspace, with where each workspace and chat stands. */
+  conductorImportProgress(
+    workspaceId: string,
+  ): Effect.Effect<
+    WorkspaceCallResult<ConductorImportProgressAnswer>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return resultOf(
+      hostedCall(this.#hosted.conductorImport.progress, { workspaceId }),
       (answer) => answer,
     );
   }

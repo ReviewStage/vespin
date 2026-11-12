@@ -148,6 +148,18 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not delete that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN" },
   },
+  WORKSPACE_CONDUCTOR_IMPORT_CHECK: {
+    refusal: "Could not check that Conductor key on this system.",
+    payload: { ...WORKSPACE, apiKey: "fixture-key" },
+  },
+  WORKSPACE_CONDUCTOR_IMPORT_RUN: {
+    refusal: "Could not start the import from Conductor on this system.",
+    payload: { ...WORKSPACE, apiKey: "fixture-key" },
+  },
+  WORKSPACE_CONDUCTOR_IMPORT_PROGRESS: {
+    refusal: "Could not read the import from Conductor on this system.",
+    payload: WORKSPACE,
+  },
   WORKSPACE_SANDBOX_SETUP_READ: {
     refusal: "Could not read that workspace's cloud setup on this system.",
     payload: WORKSPACE,

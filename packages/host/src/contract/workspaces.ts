@@ -1,3 +1,9 @@
+import {
+  conductorImportCheckAnswerSchema,
+  conductorImportProgressAnswerSchema,
+  conductorImportRequestSchema,
+  conductorImportRunAnswerSchema,
+} from "@repo/features/conductor-import-wire";
 import { workspaceTokenRepositorySchema } from "@repo/features/github-repositories-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSentryAnswerSchema } from "@repo/features/sentry-install-wire";
@@ -243,6 +249,27 @@ export const WORKSPACE_ACTS = declaredActs({
     refusal: "Could not delete that variable on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_CONDUCTOR_IMPORT_CHECK: hostAct({
+    input: conductorImportRequestSchema,
+    output: conductorImportCheckAnswerSchema,
+    refusal: "Could not check that Conductor key on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_CONDUCTOR_IMPORT_RUN: hostAct({
+    input: conductorImportRequestSchema,
+    output: conductorImportRunAnswerSchema,
+    refusal: "Could not start the import from Conductor on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_CONDUCTOR_IMPORT_PROGRESS: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: conductorImportProgressAnswerSchema,
+    refusal: "Could not read the import from Conductor on this system.",
+    panelOnly: true,
+    door: ACT.READ,
   }),
   WORKSPACE_SANDBOX_SETUP_READ: hostAct({
     input: tasksWorkspaceParamsSchema,

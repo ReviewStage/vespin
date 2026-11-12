@@ -828,6 +828,9 @@ export function fakeService(tasks: Task[]): FakeService {
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      checkConductorImport: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      runConductorImport: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      conductorImportProgress: () => Effect.succeed(UNANSWERED_WORKSPACE),
       // Each workspace read as the service answers it; a poll is not counted among the reads.
       // SAFETY: each declared read answers its own script's rows, as its declaration's answer.
       liveRead: ((

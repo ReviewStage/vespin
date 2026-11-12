@@ -43,6 +43,13 @@ import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { samePrefix } from "@repo/features/allowed-command-model";
 import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import {
+  CONDUCTOR_IMPORT_FAILURE,
+  CONDUCTOR_IMPORT_KIND,
+  CONDUCTOR_IMPORT_STATUS,
+  type ConductorImportItem,
+  type ConductorImportProgressAnswer,
+} from "@repo/features/conductor-import-wire";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
@@ -754,6 +761,68 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   return { variables: acmeVariables };
 }
 
+/* ----- Settings › Cloud environment's Import from Conductor ----- */
+
+/** The Conductor workspaces a fixture key sees, each with its chats, and how far a run has got through them. */
+const CONDUCTOR_WORKSPACES = [
+  { id: "cw-billing", name: "Billing retries", chats: 3, taskId: "task-imported-billing" },
+  {
+    id: "cw-onboarding",
+    name: "Onboarding checklist",
+    chats: 2,
+    taskId: "task-imported-onboarding",
+  },
+  { id: "cw-search", name: "Search ranking", chats: 4, taskId: null },
+  { id: "cw-infra", name: "Terraform upgrade", chats: 1, taskId: null },
+] as const;
+
+/** Whether a run has begun, which the progress read answers from. */
+let conductorRunStarted = false;
+
+/** The fixture run's items: the first two workspaces imported, one failed on its repository, the last still queued. */
+function conductorProgress(): ConductorImportProgressAnswer {
+  if (!conductorRunStarted) return { run: null };
+
+  const items: ConductorImportItem[] = CONDUCTOR_WORKSPACES.flatMap((workspace, at) => {
+    const status =
+      at < 2
+        ? CONDUCTOR_IMPORT_STATUS.IMPORTED
+        : at === 2
+          ? CONDUCTOR_IMPORT_STATUS.FAILED
+          : CONDUCTOR_IMPORT_STATUS.QUEUED;
+
+    const failure =
+      status === CONDUCTOR_IMPORT_STATUS.FAILED
+        ? CONDUCTOR_IMPORT_FAILURE.REPOSITORY_UNREACHED
+        : null;
+
+    const chats = Array.from({ length: workspace.chats }, (_, chat) => ({
+      kind: CONDUCTOR_IMPORT_KIND.CHAT,
+      conductorId: `${workspace.id}-chat-${chat}`,
+      workspaceConductorId: workspace.id,
+      name: `Chat ${chat + 1}`,
+      status: status === CONDUCTOR_IMPORT_STATUS.FAILED ? CONDUCTOR_IMPORT_STATUS.SKIPPED : status,
+      failure: null,
+      taskId: null,
+    }));
+
+    return [
+      {
+        kind: CONDUCTOR_IMPORT_KIND.WORKSPACE,
+        conductorId: workspace.id,
+        workspaceConductorId: workspace.id,
+        name: workspace.name,
+        status,
+        failure,
+        taskId: workspace.taskId,
+      },
+      ...chats,
+    ];
+  });
+
+  return { run: { runId: "run-fixture", startedAt: NOW, ended: false, items } };
+}
+
 /* ----- Settings › Cloud environment's scripts ----- */
 
 /** The agents whose sandboxes Acme's scripts last ran in, as Settings › Cloud setup names them. */
@@ -947,6 +1016,16 @@ const ANSWERS: StagedAnswers = {
     return acmeSlackBot;
   },
   [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
+  [ACT_KIND.WORKSPACE_CONDUCTOR_IMPORT_CHECK]: () => ({
+    workspaces: CONDUCTOR_WORKSPACES.length,
+    unreachedRepositories: ["acme/search"],
+  }),
+  [ACT_KIND.WORKSPACE_CONDUCTOR_IMPORT_RUN]: () => {
+    conductorRunStarted = true;
+
+    return { runId: "run-fixture", workspaces: CONDUCTOR_WORKSPACES.length };
+  },
+  [ACT_KIND.WORKSPACE_CONDUCTOR_IMPORT_PROGRESS]: () => conductorProgress(),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => ({ variables: acmeVariables }),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name }) =>
     variablesAnswer([
