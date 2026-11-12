@@ -149,7 +149,7 @@ import {
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
-import { filesLost, type UndeliveredReply } from "./inbox-undelivered.js";
+import { filesLost, UNHEARD_UNDELIVERED, type UndeliveredReply } from "./inbox-undelivered.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
@@ -471,9 +471,10 @@ const UNDELIVERED_WORDS = {
   RETRY: "Retry",
   EDIT: "Edit",
   DELETE: "Delete",
+  NEW_THREAD: "New thread",
 } as const;
 
-/** What a reply that did not go is pressed through: Retry, Edit, and Delete on it alone. */
+/** What a reply that did not go is pressed through: Retry, Edit, and Delete on it alone; no Retry for a thread's start where the page starts none. */
 interface UndeliveredDoors {
   /** None where a relaunch took the reply's files, which Edit attaches again. */
   readonly onRetry: (() => void) | undefined;
@@ -523,6 +524,11 @@ function UndeliveredReplyRow({
       now={now}
       trailing={
         <>
+          {reply.startsThread === true ? (
+            <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {UNDELIVERED_WORDS.NEW_THREAD}
+            </Text>
+          ) : null}
           <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.DANGER}>
             {UNDELIVERED_WORDS.NOT_DELIVERED}
           </Text>
@@ -1629,10 +1635,39 @@ export interface InboxPaneDoors {
   readonly keys?: boolean | undefined;
 }
 
+/** Why a new thread did not start: the refusal's words, and whether no answer came back, which may have started it all the same. */
+export interface NewThreadRefused {
+  readonly words: string;
+  readonly unheard: boolean;
+}
+
 /** What starts a new thread from an item's box instead of a reply, where the page offers one. */
 export interface InboxNewThread {
   /** Starts a thread with the item's agent and opens it; answers why it did not start, or nothing once it did. */
-  readonly onStart: (item: InboxItem, start: NewThreadStart) => Promise<string | undefined>;
+  readonly onStart: (
+    item: InboxItem,
+    start: NewThreadStart,
+  ) => Promise<NewThreadRefused | undefined>;
+}
+
+/**
+ * Starts a thread from `item`'s box, one that did not go standing on the
+ * item's thread marked Not delivered, so its words are never lost nor put
+ * back: answers a refusal's words for the box to say, or nothing once it
+ * started or where no answer came back, which only its mark says.
+ */
+function startThread(
+  offer: InboxNewThread,
+  control: Pick<TaskInboxControl, "onUndeliveredStart">,
+  item: InboxItem,
+  start: NewThreadStart,
+): Promise<string | undefined> {
+  return offer.onStart(item, start).then((refused) => {
+    if (refused === undefined) return undefined;
+    control.onUndeliveredStart(item, start, refused.unheard ? UNHEARD_UNDELIVERED : refused.words);
+
+    return refused.unheard ? undefined : refused.words;
+  });
 }
 
 /**
@@ -1641,7 +1676,12 @@ export interface InboxNewThread {
  * agent, as a chip does elsewhere. Note that a chip is a button, so its
  * press opens it rather than ticking the checkbox whose words it stands in.
  */
-function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent): AnswerNewThread {
+function answerNewThread(
+  offer: InboxNewThread,
+  control: Pick<TaskInboxControl, "onUndeliveredStart">,
+  item: InboxItem,
+  by: ItemAgent,
+): AnswerNewThread {
   const { name, tile } = by.subject;
 
   return {
@@ -1655,7 +1695,7 @@ function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent):
         onPress={by.onOpen}
       />
     ),
-    onStart: (start) => offer.onStart(item, start),
+    onStart: (start) => startThread(offer, control, item, start),
   };
 }
 
@@ -1964,6 +2004,23 @@ export function InboxPane({
       </DraftQuestion>
     );
 
+  // Note that a thread's start that did not go starts again under its key, so a start that landed unheard makes one thread; where the page starts none, it offers no Retry.
+  const retryOf = (reply: UndeliveredReply): (() => void) | undefined => {
+    const { key, text, attachments } = reply;
+
+    // Note that one a relaunch took the files from never goes without them; Edit attaches them again.
+    if (filesLost(reply)) return undefined;
+
+    if (reply.startsThread !== true) return () => control.onRetryUndelivered(item, key);
+
+    if (newThread === undefined) return undefined;
+
+    return () => {
+      control.onDropUndelivered(key);
+      void startThread(newThread, control, item, { text, attachments, clientKey: key });
+    };
+  };
+
   const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
       <DraftReply readerId={readerId} place={place}>
@@ -1981,7 +2038,9 @@ export function InboxPane({
           onQuoteDoor={onQuoteDoor}
           onQuoted={onQuoted}
           onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-          newThread={newThread === undefined ? undefined : answerNewThread(newThread, item, by)}
+          newThread={
+            newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+          }
         />
       </DraftReply>
     </AnswerMentions>
@@ -2142,9 +2201,7 @@ export function InboxPane({
                             now={now}
                             place={place}
                             doors={{
-                              onRetry: filesLost(row.reply)
-                                ? undefined
-                                : () => control.onRetryUndelivered(item, key),
+                              onRetry: retryOf(row.reply),
                               onEdit: () => control.onEditUndelivered(item, key),
                               onDelete: () => control.onDropUndelivered(key),
                             }}
