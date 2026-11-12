@@ -2,7 +2,9 @@
  * inbox-list-model.ts -- the Inbox's list as pure decisions, for every client that draws it: which items each scope lists and in what order, what each row's line says, and what the list's head and its empty list say.
  *
  * The list holds every item of every holder it is handed, the latest
- * changed first, in one run with no groups, the items its scope takes: what
+ * changed first, in one run with no groups unless the reader asked for
+ * their pinned tasks' items first, under a heading of their own
+ * (`inboxPinnedRuns`), the items its scope takes: what
  * needs the reader, what they are not done with, everything, or what they
  * set a reminder on, each scope counting its own. An item is the reader's
  * where it waits on them, or where the service does not say; only the
@@ -857,6 +859,8 @@ function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
 export interface InboxListView {
   readonly readerId: string | undefined;
   readonly items: readonly InboxListed[];
+  /** Whether the pinned tasks' items stand first, under a heading of their own (`inboxPinnedRuns`); none where every item stands in one run. */
+  readonly pinnedFirst?: boolean | undefined;
 }
 
 /**
@@ -995,7 +999,11 @@ function scopedItem(
  * exclude it once another is chosen, while the steps through the list are
  * given the item the pane shows, which keeps its place among them so K, J,
  * and Next still reach the rows either side of it. An item whose place is
- * held (`places`) stands there, rather than where it changed last.
+ * held (`places`) stands there, rather than where it changed last. Where
+ * the reader asks for their pinned tasks first (`pinnedFirst`), a pinned
+ * task's items stand before every other, the latest first within each, so
+ * an agent's reply on a pinned task lands at the top of Pinned rather than
+ * the top of everything.
  */
 export function inboxList(
   tasks: readonly InboxGroup[],
@@ -1010,10 +1018,15 @@ export function inboxList(
     readonly search?: readonly string[] | undefined;
     /** Where the items held still stand (`inboxPlaces`), each other item where it is now; none holds every item where it is now. */
     readonly places?: ReadonlyMap<string, InboxPlace> | undefined;
+    /** Whether the pinned tasks' items stand first (`inboxPinnedRuns`); none lists every item in one run. */
+    readonly pinnedFirst?: boolean | undefined;
   },
 ): InboxListView {
   const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
+  const pinnedFirst = view.pinnedFirst === true;
   const at = (item: InboxItem): number => places.get(item.id)?.at ?? item.updatedAt;
+  // Note that a pinned task's item outranks any other where the pinned stand first, the latest first within each.
+  const rank = ({ holder }: InboxListed): number => (pinnedFirst && isPinned(holder) ? 1 : 0);
 
   const items = tasks
     .flatMap(({ holder, items }) =>
@@ -1025,9 +1038,34 @@ export function inboxList(
         )
         .map((item) => inboxListed(holder, item)),
     )
-    .toSorted((a, b) => at(b.item) - at(a.item));
+    .toSorted((a, b) => rank(b) - rank(a) || at(b.item) - at(a.item));
 
-  return { items, readerId };
+  return pinnedFirst ? { items, readerId, pinnedFirst } : { items, readerId };
+}
+
+/** Whether a holder's task is pinned in the reader's sidebar. */
+function isPinned(holder: InboxHolder): boolean {
+  return holder.task.pinnedAt !== undefined;
+}
+
+/** A list's rows split where its pinned tasks' items stand first: those, then everything else. */
+export interface InboxPinnedRuns {
+  readonly pinned: readonly InboxListed[];
+  readonly rest: readonly InboxListed[];
+}
+
+/**
+ * Where a list stands its pinned tasks' items first (`inboxList`'s
+ * `pinnedFirst`), its rows split into those and the rest, each drawn under
+ * a heading of its own; none where it does not, or where no item listed is
+ * a pinned task's, so a reader with nothing pinned sees the one run they
+ * would see without it.
+ */
+export function inboxPinnedRuns(view: InboxListView): InboxPinnedRuns | undefined {
+  if (view.pinnedFirst !== true) return undefined;
+  const pinned = view.items.filter(({ holder }) => isPinned(holder));
+  if (pinned.length === 0) return undefined;
+  return { pinned, rest: view.items.filter(({ holder }) => !isPinned(holder)) };
 }
 
 /**

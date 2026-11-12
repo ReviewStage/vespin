@@ -23,9 +23,9 @@ import { keptKey, useKept } from "../use-kept.js";
  * its row stand folded until it is opened, so the tasks opened are kept,
  * each by its id, under a key of their own. A fixture run starts with every group open
  * and keeps nothing, so its frames never wear a developer's folds. The
- * Inbox's view choices are kept on the same terms, the scope it shows and
+ * Inbox's view choices are kept on the same terms, the scope it shows,
  * whom the items it lists are addressed to, a teammate by their account's
- * id, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
+ * id, and whether its pinned tasks' items stand first, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
  * choice. A choice kept before its scope was is read
  * as the scope that now lists what it listed: a tab kept before the scopes, Needs you or
  * Unread, as Open, and All open or Everything as All; and the Needs you
@@ -51,6 +51,7 @@ const STORAGE_KEY = {
   OPENED_TASKS: "app.sidebarOpenedTasks",
   INBOX_SHOW: "app.inboxShow",
   INBOX_WHOSE: "app.inboxWhose",
+  INBOX_PINNED_FIRST: "app.inboxPinnedFirst",
   INBOX_LIST_WIDTH: "app.inboxListWidth",
   RUNS_PANEL: "app.automationRunsPanel",
   FILE_TREE_WIDTH: "app.fileTreeWidth",
@@ -150,6 +151,7 @@ const storedShow = Schema.fromJsonString(
 const KEPT = {
   INBOX_SHOW: keptKey<InboxShow>(STORAGE_KEY.INBOX_SHOW, storedShow),
   WHOSE: keptKey<InboxWhose>(STORAGE_KEY.INBOX_WHOSE, storedWhose),
+  PINNED_FIRST: keptKey(STORAGE_KEY.INBOX_PINNED_FIRST, storedFlag),
   FOLDED_GROUPS: keptKey(STORAGE_KEY.GROUPS, storedFolds),
   PINNED_FOLDED: keptKey(STORAGE_KEY.PINNED, storedFlag),
   FOLDED_SECTIONS: keptKey(STORAGE_KEY.SECTIONS, storedTasks),
@@ -245,7 +247,11 @@ interface InboxShowChoice {
 }
 
 /** What the window's Inbox lists, and the presses that change it. */
-export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {}
+export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {
+  /** Whether the pinned tasks' items stand first, under a heading of their own. */
+  pinnedFirst: boolean;
+  onPinnedFirst: (pinnedFirst: boolean) => void;
+}
 
 /** Whom the items the window's Inbox lists are addressed to, and the press that lists another's. */
 export interface InboxWhoseChoice {
@@ -253,12 +259,13 @@ export interface InboxWhoseChoice {
   onWhose: (whose: InboxWhose) => void;
 }
 
-/** The Inbox's view choices, Open addressed to the reader, which is Needs you, until first changed, and kept as each is pressed. */
+/** The Inbox's view choices, Open addressed to the reader, which is Needs you, in one run, until first changed, and kept as each is pressed. */
 export function useInboxViewChoices(): InboxViewChoices {
   const [show, onShow] = useKept(KEPT.INBOX_SHOW, INBOX_SHOW.OPEN);
   const [whose, onWhose] = useKept(KEPT.WHOSE, MINE);
+  const [pinnedFirst, onPinnedFirst] = useKept(KEPT.PINNED_FIRST, false);
 
-  return { show, onShow, whose, onWhose };
+  return { show, onShow, whose, onWhose, pinnedFirst, onPinnedFirst };
 }
 
 /** A width held within the list's bounds, in whole pixels. */

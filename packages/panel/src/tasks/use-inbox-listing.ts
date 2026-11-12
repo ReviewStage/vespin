@@ -60,12 +60,12 @@ import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
  *
  * Narrowed to a task, it lists and counts every item of that task alone
  * (`taskGroups`), open and settled, addressed to anyone, as the task's own
- * Inbox tab once listed them, whatever view the Inbox keeps, which it
- * leaves as it stands (`TASK_LISTS`).
+ * Inbox tab once listed them in one run, whatever view the Inbox keeps,
+ * which it leaves as it stands (`TASK_LISTS`).
  */
 
 /** What an Inbox narrowed to a task lists: every item the task holds, open or settled, whoever it is addressed to. */
-const TASK_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES } as const;
+const TASK_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES, pinnedFirst: false } as const;
 
 /**
  * The tasks the list holds items of, in main's order: each holding one that
@@ -279,11 +279,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const search = useMemo(() => searchTokens(query), [query]);
   const me = tasks.me;
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
-  const { show, whose } = narrowedTask === undefined ? choices : TASK_LISTS;
+  const { show, whose, pinnedFirst } = narrowedTask === undefined ? choices : TASK_LISTS;
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
   // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
   const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
-  const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
+  const filter = useMemo(
+    () => ({ show, whose, search, readerId: me, pinnedFirst }),
+    [show, whose, search, me, pinnedFirst],
+  );
 
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.

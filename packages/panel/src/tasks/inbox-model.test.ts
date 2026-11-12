@@ -33,6 +33,7 @@ import {
   inboxGroup,
   inboxLineKind,
   inboxList,
+  inboxPinnedRuns,
   inboxPlaces,
   inboxPreview,
   inboxPreviewHeard,
@@ -486,6 +487,27 @@ test("the list holds every item in one run across tasks, the latest changed firs
     drawn(inboxList(TASKS, { show: INBOX_SHOW.ALL, readerId: undefined, chosen: undefined })),
     ["retry", "expiry", "threshold", "channel"],
   );
+});
+
+test("asked for its pinned tasks first, the list stands a pinned task's items before the rest, each the latest first, under headings only once something pinned is listed", () => {
+  const all = { show: INBOX_SHOW.ALL, readerId: undefined, chosen: undefined, pinnedFirst: true };
+  // The pinned task's one item changed before every other, so only the pin can stand it first.
+  const [billing] = TASKS;
+  assert.ok(billing !== undefined);
+  const pinned = {
+    holder: taskHolder({ ...INVITES, pinnedAt: 5 }),
+    items: [item({ id: "late", updatedAt: 5 })],
+  };
+  const view = inboxList([billing, pinned], all);
+  assert.deepEqual(drawn(view), ["late", "retry", "threshold", "channel"]);
+  const runs = inboxPinnedRuns(view);
+  assert.deepEqual(
+    runs === undefined
+      ? undefined
+      : [runs.pinned, runs.rest].map((run) => run.map(({ item }) => item.id)),
+    [["late"], ["retry", "threshold", "channel"]],
+  );
+  assert.equal(inboxPinnedRuns(inboxList(TASKS, all)), undefined, "nothing pinned, one run");
 });
 
 test("a list drawn again from a task's same items lists each in the object it listed it in before, and groups them in the same group; an item that changed is listed anew, and its task grouped anew", () => {

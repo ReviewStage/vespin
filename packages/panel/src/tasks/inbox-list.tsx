@@ -13,6 +13,7 @@ import {
   type InboxShow,
   type InboxWhose,
   inboxLineKind,
+  inboxPinnedRuns,
   inboxPreviewHeard,
   isDone,
   isUnread,
@@ -42,6 +43,8 @@ import {
   type EmptyStateAction,
   ERROR_STATE_PLACEMENT,
   ErrorState,
+  GROUP_HEAD,
+  GroupHeader,
   IconButton,
   INSET,
   joinRefs,
@@ -55,6 +58,7 @@ import {
   List,
   ListMotion,
   ListRow,
+  MENU_ITEM_MARK,
   motionRows,
   NOTE_LINE_LOOK,
   NoteLine,
@@ -92,7 +96,14 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { actorName, personActor } from "@repo/ui/actor-model";
-import { CheckCheckIcon, GLYPH, InboxIcon, SlidersHorizontalIcon, UsersIcon } from "@repo/ui/icons";
+import {
+  CheckCheckIcon,
+  GLYPH,
+  InboxIcon,
+  PinIcon,
+  SlidersHorizontalIcon,
+  UsersIcon,
+} from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import {
@@ -316,6 +327,12 @@ const SHOW_INSTEAD = {
 
 /** What the view's submenu of whom the items are addressed to is called. */
 const WHOSE = "Addressed to";
+
+/** What the view's switch that stands the pinned tasks' items first is called. */
+const PINNED_FIRST = "Pinned tasks first";
+
+/** The headings the list stands its rows under where the pinned tasks' items stand first, the sidebar's word for the pinned. */
+const PINNED_RUN_WORDS = { PINNED: "Pinned", REST: "Everything else" } as const;
 
 /** What the chip over the list says its × does, in full, since a reader hears it apart from the empty state's short press. */
 const CLEAR_WHOSE = "Show what's addressed to me";
@@ -615,7 +632,7 @@ function whoseEntries(
  * The window's Inbox's head's button that drops the view's menu: first what
  * it shows, Questions, Open, All, or Reminders, the one shown checked; then, but
  * under Questions, Addressed to, a submenu of Anyone, Me, or a teammate by
- * face and name, its choice checked.
+ * face and name, its choice checked; then Pinned tasks first, a switch.
  */
 function ViewOptions({
   shown,
@@ -683,13 +700,23 @@ function markAllAction(readAll: InboxReadAll): MenuAction {
   };
 }
 
-/** The window's Inbox's own group of its view's menu, after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`). */
+/** The window's Inbox's own groups of its view's menu, after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`); then the switch that stands the pinned tasks' items first. */
 function windowEntries(
   choices: InboxViewChoices,
   reader: ReturnType<typeof useMemberDirectory>,
   readerId: string | undefined,
 ): MenuEntry[][] {
-  if (!narrowedByWhose(choices.show)) return [];
+  const order: MenuEntry[] = [
+    {
+      label: PINNED_FIRST,
+      icon: <PinIcon />,
+      checked: choices.pinnedFirst,
+      mark: MENU_ITEM_MARK.SWITCH,
+      stays: true,
+      onSelect: () => choices.onPinnedFirst(!choices.pinnedFirst),
+    },
+  ];
+  if (!narrowedByWhose(choices.show)) return [order];
 
   return [
     [
@@ -699,6 +726,7 @@ function windowEntries(
         items: whoseEntries(choices.whose, choices.onWhose, reader, readerId),
       },
     ],
+    order,
   ];
 }
 
@@ -1548,7 +1576,38 @@ function InboxRows({
   );
 }
 
-/** The list: its head where it has one, then every row in one run, or a line where nothing is listed. */
+/**
+ * The list's rows: in one run, or, where the pinned tasks' items stand
+ * first and one is listed (`inboxPinnedRuns`), those under Pinned, as
+ * the sidebar heads its pinned tasks, and the rest under Everything else, each heading
+ * sticking to the top of the list while its rows scroll under it.
+ */
+function InboxRuns({
+  view,
+  place,
+  row,
+}: {
+  view: InboxListView;
+  place: RowsPlace;
+  row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
+}): React.JSX.Element {
+  const runs = inboxPinnedRuns(view);
+  if (runs === undefined) return <InboxRows items={view.items} place={place} row={row} />;
+  return (
+    <>
+      <GroupHeader label={PINNED_RUN_WORDS.PINNED} head={GROUP_HEAD.STICKS}>
+        <InboxRows items={runs.pinned} place={place} row={row} />
+      </GroupHeader>
+      {runs.rest.length === 0 ? null : (
+        <GroupHeader label={PINNED_RUN_WORDS.REST} head={GROUP_HEAD.STICKS}>
+          <InboxRows items={runs.rest} place={place} row={row} />
+        </GroupHeader>
+      )}
+    </>
+  );
+}
+
+/** The list: its head where it has one, then its rows (`InboxRuns`), or a line where nothing is listed. */
 export function InboxList({
   view,
   chosen,
@@ -1734,7 +1793,7 @@ export function InboxList({
       data-empty={String(listedItems(view).length === 0)}
       {...motionRows()}
     >
-      <InboxRows items={view.items} place={rowsPlace} row={row} />
+      <InboxRuns view={view} place={rowsPlace} row={row} />
       {note}
     </div>
   );
