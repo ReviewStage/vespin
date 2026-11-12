@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  githubShapes,
+  githubRedress,
   INLINE_PICTURE,
   inlinePictures,
   renderingPictures,
@@ -10,7 +10,7 @@ import {
 
 /**
  * github-html.test.ts -- GitHub's rendering reaches the window's HTML steps
- * whole, and what GitHub dresses its way is reshaped into what the window
+ * whole, and what GitHub dresses its way is redressed into what the window
  * draws its own: a highlighted block into a fenced one in its language, and
  * a diagram into a fenced mermaid block of its source, a themed picture
  * into an `<img>` for each theme, and a picture GitHub links to itself into
@@ -21,7 +21,7 @@ import {
  */
 
 /** A node of the parsed tree, as the step reads it. */
-type HtmlNode = Parameters<ReturnType<typeof githubShapes>>[0];
+type HtmlNode = Parameters<ReturnType<typeof githubRedress>>[0];
 
 /** An element of the parsed tree. */
 function element(
@@ -37,9 +37,9 @@ function text(value: string): HtmlNode {
 }
 
 /** The tree the step leaves of the children given. */
-function shaped(...children: HtmlNode[]) {
+function redressed(...children: HtmlNode[]) {
   const tree: HtmlNode = { type: "root", children };
-  githubShapes()(tree);
+  githubRedress()(tree);
 
   return tree.children;
 }
@@ -59,7 +59,7 @@ test("a highlighted block becomes a fenced block in its language, holding its wo
     ]),
   ]);
 
-  assert.deepEqual(shaped(block), [
+  assert.deepEqual(redressed(block), [
     element("pre", {}, [
       element("code", { className: ["language-ts"] }, [text("const a = 1;\n\nconst b = 2;")]),
     ]),
@@ -71,7 +71,7 @@ test("a diagram becomes a fenced mermaid block of its source", () => {
     element("div", {}, [element("pre", { lang: "mermaid" }, [text("graph TD\nA-->B")])]),
   ]);
 
-  assert.deepEqual(shaped(diagram), [
+  assert.deepEqual(redressed(diagram), [
     element("section", { dataType: "mermaid" }, [
       element("div", {}, [
         element("pre", {}, [
@@ -97,7 +97,7 @@ test("a themed picture becomes an image for each theme, each marked as its theme
     badge("https://camo.githubusercontent.com/light"),
   ]);
 
-  assert.deepEqual(shaped(element("a", { href: "https://example.com/review" }, [picture])), [
+  assert.deepEqual(redressed(element("a", { href: "https://example.com/review" }, [picture])), [
     element("a", { href: "https://example.com/review" }, [
       element("picture", {}, [
         badge("https://camo.githubusercontent.com/light#gh-light-mode-only"),
@@ -116,20 +116,24 @@ test("a picture GitHub links to itself, or to another of its own image addresses
   const linked = (href: string, src: string) =>
     element("a", { href, target: "_blank" }, [text(" "), picture(src), text("\n")]);
 
-  assert.deepEqual(shaped(linked(upload, upload)), [picture(upload)], "linked to itself");
-  assert.deepEqual(shaped(linked(upload, signed)), [picture(signed)], "linked to its upload");
+  assert.deepEqual(redressed(linked(upload, upload)), [picture(upload)], "linked to itself");
+  assert.deepEqual(redressed(linked(upload, signed)), [picture(signed)], "linked to its upload");
   assert.deepEqual(
-    shaped(linked(tracker, tracker)),
+    redressed(linked(tracker, tracker)),
     [picture(tracker)],
     "any picture linked to itself",
   );
   assert.deepEqual(
-    shaped(linked("https://review.example.com", upload)),
+    redressed(linked("https://review.example.com", upload)),
     [linked("https://review.example.com", upload)],
     "a link elsewhere is kept",
   );
   const captioned = element("a", { href: upload }, [picture(upload), text("the screenshot")]);
-  assert.deepEqual(shaped(captioned), [captioned], "a link with words beside its picture is kept");
+  assert.deepEqual(
+    redressed(captioned),
+    [captioned],
+    "a link with words beside its picture is kept",
+  );
 });
 
 test("a suggested change becomes a fenced block of its rows in order, a removed line marked - and an added one +, its words as they stand", () => {
@@ -153,7 +157,7 @@ test("a suggested change becomes a fenced block of its rows in order, a removed 
     ]),
   ]);
 
-  assert.deepEqual(shaped(blob), [
+  assert.deepEqual(redressed(blob), [
     element("pre", {}, [
       element("code", { className: ["language-suggested-change"] }, [
         text("-const a = 1;\n+\n+  const a = 2;"),

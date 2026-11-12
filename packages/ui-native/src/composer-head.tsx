@@ -1,16 +1,15 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
   lineLimit,
-  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -61,7 +60,7 @@ function LineAct({
       modifiers={[
         buttonStyle("plain"),
         frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-        contentShape(shapes.rectangle()),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityLabel(label),
       ]}
     >
@@ -227,7 +226,7 @@ export function SkillSuggestions({
           onPress={() => onPick(skill.name)}
           modifiers={[
             buttonStyle("plain"),
-            contentShape(shapes.rectangle()),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
             accessibilityLabel(skill.word),
           ]}
         >

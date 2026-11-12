@@ -15,7 +15,7 @@ export const MOTION_TOKEN = {
   DURATION_PANE: "--ui-duration-pane",
   DURATION_QUICK: "--ui-duration-quick",
   DURATION_EXIT: "--ui-duration-exit",
-  DURATION_SHAPE: "--ui-duration-shape",
+  DURATION_SPRING: "--ui-duration-shape",
   SPRING: "--ui-spring",
   SPRING_FAST: "--ui-spring-fast",
   EASE_EXIT: "--ui-motion-exit",

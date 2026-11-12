@@ -25,7 +25,7 @@ import type { TaskRoute } from "../task-route.js";
 import type { RepositoryChooser } from "../tasks/repository-chip.js";
 import { MAIN_TAB, SIDE_PANEL_WIDTH } from "../tasks/task-tab-model.js";
 import {
-  AGENT_RENAME_SHAPE,
+  AGENT_RENAME_TERMS,
   type AgentsControl,
   agentArchiveMutation,
   agentDeleteMutation,
@@ -333,7 +333,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onOpenApiKeys: ignore,
     archiving: false,
     rename: {
-      ...AGENT_RENAME_SHAPE,
+      ...AGENT_RENAME_TERMS,
       options: agentRenameMutation(() =>
         Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED, cause: undefined }),
       ),

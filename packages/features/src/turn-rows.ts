@@ -504,7 +504,7 @@ export type TurnRow<B> =
  * arrays cost no depth, so a group's blocks inside a row are read as a
  * lone block is.
  */
-export function sameShape<Value>(a: Value, b: Value, depth: number): boolean {
+export function readAlike<Value>(a: Value, b: Value, depth: number): boolean {
   if (Object.is(a, b)) return true;
 
   if (Array.isArray(a) || Array.isArray(b)) {
@@ -512,7 +512,7 @@ export function sameShape<Value>(a: Value, b: Value, depth: number): boolean {
       Array.isArray(a) &&
       Array.isArray(b) &&
       a.length === b.length &&
-      a.every((item, at) => sameShape(item, b[at], depth))
+      a.every((item, at) => readAlike(item, b[at], depth))
     );
   }
 
@@ -521,7 +521,7 @@ export function sameShape<Value>(a: Value, b: Value, depth: number): boolean {
 
   return (
     keys.length === Object.keys(b).length &&
-    keys.every((key) => Object.hasOwn(b, key) && sameShape(a[key], b[key], depth - 1))
+    keys.every((key) => Object.hasOwn(b, key) && readAlike(a[key], b[key], depth - 1))
   );
 }
 
@@ -554,9 +554,9 @@ export function sameFieldsBy<T extends object>(
 /** How deep a turn's row is read: the row, each of its blocks, then each block's own fields, a part read again from the same stored part reading alike. */
 export const TURN_ROW_DEPTH = 3;
 
-/** Whether two of a turn's rows draw alike: every field of the row and its blocks' own fields (`sameShape`). */
+/** Whether two of a turn's rows draw alike: every field of the row and its blocks' own fields (`readAlike`). */
 export function sameTurnRow<B>(a: TurnRow<B>, b: TurnRow<B>): boolean {
-  return sameShape(a, b, TURN_ROW_DEPTH);
+  return readAlike(a, b, TURN_ROW_DEPTH);
 }
 
 /** What a run's blocks hold, as its group's line counts them. */

@@ -328,7 +328,7 @@ function weightGroup(name, strokes, weight) {
   const paths = strokes.map((stroke) => outlineOf(stroke, STROKE[weight] / 2));
 
   return {
-    shapes: paths.map((commands) => commands.map(({ command }) => command).join("")),
+    pathCommands: paths.map((commands) => commands.map(({ command }) => command).join("")),
     svg: `<g id="${name}-S">${paths
       .map((commands) => `<path d="${pathData(commands, WEIGHT_CENTER[weight])}"/>`)
       .join("")}</g>`,
@@ -357,7 +357,7 @@ const WEIGHTS = [
 export function symbolTemplate(node) {
   const strokes = strokesOf(node);
   const weights = WEIGHTS.map(([name, weight]) => weightGroup(name, strokes, weight));
-  const [ultralight, regular, black] = weights.map(({ shapes }) => shapes.join("|"));
+  const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
 
   if (ultralight !== regular || regular !== black)
     throw new Error("lucide-symbols: the weights' outlines differ in shape and cannot interpolate");

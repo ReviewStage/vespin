@@ -35,10 +35,10 @@ type TrailPoint = { readonly x: number; readonly y: number; readonly at: number 
 const NUMERAL = { FILL: 0.96, WEIGHT: 800, PROBE: 100 } as const;
 
 /** Draws a shape into a box `width` by `height`, whose filled pixels the dots light; answers whether it could draw yet. */
-type MaskShape = (context: CanvasRenderingContext2D, width: number, height: number) => boolean;
+type MaskFigure = (context: CanvasRenderingContext2D, width: number, height: number) => boolean;
 
 /** The wordmark, wide across its box and near its top. */
-const wordmarkShape: MaskShape = (context, width, height) => {
+const wordmarkFigure: MaskFigure = (context, width, height) => {
   const [left = 0, top = 0, span = 1] = WORDMARK_ART.VIEW_BOX.split(" ").map(Number);
   const scale = (width * FIT.WIDTH) / span;
   context.translate(width * ((1 - FIT.WIDTH) / 2) - left * scale, height * FIT.TOP - top * scale);
@@ -53,7 +53,7 @@ const wordmarkShape: MaskShape = (context, width, height) => {
  * Note that it answers false until the face has loaded, because a mask drawn
  * in the fallback face would keep the fallback's shape for the page's life.
  */
-function wordsShape(words: string, family: string): MaskShape {
+function wordsFigure(words: string, family: string): MaskFigure {
   return (context, width, height) => {
     const probe = `${NUMERAL.WEIGHT} ${NUMERAL.PROBE}px ${family}`;
 
@@ -77,7 +77,7 @@ function wordsShape(words: string, family: string): MaskShape {
 }
 
 /** The shape's coverage at each CSS pixel of a box `width` by `height`, or none where it could not draw yet. */
-function maskOf(shape: MaskShape, width: number, height: number): Uint8ClampedArray | null {
+function maskOf(figure: MaskFigure, width: number, height: number): Uint8ClampedArray | null {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -85,7 +85,7 @@ function maskOf(shape: MaskShape, width: number, height: number): Uint8ClampedAr
 
   if (!context) return new Uint8ClampedArray(width * height * 4);
 
-  if (!shape(context, width, height)) return null;
+  if (!figure(context, width, height)) return null;
 
   return context.getImageData(0, 0, width, height).data;
 }
@@ -121,7 +121,7 @@ function trailAt(
 function dotPainter(
   canvas: HTMLCanvasElement,
   trail: TrailPoint[],
-  shape: MaskShape,
+  figure: MaskFigure,
   across: number,
 ) {
   const copper = getComputedStyle(canvas).color;
@@ -140,7 +140,7 @@ function dotPainter(
 
     // Note that the mask is redrawn when the canvas changes size, because the shape is laid out across its width.
     if (width !== maskWidth || height !== maskHeight) {
-      const drawn = maskOf(shape, Math.ceil(width), Math.ceil(height));
+      const drawn = maskOf(figure, Math.ceil(width), Math.ceil(height));
 
       if (drawn === null) return;
       mask = drawn;
@@ -180,16 +180,16 @@ function dotPainter(
   };
 }
 
-/** A canvas painting `shape` in dots, `across` cells wide at every width, under a band of light and the pointer's trail. */
-function useDotArt(shapeFor: (canvas: HTMLCanvasElement) => MaskShape, across: number) {
+/** A canvas painting `figureFor`'s figure in dots, `across` cells wide at every width, under a band of light and the pointer's trail. */
+function useDotArt(figureFor: (canvas: HTMLCanvasElement) => MaskFigure, across: number) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const shapeRef = useRef(shapeFor);
+  const figureRef = useRef(figureFor);
   useEffect(() => {
     const canvas = ref.current;
 
     if (!canvas) return undefined;
     const trail: TrailPoint[] = [];
-    const paint = dotPainter(canvas, trail, shapeRef.current(canvas), across);
+    const paint = dotPainter(canvas, trail, figureRef.current(canvas), across);
 
     if (heldStill()) {
       // Note that a still canvas paints once more when the page's faces load, because a shape set in words draws nothing before then.
@@ -230,7 +230,7 @@ function useDotArt(shapeFor: (canvas: HTMLCanvasElement) => MaskShape, across: n
 
 /** The product's wordmark in dots across the foot of the page. */
 export function LandingWordmark(): React.JSX.Element {
-  const ref = useDotArt(() => wordmarkShape, GRID.ACROSS);
+  const ref = useDotArt(() => wordmarkFigure, GRID.ACROSS);
 
   return <canvas ref={ref} className="ui-landing-wordmark" />;
 }
@@ -238,7 +238,7 @@ export function LandingWordmark(): React.JSX.Element {
 /** `words` in copper dots in the display face, as the wordmark is drawn: the 404 page's numerals. */
 export function LandingDotWords({ words }: { readonly words: string }): React.JSX.Element {
   const ref = useDotArt(
-    (canvas) => wordsShape(words, getComputedStyle(canvas).fontFamily),
+    (canvas) => wordsFigure(words, getComputedStyle(canvas).fontFamily),
     GRID.NUMERAL_ACROSS,
   );
 

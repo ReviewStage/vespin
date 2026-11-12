@@ -13,7 +13,7 @@ import type { RenameWrite } from "@repo/ui/use-inline-rename";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 /** How a rename is asked of a mutation, read back from it, and found refused in its answer; and what a refusal of the newest says, where it says anything. */
-export interface RenameShape<Answer, Variables> {
+export interface RenameTerms<Answer, Variables> {
   readonly ask: (subjectId: string, name: string) => Variables;
   readonly asked: (variables: Variables) => { readonly subjectId: string; readonly name: string };
   readonly refused: (answer: Answer) => boolean;
@@ -26,29 +26,29 @@ export interface RenameShape<Answer, Variables> {
     | undefined;
 }
 
-/** The rename `mutation` stands as, its names asked and read through `shape`. */
+/** The rename `mutation` stands as, its names asked and read through `terms`. */
 export function renameWrite<Answer, Variables>(
   mutation: UseMutationResult<Answer, Error, Variables>,
-  shape: RenameShape<Answer, Variables>,
+  terms: RenameTerms<Answer, Variables>,
 ): RenameWrite {
   const { mutate, reset, variables, data, error, isPending } = mutation;
-  const { onRefused } = shape;
+  const { onRefused } = terms;
 
   const refusedBy = (answer: Answer | undefined, failed: Error | null) =>
-    failed !== null || (answer !== undefined && shape.refused(answer));
+    failed !== null || (answer !== undefined && terms.refused(answer));
 
   return {
     run: (subjectId, name) => {
-      const asked = shape.ask(subjectId, name);
+      const asked = terms.ask(subjectId, name);
 
       if (onRefused === undefined) return mutate(asked);
       mutate(asked, {
         onSettled: (answer, failed, variables) => {
-          if (refusedBy(answer, failed)) onRefused(answer, failed, shape.asked(variables));
+          if (refusedBy(answer, failed)) onRefused(answer, failed, terms.asked(variables));
         },
       });
     },
-    asked: variables === undefined ? undefined : shape.asked(variables),
+    asked: variables === undefined ? undefined : terms.asked(variables),
     refused: !isPending && refusedBy(data, error),
     reset,
   };

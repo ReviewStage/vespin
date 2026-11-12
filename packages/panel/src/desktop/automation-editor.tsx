@@ -124,12 +124,12 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
   SettingsRow,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsRowValue,
   SettingsSection,
   SidePanelIcon,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   Spinner,
@@ -1012,7 +1012,7 @@ const SCHEDULED_ROWS = {
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.SWITCH] },
   ],
-} as const satisfies Record<string, readonly SettingsRowSkeletonShape[]>;
+} as const satisfies Record<string, readonly SettingsRowSkeletonLayout[]>;
 
 /** How wide a placeholder page's name stands. */
 const SKELETON_NAME = { TITLE: "160px" } as const;
@@ -2566,7 +2566,7 @@ function PromptSkeleton(): React.JSX.Element {
       className="automation-prompt-skeleton"
       style={cssCustomProperties({ "--automation-prompt-rows": String(PROMPT_ROWS) })}
     >
-      <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+      <Skeleton kind={SKELETON_KIND.BLOCK} />
     </div>
   );
 }
@@ -2581,7 +2581,7 @@ function EditorSkeleton({ offersOwner }: { offersOwner: boolean }): React.JSX.El
   return (
     <SkeletonRegion label={READING_AUTOMATION}>
       <AutomationSetup>
-        <Skeleton shape={SKELETON_SHAPE.CONTROL} />
+        <Skeleton kind={SKELETON_KIND.CONTROL} />
         <AutomationForm>
           {offersOwner ? (
             <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.SHARING}</ReplayUnmask>}>
@@ -2615,11 +2615,11 @@ function EditorActsSkeleton(): React.JSX.Element {
           <Skeleton width={SKELETON_ACTS.STATUS} />
         </Text>
       </EditorStatus>
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={SKELETON_ACTS.RUN_NOW} />
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={SKELETON_ACTS.SAVE} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={SKELETON_ACTS.RUN_NOW} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={SKELETON_ACTS.SAVE} />
       <SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SWITCH} />
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={ICON_PRESS_WIDTH} />
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={ICON_PRESS_WIDTH} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={ICON_PRESS_WIDTH} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={ICON_PRESS_WIDTH} />
     </>
   );
 }
@@ -2648,7 +2648,7 @@ export function AutomationPageSkeleton({
     <AutomationPageFrame
       title={
         <Inline gap={GAP.CONTROL}>
-          <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={actorMarkWidth(ACTOR_SIZE.PAGE)} />
+          <Skeleton kind={SKELETON_KIND.CIRCLE} width={actorMarkWidth(ACTOR_SIZE.PAGE)} />
           <Skeleton width={SKELETON_NAME.TITLE} />
         </Inline>
       }

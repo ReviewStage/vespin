@@ -168,12 +168,12 @@ export const BUTTON_VARIANT = {
 export type ButtonVariant = (typeof BUTTON_VARIANT)[keyof typeof BUTTON_VARIANT];
 
 /** A button's outline: the control's corner, or round at its ends. */
-export const BUTTON_SHAPE = {
+export const BUTTON_CORNERS = {
   SQUARE: "square",
   ROUND: "round",
 } as const;
 
-export type ButtonShape = (typeof BUTTON_SHAPE)[keyof typeof BUTTON_SHAPE];
+export type ButtonCorners = (typeof BUTTON_CORNERS)[keyof typeof BUTTON_CORNERS];
 
 /** How big a button is: the control's own, or a row mark's height. */
 export const BUTTON_SIZE = {
@@ -251,7 +251,7 @@ type LinkHintProps = Pick<
 type ButtonBase = LandingProps &
   HintProps & {
     variant?: ButtonVariant;
-    shape?: ButtonShape;
+    corners?: ButtonCorners;
     type?: ButtonType;
     onClick?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
     /** A right-click's handler, as on a row's mark that offers its row's own menu. */
@@ -307,7 +307,7 @@ const PRESSABLE_CURSOR = "cursor-press disabled:cursor-default";
 /** What a button is drawn with: the shadcn button's box and shape, and the classes its look and state add. */
 interface ButtonLook {
   readonly size: BoxSize;
-  readonly shape: ButtonShape;
+  readonly corners: ButtonCorners;
   readonly className: string;
 }
 
@@ -320,7 +320,7 @@ interface ButtonLook {
 function buttonLook({
   variant,
   size,
-  shape,
+  corners,
   iconOnly,
   busy = false,
   settled = false,
@@ -328,7 +328,7 @@ function buttonLook({
 }: {
   variant: ButtonVariant | undefined;
   size: ButtonSize | undefined;
-  shape: ButtonShape | undefined;
+  corners: ButtonCorners | undefined;
   iconOnly: boolean;
   /** Whether its press is out, which it says with a turning cursor. */
   busy?: boolean;
@@ -341,7 +341,7 @@ function buttonLook({
 
   return {
     size: box,
-    shape: shape ?? BUTTON_SHAPE.SQUARE,
+    corners: corners ?? BUTTON_CORNERS.SQUARE,
     className: cn(
       "ui-button",
       busy ? "cursor-progress" : settled ? "cursor-default" : PRESSABLE_CURSOR,
@@ -437,7 +437,7 @@ function stateProps(props: ButtonBase, name: string | undefined, done = false) {
     onBlur: props.onBlur,
     "data-variant": props.variant ?? BUTTON_VARIANT.QUIET,
     // Note that a square button, the default, carries no shape, so it is drawn as every button was.
-    "data-shape": props.shape === BUTTON_SHAPE.ROUND ? BUTTON_SHAPE.ROUND : undefined,
+    "data-corners": props.corners === BUTTON_CORNERS.ROUND ? BUTTON_CORNERS.ROUND : undefined,
     onClick: (event: MouseEvent<HTMLButtonElement>) => {
       if (refusing) {
         event.preventDefault();
@@ -636,7 +636,7 @@ export function Button({
       {...buttonLook({
         variant: props.variant,
         size,
-        shape: props.shape,
+        corners: props.corners,
         iconOnly: false,
         busy,
         settled: shown || state["aria-disabled"] === true,
@@ -674,7 +674,7 @@ export function Button({
 export function ButtonLink({
   href,
   variant,
-  shape,
+  corners,
   icon,
   label,
   external = false,
@@ -685,7 +685,7 @@ export function ButtonLink({
   href: string;
   variant?: ButtonVariant;
   /** Its outline: the control's corner, or a pill. */
-  shape?: ButtonShape;
+  corners?: ButtonCorners;
   /** Whether a press leaves the app, which a small ↗ after its words says, as an external text link's does. */
   external?: boolean | undefined;
   /** Called as the press leaves, a middle-click's included, before the browser follows the link; a press that is the window's to carry out stops the browser's with `preventDefault`. */
@@ -703,7 +703,7 @@ export function ButtonLink({
 
   return (
     <a
-      className={linkClasses(buttonLook({ variant, size: undefined, shape, iconOnly: false }))}
+      className={linkClasses(buttonLook({ variant, size: undefined, corners, iconOnly: false }))}
       data-variant={variant ?? BUTTON_VARIANT.QUIET}
       {...hint}
       href={href}
@@ -751,7 +751,7 @@ export function IconButtonLink({
   return (
     <a
       className={linkClasses(
-        buttonLook({ variant, size: undefined, shape: undefined, iconOnly: true }),
+        buttonLook({ variant, size: undefined, corners: undefined, iconOnly: true }),
       )}
       data-icon-only="true"
       data-variant={variant ?? BUTTON_VARIANT.QUIET}
@@ -839,7 +839,7 @@ export function IconButton({
   const ringShown = useSettled(busy);
 
   const state = stateProps(
-    submit === undefined ? landedProps(props, landed) : { ...props, shape: BUTTON_SHAPE.ROUND },
+    submit === undefined ? landedProps(props, landed) : { ...props, corners: BUTTON_CORNERS.ROUND },
     label,
     landed,
   );
@@ -850,7 +850,7 @@ export function IconButton({
       {...buttonLook({
         variant: props.variant,
         size,
-        shape: submit === undefined ? props.shape : BUTTON_SHAPE.ROUND,
+        corners: submit === undefined ? props.corners : BUTTON_CORNERS.ROUND,
         iconOnly: true,
         busy,
         settled: landed || state["aria-disabled"] === true,

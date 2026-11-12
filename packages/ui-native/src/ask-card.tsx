@@ -13,12 +13,12 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -26,7 +26,6 @@ import {
   labelsHidden,
   padding,
   pickerStyle,
-  shapes,
   strokeBorder,
   tag,
   tint,
@@ -93,9 +92,13 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
       spacing={0}
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+        ),
         strokeBorder({
           content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
           shape: "roundedRectangle",
           cornerRadius: RADIUS.CARD,
           style: { lineWidth: HAIRLINE },
@@ -168,7 +171,10 @@ function StepRow({
       <HStack
         spacing={SPACE.ROW}
         alignment="top"
-        modifiers={[padding(ROW_PADDING), contentShape(shapes.rectangle())]}
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
       >
         <Image
           systemName={ticked ? "checkmark.circle.fill" : "circle"}

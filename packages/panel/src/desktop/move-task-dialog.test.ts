@@ -369,7 +369,7 @@ test("a plan whose repository its workspace cannot reach and another of the acco
   const words = document.getElementById(banner.getAttribute("aria-labelledby") ?? "");
   assert.equal(words === null ? undefined : heard(words), "This task's repository belongs to Acme");
   assert.equal(
-    banner.querySelector(".workspace-ref .ui-avatar[data-shape='tile']")?.textContent,
+    banner.querySelector(".workspace-ref .ui-avatar[data-outline='tile']")?.textContent,
     "A",
   );
 

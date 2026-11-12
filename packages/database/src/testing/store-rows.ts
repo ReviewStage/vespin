@@ -209,10 +209,10 @@ export function readTurnById(run: HostedStoreTestRun, id: string): Promise<TurnR
 }
 
 /** Every part this build stores carries at least a `type`, the same shape `writer.ts`'s own column schema checks. */
-const readsPartsShape = Schema.is(Schema.Array(Schema.Struct({ type: Schema.String })));
+const readsPartTypes = Schema.is(Schema.Array(Schema.Struct({ type: Schema.String })));
 
 const StoredPartsColumnSchema: Schema.Codec<StoredUIMessage["parts"]> = Schema.declare(
-  (input): input is StoredUIMessage["parts"] => readsPartsShape(input),
+  (input): input is StoredUIMessage["parts"] => readsPartTypes(input),
 );
 
 /** A message row, decoded to the same shape the store's own writer builds it under. */

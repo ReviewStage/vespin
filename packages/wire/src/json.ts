@@ -32,7 +32,7 @@ export type UnparsedWireValue = WireValue | undefined;
  * decided; {@link isWireRecordValue}, {@link WireValueSchema}, and
  * {@link isPlainRecord} below all read it back rather than restating it.
  */
-function isPlainWireRecordShape<T>(value: T): value is T & WireRecord {
+function isPlainWireRecord<T>(value: T): value is T & WireRecord {
   if (!Predicate.isObject(value)) return false;
 
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
@@ -43,7 +43,7 @@ function isPlainWireRecordShape<T>(value: T): value is T & WireRecord {
 
 /** A record whose own shape is a wire record and whose every value is itself one. */
 function isWireRecordValue(value: unknown): value is WireRecord {
-  if (!isPlainWireRecordShape(value)) return false;
+  if (!isPlainWireRecord(value)) return false;
 
   return Object.values(value).every((entry) => readsWireValue(entry));
 }
@@ -115,17 +115,16 @@ export function isWireBoolean(value: UnparsedWireValue): value is boolean {
 }
 
 /** A record's own shape as a Schema, for a struct field that holds a record whose values nothing reads yet. */
-export const WireRecordShapeSchema: Schema.Codec<WireRecord> =
-  Schema.declare(isPlainWireRecordShape);
+export const PlainWireRecordSchema: Schema.Codec<WireRecord> = Schema.declare(isPlainWireRecord);
 
-const readsWireRecordShape = Schema.is(WireRecordShapeSchema);
+const readsPlainWireRecord = Schema.is(PlainWireRecordSchema);
 
 /**
  * A record's own shape, not whether its values are wire values: a record
  * nested in a record `isRecord` has not yet looked inside is still a record.
  */
 export function isRecord(value: UnparsedWireValue): value is WireRecord {
-  return readsWireRecordShape(value);
+  return readsPlainWireRecord(value);
 }
 
 /**
@@ -134,7 +133,7 @@ export function isRecord(value: UnparsedWireValue): value is WireRecord {
  * tree, where that parse, not the predicate, is the cost.
  */
 export function isPlainRecord(value: WireBoundaryInput): value is WireBoundaryRecord {
-  return isPlainWireRecordShape(value);
+  return isPlainWireRecord(value);
 }
 
 export function text(value: UnparsedWireValue): string | undefined {

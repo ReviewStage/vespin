@@ -29,7 +29,7 @@ import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sameShape } from "@repo/features/turn-rows";
+import { readAlike } from "@repo/features/turn-rows";
 import { CHOOSE_AN_ITEM_WORDS, countWords, selectedWords, TERM } from "@repo/features/words";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -1456,12 +1456,12 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
   };
 }
 
-/** How deep two runs of rows are read alike (`sameShape`): each row as the same holder and item. */
+/** How deep two runs of rows are read alike (`readAlike`): each row as the same holder and item. */
 const LAID_OUT_DEPTH = 1;
 
 /**
  * The rows as last drawn while a draw leaves them reading alike
- * (`sameShape`), each row read as the same listed item (`inboxListed`),
+ * (`readAlike`), each row read as the same listed item (`inboxListed`),
  * else as they are now. Note that this is what the list's motion is
  * handed, because it measures every row before and after a commit whose
  * `change` moved, and the list is handed a view built anew on every draw,
@@ -1469,7 +1469,7 @@ const LAID_OUT_DEPTH = 1;
  */
 function useLaidOut(items: readonly InboxListed[]): readonly InboxListed[] {
   const held = useRef(items);
-  const steady = sameShape(held.current, items, LAID_OUT_DEPTH) ? held.current : items;
+  const steady = readAlike(held.current, items, LAID_OUT_DEPTH) ? held.current : items;
   useLayoutEffect(() => {
     held.current = steady;
   });

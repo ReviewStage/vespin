@@ -128,7 +128,7 @@ const COMMON_WORDS: ReadonlySet<string> = new Set([
  * name, and a long opaque run mixing cases and digits as generated keys do.
  * A commit hash or a UUID, all lower case, is none of them.
  */
-const CREDENTIAL_SHAPES: readonly RegExp[] = [
+const CREDENTIAL_PATTERNS: readonly RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
   /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}/u,
   /\bgh[pousr]_[A-Za-z0-9]{20,}/u,
@@ -170,7 +170,7 @@ function keeperOf(
 
 /** Whether words look like they hold a credential, so they are never kept. */
 function looksLikeCredential(text: string): boolean {
-  if (CREDENTIAL_SHAPES.some((shape) => shape.test(text))) return true;
+  if (CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text))) return true;
 
   return (text.match(OPAQUE_RUN) ?? []).some(
     (run) => /[a-z]/u.test(run) && /[A-Z]/u.test(run) && /[0-9]/u.test(run),

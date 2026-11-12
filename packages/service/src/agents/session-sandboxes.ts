@@ -353,7 +353,7 @@ export interface SandboxReleaseSweep {
 }
 
 /** Where releases go: the queue's publish. */
-interface SandboxReleasesShape {
+interface SandboxReleasesService {
   /** The sandbox's release published, a failure said in the log, since the sweep publishes it again. */
   readonly publish: (sandboxName: string) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
 }
@@ -525,7 +525,7 @@ const inProcessRelease = (
   Effect.asVoid(consumeSandboxRelease(sandboxName).pipe(Effect.ignore));
 
 /** The releases one runtime has: consumed in place by default, as a test or a local run has them. */
-export const SandboxReleases = Context.Reference<SandboxReleasesShape>(
+export const SandboxReleases = Context.Reference<SandboxReleasesService>(
   "@repo/service/SandboxReleases",
   { defaultValue: () => ({ publish: inProcessRelease }) },
 );
@@ -538,7 +538,7 @@ export const sandboxReleasesFromEnvironment = Layer.effect(
   SandboxReleases,
   Effect.map(
     Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
-    (deployment): SandboxReleasesShape => ({
+    (deployment): SandboxReleasesService => ({
       publish: Option.exists(
         deployment,
         (named) =>

@@ -20,7 +20,7 @@ import {
  * quiet tile. The disc names its person to a reader, unless the name already
  * stands beside it, where it is `decorative` and said once, or is blank.
  *
- * An app, a bot, or an agent stands in a square (`AVATAR_SHAPE.SQUARE`)
+ * An app, a bot, or an agent stands in a square (`AVATAR_OUTLINE.SQUARE`)
  * whose corner grows with its size, by its picture or, in place of a
  * letter, its `glyph`: the glyph alone on the ground beneath it, in the ink
  * around it, or on a quiet tile where it is `tiled`, as a facepile whose
@@ -70,13 +70,13 @@ export const AVATAR_SIZE = {
 export type AvatarSize = (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE];
 
 /** The outline: a person's circle, an app's, a bot's, or an agent's square, or a workspace's or repository's tile, whose corner is a quarter of its edge. */
-export const AVATAR_SHAPE = {
+export const AVATAR_OUTLINE = {
   CIRCLE: "circle",
   SQUARE: "square",
   TILE: "tile",
 } as const;
 
-export type AvatarShape = (typeof AVATAR_SHAPE)[keyof typeof AVATAR_SHAPE];
+export type AvatarOutline = (typeof AVATAR_OUTLINE)[keyof typeof AVATAR_OUTLINE];
 
 /** How far a picture has got: still on its way, drawn, or given up. */
 const PICTURE = {
@@ -123,10 +123,10 @@ const BOX_CLASS: Record<AvatarSize, string> = {
  * reads as one shape at every size, rounder than a tile of its size; a
  * tile's, a quarter of its edge.
  */
-const SHAPE_CLASS: Record<AvatarShape, string> = {
-  [AVATAR_SHAPE.CIRCLE]: "rounded-full after:rounded-full",
-  [AVATAR_SHAPE.SQUARE]: "rounded-avatar-square after:rounded-avatar-square",
-  [AVATAR_SHAPE.TILE]: "rounded-avatar-tile after:rounded-avatar-tile",
+const OUTLINE_CLASS: Record<AvatarOutline, string> = {
+  [AVATAR_OUTLINE.CIRCLE]: "rounded-full after:rounded-full",
+  [AVATAR_OUTLINE.SQUARE]: "rounded-avatar-square after:rounded-avatar-square",
+  [AVATAR_OUTLINE.TILE]: "rounded-avatar-tile after:rounded-avatar-tile",
 };
 
 /** The six identity hues a letter stands on, by the hue `identityHue` reads off an id. */
@@ -145,7 +145,7 @@ const GLYPH_BOX = "ui-avatar-glyph grid size-full place-items-center *:size-avat
 /** What a disc is drawn as, read off its props and how its picture has fared. */
 interface Look {
   readonly size: AvatarSize;
-  readonly shape: AvatarShape;
+  readonly outline: AvatarOutline;
   readonly glyph: boolean;
   readonly tiled: boolean;
   readonly branded: boolean;
@@ -155,8 +155,8 @@ interface Look {
 }
 
 /** A disc's letter size: a share of its box, or a tile's caption, a card head's tile a dialog's, so the small tiles keep a readable letter. */
-function typeClass({ size, shape }: Look): string {
-  if (shape !== AVATAR_SHAPE.TILE) return SIZE_CLASS[size];
+function typeClass({ size, outline }: Look): string {
+  if (outline !== AVATAR_OUTLINE.TILE) return SIZE_CLASS[size];
   const box = BOX_CLASS[size];
 
   return size === AVATAR_SIZE.CARD
@@ -187,17 +187,17 @@ function groundClass({ glyph, tiled, branded, blank, hue }: Look): string {
 }
 
 /** A disc's edge: a hairline, so a picture keeps its edge on a ground of its own color; a tile's, only where it is `edged`; none round an app's glyph. */
-function edgeClass({ shape, glyph, edged }: Look): string {
+function edgeClass({ outline, glyph, edged }: Look): string {
   if (glyph) return "after:content-none";
 
-  if (shape !== AVATAR_SHAPE.TILE) return "after:shadow-avatar-edge";
+  if (outline !== AVATAR_OUTLINE.TILE) return "after:shadow-avatar-edge";
 
   return edged ? "after:shadow-avatar-tile-edge" : "after:content-none";
 }
 
 /** Every class a disc wears, its line closing them so a letter of any size sits at the box's center. */
 function discClass(look: Look): string {
-  return `ui-avatar ${typeClass(look)} ${SHAPE_CLASS[look.shape]} ${groundClass(look)} ${edgeClass(look)} leading-none`;
+  return `ui-avatar ${typeClass(look)} ${OUTLINE_CLASS[look.outline]} ${groundClass(look)} ${edgeClass(look)} leading-none`;
 }
 
 interface AvatarProps {
@@ -207,7 +207,7 @@ interface AvatarProps {
   /** The picture's address, which a caller sizes for the disc. */
   src?: string | undefined;
   size?: AvatarSize;
-  shape?: AvatarShape;
+  outline?: AvatarOutline;
   /** What stands in place of the letter until a picture is shown: an app's, a bot's, or an agent's glyph. */
   glyph?: ReactNode;
   /** Whether the glyph stands on a quiet tile rather than bare. */
@@ -259,7 +259,7 @@ function AvatarDisc({
   id = name,
   src,
   size = AVATAR_SIZE.ROW,
-  shape = AVATAR_SHAPE.CIRCLE,
+  outline = AVATAR_OUTLINE.CIRCLE,
   glyph,
   tiled = false,
   branded = false,
@@ -288,13 +288,13 @@ function AvatarDisc({
   );
 
   const hue = lettered ? identityHue(id) : undefined;
-  const look = { size, shape, glyph: glyph !== undefined, tiled, branded, edged, blank, hue };
+  const look = { size, outline, glyph: glyph !== undefined, tiled, branded, edged, blank, hue };
 
   return (
     <ShadcnAvatar
       className={discClass(look)}
       data-size={size}
-      data-shape={shape}
+      data-outline={outline}
       data-glyph={glyph === undefined ? undefined : "true"}
       data-edged={edged ? "true" : undefined}
       data-blank={blank ? "true" : undefined}

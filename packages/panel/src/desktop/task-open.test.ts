@@ -168,7 +168,7 @@ function columnLog(container: HTMLElement): string {
 
   if (region !== null) {
     const blocks = [...region.querySelectorAll(".ui-skeleton")].map(
-      (block) => `${block.getAttribute("data-shape")}:${block.getAttribute("style")}`,
+      (block) => `${block.getAttribute("data-kind")}:${block.getAttribute("style")}`,
     );
 
     return `skeleton ${blocks.join(" ")}`;

@@ -139,7 +139,7 @@ interface Recording {
   terminalAsToday: ProbeObservations["terminalAsToday"];
   terminalCapsDropped: ProbeObservations["terminalCapsDropped"];
   placeholderOutside: string | undefined;
-  rootFilesWithTokenShape: number | undefined;
+  rootFilesWithTokenPattern: number | undefined;
   failure: string | undefined;
 }
 
@@ -645,7 +645,7 @@ const probe = Effect.fn("probe/probe")(function* (
     allowFailure: true,
   });
 
-  recording.rootFilesWithTokenShape = tokenFiles.split("\n").filter((line) => line !== "").length;
+  recording.rootFilesWithTokenPattern = tokenFiles.split("\n").filter((line) => line !== "").length;
   recording.sessionFilesBeforeStop = yield* sessionFiles(
     scrub,
     recording,
@@ -685,7 +685,7 @@ function observationsOf(recording: Recording): ProbeObservations {
     terminalAsToday: recording.terminalAsToday,
     terminalCapsDropped: recording.terminalCapsDropped,
     placeholderOutside: recording.placeholderOutside,
-    rootFilesWithTokenShape: recording.rootFilesWithTokenShape,
+    rootFilesWithTokenPattern: recording.rootFilesWithTokenPattern,
   };
 }
 
@@ -785,7 +785,7 @@ const main = Effect.gen(function* () {
     terminalAsToday: undefined,
     terminalCapsDropped: undefined,
     placeholderOutside: undefined,
-    rootFilesWithTokenShape: undefined,
+    rootFilesWithTokenPattern: undefined,
     failure: undefined,
   };
 

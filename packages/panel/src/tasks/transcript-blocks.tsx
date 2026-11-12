@@ -78,7 +78,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
 import {
-  githubShapes,
+  githubRedress,
   INLINE_PICTURE,
   inlinePictures,
   pictureFor,
@@ -905,14 +905,14 @@ export function GitHubPictureLink({ src, alt }: { src: string; alt: string }): R
 
 /**
  * The steps GitHub's rendering is drawn through: the library's own HTML
- * parse, GitHub's dress reshaped into the window's own while its classes
+ * parse, GitHub's dress redressed into the window's own while its classes
  * still say what each part is (`@repo/ui/github-html`), then the library's
  * own sanitizer, GitHub's own allowlist, the pictures that share a line with
  * words marked as standing in it, and the library's link hardening.
  */
 const GITHUB_REHYPE_PLUGINS: MarkdownSteps = [
   MARKDOWN_HTML_STEP.PARSE,
-  githubShapes,
+  githubRedress,
   MARKDOWN_HTML_STEP.SANITIZE,
   inlinePictures,
   MARKDOWN_HTML_STEP.HARDEN,

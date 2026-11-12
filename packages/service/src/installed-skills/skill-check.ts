@@ -29,7 +29,7 @@ import {
 import type { SkillFile } from "./skill-source.js";
 
 /** The repository check's provider-credential shapes, kept in step with `scripts/repository-checks.sh`. */
-const CREDENTIAL_SHAPES: readonly RegExp[] = [
+const CREDENTIAL_PATTERNS: readonly RegExp[] = [
   /sk_live_[0-9A-Za-z]{24,}/u,
   /gh[pousr]_[A-Za-z0-9]{36}/u,
   /github_pat_[A-Za-z0-9_]{22,}/u,
@@ -84,7 +84,7 @@ export function skillRefusal(
 
   const texts = files.map((file) => fileText(file.bytes));
 
-  if (texts.some((text) => CREDENTIAL_SHAPES.some((shape) => shape.test(text)))) {
+  if (texts.some((text) => CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text)))) {
     return INSTALLED_SKILL_REFUSAL.CREDENTIAL;
   }
 

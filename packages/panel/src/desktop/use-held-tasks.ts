@@ -1,5 +1,5 @@
 import type { TaskSummary } from "@repo/features/task-wire";
-import { sameShape } from "@repo/features/turn-rows";
+import { readAlike } from "@repo/features/turn-rows";
 import {
   filterValues,
   TASKS_FILTER_FIELD,
@@ -37,7 +37,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** No task waiting on the view. */
 const NO_TASKS: ReadonlySet<string> = new Set();
 
-/** How deep two layouts of the page are read alike (`sameShape`): each group's head, and each of its tasks as the same task. */
+/** How deep two layouts of the page are read alike (`readAlike`): each group's head, and each of its tasks as the same task. */
 const LAID_OUT_DEPTH = 2;
 
 /** What decides where the page stands its tasks: the workspace listed, the filter, and the display's layout of them. */
@@ -113,7 +113,7 @@ export function useHeldTasks(
 
   // Note that the groups are made anew on every draw, though they lay the same tasks out alike.
   const laidOut = useRef(groups);
-  const steady = sameShape(laidOut.current, groups, LAID_OUT_DEPTH) ? laidOut.current : groups;
+  const steady = readAlike(laidOut.current, groups, LAID_OUT_DEPTH) ? laidOut.current : groups;
   // Note that this runs after the held order keeps its places, so a task that stopped waiting is placed anew once before it holds still.
   useLayoutEffect(() => {
     waited.current = tasks.pendingTasks ?? NO_TASKS;

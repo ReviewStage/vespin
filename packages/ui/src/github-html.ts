@@ -6,7 +6,7 @@
  * links, so GitHub's rendering is drawn through those same steps rather
  * than set as HTML: `wholeRendering` hands the words to them as one HTML
  * node, never as markdown, which would split the rendering at a blank line
- * inside a code block. `githubShapes` runs between the parse and the
+ * inside a code block. `githubRedress` runs between the parse and the
  * sanitizer, while GitHub's classes still say what each part is, and
  * reshapes the things GitHub dresses its own way that the window would
  * otherwise draw wrong: a highlighted block, or a diagram's source, which
@@ -324,7 +324,7 @@ function markInlinePictures(block: HtmlNode): void {
 }
 
 /** What one node of GitHub's rendering becomes: itself, nodes in its place, or nothing. */
-function reshaped(node: HtmlNode): readonly HtmlNode[] {
+function redressed(node: HtmlNode): readonly HtmlNode[] {
   if (node.type !== "element") return [node];
 
   // A source is an address the window would read itself; its picture's `<img>` stands alone.
@@ -332,7 +332,7 @@ function reshaped(node: HtmlNode): readonly HtmlNode[] {
 
   // A themed picture draws an `<img>` for each theme, each its theme's alone.
   if (node.tagName === "picture") {
-    node.children = reshapeChildren(themedImages(node));
+    node.children = redressChildren(themedImages(node));
 
     return [node];
   }
@@ -353,13 +353,13 @@ function reshaped(node: HtmlNode): readonly HtmlNode[] {
 
   if (node.tagName === "div" && highlighted !== undefined)
     return [fenced(highlighted, textOf(node))];
-  node.children = reshapeChildren(node.children ?? []);
+  node.children = redressChildren(node.children ?? []);
 
   return [node];
 }
 
-function reshapeChildren(children: readonly HtmlNode[]): HtmlNode[] {
-  return children.flatMap(reshaped);
+function redressChildren(children: readonly HtmlNode[]): HtmlNode[] {
+  return children.flatMap(redressed);
 }
 
 /** GitHub's rendering as the parsed tree, apart from any document. */
@@ -430,9 +430,9 @@ export function wholeRendering(): (tree: MarkdownRoot, file: { value: unknown })
 }
 
 /** The step that reshapes what GitHub dresses its way into what the window draws its own, run between the parse and the sanitizer. */
-export function githubShapes(): (tree: HtmlNode) => void {
+export function githubRedress(): (tree: HtmlNode) => void {
   return (tree) => {
-    tree.children = reshapeChildren(tree.children ?? []);
+    tree.children = redressChildren(tree.children ?? []);
   };
 }
 

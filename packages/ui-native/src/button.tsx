@@ -1,13 +1,13 @@
 // button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
 import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   background,
-  buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
@@ -18,7 +18,6 @@ import {
   monospacedDigit,
   padding,
   pickerStyle,
-  shapes,
   strokeBorder,
   tag,
   tint,
@@ -114,12 +113,13 @@ export function Button(props: ButtonProps) {
 function capsuleModifiers(colors: BrandColors, filled: boolean) {
   return [
     padding(CAPSULE_PADDING),
-    background(filled ? colors.TEXT : colors.SURFACE, shapes.capsule()),
+    background(filled ? colors.TEXT : colors.SURFACE, SwiftModifiers.shapes.capsule()),
     ...(filled
       ? []
       : [
           strokeBorder({
             content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "capsule",
             style: { lineWidth: HAIRLINE },
           }),
@@ -194,7 +194,7 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
       onPress={onPress}
       modifiers={[
         buttonStyle(selected ? "borderedProminent" : "bordered"),
-        buttonBorderShape("capsule"),
+        SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("small"),
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),

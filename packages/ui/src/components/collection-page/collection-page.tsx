@@ -9,7 +9,7 @@ import {
 } from "../page-frame/page-frame.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { PageHeader } from "../page-header/page-header.js";
-import { SKELETON_SHAPE, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 
 /**
  * collection-page.tsx -- the page a collection is drawn on: its title and acts, the filters under them, and the collection itself, or what stands in its place while it is read, empty, or failed.
@@ -110,10 +110,10 @@ function CollectionPageRowsSkeleton(): React.JSX.Element {
       {Array.from({ length: LOADING_ROWS }, (_, row) => (
         <div key={row} className="ui-collection-page-skeleton-row">
           <span className="ui-collection-page-skeleton-title">
-            <Skeleton shape={SKELETON_SHAPE.LINE} width="40%" />
+            <Skeleton kind={SKELETON_KIND.LINE} width="40%" />
           </span>
           <span className="ui-collection-page-skeleton-description">
-            <Skeleton shape={SKELETON_SHAPE.LINE} width="65%" />
+            <Skeleton kind={SKELETON_KIND.LINE} width="65%" />
           </span>
         </div>
       ))}

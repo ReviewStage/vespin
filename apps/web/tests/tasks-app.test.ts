@@ -964,7 +964,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const naming = yield* start({ ...RELAY, userId: other });
         const issued = yield* start({ ...RELAY, issueId: "3f0e6f5c-7d1a-4f6e-9a55-1b2c3d4e5f60" });
 
-        const shaped = yield* start({
+        const structured = yield* start({
           name: RELAY.name,
           repository: { owner: "acme", name: "relay" },
         });
@@ -973,7 +973,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const bare = yield* start({ name: RELAY.name, repository: "relay" });
 
         assert.deepEqual(
-          [naming, issued, shaped, pathed, bare],
+          [naming, issued, structured, pathed, bare],
           [invalid, invalid, invalid, invalid, invalid],
         );
         assert.deepEqual(yield* ask(request(TASKS, owner)), {

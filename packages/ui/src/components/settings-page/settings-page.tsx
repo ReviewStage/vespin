@@ -5,7 +5,7 @@ import { useHeadingAway } from "../page-header/heading-away.js";
 import { PAGE_HEADER_END, PageHeader } from "../page-header/page-header.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import {
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
 } from "../settings-section/settings-section.js";
 import { Skeleton } from "../skeleton/skeleton.js";
@@ -180,7 +180,7 @@ export function SettingsPageSkeleton({
   /** How the bar lays its slots, as `SettingsPage` takes it. */
   look?: ToolbarLook | undefined;
   /** The sections likely to land, each in its shape. */
-  sections: readonly SettingsSectionSkeletonShape[];
+  sections: readonly SettingsSectionSkeletonLayout[];
 }): React.JSX.Element {
   return (
     <SettingsPage title={<Skeleton width={SKELETON_TITLE_WIDTH} />} lead={lead} look={look}>

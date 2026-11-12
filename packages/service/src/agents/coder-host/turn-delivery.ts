@@ -88,7 +88,7 @@ export const TURN_PUBLISH = {
 
 type TurnPublish = (typeof TURN_PUBLISH)[keyof typeof TURN_PUBLISH];
 
-export interface TurnQueueShape {
+export interface TurnQueueService {
   /** The turn handed on to be delivered to a runner, as `how` says; a publish that fails is said in the log, and the sweep publishes the turn again. */
   readonly publish: (
     turn: QueuedAgentTurn,
@@ -155,7 +155,7 @@ function sendOptions(turn: QueuedAgentTurn, how: TurnPublish) {
  * the turn to the delivery its keyed publish already made, and else to the
  * sweep's reap at its pickup deadline.
  */
-const VERCEL_TURN_QUEUE: TurnQueueShape = {
+const VERCEL_TURN_QUEUE: TurnQueueService = {
   publish: (turn, how) =>
     Effect.tryPromise(() =>
       send(
@@ -213,7 +213,7 @@ const deliveredInProcess = (turn: QueuedAgentTurn, until: number) =>
  * over the publisher's services. A keyed publish of a turn whose message is
  * still kept is dropped, as Queues drops it.
  */
-function inProcessTurnQueue(): TurnQueueShape {
+function inProcessTurnQueue(): TurnQueueService {
   const kept = new Map<string, number>();
 
   return {
@@ -236,7 +236,7 @@ function inProcessTurnQueue(): TurnQueueShape {
 }
 
 /** The queue one runtime has: Vercel's where the runtime provides it, this process's otherwise. */
-export const TurnQueue = Context.Reference<TurnQueueShape>("@repo/service/TurnQueue", {
+export const TurnQueue = Context.Reference<TurnQueueService>("@repo/service/TurnQueue", {
   defaultValue: inProcessTurnQueue,
 });
 

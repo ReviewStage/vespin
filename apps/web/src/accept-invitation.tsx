@@ -12,7 +12,7 @@ import { QUERY_ROOT } from "@repo/panel/query-keys";
 import {
   AuthMark,
   AuthPage,
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   BUTTON_VARIANT,
@@ -306,7 +306,9 @@ function descriptionOf(view: View): React.ReactNode {
 /** The mark each view opens on: the invitation's workspace on its offer, else the app's, badged as it ended. */
 function markOf(view: View): React.JSX.Element {
   if (view.kind === VIEW.OFFER) {
-    return <Avatar name={view.name} size={AVATAR_SIZE.PAGE} shape={AVATAR_SHAPE.TILE} decorative />;
+    return (
+      <Avatar name={view.name} size={AVATAR_SIZE.PAGE} outline={AVATAR_OUTLINE.TILE} decorative />
+    );
   }
 
   if (view.kind === VIEW.OPENING) return <AuthMark tone={LANDING_TONE.COMPLETE} />;

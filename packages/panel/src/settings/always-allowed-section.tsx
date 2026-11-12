@@ -20,7 +20,7 @@ import {
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsAddRow,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -98,12 +98,12 @@ const WRITE_FAILED = {
 } as const;
 
 /** The add row's shape, then one command's, as the loaded section draws them. */
-const ADD_ROW_SKELETON: SettingsRowSkeletonShape = {
+const ADD_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   controls: [SETTINGS_SKELETON_CONTROL.FIELD, SETTINGS_SKELETON_CONTROL.BUTTON],
 };
 
-const COMMAND_ROW_SKELETON: SettingsRowSkeletonShape = {
+const COMMAND_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],

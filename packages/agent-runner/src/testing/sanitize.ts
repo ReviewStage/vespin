@@ -38,7 +38,7 @@ export interface KnownSecret {
 }
 
 /** Shapes that are secret whatever run they come from, with what replaces each. */
-const SECRET_SHAPES: readonly {
+const SECRET_PATTERNS: readonly {
   readonly name: string;
   readonly pattern: RegExp;
   readonly replacement: string;
@@ -122,7 +122,7 @@ export class Sanitizer {
       out = out.replace(new RegExp(escapeRegExp(secret.value), "gu"), `<redacted:${secret.kind}>`);
     }
 
-    for (const shape of SECRET_SHAPES) out = out.replace(shape.pattern, shape.replacement);
+    for (const secret of SECRET_PATTERNS) out = out.replace(secret.pattern, secret.replacement);
     out = out.replace(HOME_OWNER, "/$1/<user>");
 
     return out.replace(UUID, (id) => this.placeholderOf(id));
@@ -155,11 +155,11 @@ export function findLeaks(text: string, secrets: readonly KnownSecret[]): readon
     secret.value.length >= 4 && text.includes(secret.value) ? [secret.kind] : [],
   );
 
-  const shaped = SECRET_SHAPES.flatMap((shape) =>
-    shape.name !== "sha256" && text.replaceAll("user@example.com", "").match(shape.pattern) !== null
-      ? [shape.name]
+  const matched = SECRET_PATTERNS.flatMap((secret) =>
+    secret.name !== "sha256" && text.replaceAll("user@example.com", "").match(secret.pattern) !== null
+      ? [secret.name]
       : [],
   );
 
-  return [...known, ...shaped];
+  return [...known, ...matched];
 }

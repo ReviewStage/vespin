@@ -311,7 +311,7 @@ test("a waiting choice of one is a radio list, each option led by its radio and 
   assert.deepEqual(
     openOptions(pane).map((option) => [
       option.getAttribute("role"),
-      option.querySelector(".ui-choice-control")?.getAttribute("data-shape"),
+      option.querySelector(".ui-choice-control")?.getAttribute("data-control"),
       option.getAttribute("aria-keyshortcuts"),
     ]),
     [
@@ -395,7 +395,7 @@ test("a waiting choice of several is a checkbox list whose box counts nothing on
   const pane = itemPane(page);
   const boxes = () => openOptions(pane);
   assert.deepEqual(
-    boxes().map((box) => box.querySelector(".ui-choice-control")?.getAttribute("data-shape")),
+    boxes().map((box) => box.querySelector(".ui-choice-control")?.getAttribute("data-control")),
     ["box", "box", "box"],
   );
   assert.equal(footWords(pane), "", "the foot says nothing of how many may be picked");

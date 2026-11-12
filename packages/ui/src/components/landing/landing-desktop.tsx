@@ -14,7 +14,7 @@ import {
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { IconButton } from "../button/button.js";
 import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import {
@@ -108,7 +108,7 @@ export function agentFace(
   return (
     <Avatar
       name={name}
-      shape={AVATAR_SHAPE.SQUARE}
+      outline={AVATAR_OUTLINE.SQUARE}
       size={size}
       glyph={<HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />}
       decorative
@@ -154,7 +154,7 @@ export function DesktopSidebar({
       <div className="ui-landing-workspace">
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-landing-workspace-ref">
-            <Avatar name="acme" size={AVATAR_SIZE.CARD} shape={AVATAR_SHAPE.TILE} decorative />
+            <Avatar name="acme" size={AVATAR_SIZE.CARD} outline={AVATAR_OUTLINE.TILE} decorative />
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.SECTION}>
               acme
             </Text>

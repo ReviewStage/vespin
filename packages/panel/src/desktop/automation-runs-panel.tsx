@@ -28,7 +28,7 @@ import {
   ResizeEdge,
   SCROLL_FADE,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   TEXT_ELEMENT,
@@ -246,7 +246,7 @@ export function RunsSkeleton(): React.JSX.Element {
         {SKELETON_RUNS.map(({ title, line }) => (
           <ListRow
             key={title}
-            leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_GLYPH} />}
+            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_GLYPH} />}
             title={<Skeleton width={title} />}
             description={<Skeleton width={line} />}
             meta={<Skeleton width={SKELETON_TIME} />}

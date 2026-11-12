@@ -50,7 +50,7 @@ import { workingTime } from "@repo/features/time-format";
 import { INLINE_DIFF } from "@repo/settings/diff-view";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   BUTTON_VARIANT,
@@ -95,7 +95,7 @@ import {
   SCROLL_FADE_INSET,
   SCROLL_GUTTER,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   SPINNER_SIZE,
@@ -790,7 +790,7 @@ function CheckSquare({ name, src }: { name: string; src: string | undefined }): 
       name={name}
       {...(src === undefined ? {} : { src })}
       glyph={<GLYPH.AGENT />}
-      shape={AVATAR_SHAPE.SQUARE}
+      outline={AVATAR_OUTLINE.SQUARE}
       size={AVATAR_SIZE.INLINE}
       tiled
       decorative
@@ -1002,7 +1002,7 @@ function ChecksSkeleton(): React.JSX.Element {
         {CHECK_SKELETON_ROWS.map(({ name, app }) => (
           <ListRow
             key={name}
-            leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={CHECK_SKELETON_LEAD} />}
+            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={CHECK_SKELETON_LEAD} />}
             title={<Skeleton width={name} />}
             description={<Skeleton width={app} />}
           />
@@ -1020,7 +1020,7 @@ function ConversationSkeleton(): React.JSX.Element {
         {ENTRY_SKELETON_LINES.map(({ by, words }) => (
           <EntryFrame key={by}>
             <EntryHead>
-              <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={CHECK_SKELETON_LEAD} />
+              <Skeleton kind={SKELETON_KIND.CIRCLE} width={CHECK_SKELETON_LEAD} />
               <Skeleton width={by} />
             </EntryHead>
             {words.map((width) => (
@@ -3367,17 +3367,17 @@ const FOLD_PROPERTY = {
 } as const;
 
 /** The room the header folds away, in CSS pixels, and whether the shown view's scroller leads its view (`leadsView`). */
-interface FoldShape {
+interface FoldExtent {
   readonly room: number;
   readonly lead: boolean;
 }
 
 /** The shape a header with nothing measured yet folds by: none. */
-const NO_FOLD: FoldShape = { room: 0, lead: false };
+const NO_FOLD: FoldExtent = { room: 0, lead: false };
 
 /** The shape the header folds by, the boxes it measures, and what the tab's root hears its views' scrolls by. */
 interface HeaderFold {
-  readonly shape: FoldShape;
+  readonly extent: FoldExtent;
   readonly root: React.RefObject<HTMLElement | null>;
   readonly header: React.RefObject<HTMLElement | null>;
   readonly compact: React.RefObject<HTMLDivElement | null>;
@@ -3402,7 +3402,7 @@ interface HeaderFold {
  * drawn since scrolls. Only a phone folds it: elsewhere the header stays put.
  */
 function useHeaderFold(phone: boolean): HeaderFold {
-  const [shape, setShape] = useState<FoldShape>(NO_FOLD);
+  const [extent, setExtent] = useState<FoldExtent>(NO_FOLD);
   const root = useRef<HTMLElement>(null);
   const header = useRef<HTMLElement>(null);
   const compact = useRef<HTMLDivElement>(null);
@@ -3432,7 +3432,7 @@ function useHeaderFold(phone: boolean): HeaderFold {
     measured.current = box;
     room.current = whole;
     tab.style.setProperty(FOLD_PROPERTY.ROOM, `${whole}px`);
-    setShape((held) => (held.room === whole && held.lead === lead ? held : { room: whole, lead }));
+    setExtent((held) => (held.room === whole && held.lead === lead ? held : { room: whole, lead }));
     follow(box?.scrollTop ?? 0);
   };
 
@@ -3453,7 +3453,7 @@ function useHeaderFold(phone: boolean): HeaderFold {
   }, [phone]);
 
   return {
-    shape,
+    extent,
     root,
     header,
     compact,
@@ -3758,7 +3758,7 @@ function PullRequestTabBody({
   );
 
   const fold = useHeaderFold(phone);
-  const listRoom = phone && fold.shape.lead ? fold.shape.room : 0;
+  const listRoom = phone && fold.extent.lead ? fold.extent.room : 0;
 
   // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this agent's pull request.
   const page = (
@@ -3769,7 +3769,7 @@ function PullRequestTabBody({
             ref={fold.root}
             className="file-view pull-request-tab"
             data-header-fold={phone ? "" : undefined}
-            data-fold-lead={phone && fold.shape.lead ? "" : undefined}
+            data-fold-lead={phone && fold.extent.lead ? "" : undefined}
             onScrollCapture={fold.onScrollCapture}
             onScrollEndCapture={fold.onScrollEndCapture}
           >

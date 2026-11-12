@@ -40,7 +40,7 @@
 import { randomUUID } from "node:crypto";
 import {
   SyncListener,
-  type SyncListenerShape,
+  type SyncListenerService,
   type SyncListening,
   syncListenerOverUrl,
 } from "@repo/database/sync/listener";
@@ -68,7 +68,7 @@ import {
 } from "effect";
 import { ConnectionError, SqlError } from "effect/sql/SqlError";
 import { databaseUnpooledUrl } from "../db/index.js";
-import { clockWatch, Sync, type SyncShape, type SyncWatch } from "./watch.js";
+import { clockWatch, Sync, type SyncService, type SyncWatch } from "./watch.js";
 
 /** How the listener is held and proved. */
 const LISTENER = {
@@ -202,7 +202,7 @@ interface Listening {
 
 /** What every connection of the instance's listener shares. */
 interface Hub {
-  readonly listener: SyncListenerShape;
+  readonly listener: SyncListenerService;
   readonly watchers: Watchers;
 }
 
@@ -543,7 +543,7 @@ const nextOf = (watcher: Watcher, listening: Listening, fallback: Duration.Durat
  * connection that stands at last wakes it.
  */
 const watchOn =
-  (hub: Hub, listener: RcRef.RcRef<Listening>): SyncShape["watch"] =>
+  (hub: Hub, listener: RcRef.RcRef<Listening>): SyncService["watch"] =>
   (topics, fallback) =>
     Effect.gen(function* () {
       if (topics.length === 0) return clockWatch(fallback);
@@ -589,7 +589,7 @@ export const syncHub = Layer.effect(
 
     const listener = yield* RcRef.make({ acquire: opened(hub), idleTimeToLive: LISTENER.IDLE });
 
-    return { watch: watchOn(hub, listener) } satisfies SyncShape;
+    return { watch: watchOn(hub, listener) } satisfies SyncService;
   }),
 );
 

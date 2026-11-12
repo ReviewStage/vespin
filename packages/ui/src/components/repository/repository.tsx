@@ -3,7 +3,7 @@ import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { Fragment, useRef, useState } from "react";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { FolderXIcon, GLYPH } from "../../icons/icons.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";
@@ -80,7 +80,7 @@ export function RepositoryPicture({
       name=""
       src={url}
       size={size}
-      shape={AVATAR_SHAPE.TILE}
+      outline={AVATAR_OUTLINE.TILE}
       decorative
       edged
       blank

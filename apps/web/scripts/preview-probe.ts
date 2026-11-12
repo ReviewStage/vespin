@@ -79,7 +79,7 @@ class PreviewNotBuilt extends Schema.TaggedError<PreviewNotBuilt>()("PreviewNotB
   }
 }
 
-class ShapeMismatch extends Schema.TaggedError<ShapeMismatch>()("ShapeMismatch", {
+class ReportMismatch extends Schema.TaggedError<ReportMismatch>()("ReportMismatch", {
   failures: Schema.Number,
   total: Schema.Number,
 }) {
@@ -210,7 +210,7 @@ const program = Effect.gen(function* () {
   const failures = probeFailures(report);
 
   if (failures.length > 0) {
-    return yield* new ShapeMismatch({ failures: failures.length, total: report.results.length });
+    return yield* new ReportMismatch({ failures: failures.length, total: report.results.length });
   }
 });
 

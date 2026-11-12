@@ -1,7 +1,7 @@
 import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import { drawsSomething } from "../../said.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarShape } from "../avatar/avatar.js";
-import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarOutline } from "../avatar/avatar.js";
+import { SKELETON_KIND, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 
@@ -54,7 +54,7 @@ export interface CommentAuthor {
   /** Their picture's address; none stands their letter on their hue. */
   readonly picture?: string | undefined;
   /** A person's circle, or an agent's or an app's square. */
-  readonly shape?: AvatarShape | undefined;
+  readonly outline?: AvatarOutline | undefined;
   /** What stands on a square in place of the letter: an agent's or an app's glyph. */
   readonly glyph?: ReactNode;
 }
@@ -160,7 +160,7 @@ export function Comment({
           name={author.name}
           {...(author.id === undefined ? {} : { id: author.id })}
           src={author.picture}
-          shape={author.shape ?? AVATAR_SHAPE.CIRCLE}
+          outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
           glyph={glyph}
           tiled={glyph !== undefined}
           size={AVATAR_SIZE.ROW}
@@ -216,7 +216,7 @@ export function CommentSkeleton({
   return (
     <Frame as={COMMENT_ELEMENT.DIV}>
       <FaceCell>
-        <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_FACE} />
+        <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_FACE} />
       </FaceCell>
       <HeadLine>
         <Skeleton width={name} />

@@ -12,7 +12,7 @@ import {
   SettingsRow,
   type SettingsRowControl,
   type SettingsRowDensity,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
   SettingsSectionsSkeleton,
@@ -37,14 +37,14 @@ import { CatalogSection } from "../section";
  */
 
 /** A provider's key row while it is read: its mark, its name alone, and its press. */
-const KEY_ROW: SettingsRowSkeletonShape = {
+const KEY_ROW: SettingsRowSkeletonLayout = {
   described: false,
   mark: SETTINGS_ROW_MARK_WIDTH,
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
 };
 
 /** A member's row while it is read: a face at a card's size, the email under the name, the role and the ⋯. */
-const MEMBER_ROW: SettingsRowSkeletonShape = {
+const MEMBER_ROW: SettingsRowSkeletonLayout = {
   described: true,
   mark: "32px",
   controls: [SETTINGS_SKELETON_CONTROL.VALUE],
@@ -52,7 +52,7 @@ const MEMBER_ROW: SettingsRowSkeletonShape = {
 };
 
 /** A described row ending in each control a placeholder stands. */
-const EVERY_CONTROL: readonly SettingsRowSkeletonShape[] = Object.values(
+const EVERY_CONTROL: readonly SettingsRowSkeletonLayout[] = Object.values(
   SETTINGS_SKELETON_CONTROL,
 ).map((control) => ({ described: true, controls: [control] }));
 

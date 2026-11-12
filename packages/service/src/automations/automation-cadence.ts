@@ -92,7 +92,7 @@ type CadencedAutomation = Pick<
   "id" | "organizationId" | "enabled" | "trigger"
 >;
 
-export interface AutomationCadenceShape {
+export interface AutomationCadenceService {
   /** The automation's schedule kept as the automation stands: made, written, enabled or disabled, or deleted where it fires on no schedule. */
   readonly keep: (
     automation: CadencedAutomation,
@@ -128,7 +128,7 @@ export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFirin
 });
 
 /** Off production: no schedule kept, and a firing recorded queued for nothing to start. */
-const RECORDED_ONLY: AutomationCadenceShape = {
+const RECORDED_ONLY: AutomationCadenceService = {
   keep: () => Effect.void,
   forget: () => Effect.void,
   publish: (firing) => Effect.asVoid(recordFiring(firing)),
@@ -201,7 +201,7 @@ const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation
 });
 
 /** On production: schedules kept in Vercel Schedules under the deployment's own token, and firings sent to the topic. */
-const VERCEL_CADENCE: AutomationCadenceShape = {
+const VERCEL_CADENCE: AutomationCadenceService = {
   keep: keepSchedule,
   forget: forgetSchedule,
   publish: (firing) =>
@@ -209,7 +209,7 @@ const VERCEL_CADENCE: AutomationCadenceShape = {
 };
 
 /** The cadence one runtime has: Vercel's where the runtime provides it, a queued record and nothing more otherwise. */
-export const AutomationCadence = Context.Reference<AutomationCadenceShape>(
+export const AutomationCadence = Context.Reference<AutomationCadenceService>(
   "@repo/service/AutomationCadence",
   { defaultValue: () => RECORDED_ONLY },
 );

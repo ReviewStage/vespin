@@ -349,7 +349,7 @@ const UNREADABLE_DETAIL = "an answer that could not be read";
  * we sent all are, and Vercel's prose, codes, and a URL's slashed path
  * segments mostly are not.
  */
-const TOKEN_SHAPED = /[A-Za-z0-9._~+-]{20,}=*/gu;
+const TOKEN_LIKE = /[A-Za-z0-9._~+-]{20,}=*/gu;
 
 /** An error code as Vercel writes one: lowercase words joined by underscores. */
 const ERROR_CODE = /^[a-z]+(?:_[a-z]+){0,7}$/u;
@@ -364,7 +364,7 @@ const REDACTED_DETAIL = "[redacted]";
  * back, and a detail reaches the logs.
  */
 function capped(text: string): string {
-  return clipped(text.replace(TOKEN_SHAPED, REDACTED_DETAIL).replace(/\s+/gu, " ").trim());
+  return clipped(text.replace(TOKEN_LIKE, REDACTED_DETAIL).replace(/\s+/gu, " ").trim());
 }
 
 /** How much of a dead command's stderr a log keeps: its end, where the reason it died is written. */
@@ -376,7 +376,7 @@ function stderrTail(stderr: string, secrets: readonly string[]): string {
     .filter((secret) => secret.length > 0)
     .reduce((said, secret) => said.split(secret).join(REDACTED_DETAIL), stderr);
 
-  const said = named.replace(TOKEN_SHAPED, REDACTED_DETAIL).replace(/\s+/gu, " ").trim();
+  const said = named.replace(TOKEN_LIKE, REDACTED_DETAIL).replace(/\s+/gu, " ").trim();
 
   return said.length > STDERR_TAIL_CHARS ? `…${said.slice(-STDERR_TAIL_CHARS)}` : said;
 }

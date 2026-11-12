@@ -127,7 +127,7 @@ export function inboxAttachmentOf(address: string): InboxAttachmentRef | undefin
   const [first, workspace, holder, holderId, inbox, itemId, files, attachmentId, ...rest] =
     url.pathname.split("/");
 
-  const shaped =
+  const wellFormed =
     first === "" &&
     workspace !== undefined &&
     workspace !== "" &&
@@ -139,7 +139,7 @@ export function inboxAttachmentOf(address: string): InboxAttachmentRef | undefin
     files === FILES_STEP &&
     rest.length === 0;
 
-  if (!shaped || itemId === undefined || attachmentId === undefined) return undefined;
+  if (!wellFormed || itemId === undefined || attachmentId === undefined) return undefined;
 
   if (!UUID.test(itemId) || !UUID.test(attachmentId)) return undefined;
 

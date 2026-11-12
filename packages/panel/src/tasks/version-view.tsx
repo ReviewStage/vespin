@@ -7,7 +7,7 @@ import {
   Button,
   ErrorState,
   Fill,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   STATUS_TONE,
@@ -509,7 +509,7 @@ export function VersionPageSkeleton({
     <VersionPageFrame
       lead={lead}
       title={<Skeleton width={BAR_SKELETON.MOMENT} />}
-      actions={<Skeleton shape={SKELETON_SHAPE.CONTROL} width={BAR_SKELETON.RESTORE} />}
+      actions={<Skeleton kind={SKELETON_KIND.CONTROL} width={BAR_SKELETON.RESTORE} />}
     >
       <VersionSkeleton title={title} section={section} />
     </VersionPageFrame>

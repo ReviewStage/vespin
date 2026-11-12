@@ -84,8 +84,8 @@ import {
   CALL_KIND,
   CALL_WORDS,
   isMadeCallKind,
+  readAlike,
   sameFieldsBy,
-  sameShape,
 } from "@repo/features/turn-rows";
 import { replyFromWords } from "@repo/features/words";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -1287,7 +1287,7 @@ function AgentPartView({
 
 /** A part of a turn, drawn again only where it reads otherwise, as a part read again from the same stored part does not (`agentParts`). */
 const SteadyAgentPart = memo(AgentPartView, (a, b) =>
-  sameFieldsBy(a, b, { part: (ours, theirs) => sameShape(ours, theirs, 1) }),
+  sameFieldsBy(a, b, { part: (ours, theirs) => readAlike(ours, theirs, 1) }),
 );
 
 /** A webhook call's body inside the card of the prompt it rode in with, folded again under its own line, as the caller sent it. */

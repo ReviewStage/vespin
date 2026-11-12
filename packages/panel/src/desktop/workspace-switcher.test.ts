@@ -236,7 +236,7 @@ test("each workspace in the menu wears its tile, its first letter, and a rename 
     open(page.switcher());
 
     const drawn = menuItems()
-      .map((item) => item.querySelector(".ui-avatar[data-shape='tile']"))
+      .map((item) => item.querySelector(".ui-avatar[data-outline='tile']"))
       .filter((tile) => tile !== null)
       .map((tile) => [tile.textContent, tile.getAttribute("data-hue")]);
 

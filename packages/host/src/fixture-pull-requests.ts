@@ -108,7 +108,7 @@ function pullRequestOf(
   number: number,
   title: string,
   head: string,
-  shape: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
+  standing: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
 ): AgentOverviewPullRequest {
   return {
     number,
@@ -122,7 +122,7 @@ function pullRequestOf(
     mergedAt: null,
     author: ADA,
     labels: [],
-    ...shape,
+    ...standing,
   };
 }
 

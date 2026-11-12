@@ -67,7 +67,7 @@ export class AgentWakeupNotPublished extends Data.TaggedError("AgentWakeupNotPub
   readonly reason: string;
 }> {}
 
-interface AgentWakeupsShape {
+interface AgentWakeupsService {
   /** The booking's message published, delayed until it comes due, or why the queue did not take it. */
   readonly publish: (
     wakeup: PublishedAgentWakeup,
@@ -180,7 +180,7 @@ const inProcessPublish = (
   });
 
 /** The queue one runtime publishes wakeups to: this process's by default, as a test or a local run has it. */
-export const AgentWakeups = Context.Reference<AgentWakeupsShape>("@repo/service/AgentWakeups", {
+export const AgentWakeups = Context.Reference<AgentWakeupsService>("@repo/service/AgentWakeups", {
   defaultValue: () => ({ publish: inProcessPublish }),
 });
 
@@ -189,7 +189,7 @@ export const agentWakeupsFromEnvironment = Layer.effect(
   AgentWakeups,
   Effect.map(
     Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
-    (deployment): AgentWakeupsShape => ({
+    (deployment): AgentWakeupsService => ({
       publish: Option.exists(
         deployment,
         (named) =>

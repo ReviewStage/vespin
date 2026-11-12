@@ -12,6 +12,7 @@ import {
   Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityIdentifier,
@@ -19,14 +20,12 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
-  contentShape,
   disabled,
   font,
   foregroundStyle,
   listRowBackground,
   scrollContentBackground,
   scrollDismissesKeyboard,
-  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
@@ -156,7 +155,10 @@ function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
   const drawn = (
     <HStack
       spacing={SPACE.ROW + 2}
-      modifiers={[listRowBackground(colors.SURFACE), contentShape(shapes.rectangle())]}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
     >
       {face}
       <VStack alignment="leading" spacing={2}>
@@ -272,7 +274,10 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
 
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
-      <HStack spacing={SPACE.ROW} modifiers={[contentShape(shapes.rectangle())]}>
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+      >
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
         )}
@@ -395,7 +400,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             listRowBackground(colors.SURFACE),
           ]}
         >
-          <HStack modifiers={[contentShape(shapes.rectangle())]}>
+          <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
             <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
             <Spacer />
             {option.id === picked ? (

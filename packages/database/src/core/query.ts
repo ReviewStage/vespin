@@ -20,9 +20,9 @@ import type { SqlError } from "effect/sql/SqlError";
  * own `schemas/*.ts` module, which is the import the store-writer boundary
  * reads.
  */
-export type DatabaseShape = PgEffectDatabase<EffectPgQueryEffectHKT, EffectPgQueryResultHKT>;
+export type DatabaseClient = PgEffectDatabase<EffectPgQueryEffectHKT, EffectPgQueryResultHKT>;
 
-export class Database extends Context.Service<Database, DatabaseShape>()(
+export class Database extends Context.Service<Database, DatabaseClient>()(
   "@repo/database/Database",
 ) {}
 

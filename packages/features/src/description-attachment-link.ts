@@ -95,7 +95,7 @@ export function descriptionAttachmentOf(address: string): DescriptionAttachmentR
   if (url.search !== "" || url.hash !== "") return undefined;
   const [first, workspace, step, taskId, files, attachmentId, ...rest] = url.pathname.split("/");
 
-  const shaped =
+  const wellFormed =
     first === "" &&
     workspace !== undefined &&
     workspace !== "" &&
@@ -104,7 +104,7 @@ export function descriptionAttachmentOf(address: string): DescriptionAttachmentR
     files === FILES_STEP &&
     rest.length === 0;
 
-  if (!shaped || taskId === undefined || attachmentId === undefined) return undefined;
+  if (!wellFormed || taskId === undefined || attachmentId === undefined) return undefined;
 
   if (!UUID.test(taskId) || !UUID.test(attachmentId)) return undefined;
 

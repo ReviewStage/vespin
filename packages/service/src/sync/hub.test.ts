@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { SyncListener, type SyncListenerShape } from "@repo/database/sync/listener";
+import { SyncListener, type SyncListenerService } from "@repo/database/sync/listener";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { defineSyncTable } from "@repo/database/sync/sync-table";
 import { getTestDB, installSyncTables } from "@repo/database/testing";
@@ -135,7 +135,7 @@ const probedListener = Effect.gen(function* () {
   const acknowledging = Latch.makeUnsafe(true);
   let standing: { readonly ended: Deferred.Deferred<never, SqlError>; deaf: boolean } | undefined;
 
-  const listener: SyncListenerShape = {
+  const listener: SyncListenerService = {
     listen: Effect.gen(function* () {
       yield* acknowledging.await;
       const listening = yield* underlying.listen;

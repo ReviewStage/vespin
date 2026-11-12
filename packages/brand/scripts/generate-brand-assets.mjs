@@ -261,7 +261,7 @@ const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
 // units with the disc at ICON_MARK of them; the tile is the bundle's fill,
 // which the system rounds itself, so no corner is drawn here. Each mode's
 // tile and ink are TILES', and the clear and tinted looks are the system's
-// own from the layer's shape.
+// own from the layer's ratio.
 const IOS_ICON = { canvas: 1024, name: "ios/Vespin.icon" };
 
 const iosColor = (hex) => {
@@ -442,10 +442,10 @@ const BANNERS = {
   "16x9": { WIDTH: 3840, HEIGHT: 2160, FILL: 0.56 },
 };
 
-for (const [shape, { WIDTH, HEIGHT, FILL }] of Object.entries(BANNERS)) {
+for (const [ratio, { WIDTH, HEIGHT, FILL }] of Object.entries(BANNERS)) {
   for (const [name, { ground, ink }] of Object.entries(BANNER_GROUNDS)) {
     emit(
-      `banner/banner-${name}-${shape}.svg`,
+      `banner/banner-${name}-${ratio}.svg`,
       `${svgOpen(WIDTH, HEIGHT)}<rect width="${WIDTH}" height="${HEIGHT}" fill="${ground}"/>${centered(lockup(ink), WIDTH, HEIGHT, FILL)}</svg>`,
       PRODUCT_NAME,
     );
@@ -816,7 +816,7 @@ function dotCover(design, colorway, cover, box) {
   return paths.map(({ d }, n) => (d ? `<path d="${d}" fill="${DOTS[n]}"/>` : "")).join("");
 }
 
-for (const [shape, cover] of Object.entries(DOT_BANNERS)) {
+for (const [ratio, cover] of Object.entries(DOT_BANNERS)) {
   const { WIDTH, HEIGHT } = cover;
 
   for (const [designName, design] of Object.entries(DOT_DESIGNS)) {
@@ -829,7 +829,7 @@ for (const [shape, cover] of Object.entries(DOT_BANNERS)) {
           : placement(cut.box, WIDTH, HEIGHT, cover.FILL);
 
       emit(
-        `banner/dots/banner-dots-${designName}-${name}-${shape}.svg`,
+        `banner/dots/banner-dots-${designName}-${name}-${ratio}.svg`,
         `${svgOpen(WIDTH, HEIGHT)}<rect width="${WIDTH}" height="${HEIGHT}" fill="${colorway.GROUND}"/>${dotCover(design, colorway, cover, box)}<g transform="translate(${fmt(tx)} ${fmt(ty)}) scale(${fmt(k)})">${cut.body}</g></svg>`,
         PRODUCT_NAME,
       );

@@ -41,7 +41,7 @@ import { CARD_PADDING, Card } from "../card/card.js";
 import { Inline, JUSTIFY } from "../layout/layout.js";
 import { usePageScroll } from "../page-frame/page-scroll.js";
 import { type ListRowMenu, useRowMenu } from "../row-menu/row-menu.js";
-import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { sizeWhileShown } from "../virtual-rows/virtual-rows.js";
 import { SortHeading } from "./sort-heading.js";
@@ -606,7 +606,7 @@ function DataTableCellSkeleton({ kind }: { kind: DataTableColumnKind }): React.J
         </Inline>
       );
     case DATA_TABLE_COLUMN_KIND.MARK:
-      return <Skeleton shape={SKELETON_SHAPE.CIRCLE} />;
+      return <Skeleton kind={SKELETON_KIND.CIRCLE} />;
     default:
       return <Skeleton width={SKELETON_TEXT_WIDTH} />;
   }

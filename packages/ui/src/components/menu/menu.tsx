@@ -1019,16 +1019,16 @@ function cutRows(area: HTMLElement): void {
 
   if (popup === null || column === null) return;
   popup.style.maxHeight = "";
-  const shape = getComputedStyle(popup);
+  const computed = getComputedStyle(popup);
 
-  const chrome = lengthsOf(shape, [
+  const chrome = lengthsOf(computed, [
     "padding-top",
     "padding-bottom",
     "border-top-width",
     "border-bottom-width",
   ]);
 
-  const room = Number.parseFloat(shape.maxHeight) - chrome;
+  const room = Number.parseFloat(computed.maxHeight) - chrome;
   const fade = Number.parseFloat(getComputedStyle(area).getPropertyValue("--ui-scroll-fade"));
 
   if (!Number.isFinite(room) || !Number.isFinite(fade)) return;

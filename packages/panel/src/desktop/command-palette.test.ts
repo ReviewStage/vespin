@@ -1483,7 +1483,7 @@ test("Search lists the listed workspace's plans first, then every other workspac
   assert.deepEqual(rows(), ["Checkout retries · Northwind · shop"]);
   assert.equal(
     document.querySelector(
-      ".ui-combobox-option-detail .workspace-ref .ui-avatar[data-shape='tile']",
+      ".ui-combobox-option-detail .workspace-ref .ui-avatar[data-outline='tile']",
     )?.textContent,
     "N",
     "the other workspace is named by its tile and its name",

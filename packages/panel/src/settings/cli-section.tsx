@@ -28,7 +28,7 @@ import {
   SettingsRow,
   SettingsRowStateLine,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   STEP_STATE,
   Step,
@@ -107,7 +107,7 @@ const PAGE_LINE = {
 } as const;
 
 /** The section as it stands while the sign-in is read: the sign-in's row, then the install's, ending in Install where the client runs it. */
-function sectionSkeleton(installs: boolean): readonly SettingsSectionSkeletonShape[] {
+function sectionSkeleton(installs: boolean): readonly SettingsSectionSkeletonLayout[] {
   return [
     {
       headed: true,

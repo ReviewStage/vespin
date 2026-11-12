@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { Clock, Context, Duration, Effect, Fiber, Layer, Queue } from "effect";
 import { syncHub } from "../sync/hub.js";
-import { Sync, type SyncShape } from "../sync/watch.js";
+import { Sync, type SyncService } from "../sync/watch.js";
 import { announcingClock, driven } from "./clock-driven.js";
 
 /** The hub's coalesce window: how long a woken watch gathers before it answers. */
@@ -28,7 +28,7 @@ export const wokenOnHub = <A, E, R, W, WE, WR>(
     const hub = Context.get(yield* Layer.build(syncHub), Sync);
     const looking = yield* Queue.unbounded<void>();
 
-    const announcing: SyncShape = {
+    const announcing: SyncService = {
       watch: (topics, fallback) =>
         Effect.map(hub.watch(topics, fallback), (watch) => ({
           ...watch,

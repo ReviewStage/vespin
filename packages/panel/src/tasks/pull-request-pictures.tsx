@@ -2,7 +2,7 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { githubImageOf } from "@repo/features/github-image";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { ProviderMark, SKELETON_SHAPE, Skeleton } from "@repo/ui";
+import { ProviderMark, SKELETON_KIND, Skeleton } from "@repo/ui";
 import { type RenderingPicture, renderingPictures } from "@repo/ui/github-html";
 import { PICTURE_STATE, type PictureRead, usePicture } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
@@ -200,7 +200,7 @@ export function EntryPictures({
 }
 
 /** The shape a picture's written width and height give it, as an `aspect-ratio`; none where either is unwritten. */
-function writtenShape(size: GitHubPictureSize): string | undefined {
+function writtenAspect(size: GitHubPictureSize): string | undefined {
   return size.width === undefined || size.height === undefined
     ? undefined
     : `${size.width} / ${size.height}`;
@@ -242,7 +242,7 @@ function GitHubPicture({
 
   // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
   const heightOnly = size.height !== undefined && size.width === undefined;
-  const shape = writtenShape(size);
+  const aspect = writtenAspect(size);
 
   return state.kind === PICTURE_STATE.READY ? (
     <img
@@ -251,7 +251,7 @@ function GitHubPicture({
       alt={alt}
       width={size.width}
       height={size.height}
-      style={shape === undefined ? undefined : { aspectRatio: shape }}
+      style={aspect === undefined ? undefined : { aspectRatio: aspect }}
     />
   ) : (
     <PictureSkeleton alt={alt} size={size} />
@@ -266,7 +266,7 @@ function PictureSkeleton({
   alt: string;
   size: GitHubPictureSize;
 }): React.JSX.Element {
-  const shape = writtenShape(size);
+  const aspect = writtenAspect(size);
 
   return (
     <span
@@ -275,12 +275,12 @@ function PictureSkeleton({
       aria-label={alt}
       // Note that with both sizes written it keeps their shape rather than their height, so it stands as tall as the picture the column narrows.
       style={
-        shape === undefined
+        aspect === undefined
           ? { width: size.width, height: size.height }
-          : { width: size.width, aspectRatio: shape }
+          : { width: size.width, aspectRatio: aspect }
       }
     >
-      <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+      <Skeleton kind={SKELETON_KIND.BLOCK} />
     </span>
   );
 }

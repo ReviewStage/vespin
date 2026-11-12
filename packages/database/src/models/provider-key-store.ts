@@ -11,7 +11,7 @@ import {
 import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type DatabaseShape } from "../core/query.js";
+import { Database, type DatabaseClient, type DatabaseServices } from "../core/query.js";
 import { accountProviderKey, type StoredUsageWindow } from "../schemas/account-provider-key.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { SealedProviderKey } from "./provider-key-seal.js";
@@ -130,7 +130,7 @@ const ofKind = (key: typeof KindKeySchema.Type) =>
   );
 
 /** Where a statement finds the one row a target names, the first of its kind's order where it names no id. */
-const targetRow = (db: DatabaseShape, target: typeof TargetSchema.Type) =>
+const targetRow = (db: DatabaseClient, target: typeof TargetSchema.Type) =>
   and(
     ofKind(target),
     target.subscriptionId === undefined

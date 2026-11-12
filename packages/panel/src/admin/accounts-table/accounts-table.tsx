@@ -3,7 +3,7 @@ import {
   Badge,
   IconButton,
   Inline,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   TEXT_ELEMENT,
@@ -129,7 +129,7 @@ function AccountCellFrame({
 export function AccountCellSkeleton(): React.JSX.Element {
   return (
     <AccountCellFrame
-      avatar={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
+      avatar={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
       name={
         <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.LABEL}>
           <Skeleton width={SKELETON_NAME_WIDTH} />
@@ -206,7 +206,7 @@ export function AccountCell({
 }
 
 /** What one account table draws besides its rows, which its skeleton draws too. */
-interface AccountsTableShape<Row extends AccountsTableRow> {
+interface AccountsTableFrame<Row extends AccountsTableRow> {
   windowDays: number;
   minWidth: AccountsTableMinWidth;
   onOpen: (id: string) => void;
@@ -241,7 +241,7 @@ function accountsColumns<Row extends AccountsTableRow>({
   trailingColumns = [],
   sortable = false,
   favorite,
-}: Omit<AccountsTableShape<Row>, "minWidth">): DataTableColumns<Row> {
+}: Omit<AccountsTableFrame<Row>, "minWidth">): DataTableColumns<Row> {
   const column = createDataTableColumnHelper<Row>();
 
   const numericColumn = (detail: AccountsDetailColumn<Row>) =>
@@ -293,7 +293,7 @@ function useAccountsColumns<Row extends AccountsTableRow>({
   trailingColumns,
   sortable,
   favorite,
-}: AccountsTableShape<Row>): DataTableColumns<Row> {
+}: AccountsTableFrame<Row>): DataTableColumns<Row> {
   return useMemo(
     () =>
       accountsColumns({ windowDays, onOpen, detailColumns, trailingColumns, sortable, favorite }),
@@ -343,13 +343,13 @@ const ACCOUNTS_TABLE_LABEL = "Accounts";
 export function AccountsTable<Row extends AccountsTableRow>({
   rows,
   emptyText,
-  ...shape
-}: AccountsTableShape<Row> & {
+  ...frame
+}: AccountsTableFrame<Row> & {
   rows: readonly Row[];
   emptyText: string;
 }): React.JSX.Element {
-  const { sortable = false, favorite } = shape;
-  const columns = useAccountsColumns(shape);
+  const { sortable = false, favorite } = frame;
+  const columns = useAccountsColumns(frame);
   const [initialSorting] = useState(() => rememberedSorting(columns, sortable));
 
   return (
@@ -359,30 +359,30 @@ export function AccountsTable<Row extends AccountsTableRow>({
       rows={rows}
       getRowId={(row) => row.id}
       empty={emptyText}
-      minWidth={shape.minWidth}
+      minWidth={frame.minWidth}
       initialSorting={initialSorting}
       leadingSorting={favorite ? STARRED_FIRST : undefined}
       onSortingChange={rememberSorting}
-      onRowPress={(row) => shape.onOpen(row.id)}
+      onRowPress={(row) => frame.onOpen(row.id)}
     />
   );
 }
 
 /**
  * The table while its `rows` rows are read: the same columns the table
- * draws for `shape`, its headings as themselves and each account's cell its
+ * draws for `frame`, its headings as themselves and each account's cell its
  * avatar's and two lines' bones, so every row stands as tall as an account's.
  */
 export function AccountsTableSkeleton<Row extends AccountsTableRow>({
   rows,
-  ...shape
-}: AccountsTableShape<Row> & { rows: number }): React.JSX.Element {
+  ...frame
+}: AccountsTableFrame<Row> & { rows: number }): React.JSX.Element {
   return (
     <DataTableSkeleton
       label={ACCOUNTS_TABLE_LABEL}
-      columns={useAccountsColumns(shape)}
+      columns={useAccountsColumns(frame)}
       rows={rows}
-      minWidth={shape.minWidth}
+      minWidth={frame.minWidth}
       cells={{ [ACCOUNTS_SORT_KEY.ACCOUNT]: <AccountCellSkeleton /> }}
     />
   );

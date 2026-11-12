@@ -2,7 +2,7 @@ import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ReactNode, useId } from "react";
 import { inputProblem, type ReportedFailure, type Unreported } from "../../reported-failure.js";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_TYPE,
   BUTTON_VARIANT,
   type BusyProps,
@@ -15,7 +15,7 @@ import { ErrorLine } from "../error-line/error-line.js";
 import { ErrorState, type ErrorStateRemedy } from "../error-state/error-state.js";
 import { HoldPress } from "../hold-press/hold-press.js";
 import { LengthCounter } from "../length-counter/length-counter.js";
-import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton } from "../skeleton/skeleton.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /**
@@ -268,7 +268,7 @@ function SendPress({
       ) : (
         <IconButton
           icon={icon}
-          shape={BUTTON_SHAPE.ROUND}
+          corners={BUTTON_CORNERS.ROUND}
           variant={variant}
           label={label}
           type={type}
@@ -385,7 +385,7 @@ export function ComposerFootSkeleton({
         <FootTools>{tools}</FootTools>
         <FootEnd>
           {actions}
-          <Skeleton shape={SKELETON_SHAPE.CIRCLE} />
+          <Skeleton kind={SKELETON_KIND.CIRCLE} />
         </FootEnd>
       </FootBar>
     </FootBox>

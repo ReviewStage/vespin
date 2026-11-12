@@ -1,5 +1,5 @@
 import type { Workspace } from "@repo/features/workspace-wire";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "@repo/ui";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { workspacePhotoQuery } from "../live-reads.js";
 
@@ -78,7 +78,7 @@ export function WorkspaceTile({
       id={workspace.id}
       src={url}
       size={AVATAR_OF[size]}
-      shape={AVATAR_SHAPE.TILE}
+      outline={AVATAR_OUTLINE.TILE}
       decorative
     />
   );

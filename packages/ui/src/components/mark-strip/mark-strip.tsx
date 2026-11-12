@@ -46,7 +46,7 @@ const MARK_INK =
   "ui-mark-strip-mark [--ui-mark-strip-ink:var(--ui-color-border-strong)] data-tone:[--ui-mark-strip-ink:var(--ui-tone-ink)]";
 
 /** A dot, or a bar: a share of the strip's height, at most a dot's, its ink filling the top of its share so the gap between bars shrinks with them. */
-const MARK_SHAPE = {
+const MARK_FORM = {
   [MARK_STRIP_LOOK.DOTS]: "size-ui-6 flex-none rounded-ui-full bg-mark-strip-ink",
   [MARK_STRIP_LOOK.BARS]:
     "h-auto min-h-0 max-h-ui-6 flex-[1_1_0] bg-[linear-gradient(var(--ui-mark-strip-ink)_0_66%,transparent_66%)]",
@@ -64,7 +64,7 @@ function markClass(look: MarkStripLook, mark: StripMark): string {
         ? "opacity-35"
         : "";
 
-  return [MARK_INK, MARK_SHAPE[look], width, standing].filter((part) => part !== "").join(" ");
+  return [MARK_INK, MARK_FORM[look], width, standing].filter((part) => part !== "").join(" ");
 }
 
 export function MarkStrip({

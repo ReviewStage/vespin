@@ -29,7 +29,7 @@ export interface StartedClaudeCode {
   readonly query: (prompt: AsyncIterable<SDKUserMessage>) => ClaudeCodeSession;
 }
 
-export interface ClaudeCodeShape {
+export interface ClaudeCodeService {
   /** The CLI started on the options given, answered once it has initialized; rejected where it could not start or initialize. */
   readonly startup: (options: Options) => Promise<StartedClaudeCode>;
   /**
@@ -46,7 +46,7 @@ export interface ClaudeCodeShape {
   ) => Promise<readonly string[]>;
 }
 
-export class ClaudeCode extends Context.Service<ClaudeCode, ClaudeCodeShape>()(
+export class ClaudeCode extends Context.Service<ClaudeCode, ClaudeCodeService>()(
   "@repo/agent-runner/ClaudeCode",
 ) {}
 

@@ -210,7 +210,7 @@ export interface EntityStoreOptions {
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
-const shapesHash: Effect.Effect<string> = Effect.map(
+const keptRowsHash: Effect.Effect<string> = Effect.map(
   Effect.promise(() =>
     crypto.subtle.digest(
       "SHA-256",
@@ -293,7 +293,7 @@ export function openEntityStore(
   return Effect.gen(function* () {
     const { directory, cipher, accountId } = options;
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
-    const hash = yield* shapesHash;
+    const hash = yield* keptRowsHash;
 
     const text = yield* Effect.orElseSucceed(
       readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),

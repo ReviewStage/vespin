@@ -1827,7 +1827,7 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
     for (const name of ["acme-org"]) {
       const account = rowNamed(group, name);
       assert.equal(
-        account.querySelector(".ui-avatar[data-shape='tile']")?.textContent,
+        account.querySelector(".ui-avatar[data-outline='tile']")?.textContent,
         "A",
         `${name}'s tile`,
       );
