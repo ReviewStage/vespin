@@ -25,6 +25,7 @@ import { GitHubBackground, githubRateGate } from "./github-rate-gate.js";
 
 const PULL_REQUEST = "https://api.github.com/repos/octo/repo/pulls/1";
 const COMMENTS = "https://api.github.com/repos/octo/repo/issues/1/comments";
+const GRAPHQL = "https://api.github.com/graphql";
 const INSTALLATION_BEARER = "ghs_fixture-installation-token";
 
 type Answer = () => Response | Promise<Response>;
@@ -252,42 +253,51 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
       }),
   );
 
-  it.effect("writes under one identity start a second apart, and reads are not spaced", () =>
-    Effect.gen(function* () {
-      const arrivals: Array<readonly [string, number]> = [];
-      const start = yield* Clock.currentTimeMillis;
-      const firstThree = Promise.withResolvers<void>();
+  it.effect(
+    "writes under one identity start a second apart, and reads, GraphQL queries among them, are not spaced",
+    () =>
+      Effect.gen(function* () {
+        const arrivals: Array<readonly [string, number]> = [];
+        const start = yield* Clock.currentTimeMillis;
+        const firstFour = Promise.withResolvers<void>();
 
-      const arrived = () => {
-        if (arrivals.length === 3) firstThree.resolve();
-      };
+        const arrived = () => {
+          if (arrivals.length === 4) firstFour.resolve();
+        };
 
-      yield* Effect.gen(function* () {
-        const comment = sentAs(HttpClientRequest.post(COMMENTS));
+        yield* Effect.gen(function* () {
+          const comment = sentAs(HttpClientRequest.post(COMMENTS));
 
-        const all = yield* Effect.forkChild(
-          Effect.all([comment, comment, pullRequestAsked, pullRequestAsked], {
-            concurrency: "unbounded",
-          }),
+          const query = sentAs(
+            HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(GRAPHQL), {
+              query: "query { viewer { login } }",
+            }),
+          );
+
+          const all = yield* Effect.forkChild(
+            Effect.all([comment, comment, query, pullRequestAsked, pullRequestAsked], {
+              concurrency: "unbounded",
+            }),
+          );
+
+          // Note that the second write is waiting its turn once both reads, the query, and the first write are at GitHub.
+          yield* Effect.promise(() => firstFour.promise);
+          yield* TestClock.adjust("1 second");
+          yield* Fiber.join(all);
+        }).pipe(Effect.provide(timedGitHub(arrivals, arrived)), holdingNothing);
+        assert.deepEqual(
+          arrivals
+            .map(([method, at]) => [method, at - start])
+            .sort(([a], [b]) => String(a).localeCompare(String(b))),
+          [
+            ["GET", 0],
+            ["GET", 0],
+            ["POST", 0],
+            ["POST", 0],
+            ["POST", 1000],
+          ],
         );
-
-        // Note that the second write is waiting its turn once both reads and the first write are at GitHub.
-        yield* Effect.promise(() => firstThree.promise);
-        yield* TestClock.adjust("1 second");
-        yield* Fiber.join(all);
-      }).pipe(Effect.provide(timedGitHub(arrivals, arrived)), holdingNothing);
-      assert.deepEqual(
-        arrivals
-          .map(([method, at]) => [method, at - start])
-          .sort(([a], [b]) => String(a).localeCompare(String(b))),
-        [
-          ["GET", 0],
-          ["GET", 0],
-          ["POST", 0],
-          ["POST", 1000],
-        ],
-      );
-    }),
+      }),
   );
 
   it.effect("writes that queued behind a busy lane still start a second apart", () =>
