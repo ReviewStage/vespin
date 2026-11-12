@@ -28,6 +28,7 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
+import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
@@ -37,6 +38,7 @@ import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent } from "../agent-reach.js";
 import { claimNext, sendClaimed, sendQueued, wireQueue } from "./agent-queue.js";
 import { routedSessions } from "./runtime-sessions.js";
+import { spokenLineMetadata } from "./spoken-line.js";
 
 /** The changes to a queue after which its first message may go at once, where the agent stands idle: every change but a delete, a hold let go among them. */
 const HANDS_ON: ReadonlySet<string> = new Set([
@@ -46,6 +48,15 @@ const HANDS_ON: ReadonlySet<string> = new Set([
   QUEUE_CHANGE.RESUME,
   QUEUE_CHANGE.HOLD,
 ]);
+
+/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line; nothing for a typed one. */
+function spokenLine(userId: string, body: Parameters<typeof spokenLineMetadata>[0]) {
+  const metadata = spokenLineMetadata(body);
+
+  return metadata === undefined
+    ? undefined
+    : { sender: { kind: MESSAGE_SENDER.MEMBER, userId }, metadata };
+}
 
 /** A store's answer for the account's agent, its absence answered as no such agent. */
 const found = <A>(effect: Effect.Effect<Option.Option<A>, StoreFailure, DatabaseServices>) =>
@@ -66,6 +77,7 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
           id: body.id,
           text: body.text,
           attachments: body.attachments,
+          line: spokenLine(userId, body),
         }),
       );
 

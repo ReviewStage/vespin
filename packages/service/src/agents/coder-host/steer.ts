@@ -622,6 +622,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const message = {
     conversationId: agent.conversationId,
     turn: SESSION_TURN.TYPED,
+    spoken: line.metadata?.channel === MESSAGE_CHANNEL.VOICE,
     message: turnContent(line.text, attachments, mentioned, label),
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
@@ -767,6 +768,11 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
     const message: SessionMessage<TypedTurn> = {
       conversationId: target.conversationId,
       turn: SESSION_TURN.TYPED,
+      // Note that a row's metadata may be a runtime note, which names no channel.
+      spoken:
+        line.metadata !== null &&
+        "channel" in line.metadata &&
+        line.metadata.channel === MESSAGE_CHANNEL.VOICE,
       message: turnContent(read.text, files.flat(), read.mentioned, label),
       lineId: line.clientId,
     };
