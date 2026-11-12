@@ -36,21 +36,25 @@ const GITHUB_AVATAR_REVISION = "4";
 function httpsUrl(value: string | null | undefined): URL | undefined {
   if (value === null || value === undefined || value === "") return undefined;
   const url = parsedUrl(value);
+
   return url?.protocol === "https:" ? url : undefined;
 }
 
 /** The address itself, normalized, where it is an https address on a host a picture may be drawn from; nothing otherwise. */
 export function pinnedPictureUrl(value: string | null | undefined): string | undefined {
   const url = httpsUrl(value);
+
   if (url === undefined) return undefined;
   const host = url.hostname;
   const googleHosted = host === GOOGLE_PICTURE_HOST || host.endsWith(`.${GOOGLE_PICTURE_HOST}`);
+
   return googleHosted || host === GITHUB_PICTURE_HOST ? url.toString() : undefined;
 }
 
 /** A GitHub account's avatar, normalized, where it is served from GitHub's own avatar host; nothing otherwise, a Google address among them. */
 export function githubAvatarUrl(value: string | null | undefined): string | undefined {
   const url = httpsUrl(value);
+
   return url?.hostname === GITHUB_PICTURE_HOST ? url.toString() : undefined;
 }
 
@@ -64,6 +68,7 @@ export function githubUserAvatarUrl(person: { readonly login: string }): string 
   const url = new URL(`https://${GITHUB_PICTURE_HOST}/`);
   url.pathname = `/${encodeURIComponent(person.login)}`;
   url.searchParams.set("v", GITHUB_AVATAR_REVISION);
+
   return url.toString();
 }
 
@@ -77,6 +82,7 @@ export function githubAccountAvatarUrl(accountId: number): string {
   const url = new URL(`https://${GITHUB_PICTURE_HOST}/`);
   url.pathname = `/u/${encodeURIComponent(String(accountId))}`;
   url.searchParams.set("v", GITHUB_AVATAR_REVISION);
+
   return url.toString();
 }
 
@@ -85,14 +91,17 @@ export function githubAppAvatarUrl(appId: number): string {
   const url = new URL(`https://${GITHUB_PICTURE_HOST}/`);
   url.pathname = `/in/${encodeURIComponent(String(appId))}`;
   url.searchParams.set("v", GITHUB_AVATAR_REVISION);
+
   return url.toString();
 }
 
 /** A GitHub avatar asked for at a size in device pixels, which GitHub scales it to; any other address as it is. */
 export function githubAvatarAt(value: string, pixels: number): string {
   const url = httpsUrl(value);
+
   if (url?.hostname !== GITHUB_PICTURE_HOST) return value;
   url.searchParams.set("s", String(Math.round(pixels)));
+
   return url.toString();
 }
 
@@ -103,11 +112,15 @@ export function githubAvatarAt(value: string, pixels: number): string {
  */
 export function accountPictureAt(value: string, pixels: number): string {
   const url = httpsUrl(value);
+
   if (url === undefined) return value;
+
   if (url.hostname === GITHUB_PICTURE_HOST) return githubAvatarAt(value, pixels);
   const host = url.hostname;
   const googleHosted = host === GOOGLE_PICTURE_HOST || host.endsWith(`.${GOOGLE_PICTURE_HOST}`);
+
   if (!googleHosted || !GOOGLE_PICTURE_SIZE.test(url.pathname)) return value;
   url.pathname = url.pathname.replace(GOOGLE_PICTURE_SIZE, `=s${String(Math.round(pixels))}-c`);
+
   return url.toString();
 }

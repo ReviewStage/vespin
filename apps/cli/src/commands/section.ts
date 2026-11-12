@@ -25,6 +25,7 @@ import { resolveWorkspace } from "../workspace.js";
 /** A section as every answer prints it: its id, title, emoji, and the ids of the tasks in it. */
 function sectionJson(section: TaskSection, sections: TaskSections) {
   const icon = section.icon;
+
   return {
     id: section.id,
     workspaceId: section.workspaceId,
@@ -41,6 +42,7 @@ function sectionsOf(workspaceId: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
     const sections = yield* askService(hosted.taskSections.list, undefined);
+
     return {
       sections,
       inWorkspace: sections.sections.filter((section) => section.workspaceId === workspaceId),
@@ -53,11 +55,15 @@ export function resolveSection(workspaceId: string, named: string) {
   return Effect.gen(function* () {
     const { sections, inWorkspace } = yield* sectionsOf(workspaceId);
     const lowered = named.toLowerCase();
+
     const matches = inWorkspace.filter(
       (section) => section.id === named || section.title.toLowerCase() === lowered,
     );
+
     const [only, ...others] = matches;
+
     if (only !== undefined && others.length === 0) return { section: only, sections };
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
@@ -114,6 +120,7 @@ const createCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const id = crypto.randomUUID();
+
       const written = yield* askService(hosted.taskSections.write, {
         kind: TASK_SECTION_WRITE.CREATE,
         id,
@@ -123,13 +130,16 @@ const createCommand = Command.make(
           ? { icon: { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: emoji.value } }
           : undefined),
       });
+
       const made = written.sections.find((section) => section.id === id);
+
       if (made === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.UNAVAILABLE,
           message: "The service did not answer with the section it made.",
         });
       }
+
       const found = sectionJson(made, written);
       yield* answer({
         json: found,

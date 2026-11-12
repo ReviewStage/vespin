@@ -82,6 +82,7 @@ export function AuthPage({
   children?: ReactNode;
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
+
   return (
     <main className="ui-auth-page @container relative grid grid-cols-1 place-items-center min-h-dvh p-page-inset box-border">
       <section

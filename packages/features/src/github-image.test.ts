@@ -42,6 +42,7 @@ test("a file of a repository is asked for by its repository, ref, and path, howe
     path: ["pr-42", "before and after.PNG"],
     contentType: GITHUB_IMAGE_TYPE.PNG,
   };
+
   for (const address of [
     "https://raw.githubusercontent.com/acme/relay/pr-assets/pr-42/before%20and%20after.PNG",
     "https://raw.githubusercontent.com/acme/relay/pr-assets/pr-42/before%20and%20after.PNG?token=ignored",
@@ -49,6 +50,7 @@ test("a file of a repository is asked for by its repository, ref, and path, howe
   ]) {
     assert.deepEqual(githubImageOf(address), file, address);
   }
+
   assert.deepEqual(githubImageOf("https://raw.githubusercontent.com/acme/relay/main/logo.svg"), {
     ...file,
     ref: "main",

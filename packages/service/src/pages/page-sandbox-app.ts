@@ -57,23 +57,31 @@ const sandboxPageEndpoint = /* @__PURE__ */ Effect.fn("web/sandboxPageEndpoint")
     PageSandboxServices
   > {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.GET) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
+
     if (!loadsAFrame(request)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     const address = new URL(request.url);
     const { sandbox } = yield* PageLinks;
+
     // Note that a page is served on the sandbox's host or not at all, because on an address of the app's it would run as the app's own.
     if (sandbox === undefined || address.host !== new URL(sandbox.origin).host) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }
+
     const token = address.searchParams.get(PAGE_LINK_ROUTE.TOKEN_QUERY) ?? "";
     const linked = readPageLink(sandbox, token, yield* Clock.currentTimeMillis);
+
     if (linked === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     const { userId, owner, pageId, version } = linked;
     const page = yield* hostedStoreOrUnavailable(readPageVersion(userId, owner, pageId, version));
+
     if (Option.isNone(page)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return HttpServerResponse.text(withPageScripts(page.value.html), {
       status: HOSTED_HTTP_STATUS.OK,
       headers: sandboxPageResponseHeaders(sandbox.appOrigins),

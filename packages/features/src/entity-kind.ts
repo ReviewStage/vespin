@@ -187,6 +187,7 @@ function numberedKey(address: NumberedAddress, repository: string | null): strin
   if (repository !== null && address.repository.toLowerCase() === repository.toLowerCase()) {
     return `#${address.number}`;
   }
+
   return `${address.repository.split("/")[1] ?? address.repository}#${address.number}`;
 }
 
@@ -204,6 +205,7 @@ function numberedName(
     held: ({ url }, _known, { answered, repository }) => {
       if (answered !== undefined) return `${answered.key} ${answered.title}`;
       const address = addressOf(url);
+
       return address === undefined ? undefined : numberedKey(address, repository);
     },
   };
@@ -212,6 +214,7 @@ function numberedName(
 /** An agent's name held, said with the words given before it: "Changes by Ada". */
 function byAgent(words: string, agentId: string, known: KnownNames): string | undefined {
   const agent = known.agents.get(agentId);
+
   return agent === undefined ? undefined : `${words} ${agent}`;
 }
 
@@ -223,6 +226,7 @@ const ENTITY_NAME: EntityNames = {
     live: false,
     held: (version, known) => {
       const taskName = known.tasks.get(version.planId);
+
       return taskName === undefined ? undefined : `${taskName}, version ${version.revision}`;
     },
   },
@@ -334,6 +338,7 @@ export function entityWordHeard(kind: EntityKind, name: string): string | undefi
   const said = lead.localeCompare(word, undefined, { sensitivity: "base" }) === 0;
   // Note that the word must end where a word does, so "Taskbar" still says it is a task.
   const whole = !/^[\p{L}\p{N}]/u.test(name.slice(word.length));
+
   return said && whole ? undefined : word;
 }
 
@@ -392,18 +397,22 @@ function nameOf<K extends EntityKind>(
   said: EntitySaid,
 ): EntityNameHeld {
   const { live, held } = ENTITY_NAME[kind];
+
   return { live, held: held(entity, known, said) };
 }
 
 /** The entity a mention names: a link to a pull request's or a GitHub issue's page that one, and any other mention the entity it is. */
 export function entityOfMention(mention: Mention): Entity {
   if (mention.kind !== MENTION_KIND.LINK) return mention;
+
   if (pullRequestAddressOf(mention.url) !== undefined) {
     return { kind: ENTITY_KIND.PULL_REQUEST, url: mention.url };
   }
+
   if (issueAddressOf(mention.url) !== undefined) {
     return { kind: ENTITY_KIND.ISSUE, url: mention.url };
   }
+
   return mention;
 }
 

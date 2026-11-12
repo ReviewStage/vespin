@@ -32,6 +32,7 @@ function drawn(value: number): { view: HTMLElement; to: (next: number) => void }
   const root = createRoot(view);
   roots.push(root);
   act(() => root.render(createElement(RollingNumber, { value })));
+
   return {
     view,
     to: (next) => act(() => root.render(createElement(RollingNumber, { value: next }))),

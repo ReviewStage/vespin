@@ -11,6 +11,7 @@ import { CatalogSection } from "../section";
 /** A field the example holds the value of, as a caller would. */
 function Held({ start, disabled }: { start: string; disabled?: boolean }): React.JSX.Element {
   const [value, setValue] = useState(start);
+
   return (
     <AddressField value={value} onChange={setValue} onOpen={() => undefined} disabled={disabled} />
   );

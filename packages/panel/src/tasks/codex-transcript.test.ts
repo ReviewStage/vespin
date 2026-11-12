@@ -65,6 +65,7 @@ function drawn(...parts: WireRecord[]) {
       ),
     ),
   );
+
   return { container, opened };
 }
 
@@ -74,6 +75,7 @@ function opened(part: WireRecord): { readonly line: string; readonly body: strin
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
   const said = line.textContent ?? "";
   act(() => line.click());
+
   return { line: said, body: container.textContent ?? "" };
 }
 
@@ -149,7 +151,9 @@ const CODEX_ITEMS: readonly {
 for (const item of CODEX_ITEMS) {
   test(`Codex's ${item.name} is drawn on the renderer of Vespin's tool of its kind`, () => {
     const { line, body } = opened(storedPart(item.tool, item.input, item.output));
+
     for (const words of item.line) assert.ok(line.includes(words), `${line} says ${words}`);
+
     for (const words of item.body) assert.ok(body.includes(words), `${body} shows ${words}`);
     assert.ok(!body.includes(ESCAPE), "a terminal's escapes are taken out");
   });
@@ -172,11 +176,14 @@ test("a file change's update marks the lines Codex's diff changed, a file delete
       { status: "completed" },
     ),
   );
+
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
   assert.ok(line.textContent?.includes(`${CHECKOUT}/src/b.ts +1`), line.textContent ?? "");
   act(() => line.click());
+
   const marked = (kind: string) =>
     [...container.querySelectorAll(`[data-row="${kind}"]`)].map((each) => each.textContent);
+
   assert.deepEqual(marked("removed"), ["-b;", "-gone;"]);
   assert.deepEqual(marked("added"), ["+c;", "+d;"]);
   // Note that the lines naming a file or a hunk, and a line that stood, are tinted as neither.
@@ -197,10 +204,12 @@ test("a spawned subagent is drawn as a subagent's row on the model and effort it
     effort: "high",
     receiverThreadIds: ["thread-sub"],
   };
+
   const running = drawn(storedPart("collabAgentToolCall", input)).container;
   const row = running.querySelector("[data-subagent-row]") ?? assert.fail("a subagent's row");
   assert.ok(row.textContent?.includes("Find the queue."), row.textContent ?? "");
   assert.ok(row.textContent?.includes("GPT 5.5 High"), row.textContent ?? "");
+
   const interrupted = drawn({
     type: "tool-collabAgentToolCall",
     toolCallId: "item_spawn",
@@ -209,6 +218,7 @@ test("a spawned subagent is drawn as a subagent's row on the model and effort it
     output: { status: "interrupted", agentsStates: { "thread-sub": { status: "interrupted" } } },
     errorText: "interrupted",
   }).container;
+
   assert.ok(interrupted.querySelector("[data-subagent-row]"));
   assert.ok(interrupted.textContent?.includes("interrupted"), "the row says why it ended under it");
 });
@@ -224,6 +234,7 @@ test("a command that failed says its exit code, and one still running draws its 
       },
     ),
   );
+
   assert.ok(failed.body.includes("lint failed\nexit 1"), failed.body);
   const running = opened(storedPart("commandExecution", { command: "sleep 600", cwd: CHECKOUT }));
   assert.ok(running.line.includes("sleep 600"));
@@ -238,14 +249,17 @@ test("Codex's plan is drawn as the agent's to-do list, a completed step done", (
       { step: "Open the pull request", status: "pending" },
     ],
   };
+
   const { container } = drawn(storedPart("todoList", plan, plan));
   const line = container.querySelector("summary") ?? assert.fail("the list is a fold's line");
   assert.ok(line.textContent?.includes("1 of 3 done"), line.textContent ?? "");
   act(() => line.click());
+
   const items = [...container.querySelectorAll("[data-todo-status]")].map((item) => [
     item.textContent,
     item.getAttribute("data-todo-status"),
   ]);
+
   assert.deepEqual(items, [
     ["Round the totals", "done"],
     ["Export the invoices", "in_progress"],
@@ -265,9 +279,11 @@ test("Vespin's read_agent, called over its MCP server and stored under its own n
   const { container, opened: targets } = drawn(
     storedPart("read_agent", { agentId: "agent-7" }, { status: "running" }),
   );
+
   const row =
     container.querySelector<HTMLButtonElement>('button[data-call-id="item_read_agent"]') ??
     assert.fail("the row is a button");
+
   act(() => row.click());
   assert.deepEqual(targets, [{ kind: TOOL_TARGET.AGENT, agent: "agent-7" }]);
 });

@@ -293,8 +293,11 @@ function boxSize(
   iconOnly: boolean,
 ): BoxSize {
   const compact = size === BUTTON_SIZE.COMPACT;
+
   if (iconOnly) return compact ? "icon-compact" : "icon";
+
   if (variant === BUTTON_VARIANT.ROW) return "row";
+
   return compact ? "compact" : "control";
 }
 
@@ -335,6 +338,7 @@ function buttonLook({
   fades?: boolean;
 }): ButtonLook {
   const box = boxSize(variant, size, iconOnly);
+
   return {
     size: box,
     shape: shape ?? BUTTON_SHAPE.SQUARE,
@@ -387,6 +391,7 @@ const TURN_ATTRIBUTE = "data-turn";
 /** Turns the glyph `button` leads with once, where it has one. */
 function turn(button: HTMLElement): void {
   const glyph = button.querySelector(":scope > .ui-button-face > svg:first-child");
+
   if (glyph !== null) replayMotion(button, TURN_ATTRIBUTE, glyph);
 }
 
@@ -404,6 +409,7 @@ function stateProps(props: ButtonBase, name: string | undefined, done = false) {
   const settled = props.busy === true || done;
   const refusing = settled || (props.disabled === true && props.focusableWhenDisabled === true);
   const busyName = props.busy === true ? props.busyLabel : undefined;
+
   return {
     type: props.type ?? BUTTON_TYPE.BUTTON,
     id: props.id,
@@ -435,13 +441,17 @@ function stateProps(props: ButtonBase, name: string | undefined, done = false) {
     onClick: (event: MouseEvent<HTMLButtonElement>) => {
       if (refusing) {
         event.preventDefault();
+
         // Note that a busy button's ring, or a done one's check, already says why it takes no press.
         if (settled) return;
         replayMotion(event.currentTarget, DENIED_ATTRIBUTE);
         props.onRefused?.();
+
         return;
       }
+
       pulse(event.currentTarget, props.variant);
+
       if (props.turns === true) turn(event.currentTarget);
       props.onClick?.(event);
     },
@@ -480,19 +490,25 @@ function DoneMark({
     // Note that a motion canceled counts as played, since nothing is left to wait for.
     let left = motions.length;
     let current = true;
+
     const played = () => {
       left -= 1;
+
       if (current && left <= 0) shown.current?.();
     };
+
     if (left === 0) shown.current?.();
+
     for (const motion of motions) {
       motion.addEventListener("finish", played, { once: true });
       motion.addEventListener("cancel", played, { once: true });
     }
+
     return () => {
       current = false;
     };
   }, []);
+
   return (
     <span
       ref={(element) => {
@@ -522,7 +538,9 @@ function LandingMark({
   onShown: () => void;
 }): React.JSX.Element | null {
   const shown = useDisclosure(landed);
+
   if (!shown.mounted) return null;
+
   return <DoneMark hold leaving={shown.leaving} held={shown.ref} onShown={onShown} />;
 }
 
@@ -536,11 +554,14 @@ function useLanded(props: LandingProps): { landed: boolean; settle: () => void }
   const busy = props.busy === true;
   const [wasBusy, setWasBusy] = useState(busy);
   const [landed, setLanded] = useState(false);
+
   if (busy !== wasBusy) {
     setWasBusy(busy);
     setLanded(!busy && props.succeeded === true);
   }
+
   const settle = useCallback(() => setLanded(false), []);
+
   return { landed, settle };
 }
 
@@ -606,6 +627,7 @@ export function Button({
   const shown = done || landed;
   const offered = stateProps(landedProps(props, landed), label, shown);
   const state = readOnly ? recordedProps(offered) : offered;
+
   return (
     <ShadcnButton
       {...state}
@@ -676,6 +698,7 @@ export function ButtonLink({
     pulse(event.currentTarget, variant);
     onClick?.(event);
   };
+
   return (
     <a
       className={linkClasses(buttonLook({ variant, size: undefined, shape, iconOnly: false }))}
@@ -722,6 +745,7 @@ export function IconButtonLink({
     pulse(event.currentTarget, variant);
     onClick?.(event);
   };
+
   return (
     <a
       className={linkClasses(
@@ -767,7 +791,9 @@ function lightsGlyph(
   lights: ButtonLight | undefined,
 ): boolean {
   if ((variant ?? BUTTON_VARIANT.QUIET) !== BUTTON_VARIANT.QUIET) return false;
+
   if (lights !== undefined) return lights === BUTTON_LIGHT.GLYPH;
+
   return size === BUTTON_SIZE.COMPACT;
 }
 
@@ -809,11 +835,13 @@ export function IconButton({
   const { landed, settle } = useLanded(props);
   const busy = props.busy === true;
   const ringShown = useSettled(busy);
+
   const state = stateProps(
     submit === undefined ? landedProps(props, landed) : { ...props, shape: BUTTON_SHAPE.ROUND },
     label,
     landed,
   );
+
   return (
     <ShadcnButton
       {...state}

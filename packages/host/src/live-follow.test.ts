@@ -62,6 +62,7 @@ function polledRead(
     ...(txids === undefined ? undefined : { txids }),
     ...(snapshots === undefined ? undefined : { snapshot: snapshots[name] }),
   });
+
   return {
     url: LIVE_POLL_URL,
     queries: {
@@ -78,6 +79,7 @@ it.effect(
       const asked: (string | undefined)[] = [];
       const answers = [polledRead([{ id: "b" }], "2"), polledRead(undefined, "2")];
       const rows: unknown[] = [];
+
       const following = yield* Effect.forkChild(
         Stream.runForEach(
           liveRows<Part>(
@@ -85,6 +87,7 @@ it.effect(
               poll: (after) =>
                 Effect.sync(() => {
                   asked.push(after);
+
                   return answers.shift() ?? polledRead(undefined, "2");
                 }),
             },
@@ -93,6 +96,7 @@ it.effect(
           (whole) => Effect.sync(() => void rows.push(whole)),
         ),
       );
+
       yield* settled;
       yield* TestClock.adjust(Duration.seconds(1));
       yield* settled;
@@ -130,11 +134,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const asked: (string | undefined)[] = [];
+
       const answers = [
         cursorRead([{ id: "b" }], { past: "1", next: "2" }),
         cursorRead([{ id: "c" }], { next: "3" }),
       ];
+
       const rows: unknown[] = [];
+
       const following = yield* Effect.forkChild(
         Stream.runForEach(
           decodedLiveRows<
@@ -145,6 +152,7 @@ it.effect(
               poll: (_after, cursor) =>
                 Effect.sync(() => {
                   asked.push(cursor);
+
                   return answers.shift() ?? cursorRead(undefined, { past: "3", next: "3" });
                 }),
             },
@@ -155,6 +163,7 @@ it.effect(
           (whole) => Effect.sync(() => void rows.push(whole)),
         ),
       );
+
       yield* settled;
       yield* TestClock.adjust(Duration.seconds(1));
       yield* settled;
@@ -177,23 +186,28 @@ const askedAt = (
   Effect.gen(function* () {
     const clock = yield* Clock.Clock;
     const asks: number[] = [];
+
     const following = yield* Effect.forkChild(
       liveRows<Part>(
         {
           poll: () =>
             Effect.suspend(() => {
               asks.push(clock.currentTimeMillisUnsafe());
+
               return answer(asks.length);
             }),
         },
         polledRead([], "1"),
       ).pipe(Stream.runDrain),
     );
+
     for (let at = 0; at < Duration.toMillis(span); at += Duration.toMillis(step)) {
       yield* settled;
       yield* TestClock.adjust(step);
     }
+
     yield* Fiber.interrupt(following);
+
     return asks;
   });
 
@@ -218,6 +232,7 @@ it.effect(
           nextDoubleUnsafe: () => 0.5,
         }),
       );
+
       assert.deepEqual(gapsOf(asks).slice(0, 5), [500, 1_000, 2_000, 2_500, 2_500]);
     }),
 );
@@ -228,18 +243,21 @@ it.effect(
     Effect.gen(function* () {
       const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
       let asks = 0;
+
       const following = yield* Effect.forkChild(
         liveRows<Part>(
           {
             poll: () =>
               Effect.sync(() => {
                 asks += 1;
+
                 return { failure: "unavailable" };
               }),
           },
           polledRead([], "1"),
         ).pipe(Stream.runDrain, Effect.provideService(ServiceReach, reach)),
       );
+
       yield* settled;
       assert.equal(asks, 1, "the first poll failed and waits");
 
@@ -268,6 +286,7 @@ it.effect(
         Duration.seconds(1),
         Duration.millis(50),
       );
+
       assert.deepEqual(gapsOf(asks).slice(0, 2), [100, 500]);
     }),
 );
@@ -280,6 +299,7 @@ it.effect(
       let failing = 0;
       let behind = 0;
       const rows: unknown[] = [];
+
       const following = yield* Effect.forkChild(
         Stream.runForEach(
           liveRows<Part>(
@@ -289,6 +309,7 @@ it.effect(
                 Effect.sync(() => {
                   if (failing === 0) return polledRead(after === undefined ? [] : undefined, "1");
                   failing -= 1;
+
                   return { failure: "unavailable" };
                 }),
               behind: () => {
@@ -300,6 +321,7 @@ it.effect(
           (whole) => Effect.sync(() => void rows.push(whole)),
         ),
       );
+
       yield* settled;
       yield* TestClock.adjust(Duration.seconds(1));
       yield* settled;
@@ -329,6 +351,7 @@ it.effect("a read whose session the service refuses as signed out ends, and is a
       { poll: () => Effect.succeed(LIVE_SIGNED_OUT) },
       polledRead([], "0"),
     ).pipe(Stream.runDrain, Effect.exit);
+
     assert.ok(Exit.isFailure(exit));
   }),
 );
@@ -337,6 +360,7 @@ it.effect("a read whose session the service refuses as signed out ends, and is a
 const followedWithWait = Effect.gen(function* () {
   const live = polledLive<Part>(["left", "right"]);
   let handed: TxWait | undefined;
+
   const following = yield* Effect.forkChild(
     Stream.runDrain(
       liveRows<Part>(
@@ -350,13 +374,16 @@ const followedWithWait = Effect.gen(function* () {
       ),
     ),
   );
+
   yield* settled;
+
   return { live, following, wait: () => handed };
 });
 
 /** Whether the fiber has ended, and ended well. */
 const succeeded = <A, E>(fiber: Fiber.Fiber<A, E>) => {
   const exit = fiber.pollUnsafe();
+
   return exit !== undefined && Exit.isSuccess(exit);
 };
 
@@ -422,6 +449,7 @@ it.effect(
       // Snapshots as Postgres spells them, `xmin:xmax:xip,…`, and no txids, as an answer its clock woke carries.
       let standing = polledRead([], "1", undefined, { left: "990:990:", right: "990:990:" });
       let handed: TxWait | undefined;
+
       const following = yield* Effect.forkChild(
         Stream.runDrain(
           liveRows<Part>(
@@ -435,6 +463,7 @@ it.effect(
           ),
         ),
       );
+
       yield* settled;
       assert.ok(handed !== undefined, "the first answer carried snapshots, so a wait is handed");
 

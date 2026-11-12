@@ -50,8 +50,10 @@ export function pageLeave(page: LeavingPage): PageLeave {
   const holdBack = (event: Event): void => {
     if (leaving) {
       leaving = false;
+
       return;
     }
+
     event.preventDefault();
     // Note that Chrome and Edge before 119 ask only where `returnValue` is set too.
     event.returnValue = true;
@@ -60,7 +62,9 @@ export function pageLeave(page: LeavingPage): PageLeave {
   /** The browser's close and reload held back while an ask stands or work is held, and let go once neither is. */
   const listen = (): void => {
     const hold = standing !== undefined || descriptionWords;
+
     if (hold && !listening) page.addEventListener("beforeunload", holdBack);
+
     if (!hold && listening) page.removeEventListener("beforeunload", holdBack);
     listening = hold;
   };
@@ -89,10 +93,13 @@ export function pageLeave(page: LeavingPage): PageLeave {
 
   const leave = (go: () => void): void => {
     const ask = standing;
+
     if (ask === undefined) {
       go();
+
       return;
     }
+
     ask(() => take(go));
   };
 

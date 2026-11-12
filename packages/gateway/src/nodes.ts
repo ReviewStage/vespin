@@ -66,7 +66,9 @@ export class NodeRegistry {
 
   unregister(nodeId: string): boolean {
     const removed = this.#nodes.delete(nodeId);
+
     if (removed) this.#changed();
+
     return removed;
   }
 
@@ -77,9 +79,11 @@ export class NodeRegistry {
 
   setConnected(nodeId: string, connected: boolean): boolean {
     const held = this.#nodes.get(nodeId);
+
     if (!held || held.connected === connected) return false;
     held.connected = connected;
     this.#changed();
+
     return true;
   }
 
@@ -108,10 +112,12 @@ export class NodeRegistry {
   invoke(capability: string, params: WireRecord = {}): Effect.Effect<NodeCapabilityResult> {
     return Effect.suspend(() => {
       const provider = this.#provider(capability);
+
       if (!provider) {
         const known = [...this.#nodes.values()].some((node) =>
           node.capabilities.includes(capability),
         );
+
         return Effect.succeed<NodeCapabilityResult>({
           status: NODE_CAPABILITY_STATUS.UNAVAILABLE,
           capability,
@@ -120,12 +126,14 @@ export class NodeRegistry {
             : "no node offers that capability",
         });
       }
+
       return provider.perform(capability, params);
     });
   }
 
   onChange(listener: NodeRegistryListener): () => void {
     this.#listeners.add(listener);
+
     return () => {
       this.#listeners.delete(listener);
     };
@@ -135,6 +143,7 @@ export class NodeRegistry {
     for (const node of this.#nodes.values()) {
       if (node.connected && node.capabilities.includes(capability)) return node;
     }
+
     return undefined;
   }
 
@@ -148,6 +157,7 @@ export class NodeRegistry {
 
   #changed(): void {
     const nodes = this.list();
+
     for (const listener of [...this.#listeners]) listener(nodes);
   }
 }

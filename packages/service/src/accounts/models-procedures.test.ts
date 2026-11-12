@@ -65,11 +65,13 @@ const accountWithAnthropicKey = (userId: string, fastAccess: FastAccess | null) 
   Effect.gen(function* () {
     const db = yield* Database;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
     const sealed = {
       keyVersion: 1,
       sealedDataKey: "sealed-data-key",
       sealedKey: `sealed-${userId}`,
     };
+
     yield* saveProviderKey(
       userId,
       PROVIDER_KEY_PROVIDER.ANTHROPIC,
@@ -88,6 +90,7 @@ const offeredTo = (catalog: Layer.Layer<ModelCatalog>, userId: string) =>
     const { models } = answered.body as {
       models: readonly { id: string; fastNotEnabled?: boolean }[];
     };
+
     return {
       ids: models.map((model) => model.id),
       notEnabled: models.filter((model) => model.fastNotEnabled === true).map((model) => model.id),
@@ -119,6 +122,7 @@ const fetchOver = (catalog: Layer.Layer<ModelCatalog>) =>
         ),
       ),
     );
+
     const handle = hostedFetch({
       models: modelsProcedures({
         resolveUserId: (incoming) =>
@@ -129,8 +133,10 @@ const fetchOver = (catalog: Layer.Layer<ModelCatalog>) =>
           ),
       }),
     });
+
     // SAFETY: the models procedure yields the catalog and the database alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     return (request: Request) => Effect.promise(() => handle(request, webServices));
   });
 
@@ -138,6 +144,7 @@ const fetchOver = (catalog: Layer.Layer<ModelCatalog>) =>
 const bytes = (catalog: Layer.Layer<ModelCatalog>, request: Request) =>
   Effect.gen(function* () {
     const response = yield* (yield* fetchOver(catalog))(request);
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -151,6 +158,7 @@ const answer = (catalog: Layer.Layer<ModelCatalog>, request: Request) =>
   Effect.map(bytes(catalog, request), (answered): Answer => {
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(answered.text) as WireBoundaryInput;
+
     return { status: answered.status, body };
   });
 
@@ -185,6 +193,7 @@ it.layer(getTestDB())("the models route", (it) => {
             body: { models: [...wire([OPUS]), { ...wire([SOL])[0], credentialMissing: true }] },
           },
         );
+
         // A Preview holding an OpenAI stand-in key pays for no GPT agent of a member who saved no OpenAI key.
         const onPreview = Layer.merge(
           modelCatalogOf(CATALOG),
@@ -201,6 +210,7 @@ it.layer(getTestDB())("the models route", (it) => {
             previewApiKeys: { [MODEL_PROVIDER.OPENAI]: Redacted.make("sk-proj-preview-stand-in") },
           }),
         );
+
         assert.deepEqual(yield* answer(onPreview, request(MODELS, { userId: "user-keyed" })), {
           status: HOSTED_HTTP_STATUS.OK,
           body: { models: [...wire([OPUS]), { ...wire([SOL])[0], credentialMissing: true }] },
@@ -236,6 +246,7 @@ it.layer(getTestDB())("the models route", (it) => {
           cacheControl: null,
           text: '{"error":"invalid-token"}',
         });
+
         for (const method of ["POST", "PUT", "DELETE", "OPTIONS"]) {
           assert.deepEqual(yield* bytes(catalog, request(MODELS, { method })), {
             status: HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
@@ -244,6 +255,7 @@ it.layer(getTestDB())("the models route", (it) => {
             text: '{"error":"method-not-allowed"}',
           });
         }
+
         assert.deepEqual(yield* bytes(catalog, request(MODELS, { method: "HEAD" })), {
           status: HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
           contentType: json,

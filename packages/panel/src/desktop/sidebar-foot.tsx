@@ -80,6 +80,7 @@ export function AccountAvatar({ account }: { account: AccountSnapshot }): React.
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN) {
     return <ActorMark actor={NOBODY_SIGNED_IN} size={ACTOR_SIZE.ACCOUNT} />;
   }
+
   return (
     <ReplayMask>
       <ActorMark actor={accountActor(account)} size={ACTOR_SIZE.ACCOUNT} />
@@ -111,6 +112,7 @@ function UpdatePill({
       ({ children }) => <Tooltip label={hint}>{children}</Tooltip>,
     [hint],
   );
+
   return (
     <span className="sidebar-update flex flex-none">
       <FoldingButton
@@ -139,12 +141,17 @@ function UpdatePill({
  */
 function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Element | null {
   const { update } = updates;
+
   const offered =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.UPDATES) }).data === true;
+
   const updateNeeded =
     useQuery({ ...appStateQuery, select: (state) => state.network.updateNeeded }).data === true;
+
   const toastStanding = useReadyToastStanding();
+
   if (!offered) return null;
+
   // The service refused this build as older than it serves: the check fetches the release, and the pill then offers its Restart.
   if (updateNeeded && update.status === UPDATE_STATUS.IDLE) {
     return (
@@ -157,10 +164,13 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
       />
     );
   }
+
   if (!updateInSidebar(update)) return null;
+
   if (update.status === UPDATE_STATUS.READY) {
     // The toast offers the same Restart while it stands; the pill is the way back once it is dismissed.
     if (toastStanding) return null;
+
     return (
       <UpdatePill
         word="Restart"
@@ -171,8 +181,10 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
       />
     );
   }
+
   // The sidebar carries a failure only once a release was named.
   if (update.status !== UPDATE_STATUS.ERROR || update.latestVersion === undefined) return null;
+
   return (
     <UpdatePill
       word="Download"
@@ -236,6 +248,7 @@ function accountMenuGroups(
     acts.onProfile === undefined
       ? []
       : [{ label: "Your profile", icon: <UserRoundIcon />, onSelect: acts.onProfile }];
+
   const groups: MenuEntry[][] = [
     ...(profile.length === 0 ? [] : [profile]),
     [
@@ -260,8 +273,10 @@ function accountMenuGroups(
       },
     ],
   ];
+
   if (signedIn)
     groups.push([{ label: VERB.SIGN_OUT, icon: <LogOutIcon />, onSelect: acts.onSignOut }]);
+
   return groups;
 }
 
@@ -279,6 +294,7 @@ export function useAccountMenuGroups(
   const { mutate: sendEmail } = useMutation(pressMutation(ACT_KIND.CONTACT_EMAIL));
   const openPerson = useOpenPerson();
   const accountId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
+
   return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, {
     onProfile:
       openPerson === undefined || accountId === undefined ? undefined : () => openPerson(accountId),
@@ -302,6 +318,7 @@ function AccountMenu({
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
   const { drawn, close, trigger } = useMenu(shown);
   const groups = useAccountMenuGroups(account, onSignOut);
+
   return (
     <>
       <NavItem

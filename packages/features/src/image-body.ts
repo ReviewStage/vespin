@@ -29,6 +29,7 @@ export type ImageBodyUnread = Exclude<CallAnswer, { readonly response: Response 
  */
 function endedWith(error: unknown): string | undefined {
   if (!(error instanceof Error)) return undefined;
+
   return error.cause instanceof Error ? error.cause.name : error.name;
 }
 
@@ -53,7 +54,9 @@ export function imageBodyOf<Type extends string>(
   const contentType = Result.getOrUndefined(
     readEither(types)(unparsedWire(response.headers.get("content-type"))),
   );
+
   if (contentType === undefined) return Effect.succeed(undefined);
+
   return Effect.promise(() =>
     response
       .arrayBuffer()
@@ -62,6 +65,7 @@ export function imageBodyOf<Type extends string>(
       )
       .catch((error: unknown): ImageBodyUnread => {
         const name = endedWith(error);
+
         return {
           fault: CALL_FAULT.NETWORK,
           ...(name === undefined ? undefined : { errorName: name }),

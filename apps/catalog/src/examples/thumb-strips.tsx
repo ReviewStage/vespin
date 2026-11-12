@@ -28,10 +28,12 @@ const ITEMS = [
 function ThumbStrips(): React.JSX.Element {
   const [at, setAt] = useState(1);
   const standIn = useStandIn();
+
   const items =
     typeof standIn === "string"
       ? ITEMS
       : [...ITEMS, { name: "recording.webm", video: standIn.url }];
+
   return (
     <CatalogSection id="thumb-strip" title="A viewer's files">
       <ThumbStrip label="Files" items={items} at={at} onPick={setAt} />

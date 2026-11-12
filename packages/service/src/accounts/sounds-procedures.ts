@@ -39,11 +39,13 @@ const GONE = { sound: null } as const;
 
 export function soundsProcedures(seams: SoundsProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
+
   return {
     sound: signedIn.sound.effect(function* ({ context, input }) {
       const kept = yield* hostedStoreOrUnavailable(
         readSoundClip(context.userId, input[SOUND_CLIP_QUERY.ID]),
       );
+
       return {
         clip: Option.match(kept, {
           onNone: () => null,
@@ -58,10 +60,13 @@ export function soundsProcedures(seams: SoundsProcedureSeams) {
 
     addSound: signedIn.addSound.effect(function* ({ context, input }) {
       const clip = soundClipOfDataUrl(input.clip);
+
       if (clip === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       const sound = yield* hostedStoreOrUnavailable(
         addSound(context.userId, input.name, clip, input.slot),
       );
+
       return { sound };
     }),
 
@@ -69,6 +74,7 @@ export function soundsProcedures(seams: SoundsProcedureSeams) {
       const sound = yield* hostedStoreOrUnavailable(
         renameSound(context.userId, input.id, input.name),
       );
+
       return { sound: Option.getOrNull(sound) };
     }),
 
@@ -76,11 +82,13 @@ export function soundsProcedures(seams: SoundsProcedureSeams) {
       yield* hostedStoreOrUnavailable(
         removeSound(context.userId, input.query[SOUND_CLIP_QUERY.ID]),
       );
+
       return GONE;
     }),
 
     chooseSound: signedIn.chooseSound.effect(function* ({ context, input }) {
       const id = yield* hostedStoreOrUnavailable(chooseSound(context.userId, input.slot, input.id));
+
       return { slot: input.slot, id };
     }),
   };

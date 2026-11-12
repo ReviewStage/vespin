@@ -32,11 +32,13 @@ afterEach(() => {
 /** A rename the service answers by hand: each ask waits on the test, in order. */
 function heldService() {
   const asks: { subjectId: string; name: string; answer: (renamed: boolean) => void }[] = [];
+
   const onRename = (subjectId: string, name: string) => {
     return new Promise<boolean>((answer) => {
       asks.push({ subjectId, name, answer });
     });
   };
+
   return { asks, onRename };
 }
 
@@ -50,23 +52,30 @@ interface Asked {
 function mount(subjectId: string, onRename: (subjectId: string, name: string) => Promise<boolean>) {
   let rename: InlineRename | undefined;
   const client = new QueryClient();
+
   function Surface({ id }: { id: string }) {
     const mutation = useMutation({
       mutationFn: (asked: Asked) => onRename(asked.subjectId, asked.name),
     });
+
     rename = useInlineRename(id, {
       run: (subject, name) => mutation.mutate({ subjectId: subject, name }),
       asked: mutation.variables,
       refused: !mutation.isPending && (mutation.isError || mutation.data === false),
       reset: mutation.reset,
     });
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const drawn = (id: string) =>
     createElement(QueryClientProvider, { client }, createElement(Surface, { id }));
+
   act(() => root.render(drawn(subjectId)));
+
   return {
     now: () => rename ?? assert.fail("the surface drew"),
     draw: (id: string) => act(() => root.render(drawn(id))),

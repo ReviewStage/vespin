@@ -60,30 +60,38 @@ function laidOut(element: Element): boolean {
 /** How tall the layout given draws an element: a row's height, or its laid-out children's together. */
 function heightOf(element: Element): number {
   if (element.matches("p")) return ROW;
+
   return [...element.children].filter(laidOut).reduce((sum, child) => sum + heightOf(child), 0);
 }
 
 /** Where the layout given draws an element's top: under what is laid out before it in its parent. */
 function topOf(element: Element): number {
   const parent = element.parentElement;
+
   if (parent === null || element.matches(".ui-settings-section-card")) return 0;
+
   if (element instanceof HTMLElement && element.style.position === "absolute") {
     return topOf(parent) + Number.parseFloat(element.style.top);
   }
+
   const before = [...parent.children].slice(0, [...parent.children].indexOf(element));
+
   return topOf(parent) + before.filter(laidOut).reduce((sum, each) => sum + heightOf(each), 0);
 }
 
 beforeEach(() => {
   played = [];
+
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
+
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[], timing: KeyframeAnimationOptions) {
       const motion = { onfinish: null as (() => void) | null, cancel: () => undefined };
       played.push({ element: this, keyframes, timing, finish: () => motion.onfinish?.() });
+
       return motion;
     },
   });
@@ -98,6 +106,7 @@ afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
+
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   Reflect.deleteProperty(Element.prototype, "animate");
   vi.restoreAllMocks();
@@ -117,6 +126,7 @@ function draw<Props extends object>(
   root = createRoot(container);
   const Card = (each: Props) => card(each);
   act(() => root?.render(createElement(Card, props)));
+
   return (next) => act(() => root?.render(createElement(Card, next)));
 }
 
@@ -198,6 +208,7 @@ test("two reveals turned on in one change glide the row under them once, as far 
       createElement(Reveal, { shown: on, children: row("Second") }),
       row("Under"),
     );
+
   const show = draw(card, { on: false });
 
   show({ on: true });
@@ -223,6 +234,7 @@ test("a choice picked again rolls up the rows of the value left as the rows of t
       }),
       row("Under"),
     );
+
   const show = draw(card, { kind: "schedule" });
 
   show({ kind: "webhook" });
@@ -237,9 +249,11 @@ test("a choice picked again rolls up the rows of the value left as the rows of t
     [{ opacity: 0 }, { opacity: 1 }],
     [ROLLED_UP, UNROLLED],
   ]);
+
   const unroll = played.find(
     (each) => each.element === boxOf("Address") && "clipPath" in (each.keyframes[0] ?? {}),
   );
+
   const glide = played.find((each) => each.element === rowOf("Under"));
   expect(glide?.keyframes[0]).toEqual({ transform: `translate(0px, ${-ROW}px)` });
   expect([unroll?.timing.duration, glide?.timing.duration]).toEqual([460, 460]);
@@ -248,6 +262,7 @@ test("a choice picked again rolls up the rows of the value left as the rows of t
 test("outside a reveal area a setting's rows come and go at once", async () => {
   const bare = ({ on }: { on: boolean }) =>
     createElement("div", null, createElement(Reveal, { shown: on, children: row("From") }));
+
   const show = draw(bare, { on: false });
 
   show({ on: true });
@@ -262,6 +277,7 @@ test("an area that is its own takes its reveals even where an outer area stands,
   const nested = ({ on }: { on: boolean }) => {
     const outer = useRef<HTMLDivElement>(null);
     const inner = useRef<HTMLDivElement>(null);
+
     const rows = createElement(
       "div",
       { ref: inner, ...revealArea() },
@@ -269,16 +285,19 @@ test("an area that is its own takes its reveals even where an outer area stands,
       createElement(Reveal, { shown: on, children: row("From") }),
       row("Under"),
     );
+
     const motion = createElement(ListMotion, {
       root: inner,
       change: 0,
       children: createElement(RevealArea, { root: inner, own: true, children: rows }),
     });
+
     return createElement(RevealArea, {
       root: outer,
       children: createElement("div", { ref: outer, ...revealArea() }, motion),
     });
   };
+
   const show = draw(nested, { on: false });
 
   show({ on: true });

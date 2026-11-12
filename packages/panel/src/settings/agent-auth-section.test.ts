@@ -98,20 +98,26 @@ const DEVICE_LOGIN = {
 
 /** What the test's service holds for the account. */
 let held: ProviderKeysAnswer = { keys: [] };
+
 /** Why the next save is refused, or nothing where it is kept. */
 let refusal: (typeof PROVIDER_KEY_REJECTION)[keyof typeof PROVIDER_KEY_REJECTION] | undefined;
+
 /** Every act the page sent, in order. */
 let sent: AnyAct[] = [];
+
 /** Connect Codex's wait while it is held open, as a login waits on its code being entered; none answers it connected at once. */
 let waitOpen: PromiseWithResolvers<FakeActAnswer> | undefined;
+
 /** How the keys the host holds are delivered to the window again, as each write's own answer lays them. */
 let deliverKeys: (next: AppHostRead<AppProviderKeyList>) => void = () => undefined;
+
 /** Every copy the page made, in order. */
 let copied: string[] = [];
 
 /** A write's answer of the keys, laid where the host holds them before it answers, as the host lays it. */
 function written(value: ProviderKeysAnswer): Promise<FakeActAnswer> {
   deliverKeys({ rows: value });
+
   return Promise.resolve(done(value));
 }
 
@@ -125,12 +131,14 @@ function bottomOf(provider: ProviderKeySummary["provider"]): number {
   const places = [...held.keys, ...(held.subscriptions ?? [])]
     .filter((one) => one.provider === provider)
     .map((one) => one.position ?? 0);
+
   return Math.max(-1, ...places) + 1;
 }
 
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   sent.push(request);
   const subscriptions = held.subscriptions ?? [];
+
   switch (request.kind) {
     case ACT_KIND.WEB_OPEN:
       return Promise.resolve(done(undefined));
@@ -138,8 +146,10 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       if (refusal !== undefined) return Promise.resolve(done({ ...held, rejected: refusal }));
       const { kind, subscriptionId } = request.payload;
       const { provider } = request.payload;
+
       if (kind !== PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN) {
         if (subscriptionId !== undefined) return written(held);
+
         const key = {
           ...ANTHROPIC_KEY,
           provider,
@@ -147,15 +157,19 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
           hint: `sk-ant-…key${held.keys.length + 1}`,
           position: bottomOf(provider),
         };
+
         held = { ...held, keys: [...held.keys, key] };
+
         return written(held);
       }
+
       const added = {
         ...CLAUDE_PLAN,
         id: `claude-${subscriptions.length + 1}`,
         position: bottomOf(provider),
         addedAt: AT + subscriptions.length,
       };
+
       held = {
         ...held,
         subscriptions:
@@ -167,25 +181,34 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
                   : one,
               ),
       };
+
       return written(held);
     }
+
     case ACT_KIND.PROVIDER_KEYS_REMOVE: {
       const { kind, subscriptionId } = request.payload;
       held =
         kind === undefined || kind === PROVIDER_KEY_KIND.API_KEY
           ? { ...held, keys: held.keys.filter((one) => one.id !== subscriptionId) }
           : { ...held, subscriptions: subscriptions.filter((one) => one.id !== subscriptionId) };
+
       return written(held);
     }
+
     case ACT_KIND.SUBSCRIPTION_RENAME: {
       const { subscriptionId, label } = request.payload;
+
       const named = <One extends { readonly id?: string }>(one: One) =>
         one.id === subscriptionId ? { ...one, ...(label === null ? {} : { label }) } : one;
+
       held = { ...held, keys: held.keys.map(named), subscriptions: subscriptions.map(named) };
+
       return written(held);
     }
+
     case ACT_KIND.SUBSCRIPTIONS_REORDER: {
       const order = request.payload.subscriptionIds;
+
       const placed = <One extends { readonly id?: string; readonly position?: number }>(
         one: One,
       ) => ({
@@ -193,9 +216,12 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
         position:
           one.id !== undefined && order.includes(one.id) ? order.indexOf(one.id) : one.position,
       });
+
       held = { ...held, keys: held.keys.map(placed), subscriptions: subscriptions.map(placed) };
+
       return written(held);
     }
+
     case ACT_KIND.CHATGPT_DEVICE_START:
       return Promise.resolve(done(DEVICE_LOGIN));
     case ACT_KIND.CHATGPT_DEVICE_CANCEL: {
@@ -203,12 +229,15 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       const canceled = { outcome: CHATGPT_DEVICE_LOGIN.CANCELED };
       waitOpen?.resolve(done(canceled));
       waitOpen = undefined;
+
       return Promise.resolve(done(canceled));
     }
+
     case ACT_KIND.CHATGPT_DEVICE_WAIT:
       if (waitOpen !== undefined) return waitOpen.promise;
       held = { ...held, subscriptions: [...subscriptions, CHATGPT_PLAN] };
       deliverKeys({ rows: held });
+
       return Promise.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held }));
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
@@ -261,6 +290,7 @@ async function mount(
   );
   await settle();
   await vi.waitFor(() => assert.equal(harnessRowsStand(container), true));
+
   return container;
 }
 
@@ -285,6 +315,7 @@ async function mountSetup(): Promise<{ page: HTMLElement; connected: boolean[] }
   );
   await settle();
   await vi.waitFor(() => assert.equal(harnessRowsStand(container), true));
+
   return { page: container, connected };
 }
 
@@ -308,6 +339,7 @@ const credential = (page: Element, label: string) =>
 /** What a credential's row says of it under its name, and in which tint, or nothing where it says nothing. */
 const lineOf = (within: Element) => {
   const line = within.querySelector<HTMLElement>(".ui-settings-row-state");
+
   return line === null ? undefined : { words: line.textContent, state: line.dataset.state };
 };
 
@@ -326,6 +358,7 @@ const metersOf = (within: Element) =>
 
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
 const readyLine = plain("Ready");
+
 /** The name a key with none of its own is shown by. */
 const KEY_NAME = "API key · sk-ant-…wxyz";
 const needsHand = (words: string) => ({ words, state: SETTINGS_ROW_STATE.ATTENTION });
@@ -354,6 +387,7 @@ async function pick(item: string): Promise<void> {
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (each) => each.textContent === item,
     ) ?? assert.fail(`no ${item} item`);
+
   act(() => entry.click());
   await settle();
 }
@@ -375,6 +409,7 @@ function labeled(within: Element, words: string): HTMLInputElement {
   const label = [...within.querySelectorAll("label")].find((each) => each.textContent === words);
   const control = label?.control;
   assert.ok(control instanceof HTMLInputElement, `no field labeled ${words}`);
+
   return control;
 }
 
@@ -491,9 +526,11 @@ test("each card opens on its harness and its Add; each credential says how it st
     lineOf(credential(limited, "ana@work.test"))?.words ?? "",
     /^At its limit · back at /u,
   );
+
   const usage =
     credential(limited, "ana@work.test").querySelector<HTMLAnchorElement>("a") ??
     assert.fail("no Manage usage");
+
   assert.equal(usage.textContent, "Manage usage");
   act(() => usage.click());
   await settle();
@@ -502,9 +539,11 @@ test("each card opens on its harness and its Add; each credential says how it st
 
 test("each harness's card stands where a link to its section lands", async () => {
   const page = await mount();
+
   const landed = (section: string) =>
     page.querySelector(`[${SETTINGS_SEARCH_ANCHOR_ATTRIBUTE}="${section}"]`) ??
     assert.fail(`nothing stands at ${section}`);
+
   assert.ok(landed(SETTINGS_SECTION.CLAUDE).contains(credential(page, "Claude")));
   assert.ok(landed(SETTINGS_SECTION.CODEX).contains(credential(page, "Codex")));
 });
@@ -630,6 +669,7 @@ test("an API key added from Add opens a masked field under the header, sent once
   assert.equal(header().querySelector("form") === null, true, "the field goes");
   await vi.waitFor(() => assert.ok(document.activeElement === button(header(), "Add to Claude")));
   assert.ok(!document.body.innerHTML.includes(KEY), "the key stands nowhere once kept");
+
   for (const spy of logged) {
     assert.ok(spy.mock.calls.every((call) => !JSON.stringify(call).includes(KEY)));
   }

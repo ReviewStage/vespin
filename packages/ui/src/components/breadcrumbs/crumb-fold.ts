@@ -58,7 +58,9 @@ function foldable(crumb: Crumb): boolean {
 function foldableCount(crumbs: readonly Crumb[]): number {
   const last = crumbs.findLastIndex((crumb) => crumb.shown !== false);
   let count = 0;
+
   while (count < last && foldable(crumbs[count] as Crumb)) count += 1;
+
   return count;
 }
 
@@ -72,6 +74,7 @@ function folded(crumbs: readonly Crumb[], count: number, most: number): readonly
   const kept = crumbs
     .map((crumb, at) => {
       const words = legible(crumb);
+
       return {
         key: String(at),
         crumb,
@@ -81,11 +84,13 @@ function folded(crumbs: readonly Crumb[], count: number, most: number): readonly
       };
     })
     .slice(count);
+
   if (count === 0) return kept;
   const names = crumbs.slice(0, count).map((crumb) => crumb.label);
   const hint = names.join(FOLDED_SEPARATOR);
   // Note that the "…" is no legible crumb, because its floor is its own width.
   const crumb: Crumb = { label: FOLDED_WORDS, hint, name: hint };
+
   return [{ key: "folded", crumb, legible: false, whole: false, folded: true }, ...kept];
 }
 
@@ -103,15 +108,20 @@ function signature(crumbs: readonly Crumb[]): string {
  */
 function widthsOf(nav: HTMLElement): readonly number[] {
   const widths: number[] = [];
+
   for (let room = nav.parentElement; room !== null; room = room.parentElement) {
     widths.push(room.clientWidth);
   }
+
   const list = nav.querySelector("ol");
+
   if (list === null) return widths;
   widths.push(list.clientWidth, list.scrollWidth);
+
   for (const crumb of list.children) {
     widths.push(crumb.clientWidth, crumb.querySelector(".ui-breadcrumb-label")?.scrollWidth ?? 0);
   }
+
   return widths;
 }
 
@@ -123,9 +133,12 @@ function sameWidths(one: readonly number[], other: readonly number[]): boolean {
 /** Watches the list and each crumb drawn now, and lets go of the crumbs no longer drawn. */
 function watchCrumbs(observer: ResizeObserver, list: Element, watched: Set<Element>): void {
   const drawn = new Set([list, ...list.children]);
+
   for (const each of watched) if (!drawn.has(each)) observer.unobserve(each);
+
   for (const each of drawn) if (!watched.has(each)) observer.observe(each);
   watched.clear();
+
   for (const each of drawn) watched.add(each);
 }
 
@@ -152,24 +165,31 @@ export function useCrumbFold(
   const settled = useRef<readonly number[] | undefined>(undefined);
   const latest = useRef(key);
   latest.current = key;
+
   // Note that every box the path stands in is watched, up to the page, because
   // the one around it is as wide as the folded path and so never grows to say
   // that the window did; the first with room of its own does.
   const attach = useCallback((nav: HTMLElement | null): (() => void) | undefined => {
     if (nav === null || typeof ResizeObserver === "undefined") return undefined;
     bar.current = nav;
+
     const remeasure = () => {
       const was = settled.current;
+
       if (was === undefined || sameWidths(was, widthsOf(nav))) return;
       settled.current = undefined;
       setState({ key: latest.current, count: 0 });
     };
+
     const resized = new ResizeObserver(remeasure);
     observer.current = resized;
+
     for (let room = nav.parentElement; room !== null; room = room.parentElement) {
       resized.observe(room);
     }
+
     const stopFonts = onFontsSettled(remeasure);
+
     return () => {
       bar.current = null;
       observer.current = null;
@@ -178,24 +198,33 @@ export function useCrumbFold(
       stopFonts();
     };
   }, []);
+
   useLayoutEffect(() => {
     const nav = bar.current;
     const list = nav?.querySelector("ol");
+
     if (nav === null || nav === undefined || list === null || list === undefined) return;
+
     if (observer.current !== null) watchCrumbs(observer.current, list, watched.current);
     // Note that a render landing after a width moved measures again from nothing, because here a fold only grows, and the observer would read the widths this render settles on as unchanged.
     const was = settled.current;
+
     if (count > 0 && was !== undefined && !sameWidths(was, widthsOf(nav))) {
       settled.current = undefined;
       setState({ key, count: 0 });
+
       return;
     }
+
     if (count < most && list.scrollWidth > list.clientWidth) {
       settled.current = undefined;
       setState({ key, count: count + 1 });
+
       return;
     }
+
     settled.current = widthsOf(nav);
   });
+
   return [attach, folded(crumbs, count, most), crumbs.slice(0, count)];
 }

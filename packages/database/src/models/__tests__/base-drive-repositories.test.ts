@@ -22,6 +22,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -32,11 +33,13 @@ it.layer(getTestDB())("the workspaces a drive is filled for", (it) => {
       Effect.gen(function* () {
         const ada = yield* openAccount;
         const installationId = 600_000 + Math.floor(Math.random() * 90_000);
+
         const acme = yield* openInstallationWorkspace(ada, {
           installationId,
           accountId: installationId,
           accountLogin: `acme-${installationId}`,
         });
+
         const listedAcme = Effect.map(listBaseDriveWorkspaces(), (all) =>
           all.filter((each) => each.workspaceId === acme),
         );

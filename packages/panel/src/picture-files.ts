@@ -32,5 +32,6 @@ export function isPictureFile(file: { readonly type: string; readonly name: stri
 /** The picture files among whatever was picked, pasted, or dropped, in their given order. */
 export function imageFiles(list: ArrayLike<File> | null | undefined): File[] {
   if (!list) return [];
+
   return Array.from(list).filter(isPictureFile);
 }

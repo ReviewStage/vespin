@@ -29,6 +29,7 @@ const TODOS: AgentTodos["todos"] = [
 function drawn(node: ReactNode): HTMLElement {
   const box = document.createElement("div");
   box.innerHTML = renderToStaticMarkup(createElement("div", null, node));
+
   return box;
 }
 
@@ -51,6 +52,7 @@ function items(surface: HTMLElement): { seat: Element; words: Element; status: s
   return [...surface.querySelectorAll("li[data-todo-status]")].map((item) => {
     const [seat, words] = item.children;
     assert.ok(seat !== undefined && words !== undefined, "an item is its glyph and its words");
+
     return { seat, words, status: item.getAttribute("data-todo-status") ?? "" };
   });
 }
@@ -94,6 +96,7 @@ test("only the list the agent is at wears the working mark on its item in progre
     items(surface)
       .filter((item) => item.seat.querySelector(".ui-working-mark") !== null)
       .map((item) => item.status);
+
   assert.deepEqual(working(transcriptList(undefined, true)), [AGENT_TODO_STATUS.IN_PROGRESS]);
   assert.deepEqual(working(transcriptList()), []);
 });

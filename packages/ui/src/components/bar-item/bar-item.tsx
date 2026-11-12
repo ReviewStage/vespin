@@ -82,6 +82,7 @@ export function BarItem({
   onPress,
 }: BarItemProps): React.JSX.Element {
   const counted = count !== undefined && count.value > 0;
+
   return (
     <button
       type="button"

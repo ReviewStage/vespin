@@ -72,6 +72,7 @@ const isRefusalFields = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
 /** The refusal as the error the contract declares: its slug the code, everything beside it the data. */
 function refusalError(refusal: { readonly error: string }): ORPCError<string, object> {
   const { error, ...data } = refusal;
+
   return new ORPCError(error, { data });
 }
 
@@ -147,7 +148,10 @@ export function encodeHostedError(error: ORPCError<string, unknown>): object | n
       ? { error: error.code, ...error.data }
       : { error: error.code };
   }
+
   if (error.code === ORPC_BAD_REQUEST) return HOSTED_REFUSAL.INVALID_REQUEST;
+
   if (error.code === ORPC_PAYLOAD_TOO_LARGE) return HOSTED_REFUSAL.REQUEST_TOO_LARGE;
+
   return null;
 }

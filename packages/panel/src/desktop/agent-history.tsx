@@ -68,6 +68,7 @@ const ROW_THING = { AGENT: "Agent", ARCHIVED: "Archived agent" } as const;
 /** Whether an agent's name holds the search, whatever its case; every agent for no search. */
 function matches(agent: AgentSummary, models: AgentsControl["models"], query: string): boolean {
   const asked = query.trim().toLowerCase();
+
   return asked === "" || agentName(agent, models).toLowerCase().includes(asked);
 }
 
@@ -86,6 +87,7 @@ function HistoryAgentRow({
   onPick: () => void;
 }) {
   const { row, endMark, card } = entry;
+
   // The agent's menu over the doors a row has, as the sidebar's agent rows offer it, but Rename,
   // since the row draws no name's field; its tab and its sidebar row rename it.
   const actions = useAgentActions(agent, agents, {
@@ -93,9 +95,11 @@ function HistoryAgentRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
+
   const archived = agent.archivedAt !== undefined;
   const thing = archived ? ROW_THING.ARCHIVED : ROW_THING.AGENT;
   const coarse = useCoarsePointer();
+
   return (
     <>
       <RowHintOptions card={card}>
@@ -133,6 +137,7 @@ function historyAgents(
   const inHistory = (each: AgentSummary) => !open.includes(each.id) && listed(each);
   const closed = (agents.agents ?? []).filter(inHistory);
   const archived = (agents.archived ?? []).filter(inHistory);
+
   return { closed: closed.toReversed(), archived: archived.toReversed() };
 }
 
@@ -160,10 +165,12 @@ function HistoryPanel({
   // Note that every row takes its look and card from the "+" rows' one builder, so a row and its tab say the same.
   const entries = agentEntries(main, agents, directory, held, closed);
   const archivedEntries = agentEntries(main, agents, directory, held, archived);
+
   const open = (agentId: string) => {
     onPicked();
     onOpenAgent(agentId);
   };
+
   const rowOf = ({ agent, ...entry }: AddEntry) =>
     agent === undefined ? null : (
       <HistoryAgentRow
@@ -175,6 +182,7 @@ function HistoryPanel({
         onPick={() => open(agent.id)}
       />
     );
+
   return (
     <div className="agent-history flex min-h-0 w-popover-narrow flex-col">
       <ReplayUnmask>
@@ -246,13 +254,17 @@ export function AgentHistory({
   const [open, setOpen] = useState(false);
   const search = useRef<HTMLInputElement | null>(null);
   const { closed, archived } = historyAgents(main, agents);
+
   // Note that the button goes with its last row, putting its panel away so it never comes back
   // open, and the panel goes with the page it hangs from.
   if (closed.length === 0 && archived.length === 0) {
     if (open) setOpen(false);
+
     return null;
   }
+
   const standing = open && shown;
+
   return (
     <ReplayUnmask>
       <PopoverIconButton

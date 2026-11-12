@@ -245,6 +245,7 @@ function TranscriptLink({
   children: ReactNode;
 }): ReactNode {
   const openLink = useOpenLink();
+
   if (href === undefined || !opensAsLink(href)) {
     return (
       <Tooltip label={href}>
@@ -252,6 +253,7 @@ function TranscriptLink({
       </Tooltip>
     );
   }
+
   return (
     <TextLink href={href} words={words} onOpen={openLink}>
       {children}
@@ -268,6 +270,7 @@ function TranscriptLink({
  */
 function SiteChip({ href }: { href: string }): ReactNode {
   const openLink = useOpenLink();
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -348,6 +351,7 @@ interface MarkdownNode extends WordsNode {
 /** The words under a node, however they are formatted. */
 function wordsOf(node: WordsNode): string {
   if (node.type === "text") return node.value ?? "";
+
   return (node.children ?? []).map((child) => wordsOf(child)).join("");
 }
 
@@ -371,13 +375,16 @@ function markMentions(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
       : node.type === "linkReference" && node.identifier !== undefined
         ? definitions.get(node.identifier)?.url
         : undefined;
+
   if (target !== undefined && mayNameChip(target)) {
     node.data = {
       hName: MENTION_ELEMENT.TAG,
       hProperties: { [MENTION_ELEMENT.TARGET]: target },
     };
+
     return;
   }
+
   for (const child of node.children ?? []) markMentions(child, definitions);
 }
 
@@ -389,7 +396,9 @@ function definitionsIn(
   if (node.type === "definition" && node.identifier !== undefined && node.url !== undefined) {
     if (!found.has(node.identifier)) found.set(node.identifier, node);
   }
+
   for (const child of node.children ?? []) definitionsIn(child, found);
+
   return found;
 }
 
@@ -414,6 +423,7 @@ function markPictures(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
       : node.type === "imageReference" && node.identifier !== undefined
         ? definitions.get(node.identifier)
         : undefined;
+
   if (node.type === "image" || node.type === "imageReference") {
     node.data = {
       hName: PICTURE_ELEMENT.TAG,
@@ -423,8 +433,10 @@ function markPictures(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
         [PICTURE_ELEMENT.CAPTION]: source?.title ?? "",
       },
     };
+
     return;
   }
+
   for (const child of node.children ?? []) markPictures(child, definitions);
 }
 
@@ -447,11 +459,14 @@ function isPicture(node: MarkdownNode): boolean {
  */
 function markPictureRows(node: MarkdownNode): void {
   const said = (node.children ?? []).filter((child) => !blank(child));
+
   if (node.type === "paragraph" && said.length > 0 && said.every(isPicture)) {
     node.data = { hName: PICTURE_ROW_ELEMENT.TAG };
     node.children = said;
+
     return;
   }
+
   for (const child of node.children ?? []) markPictureRows(child);
 }
 
@@ -466,13 +481,16 @@ function markLoneLinks(tree: MarkdownNode, definitions: ReadonlyMap<string, Mark
   for (const paragraph of tree.children ?? []) {
     const said = (paragraph.children ?? []).filter((child) => !blank(child));
     const [link] = said;
+
     if (paragraph.type !== "paragraph" || said.length !== 1 || link === undefined) continue;
+
     const target =
       link.type === "link"
         ? link.url
         : link.type === "linkReference" && link.identifier !== undefined
           ? definitions.get(link.identifier)?.url
           : undefined;
+
     if (target === undefined) continue;
     paragraph.data = {
       hName: LONE_LINK_ELEMENT.TAG,
@@ -507,9 +525,11 @@ const KEYLESS_NODES: ReadonlySet<string> = new Set([
 function keyedRun(text: MarkdownNode): MarkdownNode[] {
   const value = text.value ?? "";
   const spans = keyWordsIn(value);
+
   if (spans.length === 0) return [text];
   const run: MarkdownNode[] = [];
   let from = 0;
+
   for (const span of spans) {
     if (span.start > from) run.push({ type: "text", value: value.slice(from, span.start) });
     run.push({
@@ -519,7 +539,9 @@ function keyedRun(text: MarkdownNode): MarkdownNode[] {
     });
     from = span.end;
   }
+
   if (from < value.length) run.push({ type: "text", value: value.slice(from) });
+
   return run;
 }
 
@@ -540,6 +562,7 @@ function markTaskKeys(node: MarkdownNode): void {
   node.children = node.children.flatMap((child) => {
     if (child.type === "text") return keyedRun(child);
     markTaskKeys(child);
+
     return [child];
   });
 }
@@ -581,13 +604,17 @@ function PictureElement({ node }: MarkdownNodeProps): ReactNode {
   const address = String(node?.properties[PICTURE_ELEMENT.ADDRESS] ?? "");
   const said = String(node?.properties[PICTURE_ELEMENT.WORDS] ?? "");
   const caption = String(node?.properties[PICTURE_ELEMENT.CAPTION] ?? "");
+
   if (descriptionPicture !== undefined && descriptionAttachmentOf(address) !== undefined) {
     return descriptionPicture(address, said, caption === "" ? undefined : caption);
   }
+
   // An Inbox item's own picture, where its words stand inside `InboxPictures`.
   const itemPicture = inboxPicture?.(address, said, caption === "" ? undefined : caption);
+
   if (itemPicture !== undefined) return itemPicture;
   const words = said === "" ? UNNAMED_PICTURE : said;
+
   return (
     <TranscriptLink href={address === "" ? undefined : address} words={words}>
       <ImageIcon className={OUTSIDE_GLYPH_CLASS} aria-hidden="true" />
@@ -645,6 +672,7 @@ function MentionElement({
   const target = String(node?.properties[MENTION_ELEMENT.TARGET] ?? "");
   const words = node === undefined ? "" : wordsOf(node);
   const chip = node === undefined ? undefined : linkChip(target, words, doors);
+
   return (
     chip ?? (
       <TranscriptLink href={target} words={words}>
@@ -668,6 +696,7 @@ function TaskKeyElement({
   const doors = useMentionDoors();
   const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
   const target = useWordTargets().get(key);
+
   return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
 
@@ -678,6 +707,7 @@ function LoneLinkElement({
 }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
   const target = String(node?.properties[LONE_LINK_ELEMENT.TARGET] ?? "");
   const words = String(node?.properties[LONE_LINK_ELEMENT.WORDS] ?? "");
+
   return <LoneLinkCard target={target} words={words} fallback={<p>{children}</p>} />;
 }
 
@@ -705,7 +735,9 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
 /** A file's address on GitHub, at its line, which its link carries for the reader's link menu; the press opens its File tab. */
 function fileAddress(repository: string, path: string, line: number | undefined): string {
   const page = new URL(`https://github.com/${repository}/blob/HEAD/${path}`);
+
   if (line !== undefined) page.hash = `L${line}`;
+
   return page.href;
 }
 
@@ -725,8 +757,10 @@ function InlineFileCode({
 }): ReactNode {
   const { onOpenFile, place } = useMentionDoors();
   const { repository } = place;
+
   if (onOpenFile === undefined || repository === null) return children;
   const { path, line } = target;
+
   return (
     <UiTextLink
       href={fileAddress(repository, path, line)}
@@ -745,6 +779,7 @@ function InlineFileCode({
 /** An inline span of code that is a web address: a link to it, opened as every link in the words is. */
 function InlineWebCode({ href, children }: { href: string; children: ReactNode }): ReactNode {
   const openLink = useOpenLink();
+
   return (
     <TextLink href={href} words={undefined} onOpen={openLink} look={TEXT_LINK_LOOK.CODE}>
       {children}
@@ -760,7 +795,9 @@ function TranscriptInlineCode({
   const words = node === undefined ? "" : wordsOf(node);
   const target = useMemo(() => inlineCodeTarget(words), [words]);
   const code = <code className="transcript-inline-code">{children}</code>;
+
   if (target === undefined) return code;
+
   return target.kind === INLINE_CODE_TARGET.FILE ? (
     <InlineFileCode target={target}>{code}</InlineFileCode>
   ) : (
@@ -818,6 +855,7 @@ export interface GitHubPictureSize {
 /** A size attribute as the drawn tree hands it, a number or its words, read as pixels; none where it is no positive number, as a percentage is not. */
 function pixelsOf(value: unknown): number | undefined {
   const pixels = typeof value === "number" ? value : Number(value);
+
   return Number.isFinite(pixels) && pixels > 0 ? pixels : undefined;
 }
 
@@ -844,7 +882,9 @@ function GitHubImage({
 }): ReactNode {
   const linked = useContext(InsideGitHubLink);
   const shown = pictureFor(src, useDrawnDark());
+
   if (shown === undefined) return null;
+
   return (
     picture(shown, alt, inWords || linked, size) ?? <GitHubPictureLink src={shown} alt={alt} />
   );
@@ -853,6 +893,7 @@ function GitHubImage({
 /** A picture GitHub's rendering names that its place draws none of: a link to where it points, as a transcript's picture is. */
 export function GitHubPictureLink({ src, alt }: { src: string; alt: string }): ReactNode {
   const words = alt === "" ? UNNAMED_PICTURE : alt;
+
   return (
     <TranscriptLink href={src === "" ? undefined : src} words={words}>
       <ImageIcon className={OUTSIDE_GLYPH_CLASS} aria-hidden="true" />
@@ -917,6 +958,7 @@ export function GitHubWords({
     }),
     [picture],
   );
+
   return (
     <MessageResponse
       words={html}
@@ -949,6 +991,7 @@ function useElementDraw(element: TranscriptElement | undefined): {
 } {
   const extra = element?.components;
   const tags = element?.tags;
+
   return useMemo(
     () =>
       extra === undefined || tags === undefined
@@ -997,6 +1040,7 @@ export function TranscriptWords({
 }): ReactNode {
   const remarkPlugins = useMemo(() => remarkPluginsFor(typed, asDocument), [typed, asDocument]);
   const { components, allowedTags, literal } = useElementDraw(element);
+
   // Note that the source stays the words as written, because a code block's copy reads it.
   return (
     <TranscriptMarkdownSource markdown={text}>
@@ -1048,6 +1092,7 @@ export function TranscriptReasoning({
   cut?: CutBody | undefined;
 }): ReactNode {
   const shown = cut === undefined ? text : cut.head;
+
   return (
     <Reasoning>
       <ReasoningTrigger preview={cardTitle(shown).slice(0, REASONING_PREVIEW_LENGTH)} />
@@ -1095,7 +1140,9 @@ function CutWords({
   useEffect(() => {
     if (open) onOpen();
   }, [open, onOpen]);
+
   if (cut.state === WHOLE_PART.FAILED) return children;
+
   return (
     <p data-part-reading="">
       <Shimmer>{waiting}</Shimmer>
@@ -1214,12 +1261,14 @@ function AgentCallChip({
       />
     );
   }
+
   const press = (event: MouseEvent<HTMLElement>) => {
     // The press is the chip's alone: the summary it stands in would fold.
     event.preventDefault();
     event.stopPropagation();
     opens.onOpen();
   };
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -1258,6 +1307,7 @@ function chippedLine(
   if (agent === undefined || !isAgentCallKind(kind)) {
     return { line: callLine(kind, subject, description), chip: undefined };
   }
+
   return {
     line: agentCallLine(kind, subject),
     chip: <AgentCallChip agent={agent} opens={opens} card={card} />,
@@ -1283,7 +1333,9 @@ function calledChip(
       <SiteChip href={page} />
     );
   }
+
   const first = calledFile(kind, files);
+
   return first === undefined ? undefined : fileChip(first, doors);
 }
 
@@ -1340,10 +1392,12 @@ export interface HeldCall {
 function useHeldOpen(waiting: boolean): { open: boolean; onOpenChange: (open: boolean) => void } {
   const [open, setOpen] = useState(waiting);
   const [was, setWas] = useState(waiting);
+
   if (was !== waiting) {
     setWas(waiting);
     setOpen(waiting);
   }
+
   return { open, onOpenChange: setOpen };
 }
 
@@ -1382,15 +1436,18 @@ export function TranscriptTool({
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
   const called = calledChip(kind, files, page, useMentionDoors());
+
   const { line, chip } =
     made !== undefined
       ? { line: madeCallLine(made.kind), chip: made.chip }
       : called === undefined
         ? chippedLine(kind, subject, description, agent, undefined, agentCard)
         : { line: { ...callLine(kind, moreFiles(files), undefined), code: false }, chip: called };
+
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
   const opened = useHeldOpen(held?.waiting === true);
+
   const row = (
     <Tool {...props} {...(held === undefined ? undefined : opened)}>
       <ToolHeader
@@ -1456,8 +1513,10 @@ export function TranscriptTool({
       </ToolContent>
     </Tool>
   );
+
   // A held call's answers stand under its row, set in to its words, as long as it waits.
   if (held?.actions === undefined || held.actions === null) return row;
+
   return (
     <>
       {row}
@@ -1504,6 +1563,7 @@ export function TranscriptOpeningCall({
   onOpen: () => void;
 }): ReactNode {
   const Icon = CALL_ICON[kind];
+
   if (sent !== undefined) {
     return (
       <SentCall
@@ -1517,7 +1577,9 @@ export function TranscriptOpeningCall({
       />
     );
   }
+
   const { line, chip } = chippedLine(kind, subject, undefined, agent);
+
   return (
     <Tooltip label={hint} card={card ?? undefined}>
       <LineButton data-call-id={callId} data-opens="" {...FIND_DETAIL} onClick={onOpen}>
@@ -1577,6 +1639,7 @@ function SentCall({
 }): ReactNode {
   const Icon = CALL_ICON[kind];
   const { line, chip } = chippedLine(kind, subject, undefined, agent ?? UNNAMED_AGENT, opens);
+
   return (
     <Tool data-call-id={callId}>
       <ToolHeader
@@ -1682,6 +1745,7 @@ function TodoItem({ todo, live }: { todo: AgentTodos["todos"][number]; live: boo
   const working = live && todo.status === AGENT_TODO_STATUS.IN_PROGRESS;
   const arrived = todo.status !== first;
   const done = todo.status === AGENT_TODO_STATUS.DONE;
+
   return (
     <li className="todo-item flex items-start gap-icon-gap" data-todo-status={todo.status}>
       {/* Keyed by where it stands, so each change mounts the glyph anew and its arrival runs. */}
@@ -1725,6 +1789,7 @@ export function TranscriptTodos({
   ...props
 }: TranscriptTodosProps): ReactNode {
   const words = CALL_WORDS[CALL_KIND.TODOS];
+
   return (
     <Tool data-todos="" {...props}>
       <ToolHeader
@@ -1768,6 +1833,7 @@ export function TranscriptTodosDock({
   focus: string | undefined;
 }): ReactNode {
   const { done, total } = todosCount(todos);
+
   return (
     <Disclosure look={DISCLOSURE_LOOK.DOCK} data-todos-dock="" aria-label="To-dos">
       <DisclosureSummary look={DISCLOSURE_SUMMARY.HEAD}>
@@ -1794,7 +1860,9 @@ export function TranscriptTodosDock({
  */
 function TodosDockFocus({ focus }: { focus: string | undefined }): ReactNode {
   const previewed = useDisclosurePreviewShown(focus !== undefined);
+
   if (focus === undefined || !previewed) return null;
+
   return (
     <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate className="flex-1">
       {focus}
@@ -1864,6 +1932,7 @@ export function TranscriptSubagent({
   body,
 }: TranscriptSubagentProps): ReactNode {
   const running = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
+
   const line = (
     <>
       <GlyphSlot>
@@ -1881,6 +1950,7 @@ export function TranscriptSubagent({
       <ToolStateMark state={state} />
     </>
   );
+
   const row =
     onOpen === undefined && body !== undefined ? (
       <Tool>
@@ -1904,6 +1974,7 @@ export function TranscriptSubagent({
         </LineButton>
       </Tooltip>
     );
+
   return (
     <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}

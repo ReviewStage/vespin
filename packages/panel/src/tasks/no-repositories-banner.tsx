@@ -87,6 +87,7 @@ type GitHubState = (typeof GITHUB_STATE)[keyof typeof GITHUB_STATE];
 /** Which way the workspace's GitHub stands: installed and reaching none, connected once but no longer installed, or never connected. */
 function gitHubState(installed: boolean, connected: boolean): GitHubState {
   if (installed) return GITHUB_STATE.NONE_REACHED;
+
   return connected ? GITHUB_STATE.LAPSED : GITHUB_STATE.NOT_CONNECTED;
 }
 
@@ -103,6 +104,7 @@ function MemberDetail({
   ask: GitHubState["ask"];
 }): React.JSX.Element {
   const { named, rest } = useOwnersToAsk(workspaceId);
+
   // Each item the choice joins: an owner's or an admin's chip, then the rest counted.
   const items: readonly React.ReactNode[] = [
     ...named.map((member) => (
@@ -110,10 +112,12 @@ function MemberDetail({
     )),
     ...(rest > 0 ? [otherOwnersWords(rest)] : []),
   ];
+
   const whom =
     items.length === 0
       ? ANY_OWNER
       : orListParts(items.length).map((part) => ("words" in part ? part.words : items[part.item]));
+
   // Note that a person is the reader's teammate, so the chips stay masked while the rest is the app's own, and that the chips stand in a sentence, so they wrap as its words do.
   return (
     <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
@@ -134,8 +138,10 @@ export function NoRepositoriesBanner({
   const token = useQuery(githubTokenQuery(accountId)).data?.token;
   // Note that every workspace's listing speaks for no one workspace, so the card waits for one to be chosen.
   const { scope } = chooser;
+
   if (scope === undefined || listed === undefined || listed.repositories.length > 0) return null;
   const state = gitHubState(listed.installed, chooser.connected === true);
+
   // Note that a member with no token known to be saved, its read still out or refused among them, saves one first, on Account, since the workspace's Add repository waits on it.
   const destination: SettingsLink =
     chooser.manages || (token !== undefined && token !== null)
@@ -145,7 +151,9 @@ export function NoRepositoriesBanner({
           workspaceId: scope,
         }
       : { page: SETTINGS_VIEW.ACCOUNT, section: SETTINGS_SECTION.GITHUB_TOKEN };
+
   const open = () => openSettings(destination);
+
   return (
     <Banner
       look={BANNER_LOOK.CARD}

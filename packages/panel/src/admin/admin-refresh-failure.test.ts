@@ -36,6 +36,7 @@ function mount(): Mounted {
   document.body.append(page);
   const root = createRoot(page);
   roots.push(root);
+
   return {
     page,
     draw: (props) =>
@@ -64,6 +65,7 @@ test("a failure lands as an alert over the answer still shown, with a Retry that
 test("the failure's words are said to a reader once", () => {
   const { page, draw } = mount();
   draw({ failure: FAILURE, refreshing: false, onRetry: () => {} });
+
   const said = [...page.querySelectorAll("*")].filter(
     (element) =>
       element.closest('[aria-hidden="true"]') === null &&
@@ -71,6 +73,7 @@ test("the failure's words are said to a reader once", () => {
         (node) => node.nodeType === 3 && node.textContent?.includes(FAILURE),
       ),
   );
+
   expect(said).toHaveLength(1);
 });
 

@@ -91,6 +91,7 @@ function heldRead<A>(
       new Date(now - Duration.toMillis(DEVICE_AGENT_SERVICE.EXPIRY)),
     );
     const topics: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
+
     const found = yield* heldUntil(
       waiting,
       (rows) => rows.length > 0,
@@ -98,6 +99,7 @@ function heldRead<A>(
       DEVICE_AGENT_SERVICE.POLL,
       DEVICE_AGENT_SERVICE.HOLD,
     );
+
     return Option.match(found, { onNone: () => [], onSome: ({ read }) => read });
   });
 }
@@ -122,18 +124,25 @@ const openedSecrets = (userId: string, agentId: string, sealed: string) =>
     const environment = yield* Effect.serviceOption(HostedEnvironment);
     const keys = Option.getOrUndefined(environment)?.providerKeyEncryptionKeys;
     const ring = keys === undefined ? undefined : parseKeyRing(keys);
+
     if (ring === undefined || Result.isFailure(ring)) {
       yield* Effect.logWarning("a local agent's launch secrets found no key ring to open them");
+
       return Option.none<DeviceAgentLaunchSecrets>();
     }
+
     const opened = openMacLaunchSecrets(ring.success, { userId, agentId }, sealed);
+
     const read = Result.isSuccess(opened)
       ? decodeSecrets(Redacted.value(opened.success))
       : undefined;
+
     if (read === undefined || Result.isFailure(read)) {
       yield* Effect.logWarning("a local agent's launch secrets did not open");
+
       return Option.none<DeviceAgentLaunchSecrets>();
     }
+
     return Option.some(read.success);
   });
 
@@ -154,13 +163,18 @@ export function claimedDeviceAgentLine(
 ) {
   return Effect.gen(function* () {
     const claimed = yield* claimDeviceAgentLine(userId, deviceId, id, claimToken);
+
     if (Option.isNone(claimed)) return Option.none();
     const { sealedSecrets, secretsGone, ...line } = claimed.value;
+
     if (secretsGone) return Option.some({ line, secretsGone: true as const });
+
     if (line.kind !== DEVICE_AGENT_LINE_KIND.LAUNCH || sealedSecrets === null) {
       return Option.some({ line });
     }
+
     const secrets = yield* openedSecrets(userId, line.agentId, sealedSecrets);
+
     return Option.some(Option.isSome(secrets) ? { line, secrets: secrets.value } : { line });
   });
 }
@@ -195,18 +209,23 @@ export function settledDeviceAgentLine(
 ) {
   return Effect.gen(function* () {
     const fresh = yield* settleDeviceAgentLine(userId, deviceId, id, exitCode);
+
     const settled = Option.isSome(fresh)
       ? fresh
       : Option.filter(
           yield* deviceAgentLineStanding(userId, id),
           (standing) => standing.settled && standing.deviceId === deviceId,
         );
+
     if (Option.isNone(settled)) return false;
     const { agentId, kind } = settled.value;
+
     if (kind !== DEVICE_AGENT_LINE_KIND.LAUNCH) return true;
     const newest = yield* latestDeviceAgentLaunch(userId, agentId);
+
     if (Option.isNone(newest) || newest.value.id !== id) return true;
     const agent = yield* readAgent(userId, agentId);
+
     if (Option.isNone(agent)) return true;
     // A launch that settled before its runner was up fails the agent's first launch, where that is what it booted.
     yield* failAgentBoot(agentId, BOOT_FAILURE.MAC_UNSTARTED, yield* DateTime.nowAsDate);
@@ -225,6 +244,7 @@ export function settledDeviceAgentLine(
       undefined,
       unopened ? TURN_FAILURE.MODEL : TURN_FAILURE.RUNNER_LOST,
     );
+
     return true;
   });
 }

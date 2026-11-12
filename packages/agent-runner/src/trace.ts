@@ -47,6 +47,7 @@ export const RUNNER_SPAN = {
   HANDSHAKE: "runner/handshake",
   FIRST_REQUEST: "runner/firstRequest",
 } as const;
+
 type RunnerSpan = (typeof RUNNER_SPAN)[keyof typeof RUNNER_SPAN];
 
 /** The attributes this file sets, the only ones a span keeps beside Sentry's own. */
@@ -174,6 +175,7 @@ const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.flatMap(
 /** Whether a message is the harness beginning a request to the model. */
 function isModelRequest(message: RunnerMessage): boolean {
   if ("method" in message) return message.method === CODEX_TURN_STARTED;
+
   return (
     message.type === "system" &&
     message.subtype === "status" &&
@@ -221,6 +223,7 @@ function observed(startup: Startup, message: RunnerMessage): boolean {
     return false;
   startup.requested = true;
   endStartup(startup);
+
   return true;
 }
 
@@ -231,12 +234,15 @@ function begunStartup(
   profiling: ProfilingNode | undefined,
 ): Startup {
   Sentry.init(sentryOptions(trace, profiling));
+
   const attributes = {
     [ATTRIBUTE.HARNESS]: harness,
     ...(trace.path === undefined ? undefined : { [ATTRIBUTE.PATH]: trace.path }),
   };
+
   // Note that Node's time origin is the instant the process started.
   const processStart = performance.timeOrigin;
+
   const span = Sentry.continueTrace(
     { sentryTrace: trace.sentryTrace, baggage: trace.baggage },
     () =>
@@ -248,13 +254,16 @@ function begunStartup(
         }),
       ),
   );
+
   const startup: Startup = {
     span,
     attributes,
     firstRequest: undefined,
     requested: false,
   };
+
   childSpan(startup, RUNNER_SPAN.CONFIG, span, processStart).end();
+
   return startup;
 }
 
@@ -264,11 +273,13 @@ const flushed = Effect.asVoid(Effect.promise(() => Sentry.flush(FLUSH_MS)));
 /** A launch's tracing on the trace it was handed. */
 function tracedLaunch(startup: Startup): LaunchTrace {
   const headers: Record<string, string> = {};
+
   for (const [name, value] of Object.entries(
     Sentry.getTraceData({ span: startup.span, propagateTraceparent: true }),
   )) {
     if (value !== undefined) headers[name] = value;
   }
+
   return {
     traced: (effect) =>
       effect.pipe(
@@ -282,6 +293,7 @@ function tracedLaunch(startup: Startup): LaunchTrace {
     step: (name, effect) =>
       Effect.suspend(() => {
         const span = childSpan(startup, name);
+
         return Effect.ensuring(
           effect,
           Effect.sync(() => span.end()),

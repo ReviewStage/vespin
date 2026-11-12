@@ -71,6 +71,7 @@ async function mount(purpose: NewTaskPurpose = NEW_TASK_PURPOSE.TASK): Promise<H
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -82,6 +83,7 @@ function sendHint(container: HTMLElement): { words: string; chord: string | unde
   const pill = document.querySelector('[role="tooltip"]') ?? assert.fail("the button's hint shows");
   const chord = pill.querySelector(".ui-shortcut")?.textContent ?? undefined;
   const words = (pill.textContent ?? "").replace(chord ?? "", "").trim();
+
   return { words, chord };
 }
 

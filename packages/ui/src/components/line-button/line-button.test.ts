@@ -34,12 +34,14 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 test("a line button is named by its words, carries its caller's marks, and acts without submitting its form", () => {
   const pressed: string[] = [];
   const submitted: string[] = [];
+
   const container = mount(
     createElement(
       "form",
@@ -61,6 +63,7 @@ test("a line button is named by its words, carries its caller's marks, and acts 
       }),
     ),
   );
+
   const buttons = Array.from(container.querySelectorAll("button"));
 
   expect(buttons.map((button) => button.textContent)).toEqual([
@@ -68,6 +71,7 @@ test("a line button is named by its words, carries its caller's marks, and acts 
     "the retry loop starts here",
   ]);
   expect(container.querySelector('button[data-call-id="call-1"]')).toBe(buttons[0]);
+
   for (const button of buttons) act(() => button.click());
   expect(pressed).toEqual(["row", "quote"]);
   expect(submitted).toEqual([]);
@@ -82,8 +86,11 @@ test("a line summary opens and closes its fold, says whether it stands open, and
       createElement(DisclosureBody, null, createElement("p", null, "the reasoning")),
     ),
   );
+
   const summary = container.querySelector('summary[data-call-id="call-2"]');
+
   if (!(summary instanceof HTMLElement)) throw new Error("not drawn");
+
   const read = () => [
     summary.getAttribute("aria-expanded"),
     container.querySelector("p")?.textContent,

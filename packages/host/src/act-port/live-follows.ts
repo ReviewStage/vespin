@@ -26,13 +26,17 @@ import { type ActPortContext, actPort } from "./base.js";
  */
 function streamed<A>(iterable: AsyncIterable<A>): AsyncIteratorObject<A, undefined, unknown> {
   const iterator = iterable[Symbol.asyncIterator]();
+
   const ended = async (): Promise<IteratorReturnResult<undefined>> => {
     await iterator.return?.();
+
     return { done: true, value: undefined };
   };
+
   const self: AsyncIteratorObject<A, undefined, unknown> = {
     next: async () => {
       const read = await iterator.next();
+
       return read.done === true ? { done: true, value: undefined } : read;
     },
     return: ended,
@@ -41,6 +45,7 @@ function streamed<A>(iterable: AsyncIterable<A>): AsyncIteratorObject<A, undefin
       await ended();
     },
   };
+
   return self;
 }
 
@@ -87,20 +92,24 @@ export function liveFollowProcedures<
   const Handlers extends Partial<HostActTable<Acts>>,
 >(acts: Acts, handlers: Handlers): FollowProcedures<Acts, keyof Handlers & keyof Acts> {
   const procedures: Record<string, unknown> = {};
+
   for (const [name, handler] of Object.entries(handlers)) {
     const follow = acts[name];
+
     if (follow === undefined || handler === undefined || !isLiveFollow(follow)) continue;
     // SAFETY: a follow's handler is its read's, by `HostActTable`'s mapping.
     const read = handler as LiveFollowHandler<typeof follow>;
     procedures[follow.kind] = builderOf(follow.kind).effect(function* ({ input }) {
       // SAFETY: the port read `input` with the follow's own key schema before this body runs.
       const key = input as FollowKey<typeof follow>;
+
       return streamed(
         yield* Stream.toAsyncIterableEffect(Stream.callback<never>(() => read.hold(key))),
       );
     });
     const { retryKind } = follow;
     const { retry } = read;
+
     // Note that a follow with no Try again declares no procedure for one.
     if (retryKind === undefined || retry === undefined) continue;
     procedures[retryKind] = builderOf(retryKind).effect(function* ({ input }) {
@@ -108,6 +117,7 @@ export function liveFollowProcedures<
       yield* retry(input as FollowKey<typeof follow>);
     });
   }
+
   // SAFETY: the loop above built each handed follow's two procedures under their own kinds.
   return procedures as FollowProcedures<Acts, keyof Handlers & keyof Acts>;
 }

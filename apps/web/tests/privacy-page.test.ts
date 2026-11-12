@@ -15,6 +15,7 @@ import { PrivacyPage } from "../src/PrivacyPage";
 function drawn(): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML = renderToString(createElement(PrivacyPage));
+
   return root;
 }
 
@@ -31,6 +32,7 @@ test("each of the policy's sections is a region named by its heading", () => {
   assert.ok(main !== null);
   const headings = Array.from(main.querySelectorAll("h2"));
   assert.ok(headings.length > 1);
+
   for (const heading of headings) {
     const region = heading.closest("section");
     assert.ok(region !== null, `${heading.textContent} heads no section`);

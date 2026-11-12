@@ -18,6 +18,7 @@ import { drawnAmong, drawnTeller } from "./drawn-lines.js";
 function changedFile() {
   const lines = Array.from({ length: 100 }, (_line, at) => `const line${at + 1} = ${at + 1};`);
   const after = lines.map((line, at) => (at === 4 || at === 89 ? `${line} // changed` : line));
+
   return parseDiffFromFile(
     { name: "a.ts", contents: `${lines.join("\n")}\n` },
     { name: "a.ts", contents: `${after.join("\n")}\n` },
@@ -34,8 +35,10 @@ function drawn(fileDiff = changedFile()) {
     preferredHighlighter: "shiki-js",
     expansionLineCount: 20,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   view.render({ fileDiff, fileContainer: container });
+
   return view;
 }
 
@@ -74,6 +77,7 @@ test("a file read from its patch alone draws none of the lines between its hunks
     " const line6 = 6;",
     "",
   ].join("\n");
+
   const read = parsePatchFiles(patch)[0]?.files[0] ?? assert.fail("the patch reads");
   const view = drawn(read);
 

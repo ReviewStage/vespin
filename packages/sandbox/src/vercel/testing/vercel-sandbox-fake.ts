@@ -24,9 +24,11 @@ const PROJECT = "prj_fixture";
  */
 export function fixtureToken(): string {
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+
   const payload = Buffer.from(JSON.stringify({ project_id: PROJECT, owner_id: TEAM })).toString(
     "base64url",
   );
+
   return `${header}.${payload}.`;
 }
 
@@ -47,11 +49,14 @@ const JSON_MEDIA_TYPE = "application/json";
 /** The 400 Vercel answers a list whose query it refuses, or nothing where it would answer the list. */
 export function sandboxListRefusal(url: URL): Response | undefined {
   const limit = url.searchParams.get("limit");
+
   if (limit === null) return undefined;
   const asked = Number(limit);
+
   if (Number.isInteger(asked) && asked >= LIST_LIMIT.MIN && asked <= LIST_LIMIT.MAX) {
     return undefined;
   }
+
   return Response.json(
     { error: { code: "bad_request", message: "Invalid request: `limit` out of range" } },
     { status: INVALID_QUERY_STATUS },
@@ -61,7 +66,9 @@ export function sandboxListRefusal(url: URL): Response | undefined {
 /** The 415 Vercel answers a stop not sent as JSON, or nothing where it would answer the stop. */
 export function sandboxStopRefusal(init: RequestInit): Response | undefined {
   const type = new Headers(init.headers).get("content-type") ?? "";
+
   if (type.split(";")[0]?.trim().toLowerCase() === JSON_MEDIA_TYPE) return undefined;
+
   return Response.json(
     { error: { code: "unsupported_media_type", message: "Unsupported Media Type" } },
     { status: UNSUPPORTED_MEDIA_TYPE_STATUS },
@@ -73,6 +80,7 @@ export function sandboxTagsRefusal(
   tags: Readonly<Record<string, string>> | undefined,
 ): Response | undefined {
   if (tags === undefined || Object.keys(tags).length <= TAG_LIMIT) return undefined;
+
   return Response.json(
     {
       error: {
@@ -202,6 +210,7 @@ export function commandRunStreamed(
     { stream: "stdout", data: run.stdout },
     { stream: "stderr", data: run.stderr },
   ];
+
   return streamed([
     { command: commandOf({ ...command, exitCode: null }) },
     ...printed.filter((line) => line.data !== ""),
@@ -212,6 +221,7 @@ export function commandRunStreamed(
 /** What a command printed on stderr, as its logs stream it. */
 export function commandLogsStreamed(stderr: string): Response {
   const printed: OutputLine[] = [{ stream: "stderr", data: stderr }];
+
   return streamed(printed.filter((line) => line.data !== ""));
 }
 
@@ -276,6 +286,7 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
   let next = 0;
   const named = (name: string) => drives.find((each) => !each.deleted && each.name === name);
   const mountsOf = (mounts: unknown): FakeMounts => (mounts ?? {}) as FakeMounts;
+
   return {
     drives,
     /** What a create's body mounts, kept as it was sent. */
@@ -286,6 +297,7 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
     /** The drive standing that a create's mounts put at the path, where one does. */
     mountedAt: (mounts: unknown, at: string) => {
       const name = mountsOf(mounts)[at]?.drive;
+
       return name === undefined ? undefined : named(name);
     },
     /** Vercel's answer to a call on a drive, or nothing where the call is on none. */
@@ -295,37 +307,50 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
       body: () => Promise<{ readonly name?: string }>,
     ): Promise<Response | undefined> => {
       const call = /^\/api\/v2\/sandboxes\/drives\/([^/]+)(\/fork)?$/u.exec(path);
+
       if (call === null) return undefined;
       const name = decodeURIComponent(call[1] ?? "");
       const standing = named(name);
+
       if (method === "POST" && call[2] === undefined) {
         next += 1;
         const made = standing ?? { id: `drv_${next}`, name, deleted: false };
+
         if (standing === undefined) drives.push(made);
+
         return Response.json(driveAnswered(made));
       }
+
       if (standing === undefined) {
         return Response.json({ error: { code: "not_found" } }, { status: 404 });
       }
+
       if (method === "POST") {
         next += 1;
+
         const forked: FakeDrive = {
           id: `drv_${next}`,
           name: (await body()).name ?? "",
           forkedFrom: name,
           deleted: false,
         };
+
         drives.push(forked);
+
         return Response.json(driveAnswered({ ...forked, parentDriveId: standing.id }));
       }
+
       if (method === "DELETE") {
         const mountsIt = (mounts: unknown) =>
           Object.values(mountsOf(mounts)).some((mount) => mount.drive === name);
+
         if (attached(mountsIt)) {
           return Response.json({ error: { code: "drive_attached" } }, { status: 409 });
         }
+
         standing.deleted = true;
       }
+
       return Response.json(driveAnswered(standing));
     },
   };
@@ -338,6 +363,7 @@ type Responder = (url: string, init: RequestInit) => Response | Promise<Response
 export function sandboxFetchOver(respond: Responder): Layer.Layer<never> {
   const send: typeof globalThis.fetch = (input, init) =>
     Promise.resolve(respond(input instanceof Request ? input.url : String(input), init ?? {}));
+
   return Layer.mergeAll(
     Layer.succeed(SandboxFetch, send),
     Layer.succeed(SandboxToken, async () => fixtureToken()),

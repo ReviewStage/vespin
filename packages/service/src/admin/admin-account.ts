@@ -116,8 +116,11 @@ export interface AdminAccountSource {
 /** The pull request's state as the page draws it, a draft being open. */
 function pullRequestOf(state: PullRequestState | null): AdminPullRequest {
   if (state === null) return ADMIN_PULL_REQUEST.NONE;
+
   if (state === PULL_REQUEST_STATE.MERGED) return ADMIN_PULL_REQUEST.MERGED;
+
   if (state === PULL_REQUEST_STATE.CLOSED) return ADMIN_PULL_REQUEST.CLOSED;
+
   return ADMIN_PULL_REQUEST.OPEN;
 }
 
@@ -125,6 +128,7 @@ function pullRequestOf(state: PullRequestState | null): AdminPullRequest {
 function agentOf(source: AdminAccountAgentSource, now: number): AdminAccountAgent {
   const status = agentStatusOf(source.turn, { createdAt: source.createdAt, now });
   const failure = status === AGENT_STATUS.FAILED ? (agentFailureOf(source.turn) ?? null) : null;
+
   return {
     id: source.id,
     createdAt: source.createdAt.getTime(),
@@ -145,12 +149,15 @@ function agentFailures(
   windowStart: number,
 ): AdminAccountFailure[] {
   const failures: AdminAccountFailure[] = [];
+
   for (const agent of source.windowAgents) {
     const read = agentOf(agent, now);
     const at = (agent.turn?.settledAt ?? agent.createdAt).getTime();
+
     if (read.status !== AGENT_STATUS.FAILED || at < windowStart) continue;
     failures.push({ kind: ADMIN_FAILURE_KIND.AGENT, at, reason: read.failure });
   }
+
   return failures;
 }
 
@@ -164,6 +171,7 @@ function credentialFailures(
   windowStart: number,
 ): AdminAccountFailure[] {
   const failures: AdminAccountFailure[] = [];
+
   for (const key of source.providerKeys) {
     if (key.status === PROVIDER_KEY_STATUS.VERIFIED || key.statusAt < windowStart) continue;
     failures.push({
@@ -173,10 +181,12 @@ function credentialFailures(
       reason: key.status,
     });
   }
+
   for (const connection of source.connections) {
     if (connection.status !== INTEGRATION_ROW_STATUS.EXPIRED || connection.at < windowStart) {
       continue;
     }
+
     failures.push({
       kind: ADMIN_FAILURE_KIND.CONNECTION,
       at: connection.at,
@@ -184,6 +194,7 @@ function credentialFailures(
       reason: connection.status,
     });
   }
+
   return failures;
 }
 
@@ -202,6 +213,7 @@ export function buildAdminAccountSupport(
   const windowRead = source.windowAgents
     .filter((agent) => agent.createdAt.getTime() >= windowStart)
     .map((agent) => agentOf(agent, now));
+
   const chosen = source.defaults?.experiments ?? {};
 
   const failures = [

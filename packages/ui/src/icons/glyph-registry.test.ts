@@ -17,6 +17,7 @@ const DRAWN = Object.entries(GLYPH).map(([concept, glyph]) => ({
 
 test("no two concepts are drawn by the same mark", () => {
   const first = new Map<string, string>();
+
   for (const { concept, markup } of DRAWN) {
     const sameAs = first.get(markup);
     assert.equal(sameAs, undefined, `${concept} is drawn as ${sameAs} is`);

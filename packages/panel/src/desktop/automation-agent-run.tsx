@@ -81,6 +81,7 @@ export function AutomationGlyph({
 }): React.JSX.Element {
   const { data } = useQuery(automationsQuery(workspaceId));
   const trigger = data?.find((automation) => automation.id === automationId)?.trigger;
+
   return trigger === undefined ? <GLYPH.AUTOMATION /> : <FiringGlyph of={trigger} />;
 }
 
@@ -92,15 +93,19 @@ export function automationTrail(
 ): readonly ToolbarPlace[] | undefined {
   // Note that a run from before its origin was kept has no name to lead with, so it draws none.
   const name = automationRun(agent)?.name;
+
   if (name === undefined) return undefined;
   const { automationId } = agent;
+
   const automations: ToolbarPlace = {
     label: AUTOMATIONS_PLACE,
     icon: <GLYPH.AUTOMATION />,
     onPress: () => onOpen({ kind: AUTOMATIONS_PAGE.LIST }),
   };
+
   // Note that an automation deleted since keeps its name on the agent, but there is no page to open.
   if (automationId === undefined) return [automations];
+
   return [
     automations,
     {
@@ -122,6 +127,7 @@ export function openRunAgent(
   agentId: string,
 ): void {
   const planId = tasks.liveAgents?.find((each) => each.id === agentId)?.planId;
+
   if (planId === undefined) tasks.agentView.onOpen(agentId);
   else tasks.onShowAgent(planId, agentId);
 }
@@ -141,7 +147,9 @@ export function useAutomationRunPlace(
   agent: Pick<AgentSummary, "id" | "automationId"> | undefined,
 ): AutomationRunPlace | undefined {
   const { read } = useAutomationRuns(agent?.automationId);
+
   if (agent === undefined || read === undefined || !("runs" in read)) return undefined;
+
   return automationRunPlace(read.runs, agent.id);
 }
 
@@ -157,6 +165,7 @@ export function AutomationRunStrip({
   const now = useMinute();
   const { run } = place;
   const line = automationRunLine(run);
+
   return (
     <PaneBar
       mark={<FiringGlyph of={run.firing} />}
@@ -190,6 +199,7 @@ export function AutomationRunSteps({
   onOpenAgent: (agentId: string) => void;
 }): React.JSX.Element {
   const { older, newer } = place;
+
   return (
     <Pager
       axis={PAGER_AXIS.HORIZONTAL}

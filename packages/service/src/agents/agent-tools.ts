@@ -487,12 +487,14 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
 function notOwnerWords(device: RefusedDevice | undefined): string {
   const where = device === undefined ? "another member's device" : device.name;
   const who = device?.owner ?? "its owner";
+
   return `Not started: it would run on ${where}. Only ${who} can start agents on it, so ask them to, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`;
 }
 
 /** A device of the member's as a refusal of a device's name lists it: its name, its id, and whether it is online now, as a start would take it (`freshOffer`). */
 function listedDevice(device: Device, now: number): string {
   const online = device.lastSeenAt.getTime() >= now - MAC_PRESENCE.FRESH_MS;
+
   return `${JSON.stringify(device.name)} (deviceId ${device.id}, ${online ? "online" : "away"})`;
 }
 
@@ -510,11 +512,14 @@ function deviceNameRefusal(
 ): string {
   if (devices.length === 0) return START_AGENT_REFUSAL.NO_DEVICES;
   const named = JSON.stringify(name);
+
   const why =
     matched === 0
       ? `no device of the member's is named ${named}`
       : `${matched} devices of the member's are named ${named}, so name the one you mean by its deviceId`;
+
   const listed = devices.map((device) => listedDevice(device, now)).join("; ");
+
   return `Not started: ${why}. Their devices: ${listed}. Name one by its name or its deviceId, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`;
 }
 
@@ -891,6 +896,7 @@ const UPDATE_TASK_CALL = Schema.Struct({
 });
 
 const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
+
 /**
  * A start as a call carries it: the coding agent's input, and the repository
  * of the task a member's call makes, which the member's own tool names
@@ -984,6 +990,7 @@ export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
 
 function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
   const words = wordsOf(on);
+
   return (
     "Start a new agent on the task you work on, or on another task of your workspace by " +
     `its taskId as ${AGENT_TOOL.LIST_TASKS} answered it, exactly as the developer would: ` +
@@ -1146,9 +1153,13 @@ function updateNamesAChange(update: {
 }): boolean {
   const { title, model, effort, contextWindow, pinned, disabledServers, archived, reason } = update;
   const changes = [title, model, pinned, disabledServers, archived];
+
   if ((model === undefined) !== (effort === undefined)) return false;
+
   if (contextWindow !== undefined && model === undefined) return false;
+
   if (reason !== undefined && archived !== true) return false;
+
   return changes.some((field) => field !== undefined);
 }
 
@@ -1300,6 +1311,7 @@ const ENTRY_WORDS = {
 
 function cut(text: string, maximumChars: number): string {
   const line = text.replace(/\s+/gu, " ").trim();
+
   return line.length > maximumChars ? `${line.slice(0, maximumChars - 1)}…` : line;
 }
 
@@ -1315,7 +1327,9 @@ function journalEntriesOf(journal: StoredUIMessage): EntryWords[] {
     if (isTextUIPart(part) && part.text.trim().length > 0) {
       return [{ text: `${ENTRY_WORDS.SAID}: ${part.text.trim()}` }];
     }
+
     if (isStoredToolPart(part)) return [{ text: callEntry(part), callId: part.toolCallId }];
+
     return [];
   });
 }
@@ -1328,9 +1342,12 @@ function entriesOf(journal: StoredUIMessage): string[] {
 /** A message's entries in order, whole: a line under who sent it, its files named, and a journal's own; none for any other row. */
 function rowEntriesOf(record: StoredMessageRecord, sent: LineSent | undefined): EntryWords[] {
   const { role, parts } = record.message;
+
   if (role === MESSAGE_ROLE.ASSISTANT) return journalEntriesOf(record.message);
+
   if (role !== MESSAGE_ROLE.USER) return [];
   const words = lineWords(parts).trim();
+
   return words === "" ? [] : [{ text: `${senderName(sent)}: ${words}` }];
 }
 
@@ -1362,14 +1379,17 @@ const standingsOf = (agents: readonly Agent[]) =>
     const turns = yield* latestTurnsOfReached(ids);
     const boots = yield* agentBootsOf(agents.map((agent) => agent.id));
     const now = yield* Clock.currentTimeMillis;
+
     return (agent: Agent) => {
       const turn = turns.get(agent.conversationId);
+
       const status = agentStatusOf(turn, {
         createdAt: agent.createdAt,
         now,
         blank: startedBlank(agent),
         boot: boots.get(agent.id)?.phase,
       });
+
       // Why the newest turn failed is said only while the agent reads as failed.
       return {
         status,
@@ -1410,6 +1430,7 @@ const readAgentReading = (
       : entriesOf(newest.message)
           .map((entry) => cut(entry, AGENT_TOOL_BOUNDS.ACTIVITY_CHARS))
           .at(-1);
+
   return {
     id: agent.id,
     ...task,
@@ -1485,12 +1506,15 @@ const agentRouteOf = (agent: Agent) =>
 export const workspaceAgentOf = (caller: AgentCaller, agentId: string) =>
   Effect.gen(function* () {
     const workspace = yield* callerWorkspace(caller);
+
     if (Option.isNone(workspace)) return Option.none();
     const userId = callerUserId(caller);
     const found = yield* workspaceAgent(userId, workspace.value, agentId, callerAgent(caller)?.id);
+
     if (Option.isNone(found)) return Option.none();
     const agent = found.value;
     const task = yield* agentTaskOf(userId, agent);
+
     return Option.some({
       agent,
       task: taskReading(task, callerTask(caller)),
@@ -1502,8 +1526,10 @@ export const workspaceAgentOf = (caller: AgentCaller, agentId: string) =>
 const taskOfCallerWorkspace = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
     const workspace = yield* callerWorkspace(caller);
+
     if (Option.isNone(workspace)) return false;
     const owning = yield* readTaskWorkspace(callerUserId(caller), taskId);
+
     return Option.isSome(owning) && owning.value === workspace.value;
   });
 
@@ -1517,6 +1543,7 @@ function withReset(words: string, refusal: HostedRefusal): string {
   if (refusal.provider !== undefined) {
     return `${words} The model's provider is connected as ${harnessNameOf(refusal.provider)}.`;
   }
+
   return refusal.resetsAt === undefined
     ? words
     : `${words} It resets at ${new Date(refusal.resetsAt).toISOString()}.`;
@@ -1527,9 +1554,11 @@ function startRefusalWords(refusal: HostedRefusal): string {
   if (refusal.localAgentRefusal === LOCAL_AGENT_REFUSAL.NOT_OWNER) {
     return notOwnerWords(refusal.refusedDevice);
   }
+
   if (refusal.localAgentRefusal !== undefined) {
     return LOCAL_AGENT_REFUSAL_WORDS[refusal.localAgentRefusal];
   }
+
   return withReset(
     START_REFUSAL_WORDS.get(refusal.error) ?? START_AGENT_REFUSAL.UNAVAILABLE,
     refusal,
@@ -1546,13 +1575,16 @@ export function choiceRefusal(
     choice === undefined
       ? "the member's default model is no longer offered"
       : `no offered model is ${choice.model} at effort ${choice.effort}`;
+
   const choices = offered.map((model) => `${model.id} (${model.efforts.join(", ")})`).join("; ");
+
   return `${lead}: ${refused}. The choices are: ${choices}.`;
 }
 
 /** How a coding agent names itself to another: its title, its id to answer it by, and its repository where it has one. */
 function agentIntroduction(agent: Agent): string {
   const working = agent.repository === null ? "" : `, working in ${agent.repository}`;
+
   return `"${agentName(agent)}" (agent id ${agent.id})${working}`;
 }
 
@@ -1584,6 +1616,7 @@ function startedByNote(starter: Agent, note: string | undefined): string {
     "not by the developer. Your final message reaches it by itself once your turn ends, so make " +
     "that message your report: what you did, what you published, and what you need of it. To " +
     `reach it before then, call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${starter.id}.`;
+
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }
 
@@ -1591,6 +1624,7 @@ function startedByNote(starter: Agent, note: string | undefined): string {
 const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask: string | null) =>
   Effect.gen(function* () {
     const standing = yield* standingsOf([agent]);
+
     return {
       id: agent.id,
       title: agentName(agent),
@@ -1626,15 +1660,19 @@ const startedBefore = (call: AgentCall) =>
     const { caller } = call;
     const userId = callerUserId(caller);
     const made = yield* readAgentByKey(userId, call.clientKey);
+
     if (Option.isNone(made)) return Option.none<WireRecord>();
     const agent = made.value;
     const workspace = yield* callerWorkspace(caller);
+
     if (Option.isNone(workspace) || agent.organizationId !== workspace.value) {
       return Option.some(agentToolRejected(START_AGENT_REFUSAL.NO_SUCH_TASK));
     }
+
     const reading = yield* startedReading(agent, yield* offeredModels, callerTask(caller));
     // A continue run again names the agents that continued its source before it, as its first answer did.
     const from = agent.startedFrom;
+
     const continuedBy =
       from === null || from.messageId !== undefined
         ? []
@@ -1643,6 +1681,7 @@ const startedBefore = (call: AgentCall) =>
             from.agentId,
             agent.id,
           );
+
     return Option.some<WireRecord>({
       status: ACTION_RESULT_STATUS.ACCEPTED,
       agent: reading,
@@ -1663,20 +1702,26 @@ export function runListAgents(
   const { caller } = call;
   const ownTask = callerTask(caller);
   const narrowed = listedFilter(input, ownTask);
+
   if (Result.isFailure(narrowed)) return Effect.succeed(agentToolRejected(narrowed.failure));
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
+
       const { agents, taskOf, nextOffset } = yield* workspaceAgentsOf(
         callerUserId(caller),
         workspace.value,
         callerAgent(caller),
         narrowed.success,
       );
+
       const standing = yield* standingsOf(agents);
       const newest = yield* newestJournalsOf(agents);
       const offered = yield* offeredModels;
+
       const readings = agents.map((agent) =>
         readAgentReading(
           agent,
@@ -1686,6 +1731,7 @@ export function runListAgents(
           offered,
         ),
       );
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agents: readings.map(readingRecord),
@@ -1733,6 +1779,7 @@ function isBefore(one: TranscriptPlace, other: TranscriptPlace): boolean {
 /** Whether an entry lies past the place a page reads from, the way it reads; every entry where it names none. */
 function liesPast(place: TranscriptPlace, asked: PageAsked): boolean {
   if (asked.place === undefined) return true;
+
   return asked.way === PAGE_WAY.BACK ? isBefore(place, asked.place) : isBefore(asked.place, place);
 }
 
@@ -1751,6 +1798,7 @@ function pageEntriesOf(
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
     callId,
   }));
+
   return way === PAGE_WAY.BACK ? entries.reverse() : entries;
 }
 
@@ -1764,6 +1812,7 @@ interface PageRows {
 const pageRowsAt = (target: ConversationTarget, way: PageWay, at: number) => {
   const { PAGE_ROWS } = AGENT_TOOL_BOUNDS;
   const { userId, conversationId } = target;
+
   return Effect.map(
     way === PAGE_WAY.BACK
       ? listMessagesBefore(userId, conversationId, CODER_TOOL_SET, at, PAGE_ROWS)
@@ -1774,6 +1823,7 @@ const pageRowsAt = (target: ConversationTarget, way: PageWay, at: number) => {
       const ordered = way === PAGE_WAY.BACK ? rows.toReversed() : rows;
       const last = ordered.at(-1);
       const next = way === PAGE_WAY.BACK ? last?.seq : (last?.seq ?? 0) + 1;
+
       return { rows: ordered, next: rows.length < PAGE_ROWS ? undefined : next };
     },
   );
@@ -1794,31 +1844,40 @@ export const transcriptPage = (target: ConversationTarget, asked: PageAsked) =>
   Effect.gen(function* () {
     const entries: PageEntry[] = [];
     let chars = 0;
+
     let at: number | undefined =
       asked.way === PAGE_WAY.BACK
         ? asked.place === undefined
           ? Number.MAX_SAFE_INTEGER
           : asked.place.seq + 1
         : (asked.place?.seq ?? 0);
+
     while (at !== undefined) {
       const rowsRead: PageRows | undefined = yield* pageRowsAt(target, asked.way, at);
+
       if (rowsRead === undefined) return undefined;
       const { rows, next }: PageRows = rowsRead;
+
       const senders = yield* lineSendersOf(
         { userId: target.userId, conversationId: target.conversationId },
         rows.filter((row) => row.message.role === MESSAGE_ROLE.USER).map((row) => row.id),
       );
+
       const read = rows.flatMap((row) => pageEntriesOf(row, senders.get(row.id), asked.way));
+
       for (const entry of read.filter((each) => liesPast(each.place, asked))) {
         const full =
           entries.length === asked.entries ||
           (entries.length > 0 && chars + entry.text.length > AGENT_TOOL_BOUNDS.PAGE_CHARS);
+
         if (full) return { entries, more: true } satisfies PageRead;
         entries.push(entry);
         chars += entry.text.length;
       }
+
       at = next;
     }
+
     return { entries, more: false } satisfies PageRead;
   });
 
@@ -1827,10 +1886,14 @@ export function pageAskedOf(
   asked: Pick<typeof CODER_READ_AGENT_INPUT.Type, "from" | "before" | "after" | "entries">,
 ): PageAsked | undefined {
   const entries = asked.entries ?? AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES;
+
   if (asked.before !== undefined && asked.after !== undefined) return undefined;
+
   if (asked.before !== undefined) return { way: PAGE_WAY.BACK, place: asked.before, entries };
+
   if (asked.after !== undefined) return { way: PAGE_WAY.ON, place: asked.after, entries };
   const way = asked.from === TRANSCRIPT_FROM.START ? PAGE_WAY.ON : PAGE_WAY.BACK;
+
   return { way, place: undefined, entries };
 }
 
@@ -1852,6 +1915,7 @@ export function pageAnswer(
   const last = entries.at(-1);
   const older = (back ? page.more : asked.place !== undefined) ? first?.place : undefined;
   const newer = (back ? asked.place !== undefined : page.more) ? last?.place : undefined;
+
   return {
     transcript: entries.map(said),
     ...(older === undefined ? undefined : { older: { ...older } }),
@@ -1894,16 +1958,20 @@ export function runReadAgent(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readAgentAsked(input);
   const page = Result.isSuccess(asked) ? pageAskedOf(asked.success) : undefined;
+
   if (Result.isFailure(asked) || page === undefined) {
     return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_PAGE));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, asked.success.agentId);
+
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent, task } = found.value;
       const standing = yield* standingsOf([agent]);
       const newest = yield* newestJournalsOf([agent]);
+
       const reading = readAgentReading(
         agent,
         task,
@@ -1911,10 +1979,13 @@ export function runReadAgent(
         newest.get(agent.conversationId),
         yield* offeredModels,
       );
+
       const published = yield* publishedOf(callerUserId(call.caller), agent);
       const read = yield* transcriptPage(agent, page);
+
       if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
       const queue = yield* queueOnPage(agent.id);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: readingRecord(reading),
@@ -1955,6 +2026,7 @@ const earlierContinuationsOf = (
     const whole = continuations.filter((each) => each.messageId === undefined);
     const cut = whole.findIndex((each) => each.agentId === upTo);
     const earlier = cut < 0 ? whole : whole.slice(0, cut);
+
     return earlier.map(
       (each): EarlierContinuation => ({
         id: each.agentId,
@@ -1972,12 +2044,15 @@ const startedThrough = (userId: string, agentId: string, ancestorId: string) =>
   Effect.gen(function* () {
     const seen = new Set<string>();
     let at: string | null = agentId;
+
     while (at !== null && !seen.has(at)) {
       seen.add(at);
       const read: Option.Option<Agent> = yield* readAgent(userId, at);
       at = Option.isSome(read) ? read.value.startedByAgentId : null;
+
       if (at === ancestorId) return true;
     }
+
     return false;
   });
 
@@ -1989,42 +2064,55 @@ const sourceLanding = (
 ): Effect.Effect<Result.Result<SourceLanding, string>, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
     const found = yield* workspaceAgentOf(caller, from.agentId);
+
     if (Option.isNone(found)) return Result.fail(START_AGENT_REFUSAL.NO_SOURCE);
     const { agent: source, workspaceId } = found.value;
+
     if (!startsFromAgent(callerUserId(caller), source)) {
       return Result.fail(`Not started: only ${yield* agentStarterName(source)} can do this.`);
     }
+
     if (named !== undefined && named !== source.taskId) {
       return Result.fail(START_AGENT_REFUSAL.SOURCE_OTHER_TASK);
     }
+
     // A start from an agent lands on the source's own task.
     const place = placeOfAgent(source);
+
     // A fork names one of the source's own messages, and leaves the source going on beside it.
     if (from.messageId !== undefined) {
       const { userId, conversationId } = source;
       const role = MESSAGE_ROLE.ASSISTANT;
       const at = yield* messageSeqOf(userId, conversationId, from.messageId, role);
+
       if (Option.isNone(at)) return Result.fail(START_AGENT_REFUSAL.NO_MESSAGE);
+
       return Result.succeed({ place, continuedBy: [] });
     }
+
     // Note that a continue of an agent that started the caller stops that agent, while the caller's reports still go to it.
     // A member is started by no agent, so no source started them.
     const calling = callerAgent(caller);
+
     if (
       calling !== undefined &&
       (yield* startedThrough(callerUserId(caller), calling.id, source.id))
     ) {
       return Result.fail(START_AGENT_REFUSAL.STARTER_CONTINUE);
     }
+
     // A continue takes over work that has ended; one already continued is
     // continued again, since a continuation may itself fail or go wrong, and
     // the answer names the earlier ones so the caller knows they stand.
     const { status } = (yield* standingsOf([source]))(source);
+
     if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
       return Result.fail(START_AGENT_REFUSAL.SOURCE_RUNNING);
     }
+
     const at = { userId: callerUserId(caller), workspaceId, taskId: source.taskId };
     const continuedBy = yield* earlierContinuationsOf(at, source.id);
+
     return Result.succeed({ place, continuedBy });
   });
 
@@ -2034,6 +2122,7 @@ function earlierContinuations(
   startedId: string,
 ): WireRecord {
   const earlier = (continuedBy ?? []).filter((each) => each.id !== startedId);
+
   return earlier.length === 0 ? {} : { earlierContinuations: earlier.map((each) => ({ ...each })) };
 }
 
@@ -2042,9 +2131,11 @@ function startFromRefusalWords(refusal: HostedRefusal, from: AgentStartFrom | un
   if (from !== undefined && refusal.error === HOSTED_API_ERROR.NOT_FOUND) {
     return START_AGENT_REFUSAL.NO_SOURCE;
   }
+
   if (from?.messageId !== undefined && refusal.error === HOSTED_API_ERROR.INVALID_REQUEST) {
     return START_AGENT_REFUSAL.NO_MESSAGE;
   }
+
   return startRefusalWords(refusal);
 }
 
@@ -2078,10 +2169,13 @@ const startTaskOf = (
     const { caller } = call;
     const userId = callerUserId(caller);
     const id = calledId(userId, call.clientKey);
+
     if (Option.isSome(yield* readTask(userId, id))) return Result.succeed(id);
     const workspace = yield* callerWorkspace(caller);
+
     if (Option.isNone(workspace)) return Result.fail(START_AGENT_REFUSAL.NO_WORKSPACE);
     const calling = callerAgent(caller);
+
     const made = yield* createTaskAsked(
       userId,
       {
@@ -2098,6 +2192,7 @@ const startTaskOf = (
       },
       SERVER_TASK_SOURCE.AGENT,
     );
+
     return Result.succeed(made.task.task.id);
   }).pipe(
     Effect.catchTag(
@@ -2132,15 +2227,20 @@ function startInputRefusal(
 ): string | undefined {
   const { from } = start;
   const onTask = start.taskId !== undefined || callerTask(caller) !== null;
+
   if (start.repository !== undefined && (from !== undefined || onTask)) {
     return START_AGENT_REFUSAL.REPOSITORY_ON_TASK;
   }
+
   if (from === undefined) return undefined;
   const prompt = start.prompt ?? start.task;
+
   if (prompt !== undefined || start.branch !== undefined) {
     return START_AGENT_REFUSAL.FROM_WITH_PROMPT;
   }
+
   const self = from.agentId === callerAgent(caller)?.id;
+
   return self && from.messageId === undefined ? START_AGENT_REFUSAL.SELF_CONTINUE : undefined;
 }
 
@@ -2165,10 +2265,13 @@ const runsOnOfStart = Effect.fnUntraced(function* (
   const wanted = runsOn.device.trim().toLowerCase();
   const matched = devices.filter((device) => device.name.trim().toLowerCase() === wanted);
   const [only] = matched;
+
   if (matched.length === 1 && only !== undefined) {
     return Result.succeed({ machine: AGENT_MACHINE.DEVICE, deviceId: only.id });
   }
+
   const now = yield* Clock.currentTimeMillis;
+
   return Result.fail(deviceNameRefusal(runsOn.device, matched.length, devices, now));
 });
 
@@ -2191,6 +2294,7 @@ export function runStartAgent(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readStart(input);
+
   // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
   if (
     Result.isFailure(asked) ||
@@ -2198,18 +2302,22 @@ export function runStartAgent(
   ) {
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.UNREADABLE));
   }
+
   if (asked.success.newTask !== undefined) {
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NEW_TASK));
   }
+
   const { model, effort, from } = asked.success;
   const { caller, agentSessions } = call;
   const refused = startInputRefusal(caller, asked.success);
+
   if (refused !== undefined) return Effect.succeed(agentToolRejected(refused));
   const prompt = asked.success.prompt ?? asked.success.task;
   const choice = model !== undefined && effort !== undefined ? { model, effort } : undefined;
   const named = asked.success.taskId;
   const ownTask = callerTask(caller);
   const userId = callerUserId(caller);
+
   return orStoreRefusal(
     Effect.gen(function* () {
       // Another task, or another agent's, is started on only where it is of the caller's
@@ -2217,22 +2325,30 @@ export function runStartAgent(
       // (`startedBefore`), before a source is read, which its own continue has since stopped,
       // or the pictures it named, which may be gone since.
       const elsewhere = from !== undefined || (named !== undefined && named !== ownTask);
+
       if (elsewhere || asked.success.images !== undefined) {
         const before = yield* startedBefore(call);
+
         if (Option.isSome(before)) return before.value;
       }
+
       if (from === undefined && named !== undefined && named !== ownTask) {
         const reached = yield* taskOfCallerWorkspace(caller, named);
+
         if (!reached) return agentToolRejected(START_AGENT_REFUSAL.NO_SUCH_TASK);
       }
+
       // A start from another agent lands in that agent's own place, its task or its workspace.
       const landing = from === undefined ? undefined : yield* sourceLanding(caller, from, named);
+
       if (landing !== undefined && Result.isFailure(landing)) {
         return agentToolRejected(landing.failure);
       }
+
       // A caller on no task that names none starts on a task made for the agent, handed words alone,
       // in the repository named or its own.
       const taskId = named ?? ownTask;
+
       // Note that a workspace with Task descriptions off has no description to hand a start, so every start but one from another agent names its prompt.
       if (
         landing === undefined &&
@@ -2241,38 +2357,51 @@ export function runStartAgent(
       ) {
         return agentToolRejected(START_AGENT_REFUSAL.PROMPT_NEEDED);
       }
+
       const fresh = landing === undefined && taskId === null;
+
       if (fresh && prompt === undefined) return agentToolRejected(START_AGENT_REFUSAL.NO_PROMPT);
+
       const repository =
         asked.success.repository === undefined
           ? (callerAgent(caller)?.repository ?? null)
           : asked.success.repository;
+
       if (fresh && repository === null && asked.success.branch !== undefined) {
         return agentToolRejected(START_AGENT_REFUSAL.BRANCH_NO_REPOSITORY);
       }
+
       // The pictures it is handed are read as the caller may read them, and refused whole where one is not.
       const images =
         asked.success.images === undefined
           ? Result.succeed([])
           : yield* forwardedImages(forwarderOf(caller), asked.success.images);
+
       if (Result.isFailure(images)) {
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
+
       const runsOn = yield* runsOnOfStart(userId, asked.success.runsOn);
+
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       // Note that the task is made only once the call's input is read whole, so a call refused for it makes none.
       const making = fresh ? yield* startTaskOf(call, repository) : undefined;
+
       if (making !== undefined && Result.isFailure(making))
         return agentToolRejected(making.failure);
       const made = making?.success;
       const onTask = taskId ?? made;
+
       const place: StartWhere | undefined =
         landing?.success.place ?? (onTask === undefined ? undefined : { taskId: onTask });
+
       if (place === undefined) return agentToolRejected(START_AGENT_REFUSAL.NO_WORKSPACE);
       // An agent a coding agent starts hears who started it, and that it reports back to it by message; one a member starts hears their note as the developer's.
       const calling = callerAgent(caller);
+
       const note =
         calling === undefined ? asked.success.note : startedByNote(calling, asked.success.note);
+
       const started = yield* startAgent(Effect.succeed(agentSessions), userId, {
         ...place,
         idempotencyKey: call.clientKey,
@@ -2297,15 +2426,20 @@ export function runStartAgent(
             ? yield* runOfCaller(calling)
             : undefined,
       }).pipe(Effect.result);
+
       if (Result.isFailure(started)) {
         const refusal = started.failure;
+
         if (made !== undefined) yield* discardUnstarted(userId, made);
+
         if (refusal instanceof ModelChoiceRefused) {
           // The choices are the models the start was checked against, so no second read can lose them.
           return agentToolRejected(choiceRefusal(choice, refusal.offered));
         }
+
         return agentToolRejected(startFromRefusalWords(refusal, from));
       }
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: yield* startedReading(started.success.agent, yield* offeredModels, ownTask),
@@ -2318,9 +2452,11 @@ export function runStartAgent(
 /** Who an archive is by: the calling coding agent by its id and name, for the member the caller acts for, or the member calling, with the reason given. */
 function archiverOf(caller: AgentCaller, reason: string | undefined): StoredArchive {
   const why = reason === undefined ? undefined : { reason };
+
   if (caller.kind === AGENT_CALLER.MEMBER) {
     return { by: AGENT_ARCHIVER.MEMBER, userId: caller.userId, ...why };
   }
+
   return {
     by: AGENT_ARCHIVER.AGENT,
     userId: caller.agent.userId,
@@ -2366,6 +2502,7 @@ export const taskUpdateAnswer = (
   Effect.gen(function* () {
     const { step, name } = yield* workspaceNamingOf(userId, task.workspaceId);
     const blocks = blocksNamed ? yield* taskBlockReadingsNow(userId, task.id) : undefined;
+
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       task: {
@@ -2382,6 +2519,7 @@ export const taskUpdateAnswer = (
       },
       already,
     };
+
     return answer;
   });
 
@@ -2408,8 +2546,10 @@ const sectionAsked = (
       sectionId === null
         ? null
         : kept.sections.find((each) => each.id === sectionId && each.workspaceId === workspaceId);
+
     if (section === undefined) return Result.fail(UPDATE_TASK_REFUSAL.NO_SECTION);
     const standing = kept.entries.find((entry) => entry.taskId === taskId)?.sectionId ?? null;
+
     return Result.succeed({
       section: section === null ? null : { id: section.id, title: section.title },
       stands: standing === sectionId,
@@ -2424,6 +2564,7 @@ const sectionAsked = (
  */
 function changesStand(stored: StoredTask, changes: TaskChanges): boolean {
   const { task } = stored;
+
   return (
     (changes.name === undefined || changes.name === task.name) &&
     (changes.repository === undefined || changes.repository === task.repository) &&
@@ -2440,6 +2581,7 @@ export function repositoryRefusalWords(refusal: HostedRefusal): string {
   if (refusal.error === HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE) {
     return UPDATE_TASK_REFUSAL.NOT_REACHABLE;
   }
+
   return refusal.error === HOSTED_API_ERROR.GITHUB_UNANSWERED
     ? UPDATE_TASK_REFUSAL.GITHUB_UNANSWERED
     : AGENT_TOOL_REFUSAL.STORE;
@@ -2475,18 +2617,25 @@ export function runUpdateTask(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readTaskUpdate(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.UNREADABLE));
   }
+
   const { taskId, sectionId, assignee, archived, parentTaskId, blockedBy, blocks, ...named } =
     asked.success;
+
   const blockChanges = { ...(blockedBy && { blockedBy }), ...(blocks && { blocks }) };
+
   const assigneeId =
     assignee === undefined ? undefined : assignee === null ? null : assigneeIdOf(assignee);
+
   if (assignee !== undefined && assigneeId === undefined) {
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.NOT_MEMBER));
   }
+
   const changes = assigneeId === undefined ? named : { ...named, assigneeId };
+
   if (
     Object.keys(changes).length === 0 &&
     archived === undefined &&
@@ -2496,12 +2645,15 @@ export function runUpdateTask(
   ) {
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.UNREADABLE));
   }
+
   const { caller } = call;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const userId = callerUserId(caller);
       const workspace = yield* callerWorkspace(caller);
       const read = yield* readTask(userId, taskId);
+
       if (
         Option.isNone(workspace) ||
         Option.isNone(read) ||
@@ -2509,42 +2661,53 @@ export function runUpdateTask(
       ) {
         return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
       }
+
       // Where it is asked to stand in the sidebar is read before anything is written.
       const placing =
         sectionId === undefined
           ? undefined
           : yield* sectionAsked(userId, workspace.value, taskId, sectionId);
+
       if (placing !== undefined && Result.isFailure(placing)) {
         return agentToolRejected(placing.failure);
       }
+
       // So are the tasks its blocks name, each held to the workspace as the task itself is.
       const blocking = blockChangesNamed(blockChanges)
         ? yield* blockWritesAsked(userId, workspace.value, taskId, blockChanges)
         : undefined;
+
       if (blocking !== undefined && Result.isFailure(blocking)) {
         return agentToolRejected(blocking.failure);
       }
+
       // The change itself is confirmed as the app's is (`taskChangeAsked`), an archive stopping the task's agents but the caller.
       const asked = archived === undefined ? changes : { ...changes, archived };
+
       const confirmed =
         Object.keys(asked).length === 0
           ? undefined
           : yield* Effect.result(taskChangeAsked(userId, taskId, asked, callerAgent(caller)?.id));
+
       if (confirmed !== undefined && Result.isFailure(confirmed)) {
         return agentToolRejected(changeRefusalWords(confirmed.failure));
       }
+
       const stands =
         changesStand(read.value, confirmed?.success.changes ?? {}) &&
         (placing?.success.stands ?? true);
+
       // The tasks the blocks name, and the parent, are locked before the task's change, so the change takes no lock first that another call's writes wait on.
       const locking = [
         ...(blocking === undefined ? [] : tasksOfWrites(blocking.success)),
         ...(typeof parentTaskId === "string" ? [taskId, parentTaskId] : []),
       ];
+
       // The task's change, its place in the sidebar, its parent, and its blocks are one transaction, so a place
       // refused, its section deleted meanwhile, a parent refused, or a block refused takes the change back with it.
       const writing = Effect.gen(function* () {
         if (locking.length > 0) yield* lockTasksForBlocks(userId, locking);
+
         const updated =
           confirmed === undefined
             ? undefined
@@ -2558,9 +2721,11 @@ export function runUpdateTask(
                   (refusal) => new TaskChangeRefused({ words: changeRefusalWords(refusal) }),
                 ),
               );
+
         if (updated !== undefined && Option.isNone(updated)) {
           return yield* new TaskChangeRefused({ words: UPDATE_TASK_REFUSAL.NO_TASK });
         }
+
         if (placing !== undefined && !placing.success.stands) {
           // The sidebar's own write puts it in the section named, or in none, as the developer's drag does.
           const placed = yield* writeTaskSections(userId, {
@@ -2568,20 +2733,25 @@ export function runUpdateTask(
             taskId,
             sectionId: placing.success.section?.id ?? null,
           });
+
           if (Option.isNone(placed)) {
             return yield* new TaskChangeRefused({ words: UPDATE_TASK_REFUSAL.NO_SECTION });
           }
         }
+
         // The parent is written under the store's own rules, and the task answered as it then stands.
         const parented =
           parentTaskId === undefined
             ? undefined
             : yield* setTaskParent(userId, taskId, parentTaskId);
+
         if (parented !== undefined && Option.isNone(parented)) {
           return yield* new TaskChangeRefused({ words: UPDATE_TASK_REFUSAL.NO_TASK });
         }
+
         const blocksChanged =
           blocking === undefined ? false : yield* writeTaskBlocks(userId, blocking.success);
+
         return {
           updated: updated?.value,
           task: parented?.value.task ?? updated?.value.task ?? read.value.task,
@@ -2589,6 +2759,7 @@ export function runUpdateTask(
           blocksChanged,
         };
       });
+
       const changed = yield* Effect.flatMap(SqlClient.SqlClient, (client) =>
         client.withTransaction(writing),
       ).pipe(
@@ -2602,11 +2773,14 @@ export function runUpdateTask(
           TaskParentCycle: () => Effect.succeed(Result.fail(UPDATE_TASK_REFUSAL.PARENT_CYCLE)),
         }),
       );
+
       if (Result.isFailure(changed)) return agentToolRejected(changed.failure);
       const { updated, task, parentChanged, blocksChanged } = changed.success;
+
       // The agents its Done archived are let go of once it commits, and a finish counted, as the app's change does.
       if (updated !== undefined)
         yield* taskChangeSettled(deploymentSandboxDeletes, userId, updated);
+
       return yield* taskUpdateAnswer(userId, task, {
         already: stands && !parentChanged && !blocksChanged,
         section: placing?.success.section,
@@ -2621,12 +2795,15 @@ export function runUpdateTask(
 const stopRefusalWords = (refusal: HostedRefusal, agent: Agent) =>
   Effect.gen(function* () {
     if (refusal.error === HOSTED_API_ERROR.NOT_FOUND) return AGENT_TOOL_REFUSAL.NO_AGENT;
+
     if (refusal.error === HOSTED_API_ERROR.NOT_PERMITTED) {
       return `Not stopped: ${yield* agentStarterName(agent)}'s own subscription pays for that agent, so only they and their agents can stop it.`;
     }
+
     if (refusal.error === HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE) {
       return STOP_AGENT_REFUSAL.NATIVE_NOT_HERE;
     }
+
     return STOP_AGENT_REFUSAL.UNAVAILABLE;
   });
 
@@ -2649,26 +2826,33 @@ function stopStands(turn: AgentLatestTurn | undefined): boolean {
 const stopOf = (call: AgentCall, agent: Agent) =>
   Effect.gen(function* () {
     const { caller, clientKey: key } = call;
+
     const earlier = yield* hostedStoreOrUnavailable(
       turnStoppedUnderReached(agent.conversationId, key),
     );
+
     const before = (yield* turnStandingsOf([agent.conversationId]))(agent.conversationId);
     // A member's Stop names no agent that made it, as the developer's names none.
     const by = callerAgent(caller)?.id;
+
     const canceled = earlier
       ? false
       : yield* stoppedAgent(call.writer, callerUserId(caller), agent, {
           key,
           ...(by === undefined ? undefined : { by }),
         });
+
     const after = (yield* turnStandingsOf([agent.conversationId], [agent]))(agent.conversationId);
+
     const status = agentStatusOf(after.turn, {
       createdAt: agent.createdAt,
       now: yield* Clock.currentTimeMillis,
       blank: startedBlank(agent),
       boot: after.boot,
     });
+
     const standing = stopStands(before.turn) && after.turn?.id === before.turn?.id;
+
     return { stopped: earlier || canceled || standing, status };
   });
 
@@ -2678,26 +2862,34 @@ export function runStopAgent(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readAgentRef(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(STOP_AGENT_REFUSAL.UNREADABLE));
   }
+
   const { agentId } = asked.success;
   const { caller } = call;
+
   if (agentId === callerAgent(caller)?.id) {
     return Effect.succeed(agentToolRejected(STOP_AGENT_REFUSAL.SELF));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent, task } = found.value;
       const stop = yield* Effect.result(stopOf(call, agent));
+
       if (Result.isFailure(stop)) {
         return agentToolRejected(yield* stopRefusalWords(stop.failure, agent));
       }
+
       // Note that a Stop already standing on a turn still ending is this call's own run again, or
       // the developer's, and is answered as stopped so a call run again reads as it first did.
       const { stopped, status } = stop.success;
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -2720,13 +2912,17 @@ class TaskChangeRefused extends Data.TaggedError("TaskChangeRefused")<{ readonly
 const archiveRefusalWords = (refusal: HostedRefusal, agent: Agent) =>
   Effect.gen(function* () {
     if (refusal.error === HOSTED_API_ERROR.NOT_FOUND) return AGENT_TOOL_REFUSAL.NO_AGENT;
+
     if (refusal.error === HOSTED_API_ERROR.AGENT_NOT_READY) return UPDATE_AGENT_REFUSAL.NOT_READY;
+
     if (refusal.error === HOSTED_API_ERROR.NOT_PERMITTED) {
       return `Not archived: ${yield* agentStarterName(agent)}'s own subscription pays for that agent, so only they and their agents can stop and archive it. Nothing else asked was changed.`;
     }
+
     if (refusal.error === HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE) {
       return UPDATE_AGENT_REFUSAL.NATIVE_NOT_HERE;
     }
+
     return UPDATE_AGENT_REFUSAL.UNAVAILABLE_ARCHIVE;
   });
 
@@ -2747,51 +2943,68 @@ export function runUpdateAgent(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readUpdateAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.UNREADABLE));
   }
+
   const { agentId, title, model, effort, contextWindow, pinned, disabledServers } = asked.success;
   const { archived, reason } = asked.success;
   const { caller } = call;
+
   if (archived === true && agentId === callerAgent(caller)?.id) {
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.SELF));
   }
+
   const userId = callerUserId(caller);
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { task } = found.value;
       const choices = yield* Effect.result(accountModelChoices(userId));
+
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
       const { offered } = choices.success;
+
       const asked =
         model === undefined || effort === undefined
           ? undefined
           : { model, effort, ...(contextWindow === undefined ? undefined : { contextWindow }) };
+
       // A provider's own harness takes only what it runs (`agent-runtime-models.ts`).
       const route = asked === undefined ? undefined : yield* agentRouteOf(found.value.agent);
       const runtime = route?.runtime;
+
       const refused =
         asked === undefined ? undefined : runtimeChoiceRefusal(runtime, asked, route?.payer);
+
       if (refused !== undefined) {
         return agentToolRejected(
           `${UPDATE_CHOICE_LEAD}: ${runtimeChoiceRefusalWords(runtime, refused)}`,
         );
       }
+
       const accepted = asked === undefined ? undefined : validateModelChoice(offered, asked);
+
       if (asked !== undefined && accepted !== undefined && Result.isFailure(accepted)) {
         return agentToolRejected(choiceRefusal(asked, offered, UPDATE_CHOICE_LEAD));
       }
+
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
       const choice = accepted === undefined ? undefined : Result.getOrUndefined(accepted);
       let agent = found.value.agent;
+
       // Note that an agent archives only an idle agent, because stopping another's work is a member's call.
       if (archived === true && callerAgent(caller) !== undefined) {
         const { status } = (yield* standingsOf([agent]))(agent);
+
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
         );
+
         // A turn whose Stop is on its way reads as canceled, yet is still ending.
         if (
           status === AGENT_STATUS.STARTING ||
@@ -2801,6 +3014,7 @@ export function runUpdateAgent(
           return agentToolRejected(UPDATE_AGENT_REFUSAL.STILL_WORKING);
         }
       }
+
       if (archived !== undefined) {
         const archive = yield* Effect.result(
           archivedAgent(
@@ -2812,20 +3026,25 @@ export function runUpdateAgent(
             archiverOf(caller, reason),
           ),
         );
+
         if (Result.isFailure(archive)) {
           return agentToolRejected(yield* archiveRefusalWords(archive.failure, agent));
         }
+
         if (Option.isNone(archive.success)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
         agent = archive.success.value.agent;
       }
+
       const written = yield* changedAgent(userId, agent, {
         title,
         choice,
         pinned,
         disabledServers,
       });
+
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       agent = written.value.agent;
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -2853,27 +3072,35 @@ export function runListTasks(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const { caller } = call;
   const asked = readTasksAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TASKS));
   }
+
   const words = asked.success.nameContains?.toLowerCase();
   const offset = asked.success.offset ?? 0;
   const assigned = asked.success.assignee;
+
   // The tasks of one member, or with null of no one; a link that names no person names no one's tasks.
   const assigneeId =
     assigned === undefined || assigned === null ? assigned : assigneeIdOf(assigned);
+
   if (assigned !== undefined && assigned !== null && assigneeId === undefined) {
     return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TASKS));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const ownTask = callerTask(caller);
       const userId = callerUserId(caller);
       const listed = yield* listTasks(userId);
+
       const matching = listed.filter(
         (task) =>
           task.workspaceId === workspace.value &&
@@ -2881,15 +3108,19 @@ export function runListTasks(
           (asked.success.status === undefined || task.status === asked.success.status) &&
           (assigned === undefined || (task.assignee?.userId ?? null) === assigneeId),
       );
+
       const kept = yield* listTaskSections(userId);
       const sections = kept.sections.filter((section) => section.workspaceId === workspace.value);
       const shelved = new Set(sections.map((section) => section.id));
+
       const sectionOf = new Map(
         kept.entries
           .filter((entry) => shelved.has(entry.sectionId))
           .map((entry) => [entry.taskId, entry.sectionId]),
       );
+
       const { step, name } = yield* workspaceNamingOf(userId, workspace.value);
+
       const tasks = matching.slice(offset, offset + TASKS_LIST_LIMIT).map((task) => ({
         id: task.id,
         ...taskStandingOf(task, { step, name }),
@@ -2899,7 +3130,9 @@ export function runListTasks(
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
       }));
+
       const next = offset + TASKS_LIST_LIMIT;
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         tasks,
@@ -2914,9 +3147,11 @@ export function runListTasks(
 const modelsListed = (userId: string, route: NativeRoute | undefined) =>
   Effect.gen(function* () {
     const choices = yield* Effect.result(accountModelChoices(userId));
+
     if (Result.isFailure(choices)) return agentToolRejected(LIST_MODELS_REFUSAL.UNAVAILABLE);
     const { offered, defaultChoice } = choices.success;
     const listed = runtimeModels(offered, route?.runtime, route?.payer);
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       models: listed.map((model) => ({
@@ -2946,20 +3181,26 @@ export function runListModels(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readListModelsAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(LIST_MODELS_REFUSAL.UNREADABLE));
   }
+
   const { agentId } = asked.success;
   const { caller } = call;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       // The agent named, whose runtime narrows the list to what it may move to.
       let route: NativeRoute | undefined;
+
       if (agentId !== undefined) {
         const found = yield* workspaceAgentOf(caller, agentId);
+
         if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
         route = yield* agentRouteOf(found.value.agent);
       }
+
       return yield* modelsListed(callerUserId(caller), route);
     }),
   );
@@ -2989,12 +3230,14 @@ export function cutOnLine(text: string, maximumChars: number): TextCut {
   if (text.length <= maximumChars) return { text, leftOutChars: 0 };
   const lineEnd = text.lastIndexOf("\n", maximumChars);
   const kept = text.slice(0, lineEnd > 0 ? lineEnd : maximumChars);
+
   return { text: kept, leftOutChars: text.length - kept.length };
 }
 
 /** A page's HTML cut on a line to the read's bound, and how many characters were left out; whole where it fits. */
 function pageCut(html: string): PageCut {
   const cut = cutOnLine(html, READ_PAGE_CHARS);
+
   return { html: cut.text, leftOutChars: cut.leftOutChars };
 }
 
@@ -3012,6 +3255,7 @@ const pageStandingOf = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
     if (!(yield* taskOfCallerWorkspace(caller, taskId))) return Option.none<PageStanding>();
     const names = yield* taskNamesOf(callerUserId(caller), [taskId]);
+
     return Option.some<PageStanding>({
       task: { id: taskId, name: names.get(taskId)?.name ?? null },
       isYourTask: taskId === callerTask(caller),
@@ -3024,24 +3268,32 @@ export function runReadPage(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readPageAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(READ_PAGE_REFUSAL.UNREADABLE));
   }
+
   const { caller } = call;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const userId = callerUserId(caller);
       const found = yield* readPageById(userId, asked.success.pageId, asked.success.version);
+
       if (Option.isNone(found)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
       const { taskId, page, newestVersion } = found.value;
       // A page of another workspace, even one the member is also in, is none of the caller's.
       const standing = yield* pageStandingOf(caller, taskId);
+
       if (Option.isNone(standing)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
       const cut = pageCut(page.html);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         page: {

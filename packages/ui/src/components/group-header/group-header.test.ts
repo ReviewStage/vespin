@@ -45,6 +45,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -87,6 +88,7 @@ test("an open group with no rows names no rows it controls", () => {
   const container = render(
     createElement(GroupHeader, { label: "acme/web", fold: { defaultOpen: true } }),
   );
+
   const head = headOf(container);
   assert.equal(head.getAttribute("aria-expanded"), "true");
   assert.equal(head.getAttribute("aria-controls"), null);
@@ -94,8 +96,10 @@ test("an open group with no rows names no rows it controls", () => {
 
 test("a group its holder keeps folds as the holder says, told of each press", () => {
   const heard: boolean[] = [];
+
   function Held(): React.JSX.Element {
     const [open, setOpen] = useState(false);
+
     return group({
       open,
       onOpenChange: (next) => {
@@ -104,6 +108,7 @@ test("a group its holder keeps folds as the holder says, told of each press", ()
       },
     });
   }
+
   const container = render(createElement(Held));
   const head = headOf(container);
   act(() => head.click());
@@ -115,15 +120,19 @@ test("a group its holder keeps folds as the holder says, told of each press", ()
 
 test("an action beside the fold is pressed without folding the group", () => {
   let presses = 0;
+
   const actions = createElement(
     "button",
     { type: "button", onClick: () => (presses += 1) },
     "New task",
   );
+
   const container = render(group({ defaultOpen: true }, { actions }));
+
   const action = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "New task",
   );
+
   act(() => action?.click());
   assert.equal(presses, 1);
   assert.equal(headOf(container).getAttribute("aria-expanded"), "true");
@@ -149,6 +158,7 @@ test("the count is drawn as its caller gives it, none included, and read with it
       { count: { value: 0, noun: "tasks", shown: NAV_COUNT_SHOWN.ALWAYS } },
     ),
   );
+
   assert.equal(headOf(counted).textContent, "acme/web0 tasks");
 
   const uncounted = render(group({ defaultOpen: false }));
@@ -184,6 +194,7 @@ function editing(ends: GroupHeaderEditEnd[], holding = false): HTMLElement {
     holding,
     onEnd: (end: GroupHeaderEditEnd) => ends.push(end),
   });
+
   return render(createElement(GroupHeader, { label: "Launch", editing: editor, children: ROWS }));
 }
 
@@ -253,6 +264,7 @@ test("while a layer the glyph's control hung stands, the focus leaving the head 
 function EditingWithPanel({ ends }: { ends: GroupHeaderEditEnd[] }): ReactElement {
   const [open, setOpen] = useState(false);
   const handle = useRef<GroupHeaderEditorHandle | null>(null);
+
   const editor = createElement(GroupHeaderEditor, {
     ref: handle,
     value: "Launch",
@@ -265,12 +277,14 @@ function EditingWithPanel({ ends }: { ends: GroupHeaderEditEnd[] }): ReactElemen
       open,
       onOpenChange: (next: boolean, away: boolean) => {
         setOpen(next);
+
         if (away) handle.current?.leave();
       },
       children: createElement("button", { type: "button" }, "Rocket"),
     }),
     onEnd: (end: GroupHeaderEditEnd) => ends.push(end),
   });
+
   return createElement(GroupHeader, { label: "Launch", editing: editor, children: ROWS });
 }
 
@@ -278,10 +292,12 @@ test("a press away while the glyph's panel stands puts the panel away and keeps 
   const ends: GroupHeaderEditEnd[] = [];
   const container = render(createElement(EditingWithPanel, { ends }));
   const outside = document.body.appendChild(document.createElement("button"));
+
   const settle = () =>
     act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
+
   typeInto(fieldOf(container), "Launch week");
   await act(async () =>
     container.querySelector<HTMLButtonElement>('button[aria-label="Change icon"]')?.click(),

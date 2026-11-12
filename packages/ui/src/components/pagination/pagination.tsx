@@ -53,13 +53,18 @@ export interface PaginationPages {
  */
 function pageNumbers(current: number, count: number): readonly (number | undefined)[] {
   const shown = new Set([1, count]);
+
   for (let near = current - PAGINATION_REACH; near <= current + PAGINATION_REACH; near += 1) {
     if (near >= 1 && near <= count) shown.add(near);
   }
+
   const ordered = [...shown].sort((a, b) => a - b);
+
   return ordered.flatMap((number, index) => {
     const previous = ordered[index - 1];
+
     if (previous === undefined || number - previous === 1) return [number];
+
     return number - previous === 2 ? [previous + 1, number] : [undefined, number];
   });
 }
@@ -73,6 +78,7 @@ function Step({
   rel: "prev" | "next";
 }): React.JSX.Element {
   const arrow = rel === "prev" ? "←" : "→";
+
   if (step === undefined) {
     return (
       <span className={PAGINATION_ITEM} data-idle="true" aria-hidden="true">
@@ -80,9 +86,12 @@ function Step({
       </span>
     );
   }
+
   let words = arrow;
+
   if (step.text !== undefined)
     words = rel === "prev" ? `${arrow} ${step.text}` : `${step.text} ${arrow}`;
+
   return (
     <a
       className={PAGINATION_ITEM}
@@ -115,6 +124,7 @@ export function Pagination({
   pages?: PaginationPages | undefined;
 }): React.JSX.Element | null {
   if (pages !== undefined && pages.count < 2) return null;
+
   return (
     <PaginationRow aria-label={label} data-numbered={pages ? "true" : undefined}>
       <Step step={previous} rel="prev" />
@@ -125,8 +135,10 @@ export function Pagination({
                 (numbers[index + 1] ?? 0) <= pages.current
                   ? ELISION_SIDE.BEFORE
                   : ELISION_SIDE.AFTER;
+
               return <PaginationEllipsis key={side}>…</PaginationEllipsis>;
             }
+
             if (number === pages.current) {
               return (
                 <span key={number} className={PAGINATION_ITEM} aria-current="page">
@@ -134,6 +146,7 @@ export function Pagination({
                 </span>
               );
             }
+
             return (
               <a
                 key={number}

@@ -261,7 +261,9 @@ type StatLayout = (typeof STAT_LAYOUT)[keyof typeof STAT_LAYOUT];
 /** The cards two by two, the last alone where they are odd. */
 function inPairs<T>(items: readonly T[]): T[][] {
   const pairs: T[][] = [];
+
   for (let at = 0; at < items.length; at += 2) pairs.push(items.slice(at, at + 2));
+
   return pairs;
 }
 
@@ -281,6 +283,7 @@ export function StatCards<T>({
   data: T | undefined;
 }): React.JSX.Element {
   const grouped = layout === STAT_LAYOUT.GROUP;
+
   const card = (stat: StatSpec<T>) =>
     data === undefined ? (
       <MetricCardSkeleton grouped={grouped} hint={stat.hint !== undefined} />
@@ -293,11 +296,13 @@ export function StatCards<T>({
         grouped={grouped}
       />
     );
+
   const cell = (stat: StatSpec<T>) => (
     <div key={stat.key} className={STAT_CELL}>
       {card(stat)}
     </div>
   );
+
   switch (layout) {
     case STAT_LAYOUT.GROUP:
       return (

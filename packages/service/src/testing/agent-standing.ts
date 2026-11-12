@@ -27,7 +27,9 @@ export function standingFor(
     [TOOL_GATE.DESCRIPTIONS]: descriptions,
     [TOOL_GATE.TURN_END]: turnEnd,
   };
+
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
+
   return {
     agent: Option.none(),
     open: new Set(open),

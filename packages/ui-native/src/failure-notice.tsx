@@ -87,7 +87,9 @@ const Notices = createContext<FailureNotices | undefined>(undefined);
 /** The notice of the app drawn under `FailureNoticeProvider`. */
 export function useFailureNotices(): FailureNotices {
   const notices = useContext(Notices);
+
   if (notices === undefined) throw new Error("A screen asked for a notice outside its provider.");
+
   return notices;
 }
 
@@ -101,6 +103,7 @@ function NoticeBody({
 }) {
   const colors = useColors();
   const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
+
   return (
     <Host matchContents={{ vertical: true }} style={styles.banner}>
       <HStack
@@ -166,6 +169,7 @@ function NoticeBanner({
   const reduceMotion = useReduceMotion();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
+
   const leave = useCallback(
     (serial: number) => {
       place.stopAnimation();
@@ -179,25 +183,31 @@ function NoticeBanner({
     },
     [place, onGone],
   );
+
   // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands slides away.
   useEffect(() => {
     if (notice === undefined) {
       Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }).start(
         ({ finished }) => finished && setDrawn(undefined),
       );
+
       return;
     }
+
     setDrawn(notice);
     place.setValue(0);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
+
     const arrive = (reading: boolean) => {
       if (!live) return;
+
       const stands = reading
         ? STANDS_FOR.SCREEN_READER
         : notice.retry === undefined
           ? STANDS_FOR.WORDS
           : STANDS_FOR.WITH_RETRY;
+
       // Note that the notice's stay is a pause between its slide in and its slide out, so a swipe or a newer notice stops all three as one.
       Animated.sequence([
         Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
@@ -207,12 +217,15 @@ function NoticeBanner({
         if (finished) onGone(notice.serial);
       });
     };
+
     AccessibilityInfo.isScreenReaderEnabled().then(arrive, () => arrive(false));
+
     return () => {
       live = false;
       place.stopAnimation();
     };
   }, [notice, place, onGone]);
+
   const swipe = useMemo(
     () =>
       PanResponder.create({
@@ -223,12 +236,15 @@ function NoticeBanner({
       }),
     [drawn, leave],
   );
+
   if (drawn === undefined) return null;
+
   const retry = () => {
     leave(drawn.serial);
     buzz(BUZZ.SELECTION);
     drawn.retry?.();
   };
+
   const arriving = reduceMotion
     ? { opacity: place }
     : {
@@ -237,6 +253,7 @@ function NoticeBanner({
           { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [-ARRIVAL, 0] }) },
         ],
       };
+
   return (
     <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
       <Animated.View
@@ -259,6 +276,7 @@ function NoticeBanner({
  */
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+
   const notices = useMemo<FailureNotices>(
     () => ({
       say: (asked) => setState((was) => noticeAsked(was, asked)),
@@ -266,7 +284,9 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
     }),
     [],
   );
+
   const gone = useCallback((serial: number) => setState((was) => noticeGone(was, serial)), []);
+
   return (
     <Notices.Provider value={notices}>
       {children}

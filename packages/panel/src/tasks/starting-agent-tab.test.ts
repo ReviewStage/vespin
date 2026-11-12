@@ -78,6 +78,7 @@ test("an agent still starting says so over an empty transcript and draws the wor
 /** An agent's own tab drawn over a transcript whose first launch stands as `boot` says, answered with the words it draws. */
 async function bootingTabWords(boot: AgentBoot): Promise<string> {
   fakeAppBridge({});
+
   const agent: AgentSummary = {
     id: "agent-booting",
     planId: "task-booting",
@@ -89,6 +90,7 @@ async function bootingTabWords(boot: AgentBoot): Promise<string> {
     turnId: null,
     brief: AGENT_BRIEF.PROMPT,
   };
+
   pushedTranscripts(() => [
     { messages: [], cursor: "0:0", status: AGENT_STATUS.RUNNING, title: null, boot },
   ]);
@@ -113,6 +115,7 @@ async function bootingTabWords(boot: AgentBoot): Promise<string> {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return container.textContent ?? "";
 }
 
@@ -140,10 +143,12 @@ test("an agent's tab whose first launch failed says why in its empty transcript,
 test("the column draws a Start still out on the description as its agent's tab saying it is starting, under the press's key", async () => {
   fakeAppBridge({});
   const base = agentsControl();
+
   const agents = agentsControl({
     agentIds: ["press-1"],
     start: { ...base.start, busy: true, pending: { key: "press-1", model: undefined } },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

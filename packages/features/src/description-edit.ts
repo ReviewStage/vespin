@@ -100,7 +100,9 @@ function patchLines(text: string): string {
 function rebased(base: string, value: string, current: string): string | undefined {
   const patch = structuredPatch("", "", patchLines(base), patchLines(value), "", "");
   const applied = applyPatch(patchLines(current), patch);
+
   if (applied === false) return undefined;
+
   return applied.endsWith("\n") ? applied.slice(0, -1) : applied;
 }
 
@@ -115,7 +117,9 @@ export function applyDocumentEdit(
   edit: DescriptionEditRequest,
 ): DescriptionEditOutcome {
   const { base, value } = edit.document;
+
   if (current === base) return { applied: value };
   const next = value === "" ? undefined : rebased(base, value, current);
+
   return next === undefined ? { conflict: { current } } : { applied: next };
 }

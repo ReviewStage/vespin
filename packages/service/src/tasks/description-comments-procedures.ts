@@ -123,6 +123,7 @@ const outcomeAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<DescriptionCommentThreadAnswer, HostedRefusal> {
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE)
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return outcome.answer;
 });
 
@@ -137,6 +138,7 @@ function withTxid(
 ): DescriptionCommentThreadAnswer {
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE || outcome.txid === undefined)
     return body;
+
   return "refused" in body ? body : { ...body, txid: outcome.txid };
 }
 
@@ -176,7 +178,9 @@ export const memberCommentAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   comment: MentioningComment,
 ) {
   const { answer } = outcome;
+
   if (!("thread" in answer)) return answer;
+
   // Note that a retry under the key already taken wrote nothing, so it is not counted again.
   if (outcome.repeated !== true) {
     yield* recordServerEventIn(
@@ -186,19 +190,23 @@ export const memberCommentAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
       { is_reply: comment.isReply },
     );
   }
+
   const { thread } = answer;
+
   const own = thread.entries.some(
     (entry) =>
       entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT &&
       entry.writer.by?.userId === comment.userId &&
       entry.words === comment.words,
   );
+
   const unsent =
     !own || comment.held === true
       ? []
       : comment.along === undefined || comment.along.length === 0
         ? yield* mentionsHandedOver(thread, comment)
         : yield* reviewHandedOver(thread, comment, comment.along);
+
   return unsent.length === 0 ? answer : { thread, unsent };
 });
 
@@ -210,6 +218,7 @@ const commentAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   return yield* memberCommentAnswer(outcome, comment);
 });
 
@@ -225,7 +234,9 @@ const pageWriterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (thread.page === undefined) return undefined;
   const found = yield* hostedStoreOrUnavailable(readPageById(userId, thread.page.id, undefined));
   const shownBy = Option.getOrUndefined(found)?.page.shownBy;
+
   if (shownBy === undefined) return undefined;
+
   return shownBy.kind === PAGE_SHOWER.AGENT
     ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: shownBy.agentId }
     : { actor: DESCRIPTION_COMMENT_ACTOR.APP };
@@ -254,8 +265,10 @@ function agentsIn(
             entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT
           ? entry.writer.agentId
           : undefined;
+
     return agentId === undefined ? [] : [{ actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId }];
   });
+
   return writer === undefined ? joined : [writer, ...joined];
 }
 
@@ -273,9 +286,11 @@ function handedTo(
   writer: DescriptionCommentAsked | undefined,
 ): readonly HandOver[] {
   const handOvers = new Map<string | undefined, HandOver>();
+
   for (const to of agentsIn(thread, writer)) {
     if (!handOvers.has(to.agentId)) handOvers.set(to.agentId, { to, owed: true });
   }
+
   for (const agentId of askedInWords(words)) {
     if (!handOvers.has(agentId)) {
       handOvers.set(agentId, {
@@ -284,6 +299,7 @@ function handedTo(
       });
     }
   }
+
   return [...handOvers.values()];
 }
 
@@ -304,19 +320,24 @@ const mentionsHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
   comment: MentioningComment,
 ) {
   const { userId, taskId } = comment;
+
   // Note that a page that could not be read names no writer, so the comment asks only those its thread and words name.
   const writer = yield* pageWriterOf(userId, thread).pipe(
     Effect.catch(() => Effect.succeed(undefined)),
   );
+
   const unsent: DescriptionCommentAsked[] = [];
   const taking: { readonly to: DescriptionCommentAsked; readonly agent: CommentRecipient }[] = [];
+
   for (const { to, owed } of handedTo(thread, comment.words, writer)) {
     const agent = yield* askableAgent(userId, taskId, to, thread).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     );
+
     if (agent !== undefined) taking.push({ to, agent });
     else if (owed) unsent.push(to);
   }
+
   yield* afterResponse(
     "a comment's hand-over",
     Effect.forEach(
@@ -331,6 +352,7 @@ const mentionsHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
       { discard: true },
     ),
   );
+
   return unsent;
 });
 
@@ -342,11 +364,13 @@ const handedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: CommentRecipient,
 ) {
   const { userId, taskId } = comment;
+
   const ask = {
     action: DESCRIPTION_COMMENT_ACTION.ASK,
     clientKey: mentionKey(comment.clientKey, to),
     to,
   };
+
   const outcome = yield* hostedStoreOrUnavailable(
     actOnDescriptionCommentThread(
       { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId },
@@ -355,6 +379,7 @@ const handedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
       ask,
     ),
   );
+
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE || !("thread" in outcome.answer)) return;
   yield* askHandedOver({
     userId,
@@ -394,22 +419,28 @@ const askHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (input: {
   readonly to: CommentRecipient;
 }) {
   const { userId, taskId, thread, clientKey, words, to } = input;
+
   // The member's own newest ask names them, since an earlier one may be another member's.
   const asked = thread.entries.findLast(
     (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.ASKED && entry.writer.by?.userId === userId,
   );
+
   const task = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
+
   if (Option.isNone(task)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (
     thread.page === undefined &&
     !(yield* experimentOnIn(task.value.workspaceId, EXPERIMENT.DESCRIPTIONS))
   ) {
     return yield* withdrawnAsk(taskId, clientKey);
   }
+
   const page =
     thread.page === undefined
       ? undefined
       : yield* hostedStoreOrUnavailable(readPageById(userId, thread.page.id, undefined));
+
   const text = commentAskMessage({
     taskId,
     taskName: task.value.name,
@@ -419,8 +450,10 @@ const askHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (input: {
       ? undefined
       : { page: { title: page.value.page.title, newestVersion: page.value.newestVersion } }),
   });
+
   const threadId = thread.id;
   const shown = page === undefined ? undefined : Option.getOrUndefined(page)?.page;
+
   // Note that a thread on a whole page quotes the page's title, which its line names already, so it quotes nothing.
   const line = {
     taskId,
@@ -431,6 +464,7 @@ const askHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (input: {
         ? undefined
         : { id: thread.page.id, title: shown.title },
   };
+
   yield* handCommentAskOver({
     userId,
     to,
@@ -456,6 +490,7 @@ function reviewOf(comment: {
   readonly along?: readonly string[];
 }): Pick<MentioningComment, "held" | "along"> {
   if (comment.held === true) return { held: true };
+
   return comment.along === undefined ? {} : { along: comment.along };
 }
 
@@ -468,6 +503,7 @@ function heldWordsOf(thread: DescriptionCommentThread, userId: string): string |
   const since = thread.entries.findLastIndex(
     (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.ASKED,
   );
+
   const words = thread.entries
     .slice(since + 1)
     .filter(
@@ -475,6 +511,7 @@ function heldWordsOf(thread: DescriptionCommentThread, userId: string): string |
         entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT && entry.writer.by?.userId === userId,
     )
     .map((entry) => entry.words ?? "");
+
   return words.length === 0 ? undefined : words.join("\n\n");
 }
 
@@ -488,12 +525,15 @@ const reviewThreads = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Note that a thread holding several of the review's replies is named once for each, and the sending one may be named too, so each is read once.
   const named = new Set(along);
   named.delete(thread.id);
+
   for (const id of named) {
     const read = yield* hostedStoreOrUnavailable(
       readDescriptionCommentThread(comment.userId, comment.taskId, id),
     ).pipe(Effect.catch(() => Effect.succeed(Option.none<DescriptionCommentThread>())));
+
     if (Option.isSome(read)) held.push(read.value);
   }
+
   return [...held, thread];
 });
 
@@ -510,9 +550,11 @@ const reviewHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const { userId, taskId } = comment;
   const threads = yield* reviewThreads(thread, comment, along);
+
   const writer = yield* pageWriterOf(userId, thread).pipe(
     Effect.catch(() => Effect.succeed(undefined)),
   );
+
   // Each one asked, with whether a hand-over that cannot land is said back and the threads they are in, by agent.
   const asked = new Map<
     string | undefined,
@@ -522,10 +564,13 @@ const reviewHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
       readonly threads: DescriptionCommentThread[];
     }
   >();
+
   for (const each of threads) {
     const words = each.id === thread.id ? comment.words : (heldWordsOf(each, userId) ?? "");
+
     for (const { to, owed } of handedTo(each, words, writer)) {
       const was = asked.get(to.agentId);
+
       if (was === undefined) asked.set(to.agentId, { to, owed, threads: [each] });
       else {
         was.owed ||= owed;
@@ -533,20 +578,25 @@ const reviewHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
       }
     }
   }
+
   const unsent: DescriptionCommentAsked[] = [];
+
   const taking: {
     readonly to: DescriptionCommentAsked;
     readonly agent: CommentRecipient;
     readonly threads: readonly DescriptionCommentThread[];
   }[] = [];
+
   for (const { to, owed, threads: theirs } of asked.values()) {
     // Note that a review's threads stand on one page, which Descriptions does not gate.
     const agent = yield* askableAgent(userId, taskId, to, thread).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     );
+
     if (agent !== undefined) taking.push({ to, agent, threads: theirs });
     else if (owed) unsent.push(to);
   }
+
   yield* afterResponse(
     "a review's hand-over",
     Effect.forEach(
@@ -560,6 +610,7 @@ const reviewHandedOver = /* @__PURE__ */ Effect.fnUntraced(function* (
       { discard: true },
     ),
   );
+
   return unsent;
 });
 
@@ -589,6 +640,7 @@ function reviewKey(
  */
 function reviewLineWords(threads: readonly DescriptionCommentThread[], userId: string): string {
   const words = threads.map((thread) => heldWordsOf(thread, userId) ?? "").join("\n\n");
+
   return words.length > COMMENT_LINE_BOUNDS.WORDS_CHARS
     ? `${words.slice(0, COMMENT_LINE_BOUNDS.WORDS_CHARS - 1)}…`
     : words;
@@ -609,12 +661,14 @@ const reviewAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { userId, taskId } = comment;
   const keys: string[] = [];
   const asked: DescriptionCommentThread[] = [];
+
   for (const thread of threads) {
     const ask = {
       action: DESCRIPTION_COMMENT_ACTION.ASK,
       clientKey: reviewKey(comment.clientKey, thread.id, to),
       to,
     };
+
     const outcome = yield* hostedStoreOrUnavailable(
       actOnDescriptionCommentThread(
         { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId },
@@ -623,20 +677,26 @@ const reviewAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
         ask,
       ),
     );
+
     if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE || !("thread" in outcome.answer))
       continue;
     keys.push(ask.clientKey);
     asked.push(outcome.answer.thread);
   }
+
   const last = asked.at(-1);
+
   if (last?.page === undefined) return;
   const task = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
   const page = yield* hostedStoreOrUnavailable(readPageById(userId, last.page.id, undefined));
+
   if (Option.isNone(task) || Option.isNone(page)) return;
   const shown = page.value.page;
+
   const sender = last.entries.findLast(
     (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.ASKED && entry.writer.by?.userId === userId,
   )?.writer.by?.name;
+
   yield* handCommentAskOver({
     userId,
     to: agent,
@@ -673,9 +733,11 @@ const reviewAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 /** The description comments resource: its held read, a start, and one thing done to a thread, each to a signed-in member. */
 export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedureSeams) {
   const member = hosted.descriptionComments.use(accountMiddleware(seams.resolveUserId));
+
   return {
     read: member.read.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
+
       const read = yield* hostedStoreOrUnavailable(
         descriptionCommentsPast(
           context.userId,
@@ -684,16 +746,20 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
           input.page === undefined ? undefined : yield* pathUuid(input.page),
         ),
       );
+
       if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return read.value;
     }),
     start: member.start.effect(function* ({ input, context }) {
       const start = input.body;
       const taskId = yield* pathUuid(input.params.id);
       const writer = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: context.userId } as const;
+
       const outcome = yield* hostedStoreOrUnavailable(
         startDescriptionCommentThread(writer, taskId, start),
       );
+
       const body = yield* commentAnswer(outcome, {
         userId: context.userId,
         taskId,
@@ -702,6 +768,7 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
         isReply: false,
         ...("page" in start ? reviewOf(start) : {}),
       });
+
       return {
         status: "thread" in body ? HOSTED_HTTP_STATUS.CREATED : HOSTED_HTTP_STATUS.OK,
         body: withTxid(body, outcome),
@@ -712,6 +779,7 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
       const taskId = yield* pathUuid(input.params.id);
       const threadId = yield* pathUuid(input.params.thread);
       const writer = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: context.userId } as const;
+
       // Note that only a page's thread is held in a review, so a reply on any other asking to be held or to send one is refused before it is written.
       if (
         action.action === DESCRIPTION_COMMENT_ACTION.REPLY &&
@@ -720,17 +788,22 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
         const read = yield* hostedStoreOrUnavailable(
           readDescriptionCommentThread(context.userId, taskId, threadId),
         );
+
         if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
         if (read.value.page === undefined) {
           return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         }
       }
+
       const outcome = yield* hostedStoreOrUnavailable(
         actOnDescriptionCommentThread(writer, taskId, threadId, action),
       );
+
       if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) {
         return withTxid(yield* outcomeAnswer(outcome), outcome);
       }
+
       const body = yield* commentAnswer(outcome, {
         userId: context.userId,
         taskId,
@@ -739,6 +812,7 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
         isReply: true,
         ...reviewOf(action),
       });
+
       return withTxid(body, outcome);
     }),
   };

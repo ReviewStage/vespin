@@ -76,8 +76,10 @@ export interface PublishedDoors {
 
 /** What the segment of the agent's other pull requests names its menu. */
 const OTHERS_LABEL = "Other pull requests";
+
 /** The width, in the bar's type size, from which a segment has room for its line counts. */
 const SEGMENT_ROOMY_EM = 18;
+
 /** What the pull request's row is, which names its ⋯ and its menu. */
 const PUBLISHED_THING = "Pull request";
 const CHECKS_FAILING = "Checks failing";
@@ -118,7 +120,9 @@ function branchActions(
           },
         ]),
   ];
+
   const open: MenuAction[] = opens === undefined ? [] : [opens];
+
   return [copies, open].filter((group) => group.length > 0);
 }
 
@@ -136,7 +140,9 @@ function pullRequestPlaces(
   doors: PublishedDoors,
 ): { readonly press: () => void; readonly other: MenuAction | undefined } {
   const openGitHub = () => doors.openGitHub(url);
+
   if (inApp === undefined) return { press: openGitHub, other: undefined };
+
   return onGitHub
     ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, undefined) }
     : {
@@ -177,23 +183,28 @@ export function PublishedRow({
 }): ReactNode {
   const state = pullRequestStateWord(pullRequest);
   const coarse = useCoarsePointer();
+
   const places = pullRequestPlaces(
     pullRequest.url,
     doors.openPullRequest,
     usePullRequestsOnGitHub(),
     doors,
   );
+
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
   const mentionDoors = useMentionDoors();
+
   const mention = {
     kind: MENTION_KIND.LINK,
     provider: INTEGRATION_PROVIDER.GITHUB,
     url: pullRequest.url,
   } as const;
+
   const standing = useLinkStanding(mention, {
     taskId: mentionDoors.holder?.taskId,
     workspace: mentionDoors.place.workspace,
   });
+
   const card = (
     <MentionChipCard
       mention={mention}
@@ -203,6 +214,7 @@ export function PublishedRow({
       standing={standing}
     />
   );
+
   return (
     <div className="agent-published">
       <List label="Pull request" variant={LIST_VARIANT.CARD} fingerTall>
@@ -236,7 +248,9 @@ export function PublishedRow({
 /** Where one of the agent's pull requests opens in the app: the one it stands on in its Pull request tab, another by its number in that tab; none where the view stands in no panel. */
 function dockedInApp(docked: DockedPullRequest, doors: PublishedDoors): (() => void) | undefined {
   const { openPullRequest, openPullRequestNumber } = doors;
+
   if (docked.current && openPullRequest !== undefined) return openPullRequest;
+
   return openPullRequestNumber === undefined
     ? undefined
     : () => openPullRequestNumber(docked.pullRequest.number);
@@ -260,6 +274,7 @@ function PublishedSegment({
   const { pullRequest, branch } = docked;
   const places = dockedPlaces(docked, doors, usePullRequestsOnGitHub());
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
+
   return (
     <ListRow
       leading={<PullRequestMark pullRequest={pullRequest} />}
@@ -296,11 +311,13 @@ export function PublishedBar({
   doors: PublishedDoors;
 }): ReactNode {
   const onGitHub = usePullRequestsOnGitHub();
+
   if (docked.length < 2) {
     return published === undefined || published.pullRequest === null ? null : (
       <PublishedRow pullRequest={published.pullRequest} branch={published.branch} doors={doors} />
     );
   }
+
   return (
     <div className="agent-published">
       <SplitBar

@@ -29,6 +29,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -45,6 +46,7 @@ const wakesTheMac = <A, E, R>(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the Mac's read is woken by a topic the write notifies",
     );
+
     return fired;
   });
 
@@ -68,6 +70,7 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
           account,
           userId,
         );
+
         assert.equal(queued.txids.length, 1, "the queue notifies under one transaction");
 
         const claimed = yield* wakesTheMac(
@@ -75,7 +78,9 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
           account,
           userId,
         );
+
         assert.ok(Option.isSome(claimed.value), "the command was claimed");
+
         const settled = yield* wakesTheMac(
           settleMacCommand(userId, id, {
             exitCode: 0,
@@ -87,6 +92,7 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
           account,
           userId,
         );
+
         assert.ok(settled.value, "the result was kept");
         yield* wakesTheMac(withdrawMacCommand(userId, id), account, userId);
       }),

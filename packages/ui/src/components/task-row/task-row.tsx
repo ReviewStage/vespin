@@ -383,12 +383,17 @@ function inOrder(cells: readonly TaskRowCell[]): readonly TaskRowCell[] {
  */
 function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
   const drawn = inOrder(cells);
+
   const trails =
     !drawn.includes(TASK_ROW_CELL.END) ||
     drawn.some((cell) => !leads(cell) && cell !== TASK_ROW_CELL.END);
+
   const columns: AfterColumn[] = trails ? [TRAIL] : [];
+
   if (drawn.includes(TASK_ROW_CELL.UPDATED)) columns.push(TASK_ROW_CELL.UPDATED);
+
   if (drawn.includes(TASK_ROW_CELL.END)) columns.push(TASK_ROW_CELL.END);
+
   return columns;
 }
 
@@ -400,6 +405,7 @@ function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
  */
 function columnUnderMore(cells: readonly TaskRowCell[]): AfterColumn | undefined {
   const last = afterColumns(cells).at(-1);
+
   return last === TASK_ROW_CELL.UPDATED ? last : undefined;
 }
 
@@ -421,6 +427,7 @@ function RowCell({
 }): React.JSX.Element {
   const leading = column !== TRAIL && leads(column);
   const fit = placed && column !== TRAIL ? CELL_FIT[column] : undefined;
+
   return (
     <span
       style={fit}
@@ -453,6 +460,7 @@ function RowCells({
   placed?: boolean;
 }): React.JSX.Element {
   const drawn = inOrder(cells);
+
   return (
     <>
       {drawn.filter(leads).map((cell) => (
@@ -551,7 +559,9 @@ export interface TaskRowWords {
 /** The most characters any of `words` holds; none where none holds any. */
 function mostChars(words: Iterable<string | undefined>): number {
   let most = 0;
+
   for (const each of words) most = Math.max(most, each?.length ?? 0);
+
   return most;
 }
 
@@ -585,8 +595,10 @@ export function taskRowColumns(cells: readonly TaskRowCell[], more = true): stri
   const before = inOrder(cells)
     .filter(leads)
     .map(() => "auto");
+
   const after = afterColumns(cells).map(() => "auto");
   const moreColumn = more && columnUnderMore(cells) === undefined ? [MORE_COLUMN] : [];
+
   return [...before, "minmax(0, 1fr)", ...after, ...moreColumn].join(" ");
 }
 
@@ -684,6 +696,7 @@ export function TaskRow({
   // Note that the row a hint hangs its card beside is the item, which a run measures through its place too.
   const item = useRef<HTMLLIElement | null>(null);
   const { ref: placeRef, ...placed } = place ?? {};
+
   const itemRef = useCallback(
     (element: HTMLLIElement | null) => {
       item.current = element;
@@ -691,19 +704,23 @@ export function TaskRow({
     },
     [placeRef],
   );
+
   // Note that a row being renamed keeps its ⋯, because its press, which the menu would hand focus back to, is its field.
   const bare = edges === TASK_ROW_EDGES.BARE;
   const drawsMore = (more && !bare) || editor !== undefined;
   const rowMenu = useRowMenu(menu, { disabled, opener: press, more: drawsMore });
   const underMore = drawsMore ? columnUnderMore(cells) : undefined;
+
   // Note that → and ← are the row's only while they would move its fold, so the list still hears the rest.
   const foldKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (fold === undefined) return;
     const asked = FOLD_KEY_OPENS[event.key];
+
     if (asked === undefined || asked === fold.open) return;
     event.preventDefault();
     fold.onOpenChange(asked);
   };
+
   const pressed = (
     <CardPress
       ref={press}
@@ -727,6 +744,7 @@ export function TaskRow({
       </span>
     </CardPress>
   );
+
   const named = (
     <>
       {editor !== undefined ? (
@@ -744,6 +762,7 @@ export function TaskRow({
       {note === undefined ? null : <span className={NOTE}>{note}</span>}
     </>
   );
+
   return (
     <RowItem
       ref={itemRef}
@@ -931,6 +950,7 @@ export function TaskRows({
 }): React.JSX.Element {
   const made = useId();
   const roving = useRovingKeys<HTMLUListElement>();
+
   const rows = (
     <ul
       {...(joinsWalk ? {} : roving)}
@@ -944,6 +964,7 @@ export function TaskRows({
       {children}
     </ul>
   );
+
   return selection === undefined || edges !== TASK_ROW_EDGES.LIST ? (
     rows
   ) : (
@@ -1019,6 +1040,7 @@ export function VirtualTaskRows({
   const made = useId();
   const run = useRef<VirtualRowsHandle>(null);
   const roving = useRovingKeys<HTMLDivElement>({ reach: reachInRun(run) });
+
   const rows = (
     <div
       {...roving}
@@ -1053,6 +1075,7 @@ export function VirtualTaskRows({
       )}
     </div>
   );
+
   return selection === undefined || edges !== TASK_ROW_EDGES.LIST ? (
     rows
   ) : (

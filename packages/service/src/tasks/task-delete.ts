@@ -43,9 +43,11 @@ export const deleteTaskStoppingAgents = /* @__PURE__ */ Effect.fnUntraced(functi
   DatabaseServices | HttpClient.HttpClient | Sandbox
 > {
   const retiring = yield* retiringReach(userId);
+
   const agents = yield* hostedStoreOrUnavailable(
     listAgents(userId, taskId, { includeArchived: true }),
   );
+
   yield* everyStoppedForGood(writer, userId, agents);
   // The stopped agents' sessions are retired before the delete's transaction, so no lock waits on a harness;
   // an agent started meanwhile is none of these, keeps its session, and refuses the delete below.
@@ -53,13 +55,17 @@ export const deleteTaskStoppingAgents = /* @__PURE__ */ Effect.fnUntraced(functi
     retiredBeforeDelete(retiring)(agents.map(({ conversationId }) => conversationId)),
   );
   const stopped = new Set(agents.map(({ id }) => id));
+
   const deleted = yield* hostedStoreOrUnavailable(
     deleteTaskCommitted(userId, taskId, { stoppedAgentIds: stopped }).pipe(
       Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined)),
     ),
   );
+
   // An agent started while the others were stopped is one this delete has not stopped yet.
   if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+
   if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return deleted.value;
 });

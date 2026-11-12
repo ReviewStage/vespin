@@ -32,6 +32,7 @@ test("a failed join's validate fetch, its token in the query, is dropped", () =>
       url: `https://ui-avatar.livekit.cloud/rtc/v1/validate?access_token=${TOKEN}&auto_subscribe=1`,
     },
   };
+
   assert.equal(withoutAccessTokens(breadcrumb), null);
 });
 
@@ -41,6 +42,7 @@ test("a console line that prints the URL is dropped", () => {
     level: "warning" as const,
     message: `could not connect to wss://x.livekit.cloud/rtc?access_token=${TOKEN}`,
   };
+
   assert.equal(withoutAccessTokens(breadcrumb), null);
 });
 
@@ -50,6 +52,7 @@ test("a breadcrumb carrying no token is kept as it was", () => {
     type: "http",
     data: { method: "GET", url: "https://app.example.test/status", status_code: 200 },
   };
+
   assert.equal(withoutAccessTokens(breadcrumb), breadcrumb);
 });
 
@@ -65,6 +68,7 @@ test("an error whose message carries a failed join's validate URL is dropped", (
       ],
     },
   };
+
   assert.equal(eventWithoutAccessTokens(event), null);
 });
 
@@ -80,6 +84,7 @@ test("an event carrying no token is sent as it was", () => {
     exception: { values: [{ type: "TypeError", value: "x is undefined" }] },
     request: { url: "app://renderer/index.html" },
   };
+
   assert.equal(eventWithoutAccessTokens(event), event);
 });
 
@@ -117,18 +122,23 @@ class FixtureClient extends Sentry.Client {
 function spansOf(body: string): SentSpan[] {
   const [, ...lines] = body.split("\n").filter((line) => line.length > 0);
   const spans: SentSpan[] = [];
+
   for (let at = 0; at + 1 < lines.length; at += 2) {
     const header: { type?: string } = JSON.parse(lines[at] ?? "{}");
+
     if (header.type !== "span") continue;
     const container: SpanContainer = JSON.parse(lines[at + 1] ?? "{}");
+
     for (const item of container.items ?? []) {
       const attributes = Object.entries(item.attributes ?? {}).map(([name, { value }]) => [
         name,
         value,
       ]);
+
       spans.push({ name: item.name, attributes: Object.fromEntries(attributes) });
     }
   }
+
   return spans;
 }
 
@@ -139,6 +149,7 @@ function spansOf(body: string): SentSpan[] {
  */
 async function sentSpans(traced: () => void): Promise<SentSpan[]> {
   const sent: SentSpan[] = [];
+
   const client = new FixtureClient({
     dsn: FIXTURE_SENTRY_DSN,
     integrations: [Sentry.spanStreamingIntegration({ flushOnSegmentEnd: false })],
@@ -151,14 +162,18 @@ async function sentSpans(traced: () => void): Promise<SentSpan[]> {
         const body = Predicate.isString(request.body)
           ? request.body
           : new TextDecoder().decode(request.body);
+
         sent.push(...spansOf(body));
+
         return Promise.resolve({});
       }),
   });
+
   Sentry.setCurrentClient(client);
   client.init();
   traced();
   await client.close(1_000);
+
   return sent;
 }
 
@@ -169,6 +184,7 @@ function sentText(spans: readonly SentSpan[]): string {
 
 test("a request span whose address names the avatar's token as it starts is never sent", async () => {
   const url = `https://x.livekit.cloud/rtc/v1/validate?access_token=${TOKEN}&auto_subscribe=1`;
+
   const spans = await sentSpans(() => {
     Sentry.startSpan({ name: "/panel.html", op: "pageload" }, () => {
       Sentry.startSpan(
@@ -177,6 +193,7 @@ test("a request span whose address names the avatar's token as it starts is neve
       );
     });
   });
+
   assert.deepEqual(
     spans.map((span) => span.name),
     ["/panel.html"],
@@ -189,6 +206,7 @@ test("a span whose name names the token as it starts is never sent", async () =>
       Sentry.startSpan({ name: `GET /rtc?access_token=${TOKEN}`, op: "http.client" }, () => {});
     });
   });
+
   assert.deepEqual(
     spans.map((span) => span.name),
     ["/panel.html"],
@@ -197,6 +215,7 @@ test("a span whose name names the token as it starts is never sent", async () =>
 
 test("a token in a span's fragment, path, or query is scrubbed from what is sent", async () => {
   const pathToken = "0f".repeat(20);
+
   const spans = await sentSpans(() => {
     Sentry.startSpan({ name: "/app", op: "pageload" }, (page) => {
       // Note that the page's own address is set once the span stands, as the SDK's HTTP context does.
@@ -215,10 +234,13 @@ test("a token in a span's fragment, path, or query is scrubbed from what is sent
       );
     });
   });
+
   const text = sentText(spans);
+
   for (const secret of [TOKEN, pathToken, "fixture-code", "fixture-state", "fixture-sig"]) {
     assert.equal(text.includes(secret), false, secret);
   }
+
   const attributes = Object.fromEntries(spans.map((span) => [span.name, span.attributes]));
   assert.deepEqual(
     [attributes["/app"]?.["url.full"], attributes["/app"]?.["url.fragment"]],
@@ -258,6 +280,7 @@ test("an address in a span's name is scrubbed, and other words of the name are k
     );
     Sentry.startSpan({ name: "ui.click button#send" }, () => {});
   });
+
   assert.deepEqual(spans.map((span) => span.name).sort(), [
     "GET https://app.example.test/oauth/callback?code=[redacted]&sig=[redacted]",
     "proxy url=https://[redacted]@app.example.test/x",
@@ -280,10 +303,13 @@ test("the page's referrer, an array, is scrubbed, and so is a token in any array
       ]);
     });
   });
+
   const text = sentText(spans);
+
   for (const secret of [TOKEN, "fixture-code", "fixture-state"]) {
     assert.equal(text.includes(secret), false, secret);
   }
+
   assert.deepEqual(
     [spans[0]?.attributes["http.request.header.referer"], spans[0]?.attributes["avatar.attempts"]],
     [
@@ -302,6 +328,7 @@ test("a token named after a span starts, in its name or any attribute, is replac
       });
     });
   });
+
   assert.equal(sentText(spans).includes(TOKEN), false);
   assert.deepEqual(
     spans.map((span) => [span.name, span.attributes["avatar.failure"]]),
@@ -319,6 +346,7 @@ test("a span carrying no address and no token is sent as it was", async () => {
       () => {},
     );
   });
+
   assert.deepEqual(
     spans.map((span) => [span.name, span.attributes["plan.sections"]]),
     [["plan.render", 4]],

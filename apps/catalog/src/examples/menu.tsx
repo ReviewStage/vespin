@@ -85,6 +85,7 @@ const TASK_ACTIONS: readonly (readonly MenuEntry[])[] = [
 /** A ⋯ and the task's menu it drops. */
 function TaskMenu(): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <>
       <MoreButton thing="Task" {...menu.trigger()} />
@@ -104,8 +105,10 @@ function ViewMenu(): React.JSX.Element {
   const [grouping, setGrouping] = useState<string>("Repository");
   const [order, setOrder] = useState<string>("Last updated");
   const [archived, setArchived] = useState(false);
+
   const choices = (labels: readonly string[], chosen: string, choose: (label: string) => void) =>
     labels.map((label) => ({ label, checked: label === chosen, onSelect: () => choose(label) }));
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} {...menu.trigger(dropBelowStart)}>
@@ -143,6 +146,7 @@ const RELATED_TASKS = [
 function PlusMenu(): React.JSX.Element {
   const menu = useMenu(true);
   const [related, setRelated] = useState<string | undefined>(undefined);
+
   const groups: readonly (readonly MenuEntry[])[] = [
     [
       { label: "Attachment", icon: <PaperclipIcon />, onSelect: ignore },
@@ -169,6 +173,7 @@ function PlusMenu(): React.JSX.Element {
       },
     ],
   ];
+
   return (
     <>
       <IconButton label="Add" icon={<PlusIcon />} {...menu.trigger(riseAbove)} />
@@ -180,6 +185,7 @@ function PlusMenu(): React.JSX.Element {
 /** The account's menu: whose it is over its items, long words cut short, and who shares it under them. */
 function AccountMenu(): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <>
       <Button icon={<UserIcon />} {...menu.trigger(dropBelowStart)}>
@@ -217,6 +223,7 @@ function AccountMenu(): React.JSX.Element {
 /** A people filter: each person's item, their email beside their name, hangs their card beside it while the pointer rests there, a long name fading where cut. */
 function PeopleMenu(): React.JSX.Element {
   const menu = useMenu(true);
+
   const person = (name: string, email: string, note: string) => ({
     label: name,
     detail: email,
@@ -230,6 +237,7 @@ function PeopleMenu(): React.JSX.Element {
     ),
     onSelect: ignore,
   });
+
   return (
     <>
       <Button icon={<UserIcon />} {...menu.trigger(dropBelowStart)}>
@@ -261,6 +269,7 @@ function PeopleMenu(): React.JSX.Element {
 function ModeMenu(): React.JSX.Element {
   const menu = useMenu(true);
   const [mode, setMode] = useState("ask");
+
   const choice = (value: string, label: string, detail: string) => ({
     key: value,
     label,
@@ -269,6 +278,7 @@ function ModeMenu(): React.JSX.Element {
     checked: mode === value,
     onSelect: () => setMode(value),
   });
+
   return (
     <>
       <Button {...menu.trigger(dropBelowStart)}>Permission mode</Button>
@@ -309,11 +319,13 @@ function RightClickRow(): React.JSX.Element {
 function PinnedRows(): React.JSX.Element {
   const [highlighted, setHighlighted] = useState("effort");
   const [fast, setFast] = useState(true);
+
   const steered = (id: string) => ({
     id: `catalog-pinned-${id}`,
     highlighted: highlighted === id,
     onHover: () => setHighlighted(id),
   });
+
   return (
     <div className="catalog-popover catalog-column">
       <MenuItem
@@ -338,6 +350,7 @@ function PinnedRows(): React.JSX.Element {
 /** A narrowed `@` list on the menu's surface, under its kind's crumb, as an editor hangs one. */
 function NarrowedList(): React.JSX.Element {
   const [active, setActive] = useState(0);
+
   return (
     <MenuSurface className="catalog-menu-surface" inset={MENU_SURFACE_INSET.NONE}>
       <div className="catalog-menu-crumb">
@@ -373,6 +386,7 @@ function NarrowedList(): React.JSX.Element {
 /** A find bar on the menu's surface: its field, then the buttons that step through what it found. */
 function FindBar(): React.JSX.Element {
   const [query, setQuery] = useState("");
+
   return (
     <MenuSurface flow={MENU_SURFACE_FLOW.ROW} role="search" aria-label="Find">
       <SearchField label="Find" placeholder="Find" value={query} onChange={setQuery} />

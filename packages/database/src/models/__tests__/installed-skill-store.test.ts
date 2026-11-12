@@ -42,6 +42,7 @@ import {
  */
 
 const PERSONAL: InstalledSkillOwner = { scope: INSTALLED_SKILL_SCOPE.PERSONAL };
+
 const inWorkspace = (organizationId: string): InstalledSkillOwner => ({
   scope: INSTALLED_SKILL_SCOPE.WORKSPACE,
   organizationId,
@@ -71,6 +72,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -151,6 +153,7 @@ it.layer(getTestDB())("the installed skill store", (it) => {
           ]);
           assert.equal(yield* readable(account, id), true);
         }
+
         assert.deepEqual(yield* namesSeen(outsider, workspace), []);
         assert.equal(yield* readable(outsider, id), false);
 
@@ -296,6 +299,7 @@ it.layer(getTestDB())("the installed skill store", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount;
         const workspace = yield* openWorkspace(owner);
+
         const refused = (made: NewInstalledSkill) =>
           Effect.map(Effect.result(installSkill(owner, made)), Result.isFailure);
 

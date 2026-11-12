@@ -170,13 +170,17 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
     agents.map((agent) => agent.conversationId),
     agents,
   );
+
   const names = yield* hostedStoreOrUnavailable(readAccountNames(agents.flatMap(summaryAccounts)));
+
   const continuedBy = yield* continuedByOf(
     userId,
     agents.map((agent) => agent.id),
   );
+
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices(agents)));
   const now = yield* Clock.currentTimeMillis;
+
   return {
     agents: agents.map((agent) =>
       agentSummary(agent, standing(agent.conversationId), now, names, continuedBy(agent.id), macs),
@@ -197,6 +201,7 @@ const committedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Option.isNone(changed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const agent = yield* summaryOf(userId, changed.value.agent);
   const { txid } = changed.value;
+
   return txid === undefined ? { agent } : { agent, txid };
 });
 
@@ -229,7 +234,9 @@ export const pullRequestChangesRead = (
       ],
       { concurrency: "unbounded" },
     );
+
     const commits = yield* readCommits(token, subject.repository, whole, files.files);
+
     return {
       url: pullRequest.url,
       ...commits,
@@ -253,12 +260,15 @@ export const agentChangesOf = (
 ) =>
   Effect.gen(function* () {
     if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
+
     const changes = yield* githubReadRefusal(
       Effect.gen(function* () {
         const { token } = yield* agentPullRequestReach(userId, agent);
+
         return yield* pullRequestChangesRead(token, agent, pullRequest);
       }),
     );
+
     return { pullRequest: changes };
   });
 
@@ -268,8 +278,10 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
   // The kept published answers, shared with the pull request procedures where the router hands them, so a change there lets go of what `changes` read.
   const published = seams.published ?? instancePublishedCache();
   const signedIn = hosted.agents.use(accountMiddleware(seams.resolveUserId));
+
   const inSandbox = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.provide(effect, seams.sandbox);
+
   const summaryModelOf = Effect.map(
     HostedEnvironment,
     (environment): SummaryModelOf =>
@@ -279,6 +291,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           Effect.provideService(HostedEnvironment, environment),
         )),
   );
+
   // A Start answers 201 for the agent it made, 200 for the one a retry under its key made before.
   const startAnswer = (started: {
     readonly agent: AgentSummary;
@@ -291,16 +304,20 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       ...(started.txid === undefined ? undefined : { txid: started.txid }),
     },
   });
+
   // Whose Mac the agent's `run_on_mac` runs on, and whether it would run there now.
   const workspaceToolsOf = (userId: string, agentId: string) =>
     Effect.gen(function* () {
       const { agent, target } = yield* reachedAgentById(userId, agentId);
       // A member who reaches the agent but not its task reads it as not found, since its transcript is the task's to show.
       const visible = yield* hostedStoreOrUnavailable(readVisibleAgentWorkspace(userId, agent.id));
+
       if (Option.isNone(visible)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const runOnMac = yield* hostedStoreOrUnavailable(runOnMacStanding(agent, target));
+
       return runOnMac === undefined ? {} : { runOnMac };
     });
+
   return {
     /**
      * A workspace's agents, on any task, newest started first,
@@ -316,6 +333,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const workspaceId = input.workspaceId ?? "";
       const { repository } = input;
       const words = input.words?.trim();
+
       if (
         workspaceId === "" ||
         repository === "" ||
@@ -324,11 +342,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       ) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       const member = yield* hostedStoreOrUnavailable(
         isWorkspaceMember(context.userId, workspaceId),
       );
+
       if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const offset = input.offset ?? 0;
+
       const listed = yield* hostedStoreOrUnavailable(
         listWorkspaceAgentLines(context.userId, workspaceId, {
           ...(repository === undefined ? undefined : { repository }),
@@ -339,20 +360,25 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           limit: AGENT_BOUNDS.MAX_WORKSPACE_AGENTS + 1,
         }),
       );
+
       const { page, nextOffset } = listedPage(listed, offset, AGENT_BOUNDS.MAX_WORKSPACE_AGENTS);
       const summaries = yield* listedSummaries(context.userId, page);
+
       return nextOffset === null ? summaries : { ...summaries, nextOffset };
     }),
     /** The task's agents with their status. */
     listOfTask: signedIn.listOfTask.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const workspace = yield* hostedStoreOrUnavailable(readTaskWorkspace(context.userId, taskId));
+
       if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       const agents = yield* hostedStoreOrUnavailable(
         listAgentLines(context.userId, taskId, {
           includeArchived: listsArchived(input.archived),
         }),
       );
+
       return yield* listedSummaries(context.userId, agents);
     }),
     /**
@@ -362,6 +388,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      */
     start: signedIn.start.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
+
       const started = yield* startRequestedAgent(
         routedSessions<TypedTurn>(context.userId),
         context.userId,
@@ -369,6 +396,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         input.body,
         yield* summaryModelOf,
       );
+
       return startAnswer(started);
     }),
     /**
@@ -380,11 +408,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      */
     startFrom: signedIn.startFrom.effect(function* ({ input, context }) {
       const sourceId = yield* pathUuid(input.params.id);
+
       if (input.body.from?.agentId !== sourceId) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       // A choice is read first, so a request refused for it is refused on a retry too.
       yield* requestedChoice(input.body);
+
       // A retry is answered with the agent its key made before the source is read, which may be gone since.
       const made = yield* startedFromBefore(
         context.userId,
@@ -397,10 +428,13 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         },
         undefined,
       );
+
       if (Option.isSome(made)) {
         return startAnswer({ agent: yield* summaryOf(context.userId, made.value), created: false });
       }
+
       const { agent: source } = yield* reachedAgentById(context.userId, sourceId);
+
       const started = yield* startRequestedAgent(
         routedSessions<TypedTurn>(context.userId),
         context.userId,
@@ -408,6 +442,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         input.body,
         yield* summaryModelOf,
       );
+
       return startAnswer(started);
     }),
     /** The agent as its own page. */
@@ -425,6 +460,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
       const now = yield* Clock.currentTimeMillis;
+
       return {
         agent: agentPage(
           agent,
@@ -459,14 +495,17 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     change: signedIn.change.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
       const { body } = input;
+
       if ("title" in body) {
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { title: body.title })),
         );
       }
+
       if ("archived" in body) {
         const why = body.reason === undefined ? undefined : { reason: body.reason };
+
         return yield* committedAgent(
           userId,
           yield* archivedAgent(seams, writer, userId, agent, body.archived, {
@@ -476,45 +515,60 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           }),
         );
       }
+
       if ("pinned" in body) {
         const { pinned, position } = body;
+
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { pinned, position })),
         );
       }
+
       if ("readMark" in body) return { agent: yield* summaryOf(userId, agent) };
+
       if ("disabledServers" in body) {
         const { disabledServers } = body;
+
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { disabledServers })),
         );
       }
+
       if ("permissionMode" in body) {
         const { permissionMode } = body;
+
         // Only who steers the agent sets how its calls are asked, and only a harness that asks takes a mode that does.
         if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
         const route = Option.getOrUndefined(
           yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),
         );
+
         if (!harnessTakesMode(route?.runtime, permissionMode)) {
           return yield* Effect.fail(HOSTED_REFUSAL.PERMISSION_MODE_REFUSED);
         }
+
         const changed = yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { permissionMode })),
         );
+
         return { ...changed, permissionModeApplies: PERMISSION_MODE_APPLIES.NEXT_TURN };
       }
+
       const route = Option.getOrUndefined(
         yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),
       );
+
       if (runtimeChoiceRefusal(route?.runtime, body, route?.payer) !== undefined) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       const choice = yield* choiceOrInvalid(acceptedAgentChoice(userId, body));
       const changed = yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { choice }));
+
       return yield* committedAgent(userId, changed);
     }),
     /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
@@ -524,23 +578,27 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** One ask the agent's runner holds answered by a member who controls it, written to the runner and settled (`approval-answer.ts`). */
     answerApproval: signedIn.answerApproval.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
+
       return yield* answeredApproval(userId, agent, input.params.approval, input.body);
     }),
     /** The agent stopped: the harness's cancel of the turn under way, then the row's stamp; an agent with no turn running is answered as it stands. */
     stop: signedIn.stop.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       yield* stoppedAgent(writer, userId, agent);
+
       return { agent: yield* summaryOf(userId, agent) };
     }),
     /** The agent's failed first launch booted again (`coder-host/boot.ts`), answered as it then stands. */
     boot: signedIn.boot.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       yield* retryBoot(userId, agent);
+
       return { agent: yield* summaryOf(userId, agent) };
     }),
     /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
     warm: signedIn.warm.effect(function* ({ input, context }) {
       yield* warmedAgent(context.userId, input.id);
+
       return { warm: true as const };
     }),
     /** The agent's harness started on a fresh session in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
@@ -561,6 +619,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The files one of the agent's turns changed, as git tells them apart on its machine (`coder-host/turn-changes.ts`). */
     turnChanges: signedIn.turnChanges.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.id);
+
       return yield* turnChangesOf(agent, input.messageId);
     }),
     /**
@@ -575,6 +634,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       const number = yield* pullRequestNumberOf(input.number === undefined ? [] : [input.number]);
       const pullRequest = yield* askedPullRequest(yield* published, userId, agent, number);
+
       return yield* agentChangesOf(userId, agent, pullRequest);
     }),
     /**
@@ -585,11 +645,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      */
     reviewOptions: signedIn.reviewOptions.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+
       // An agent with no repository has none to offer reviewers or labels of.
       if (!hasRepository(agent)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+
       return yield* githubReadRefusal(
         Effect.gen(function* () {
           const { token } = yield* agentPullRequestReach(userId, agent);
+
           return yield* namedReviewOptions(
             agent,
             yield* pullRequestReviewOptions(token, agent.repository),
@@ -608,40 +671,51 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.id);
+
       return yield* inSandbox(listedShells(sessionId));
     }),
     /** A shell started in the agent's running sandbox, under an id the service mints. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.params.id);
+
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       const { title } = input.body;
+
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const started = yield* sandboxOrUpstream(sandbox.start(sessionId, randomUUID(), title));
+
           if (Result.isFailure(started)) return yield* Effect.fail(shellRefusal(started.failure));
+
           return { terminal: started.success };
         }),
       );
+
       yield* recordServerEventIn(
         SERVER_EVENT.AGENT_TOOL_OPEN,
         context.userId,
         readVisibleAgentWorkspace(context.userId, input.params.id),
         { tool: SERVER_AGENT_TOOL.TERMINAL },
       );
+
       return opened;
     }),
     /** One shell named anew, answering the shells as they stand after. */
     renameTerminal: signedIn.renameTerminal.effect(function* ({ input, context }) {
       const terminalId = yield* pathUuid(input.params.terminal);
       const sessionId = yield* reachedSession(context.userId, input.params.id);
+
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { title } = input.body;
+
       return yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const renamed = yield* sandboxOrUpstream(sandbox.rename(sessionId, terminalId, title));
+
           if (Result.isFailure(renamed)) return yield* Effect.fail(shellRefusal(renamed.failure));
+
           return yield* listedShells(sessionId);
         }),
       );
@@ -654,23 +728,29 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      */
     runAction: signedIn.runAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
+
       return yield* inSandbox(ranRunAction(context.userId, input.id, actionId));
     }),
     /** One run action stopped, TERM then KILL where it outlives the grace (`agent-sandbox.ts`), answering the shells as they stand after. */
     stopRunAction: signedIn.stopRunAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
+
       return yield* inSandbox(stoppedRunAction(context.userId, input.id, actionId));
     }),
     /** One shell ended, answering the shells as they stand after. */
     endTerminal: signedIn.endTerminal.effect(function* ({ input, context }) {
       const terminalId = yield* pathUuid(input.terminal);
       const sessionId = yield* reachedSession(context.userId, input.id);
+
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const killed = yield* sandboxOrUpstream(sandbox.kill(sessionId, terminalId));
+
           if (Result.isFailure(killed)) return yield* Effect.fail(shellRefusal(killed.failure));
+
           return yield* listedShells(sessionId);
         }),
       );

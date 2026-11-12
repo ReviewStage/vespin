@@ -238,6 +238,7 @@ function takeDownOver(depth: number, own: string): void {
 /** Takes a tooltip off the window's stack, where it stands. */
 function unstack(id: string): void {
   const at = standing.findIndex((each) => each.id === id);
+
   if (at !== -1) standing.splice(at, 1);
 }
 
@@ -271,13 +272,17 @@ function hearRestEnders(stop: () => void): () => void {
   const key = (event: KeyboardEvent) => {
     if (!MODIFIER_KEYS.has(event.key)) stop();
   };
+
   const scrolled = (event: Event) => {
     const { target } = event;
+
     if (!(target instanceof Node && standing.some((each) => each.holds(target)))) stop();
   };
+
   window.addEventListener("keydown", key, true);
   window.addEventListener("scroll", scrolled, true);
   window.addEventListener("blur", stop);
+
   return () => {
     window.removeEventListener("keydown", key, true);
     window.removeEventListener("scroll", scrolled, true);
@@ -354,11 +359,13 @@ interface HintRest {
  */
 export function useHintRest(): HintRest {
   const id = useId();
+
   const stop = useCallback(() => {
     if (resting?.id !== id) return;
     letGoRest();
     hintRest.stop();
   }, [id]);
+
   const rest = useCallback(
     (show: () => void) => {
       letGoRest();
@@ -375,7 +382,9 @@ export function useHintRest(): HintRest {
     },
     [id, stop],
   );
+
   useEffect(() => stop, [stop]);
+
   return useMemo(() => ({ rest, stop }), [rest, stop]);
 }
 
@@ -397,6 +406,7 @@ export function hintedControlOf(node: Node): HTMLElement | undefined {
  */
 export function pointCard(control: HTMLElement, over: boolean): void {
   const door = cardDoors.get(control);
+
   if (over) door?.rest(false);
   else door?.leave();
 }
@@ -410,8 +420,10 @@ export function commandKeyshortcuts(command: KeyedCommand): string {
 function cardDoorFrom(from: HTMLElement | null): CardDoor | undefined {
   for (let each = from; each !== null; each = each.parentElement) {
     const door = cardDoors.get(each);
+
     if (door !== undefined) return door;
   }
+
   return undefined;
 }
 
@@ -432,8 +444,10 @@ function cardDoorAround(anchor: HTMLElement): CardDoor | undefined {
  */
 function heardOver(element: HTMLElement, label: string): Heard {
   const name = element.getAttribute("aria-label") ?? element.textContent;
+
   if (name.replace(SPACING, "").includes(label.replace(SPACING, ""))) return HEARD.NAMED;
   const spoken = !element.matches(TAKES_FOCUS) && !element.matches(HOLDS_NO_WORDS);
+
   return spoken ? HEARD.SPOKEN : HEARD.DESCRIBED;
 }
 
@@ -453,6 +467,7 @@ function wordsHomeNow(): HTMLElement {
     wordsHome = document.createElement("div");
     document.body.append(wordsHome);
   }
+
   return wordsHome;
 }
 
@@ -480,7 +495,9 @@ function HintWords({
     () => true,
     () => false,
   );
+
   if (!inWindow) return null;
+
   return createPortal(
     spoken ? (
       <VisuallyHidden id={id}>{words}</VisuallyHidden>
@@ -527,6 +544,7 @@ function Hint({
 }): React.JSX.Element {
   const { anchor, region } = drawn.shown;
   const placed = { id, anchor, leaving, ref: hold };
+
   if (card !== undefined) {
     // Note that a card hung from a row hangs beside the whole row, because
     // its control, the row's press, gives its end up to the row's acts as
@@ -546,6 +564,7 @@ function Hint({
       </TooltipCard>
     );
   }
+
   return (
     <TooltipPill
       {...placed}
@@ -604,11 +623,13 @@ export function Tooltip({
   const chord = command === undefined ? ownChord : APP_SHORTCUTS[command].chord;
   const [shown, setShown, latest] = useStateWithRef<Shown | undefined>(undefined);
   const carded = card !== undefined;
+
   // The row a card counts as its control, where it names one; a pill has none.
   const region = useCallback(
     () => (carded ? (cardRegion?.current ?? undefined) : undefined),
     [carded, cardRegion],
   );
+
   // Note that only a tooltip hanging a card holds a linger of its own.
   const lingerWait = useWait();
   const linger = useMemo(() => (carded ? cardLinger(lingerWait) : NO_LINGER), [carded, lingerWait]);
@@ -620,12 +641,15 @@ export function Tooltip({
   // The pill is drawn through its exit as it last stood.
   const asked = shown === undefined || label === undefined ? undefined : { shown, label };
   const [drawn, setDrawn] = useState<Drawn | undefined>(asked);
+
   if (asked !== undefined && (asked.shown !== drawn?.shown || asked.label !== drawn.label)) {
     setDrawn(asked);
   }
+
   const pill = useDisclosure(asked !== undefined);
   const pillElement = useRef<HTMLElement | null>(null);
   const holdPill = pill.ref;
+
   const drawPill = useCallback(
     (element: HTMLElement | null) => {
       pillElement.current = element;
@@ -633,23 +657,28 @@ export function Tooltip({
     },
     [holdPill],
   );
+
   // A pill that was on screen warms the window for the next; a card, which
   // lingers as the pointer moves on, leaves it as it was, and a hint still
   // waiting is only called off.
   const hide = useCallback(() => {
     if (latest() === undefined) {
       stopRest();
+
       return;
     }
+
     if (!carded) warmUntil = performance.now() + WARM_MS;
     // A card going takes down the cards hung from its controls with it.
     const at = standing.findIndex((each) => each.id === id);
+
     if (at !== -1) takeDownOver(at + 1, id);
     unstack(id);
     overCard.current = false;
     linger.stop();
     setShown(undefined);
   }, [latest, stopRest, carded, id, setShown, linger]);
+
   // The hint up over `anchor`, over the standing card it stands on, if any,
   // and in place of every other.
   const stand = (anchor: HTMLElement, touched: boolean) => {
@@ -670,72 +699,92 @@ export function Tooltip({
       holds: (node) => pillElement.current?.contains(node) === true,
     });
   };
+
   const show = (anchor: HTMLElement, touched = false) => {
     if (label === undefined) return;
+
     // The pointer back on a lingering card's control keeps the card as it stands.
     if (latest()?.anchor === anchor) {
       linger.stop();
+
       return;
     }
+
     // A control in the standing card's row is part of that row, and leaves the card standing.
     const top = standing.at(-1);
+
     if (top !== undefined && top.id !== id && top.region?.contains(anchor) === true) return;
     // Words or a mark inside a control hanging a card, as a row's name cut
     // short is, raise that card in their pill's place, waiting or standing,
     // so one the pointer reached past a control of its own inside still
     // shows; a control of their own, as a chip's Remove is, keeps its pill.
     const around = carded || anchor.matches(OWN_CONTROL) ? undefined : cardDoorAround(anchor);
+
     if (around !== undefined) {
       around.rest(touched);
+
       return;
     }
+
     // Note that the warm spell is read before anything is taken down, so a
     // hint this one takes down never warms the window for it.
     if (touched || performance.now() < warmUntil) {
       stopRest();
       stand(anchor, touched);
+
       return;
     }
+
     rest(() => stand(anchor, false));
   };
+
   // Note that the door to the card reads the latest `show`, because it is offered once for as long as the card is.
   const showRef = useRef(show);
   useLayoutEffect(() => {
     showRef.current = show;
   });
+
   // A card on screen lingers for the pointer crossing to it; a pill goes at
   // once, and a hint still waiting is called off.
   const leave = useCallback(() => {
     if (carded && latest() !== undefined) linger.leave(hide);
     else hide();
   }, [carded, latest, linger, hide]);
+
   // Note that the door out of the card reads the latest `leave`, as its way in reads the latest `show`.
   const leaveRef = useRef(leave);
   useLayoutEffect(() => {
     leaveRef.current = leave;
   });
+
   // A selection dragged past the card's edge leaves it standing until the
   // press ends, and the pointer then off the card lets it linger.
   const onCard = (over: boolean) => {
     overCard.current = over;
+
     if (over) linger.stop();
     else if (!pressingCard.current) linger.leave(hide);
   };
+
   const onCardPress = () => {
     pressingCard.current = true;
+
     const end = () => {
       window.removeEventListener("pointerup", end, true);
       window.removeEventListener("pointercancel", end, true);
       pressingCard.current = false;
       // A card a finger opened stands until a tap elsewhere, as a popover does.
       const stood = latest();
+
       if (stood !== undefined && !stood.touched && !overCard.current) {
         linger.leave(hide);
       }
     };
+
     window.addEventListener("pointerup", end, true);
     window.addEventListener("pointercancel", end, true);
   };
+
   // A control that goes while its card stands takes the card, and its
   // linger, with it; one that goes while its hint waits calls the wait off
   // (`useHintRest`).
@@ -751,23 +800,31 @@ export function Tooltip({
   // element is known.
   const offersCard = carded && label !== undefined;
   const control = useRef<HTMLElement | null>(null);
+
   const doorTo = (element: HTMLElement): CardDoor => ({
     rest: (touched) => showRef.current(element, touched),
     leave: () => leaveRef.current(),
   });
+
   const learn = useCallback(
     (element: HTMLElement | null) => {
       const before = control.current;
+
       if (element === before) return;
+
       if (before !== null) cardDoors.delete(before);
       control.current = element;
+
       if (element !== null && offersCard) cardDoors.set(element, doorTo(element));
     },
     [offersCard],
   );
+
   useEffect(() => {
     const element = control.current;
+
     if (element === null) return;
+
     if (offersCard) cardDoors.set(element, doorTo(element));
     else cardDoors.delete(element);
   }, [offersCard]);
@@ -779,9 +836,11 @@ export function Tooltip({
     [],
   );
   const ownRef = children.props.ref;
+
   const anchorRef = useCallback(
     (element: HTMLElement | null) => {
       handRef(ownRef, element);
+
       if (element !== null) learn(element);
     },
     [ownRef, learn],
@@ -796,9 +855,11 @@ export function Tooltip({
     // Note that a control the tooltip hands no ref is found by the
     // description it was first drawn with, which every control starts on.
     let element = control.current;
+
     if (element === null || !element.isConnected) {
       element = document.querySelector<HTMLElement>(`[aria-describedby~="${wordsId}"]`);
     }
+
     if (element === null) return;
     learn(element);
     setHeard(heardOver(element, label));
@@ -815,19 +876,25 @@ export function Tooltip({
   const up = shown !== undefined;
   useEffect(() => {
     if (!up) return;
+
     const key = (event: KeyboardEvent) => {
       if (MODIFIER_KEYS.has(event.key)) return;
+
       if (event.key === "Escape" || !overCard.current) hide();
     };
+
     // Note that a card stacked over this one is portaled apart from it, so a scroll on any standing card is read as the cards being read.
     const scrolled = (event: Event) => {
       const { target } = event;
       const within = target instanceof Node && standing.some((each) => each.holds(target));
+
       if (!within) hide();
     };
+
     window.addEventListener("keydown", key, true);
     window.addEventListener("scroll", scrolled, true);
     window.addEventListener("blur", hide);
+
     return () => {
       window.removeEventListener("keydown", key, true);
       window.removeEventListener("scroll", scrolled, true);
@@ -845,15 +912,19 @@ export function Tooltip({
   // left.
   useEffect(() => {
     const row = region();
+
     if (!up || row === undefined) return;
+
     // Note that a finger lifted leaves the row too, which is no pointer moving on.
     const out = (event: PointerEvent) => {
       if (event.pointerType !== "touch" && !overCard.current) leave();
     };
+
     const back = () => linger.stop();
     row.addEventListener("pointerleave", out);
     row.addEventListener("pointerenter", back);
     row.addEventListener("pointerdown", hide);
+
     return () => {
       row.removeEventListener("pointerleave", out);
       row.removeEventListener("pointerenter", back);
@@ -865,14 +936,20 @@ export function Tooltip({
   const touchedUp = shown?.touched === true;
   useEffect(() => {
     if (!touchedUp) return;
+
     const pressed = (event: PointerEvent) => {
       const { target } = event;
+
       if (!(target instanceof Node)) return;
+
       if (latest()?.anchor.contains(target) === true) return;
+
       if (standing.some((each) => each.holds(target))) return;
       hide();
     };
+
     window.addEventListener("pointerdown", pressed, true);
+
     return () => window.removeEventListener("pointerdown", pressed, true);
   }, [touchedUp, latest, hide]);
 
@@ -884,14 +961,18 @@ export function Tooltip({
 
   const own = children.props;
   const described = label !== undefined && heard === HEARD.DESCRIBED;
+
   // Note that the control's own description is kept, ahead of the label.
   const describedBy = [own["aria-describedby"], described ? wordsId : undefined]
     .filter((each) => each !== undefined && each !== "")
     .join(" ");
+
   const spoken = label !== undefined && heard === HEARD.SPOKEN;
+
   const owns = [own["aria-owns"], spoken ? wordsId : undefined]
     .filter((each) => each !== undefined && each !== "")
     .join(" ");
+
   const anchor = cloneElement(children, {
     ...(describedBy === "" ? undefined : { "aria-describedby": describedBy }),
     ...(owns === "" ? undefined : { "aria-owns": owns }),
@@ -901,13 +982,16 @@ export function Tooltip({
     onPointerEnter: (event) => {
       own.onPointerEnter?.(event);
       learn(event.currentTarget);
+
       // A touch has no hover to rest, so it shows nothing.
       if (event.pointerType !== "touch") show(event.currentTarget);
     },
     onPointerLeave: (event) => {
       own.onPointerLeave?.(event);
+
       // A finger lifted leaves its control too, which takes down nothing it opened.
       if (event.pointerType === "touch") return;
+
       // A card hung from a row lingers once the pointer leaves the row
       // instead, while one still waiting is called off as the press is left.
       if (region() === undefined || latest() === undefined) leave();
@@ -919,12 +1003,15 @@ export function Tooltip({
       shownAtPress.current = latest() !== undefined;
       hide();
       const control = event.currentTarget;
+
       if (!fingerPress.current || shownAtPress.current || label === undefined) return;
       // Note that an inner control holds for the hint because its tap does not open it.
       const pressed = event.target instanceof Element ? event.target : control;
+
       if (pressed.closest(OWN_CONTROL) === null || pressed.closest(LONG_PRESS_MENU) !== null) {
         return;
       }
+
       hold.start(event, () => show(control, true));
     },
     onTouchEnd: (event) => {
@@ -936,10 +1023,12 @@ export function Tooltip({
       const tapped = fingerPress.current && !shownAtPress.current;
       fingerPress.current = false;
       shownAtPress.current = false;
+
       if (!tapped || label === undefined || event.defaultPrevented) return;
       // Note that a control inside the words, a choice bar the hint names, takes its own tap too.
       const { target } = event;
       const onControl = target instanceof Element && target.closest(OWN_CONTROL) !== null;
+
       if (onControl || event.currentTarget.closest(OWN_CONTROL) !== null) return;
       // Note that the tap is spent here, so a message holding the words shows no actions for it.
       event.preventDefault();
@@ -947,20 +1036,24 @@ export function Tooltip({
     },
     onFocus: (event) => {
       own.onFocus?.(event);
+
       // Note that a focus on a control inside, as a chip in a fold's line, is
       // that control's to hint, so it raises nothing over it here.
       if (event.target !== event.currentTarget) return;
       learn(event.currentTarget);
+
       // Only focus the keyboard moved shows the pill: a press focuses its
       // control too, and has just taken the pill down.
       if (document.documentElement.dataset.keyboard === "true") show(event.currentTarget);
     },
     onBlur: (event) => {
       own.onBlur?.(event);
+
       // A press on the card, or anywhere while a finger's hint stands, leaves it to its own close.
       if (!overCard.current && latest()?.touched !== true) hide();
     },
   });
+
   return (
     <>
       {anchor}
@@ -1011,6 +1104,7 @@ export function RowHintOptions({
   children,
 }: RowHintOptions & { children: ReactNode }): React.JSX.Element {
   const options = useMemo((): RowHintOptions => ({ shown, command, card }), [shown, command, card]);
+
   return <RowHintContext.Provider value={options}>{children}</RowHintContext.Provider>;
 }
 
@@ -1023,6 +1117,7 @@ export function RowHintOptions({
  */
 export const RowHint: ListRowHint = ({ label, row, children }) => {
   const { shown = true, ...options } = useContext(RowHintContext);
+
   return (
     <Tooltip label={shown ? label : undefined} {...options} cardBeside cardRegion={row}>
       {children}

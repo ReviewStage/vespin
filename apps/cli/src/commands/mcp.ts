@@ -77,6 +77,7 @@ function connectByHand(why: string, byHand: string): Effect.Effect<never, Comman
 const ran = Effect.fnUntraced(function* (command: McpCommand) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const [program, ...args] = command;
+
   return yield* spawner
     .exitCode(
       ChildProcess.make(program, args, { stdin: "ignore", stdout: "ignore", stderr: "inherit" }),
@@ -94,14 +95,17 @@ const installByCommand = Effect.fnUntraced(function* (
 ) {
   const command = MCP_ADD_COMMAND[COMMAND_AGENT_OF[client]](serverUrl);
   const exit = yield* ran(command);
+
   if (exit === undefined)
     return yield* connectByHand(`${command[0]} is not on your PATH.`, shellLine(command));
+
   if (exit !== 0) {
     return yield* new CommandFailed({
       exit: CLI_EXIT.REFUSED,
       message: `${shellLine(command)} ended with ${exit}.`,
     });
   }
+
   return { connected: CONNECTED.RAN, command: shellLine(command) };
 });
 
@@ -109,28 +113,38 @@ const installByCommand = Effect.fnUntraced(function* (
 const installInCursor = Effect.fnUntraced(function* (serverUrl: string) {
   const fileSystem = yield* FileSystem.FileSystem;
   const file = path.join(os.homedir(), ...CURSOR_CONFIG_PATH);
+
   const byHand = connectByHand(
     `${file} could not be read as Cursor's config.`,
     cursorConfigSnippet(serverUrl),
   );
+
   const exists = yield* Effect.orElseSucceed(fileSystem.exists(file), () => false);
+
   const text = exists
     ? yield* Effect.orElseSucceed(fileSystem.readFileString(file), () => undefined)
     : "";
+
   if (text === undefined) return yield* byHand;
   let config: unknown;
+
   try {
     config = text.trim() === "" ? undefined : JSON.parse(text);
   } catch {
     return yield* byHand;
   }
+
   const merged = cursorConfigWithServer(config, serverUrl);
+
   if (merged === undefined) return yield* byHand;
+
   const wrote = Effect.gen(function* () {
     yield* fileSystem.makeDirectory(path.dirname(file), { recursive: true });
     yield* fileSystem.writeFileString(file, `${JSON.stringify(merged, null, 2)}\n`);
   });
+
   yield* Effect.catch(wrote, () => byHand);
+
   return { connected: CONNECTED.WROTE, file };
 });
 
@@ -146,10 +160,12 @@ const installCommand = Command.make(
   ({ client }) =>
     Effect.gen(function* () {
       const serverUrl = mcpServerUrl(yield* serviceOrigin);
+
       const done =
         client === MCP_CLIENT.CURSOR
           ? yield* installInCursor(serverUrl)
           : yield* installByCommand(client, serverUrl);
+
       yield* note(SIGN_IN_NEXT[client]);
       yield* answer({
         json: { client, serverUrl, ...done },
@@ -212,9 +228,11 @@ const revokeCommand = Command.make(
         yes,
       );
       const { hosted } = yield* session;
+
       const { serverUrl, clients } = yield* askService(hosted.mcpClients.revoke, {
         query: { clientId: client },
       });
+
       yield* answer({
         json: { serverUrl, clients },
         lines: [`Revoked ${client}.`],

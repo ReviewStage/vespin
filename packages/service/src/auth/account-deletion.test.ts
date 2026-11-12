@@ -109,10 +109,12 @@ const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.Stri
 const roleIn = (organizationId: string, userId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const rows = yield* db
       .select({ role: member.role })
       .from(member)
       .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+
     return rows.map((row) => row.role);
   });
 
@@ -138,10 +140,12 @@ const openAuthRoute = (
         }),
       ],
     });
+
     const sandboxes = memorySandbox();
     const forgotten: string[] = [];
     // Resend answers every onboarding call, and each is kept to read back.
     const resend = recordingHttpClient(() => jsonResponse({ object: "contact" }));
+
     const onboarding = onboardingEventsFromEnvironment.pipe(
       Layer.provide(
         Layer.merge(
@@ -155,6 +159,7 @@ const openAuthRoute = (
         ),
       ),
     );
+
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
@@ -168,13 +173,16 @@ const openAuthRoute = (
       onboarding,
       standIns,
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       authApp((request) => auth.handler(request), workspaceSeams(auth.api)).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => dispose()));
+
     const post = (path: string, body: object, cookie?: string) =>
       Effect.promise(() =>
         handler(
@@ -189,6 +197,7 @@ const openAuthRoute = (
           }),
         ),
       );
+
     /** An account signed up and signed in: its id and the cookie its session rides on. */
     const signUp = (name: string) =>
       Effect.gen(function* () {
@@ -197,14 +206,19 @@ const openAuthRoute = (
           email: `${name}@example.com`,
           password: "a-password-long-enough",
         });
+
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
         const cookie = answered.headers
           .getSetCookie()
           .map((line) => line.split(";")[0])
           .join("; ");
+
         const { id } = decodeSignedUp(yield* Effect.promise(() => answered.json())).user;
+
         return { id, cookie };
       });
+
     return { auth, post, signUp, sandboxes, forgotten, resend };
   });
 
@@ -216,12 +230,15 @@ const openWorkspaces = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const solo = yield* Effect.promise(() =>
       route.auth.api.createOrganization({ body: { name: "Ada", slug: "ada", userId: ada } }),
     );
+
     const shared = yield* Effect.promise(() =>
       route.auth.api.createOrganization({ body: { name: "Acme", slug: "acme", userId: ada } }),
     );
+
     assert.ok(solo && shared);
     yield* Effect.promise(() =>
       route.auth.api.addMember({
@@ -240,10 +257,12 @@ const openWorkspaces = (
       updatedAt: now,
     });
     const agentId = yield* openAgentOnOwnTask(grace, solo.id);
+
     const [agent] = yield* db
       .select({ conversationId: agentTable.conversationId })
       .from(agentTable)
       .where(eq(agentTable.id, agentId));
+
     assert.ok(agent);
     yield* db
       .update(conversations)
@@ -259,9 +278,11 @@ const openWorkspaces = (
     });
     const workspaceDrive = workspaceDriveName(solo.id);
     const repositoryDrive = baseDriveName(solo.id, "acme/relay");
+
     for (const name of [workspaceDrive, repositoryDrive]) {
       route.sandboxes.state.drives.set(name, { name, forkedFrom: undefined });
     }
+
     route.sandboxes.stand({
       name: workspaceDrive,
       drive: { name: workspaceDrive, at: WORKSPACE_DRIVE.MOUNT },
@@ -287,6 +308,7 @@ const openWorkspaces = (
         }),
       ),
     );
+
     const [scheduled] = yield* db
       .insert(automation)
       .values({
@@ -300,7 +322,9 @@ const openWorkspaces = (
         guards: AUTOMATION_DEFAULT_GUARDS,
       })
       .returning({ id: automation.id });
+
     assert.ok(scheduled);
+
     const [sharedScheduled] = yield* db
       .insert(automation)
       .values({
@@ -314,9 +338,11 @@ const openWorkspaces = (
         guards: AUTOMATION_DEFAULT_GUARDS,
       })
       .returning({ id: automation.id });
+
     assert.ok(sharedScheduled);
     const sharedTask = yield* createTask(ada, { organizationId: shared.id, name: "Invitations" });
     const sharedAgent = yield* openTaskAgent(grace, shared.id, sharedTask.id);
+
     return {
       solo: solo.id,
       shared: shared.id,
@@ -339,11 +365,13 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
         const ada = yield* route.signUp("ada");
         const grace = yield* route.signUp("grace");
+
         const {
           shared,
           leftBehind,
@@ -409,9 +437,11 @@ it.effect(
         );
         // The solo workspace's schedule goes with it, then Ada's own in the shared one with her account.
         assert.deepEqual(route.forgotten, [schedule, sharedSchedule]);
+
         const contactDeletes = route.resend.requests
           .filter((request) => request.method === HTTP_METHOD.DELETE)
           .map((request) => decodeURIComponent(request.pathname));
+
         assert.deepEqual(contactDeletes, ["/contacts/ada@example.com"]);
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
@@ -424,6 +454,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -431,12 +462,15 @@ it.effect(
         const grace = yield* route.signUp("grace");
         const alan = yield* route.signUp("alan");
         const barbara = yield* route.signUp("barbara");
+
         const acme = yield* Effect.promise(() =>
           route.auth.api.createOrganization({
             body: { name: "Acme", slug: "acme", userId: ada.id },
           }),
         );
+
         assert.ok(acme);
+
         // Grace joined first, then Alan, then Barbara, a day apart.
         for (const [day, userId, role] of [
           [1, grace.id, "member"],
@@ -469,6 +503,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -501,6 +536,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -549,6 +585,7 @@ it.effect(
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         const route = yield* openAuthRoute(client);
@@ -629,24 +666,32 @@ it.effect.each([
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         let githubAsked: () => void = () => undefined;
         let googleAsked: () => void = () => undefined;
+
         const asked = Promise.all([
           new Promise<void>((settle) => (githubAsked = settle)),
           new Promise<void>((settle) => (googleAsked = settle)),
         ]);
+
         const providers = fakeGitHub((sent) => {
           if (sent.url === GOOGLE_REVOKE_URL) {
             googleAsked();
+
             return new Response(null, { status: 200 });
           }
+
           githubAsked();
+
           return answer(sent);
         }, app);
+
         // The route runs in a runtime of its own, so it waits on the test's clock, each wait announced.
         const { clock, asleep } = yield* announcingClock;
+
         const route = yield* openAuthRoute(
           client,
           Layer.mergeAll(
@@ -656,6 +701,7 @@ it.effect.each([
             Layer.succeed(Clock.Clock, clock),
           ),
         );
+
         const ada = yield* route.signUp("ada");
         const now = yield* Clock.currentTimeMillis;
         yield* signInWithGitHub(ada.id);
@@ -685,21 +731,25 @@ it.effect.each([
           yield* db.select({ id: user.id }).from(user).where(eq(user.id, ada.id)),
           [],
         );
+
         const revokes = providers.sent.map((sent) => ({
           url: sent.url,
           method: sent.method,
           body: sent.body,
         }));
+
         const githubRevoke = {
           url: GITHUB_REVOKE_URL,
           method: HTTP_METHOD.DELETE,
           body: JSON.stringify({ access_token: standingGithubRow(now).accessToken }),
         };
+
         const googleRevoke = {
           url: GOOGLE_REVOKE_URL,
           method: HTTP_METHOD.POST,
           body: new URLSearchParams({ token: GOOGLE_ACCESS_TOKEN }).toString(),
         };
+
         assert.deepEqual(
           revokes.toSorted((a, b) => a.url.localeCompare(b.url)),
           githubRevoked ? [githubRevoke, googleRevoke] : [googleRevoke],

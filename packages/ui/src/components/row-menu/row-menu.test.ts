@@ -48,6 +48,7 @@ function MenuCard({
 }): React.JSX.Element {
   const press = useRef<HTMLButtonElement | null>(null);
   const row = useRowMenu(menu, { disabled, opener: press });
+
   return createElement(
     "div",
     null,
@@ -67,7 +68,9 @@ function buttonNamed(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find(
     (button) => (button.getAttribute("aria-label") ?? button.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`No button named ${name}`);
+
   return found;
 }
 

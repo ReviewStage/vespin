@@ -20,6 +20,7 @@ const ASK = {
   agentId: "agent-1",
   bridge: { kind: TUNNEL_KIND.PORT_FORWARD, port: 5173 },
 } as const;
+
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const OPEN = JSON.stringify({ type: "open", channel: 1 });
@@ -30,6 +31,7 @@ const scriptedSocket = Effect.gen(function* () {
   const inbound = yield* Queue.make<RelayFrame, Cause.Done>();
   const sent: RelayFrame[] = [];
   const closed: number[] = [];
+
   const socket: RelaySocket = {
     frames: Stream.fromQueue(inbound),
     send: (frame) => Effect.sync(() => void sent.push(frame)),
@@ -39,6 +41,7 @@ const scriptedSocket = Effect.gen(function* () {
         Queue.end(inbound),
       ),
   };
+
   return { socket, push: (frame: RelayFrame) => Queue.offer(inbound, frame), sent, closed };
 });
 
@@ -56,6 +59,7 @@ function world(pty: Scripted, standing: SandboxState = SANDBOX_STATE.RUNNING) {
       ),
     connect: () => Effect.succeed(pty.socket),
   };
+
   return deps;
 }
 

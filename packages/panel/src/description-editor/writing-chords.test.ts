@@ -37,6 +37,7 @@ afterEach(() => {
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
+
   for (const editor of mounted.splice(0)) editor.destroy();
   document.body.innerHTML = "";
 });
@@ -47,6 +48,7 @@ function KeyedWindow({ ran }: { ran: string[] }): ReactElement | null {
   useAppCommand(APP_COMMAND.TOGGLE_SIDEBAR, () => ran.push("toggle sidebar"));
   useAppCommand(APP_COMMAND.COPY_CONTENT, () => ran.push("copy description"));
   useAppCommand(APP_COMMAND.TOGGLE_FULL_SCREEN, () => ran.push("toggle full screen"));
+
   return null;
 }
 
@@ -57,6 +59,7 @@ function mount(markdown: string, format?: EditorFormatDoors) {
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(KeyedWindow, { ran }))));
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: undefined,
@@ -68,11 +71,15 @@ function mount(markdown: string, format?: EditorFormatDoors) {
     onLeaveUp: () => undefined,
     format,
   });
+
   mounted.push(handle);
+
   const element =
     host.querySelector<TiptapEditorHTMLElement>("[role=textbox]") ?? assert.fail("the editor");
+
   const editor = element.editor ?? assert.fail("the editor is running");
   editor.commands.setTextSelection({ from: 1, to: editor.state.doc.firstChild?.nodeSize ?? 1 });
+
   return { ran, handle, element, editor };
 }
 
@@ -132,12 +139,14 @@ test.each([
   ({ node, markdown }) => {
     const formats: EditorFormat[] = [];
     const links = { count: 0 };
+
     const { element, editor } = mount(markdown, {
       onFormat: (format) => formats.push(format),
       onLink: () => {
         links.count += 1;
       },
     });
+
     let at: number | undefined;
     editor.state.doc.descendants((each, pos) => {
       if (each.type.name === node) at = pos;

@@ -51,6 +51,7 @@ export const WORKSPACE_EXPERIMENT_LIST = [
 ] as const;
 
 export type WorkspaceExperiment = (typeof WORKSPACE_EXPERIMENT_LIST)[number];
+
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
 
 const isWorkspaceExperimentKey = Schema.is(Schema.Literals(WORKSPACE_EXPERIMENT_LIST));
@@ -165,11 +166,14 @@ const choicesRecord = Schema.Record(Schema.String, Schema.Unknown);
  */
 export function experimentChoicesFrom(value: UnparsedWireValue): ExperimentChoices | undefined {
   const decoded = Schema.decodeUnknownOption(choicesRecord)(value);
+
   if (Option.isNone(decoded)) return undefined;
   const choices: Partial<Record<Experiment, boolean>> = {};
+
   for (const [key, choice] of Object.entries(decoded.value)) {
     if (isExperiment(key) && isChoice(choice)) choices[key] = choice;
   }
+
   return choices;
 }
 
@@ -202,9 +206,11 @@ export function workspaceExperimentChoicesFrom(
   entries: readonly { readonly experiment: string; readonly on: boolean }[] | undefined,
 ): WorkspaceExperimentChoices {
   const choices: Partial<Record<WorkspaceExperiment, boolean>> = {};
+
   for (const { experiment, on } of entries ?? []) {
     if (isWorkspaceExperimentKey(experiment)) choices[experiment] = on;
   }
+
   return choices;
 }
 

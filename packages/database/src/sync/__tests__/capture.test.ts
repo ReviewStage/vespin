@@ -85,6 +85,7 @@ const probeDB = Layer.provideMerge(
   Layer.effectDiscard(
     Effect.gen(function* () {
       const client = yield* SqlClient.SqlClient;
+
       for (const statement of PROBE_SQL) yield* client.unsafe(statement);
       yield* installSyncTables([probeSync]);
     }),
@@ -101,6 +102,7 @@ const insertGroup = (agents: number) =>
     yield* db
       .insert(PROBE_PARENT)
       .values(agentIds.map((agentId) => ({ id: randomUUID(), groupId, agentId })));
+
     return { groupId, agentIds };
   });
 
@@ -126,10 +128,12 @@ const loggedBy = <E, R>(writes: Effect.Effect<unknown, E, R>) =>
     const db = yield* Database;
     const [before] = yield* db.select({ rows: count() }).from(syncLog);
     yield* writes;
+
     const rows = yield* db
       .select({ table: syncLog.tableName, key: syncLog.key, topics: syncLog.topics })
       .from(syncLog)
       .orderBy(asc(syncLog.txid), asc(sql`${syncLog.key}::text collate "C"`));
+
     return rows.slice(before?.rows ?? 0).map((row) => ({
       table: row.table,
       ids: (row.key as readonly { readonly id: string }[]).map((key) => key.id).sort(),
@@ -208,6 +212,7 @@ it.layer(probeDB)("what a write to a synced table notifies", (it) => {
     Effect.gen(function* () {
       const client = yield* SqlClient.SqlClient;
       const row = { id: randomUUID(), workspaceId: randomUUID(), title: "Rolled back" };
+
       const rolledBack = client.withTransaction(
         Effect.andThen(insertProbe(row), Effect.fail("rolled back")),
       );
@@ -228,6 +233,7 @@ it.layer(probeDB)("what a write to a logged table logs", (it) => {
         const workspaceId = randomUUID();
         const taskId = randomUUID();
         const [first, second, moved] = [randomUUID(), randomUUID(), randomUUID()];
+
         const topics = [
           [TOPIC.TASK, taskId],
           [TOPIC.WORKSPACE, workspaceId],

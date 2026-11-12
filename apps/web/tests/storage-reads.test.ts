@@ -24,6 +24,7 @@ import { z } from "zod";
  */
 
 const database = await openHostedStoreTestDatabase();
+
 afterAll(() => database.close());
 
 const NOW = new Date("2026-09-10T12:00:00.000Z");
@@ -91,6 +92,7 @@ async function insertMessage(
 
 function readRecords(read: MessageListRead): readonly StoredMessageRecord[] {
   assert.equal(read.ok, true);
+
   return read.ok ? read.value : [];
 }
 
@@ -101,9 +103,11 @@ async function populateMain(
   const main = await insertConversation(userId);
   const turn = await insertTurn(userId, main);
   const ids: string[] = [];
+
   for (const seq of [1, 2, 3]) {
     ids.push(await insertMessage(userId, main, seq, { turnId: turn }));
   }
+
   return { main, turn, ids };
 }
 
@@ -111,6 +115,7 @@ async function populateMain(
 async function everyRead(userId: string, conversationId: string, rows: { readonly turn: string }) {
   const { messages, turns } = database.store;
   const recordIds = (read: MessageListRead) => readRecords(read).map((record) => record.id);
+
   return {
     byClientId: recordIds(
       await database.run(messages.byClientId(userId, conversationId, TOOLS, "client-1")),

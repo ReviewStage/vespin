@@ -26,6 +26,7 @@ const FIXTURE_YEAR_START = Date.parse("2026-01-01T00:00:00Z");
 function listedTasks(): readonly TaskSummary[] {
   const view = fixtureTasksView({ fixtureMode: true, profile: RUN_PROFILE.TASKS });
   assert.ok(view);
+
   return view.tasks;
 }
 
@@ -35,6 +36,7 @@ function membersOf(profile: string, workspaceId: string): readonly WorkspaceMemb
   const staged = fixtureAppState({ ...main, run: { ...main.run, profile } });
   const members = staged[LIVE_READ.WORKSPACE_MEMBERS][workspaceId]?.rows?.members;
   assert.ok(members, `${profile} holds the members of ${workspaceId}`);
+
   return members;
 }
 
@@ -52,6 +54,7 @@ test("every fixture task was started this year and saved no earlier than it star
 test("every fixture task names a member of its own workspace as who created it", () => {
   const unnamed = listedTasks().filter((task) => {
     const members = membersOf(RUN_PROFILE.TASKS, task.workspaceId);
+
     return !members.some((member) => member.userId === task.createdBy?.userId);
   });
 
@@ -67,11 +70,14 @@ test("the open task's version history lists at least four versions by more than 
       taskId: FIXTURE_IDS.TASK,
       seq,
     })?.answer;
+
   const main = stateWith({}, {});
+
   const staged = fixtureAppState({
     ...main,
     run: { ...main.run, fixtureMode: true, profile: RUN_PROFILE.TASKS },
   });
+
   const page = staged[LIVE_READ.HISTORY][FIXTURE_IDS.TASK]?.rows;
   assert.ok(page, "the history is held as the version history holds it");
   const members = new Set(page.revisions.flatMap(({ lastEdit }) => lastEdit.by?.userId ?? []));

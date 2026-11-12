@@ -146,14 +146,19 @@ function readMessage(
   if (!isRecord(input)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
   // Note that `message` is read too, because Claude Code's own messaging tools name their words so and its agents carry that name here.
   const words = input.text ?? input.message;
+
   if (typeof words !== "string") return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
   const agentId = readAgentId(input.agentId);
+
   if (Result.isFailure(agentId)) return Result.fail(MESSAGE_AGENT_REFUSAL.MALFORMED_ID);
   const text = words.trim();
+
   if (text.length === 0) return Result.fail(MESSAGE_AGENT_REFUSAL.EMPTY);
+
   if (text.length > MAX_MESSAGE_WORDS_CHARS) {
     return Result.fail(MESSAGE_AGENT_REFUSAL.TOO_LONG(text.length));
   }
+
   return Result.succeed({ agentId: agentId.success, text });
 }
 
@@ -172,6 +177,7 @@ export const MESSAGE_AGENT_TOOL = {
 /** A steer's refusal in the model's words, with when a plan's reached limit resets where the provider said. */
 export function messageRefusalWords(refusal: HostedRefusal): string {
   const words = REFUSAL_WORDS.get(refusal.error) ?? MESSAGE_AGENT_REFUSAL.UNAVAILABLE;
+
   return refusal.resetsAt === undefined
     ? words
     : `${words} It resets at ${new Date(refusal.resetsAt).toISOString()}.`;
@@ -180,6 +186,7 @@ export function messageRefusalWords(refusal: HostedRefusal): string {
 /** The line the other agent receives: who sent it, by its mention link, the words, and how to answer. */
 function messageLine(sender: Agent, senderMention: string, text: string): string {
   const head = `${AGENT_MESSAGE_LEAD} · ${senderMention} to you:`;
+
   return [head, text, agentMessageReplyLine(sender.id)].join("\n\n");
 }
 
@@ -189,46 +196,59 @@ export function runMessageAgent(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readMessage(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(agentToolRejected(asked.failure));
   const { agentId, text } = asked.success;
   const { caller } = call;
   const sender = callerAgent(caller);
+
   if (sender === undefined) {
     return Effect.succeed(agentToolRejected(MESSAGE_AGENT_REFUSAL.NOT_AGENT));
   }
+
   if (agentId === sender.id) return Effect.succeed(agentToolRejected(MESSAGE_AGENT_REFUSAL.SELF));
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const userId = callerUserId(caller);
       const workspace = yield* callerWorkspace(caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
       const found = yield* workspaceAgent(userId, workspace.value, agentId, sender.id);
+
       if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+
       // An agent runs as its starter, so one whose starter left the workspace hears nothing of it.
       if (!(yield* isWorkspaceMember(found.value.userId, workspace.value))) {
         return agentToolRejected(MESSAGE_AGENT_REFUSAL.STARTER_LEFT);
       }
+
       // An archived agent is brought back first, as a member's words bring it back; one archived again meanwhile the steer refuses.
       const taking = yield* agentTakingMessage(userId, agentId, (reader, id) =>
         workspaceAgent(reader, workspace.value, id, sender.id),
       );
+
       if (Option.isNone(taking)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
       const target = taking.value;
       // The line is minted for the receiving agent's starter, whose principal its turn runs under.
       const agentSessions = call.agentSessionsAs(target.userId);
       const step = yield* workspaceStepOf(userId, workspace.value);
+
       const mention = writtenMention(
         { kind: MENTION_KIND.AGENT, agentId: sender.id },
         agentName(sender),
         step,
       );
+
       const sent = yield* steerAgent(agentSessions, call.writer, userId, target, {
         text: messageLine(sender, mention, text),
         clientKey: call.clientKey,
         sender: agentLineSender(sender),
         metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
       }).pipe(Effect.result);
+
       if (Result.isFailure(sent)) return agentToolRejected(messageRefusalWords(sent.failure));
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         delivery: sent.success,

@@ -141,6 +141,7 @@ const decodeAnswer = Schema.decodeUnknownEffect(deviceAgentAnswerSchema);
  */
 function answerBytes(answer: DeviceAgentAnswer): Uint8Array | null {
   if (answer.kind === DEVICE_AGENT_REQUEST_KIND.READ_FILE) return answer.bytes;
+
   return new TextEncoder().encode(`${answer.exit}\n${answer.diff}`);
 }
 
@@ -151,6 +152,7 @@ function answerOf(row: typeof AnswerRowSchema.Type): unknown {
   const line = kept.indexOf("\n");
   const head = line === -1 ? kept : kept.slice(0, line);
   const exit = head === "" ? Number.NaN : Number(head);
+
   return {
     kind: row.kind,
     // A row with no exit line, as one answered no bytes, reads as a failed diff, never as exit 0.
@@ -474,6 +476,7 @@ const findWaitingLines = SqlSchema.findAll({
   execute: ({ userId, deviceId }) =>
     Database.use((db) => {
       const inOrder = sql`over (order by ${deviceAgentLine.seq})`;
+
       const waiting = db
         .select({
           id: deviceAgentLine.id,
@@ -497,6 +500,7 @@ const findWaitingLines = SqlSchema.findAll({
           ),
         )
         .as("waiting");
+
       return db
         .select({
           id: waiting.id,
@@ -1112,10 +1116,13 @@ export function claimDeviceAgentLine(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const claimed = yield* claimLine({ userId, deviceId, id, claimToken: claimToken ?? null, now });
+
     if (Option.isSome(claimed) || claimToken === undefined) {
       return Option.map(claimed, (line) => ({ ...line, secretsGone: false }));
     }
+
     const again = yield* findClaimedUnder({ userId, deviceId, id, claimToken });
+
     return Option.map(again, (line) => ({
       ...line,
       sealedSecrets: null,

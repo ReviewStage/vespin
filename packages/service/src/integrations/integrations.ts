@@ -152,13 +152,18 @@ const decodeQuotedName = Schema.decodeUnknownOption(Schema.fromJsonString(Schema
  */
 function toonOrJsonName(result: WireValue): Option.Option<string> {
   const fromJson = toolAnswerName(decodeNamed, (read) => read.name)(result);
+
   if (Option.isSome(fromJson)) return fromJson;
+
   for (const text of toolResultTexts(result)) {
     const line = text.split(/\r?\n/).find((each) => each.startsWith("name: "));
+
     if (line === undefined) continue;
     const value = line.slice("name: ".length).trim();
+
     return value.startsWith('"') ? decodeQuotedName(value) : Option.some(value);
   }
+
   return Option.none();
 }
 

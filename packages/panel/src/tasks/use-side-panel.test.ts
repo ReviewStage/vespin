@@ -30,6 +30,7 @@ const OTHER_TASK = "5b7d9f1a-3c5e-4a7b-9d1f-2b4c6d8e0f1a";
 const BARE_TASK = "6c8e0a2b-4d6f-4b8c-8e2a-3c5d7e9f1a2b";
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const OTHER_AGENT = "9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
 /** A cloud terminal tab of each agent. */
 const CLOUD = terminalTab(AGENT, "2f6e0c1a-5b3d-4c8e-9a1f-7d2b4e6a8c10", "Cloud 1");
 const OTHER_CLOUD = terminalTab(OTHER_AGENT, "3a7f1d2b-6c4e-4d9f-8b2a-8e3c5f7b9d21", "Cloud 1");
@@ -62,6 +63,7 @@ interface Stood {
 /** Mounts the panel alone, as a launch does, over the task and agents given, answering the control as it stands. */
 function launch(stood: Stood) {
   let control: SidePanelControl | undefined;
+
   function Probe({ held }: { held: Stood }) {
     control = useSidePanel(
       undefined,
@@ -73,14 +75,17 @@ function launch(stood: Stood) {
       [],
       held.taskAgents,
     );
+
     return null;
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   const terminals = windowTerminals();
   let account = stood.account;
+
   const render = (held: Stood) => {
     account = held.account;
     act(() =>
@@ -96,10 +101,13 @@ function launch(stood: Stood) {
       ),
     );
   };
+
   render(stood);
+
   return {
     control: () => {
       assert.ok(control);
+
       return control;
     },
     /** Opens a Terminal tab as a real open does: its terminal held for the account signed in, then its tab chosen. */
@@ -314,18 +322,24 @@ test("a file named alone, as ⌘K finds it, shows the tab it has as it stands, a
   const shown = "src/invites/accept.ts";
   const found = "src/invites/expire.ts";
   let control: SidePanelControl | undefined;
+
   function Probe() {
     control = useSidePanel(undefined, usedTask(TASK), [], [], [], []);
+
     return null;
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Probe)));
+
   const now = () => {
     assert.ok(control);
+
     return control;
   };
+
   act(() => now().onOpenFile({ path: shown, startLine: 3, endLine: 5 }));
 
   act(() => now().onOpenFile({ path: shown }));
@@ -414,6 +428,7 @@ test("a new stop starts with the panel shut, whatever its strip holds, unless a 
 
 test("each Inbox item is a stop of its own, so the panel a link opened beside one is shut beside the next, though both are one task's", () => {
   let control: SidePanelControl | undefined;
+
   function Probe({ item }: { item: string }) {
     control = useSidePanel(
       undefined,
@@ -423,8 +438,10 @@ test("each Inbox item is a stop of its own, so the panel a link opened beside on
       [],
       [AGENT],
     );
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const render = (item: string) => act(() => root.render(createElement(Probe, { item })));
@@ -441,6 +458,7 @@ test("each Inbox item is a stop of its own, so the panel a link opened beside on
 test("beside the window's Inbox the panel stands for the item's plan with none of its fixed tabs, holds what the item opens there, and the plan's page finds its strip as it left it, a fixed tab it closed still closed and one it opened still open", () => {
   const COMMIT = "0123456789abcdef0123456789abcdef01234567";
   let control: SidePanelControl | undefined;
+
   function Probe({ inbox }: { inbox: boolean }) {
     control = useSidePanel(
       undefined,
@@ -450,13 +468,17 @@ test("beside the window's Inbox the panel stands for the item's plan with none o
       [],
       inbox ? undefined : [AGENT],
     );
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const render = (inbox: boolean) => act(() => root.render(createElement(Probe, { inbox })));
+
   const panel = () => {
     assert.ok(control);
+
     return control;
   };
 
@@ -530,10 +552,13 @@ test("an Inbox tab an earlier version pinned, a task's or an agent's, is let go,
 test("a narrow room holds the open panel full screen alone, so the window's ways out of full screen shut it there, and a room widened again stands it beside the document", () => {
   let room: ShellRoom = SHELL_ROOM.NARROW;
   let control: SidePanelControl | undefined;
+
   function Probe({ at }: { at: ShellRoom }) {
     control = useSidePanel(undefined, usedTask(TASK), [AGENT], [], [], [AGENT], at);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const render = () => act(() => root.render(createElement(Probe, { at: room })));
@@ -555,15 +580,20 @@ test("a narrow room holds the open panel full screen alone, so the window's ways
 
 test("the Inbox with nothing chosen has no task, so the panel left open shows over it in no room, neither full screen on a phone nor empty beside it", () => {
   let control: SidePanelControl | undefined;
+
   function Probe({ at, task }: { at: ShellRoom; task: OpenTask }) {
     control = useSidePanel(undefined, task, [AGENT], [], [], [AGENT], at);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const now = () => control ?? assert.fail("the panel is held");
+
   const render = (at: ShellRoom, task: OpenTask) =>
     act(() => root.render(createElement(Probe, { at, task })));
+
   // The panel stands open on a plan once a tab is chosen, and is kept open for the next launch.
   render(SHELL_ROOM.NARROW, usedTask(TASK));
   act(() => now().onChoose(changesTab(AGENT)));
@@ -584,6 +614,7 @@ test("a link in the panel to an agent elsewhere carries the panel to the agent's
   const PAGE = "3f8e2a1b-6c4d-4e5f-8a9b-0c1d2e3f4a5b";
   const AGENT_TASK = "6c8e0a2b-4d6f-4b8d-9f1a-3c5e7a9b1d2f";
   let control: SidePanelControl | undefined;
+
   function Probe({ on }: { on: string }) {
     control = useSidePanel(
       undefined,
@@ -595,15 +626,20 @@ test("a link in the panel to an agent elsewhere carries the panel to the agent's
       [],
       [],
     );
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const render = (on: string) => act(() => root.render(createElement(Probe, { on })));
+
   const panel = () => {
     assert.ok(control);
+
     return control;
   };
+
   const pagesDrawn = () =>
     panel().strip.flatMap((tab) => (typeof tab === "object" && "page" in tab ? [tab.page] : []));
 
@@ -623,6 +659,7 @@ test("a link in the panel to an agent elsewhere carries the panel to the agent's
 test("a page of another task opens beside the Inbox item, drawn there, and Open task lands on that task with the page still chosen and the panel open", () => {
   const PAGE = "3f8e2a1b-6c4d-4e5f-8a9b-0c1d2e3f4a5b";
   let control: SidePanelControl | undefined;
+
   function Probe({ inbox }: { inbox: boolean }) {
     control = useSidePanel(
       undefined,
@@ -634,20 +671,26 @@ test("a page of another task opens beside the Inbox item, drawn there, and Open 
       inbox ? [] : [PAGE],
       [],
     );
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const render = (inbox: boolean) => act(() => root.render(createElement(Probe, { inbox })));
+
   const panel = () => {
     assert.ok(control);
+
     return control;
   };
 
   render(true);
   act(() => panel().onOpen(pageTab(PAGE), { taskId: OTHER_TASK }));
+
   const pagesDrawn = () =>
     panel().strip.flatMap((tab) => (typeof tab === "object" && "page" in tab ? [tab.page] : []));
+
   assert.deepEqual(pagesDrawn(), [PAGE], "drawn beside the item it opened on");
   assert.deepEqual(panel().tab, pageTab(PAGE));
   assert.deepEqual(panel().pages[0]?.place, { taskId: OTHER_TASK }, "read on its own task");
@@ -662,6 +705,7 @@ test("a page of another task opens beside the Inbox item, drawn there, and Open 
 
 test("an agent's transcript stands in a panel beside the Inbox alone, once the task's agents hold it", () => {
   let control: SidePanelControl | undefined;
+
   function Probe({ bare }: { bare: boolean }) {
     control = useSidePanel(
       undefined,
@@ -671,14 +715,18 @@ test("an agent's transcript stands in a panel beside the Inbox alone, once the t
       [],
       [AGENT, OTHER_AGENT],
     );
+
     return null;
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   const render = (bare: boolean) => act(() => root.render(createElement(Probe, { bare })));
+
   const panel = () => {
     assert.ok(control);
+
     return control;
   };
 

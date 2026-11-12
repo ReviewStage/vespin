@@ -41,6 +41,7 @@ export function nativeRuntimeOfSession(sessionId: string): NativeRuntime | undef
       if (sessionId.startsWith(prefix)) return runtime as NativeRuntime;
     }
   }
+
   return undefined;
 }
 

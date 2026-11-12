@@ -17,9 +17,11 @@ import { readLastActive, stampPresence } from "../presence-store.js";
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 

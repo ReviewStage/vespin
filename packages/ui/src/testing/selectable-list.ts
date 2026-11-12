@@ -78,7 +78,9 @@ function keyOf(press: HTMLElement): string {
 /** What a reader hears a press described as: the words its `aria-describedby` names, which outrank its `aria-description`, else that. */
 function describedAs(press: HTMLElement): string {
   const named = press.getAttribute("aria-describedby");
+
   if (named === null) return press.getAttribute("aria-description") ?? "";
+
   return named
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent ?? "")
@@ -95,7 +97,9 @@ function chosen(root: HTMLElement): string[] {
 /** The press of the row keyed `key`, as drawn now. */
 function pressOf(root: HTMLElement, key: string): HTMLElement {
   const found = presses(root).find((press) => keyOf(press) === key);
+
   if (found === undefined) throw new Error(`No row keyed ${key}`);
+
   return found;
 }
 
@@ -127,10 +131,13 @@ function press(name: string, held: KeyboardEventInit = {}): void {
 /** The Esc presses that reach the document past the surface, listening until `stop` is called. */
 function heardBehind(): { heard: string[]; stop: () => void } {
   const heard: string[] = [];
+
   const hear = (event: KeyboardEvent) => {
     if (event.key === "Escape") heard.push(event.key);
   };
+
   document.addEventListener("keydown", hear);
+
   return { heard, stop: () => document.removeEventListener("keydown", hear) };
 }
 
@@ -165,6 +172,7 @@ export function selectableListBehavior(
         rows.length,
         "the surface draws at least four rows that can be chosen",
       ).toBeGreaterThan(3);
+
       return { root: standing.root, opened: standing.opened, rows };
     }
 
@@ -213,6 +221,7 @@ export function selectableListBehavior(
       focus(root, rows[0] ?? "");
       press("a", { metaKey: true });
       const behind = heardBehind();
+
       try {
         press("Escape");
         expect(chosen(root)).toEqual([]);

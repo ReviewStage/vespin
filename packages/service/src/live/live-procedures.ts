@@ -256,6 +256,7 @@ function wokenBy<Part extends string>(
   txids: readonly string[],
 ): Record<Part, SealedLiveQueryWire> {
   if (txids.length === 0) return queries;
+
   // SAFETY: every part is kept, each with the txids beside it.
   return Object.fromEntries(
     Object.entries<SealedLiveQueryWire>(queries).map(([part, sealed]) => [
@@ -282,6 +283,7 @@ function readParts<Part extends string>(
   return Effect.flatMap(SqlClient.SqlClient, (sql) => {
     const sealer = pollSealer(sql);
     const read = how(sealer);
+
     return Effect.map(
       Effect.forEach(
         Object.entries<LiveStatement>(statements),
@@ -318,16 +320,21 @@ const heldParts = /* @__PURE__ */ Effect.fnUntraced(function* <Part extends stri
   onWoken?: (heardAt: number) => Effect.Effect<void>,
 ): Effect.fn.Return<ReadParts<Part>, HostedRefusal, R> {
   const woken = yield* heldUntil(looked, moved, topics, look, LIVE_POLL_HOLD.HOLD);
+
   if (Option.isSome(woken)) {
     // Note that the rows are read after the look that saw them move, so they are at least as new as it, and are answered with their own digests rather than its.
     const answer = yield* read;
+
     if (onWoken !== undefined && Option.isSome(woken.value.heardAt)) {
       yield* onWoken(woken.value.heardAt.value);
     }
+
     return { ...answer, queries: wokenBy(answer.queries, woken.value.txids) };
   }
+
   // Note that the look at the hold's end runs untraced, as every look after a hold's first does (`heldUntil`).
   const standing = yield* Effect.withTracerEnabled(looked, false);
+
   return moved(standing) ? yield* read : standing;
 });
 
@@ -361,7 +368,9 @@ const sealedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Part extends st
 ): Effect.fn.Return<ReadParts<Part>, HostedRefusal, SqlClient.SqlClient> {
   const read = readParts(statements, (sealer) => sealer.seal);
   const after = asked[LIVE_POLL.AFTER];
+
   if (after === undefined) return yield* read;
+
   return yield* heldParts(
     readParts(statements, (sealer) => sealer.digest),
     read,
@@ -405,10 +414,12 @@ const queryParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   olderParts?: readonly PartOf<Read>[],
 ) {
   const statements = query.statements(params);
+
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   // A read that names no `after` is answered at once, so it needs no topics to wait on.
   const held = asked[LIVE_POLL.AFTER] !== undefined;
   const topics = held ? yield* topicsOf(query, params) : NO_TOPICS;
+
   return yield* sealedParts(statements.value, asked, topics, look, heldOn, olderParts);
 });
 
@@ -429,6 +440,7 @@ function cursorMoved<Part extends string>(
     ({ cursor, digest }) =>
       cursor !== undefined && (cursor.past === undefined || digest !== NO_ROWS_DIGEST),
   );
+
   return (
     pastCursor ||
     (liveDigestOf(read.queries) !== after &&
@@ -458,21 +470,27 @@ const cursorParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends An
 ) {
   const following = query.cursor;
   const cursor = asked[LIVE_POLL.CURSOR];
+
   if (following === undefined || cursor === undefined) {
     return yield* queryParts(query, params, asked, look);
   }
+
   const followed: ReadonlySet<string> = new Set(following.parts);
+
   const polled = (how: PartRead) =>
     Effect.gen(function* () {
       // Note that where it stands is read before its rows, so a write that lands between the two is read again past the next cursor rather than missed.
       const standing = yield* following
         .standing(params)
         .pipe(Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE));
+
       const past = standing.stands(cursor) ? cursor : undefined;
       const statements = query.statements(params, past);
+
       if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
       const read = yield* readParts(statements.value, how);
       const at = { ...(past === undefined ? undefined : { past }), next: standing.next };
+
       return {
         ...read,
         // SAFETY: every part is kept, each cursor part with where it stands beside it.
@@ -484,10 +502,13 @@ const cursorParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends An
         ) as Record<PartOf<Read>, SealedLiveQueryWire>,
       };
     });
+
   const read = polled((sealer) => sealer.seal);
   const after = asked[LIVE_POLL.AFTER];
+
   if (after === undefined) return yield* read;
   const topics = yield* topicsOf(query, params);
+
   return yield* heldParts(
     polled((sealer) => sealer.digest),
     read,
@@ -538,9 +559,11 @@ const syncIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<number | undefined, HostedRefusal> {
   if (sync === "") return undefined;
   const id = Number(sync);
+
   if (!/^\d{1,16}$/.test(sync) || !Number.isSafeInteger(id)) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return id;
 });
 
@@ -564,6 +587,7 @@ function syncedParts<Part extends string>(
       // Note that a delta's rows are read at a snapshot past the settled id, which shows writes past it that no delta carries yet, so a writer confirms by `next` and the txids instead.
       const { snapshot: _snapshot, ...delta } = sealed;
       const ofPart = gone.get(part as Part) ?? [];
+
       return [part, { ...delta, sync, ...(ofPart.length === 0 ? {} : { gone: ofPart }) }];
     }),
   ) as Record<Part, SealedLiveQueryWire>;
@@ -577,6 +601,7 @@ function rowIds(sealed: SealedLiveQueryWire, key: string): ReadonlySet<string> {
         typeof row === "object" && row !== null
           ? (row as Readonly<Record<string, unknown>>)[key]
           : undefined;
+
       return id === undefined ? [] : [String(id)];
     }),
   );
@@ -609,13 +634,16 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
   rows: DeltaStanding["window"]["rows"],
 ): Effect.fn.Return<DeltaNarrowed<PartOf<Read>>, HostedRefusal, SqlClient.SqlClient> {
   const statements = delta.statements(params, syncMovedOf(rows));
+
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const read = yield* readParts(statements.value, (sealer) => sealer.seal);
   const gone = new Map<PartOf<Read>, readonly string[]>();
+
   for (const [part, keys] of ownMovedKeys(delta.own, rows)) {
     const found = rowIds(read.queries[part], delta.own.get(part)?.key ?? "");
     gone.set(part, [...keys].filter((key) => !found.has(key)).toSorted());
   }
+
   return { read, gone };
 });
 
@@ -658,6 +686,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   sync: string,
 ) {
   const delta = query.delta;
+
   if (delta === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const past = yield* syncIdOf(sync);
   const topics = yield* topicsOf(query, params);
@@ -668,10 +697,12 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   let from = past;
   /** The txids of the windows held past, which the answer carries, since it is read past them too. */
   const passed = new Set<string>();
+
   const looked: Effect.Effect<DeltaStanding, HostedRefusal, DatabaseServices> =
     hostedStoreOrUnavailable(
       Effect.gen(function* () {
         const { settled } = yield* syncStanding();
+
         const window = yield* readSyncWindow({
           past: from ?? settled,
           settled,
@@ -679,56 +710,75 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
           anyTopic: delta.anyTopic.map((table) => table.name),
           topics: reached,
         });
+
         const admissionMoved = window.rows.some(
           (row) =>
             row.reached &&
             whole.has(row.table) &&
             row.topics.some(([kind, id]) => kind === TOPIC.ACCOUNT && accounts.has(id)),
         );
+
         const behind =
           from === undefined ||
           from > settled ||
           (window.floor !== undefined && from < window.floor) ||
           window.rows.length > SYNC_LOG.MOST;
+
         return { settled, window, whole: behind || admissionMoved };
       }),
     );
+
   const look: Effect.Effect<DeltaLook<PartOf<Read>>, HostedRefusal, DatabaseServices> = Effect.gen(
     function* () {
       const standing = yield* looked;
+
       if (standing.whole) return { standing, narrowed: Option.none() };
+
       const narrowed =
         standing.window.rows.length === 0
           ? Option.none()
           : Option.some(yield* narrowedParts<Read>(delta, params, standing.window.rows));
+
       if (!Option.exists(narrowed, carriesAny)) {
         from = standing.settled;
+
         for (const txid of standing.window.txids) passed.add(txid);
       }
+
       return { standing, narrowed };
     },
   );
+
   const moved = ({ standing, narrowed }: DeltaLook<PartOf<Read>>) =>
     standing.whole || Option.exists(narrowed, carriesAny);
+
   const held =
     past === undefined
       ? Option.none()
       : yield* heldUntil(look, moved, topics, LIVE_POLL_HOLD.WATCHED_LOOK, LIVE_POLL_HOLD.HOLD);
+
   // Note that the look at a hold's end runs untraced, as every look after a hold's first does (`heldUntil`), and a read that held nothing looks once, traced.
   const { standing, narrowed } = Option.isSome(held)
     ? held.value.read
     : yield* past === undefined ? look : Effect.withTracerEnabled(look, false);
+
   const next = String(standing.settled);
+
   if (standing.whole) {
     const statements = query.statements(params);
+
     if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+
     return { ...read, queries: syncedParts(read.queries, { next }, new Map()) };
   }
+
   const { read, gone } = Option.isSome(narrowed)
     ? narrowed.value
     : yield* narrowedParts<Read>(delta, params, standing.window.rows);
+
   const queries = syncedParts(read.queries, { past: String(past), next }, gone);
+
   return {
     ...read,
     queries: wokenBy(queries, [...new Set([...passed, ...standing.window.txids])]),
@@ -771,10 +821,13 @@ function boundParts<Read extends AnyLiveRead>(
   const held = heldOn as readonly PartOf<Read>[] | undefined;
   const older = olderParts as readonly PartOf<Read>[] | undefined;
   const sync = asked[LIVE_POLL.SYNC];
+
   if (read.delta !== undefined && sync !== undefined) return liveDeltaParts(read, bound, sync);
+
   if (read.cursor !== undefined) {
     return liveCursorParts(read, bound, asked, read.look, read.woken, older);
   }
+
   return liveQueryParts(read, bound, asked, read.look, held, older);
 }
 
@@ -797,6 +850,7 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
     // SAFETY: a read's query names each of its params and its mode's fields under their own keys, as text.
     const asked = input as Readonly<Record<string, string | undefined>>;
     const params: Record<string, string> = {};
+
     for (const [key, param] of Object.entries(read.declaration.params)) {
       if (param === LIVE_PARAM.USER) {
         yield* sameUser({ [LIVE_USER_QUERY]: asked[key] }, context.userId);
@@ -810,20 +864,26 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
         params[key] = asked[key] ?? "";
       }
     }
+
     // SAFETY: every param the query names is bound above, and the binding serves the rest (`bindLiveRead` holds it to).
     const served = read.serve === undefined ? undefined : yield* read.serve(params as never, asked);
     // SAFETY: every param the declaration names is bound above or served, and no other.
     const bound = { ...params, ...served } as LiveReadParams<Read>;
+
     if (read.admit !== undefined) yield* read.admit(bound, asked);
     const sealed = yield* boundParts(read, bound, asked);
+
     if (read.answered !== undefined) yield* read.answered(sealed.queries);
+
     const beside =
       read.beside === undefined
         ? undefined
         : yield* read.beside({ request: context.request, params: bound });
+
     // SAFETY: the sealed parts are the declaration's, and the fields beside them its `beside`, as its answer names them.
     return { ...sealed, ...beside } as LiveReadAnswer<Read>;
   });
+
   return function* ({
     input,
     context,
@@ -840,6 +900,7 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
 export function liveProcedures(seams: LiveProcedureSeams) {
   const signedIn = hosted.live.use(accountMiddleware(seams.resolveUserId));
   const answerWorkspaces = answerBoundRead(workspacesRead);
+
   return {
     inbox: signedIn.inbox.effect(answerBoundRead(accountInboxRead)),
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
@@ -869,6 +930,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
       yield* pluginWriteOrUnavailable(
         ensurePersonalWorkspace(asked.context.userId, seams.workspaces),
       );
+
       return yield* answerWorkspaces(asked);
     }),
 

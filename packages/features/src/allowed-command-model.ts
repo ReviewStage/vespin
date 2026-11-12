@@ -33,8 +33,10 @@ export function typedCommandPrefix(
 ): { readonly prefix: CommandPrefix } | { readonly refused: TypedCommandRefusal } {
   const words = typed.split(/\s+/u).filter((word) => word !== "");
   const named = words.at(-1) === ANY_REST ? words.slice(0, -1) : words;
+
   if (named.length === 0) return { refused: TYPED_COMMAND_REFUSAL.EMPTY };
   const prefix = Result.getOrUndefined(readEither(CommandPrefixSchema)(named));
+
   return prefix === undefined ? { refused: TYPED_COMMAND_REFUSAL.NOT_A_PREFIX } : { prefix };
 }
 

@@ -150,6 +150,7 @@ type ChaptersServices =
 /** The agent the path names, where the account is a member of its workspace; not found otherwise, and for an id that is no UUID. */
 const reachedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, id: string) {
   const { agent } = yield* reachedAgentById(userId, id);
+
   return agent;
 });
 
@@ -182,17 +183,22 @@ const subjectOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   // The number as the query spelled it, read by the rule every read of the tab reads it by.
   const number = yield* pullRequestNumberOf(named === undefined ? [] : [named]);
   const asked = yield* askedPullRequest(yield* published, userId, agent, number);
+
   if (asked === null || !hasRepository(agent)) return Option.none();
+
   const { token, workspace, found } = yield* githubReadRefusal(
     Effect.gen(function* () {
       const { token } = yield* agentPullRequestReach(userId, agent);
       const workspace = yield* agentWorkspace(userId, agent);
       const found = yield* pullRequestByNumber(token, agent.repository, asked.number);
+
       return { token, workspace, found };
     }),
   );
+
   // The token was just minted through this workspace, so none here is a workspace left between two reads.
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+
   return Option.map(found, (pullRequest) => ({
     repository: agent.repository,
     organizationId: workspace.value,
@@ -207,11 +213,14 @@ export const keptUnder = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Agent,
 ): Effect.fn.Return<Option.Option<ChaptersOf>, HostedRefusal, ChaptersServices> {
   if (!hasRepository(agent)) return Option.none();
+
   const workspace = yield* githubReadRefusal(
     Effect.andThen(agentPullRequestReach(userId, agent), agentWorkspace(userId, agent)),
   );
+
   // The token was just minted through this workspace, so none here is a workspace left between two reads.
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+
   return Option.some({ repository: agent.repository, organizationId: workspace.value });
 });
 
@@ -221,6 +230,7 @@ const stateOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<PullRequestChaptersState, HostedRefusal> {
   if (Option.isNone(row)) return { status: PULL_REQUEST_CHAPTERS_STATE.NONE };
   const { status, headSha, baseSha } = row.value;
+
   switch (status) {
     case PULL_REQUEST_CHAPTERS_STATUS.GENERATING:
       return {
@@ -239,11 +249,14 @@ const stateOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     case PULL_REQUEST_CHAPTERS_STATUS.READY: {
       const chapters = yield* hostedStoreOrUnavailable(decodeChapters(row.value.chapters));
       const model = row.value.model;
+
       // The store writes a model with every ready row, so one without is a row off its own shape.
       if (model === null || model === "") {
         yield* Effect.logWarning("ready chapters stood without their model");
+
         return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
       }
+
       return { status: PULL_REQUEST_CHAPTERS_STATE.READY, headSha, baseSha, model, chapters };
     }
   }
@@ -258,6 +271,7 @@ const answerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const row = yield* hostedStoreOrUnavailable(
     latestPullRequestChapters(of.organizationId, of.repository, number),
   );
+
   return { pullRequest: { number, ...generator, chapters: yield* stateOf(row) } };
 });
 
@@ -268,12 +282,15 @@ const answerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
  */
 const generatingNow = /* @__PURE__ */ Effect.fnUntraced(function* (subject: ChaptersSubject) {
   const { organizationId, repository, pullRequest } = subject;
+
   const row = yield* hostedStoreOrUnavailable(
     latestPullRequestChapters(organizationId, repository, pullRequest.number),
   );
+
   if (Option.isNone(row)) return false;
   const now = yield* Clock.currentTimeMillis;
   const { status, headSha, startedAt } = row.value;
+
   return (
     status === PULL_REQUEST_CHAPTERS_STATUS.GENERATING &&
     headSha === pullRequest.headSha &&
@@ -291,6 +308,7 @@ const ownKeysFor = (userId: string) =>
   Effect.gen(function* () {
     const environment = yield* HostedEnvironment;
     const preferred = yield* hostedStoreOrUnavailable(accountChaptersProvider(userId));
+
     return yield* hostedStoreOrUnavailable(ownKeysOf(userId, preferred, environment));
   });
 
@@ -310,10 +328,13 @@ const PROVIDER_ORDER: readonly ModelProvider[] = Object.values(MODEL_PROVIDER);
  */
 function generatorOf(keys: readonly OwnKey[]): ChaptersGenerator {
   const [own] = keys;
+
   if (own === undefined) return { generatable: false };
+
   const choices = [...keys]
     .sort((a, b) => PROVIDER_ORDER.indexOf(a.provider) - PROVIDER_ORDER.indexOf(b.provider))
     .map(runsOnOf);
+
   return {
     generatable: true,
     runsOn: runsOnOf(own),
@@ -334,6 +355,7 @@ interface GenerateOn {
 const modelOf = (seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">, userId: string) =>
   Effect.map(ownKeysFor(userId), (keys): GenerateOn | undefined => {
     const [own] = keys;
+
     return own === undefined
       ? undefined
       : {
@@ -359,6 +381,7 @@ const agentChaptersAdmission = /* @__PURE__ */ Effect.fnUntraced(function* (
   const [kept, generator] = yield* Effect.all([keptUnder(userId, agent), generatorFor(userId)], {
     concurrency: "unbounded",
   });
+
   return { kept, generator };
 });
 
@@ -393,6 +416,7 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
   } & Pick<Parameters<typeof generateChapters>[1], "files" | "commitMessages">,
 ) {
   const started = yield* Clock.currentTimeMillis;
+
   const settle = (outcome: PullRequestChaptersEffect<boolean>, counted: GenerationCounts) =>
     Effect.gen(function* () {
       yield* hostedStoreOrUnavailable(outcome);
@@ -402,6 +426,7 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
         duration_ms: duration,
       });
     });
+
   const failed = (kind: PullRequestChaptersFailure) =>
     Effect.flatMap(Clock.currentTimeMillis, (now) =>
       settle(failChapterGeneration(claim, kind, new Date(now)), {
@@ -410,8 +435,10 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
         hunks: 0,
       }),
     );
+
   // A listing cut short at the files bound would be told as the whole, so it is refused as too large before any call.
   if (read.truncated) return yield* failed(PULL_REQUEST_CHAPTERS_FAILURE.TOO_LARGE);
+
   const told = generateChapters(model, read).pipe(
     Effect.matchEffect({
       onFailure: (failure) => failed(failure.kind),
@@ -432,6 +459,7 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
         ),
     }),
   );
+
   return yield* told.pipe(
     Effect.onError((cause) =>
       Cause.hasFails(cause)
@@ -444,6 +472,7 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
 /** The pull request's files, words, and commit messages, as a generation reads them. */
 const generationInput = (subject: ChaptersSubject) => {
   const { token, repository, pullRequest } = subject;
+
   return githubReadRefusal(
     Effect.all(
       [
@@ -480,24 +509,32 @@ const generatedFor = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const { organizationId, repository, token, pullRequest } = subject;
   const { model, generator } = on;
+
   // Note that GitHub names the base on every read of one pull request; one that does not is a GitHub off its shape.
   if (pullRequest.baseSha === undefined) {
     return yield* Effect.fail(HOSTED_REFUSAL.GITHUB_UNANSWERED);
   }
+
   // A generation another request holds for this head answers as it stands, before GitHub is asked for a diff this request will not use.
   if (yield* generatingNow(subject)) {
     return yield* answerOf(subject, pullRequest.number, generator);
   }
+
   const read = yield* generationInput(subject);
+
   // The files are read by the pull request's number, so a push between the two reads would tell another head's diff under this one: the head is read again, and a moved one is answered as it now stands, to be generated on its own.
   const after = yield* githubReadRefusal(
     pullRequestByNumber(token, repository, pullRequest.number),
   );
+
   if (Option.isNone(after)) return { pullRequest: null };
+
   if (after.value.headSha !== pullRequest.headSha) {
     return yield* answerOf(subject, pullRequest.number, generator);
   }
+
   const now = yield* Clock.currentTimeMillis;
+
   const claimed = yield* hostedStoreOrUnavailable(
     claimChapterGeneration({
       organizationId,
@@ -509,9 +546,11 @@ const generatedFor = /* @__PURE__ */ Effect.fnUntraced(function* (
       now: new Date(now),
     }),
   );
+
   if (claimed.outcome === CHAPTER_CLAIM_OUTCOME.CLAIMED) {
     yield* generated(claimed.claim, model, { userId, workspaceId: organizationId }, read);
   }
+
   return yield* answerOf(subject, pullRequest.number, generator);
 });
 
@@ -536,9 +575,12 @@ export const agentChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const asked =
     number ?? (yield* askedPullRequest(yield* published, userId, agent, undefined))?.number;
+
   if (asked === undefined) return { pullRequest: null };
   const { kept, generator } = yield* agentChaptersAdmission(userId, agent);
+
   if (Option.isNone(kept)) return { pullRequest: null };
+
   return yield* answerOf(kept.value, asked, generator);
 });
 
@@ -552,9 +594,12 @@ export const agentChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(function*
 ) {
   // The model runs on the presser's own key, while the chapters it tells are the workspace's.
   const on = yield* modelOf(seams, userId);
+
   if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const subject = yield* subjectOf(published, userId, agent, number);
+
   if (Option.isNone(subject)) return { pullRequest: null };
+
   return yield* generatedFor(userId, on, subject.value);
 });
 
@@ -564,6 +609,7 @@ export const repositoryChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function
   query: RepositoryPullRequest,
 ) {
   const { subject } = yield* reachedRepository(userId, query);
+
   // What the reader's Generate would run on, as the agent's read asks it.
   return yield* answerOf(subject, query.number, yield* generatorFor(userId));
 });
@@ -577,7 +623,9 @@ export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(func
   // The pull request is reached before the presser's key is asked about, so a non-member is refused alike whatever key they saved.
   const { token, subject, found } = yield* reachedByNumber(userId, query, pullRequestByNumber);
   const on = yield* modelOf(seams, userId);
+
   if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return yield* generatedFor(userId, on, {
     repository: subject.repository,
     organizationId: subject.organizationId,
@@ -590,17 +638,21 @@ export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(func
 export function pullRequestChaptersProcedures(seams: PullRequestChaptersProcedureSeams) {
   const signedIn = hosted.pullRequestChapters.use(accountMiddleware(seams.resolveUserId));
   const published = seams.published ?? instancePublishedCache();
+
   return {
     read: signedIn.read.effect(function* ({ input, context }) {
       const agent = yield* reachedAgent(context.userId, input.id);
       const number = yield* pullRequestNumberOf([input.number]);
+
       // One number named always reads as one or is refused.
       if (number === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       return yield* agentChaptersRead(published, context.userId, agent, number);
     }),
 
     generate: signedIn.generate.effect(function* ({ input, context }) {
       const agent = yield* reachedAgent(context.userId, input.params.id);
+
       return yield* agentChaptersGenerate(
         seams,
         published,

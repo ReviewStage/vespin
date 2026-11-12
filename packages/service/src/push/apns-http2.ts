@@ -40,15 +40,19 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
     /** The session to the gateway, the one held while it stands, or a fresh one. */
     const sessionFor = (host: string): ClientHttp2Session => {
       const held = sessions.get(host);
+
       if (held !== undefined && !held.closed && !held.destroyed) return held;
       const session = connect(`https://${host}:443`);
+
       const forget = () => {
         if (sessions.get(host) === session) sessions.delete(host);
       };
+
       session.on("error", forget);
       session.on("goaway", forget);
       session.on("close", forget);
       sessions.set(host, session);
+
       return session;
     };
 
@@ -66,6 +70,7 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
           [HTTP2_HEADER_PATH]: request.path,
           ...request.headers,
         });
+
         let status = 0;
         const chunks: Buffer[] = [];
         stream.on("response", (headers) => {
@@ -86,6 +91,7 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
           ),
         );
         stream.end(request.body);
+
         return Effect.sync(() => stream.close(NGHTTP2_CANCEL));
       }).pipe(
         Effect.timeoutOrElse({

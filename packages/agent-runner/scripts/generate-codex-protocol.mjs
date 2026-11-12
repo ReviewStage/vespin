@@ -68,21 +68,28 @@ function typeScriptFiles(directory) {
 }
 
 const scratch = mkdtempSync(path.join(tmpdir(), "codex-protocol-"));
+
 try {
   execFileSync("npx", ["--yes", CODEX_PACKAGE, "app-server", "generate-ts", "--out", scratch], {
     stdio: "inherit",
   });
+
   for (const file of typeScriptFiles(scratch)) {
     const text = readFileSync(file, "utf8").replace(/from "(\.\.?\/[^"]*)"/gu, (_, specifier) => {
       const resolved = path.resolve(path.dirname(file), specifier);
       const isDirectory = existsSync(resolved) && statSync(resolved).isDirectory();
+
       return `from "${specifier}${isDirectory ? "/index" : ""}.js"`;
     });
+
     writeFileSync(file, text);
   }
+
   const models = await fetch(BUNDLED_MODELS_URL);
+
   if (!models.ok) throw new Error(`${BUNDLED_MODELS_URL} answered ${models.status}`);
   const modelsText = await models.text();
+
   // Note that a catalog that does not parse, or lists no model, is refused here, as Codex would refuse it at launch.
   if (!(JSON.parse(modelsText).models?.length > 0))
     throw new Error("the bundled catalog lists no model");

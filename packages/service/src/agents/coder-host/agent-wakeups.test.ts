@@ -56,6 +56,7 @@ const OPENED = new Date("2026-10-21T12:00:00Z");
 /** The agent's harness, writing down every message sent, by session, or refusing every send. */
 function fakeAgentSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
+
   const sessions: AgentSessions = {
     boot: bootedAtOnce,
     open: () =>
@@ -68,6 +69,7 @@ function fakeAgentSessions(refusing = false) {
         ? Effect.fail(refusedSession())
         : Effect.sync(() => {
             sent.push({ sessionId, message });
+
             return {
               outcome: SESSION_SEND_OUTCOME.ACCEPTED,
               sessionId,
@@ -77,12 +79,14 @@ function fakeAgentSessions(refusing = false) {
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   };
+
   return { sent, sessions, sessionsFor: () => Effect.succeed(sessions) };
 }
 
 /** The words of a message sent to the harness. */
 function sentText(message: SessionMessage["message"]): string {
   if (!Array.isArray(message)) return message;
+
   return message.map((part) => (part.type === "text" ? part.text : "")).join("\n");
 }
 
@@ -93,6 +97,7 @@ const openAgent = Effect.gen(function* () {
   yield* db.insert(user).values({ id: owner, name: "Test User", email: `${owner}@app.test` });
   yield* connectAgentApiKeys(owner);
   const task = yield* startTask(owner, { name: "Invitations" });
+
   const started = yield* createAgent(owner, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -104,6 +109,7 @@ const openAgent = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CODEX,
     payer: AGENT_PAYER.API_KEY,
   });
+
   const { agent } = Option.getOrThrow(started);
   const sessionId = `codex-${randomUUID()}`;
   yield* claimRuntimeSession(
@@ -111,12 +117,14 @@ const openAgent = Effect.gen(function* () {
     sessionId,
     new Date(OPENED.getTime() - 3_600_000),
   );
+
   return { owner, agent, sessionId };
 });
 
 /** The tool's call as the agent makes it, its sessions unused since a booking reaches none. */
 function callOf(agent: Agent): AgentCall {
   const { sessions } = fakeAgentSessions();
+
   return {
     caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: true },
     agentSessions: sessions,
@@ -129,12 +137,14 @@ function callOf(agent: Agent): AgentCall {
 /** A queue that writes down each message published, or refuses every publish. */
 function recordingQueue(refusing = false) {
   const published: PublishedAgentWakeup[] = [];
+
   const publish = (wakeup: PublishedAgentWakeup) =>
     refusing
       ? Effect.fail(new AgentWakeupNotPublished({ reason: "refused" }))
       : Effect.sync(() => {
           published.push(wakeup);
         });
+
   return { published, publish };
 }
 
@@ -154,6 +164,7 @@ const deliver = (
   wakeup: PublishedAgentWakeup | undefined,
 ) => {
   assert.ok(wakeup !== undefined, "a message was published");
+
   return consumeAgentWakeup(agentSessions.sessionsFor, wakeup.wakeupId);
 };
 
@@ -180,6 +191,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           { delaySeconds: 600, prompt: "Read the checks on pull request #42." },
           queue,
         );
+
         assert.deepEqual(booked, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
@@ -196,6 +208,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         ]);
         // The words are the agent's own, so its row names the agent as their sender, on the app's channel, which the transcript draws as the agent waking up.
         const db = yield* Database;
+
         const lines = yield* db
           .select({
             sender: messages.sender,
@@ -206,6 +219,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           .where(
             and(eq(messages.conversationId, agent.conversationId), isNotNull(messages.sender)),
           );
+
         assert.deepEqual(
           lines.map(({ sender, senderAgentId, metadata }) => ({
             sender,
@@ -289,6 +303,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         { delaySeconds: 60, prompt: "Never taken." },
         recordingQueue(true),
       );
+
       assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED);
       yield* deliver(agentSessions, queue.published[0]);
       assert.deepEqual(sentTo(agentSessions, sessionId), [], "the refused booking replaced it");
@@ -315,6 +330,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           storeWriter({ tools: CODER_TOOL_SET }),
           standing,
         );
+
         yield* deliver(agentSessions, queue.published[0]);
         assert.equal(canceled, false);
         assert.deepEqual(sentTo(agentSessions, sessionId), []);

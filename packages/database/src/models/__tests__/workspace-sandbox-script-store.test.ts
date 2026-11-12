@@ -40,6 +40,7 @@ const openOwnedWorkspace = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return yield* openWorkspace(userId);
 });
 
@@ -177,10 +178,12 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openOwnedWorkspace;
+
         const stampOf = Effect.map(
           readRunActions(workspace, "acme/relay"),
           (rows) => rows[0]?.updatedAt.getTime() ?? 0,
         );
+
         yield* setRunActions(
           workspace,
           "acme/relay",

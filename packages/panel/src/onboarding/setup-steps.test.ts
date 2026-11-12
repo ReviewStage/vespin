@@ -82,10 +82,12 @@ function answeringDeletes(place: string, deleted: unknown[]): void {
   fakeActPort({
     [WORKSPACE_ACT_KIND.WORKSPACE_DELETE]: (payload) => {
       deleted.push(payload);
+
       return Promise.resolve();
     },
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => {
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
   });
@@ -117,6 +119,7 @@ function setupDrawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -155,6 +158,7 @@ function finishingWith(
   answeringDeletes(place, deleted);
   const finished = { count: 0 };
   setupDrawn([], finished);
+
   return finished;
 }
 
@@ -244,10 +248,13 @@ test("the survey keeps its answers on the account, Other's words among them, and
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
       if (field === "onboardingSurvey") {
         kept.push(JSON.parse(String(value)));
+
         // The account refuses the first keep, as a write lost to an outage is.
         if (kept.length === 1) return Promise.reject(refusedOnPort("Not saved."));
       }
+
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
   });

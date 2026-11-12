@@ -167,6 +167,7 @@ test("the funnel and reach keep their order, with shares of their bases and none
 
 test("the most active keep their rank, their counts joined", () => {
   const account = { email: "", image: null, admin: false };
+
   const overview = buildAdminOverview(
     {
       ...emptyOverviewSource(),

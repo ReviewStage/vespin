@@ -99,6 +99,7 @@ export function taskKey(
 ): string {
   const { name } = stored.task;
   const handed = [name, stored.brief ?? null, openThreadsText(comments)];
+
   // Note that a key with Descriptions on reads as it did before Descriptions was gated, so no session hands its task again for it.
   return contentKey(JSON.stringify(descriptionsOn ? handed : [...handed, { descriptionsOn }]));
 }
@@ -148,5 +149,6 @@ export function timeWithLead(standing: string): string {
 /** The memories a turn found, one to a line as its id and its words, behind the line saying what they are. */
 export function memoriesWithLead(memories: readonly StoredMemory[]): string {
   const lines = memories.map((memory) => `- ${memory.id}: ${JSON.stringify(memory.text)}`);
+
   return [TURN_MESSAGE_LEAD.MEMORIES, ...lines].join("\n");
 }

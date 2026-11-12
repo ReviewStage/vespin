@@ -16,6 +16,7 @@ const WINDOW_HEIGHT = 800;
  * viewport's (WebKit bug 174362), each a keyboard over the page left out.
  */
 const ENGINE = { BLINK: "blink", WEBKIT: "webkit" } as const;
+
 type Engine = (typeof ENGINE)[keyof typeof ENGINE];
 
 /** A phone's visual viewport, as tall as it is shown, panned as far as it is, and zoomed as far as it is, in a window its engine measures. */
@@ -38,6 +39,7 @@ class FakeVisualViewport extends EventTarget {
   /** The window's size as its engine answers it. */
   get window() {
     const shrink = this.engine === ENGINE.WEBKIT ? this.scale : 1;
+
     // Note that WebKit cuts the window's size to a whole pixel.
     return { width: WINDOW_WIDTH / shrink, height: Math.trunc(this.layoutHeight / shrink) };
   }
@@ -103,8 +105,10 @@ function stageTop(): number {
 function mount(): void {
   function Panel() {
     useVisualViewport();
+
     return null;
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Panel)));
@@ -116,6 +120,7 @@ function mount(): void {
  */
 function readOverBody(property: string): string {
   const layer = document.body.appendChild(document.createElement("div"));
+
   return getComputedStyle(layer).getPropertyValue(property);
 }
 
@@ -308,6 +313,7 @@ function scrollingColumn(): HTMLElement {
   Object.defineProperty(column, "scrollHeight", { configurable: true, value: 2000 });
   Object.defineProperty(column, "clientHeight", { configurable: true, value: 700 });
   column.getBoundingClientRect = () => DOMRect.fromRect({ y: stageTop(), height: 700, width: 390 });
+
   return column;
 }
 
@@ -325,6 +331,7 @@ test("a box focused while words stand selected elsewhere on the page is kept abo
     configurable: true,
     value: () => DOMRect.fromRect({ y: 150, height: 20, width: 200 }),
   });
+
   try {
     mount();
     field.focus();

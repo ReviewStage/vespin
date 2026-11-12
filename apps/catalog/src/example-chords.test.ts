@@ -31,7 +31,9 @@ class StillObserver {
 }
 
 globalThis.ResizeObserver ??= StillObserver as unknown as typeof ResizeObserver;
+
 globalThis.IntersectionObserver ??= StillObserver as unknown as typeof IntersectionObserver;
+
 Element.prototype.scrollIntoView ??= () => undefined;
 
 const roots: Root[] = [];
@@ -49,6 +51,7 @@ function draw(id: string): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(example.Render)));
+
   return document.body;
 }
 
@@ -64,9 +67,11 @@ test("the menu example's Copy link shows the window's chord for it", () => {
   const trigger = page.querySelector<HTMLElement>("[aria-label='Task actions'][aria-haspopup]");
   assert.ok(trigger, "the task menu has its ⋯");
   act(() => trigger.click());
+
   const copyLink = [...page.querySelectorAll("[role='menuitem']")].find((item) =>
     item.textContent?.includes("Copy link"),
   );
+
   assert.ok(copyLink, "the task menu offers Copy link");
   assert.equal(copyLink.querySelector(".ui-shortcut")?.textContent, "⇧⌘C");
 });
@@ -75,6 +80,8 @@ test("every chord the settings-row example draws is one the window has", () => {
   const chords = [...draw("settings-row").querySelectorAll(".ui-shortcut")].map(
     (chord) => chord.textContent,
   );
+
   assert.ok(chords.length > 0, "the shortcut rows draw their chords");
+
   for (const chord of chords) assert.ok(WINDOW_CHORDS.has(chord ?? ""), `${chord}`);
 });

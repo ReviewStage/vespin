@@ -79,6 +79,7 @@ export function PictureBlock({
     caption === undefined || caption === "" ? null : (
       <span className={PICTURE_CAPTION_CLASS}>{caption}</span>
     );
+
   // A video plays where it stands, and what a press on a picture opens is its Expand.
   if (state.kind === PICTURE_STATE.READY && isVideoDataUrl(state.url)) {
     return (
@@ -88,6 +89,7 @@ export function PictureBlock({
       </span>
     );
   }
+
   // A picture with nothing to open on a press is drawn as itself, no button.
   if (state.kind === PICTURE_STATE.READY && onOpen === undefined) {
     return (
@@ -110,8 +112,10 @@ export function PictureBlock({
       </span>
     );
   }
+
   if (state.kind === PICTURE_STATE.READY) {
     const open = onOpen;
+
     return (
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
         <PictureTile
@@ -141,6 +145,7 @@ export function PictureBlock({
       </span>
     );
   }
+
   if (state.kind === PICTURE_STATE.READING) {
     return (
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
@@ -156,6 +161,7 @@ export function PictureBlock({
       </span>
     );
   }
+
   if (state.kind === PICTURE_STATE.FAILED) {
     return (
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
@@ -176,6 +182,7 @@ export function PictureBlock({
       </span>
     );
   }
+
   return (
     <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
       <Card

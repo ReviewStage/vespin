@@ -33,6 +33,7 @@ const printError = console.error.bind(console);
 
 console.error = (...args: unknown[]) => {
   const [format, key] = args;
+
   if (typeof format === "string" && format.startsWith(DUPLICATE_KEY)) duplicated.push(key);
   printError(...args);
 };
@@ -40,6 +41,7 @@ console.error = (...args: unknown[]) => {
 /** Throws if React has said two siblings shared a key since the last check. */
 function failOnDuplicated(): void {
   const keys = duplicated.splice(0);
+
   if (keys.length === 0) return;
   const named = [...new Set(keys.map(String))].map((key) => `\`${key}\``).join(", ");
   throw new Error(

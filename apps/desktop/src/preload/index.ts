@@ -19,17 +19,23 @@ const bridge: Record<string, CallableFunction> = {};
 for (const [method, definition] of bridgeEntries()) {
   // The network is said by the preload itself, below, never by the page.
   if (method === "reportOnline") continue;
+
   if (definition.kind === "invoke") {
     bridge[method] = async (...args: UnparsedWireValue[]) => {
       // SAFETY: Electron returns a structured-clone value, which the manifest result guard parses below.
       const value = (await ipcRenderer.invoke(definition.channel, ...args)) as UnparsedWireValue;
+
       if (definition.result?.(value) === false) throw new Error("Invalid bridge response");
+
       return value;
     };
+
     continue;
   }
+
   bridge[method] = (...args: UnparsedWireValue[]) => {
     ipcRenderer.send(definition.channel, ...args);
+
     return undefined;
   };
 }
@@ -48,8 +54,11 @@ contextBridge.exposeInMainWorld("appBridge", exposedBridge());
 function reportOnline(): void {
   ipcRenderer.send(BRIDGE.reportOnline.channel, navigator.onLine);
 }
+
 reportOnline();
+
 window.addEventListener("online", reportOnline);
+
 window.addEventListener("offline", reportOnline);
 
 // An attached shell's port cannot cross the context bridge, so it is handed

@@ -199,8 +199,10 @@ const NO_SORTING: SortingState = [];
 /** Whether `event` landed on a control inside the row rather than on the row itself. */
 function onOwnControl(event: MouseEvent<HTMLElement>): boolean {
   const target = event.target;
+
   if (!(target instanceof Element)) return false;
   const control = target.closest(OWN_CONTROL);
+
   return control !== null && event.currentTarget.contains(control);
 }
 
@@ -218,6 +220,7 @@ function DataTableHeading<Row extends RowData>({
   header: Header<DataTableFeatures, Row, unknown>;
 }): React.JSX.Element {
   const kind = columnKind(header.column);
+
   if (kind === DATA_TABLE_COLUMN_KIND.MARK) {
     return (
       <TableHead className={CELL_KIND} data-kind={kind}>
@@ -227,12 +230,15 @@ function DataTableHeading<Row extends RowData>({
       </TableHead>
     );
   }
+
   const sorted = header.column.getIsSorted();
+
   const direction = Match.value(sorted).pipe(
     Match.when(false, () => undefined),
     Match.when("asc", () => SORT_DIRECTION.ASCENDING),
     Match.orElse(() => SORT_DIRECTION.DESCENDING),
   );
+
   if (!header.column.getCanSort()) {
     return (
       <TableHead className={CELL_KIND} data-kind={kind} aria-sort={direction}>
@@ -242,6 +248,7 @@ function DataTableHeading<Row extends RowData>({
       </TableHead>
     );
   }
+
   return (
     <TableHead className={CELL_KIND} data-kind={kind} aria-sort={direction}>
       <SortHeading direction={direction} onPress={header.column.getToggleSortingHandler()}>
@@ -369,6 +376,7 @@ export function DataTable<Row extends RowData>({
 }): React.JSX.Element {
   const [chosen, setChosen] = useState<SortingState>(initialSorting);
   const sorting = useMemo(() => [...leadingSorting, ...chosen], [leadingSorting, chosen]);
+
   const table = useAppTable({
     columns,
     data: rows,
@@ -380,10 +388,12 @@ export function DataTable<Row extends RowData>({
       const next = functionalUpdate(updater, sorting).filter(
         (sort) => !leadingSorting.some((leading) => leading.id === sort.id),
       );
+
       setChosen(next);
       onSortingChange?.(next);
     },
   });
+
   if (rows.length === 0) {
     return (
       <Card>
@@ -393,7 +403,9 @@ export function DataTable<Row extends RowData>({
       </Card>
     );
   }
+
   const { rows: drawn } = table.getRowModel();
+
   return (
     <DataTableFrame
       table={table}
@@ -416,6 +428,7 @@ export function DataTable<Row extends RowData>({
 /** A spacer row standing for the rows left undrawn above or below the view, as tall as they would stand. */
 function DataTableSpacer({ height, columns }: { height: number; columns: number }): ReactNode {
   if (height <= 0) return null;
+
   return (
     <tr>
       <td colSpan={columns} className="p-0" style={{ height }} />
@@ -446,6 +459,7 @@ function DataTableBody<Row extends RowData>({
   const body = useRef<HTMLTableSectionElement>(null);
   const [margin, setMargin] = useState(0);
   const [, setFound] = useState(0);
+
   const virtualizer = useVirtualizer<HTMLElement, HTMLTableRowElement>({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -458,27 +472,37 @@ function DataTableBody<Row extends RowData>({
     // Note that a scroller in a tab kept but not shown measures no size, and the rows drawn there stay drawn (`sizeWhileShown`).
     observeElementRect: sizeWhileShown,
   });
+
   // The body stands below whatever the page draws above it in the scroller, read again as the scroller or the page's content is sized anew.
   // Note that the body draws again as it first finds the scroller, because the page sets it only after the body's own layout effects, and the virtualizer takes it as it draws.
   useEffect(() => {
     const element = body.current;
     const found = scroller.current;
+
     if (element === null || found === null) return;
+
     const read = () => {
       const box = scroller.current;
+
       if (box === null) return;
+
       const at = Math.round(
         element.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop,
       );
+
       setMargin((was) => (was === at ? was : at));
     };
+
     read();
     setFound((count) => count + 1);
+
     // Note that a runtime with no ResizeObserver, as jsdom is, keeps the place read once, as the virtualizer keeps each row's size there.
     if (typeof ResizeObserver === "undefined") return;
     const heard = new ResizeObserver(read);
     heard.observe(found);
+
     if (shiftedBy.current !== null) heard.observe(shiftedBy.current);
+
     return () => heard.disconnect();
   }, [scroller, shiftedBy]);
   const items = virtualizer.getVirtualItems();
@@ -487,13 +511,16 @@ function DataTableBody<Row extends RowData>({
   const columns = table.getAllLeafColumns().length + (rowMenu === undefined ? 0 : 1);
   const above = first === undefined ? 0 : first.start - margin;
   const below = last === undefined ? 0 : virtualizer.getTotalSize() - (last.end - margin);
+
   return (
     <TableBody ref={body} className="[overflow-anchor:none]">
       <DataTableSpacer height={above} columns={columns} />
       {items.map((item) => {
         const row = rows[item.index];
+
         if (row === undefined) return null;
         const press = onRowPress && (rowPressable?.(row.original) ?? true) ? onRowPress : undefined;
+
         return (
           <DataTableRow
             key={row.id}
@@ -534,6 +561,7 @@ function DataTableRow<Row extends RowData>({
   menu: { readonly of: ListRowMenu | undefined } | undefined;
 }): React.JSX.Element {
   const doors = useRowMenu(menu?.of);
+
   return (
     <TableRow
       ref={measure}
@@ -609,6 +637,7 @@ export function DataTableSkeleton<Row extends RowData>({
   menus?: boolean;
 }): React.JSX.Element {
   const table = useAppTable({ columns, data: NO_ROWS, enableSorting: false });
+
   return (
     <DataTableFrame table={table} label={label} minWidth={minWidth} menus={menus}>
       <TableBody>

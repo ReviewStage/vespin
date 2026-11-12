@@ -394,7 +394,9 @@ type TurnWork = (typeof TURN_WORK)[keyof typeof TURN_WORK];
 
 function turnWorkOf(kind: string, parentKind: string | null): TurnWork {
   if (kind === CONVERSATION_KIND.AGENT) return TURN_WORK.AGENT;
+
   if (parentKind === CONVERSATION_KIND.AGENT) return TURN_WORK.AGENT_SUBAGENT;
+
   return TURN_WORK.APP;
 }
 
@@ -424,12 +426,16 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
   const appTurns = new Map<string, AdminFailureCount>();
   const agentRuns = new Map<string, AdminFailureCount>();
   const abandonedTurns = new Map<string, number>();
+
   for (const row of outcomes) {
     const failed = row.status === TURN_STATUS.FAILED ? row.value : 0;
+
     if (row.failure === TURN_FAILURE.ABANDONED) {
       bump(abandonedTurns, row.day, 0, (counted) => counted + row.value);
     }
+
     const work = turnWorkOf(row.kind, row.parentKind);
+
     if (work === TURN_WORK.AGENT_SUBAGENT) continue;
     bump(work === TURN_WORK.AGENT ? agentRuns : appTurns, row.day, NO_FAILURES, (counted) => ({
       failed: counted.failed + failed,
@@ -438,12 +444,14 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
   }
 
   const agentFailures = new Map<AgentFailure, number>();
+
   for (const row of failures) {
     const failure = agentFailureOf({
       status: TURN_STATUS.FAILED,
       failure: row.failure,
       failureDetail: row.failureDetail,
     });
+
     if (failure !== undefined)
       agentFailures.set(failure, (agentFailures.get(failure) ?? 0) + row.value);
   }
@@ -456,7 +464,9 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
     const status = agentStatusOf(undefined, { createdAt: agent.createdAt, now });
     const failure = agentFailureOf(undefined);
     const failedAt = agent.createdAt.getTime() + STARTING_GRACE_MS;
+
     if (status !== AGENT_STATUS.FAILED || failure === undefined) continue;
+
     if (failedAt < request.windowStart.getTime()) continue;
     bump(agentRuns, utcDayKey(failedAt), NO_FAILURES, (counted) => ({
       failed: counted.failed + 1,
@@ -472,10 +482,12 @@ const readAutomationSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityAutom
   request: WindowScope,
 ) {
   const automationRuns = new Map<string, AdminAutomationCount>();
+
   const automationReasons = new Map<
     AutomationRunReason | null,
     { skipped: number; failed: number }
   >();
+
   for (const row of yield* findAutomationOutcomes(request)) {
     const failed = row.status === AUTOMATION_RUN_STATUS.FAILED ? row.value : 0;
     const skipped = row.status === AUTOMATION_RUN_STATUS.SKIPPED ? row.value : 0;
@@ -484,6 +496,7 @@ const readAutomationSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityAutom
       skipped: counted.skipped + skipped,
       total: counted.total + row.value,
     }));
+
     if (failed + skipped === 0) continue;
     const reason = automationReasons.get(row.reason) ?? { skipped: 0, failed: 0 };
     automationReasons.set(row.reason, {
@@ -491,6 +504,7 @@ const readAutomationSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityAutom
       failed: reason.failed + failed,
     });
   }
+
   return { automationRuns, automationReasons };
 });
 
@@ -505,9 +519,11 @@ function problemsByAccount(
   installations: readonly (typeof BrokenInstallationRowSchema.Type)[],
 ): Map<string, AdminAttentionProblem[]> {
   const byAccount = new Map<string, AdminAttentionProblem[]>();
+
   const add = (userId: string, problem: AdminAttentionProblem) => {
     byAccount.set(userId, [...(byAccount.get(userId) ?? []), problem]);
   };
+
   for (const row of keys) {
     add(row.userId, {
       kind: ADMIN_ATTENTION_KIND.PROVIDER_KEY,
@@ -516,6 +532,7 @@ function problemsByAccount(
       since: row.since.getTime(),
     });
   }
+
   for (const row of integrations) {
     add(row.userId, {
       kind: ADMIN_ATTENTION_KIND.INTEGRATION,
@@ -524,22 +541,27 @@ function problemsByAccount(
       since: row.since.getTime(),
     });
   }
+
   for (const row of installations) {
     const problems = byAccount.get(row.userId) ?? [];
+
     const same = problems.find(
       (problem) =>
         problem.kind === ADMIN_ATTENTION_KIND.GITHUB_INSTALLATION && problem.status === row.status,
     );
+
     if (same !== undefined) {
       same.since = Math.max(same.since, row.since.getTime());
       continue;
     }
+
     add(row.userId, {
       kind: ADMIN_ATTENTION_KIND.GITHUB_INSTALLATION,
       status: row.status,
       since: row.since.getTime(),
     });
   }
+
   return byAccount;
 }
 
@@ -556,9 +578,12 @@ const readAttention = /* @__PURE__ */ Effect.fn("web/readReliabilityAttention")(
     [findBrokenKeys(scope), findBrokenIntegrations(scope), findBrokenInstallations(scope)],
     { concurrency: "unbounded" },
   );
+
   const byAccount = problemsByAccount(keys, integrations, installations);
+
   const newest = (problems: readonly AdminAttentionProblem[]) =>
     Math.max(...problems.map((problem) => problem.since));
+
   const listed = [...byAccount]
     .map(([id, problems]) => ({
       id,
@@ -567,9 +592,11 @@ const readAttention = /* @__PURE__ */ Effect.fn("web/readReliabilityAttention")(
     }))
     .sort((left, right) => right.brokenSince - left.brokenSince || left.id.localeCompare(right.id))
     .slice(0, ADMIN_ATTENTION_LIMIT);
+
   if (listed.length === 0) return { total: 0, accounts: [] };
 
   const ids = listed.map((row) => row.id);
+
   const [accountRows, failedRows] = yield* Effect.all(
     [
       findAccountFaces(ids),
@@ -577,12 +604,15 @@ const readAttention = /* @__PURE__ */ Effect.fn("web/readReliabilityAttention")(
     ],
     { concurrency: "unbounded" },
   );
+
   const accountById = new Map(accountRows.map((row) => [row.id, row]));
   const failedById = new Map(failedRows.map((row) => [row.userId, row.value]));
 
   const accounts: AdminAttentionAccount[] = listed.flatMap((row) => {
     const account = accountById.get(row.id);
+
     if (account === undefined) return [];
+
     return [
       {
         id: account.id,
@@ -596,6 +626,7 @@ const readAttention = /* @__PURE__ */ Effect.fn("web/readReliabilityAttention")(
       },
     ];
   });
+
   return { total: byAccount.size, accounts };
 });
 
@@ -634,11 +665,13 @@ export function readAdminReliabilitySource(input: {
 }): Effect.Effect<AdminReliabilitySource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const database = yield* probeDatabase;
+
     if (!database.reachable) {
       return emptySource(database, input.integrations, input.analyticsConsoleUrl);
     }
 
     const windowStartDay = lastNDayKeys(input.now, input.windowDays)[0] ?? utcDayKey(input.now);
+
     const request = {
       windowStart: dayStart(windowStartDay),
       scope: input.scope,

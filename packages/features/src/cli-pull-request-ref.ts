@@ -20,9 +20,12 @@ const NUMBERED_REPOSITORY = /^([^#\s]+)#(\d+)$/u;
 export function cliPullRequestRefOf(argument: string): NumberedAddress | undefined {
   const trimmed = argument.trim();
   const linked = pullRequestAddressOf(trimmed);
+
   if (linked !== undefined) return linked;
   const [, repository, digits] = NUMBERED_REPOSITORY.exec(trimmed) ?? [];
   const number = Number(digits);
+
   if (repository === undefined || !GITHUB_REPOSITORY_PATTERN.test(repository)) return undefined;
+
   return Number.isSafeInteger(number) && number >= 1 ? { repository, number } : undefined;
 }

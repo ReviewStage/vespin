@@ -13,6 +13,7 @@ import * as FileSystem from "effect/FileSystem";
 import type { PlatformError } from "effect/PlatformError";
 
 const SETTINGS_FILE_NAME = "settings.json";
+
 /**
  * Where a write lands before its rename: one name per writer where the file
  * has several (browser tabs over one storage), so two overlapping writes
@@ -22,6 +23,7 @@ const SETTINGS_FILE_NAME = "settings.json";
 function temporaryFileName(fileName: string, writer: string | undefined): string {
   return writer === undefined ? `${fileName}.tmp` : `${fileName}.${writer}.tmp`;
 }
+
 /** Owner read/write only: a settings file carries a decryption key's ciphertext. */
 const SETTINGS_FILE_MODE = 0o600;
 
@@ -31,8 +33,10 @@ function isIgnorableReadFailure(error: PlatformError): boolean {
   // `Unknown` — so the errno the platform keeps on the reason's own cause is
   // still what names these four. A rejected argument is none of them.
   const reason = error.reason;
+
   if (reason._tag === "BadArgument") return false;
   const cause = reason.cause;
+
   return (
     cause instanceof Error &&
     "code" in cause &&
@@ -56,6 +60,7 @@ export const readSettingsFileText = /* @__PURE__ */ Effect.fn("host/readSettings
   ): Effect.fn.Return<string | undefined, PlatformError, FileSystem.FileSystem | Path.Path> {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     return yield* fileSystem
       .readFileString(path.join(directory, fileName))
       .pipe(Effect.catchIf(isIgnorableReadFailure, () => Effect.succeed(undefined)));

@@ -82,6 +82,7 @@ export function SettingsFoldRow({
   children: ReactNode;
 }): React.JSX.Element {
   const { state, details } = useDisclosureFold(defaultOpen);
+
   return (
     <DisclosureScope state={state}>
       <SettingsRow
@@ -142,6 +143,7 @@ export function SettingsRowsFold({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const folds = rows !== undefined && rows !== null && rows !== false;
+
   return (
     <>
       {head(

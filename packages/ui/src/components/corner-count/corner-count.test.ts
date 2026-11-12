@@ -30,6 +30,7 @@ function mount(count: number): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(CornerCount, { count, children: createElement("svg") })));
+
   return container;
 }
 

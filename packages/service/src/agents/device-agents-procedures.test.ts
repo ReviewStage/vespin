@@ -44,6 +44,7 @@ import { deviceAgentsProcedures } from "./device-agents-procedures.js";
 import { hostsProcedures } from "./hosts-procedures.js";
 
 const ORIGIN = "https://app.test";
+
 const PATH = {
   DEVICES: "/api/device-agents/devices",
   PRESENCE: "/api/device-agents/presence",
@@ -100,7 +101,9 @@ function request(
   } = {},
 ): Request {
   const url = new URL(path, ORIGIN);
+
   if (init.deviceId !== undefined) url.searchParams.set("deviceId", init.deviceId);
+
   return new Request(url, {
     method: init.body === undefined && init.post === undefined ? "GET" : "POST",
     headers: {
@@ -123,7 +126,9 @@ const answerOf = (incoming: Request) =>
       Layer.succeed(HostedEnvironment, yield* HostedEnvironment),
       ANALYTICS.layer,
     );
+
     const context = yield* Effect.context<SqlClient.SqlClient>().pipe(Effect.provide(services));
+
     const seams = {
       resolveUserId: (asked: Request) =>
         Effect.succeed(
@@ -132,15 +137,19 @@ const answerOf = (incoming: Request) =>
           ),
         ),
     };
+
     const handle = hostedFetch({
       deviceAgents: deviceAgentsProcedures(seams),
       hosts: hostsProcedures(seams),
     });
+
     // SAFETY: the procedures yield the database, the clock, the environment, and the analytics alone, which is all a test provides of the web runtime's services.
     const response = yield* Effect.promise(() =>
       handle(incoming, context as Context.Context<WebServices>),
     );
+
     const text = yield* Effect.promise(() => response.text());
+
     return { status: response.status, body: text.length === 0 ? undefined : JSON.parse(text) };
   });
 
@@ -153,6 +162,7 @@ const account = () =>
     const db = yield* Database;
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
     return userId;
   });
 
@@ -191,6 +201,7 @@ function macRegister(
 const agentRunningOn = (userId: string, deviceId: string | null) =>
   Effect.gen(function* () {
     const task = yield* startTask(userId, { name: "Invitations" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -202,6 +213,7 @@ const agentRunningOn = (userId: string, deviceId: string | null) =>
       ...(deviceId === null ? {} : { machine: AGENT_MACHINE.DEVICE, deviceId }),
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const { conversationId } = Option.getOrThrow(started).agent;
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const target = { userId, conversationId };
@@ -220,6 +232,7 @@ const agentRunningOn = (userId: string, deviceId: string | null) =>
       trigger: TURN_TRIGGER.ASK,
       at: yield* Clock.currentTimeMillis,
     });
+
     return conversationId;
   });
 
@@ -231,6 +244,7 @@ function hostBeat(secret: string, deviceId: string, version: string = HOST_VERSI
 /** The release the service publishes, which every case that names it needs. */
 function publishedRelease() {
   assert.ok(HOST_RELEASE !== undefined, "a release is published");
+
   return HOST_RELEASE;
 }
 
@@ -260,6 +274,7 @@ const startedPairing = Effect.gen(function* () {
   const started = yield* answerOf(startPairing());
   assert.equal(started.status, HOSTED_HTTP_STATUS.OK);
   const { pollSecret, userCode }: { pollSecret: string; userCode: string } = started.body;
+
   return { pollSecret, userCode };
 });
 
@@ -272,6 +287,7 @@ const pairedHost = (userId: string) =>
     const handed = yield* pollPairing(pollSecret);
     const deviceId: string = handed.body.deviceId;
     const secret: string = handed.body.deviceSecret;
+
     const register = yield* statusOf(
       request(secret, PATH.DEVICES, {
         version: HOST_VERSION.FLOOR,
@@ -282,7 +298,9 @@ const pairedHost = (userId: string) =>
         },
       }),
     );
+
     assert.equal(register, HOSTED_HTTP_STATUS.OK);
+
     return { deviceId, secret };
   });
 
@@ -304,6 +322,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const owner = yield* account();
         const deviceId = randomUUID();
         const secret: string = (yield* answerOf(enrollOwn(owner, deviceId))).body.deviceSecret;
+
         const unauthenticated = {
           status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
           body: { error: "invalid-token" },
@@ -317,6 +336,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
             request(owner, PATH.LINE_CLAIM, { body: { deviceId, id: randomUUID() } }),
           ),
         ];
+
         const unknown = yield* answerOf(request("nobody", PATH.LINES, { deviceId }));
 
         assert.deepEqual(answers, [
@@ -347,6 +367,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
       const host = yield* pairedHost(owner);
       const otherHost = yield* pairedHost(other);
       const task = yield* startTask(owner, { name: "Invitations" });
+
       const started = yield* createAgent(owner, {
         taskId: task.id,
         idempotencyKey: randomUUID(),
@@ -359,6 +380,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         deviceId: host.deviceId,
         runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       });
+
       const live = (secret: string, deviceId: string) =>
         answerOf(request(secret, PATH.LIVE_AGENTS, { deviceId, version: HOST_VERSION.FLOOR }));
 
@@ -384,12 +406,14 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
 
         const ownBeat = yield* answerOf(hostBeat(host.secret, host.deviceId));
         const otherDeviceBeat = yield* statusOf(hostBeat(host.secret, otherHost.deviceId));
+
         const followedByOther = yield* statusOf(
           request(otherHost.secret, PATH.LINES, {
             deviceId: host.deviceId,
             version: HOST_VERSION.FLOOR,
           }),
         );
+
         const ownerList = yield* answerOf(request(owner, PATH.HOSTS));
         const otherList = yield* answerOf(request(other, PATH.HOSTS));
 
@@ -443,6 +467,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const owner = yield* account();
         const host = yield* pairedHost(owner);
         const failure = "the download did not match its checksum";
+
         /** The account's one host's update, as Hosts lists it. */
         const listedUpdate = Effect.map(answerOf(request(owner, PATH.HOSTS)), (listed) =>
           listed.body.hosts.map(
@@ -459,6 +484,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
             body: { deviceId: host.deviceId, update: HOST_UPDATE.FAILED, updateFailure: failure },
           }),
         );
+
         const whileFailed = yield* listedUpdate;
         // A host from before the field, or one updating nothing, beats with neither.
         const plain = yield* statusOf(hostBeat(host.secret, host.deviceId));
@@ -479,9 +505,11 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
       const removedByOther = yield* statusOf(
         request(other, PATH.HOST_REMOVE, { body: { id: host.deviceId } }),
       );
+
       const removed = yield* statusOf(
         request(owner, PATH.HOST_REMOVE, { body: { id: host.deviceId } }),
       );
+
       const beat = yield* answerOf(hostBeat(host.secret, host.deviceId));
       const listed = yield* answerOf(request(owner, PATH.HOSTS));
 
@@ -516,12 +544,14 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
             body: { deviceId: staying.deviceId },
           }),
         );
+
         const left = yield* statusOf(
           request(leaving.secret, PATH.LEAVE, {
             version: HOST_VERSION.FLOOR,
             body: { deviceId: leaving.deviceId },
           }),
         );
+
         const beat = yield* answerOf(hostBeat(leaving.secret, leaving.deviceId));
         const listed = yield* answerOf(request(owner, PATH.HOSTS));
         const turns = yield* latestTurnsOfReached([onHost]);
@@ -551,6 +581,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
       const removed = yield* statusOf(
         request(owner, PATH.HOST_REMOVE, { body: { id: host.deviceId } }),
       );
+
       const turns = yield* latestTurnsOfReached([onHost, elsewhere]);
 
       assert.equal(removed, HOSTED_HTTP_STATUS.OK);
@@ -574,8 +605,10 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const owner = yield* account();
         const machineId = "d".repeat(64);
         const before = randomUUID();
+
         const beforeSecret: string = (yield* answerOf(enrollOwn(owner, before, machineId))).body
           .deviceSecret;
+
         yield* statusOf(macRegister(beforeSecret, before));
         const onBefore = yield* agentRunningOn(owner, before);
         // Note that the box was reinstalled, so it pairs as a new host and names its machine only at its first register.
@@ -583,12 +616,14 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         yield* byCode(owner, PATH.PAIRING_APPROVE, userCode);
         const handed = yield* pollPairing(pollSecret);
         const paired: string = handed.body.deviceId;
+
         const pairedRegister = yield* statusOf(
           request(handed.body.deviceSecret, PATH.DEVICES, {
             version: HOST_VERSION.FLOOR,
             body: { ...registered(paired), machineId },
           }),
         );
+
         const listedPaired = yield* answerOf(request(owner, PATH.HOSTS));
         const onPaired = yield* agentRunningOn(owner, paired);
         const after = randomUUID();
@@ -626,9 +661,11 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const host = yield* pairedHost(owner);
 
         const oldBeat = yield* answerOf(hostBeat(host.secret, host.deviceId, OLD_VERSION));
+
         const unnamed = yield* statusOf(
           request(host.secret, PATH.PRESENCE, { body: { deviceId: host.deviceId } }),
         );
+
         const listed = yield* answerOf(request(owner, PATH.HOSTS));
 
         assert.equal(oldBeat.status, HOSTED_HTTP_STATUS.UPGRADE_REQUIRED);
@@ -661,19 +698,24 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const unnamed = yield* statusOf(
           request(owner, PATH.ENROLL_OWN, { version: HOST_VERSION.FLOOR, body: { deviceId } }),
         );
+
         const enrolled = yield* answerOf(enrollOwn(owner, deviceId));
         const byOther = yield* statusOf(enrollOwn(other, deviceId));
         const secret: string = enrolled.body.deviceSecret;
+
         const register = yield* statusOf(
           macRegister(secret, deviceId, {
             setup: DEVICE_SETUP.FAILED,
             setupFailure: "Claude Code could not be installed",
           }),
         );
+
         const listed = yield* answerOf(request(owner, PATH.HOSTS));
+
         const removed = yield* statusOf(
           request(owner, PATH.HOST_REMOVE, { body: { id: deviceId } }),
         );
+
         const beatAfterRemove = yield* statusOf(hostBeat(secret, deviceId));
 
         assert.equal(
@@ -732,12 +774,14 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const again = yield* pollPairing(pollSecret);
         const secret: string = handed.body.deviceSecret;
         const collected = yield* answerOf(request(owner, PATH.HOSTS));
+
         const register = yield* statusOf(
           request(secret, PATH.DEVICES, {
             version: HOST_VERSION.FLOOR,
             body: { ...registered(deviceId), platform: DEVICE_PLATFORM.LINUX, home: "/srv/luke" },
           }),
         );
+
         const joined = yield* answerOf(request(owner, PATH.HOSTS));
 
         assert.equal(old, HOSTED_HTTP_STATUS.UPGRADE_REQUIRED);
@@ -823,17 +867,22 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const firstGuessAt = yield* Clock.currentTimeMillis;
 
         const misses = [];
+
         for (const last of "BCDFGHJKLM") {
           misses.push(
             yield* statusOf(request(owner, PATH.PAIRING, { body: { code: unusedCode(last) } })),
           );
         }
+
         const held = yield* byCode(owner, PATH.PAIRING, userCode);
+
         const othersRead = yield* statusOf(
           request(other, PATH.PAIRING, { body: { code: userCode } }),
         );
+
         yield* TestClock.adjust("15 minutes");
         const fresh = yield* startedPairing;
+
         const after = yield* statusOf(
           request(owner, PATH.PAIRING, { body: { code: fresh.userCode } }),
         );

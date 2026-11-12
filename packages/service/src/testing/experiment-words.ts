@@ -13,8 +13,11 @@ const ELSEWHERE_WORDS =
 /** Every string a value holds: a tool's description, and each description and string its JSON Schema names, keys aside. */
 function wordsIn(value: unknown): readonly string[] {
   if (typeof value === "string") return [value];
+
   if (Array.isArray(value)) return value.flatMap(wordsIn);
+
   if (typeof value === "object" && value !== null) return Object.values(value).flatMap(wordsIn);
+
   return [];
 }
 

@@ -114,6 +114,7 @@ async function mount(input: {
   const base = tasksControl();
   const listed = input.agents ?? [];
   const agentTabs = listed.map((each) => agentTab(each.id));
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [SUMMARY],
@@ -142,6 +143,7 @@ async function mount(input: {
       },
     }),
   });
+
   act(() =>
     root.render(
       windowRouter().provide(
@@ -163,6 +165,7 @@ async function mount(input: {
   await settle();
   const terminals = input.terminals ?? true;
   await vi.waitFor(() => assert.equal(appCommandOffered(APP_COMMAND.SHOW_TERMINAL), terminals));
+
   return {
     /** Every tab the side panel was asked to show, in order, a terminal's by its agent and its name. */
     shown: () =>
@@ -183,7 +186,9 @@ async function mount(input: {
 /** The offer to start an agent, while it stands: its rows' names, and which is chosen. */
 function picker() {
   const dialog = document.querySelector('[role="dialog"]');
+
   if (dialog === null) return undefined;
+
   return {
     rows: [...dialog.querySelectorAll('[role="option"]')].map((row) => ({
       name: row.querySelector(".ui-combobox-option-label")?.textContent,
@@ -193,6 +198,7 @@ function picker() {
       const row = [...dialog.querySelectorAll<HTMLElement>('[role="option"]')].find(
         (each) => each.querySelector(".ui-combobox-option-label")?.textContent === name,
       );
+
       assert.ok(row, `a row named ${name}`);
       await act(async () => row.click());
       await settle();
@@ -217,6 +223,7 @@ test("from an agent's own tab, both mean that agent, whatever else is on the pla
     main: agentTab(DONE.id),
     lastTerminal: WORKING.id,
   });
+
   await task.run(APP_COMMAND.SHOW_TERMINAL);
   await task.run(APP_COMMAND.NEW_TERMINAL);
   assert.deepEqual(task.shown(), [
@@ -233,15 +240,19 @@ test("with several agents, both mean the terminal used last, and New terminal op
   assert.deepEqual(task.shown().at(-1), [DONE.id, "Cloud 2"]);
   assert.equal(picker(), undefined);
 });
+
 test("with no agent on the plan, both offer to start one", async () => {
   let started = 0;
+
   const task = await mount({
     agents: [],
     started: () => {
       started += 1;
+
       return undefined;
     },
   });
+
   await task.run(APP_COMMAND.NEW_TERMINAL);
   assert.deepEqual(picker()?.rows, [{ name: "Start an agent", chosen: true }]);
   await picker()?.choose("Start an agent");
@@ -251,10 +262,12 @@ test("with no agent on the plan, both offer to start one", async () => {
 
 test("a Start the picker pressed that the service refused says why on the toast, its repository's remedy beside it", async () => {
   const words = "This task has no repository yet.";
+
   const task = await mount({
     agents: [],
     started: () => ({ reason: FAILURE_REASON.CHOOSE_REPOSITORY, text: words, taskId: TASK.id }),
   });
+
   await task.run(APP_COMMAND.NEW_TERMINAL);
   await picker()?.choose("Start an agent");
   await settle();
@@ -269,17 +282,21 @@ test("the panel's + lists each agent's terminal under Cloud Terminal, and a pick
     side: SIDE_PANEL_TAB.COMMENTS,
     lastTerminal: DONE.id,
   });
+
   const add = document.querySelector<HTMLButtonElement>(
     '.side-panel-tabs button[aria-label="Open a tab"]',
   );
+
   assert.ok(add, "the panel's +");
   await act(async () => add.click());
   await settle();
+
   const rows = [
     ...document.querySelectorAll<HTMLElement>('.ui-searchable-menu [role="option"]'),
   ].filter(
     (row) => row.closest('[role="group"]')?.textContent?.startsWith("Cloud Terminal") === true,
   );
+
   assert.deepEqual(
     rows.map((row) => [
       row.querySelector(".ui-combobox-option-label")?.textContent,
@@ -298,10 +315,13 @@ test("the panel's + lists each agent's terminal under Cloud Terminal, and a pick
 function menuItem(label: string) {
   const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
   assert.ok(menu, "a menu stands open");
+
   const item = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === label,
   );
+
   assert.ok(item, `the menu offers ${label}`);
+
   return {
     hint: item.querySelector(".ui-menu-item-hint")?.textContent,
     press: async () => {
@@ -316,6 +336,7 @@ function rightClickTab(name: string): void {
   const tab = [
     ...document.querySelectorAll<HTMLElement>('.task-tabs .ui-toolbar [role="tab"]'),
   ].find((each) => each.textContent?.includes(name) === true);
+
   assert.ok(tab, `the column has a tab named ${name}`);
   act(() => {
     tab.dispatchEvent(
@@ -330,6 +351,7 @@ test("an agent's tab offers Show terminal on its right-click, which opens that a
     main: agentTab(WORKING.id),
     lastTerminal: DONE.id,
   });
+
   assert.ok(document.querySelector(".agent-composer"), "the agent's composer is drawn");
   assert.equal(
     document.querySelector('.agent-composer button[aria-label="Show terminal"]'),
@@ -354,6 +376,7 @@ test("an agent's tab offers Show terminal on its right-click, which opens that a
 function menuLabels(): string[] {
   const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
   assert.ok(menu, "a menu stands open");
+
   return [...menu.querySelectorAll(".ui-menu-item-label")].map((each) => each.textContent ?? "");
 }
 
@@ -363,12 +386,14 @@ async function mountOn(
   input: Parameters<typeof mount>[0],
 ): ReturnType<typeof mount> {
   handCapabilities(capabilities);
+
   return mount({ ...input, terminals: capabilities.includes(HOST_CAPABILITY.TERMINALS) });
 }
 
 test("on a platform that runs no terminals, neither ⌘J nor New terminal stands, the panel's + offers no Terminal, and an agent's tab offers no Show terminal", async () => {
   const offered = (each: HostCapability) =>
     each !== HOST_CAPABILITY.TERMINALS && each !== HOST_CAPABILITY.MAC_TERMINAL;
+
   await mountOn(DESKTOP_CAPABILITIES, {
     agents: [WORKING],
     main: agentTab(WORKING.id),
@@ -386,12 +411,15 @@ test("on a platform that runs no terminals, neither ⌘J nor New terminal stands
   const without = menuLabels();
   assert.equal(runAppCommand(APP_COMMAND.SHOW_TERMINAL), false);
   assert.equal(runAppCommand(APP_COMMAND.NEW_TERMINAL), false);
+
   const add = document.querySelector<HTMLButtonElement>(
     '.side-panel-tabs button[aria-label="Open a tab"]',
   );
+
   assert.ok(add, "the panel's +");
   await act(async () => add.click());
   await settle();
+
   const groups = [...document.querySelectorAll('.ui-searchable-menu [role="group"]')].map(
     (group) => group.textContent ?? "",
   );

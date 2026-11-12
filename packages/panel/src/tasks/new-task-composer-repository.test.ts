@@ -94,6 +94,7 @@ async function mount(
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = () =>
     root.render(
       withQueryClient(
@@ -106,6 +107,7 @@ async function mount(
             repositoriesIn: () => ({ ...NO_REPOSITORIES, recent, scope: scope.id }),
             start: (_name: string, repository: string | null) => {
               starts.push(repository);
+
               return Promise.resolve(undefined);
             },
           },
@@ -115,18 +117,22 @@ async function mount(
         }),
       ),
     );
+
   act(draw);
   await settle();
+
   /** Draws the card again, as the workspaces resolving does. */
   const redraw = async () => {
     act(draw);
     await settle();
   };
+
   /** The host asking every list held again, as a window coming forward asks it. */
   const comeForward = async () => {
     await act(again);
     await settle();
   };
+
   return { container, starts, redraw, comeForward };
 }
 
@@ -146,15 +152,18 @@ test("with no recent task, the chip stands on the first repository the read list
     const chip =
       container.querySelector<HTMLButtonElement>(".ui-chip") ??
       assert.fail("the card draws the repository chip");
+
     assert.equal(chip.textContent?.includes("octo/tools"), true, chip.textContent ?? "");
   });
 });
 
 test("a repository the picker lists on a member's token, on an owner the workspace's App is not on, stays picked", async () => {
   const { container } = await mount(TOKEN_LISTING);
+
   const chip =
     container.querySelector<HTMLButtonElement>(".ui-chip") ??
     assert.fail("the card draws the repository chip");
+
   act(() => chip.click());
   await settle();
   act(() => row("tools").click());
@@ -165,12 +174,16 @@ test("a repository the picker lists on a member's token, on an owner the workspa
 
 test("the repository chip hangs the repository's card while the pointer rests on it: its name, and its owner under it", async () => {
   const { container } = await mount(TOKEN_LISTING, "octo/tools");
+
   const chip = await vi.waitFor(() => {
     const drawn =
       container.querySelector(".ui-chip") ?? assert.fail("the card draws the repository chip");
+
     assert.equal(drawn.textContent?.includes("octo/tools"), true);
+
     return drawn;
   });
+
   restOn(chip);
   const card = document.querySelector("[data-repository-card]");
 
@@ -185,6 +198,7 @@ test("a preset on a token repository the picker lists stands chosen once the rea
     const chip =
       container.querySelector<HTMLButtonElement>(".ui-chip") ??
       assert.fail("the card draws the repository chip");
+
     assert.equal(chip.textContent?.includes("octo/tools"), true, chip.textContent ?? "");
   });
 });
@@ -200,8 +214,10 @@ test("a preset the workspace's GitHub does not reach is not started on while the
 
 test("a preset a read does not list is let go, so a later read listing it does not bring it back", async () => {
   let reads = 0;
+
   const { container, comeForward } = await mount(() => {
     reads += 1;
+
     return reads === 1
       ? Promise.resolve({
           repositories: {
@@ -212,7 +228,9 @@ test("a preset a read does not list is let go, so a later read listing it does n
         })
       : TOKEN_LISTING();
   }, "octo/tools");
+
   await comeForward();
+
   const chip =
     container.querySelector<HTMLButtonElement>(".ui-chip") ??
     assert.fail("the card draws the repository chip");
@@ -223,6 +241,7 @@ test("a preset a read does not list is let go, so a later read listing it does n
 
 test("a preset survives a read made before the workspace resolved and stands once its workspace's read lists it", async () => {
   const scope: { id: string | undefined } = { id: undefined };
+
   const { container, redraw } = await mount(
     (workspace) =>
       workspace === EVERY_WORKSPACE
@@ -237,6 +256,7 @@ test("a preset survives a read made before the workspace resolved and stands onc
     "octo/tools",
     scope,
   );
+
   scope.id = ACME.id;
   await redraw();
   // Note that the chip stands on the repository once the read that lists it reaches its query.
@@ -244,15 +264,18 @@ test("a preset survives a read made before the workspace resolved and stands onc
     const chip =
       container.querySelector<HTMLButtonElement>(".ui-chip") ??
       assert.fail("the card draws the repository chip");
+
     assert.equal(chip.textContent?.includes("octo/tools"), true, chip.textContent ?? "");
   });
 });
 
 test("a recent default a read does not list is let go, so a later read listing it does not bring it back", async () => {
   let reads = 0;
+
   const { container, comeForward } = await mount(
     () => {
       reads += 1;
+
       return reads === 1
         ? Promise.resolve({
             repositories: {
@@ -267,9 +290,11 @@ test("a recent default a read does not list is let go, so a later read listing i
     { id: ACME.id },
     ["octo/tools"],
   );
+
   const chip =
     container.querySelector<HTMLButtonElement>(".ui-chip") ??
     assert.fail("the card draws the repository chip");
+
   // Note that the first read, which lists nothing, reaches the chip before the window comes forward.
   await vi.waitFor(() => assert.equal(chip.textContent, "No repository"));
   await comeForward();

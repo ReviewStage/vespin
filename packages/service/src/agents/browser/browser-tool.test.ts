@@ -57,7 +57,9 @@ const RECORDED_WEBM = (() => {
     0x80 | body.length,
     ...body,
   ];
+
   const video = ebml([0xe0], [...ebml([0xb0], [0x05, 0x00]), ...ebml([0xba], [0x03, 0x20])]);
+
   return new Uint8Array([
     ...ebml([0x1a, 0x45, 0xdf, 0xa3], ebml([0x42, 0x82], [...Buffer.from("webm")])),
     ...ebml([0x18, 0x53, 0x80, 0x67], ebml([0x16, 0x54, 0xae, 0x6b], ebml([0xae], video))),
@@ -70,6 +72,7 @@ function recordingBrowser(
   recording: NonNullable<Parameters<typeof fakeSandboxApi>[0]["recording"]>,
 ) {
   const sandbox = fakeSandboxApi({ status: "running", sessionId: SESSION, recording });
+
   return {
     layer: Layer.succeed(
       AgentBrowser,
@@ -167,22 +170,31 @@ function browser(
     const sessions = new Map<string, string>();
     // How many more reads of its state each page still loading answers that it loads.
     const loading = new Map<string, number>();
+
     const readyState = (targetId: string) => {
       const left = loading.get(targetId);
+
       if (left === undefined) return "complete";
+
       if (left > 0) {
         loading.set(targetId, left - 1);
+
         return "loading";
       }
+
       loading.delete(targetId);
       const at = held.findIndex((page) => page.targetId === targetId);
       const page = held[at];
+
       if (page !== undefined) held.splice(at, 1, { ...page, title: titleAt(page.url) });
+
       return "complete";
     };
+
     const answer = (command: FakeCdpCommand): FakeCdpAnswer | undefined => {
       sent.push(command);
       const { params } = command;
+
       switch (command.method) {
         case "Target.getTargets":
           return { result: { targetInfos: held.map((page) => ({ ...page, type: "page" })) } };
@@ -190,25 +202,34 @@ function browser(
           if (params.url === options.unopenable) {
             return { error: { code: -32000, message: "Failed to open a new tab" } };
           }
+
           opened += 1;
           const targetId = `tab-${opened}`;
           held.push({ targetId, url: String(params.url), title: String(params.url) });
           loading.set(targetId, options.loadAsks ?? 0);
+
           return { result: { targetId } };
         }
+
         case "Target.closeTarget": {
           const at = held.findIndex((page) => page.targetId === params.targetId);
+
           if (at < 0) return { error: { code: -32602, message: "No target with given id found" } };
           held.splice(at, 1);
+
           return { result: { success: true } };
         }
+
         case "Target.attachToTarget": {
           const sessionId = `session-${String(params.targetId)}`;
           sessions.set(sessionId, String(params.targetId));
+
           return { result: { sessionId } };
         }
+
         case "Page.navigate": {
           const page = held.find((one) => one.targetId === sessions.get(command.sessionId ?? ""));
+
           if (page !== undefined) {
             held.splice(held.indexOf(page), 1, {
               ...page,
@@ -216,8 +237,10 @@ function browser(
               title: titleAt(String(params.url)),
             });
           }
+
           return { result: { frameId: "frame-1" } };
         }
+
         case "Page.getLayoutMetrics":
           return { result: LAYOUT };
         case "Runtime.evaluate":
@@ -230,12 +253,15 @@ function browser(
             : { result: { result: { value: 1 } } };
         case "Page.captureScreenshot":
           if (params.format === "png") return { result: { data: KEPT_PNG } };
+
           return { result: { data: params.quality === 85 ? KEPT_JPEG : JPEG } };
         default:
           return PLAIN.has(command.method) ? { result: {} } : undefined;
       }
     };
+
     const peer = yield* fakeCdpPeer({ answer });
+
     return { peer, sent, held };
   });
 }
@@ -243,10 +269,12 @@ function browser(
 /** The fake sandbox's browser on the peer, already started, as a browser the agent used earlier in its sandbox's life is. */
 function runningBrowser(peer: FakeCdpPeer) {
   const layer = agentBrowserTestLayer(peer, SESSION);
+
   const started = Effect.gen(function* () {
     const browser = yield* AgentBrowser;
     yield* browser.ensure(SESSION);
   });
+
   return Effect.as(Effect.provide(started, layer), layer);
 }
 
@@ -261,12 +289,14 @@ const openConversation = Effect.gen(function* () {
   );
   const conversationId = yield* openAgentConversation(id, yield* openWorkspace(id));
   owners.set(conversationId, id);
+
   return { userId: id, conversationId };
 });
 
 /** One call of the tool, as an agent's root makes it, on the browser given. */
 function call(conversationId: string, input: unknown, browserLayer: Layer.Layer<AgentBrowser>) {
   const transcript = { userId: owners.get(conversationId) ?? "", conversationId };
+
   return runBrowserTool(
     { browserSession: SESSION, conversationId, transcript, openSandbox: async () => undefined },
     unparsedWire(input as WireBoundaryInput),
@@ -275,6 +305,7 @@ function call(conversationId: string, input: unknown, browserLayer: Layer.Layer<
 
 function ran(result: BrowserToolResult) {
   if (result.status !== BROWSER_TOOL_STATUS.RAN) return assert.fail(result.reason);
+
   return result;
 }
 
@@ -331,10 +362,12 @@ it.layer(getTestDB())("the browser tool", (it) => {
 
         assert.deepEqual(closed.tabs, []);
         assert.deepEqual(yield* keptTabs(conversationId), []);
+
         // A tab the agent closed never comes back, however the browser is reached next.
         const listed = ran(
           yield* call(conversationId, { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] }, layer),
         );
+
         assert.deepEqual(listed.tabs, []);
         assert.deepEqual(yield* keptTabs(conversationId), []);
       }),
@@ -353,10 +386,12 @@ it.layer(getTestDB())("the browser tool", (it) => {
           openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
         });
         const refusing = { unopenable: "https://lost.test/" as string | undefined };
+
         const { peer, held: pages } = yield* browser(
           [{ targetId: "tab-held", url: "https://held.test/", title: "Held" }],
           refusing,
         );
+
         const layer = yield* runningBrowser(peer);
         const list = { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] };
 
@@ -383,12 +418,15 @@ it.layer(getTestDB())("the browser tool", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, conversationId } = yield* openConversation;
+
         const pages = [
           { targetId: "tab-free", url: "https://free.test/", title: "Free" },
           { targetId: "tab-driven", url: "https://driven.test/", title: "Driven" },
         ];
+
         const { peer, sent } = yield* browser(pages);
         const layer = yield* runningBrowser(peer);
+
         for (const page of pages) {
           yield* upsertBrowserTab({
             conversationId,
@@ -398,15 +436,18 @@ it.layer(getTestDB())("the browser tool", (it) => {
             openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
           });
         }
+
         const driven = (yield* listAgentBrowserTabs(conversationId)).find(
           (row) => row.targetId === "tab-driven",
         );
+
         assert.ok(driven);
         const now = yield* Clock.currentTimeMillis;
         assert.equal(
           yield* takeOverBrowserTab(driven.id, userId, new Date(now + 60_000), new Date(now)),
           true,
         );
+
         const actions = {
           actions: [
             { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-free", x: 10, y: 10 },
@@ -449,6 +490,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, conversationId } = yield* openConversation;
+
         for (const [targetId, address] of [
           ["before-1", "https://shop.test/cart"],
           ["before-2", "http://localhost:3000/admin"],
@@ -461,6 +503,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
           });
         }
+
         const kept = yield* listAgentBrowserTabs(conversationId);
         const admin = kept.find((row) => row.targetId === "before-2");
         assert.ok(admin);
@@ -504,6 +547,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             agentBrowserTestLayer(peer, SESSION),
           ),
         );
+
         assert.equal(refused.steps[0]?.status, BROWSER_STEP_STATUS.FAILED);
       }),
   );
@@ -513,6 +557,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openConversation;
+
         for (const [targetId, address] of [
           ["before-1", "https://shop.test/cart"],
           ["before-2", "http://localhost:3000/admin"],
@@ -525,6 +570,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
           });
         }
+
         const kept = yield* listAgentBrowserTabs(conversationId);
         // The sandbox resumed and a live view's connection started the browser, then went before it
         // reopened anything: the browser holds only the blank page it starts with.
@@ -567,6 +613,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         const listed = ran(
           yield* call(conversationId, { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] }, layer),
         );
+
         const again = ran(
           yield* call(conversationId, { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] }, layer),
         );
@@ -577,6 +624,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           title: signIn.title,
           openedBy: AGENT_BROWSER_TAB_OPENER.MEMBER,
         };
+
         assert.deepEqual(listed.tabs, [theirs]);
         assert.deepEqual(again.tabs, [theirs], "the agent's own list does not make it the agent's");
       }),
@@ -602,6 +650,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             layer,
           ),
         );
+
         const listed = ran(
           yield* call(conversationId, { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] }, layer),
         );
@@ -614,6 +663,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             title: titleAt("http://localhost:3000/"),
           },
         ];
+
         assert.deepEqual(opened.tabs, expected);
         assert.deepEqual(listed.steps, [
           { action: BROWSER_AGENT_ACTION.LIST, status: BROWSER_STEP_STATUS.DONE, tabs: expected },
@@ -659,6 +709,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
 
         const rows = yield* listAgentBrowserTabs(conversationId);
         const byTarget = rows.toSorted((one, other) => one.targetId.localeCompare(other.targetId));
+
         const cursors = byTarget.map((row) => ({
           targetId: row.targetId,
           x: row.cursorX,
@@ -668,6 +719,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           height: row.cursorViewportH,
           at: row.cursorAt?.getTime() ?? null,
         }));
+
         assert.deepEqual(cursors, [
           // The tab this call opened was kept only once the call ran, after its click.
           {
@@ -699,6 +751,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         const { conversationId } = yield* openConversation;
         const { peer, sent } = yield* browser([], { loadAsks: 2 });
         const url = "https://shop.test/login";
+
         const asked = () =>
           sent.filter((command) => command.params.expression === "document.readyState").length;
 
@@ -714,11 +767,13 @@ it.layer(getTestDB())("the browser tool", (it) => {
             agentBrowserTestLayer(peer, SESSION),
           ),
         );
+
         // The page loads over its next reads of its state, each a poll later.
         for (let reads = 1; reads <= 3; reads += 1) {
           while (asked() < reads) yield* Effect.yieldNow;
           yield* TestClock.adjust("250 millis");
         }
+
         const opened = ran(yield* Fiber.join(pending));
 
         assert.deepEqual(opened.tabs, [{ tab: "tab-1", url, title: titleAt(url) }]);
@@ -767,6 +822,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openConversation;
+
         const { peer } = yield* browser([
           { targetId: "tab-1", url: "https://shop.test/", title: "Shop" },
         ]);
@@ -778,6 +834,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             agentBrowserTestLayer(peer, SESSION),
           ),
         );
+
         const [step] = result.steps;
         assert.ok(step !== undefined && "picture" in step);
         const kept = yield* readConversationPicture(conversationId, step.picture.id);
@@ -829,6 +886,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         // No sandbox stands under the session until its door is opened, as before an agent's first sandbox call.
         let opened = false;
         const { api } = fakeSandboxApi({ status: "running", sessionId: SESSION });
+
         const unopened = Layer.succeed(
           AgentBrowser,
           agentBrowserOver(
@@ -842,6 +900,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             FAKE_IMAGE,
           ),
         );
+
         const input = unparsedWire({
           actions: [{ action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" }],
         });
@@ -857,6 +916,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           },
           input,
         ).pipe(Effect.provide(unopened));
+
         const refused = yield* runBrowserTool(
           {
             browserSession: SESSION,
@@ -883,6 +943,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
       Effect.gen(function* () {
         const { conversationId } = yield* openConversation;
         const { peer } = yield* browser();
+
         const { layer, ran: commands } = recordingBrowser(peer, {
           stop: JSON.stringify({ ok: true, seconds: 8.3, bytes: RECORDED_WEBM.byteLength }),
           video: RECORDED_WEBM,
@@ -895,6 +956,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             layer,
           ),
         );
+
         const stopped = ran(
           yield* call(
             conversationId,
@@ -944,6 +1006,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             layer,
           ),
         );
+
         const [repeated] = again.steps;
         assert.ok(
           repeated !== undefined && "picture" in repeated && repeated.picture !== undefined,
@@ -958,6 +1021,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
       Effect.gen(function* () {
         const { conversationId } = yield* openConversation;
         const { peer } = yield* browser();
+
         const { layer } = recordingBrowser(peer, {
           start: { exitCode: 0, stdout: `${RECORDING_START_OUTPUT.RUNNING}\n`, stderr: "" },
         });
@@ -969,6 +1033,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             layer,
           ),
         );
+
         const none = ran(
           yield* call(
             conversationId,

@@ -34,6 +34,7 @@ export const COMMAND_ROUTE = {
   /** As the session's compaction, which the line asks of the runner. */
   COMPACT: "compact",
 } as const;
+
 export type CommandRoute = (typeof COMMAND_ROUTE)[keyof typeof COMMAND_ROUTE];
 
 /**
@@ -95,6 +96,8 @@ export function codexCommandRoute(name: string): CommandRoute {
  */
 export function routeBesideReplay(route: CommandRoute): CommandRoute {
   if (route === COMMAND_ROUTE.BARE) return COMMAND_ROUTE.ESCAPED;
+
   if (route === COMMAND_ROUTE.COMPACT) return COMMAND_ROUTE.WORDS;
+
   return route;
 }

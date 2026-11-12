@@ -46,8 +46,11 @@ function block(count: number): string {
 /** The lines the card shows now, less what it holds `hidden` and the newline that closes the last. */
 function shownLines(): string[] {
   const body = document.querySelector("pre")?.cloneNode(true);
+
   if (!(body instanceof Element)) return expect.fail("No code body");
+
   for (const hidden of body.querySelectorAll("[hidden]")) hidden.remove();
+
   return (body.textContent ?? "").replace(/\n$/u, "").split("\n");
 }
 
@@ -127,12 +130,14 @@ test("Copy copies the whole block, even while it is cut", async () => {
 
 test("the lines the host colored are cut where the block is", () => {
   const code = block(45);
+
   const lines = code
     .split("\n")
     .map((line) => [
       { text: "const", color: "#ff7b72", lightColor: "#cf222e" },
       { text: line.slice("const".length) },
     ]);
+
   draw(createElement(CodeCard, { title: "typescript", code, lines, copy: noCopy }));
   expect(shownLines()).toEqual(code.split("\n").slice(0, 40));
   const keyword = document.querySelector("pre span") as HTMLElement | null;
@@ -141,13 +146,17 @@ test("the lines the host colored are cut where the block is", () => {
 
 test("a block drawn as rows is cut at 40 like any block", () => {
   const code = block(45);
+
   const rows: CodeRow[] = code
     .split("\n")
     .map((_, at) => (at % 2 === 0 ? CODE_ROW.ADDED : CODE_ROW.REMOVED));
+
   draw(createElement(CodeCard, { title: "diff", code, rows, copy: noCopy }));
+
   const shown = [...document.querySelectorAll("pre [data-row]")].filter(
     (row) => row.closest("[hidden]") === null,
   );
+
   expect(shown).toHaveLength(40);
   expect(shown[1]?.textContent).toBe("const line2 = 2;");
   expect(buttonNamed("Show all")).toBeDefined();
@@ -214,6 +223,7 @@ test("a block drawn as rows keeps an empty last row", () => {
 test("a header whose language is picked names the press by it, and says while its menu is open", () => {
   function Picked(): ReactElement {
     const [open, setOpen] = useState(false);
+
     return createElement(CodeCardHeader, {
       title: "Shell",
       copied: "pnpm install",
@@ -227,6 +237,7 @@ test("a header whose language is picked names the press by it, and says while it
       },
     });
   }
+
   draw(createElement(Picked));
   expect(buttonNamed("Language: Shell")?.getAttribute("aria-expanded")).toBe("false");
   press("Language: Shell");

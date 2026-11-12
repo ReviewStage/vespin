@@ -38,15 +38,18 @@ async function mask(): Promise<Mask> {
     importClient: () => Promise.resolve(client as unknown as PostHog),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
+
   const options = client.init.mock.calls[0]?.[1] as {
     session_recording: { maskAttributeFn: Mask };
   };
+
   return options.session_recording.maskAttributeFn;
 }
 
 test("a recording asterisks every attribute it does not lay out by, those that carry words, names, and ids among them", async () => {
   const masked = await mask();
   const row = document.createElement("div");
+
   for (const name of [
     "title",
     "aria-label",
@@ -70,6 +73,7 @@ test("a recording asterisks every attribute it does not lay out by, those that c
   ]) {
     assert.equal(masked(name, "acme/launch", row), "***********", name);
   }
+
   // A picture's `data:` address is megabytes, which leaves as no more asterisks than a short value.
   const address = `data:image/png;base64,${"A".repeat(100_000)}`;
   assert.equal(masked("src", address, document.createElement("img")), "****************");

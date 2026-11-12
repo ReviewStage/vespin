@@ -57,18 +57,25 @@ function meaningful(parts: readonly FinePart[]): FinePart[] {
   const changedAround = (index: number, step: 1 | -1) => {
     let removed = 0;
     let added = 0;
+
     for (let at = index + step; at >= 0 && at < parts.length; at += step) {
       const part = parts[at];
+
       if (part === undefined || (!part.added && !part.removed)) break;
+
       if (part.added) added += part.value.length;
       else removed += part.value.length;
     }
+
     return Math.max(removed, added);
   };
+
   return parts.flatMap((part, index) => {
     if (part.added || part.removed) return [part];
     const length = part.value.length;
+
     if (length > changedAround(index, -1) || length > changedAround(index, 1)) return [part];
+
     return [
       { value: part.value, added: false, removed: true },
       { value: part.value, added: true, removed: false },
@@ -92,17 +99,22 @@ function keptFinely(
   depth = 0,
 ): KeptRun[] {
   const read = FINE_READS[depth];
+
   if (read === undefined || removed === "" || added === "") return [];
+
   // Note that only one word replaced by one word is read by letters, a typo fixed, because letters common to two different phrases are coincidence.
   if (depth > 0 && /\s/u.test(removed + added)) return [];
+
   if (removed.length + added.length > MAX_FINE_DIFF_CHARS) return [];
   const parts = read(removed, added);
+
   if (parts === undefined) return [];
   const kept: KeptRun[] = [];
   let at = before;
   let to = after;
   let gone = "";
   let written = "";
+
   const settle = () => {
     kept.push(...keptFinely(gone, written, at, to, depth + 1));
     at += gone.length;
@@ -110,6 +122,7 @@ function keptFinely(
     gone = "";
     written = "";
   };
+
   for (const part of meaningful(parts)) {
     if (part.removed) gone += part.value;
     else if (part.added) written += part.value;
@@ -120,7 +133,9 @@ function keptFinely(
       to += part.value.length;
     }
   }
+
   settle();
+
   return kept;
 }
 
@@ -146,16 +161,20 @@ function keptRuns(before: string, after: string): readonly KeptRun[] {
   let to = 0;
   let removed = "";
   let added = "";
+
   const settle = () => {
     const finely = keptFinely(removed, added, at, to);
     kept.push(...finely);
+
     if (finely.length === 0 && removed.trim() !== "") removedWhole.push({ text: removed, at });
+
     if (finely.length === 0 && added.trim() !== "") addedWhole.push({ text: added, at: to });
     at += removed.length;
     to += added.length;
     removed = "";
     added = "";
   };
+
   for (const part of diffLines(before, after)) {
     if (part.removed) removed += part.value;
     else if (part.added) added += part.value;
@@ -166,17 +185,21 @@ function keptRuns(before: string, after: string): readonly KeptRun[] {
       to += part.value.length;
     }
   }
+
   settle();
   // Note that the blank lines a move carries with a block differ by where it lands, so blocks are matched without their trailing space.
   const words = (changed: Changed) => changed.text.trimEnd();
+
   for (const gone of removedWhole) {
     const same = addedWhole.filter((written) => words(written) === words(gone));
     const twice = removedWhole.filter((other) => words(other) === words(gone)).length > 1;
     const [moved] = same;
+
     if (moved !== undefined && same.length === 1 && !twice) {
       kept.push({ before: gone.at, after: moved.at, length: words(gone).length });
     }
   }
+
   return kept;
 }
 
@@ -191,16 +214,20 @@ export function textChange(
 ): (span: CommentSpan) => CommentSpan | undefined {
   if (before === after) return (span) => span;
   const kept = keptRuns(before, after);
+
   return (span) => {
     let from: number | undefined;
     let to: number | undefined;
+
     for (const run of kept) {
       const start = Math.max(span.from, run.before);
       const end = Math.min(span.to, run.before + run.length);
+
       if (start >= end) continue;
       from = Math.min(from ?? Number.POSITIVE_INFINITY, run.after + (start - run.before));
       to = Math.max(to ?? 0, run.after + (end - run.before));
     }
+
     return from === undefined || to === undefined ? undefined : { from, to };
   };
 }

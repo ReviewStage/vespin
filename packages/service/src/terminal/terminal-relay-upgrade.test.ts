@@ -18,6 +18,7 @@ const AGENT = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
 const SHELL = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 const OWN_ORIGIN = "https://app.example.test";
 const OWN = new Set([OWN_ORIGIN]);
+
 /** An origin React Native's socket may name on the iPhone's handshake, which is no page's. */
 const IOS_ORIGIN = "http://localhost";
 const BEARER = { authorization: "Bearer token-1" };
@@ -43,6 +44,7 @@ test("a bearer is taken whatever origin stands beside it, since no page can set 
     taken,
     "a deployment that owns no origin still takes the desktop",
   );
+
   for (const origin of [IOS_ORIGIN, OWN_ORIGIN, "https://evil.test", "null"]) {
     assert.deepEqual(admitRelayUpgrade(address(ASKED), { ...BEARER, origin }, OWN), taken, origin);
     assert.deepEqual(
@@ -78,6 +80,7 @@ test("another site's page carrying only its cookie is refused before any socket 
       headers.origin,
     );
   }
+
   assert.deepEqual(
     admitRelayUpgrade(address(ASKED), PAGE, new Set()),
     { status: RELAY_UPGRADE_STATUS.FORBIDDEN },
@@ -88,6 +91,7 @@ test("another site's page carrying only its cookie is refused before any socket 
 test("a page with no cookie, a cookie with no page's origin, and a missing, blank, or non-bearer Authorization are refused", () => {
   const refused = (headers: Record<string, string>) =>
     admitRelayUpgrade(address(ASKED), headers, OWN);
+
   assert.deepEqual(refused({}), { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED });
   assert.deepEqual(refused({ authorization: "Bearer " }), {
     status: RELAY_UPGRADE_STATUS.UNAUTHORIZED,
@@ -111,6 +115,7 @@ test("another path and an unreadable ask are refused before any socket stands", 
   assert.deepEqual(admitRelayUpgrade(address(ASKED, "/api/voice/sessions"), BEARER, OWN), {
     status: RELAY_UPGRADE_STATUS.NOT_FOUND,
   });
+
   for (const unreadable of [
     { ...ASKED, agent: "not-an-id" },
     { ...ASKED, cols: "0" },

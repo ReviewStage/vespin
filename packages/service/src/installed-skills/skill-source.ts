@@ -73,9 +73,11 @@ export const reachSkillRepository = /* @__PURE__ */ Effect.fnUntraced(function* 
   GitHubApp | HttpClient.HttpClient | DatabaseServices
 > {
   const app = yield* GitHubApp;
+
   const reached = yield* githubReachOrRefusal(
     app.repositoryReadToken(workspaceId, `${owner}/${repo}`, member),
   );
+
   if (Option.isNone(reached)) {
     return {
       owner,
@@ -86,7 +88,9 @@ export const reachSkillRepository = /* @__PURE__ */ Effect.fnUntraced(function* 
       public: true,
     };
   }
+
   const { repository, token } = reached.value;
+
   return {
     owner: repository.owner,
     name: repository.name,
@@ -129,6 +133,7 @@ export function readSkillArchive(
 /** The folder a `SKILL.md` stands in, or nothing where the path is no `SKILL.md`. */
 function skillFolderOf(path: string): string | undefined {
   if (path === INSTALLED_SKILL_MAIN_FILE) return "";
+
   return path.endsWith(`/${INSTALLED_SKILL_MAIN_FILE}`)
     ? path.slice(0, -INSTALLED_SKILL_MAIN_FILE.length - 1)
     : undefined;
@@ -145,19 +150,26 @@ export function skillFolders(archive: RepositoryArchive, folder: string): readon
   const paths = [...archive.files.keys()].filter(
     (path) => !path.includes("\\") && repositorySegments(path) !== undefined,
   );
+
   const found = paths.flatMap((path) => {
     const skill = skillFolderOf(path);
+
     if (skill === undefined || !within(path, folder)) return [];
+
     return skill.split("/").some((segment) => SKIPPED_FOLDERS.has(segment)) ? [] : [skill];
   });
+
   const outermost = found.filter(
     (skill) => !found.some((other) => other !== skill && within(skill, other)),
   );
+
   return outermost.sort().map((skill) => ({
     path: skill,
     files: paths.flatMap((path) => {
       const bytes = archive.files.get(path);
+
       if (bytes === undefined || !within(path, skill)) return [];
+
       return [{ path: skill === "" ? path : path.slice(skill.length + 1), bytes }];
     }),
   }));

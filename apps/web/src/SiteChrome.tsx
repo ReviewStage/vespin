@@ -19,6 +19,7 @@ import {
 import { captureSiteEvent, SITE_EVENT } from "./analytics";
 
 export const REPOSITORY_URL = "https://github.com/ReviewStage/vespin";
+
 /** The newest release's version-free DMG, named for the product as the Release workflow names it. */
 export const DMG_URL = `${REPOSITORY_URL}/releases/latest/download/${PRODUCT_NAME}.dmg`;
 
@@ -65,6 +66,7 @@ type ChromeProps = { readonly current?: SitePlace };
  */
 function currentOf(page: SitePage, place: SitePlace | undefined): TextLinkCurrent | undefined {
   if (place?.page !== page) return undefined;
+
   return place.beneath === true ? TEXT_LINK_CURRENT.SECTION : TEXT_LINK_CURRENT.PAGE;
 }
 

@@ -53,6 +53,7 @@ function answer(sent: SentToGitHub): Response {
 const standing = (bearers: ReadonlyMap<string, string>) =>
   Effect.gen(function* () {
     const github = fakeGitHub(answer, GITHUB_APP_WITH_TOKENS);
+
     const services = yield* Effect.context<never>().pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -63,6 +64,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
         ),
       ),
     );
+
     const handle = hostedFetch({
       plans: tasksProcedures({
         resolveUserId: (incoming: Request) =>
@@ -74,8 +76,10 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
         workspaces: yield* fakeWorkspaceSeams,
       }),
     });
+
     // SAFETY: a repository change or a start yields the store, the clock, and GitHub alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     return (method: string, path: string, bearer: string, body: object) =>
       Effect.promise(async () => {
         const response = await handle(
@@ -86,6 +90,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
           }),
           webServices,
         );
+
         // SAFETY: the router answers JSON; the test compares it as the wire value it is.
         return { status: response.status, body: JSON.parse(await response.text()) };
       });
@@ -102,6 +107,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         const workspace = yield* openWorkspace(owner);
         yield* joinWorkspace(workspace, teammate);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Side" });
+
         const send = yield* standing(
           new Map([
             ["Bearer owner", owner],
@@ -109,10 +115,13 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
             ["Bearer stranger", stranger],
           ]),
         );
+
         const patch = (taskId: string, bearer: string, body: object) =>
           send("PATCH", `/api/plans/${taskId}`, bearer, body);
+
         const accessOf = Effect.map(readTask(owner, task.id), (read) => {
           const { githubAccess, task: summary } = Option.getOrThrow(read);
+
           return { githubAccess, repository: summary.repository };
         });
 
@@ -120,12 +129,14 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         const byStranger = yield* patch(task.id, "Bearer stranger", {
           repository: "octo-member/side",
         });
+
         assert.deepEqual(byStranger, { status: 404, body: { error: HOSTED_API_ERROR.NOT_FOUND } });
         assert.ok(Option.isNone(yield* readTask(stranger, task.id)));
 
         const byTeammate = yield* patch(task.id, "Bearer teammate", {
           repository: "octo-member/side",
         });
+
         assert.equal(byTeammate.body.error, HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE);
         assert.deepEqual(yield* accessOf, { githubAccess: GITHUB_ACCESS.APP, repository: null });
 
@@ -144,6 +155,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
       Effect.gen(function* () {
         const owner = yield* openTokenMember();
         const workspace = yield* openWorkspace(owner);
+
         const parent = yield* createTask(owner, {
           organizationId: workspace,
           name: "Side",
@@ -151,7 +163,9 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           githubAccess: GITHUB_ACCESS.TOKEN,
           assigneeId: owner,
         });
+
         const send = yield* standing(new Map([["Bearer owner", owner]]));
+
         const start = (body: object) =>
           send("POST", "/api/plans", "Bearer owner", { workspaceId: workspace, ...body });
 
@@ -160,6 +174,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           parentTaskId: parent.id,
           runsOn: { machine: AGENT_MACHINE.VERCEL },
         });
+
         assert.equal(made.status, 201, JSON.stringify(made.body));
         const child = Option.getOrThrow(yield* readTask(owner, made.body.plan.id));
         assert.deepEqual(
@@ -182,6 +197,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           parentTaskId: parent.id,
           repository: "octo-member/other",
         });
+
         assert.deepEqual(elsewhere, {
           status: 409,
           body: { error: HOSTED_API_ERROR.CHILD_REPOSITORY_LOCKED },
@@ -194,17 +210,20 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
     Effect.gen(function* () {
       const owner = yield* openTokenMember();
       const workspace = yield* openWorkspace(owner);
+
       const parent = yield* createTask(owner, {
         organizationId: workspace,
         name: "Other",
         repository: "octo-member/other",
       });
+
       const child = yield* createTask(owner, {
         organizationId: workspace,
         name: "Child",
         repository: "octo-member/other",
         parentTaskId: parent.id,
       });
+
       const send = yield* standing(new Map([["Bearer owner", owner]]));
 
       const moved = yield* send("PATCH", `/api/plans/${child.id}`, "Bearer owner", {
@@ -227,6 +246,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
       const stranger = yield* openTokenMember({ token: "fixture-stranger-token" });
       const workspace = yield* openWorkspace(owner);
       yield* joinWorkspace(workspace, teammate);
+
       // A plan on its owner's own token, which a teammate whose token never read its repository does not see.
       const parent = yield* createTask(owner, {
         organizationId: workspace,
@@ -234,12 +254,14 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         repository: "octo-member/side",
         githubAccess: GITHUB_ACCESS.TOKEN,
       });
+
       const send = yield* standing(
         new Map([
           ["Bearer teammate", teammate],
           ["Bearer stranger", stranger],
         ]),
       );
+
       const notFound = { status: 404, body: { error: HOSTED_API_ERROR.NOT_FOUND } };
 
       const byTeammate = yield* send("POST", "/api/plans", "Bearer teammate", {
@@ -247,6 +269,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         workspaceId: workspace,
         parentTaskId: parent.id,
       });
+
       const byStranger = yield* send("POST", "/api/plans", "Bearer stranger", {
         name: "Child",
         parentTaskId: parent.id,

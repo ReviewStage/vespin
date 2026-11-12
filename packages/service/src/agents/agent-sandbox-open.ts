@@ -94,6 +94,7 @@ const IMAGE_RETRY = {
  */
 export function agentSandboxName(sessionId: string): string {
   const digest = createHash("sha256").update(sessionId).digest("hex");
+
   return `${SANDBOX_NAME}${digest.slice(0, 32)}`;
 }
 
@@ -123,6 +124,7 @@ export const legacySandboxOf = (
     const listed = (yield* api.listTagged(SESSION_TAG, sessionId)).find(
       (each) => each.name !== agentSandboxName(sessionId),
     );
+
     return listed === undefined ? undefined : yield* api.get(listed.name);
   });
 
@@ -159,10 +161,13 @@ export function reopenedOf(
   if (standing.name === agentSandboxName(sessionId)) {
     return Effect.succeed({ sessionId, tags: { ...standing.tags }, vcpus: standing.vcpus });
   }
+
   if (standing.status !== undefined && standing.status !== SANDBOX_STATUS.STOPPED) {
     return Effect.fail(new SandboxEnding({}));
   }
+
   const agentId = agentTag(standing.tags);
+
   return Effect.succeed({
     sessionId,
     tags:
@@ -220,7 +225,9 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
             ),
           }
         : { snapshotId: of.snapshot.snapshotId };
+
     let created = false;
+
     const sandbox = yield* (yield* Sandbox).getOrCreate(
       {
         name: agentSandboxName(of.sessionId),
@@ -238,6 +245,7 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
         await onCreate?.(opened);
       },
     );
+
     return { sandbox, created };
   });
 

@@ -52,10 +52,12 @@ function GuardedScreens() {
     ...appStateQuery,
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
+
   const { data: updateNeeded = false } = useQuery({
     ...appStateQuery,
     select: (state) => state.network.updateNeeded === true,
   });
+
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
@@ -64,9 +66,11 @@ function GuardedScreens() {
   useCrashReportAccount();
   useOfflineNotice();
   useShareSheet(updateNeeded);
+
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
+
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
@@ -117,6 +121,7 @@ function GuardedScreens() {
  */
 export default function RootLayout() {
   useEffect(() => hideSplash(), []);
+
   return (
     <HostProvider>
       <FailureNoticeProvider>

@@ -31,6 +31,7 @@ const openAccount = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
+
   return userId;
 });
 

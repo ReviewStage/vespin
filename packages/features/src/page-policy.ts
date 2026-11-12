@@ -58,6 +58,7 @@ export const PAGE_RESPONSE_HEADERS = {
  */
 export function sandboxPageResponseHeaders(appOrigins: readonly string[]) {
   const ancestors = appOrigins.length === 0 ? "'none'" : appOrigins.join(" ");
+
   return {
     ...PAGE_RESPONSE_HEADERS,
     "content-security-policy": `${PAGE_CONTENT_SECURITY_POLICY}; frame-ancestors ${ancestors}`,

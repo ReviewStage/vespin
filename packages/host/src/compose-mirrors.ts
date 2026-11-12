@@ -181,9 +181,11 @@ class MirrorGone extends Data.TaggedError("MirrorGone") {}
 const mirrorEnsureParamsSchema = Schema.Struct({ agentId: wireUuidSchema });
 
 const readId = readEither(wireUuidSchema);
+
 const readTunnelFrame = readEither(Schema.fromJsonString(tunnelFrameSchema), {
   excess: EXCESS_KEYS.DROP,
 });
+
 const readMirrorFrame = readEither(Schema.fromJsonString(mirrorFrameSchema), {
   excess: EXCESS_KEYS.DROP,
 });
@@ -241,9 +243,12 @@ interface Mirror {
 /** How a mirror stands, as the Local tab says it. */
 function standingOf(mirror: Mirror): MirrorStanding {
   if (mirror.making) return { kind: MIRROR_STANDING.PREPARING };
+
   if (mirror.prefetching) return { kind: MIRROR_STANDING.CLONING };
+
   if (mirror.failed === undefined) return { kind: MIRROR_STANDING.WAITING };
   const { failure, code } = mirror.failed;
+
   return { kind: MIRROR_STANDING.FAILED, failure, ...(code === undefined ? {} : { code }) };
 }
 
@@ -259,7 +264,9 @@ function droppedAttributes(dropped: MirrorDropped): Record<string, string | numb
 /** Why a tunnel closed before its header, by its close code. */
 function closedFailure(code: number | undefined): MirrorFailure {
   if (code === TUNNEL_CLOSE.NOT_RUNNING) return MIRROR_FAILURE.NOT_RUNNING;
+
   if (code === TUNNEL_CLOSE.UNAVAILABLE) return MIRROR_FAILURE.UNAVAILABLE;
+
   return MIRROR_FAILURE.CLOSED;
 }
 
@@ -285,13 +292,16 @@ function tunnelAddress(socketOrigin: string, agentId: string): string {
     [SANDBOX_TUNNEL.QUERY.AGENT]: agentId,
     [SANDBOX_TUNNEL.QUERY.KIND]: TUNNEL_KIND.MIRROR,
   });
+
   return `${socketOrigin}${SANDBOX_TUNNEL.PATH}?${query}`;
 }
 
 /** A text frame as a mirror message on the mirror's channel, or nothing where it is none this build reads. */
 function mirrorMessage(text: string): MirrorFrame | undefined {
   const frame = Result.getOrUndefined(readTunnelFrame(unparsedWire(text)));
+
   if (frame?.type !== TUNNEL_FRAME.DATA || frame.channel !== CHANNEL) return undefined;
+
   return Result.getOrUndefined(readMirrorFrame(unparsedWire(decoder.decode(frame.data))));
 }
 
@@ -320,11 +330,14 @@ const ran = (
         stdin: "ignore",
         stderr: "ignore",
       });
+
       const [printed, exited] = yield* Effect.all(
         [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
         { concurrency: "unbounded" },
       );
+
       const code = Number(exited);
+
       return code === 0 ? { printed } : { failure: MIRROR_FAILURE.EXITED, code };
     }),
   ).pipe(
@@ -350,9 +363,11 @@ export function composeMirrors(
 > {
   return Effect.gen(function* () {
     const { kernel, account, openSocket, platform, agentListed, recordProductEvent } = dependencies;
+
     const context = yield* Effect.context<
       FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
     >();
+
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const fibers = yield* FiberMap.make<string>();
@@ -363,15 +378,18 @@ export function composeMirrors(
 
     const folderOf = (agentId: string) => path.join(platform.folder, agentId);
     const worktreeOf = (agentId: string) => path.join(folderOf(agentId), WORKTREE_FOLDER);
+
     const worktreeStands = (agentId: string) =>
       Effect.orElseSucceed(fileSystem.exists(path.join(worktreeOf(agentId), ".git")), () => false);
 
     /** Every mirror whose worktree does not stand yet, as it stands, told to the windows. */
     const told = Effect.sync(() => {
       const standings: Record<string, MirrorStanding> = {};
+
       for (const [agentId, mirror] of mirrors) {
         if (!mirror.stands) standings[agentId] = standingOf(mirror);
       }
+
       kernel.emit(GATEWAY_EVENT.MIRRORS_CHANGED, standings);
     });
 
@@ -399,6 +417,7 @@ export function composeMirrors(
     const counted = (mirror: Mirror, dropped: MirrorDropped) =>
       Effect.gen(function* () {
         const last = mirror.counted;
+
         if (last?.step === dropped.step && last.failure === dropped.failure) return;
         mirror.counted = dropped;
         const now = yield* Clock.currentTimeMillis;
@@ -426,10 +445,13 @@ export function composeMirrors(
     const made = (agentId: string, mirror: Mirror, base: string) =>
       Effect.gen(function* () {
         const worktree = worktreeOf(agentId);
+
         if (yield* worktreeStands(agentId)) return worktree;
         const prefetched = yield* Deferred.await(mirror.prefetched);
+
         const making = Effect.gen(function* () {
           const repository = agentListed(agentId)?.repository;
+
           if (repository === undefined || repository === null) {
             return yield* Effect.fail(
               new MirrorDropped({
@@ -438,12 +460,15 @@ export function composeMirrors(
               }),
             );
           }
+
           const script = platform.worktreeScript({ repository, worktree, base, prefetched });
           yield* scripted(MIRROR_STEP.WORKTREE, script, SCRIPT_WITHIN.WORKTREE);
         });
+
         yield* flagged(stepped(agentId, MIRROR_STEP.WORKTREE, making), (up) => {
           mirror.making = up;
         });
+
         return worktree;
       });
 
@@ -455,17 +480,20 @@ export function composeMirrors(
     ) =>
       Effect.gen(function* () {
         const worktree = worktreeOf(agentId);
+
         const listing = yield* stepped(
           agentId,
           MIRROR_STEP.LIST,
           scripted(MIRROR_STEP.LIST, platform.listScript(worktree), SCRIPT_WITHIN.LIST),
         );
+
         const listed = listing.split("\0").filter((file) => file !== "");
         yield* stepped(
           agentId,
           MIRROR_STEP.MATCH,
           Effect.gen(function* () {
             const asked = yield* mirrorMatched(worktree, listed, files);
+
             for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
               const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);
               yield* socket.send({ text: requestFrame({ type: MIRROR_FRAME.REQUEST, paths }) });
@@ -489,15 +517,19 @@ export function composeMirrors(
             yield* Deferred.succeed(mirror.made, folder);
             yield* told;
             yield* heard(mirror);
+
             return;
           }
+
           case MIRROR_FRAME.MANIFEST:
             return yield* matched(agentId, socket, message.files);
           case MIRROR_FRAME.FILE:
             yield* mirrorWritten(worktreeOf(agentId), message);
+
             return;
           case MIRROR_FRAME.DELETE:
             yield* mirrorDeleted(worktreeOf(agentId), message.path);
+
             return;
           case MIRROR_FRAME.SKIPPED:
             return;
@@ -519,25 +551,33 @@ export function composeMirrors(
             Effect.gen(function* () {
               const dropped = (failure: MirrorFailure, code?: number) =>
                 Effect.fail(new MirrorDropped({ step: MIRROR_STEP.TUNNEL, failure, code }));
+
               if (socketOrigin === undefined) return yield* dropped(MIRROR_FAILURE.UNREACHABLE);
               const address = tunnelAddress(socketOrigin, agentId);
               const opening = yield* openedUnderCredential(account.credential, openSocket, address);
+
               if ("refused" in opening)
                 return yield* dropped(MIRROR_FAILURE.REFUSED, opening.refused);
+
               if (!("socket" in opening)) return yield* dropped(MIRROR_FAILURE.UNREACHABLE);
+
               return opening.socket;
             }),
           );
+
           mirror.failed = undefined;
           yield* told;
           yield* socket.send({
             text: JSON.stringify({ type: TUNNEL_FRAME.OPEN, channel: CHANNEL }),
           });
+
           // Note that the wait on the header is a span ended by hand, because it ends at a message mid-stream rather than with an effect.
           const header = yield* Effect.makeSpan(SENTRY_MIRROR_SPAN.HEADER, {
             attributes: { [SPAN_ATTRIBUTE.AGENT]: agentId },
           });
+
           let waiting = true;
+
           const headerEnded = (exit: Exit.Exit<unknown, unknown>) =>
             Effect.flatMap(Clock.currentTimeNanos, (now) =>
               Effect.sync(() => {
@@ -546,18 +586,24 @@ export function composeMirrors(
                 header.end(now, exit);
               }),
             );
+
           yield* Effect.addFinalizer(headerEnded);
           let inStep = false;
           let closeCode: number | undefined;
           yield* Stream.runForEach(socket.arrivals, (arrival) => {
             if ("close" in arrival) {
               closeCode = arrival.close;
+
               return Effect.void;
             }
+
             const message = "text" in arrival ? mirrorMessage(arrival.text) : undefined;
+
             if (message === undefined) return Effect.void;
+
             const heardFirst =
               message.type === MIRROR_FRAME.HEADER ? headerEnded(Exit.void) : Effect.void;
+
             return Effect.andThen(
               Effect.andThen(heardFirst, applied(agentId, mirror, socket, message)),
               Effect.sync(() => {
@@ -565,18 +611,23 @@ export function composeMirrors(
               }),
             );
           });
+
           if (closeCode === TUNNEL_CLOSE.GONE) return TUNNEL_ENDING.GONE;
+
           if (!inStep) {
             const dropped = new MirrorDropped({
               step: MIRROR_STEP.HEADER,
               failure: closedFailure(closeCode),
               code: closeCode,
             });
+
             for (const [key, value] of Object.entries(droppedAttributes(dropped))) {
               header.attribute(key, value);
             }
+
             return yield* Effect.fail(dropped);
           }
+
           return TUNNEL_ENDING.DROPPED;
         }),
       );
@@ -593,6 +644,7 @@ export function composeMirrors(
     const attempt = (agentId: string, mirror: Mirror) =>
       Effect.suspend(() => {
         mirror.attempts += 1;
+
         return tunnelLife(agentId, mirror).pipe(
           Effect.tapError((error) =>
             error instanceof MirrorDropped
@@ -618,6 +670,7 @@ export function composeMirrors(
       Effect.gen(function* () {
         const mirror = mirrors.get(agentId);
         mirrors.delete(agentId);
+
         if (mirror !== undefined) yield* Deferred.fail(mirror.made, new MirrorGone());
         yield* told;
         yield* ran(platform.removeScript(worktreeOf(agentId)), SCRIPT_WITHIN.LIST);
@@ -630,14 +683,18 @@ export function composeMirrors(
     const prefetched = (agentId: string, mirror: Mirror) =>
       Effect.gen(function* () {
         const repository = agentListed(agentId)?.repository;
+
         if (repository === undefined || repository === null) return false;
+
         if (yield* worktreeStands(agentId)) return false;
         const script = platform.prefetchScript({ repository, worktree: worktreeOf(agentId) });
+
         const prefetch = stepped(
           agentId,
           MIRROR_STEP.PREFETCH,
           scripted(MIRROR_STEP.PREFETCH, script, SCRIPT_WITHIN.WORKTREE),
         );
+
         return yield* flagged(prefetch, (up) => {
           mirror.prefetching = up;
         }).pipe(
@@ -656,6 +713,7 @@ export function composeMirrors(
         const prefetch = yield* Effect.forkChild(prefetched(agentId, mirror));
         const ended = yield* Effect.exit(attempt(agentId, mirror));
         yield* Fiber.interrupt(prefetch);
+
         if (Exit.isSuccess(ended) && ended.value === TUNNEL_ENDING.GONE)
           return yield* removed(agentId);
         mirror.trying = false;
@@ -667,10 +725,12 @@ export function composeMirrors(
       starting.withPermit(
         Effect.gen(function* () {
           const standing = mirrors.get(agentId);
+
           if (standing?.trying === true) return standing;
           const made = yield* Deferred.make<string, MirrorGone>();
           const prefetchEnded = yield* Deferred.make<boolean>();
           const stands = yield* worktreeStands(agentId);
+
           const mirror: Mirror = standing ?? {
             made,
             prefetched: prefetchEnded,
@@ -684,18 +744,23 @@ export function composeMirrors(
             failed: undefined,
             counted: undefined,
           };
+
           mirror.made = made;
           mirror.prefetched = prefetchEnded;
           mirror.trying = true;
           mirror.stands = stands;
           mirrors.set(agentId, mirror);
+
           if (mirror.stands) yield* Deferred.succeed(mirror.made, worktreeOf(agentId));
           else yield* told;
           const keeping = kept(agentId, mirror);
+
           // Note that only the mirror's own fibers run on the platform's tracer, so the host's other spans stay where they were.
           const traced =
             platform.tracer === undefined ? keeping : Effect.withTracer(keeping, platform.tracer);
+
           yield* FiberMap.run(fibers, agentId, Effect.provideContext(traced, context));
+
           return mirror;
         }),
       );
@@ -718,7 +783,9 @@ export function composeMirrors(
             params,
             "ensuring a mirror names the agent",
           );
+
           const agent = agentListed(agentId);
+
           if (
             !kernel.runMode.sendsNetwork ||
             agent === undefined ||
@@ -729,24 +796,30 @@ export function composeMirrors(
               new RefusedRefusal({ message: "no cloud agent of this account to mirror" }),
             );
           }
+
           const mirror = yield* started(agentId);
+
           const folder = yield* Effect.mapError(
             Deferred.await(mirror.made),
             () => new RefusedRefusal({ message: "the mirror could not be made" }),
           );
+
           return { folder };
         }),
     };
 
     const lifetime = Effect.gen(function* () {
       if (!kernel.runMode.sendsNetwork) return;
+
       const standing = yield* Effect.orElseSucceed(
         fileSystem.readDirectory(platform.folder),
         () => [],
       );
+
       for (const name of standing) {
         if (Result.isSuccess(readId(unparsedWire(name)))) yield* started(name);
       }
+
       const listings = yield* dependencies.listings;
       yield* Effect.forkScoped(Stream.runForEach(listings, () => archivedRemoved));
     });

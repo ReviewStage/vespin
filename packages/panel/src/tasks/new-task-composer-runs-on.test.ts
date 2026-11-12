@@ -96,6 +96,7 @@ async function settle(): Promise<void> {
     act(async () => {
       for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
     });
+
   await ticks();
   await settleQueries(ticks);
 }
@@ -161,33 +162,42 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
   const control = tasksControl();
   let reads = offered.reads ?? READS.LAND;
   let devices = offered.devices;
+
   let modelsRead: ModelsRead =
     devices === undefined
       ? { state: MODELS_READ.UNREAD, generation: 0 }
       : { state: MODELS_READ.READ, generation: 1 };
+
   const starts: (TaskRunsOnRequest | undefined)[] = [];
+
   const named: {
     repository: string | null;
     relations: readonly TaskCreateRelation[] | undefined;
   }[] = [];
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   let asked = 0;
+
   const readModels = () => {
     asked += 1;
     const generation = modelsRead.generation + 1;
+
     if (reads === READS.LAND) {
       devices = [...(offered.reread ?? offered.devices ?? [])];
     }
+
     const state = {
       [READS.LAND]: MODELS_READ.READ,
       [READS.HOLD]: MODELS_READ.READING,
       [READS.FAIL]: MODELS_READ.FAILED,
     }[reads];
+
     modelsRead = { state, generation };
     draw();
   };
+
   function Card() {
     const newTask = useSteadyDoors({
       ...control.newTask,
@@ -206,9 +216,11 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
       ) => {
         starts.push(from?.runsOn);
         named.push({ repository, relations: from?.relations });
+
         return Promise.resolve(undefined);
       },
     });
+
     return createElement(NewTaskComposer, {
       newTask,
       workspaceId: ACME.id,
@@ -216,12 +228,15 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
       listSide: MENTION_MENU_SIDE.ABOVE,
     });
   }
+
   const draw = () => root.render(withQueryClient(createElement(Card)));
   act(draw);
   await settle();
+
   const letReadsLand = () => {
     reads = READS.LAND;
   };
+
   return { container, starts, named, letReadsLand, reads: () => asked };
 }
 
@@ -244,6 +259,7 @@ function row(name: string): HTMLElement {
 
 test("a task starts on the device Runs on picked, by its id, and an offline device is listed but not picked", async () => {
   const { container, starts } = await mount();
+
   const chip = () =>
     container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
     assert.fail("the card draws Runs on");
@@ -264,6 +280,7 @@ test("a task starts on the device Runs on picked, by its id, and an offline devi
 test("a device online but still getting ready, or that couldn't set up, is listed saying so and not picked", async () => {
   const [studio, builder] = devicesWith(Date.now(), Date.now());
   assert.ok(studio !== undefined && builder !== undefined);
+
   const { container } = await mount({
     devices: [
       { ...studio, setup: DEVICE_SETUP.PREPARING },
@@ -274,6 +291,7 @@ test("a device online but still getting ready, or that couldn't set up, is liste
       },
     ],
   });
+
   act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
   await settle();
 
@@ -303,6 +321,7 @@ test.each([
     const [online, builder] = devicesWith();
     assert.ok(online !== undefined && builder !== undefined);
     const { container, starts } = await mount({ devices: [{ ...online, ...studio }, builder] });
+
     const chip =
       container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
       assert.fail("the card draws Runs on");
@@ -345,10 +364,12 @@ test("nothing starts before the card's own read of the devices lands, and one th
   await settle();
   assert.deepEqual(failed.starts, []);
   assert.match(failed.container.textContent ?? "", /Couldn't read your devices/);
+
   const retry =
     [...failed.container.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent === "Retry",
     ) ?? assert.fail("the card offers Retry");
+
   failed.letReadsLand();
   act(() => retry.click());
   await settle();
@@ -373,6 +394,7 @@ test("while Bring your own host is off the card reads no devices, offers Cloud a
   fakeActPort({
     [ACT_KIND.HOSTS_PRESENCE_FOLLOW]: () => {
       beats += 1;
+
       return quietHold();
     },
   });

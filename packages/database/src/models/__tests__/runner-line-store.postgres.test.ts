@@ -34,6 +34,7 @@ const anotherConnection = Effect.gen(function* () {
   const url = new URL(process.env[STORE_TEST_DATABASE_ENVIRONMENT.URL] ?? "");
   url.pathname = `/${row?.name ?? ""}`;
   const layer = Layer.fresh(sqlClientOverUrl(url.toString()));
+
   return <A, E>(effect: Effect.Effect<A, E, DatabaseServices>) => Effect.provide(effect, layer);
 });
 
@@ -43,6 +44,7 @@ const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -53,15 +55,18 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, agentId: Option.getOrThrow(started).agent.id };
 });
 
 /** How many of the test database's sessions wait on a lock. */
 const waitingOnLocks = Effect.gen(function* () {
   const client = yield* SqlClient.SqlClient;
+
   const [row] = yield* client<{
     readonly waiting: number;
   }>`select count(*)::int as waiting from pg_locks where not granted and pid in (select pid from pg_stat_activity where datname = current_database())`;
+
   return row?.waiting ?? 0;
 });
 
@@ -70,6 +75,7 @@ const untilWaitingOrDone = (fiber: Fiber.Fiber<unknown, unknown>) =>
   Effect.gen(function* () {
     for (let look = 0; look < LOOKS; look += 1) {
       if (fiber.pollUnsafe() !== undefined) return;
+
       if ((yield* waitingOnLocks) > 0) return;
       yield* Effect.yieldNow;
     }
@@ -84,6 +90,7 @@ it.layer(getTestDB())("an agent's runner lines queued at once", (it) => {
         const { userId, agentId } = yield* openAccount;
         const written = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
+
         const first = yield* Effect.forkChild(
           onAnother(
             Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -96,11 +103,13 @@ it.layer(getTestDB())("an agent's runner lines queued at once", (it) => {
             ),
           ),
         );
+
         yield* Deferred.await(written);
 
         const second = yield* Effect.forkChild(
           onAnother(queueRunnerLine(userId, { agentId, launch: LAUNCH, text: "second" })),
         );
+
         yield* untilWaitingOrDone(second);
         // Note that the second queue must be seen waiting on a lock, not merely unfinished, since
         // one still connecting when the looks run out would pass for one the lock held back.
@@ -115,6 +124,7 @@ it.layer(getTestDB())("an agent's runner lines queued at once", (it) => {
           after: 0,
           limit: 10,
         });
+
         assert.deepEqual(
           lines.map((line) => line.text),
           ["first", "second"],

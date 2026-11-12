@@ -69,6 +69,7 @@ test("the tree stands each open task once: pinned, sectioned, nested, then by re
     noRepository: "No repository",
     tasksHead: "My tasks",
   });
+
   expect(drawn(tree)).toEqual([
     ["Pinned", "Digest"],
     ["Launch", "Launch notes"],
@@ -97,6 +98,7 @@ test("a child task put in a section stands there with its own child tasks, not u
     noRepository: "No repository",
     tasksHead: "My tasks",
   });
+
   expect(drawn(tree)).toEqual([
     ["Pinned", "Digest"],
     ["Launch", "Invite copy", "  Invite copy review"],
@@ -112,5 +114,6 @@ test("a search finds the workspace's tasks whatever their status, by name or key
     workspaceName: "Acme",
     tokens: ["acme-41"],
   });
+
   expect(found.map((each) => each.name)).toEqual(["Rounding"]);
 });

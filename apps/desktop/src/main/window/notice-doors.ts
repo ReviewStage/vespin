@@ -54,6 +54,7 @@ export function electronNoticeDoors(dependencies: {
 }): AgentNoticeDoorsSurface {
   const { onAnswered, panels, report, system = { app, Notification } } = dependencies;
   const standing = new Set<PostedNotification>();
+
   const post: AgentNoticeDoorsSurface["post"] = (notice) => {
     if (!system.Notification.isSupported()) return;
     const silent = notice.subject.kind !== NOTICE_KIND.MAC_COMMAND_ASK;
@@ -73,6 +74,7 @@ export function electronNoticeDoors(dependencies: {
     });
     posted.show();
   };
+
   return {
     post,
     badge: (count) => {

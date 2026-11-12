@@ -70,6 +70,7 @@ function thread(id: string, title: string, updatedAt: number, rest: Partial<Inbo
     updatedAt,
     ...rest,
   };
+
   return item;
 }
 
@@ -78,6 +79,7 @@ const DECIDE = {
   options: [{ label: "Ship it" }, { label: "Wait" }],
   status: INBOX_ASK_STATUS.OPEN,
 } as const;
+
 const DO = { type: INBOX_ASK.DO, steps: ["Add the secret."], status: INBOX_ASK_STATUS.OPEN };
 const ANSWER = { type: INBOX_ASK.ANSWER, status: INBOX_ASK_STATUS.OPEN } as const;
 
@@ -143,6 +145,7 @@ describe("inboxWidgetSnapshot", () => {
 
   it("counts down a settled thread of the workspace that is past the rows shown", () => {
     const row = (id: string) => ({ id, title: id, task: "Fix the token refresh" });
+
     const kept = {
       workspace: "Acme",
       waiting: 4,

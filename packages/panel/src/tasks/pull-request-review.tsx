@@ -111,13 +111,16 @@ export function PullRequestReview({
   const [open, setOpen] = useState(false);
   const [event, setEvent] = useState<ReviewEvent>(REVIEW_EVENT.COMMENT);
   const [body, setBody] = useState("");
+
   // Note that the question stands, busy, until GitHub answers the discard, says its refusal in GitHub's words, and holds the panel open meanwhile as a review on its way does.
   const discarding = useConfirmDialog(
     { subject: pending != null, surfaceOpen: open },
     writes.confirmAct({ action: PULL_REQUEST_ACTION.DISCARD_REVIEW }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_REVIEW_DISCARD),
   );
+
   const sending = writes.pending !== undefined || discarding.stage !== CONFIRM_STAGE.RESTING;
+
   // Note that the task's `@` list names what GitHub cannot read, so the summary stands under none, as a thread's reply does.
   return (
     <TaskMentions value={undefined}>

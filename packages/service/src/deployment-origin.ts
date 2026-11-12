@@ -27,11 +27,15 @@ const DEPLOYMENT_ENVIRONMENT = { PRODUCTION: "production" } as const;
 /** The deployment's own origin, as above, or nothing where none can be named. */
 export function deploymentOrigin(): string | undefined {
   const named = process.env[DEPLOYMENT_ORIGIN_VARIABLE]?.trim();
+
   if (named) return named;
+
   const production =
     process.env[VERCEL_ENVIRONMENT.ENVIRONMENT]?.trim() === DEPLOYMENT_ENVIRONMENT.PRODUCTION
       ? process.env[VERCEL_ENVIRONMENT.PRODUCTION_URL]?.trim()
       : undefined;
+
   const own = production || process.env[VERCEL_ENVIRONMENT.URL]?.trim();
+
   return own ? `https://${own}` : undefined;
 }

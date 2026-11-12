@@ -29,12 +29,14 @@ import { watchGapControls } from "./gap-controls.js";
 function texts(length: number, changed: readonly number[]) {
   const lines = Array.from({ length }, (_line, at) => `const line${at + 1} = ${at + 1};`);
   const after = lines.map((line, at) => (changed.includes(at + 1) ? `${line} // changed` : line));
+
   return { before: `${lines.join("\n")}\n`, after: `${after.join("\n")}\n` };
 }
 
 /** `length` lines, `changed` changed, read whole, as a file Files changed has read for its gaps. */
 function changedFile(length: number, changed: readonly number[]): FileDiffMetadata {
   const { before, after } = texts(length, changed);
+
   return parseDiffFromFile({ name: "a.ts", contents: before }, { name: "a.ts", contents: after });
 }
 
@@ -70,10 +72,12 @@ function drawn(
     expansionLineCount: 20,
     ...more,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   view.render({ fileDiff, fileContainer: container });
   const root = container.shadowRoot ?? assert.fail("Pierre draws in a shadow root");
   watchGapControls(root);
+
   return { view, root };
 }
 
@@ -81,6 +85,7 @@ function drawn(
 function control(root: ShadowRoot, index: number, which: "words" | "up" | "down" | "both") {
   const gap = `[data-gutter] [data-separator][data-expand-index="${index}"]`;
   const inner = which === "words" ? "[data-unmodified-lines]" : `[data-expand-${which}]`;
+
   return (
     root.querySelector<HTMLElement>(`${gap} ${inner}`) ?? assert.fail(`no ${which} on gap ${index}`)
   );
@@ -149,16 +154,19 @@ test("a long gap's arrows open twenty lines their way, and a short gap's arrow a
 test("every gap's controls are marked alike, the words as all of the gap and each arrow as the next lines, each a named button in the tab order", () => {
   const long = drawn(changedFile(LONG.length, LONG.changed)).root;
   const short = drawn(changedFile(SHORT.length, SHORT.changed)).root;
+
   const marks = (element: HTMLElement) => [
     element.getAttribute(GAP_CONTROL_ATTRIBUTE),
     element.getAttribute("role"),
     element.getAttribute("tabindex"),
   ];
+
   for (const root of [long, short]) {
     for (const index of [0, 1, 2]) {
       assert.deepEqual(marks(control(root, index, "words")), [GAP_CONTROL.ALL, "button", "0"]);
     }
   }
+
   for (const arrow of [
     control(long, 0, "down"),
     control(long, 1, "up"),
@@ -170,6 +178,7 @@ test("every gap's controls are marked alike, the words as all of the gap and eac
   ]) {
     assert.deepEqual(marks(arrow), [GAP_CONTROL.MORE, "button", "0"]);
   }
+
   assert.equal(control(long, 1, "words").getAttribute("aria-label"), "Show all 51 lines");
   assert.equal(control(long, 1, "up").getAttribute("aria-label"), "Show 20 more lines");
   assert.equal(control(short, 1, "both").getAttribute("aria-label"), "Show all 11 lines");
@@ -212,15 +221,18 @@ function patchOnly(): FileDiffMetadata {
     ),
     "",
   ].join("\n");
+
   return parsePatchFiles(patch)[0]?.files[0] ?? assert.fail("the patch reads");
 }
 
 test("a long gap pressed from both ends by the keyboard keeps its two arrows, and the focus on the one pressed, until it opens whole", async () => {
   const { view, root } = drawn(changedFile(LONG.length, LONG.changed));
+
   const enter = (element: HTMLElement) =>
     element.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
     );
+
   enter(control(root, 1, "up"));
   await settle();
   const down = control(root, 1, "down");
@@ -242,15 +254,18 @@ test("a long gap pressed from both ends by the keyboard keeps its two arrows, an
 test("the trailing gap's words read the file first, then open it to its end", async () => {
   const { before, after } = texts(LONG.length, LONG.changed);
   let reads = 0;
+
   const { view, root } = drawn(patchOnly(), {
     loadDiffFiles: async () => {
       reads += 1;
+
       return {
         oldFile: { name: "a.ts", contents: before },
         newFile: { name: "a.ts", contents: after },
       };
     },
   });
+
   const trailing = control(root, 1, "words");
   assert.equal(trailing.getAttribute("aria-label"), "Show the rest of the file");
   click(trailing);
@@ -262,10 +277,12 @@ test("the trailing gap's words read the file first, then open it to its end", as
 
 test("a gap of a file whose gaps cannot open, told it only moved as the list tells it, marks none of its controls", () => {
   const { cacheKey: _none, ...read } = patchOnly();
+
   const { root } = drawn(
     { ...read, type: "rename-pure" },
     { loadDiffFiles: async () => assert.fail("nothing is read") },
   );
+
   assert.ok(
     root.querySelector("[data-unmodified-lines]") !== null,
     "the gap says how many lines it leaves out",

@@ -232,28 +232,35 @@ function AnswerCard({
   // Note that a notice opening acknowledges offers no Got it, since opening it was the nod (`useNodOnOpen`), save while its holder's held read has failed, when opening acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
   const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
+
   // Note that Send lights only where the box holds a reply the service takes: an answer to the open ask attached, or words or files, a notice's nod being Got it's.
   const sendable = starts
     ? !emptyBox(draft) && draft.note.trim().length <= INBOX_BOUNDS.MAX_MESSAGE_CHARS
     : nod || inboxThreadSend(thread, draft) !== undefined;
+
   // Note that what an unfinished answer lacks is said only once a send was refused, and goes once it is filled.
   const missing = starts || nod ? undefined : inboxMissing(thread, draft);
   const [wanting, setWanting] = useState(false);
+
   if (wanting && missing === undefined) setWanting(false);
   const box = useRef<HTMLDivElement>(null);
+
   const refuse = (lacks: InboxMissing) => {
     setWanting(true);
     focusMissing(box.current, lacks);
   };
+
   const placeholder = starts
     ? NEW_THREAD_PLACEHOLDER
     : asks
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
+
   // What the box reads off the item's agent, read as the agent's own tab reads it, so the two boxes stand alike.
   const agentBox = useAgentBox({ agentId: item.agentId, agent, agents });
   const kept = control.notes.get(item.id);
   const noted = kept === undefined ? undefined : inboxNoteReading(kept, agent, connected);
+
   // Note that the note is let go once the agent is back, since what it said no longer stands, and only that note, never one a later send left meanwhile.
   const unarchive = () =>
     void onUnarchiveAgent().then((result) => {
@@ -270,7 +277,9 @@ function AnswerCard({
         });
       } else if (kept !== undefined) control.onDropNote(item.id, kept);
     });
+
   const words = noted?.words ?? refusal;
+
   const note: ComposerNote | undefined =
     words === undefined
       ? undefined
@@ -284,14 +293,17 @@ function AnswerCard({
           }),
           remedy: noted?.unarchive === true ? { label: UNARCHIVE, onClick: unarchive } : undefined,
         };
+
   const message = () => {
     setRefusal(undefined);
     control.onMessage(item, draft);
   };
+
   const acknowledge = () => {
     setRefusal(undefined);
     control.onAcknowledge(item, acknowledgeHeld);
   };
+
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
   // there; a start refused puts what it sent back ahead of them (`refused-send.ts`), so neither is lost.
@@ -306,11 +318,14 @@ function AnswerCard({
     control.onDraft(item, { ...draft, note: "", attachments: [] });
     void offer.onStart({ text, attachments: sent.attachments, clientKey: key }).then((refused) => {
       setStarting(false);
+
       if (refused === undefined) {
         attempt.current = undefined;
         setAsNew(false);
+
         return;
       }
+
       setRefusal(refused);
       putBackRefused({
         went: { text: sent.note, attachments: sent.attachments },
@@ -319,6 +334,7 @@ function AnswerCard({
       });
     });
   };
+
   const composer: AgentComposerControl = {
     draft: draft.note,
     // Note that each change moves the card on from what it holds as the write lands, since a file's chip goes into the words the moment the file is held, before the box draws again.
@@ -337,6 +353,7 @@ function AnswerCard({
     retry: noRetry,
     sent: [],
   };
+
   // The door the box lays a quote in through, which Reply over the thread and the pages it draws use.
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   // Note that Reply stands only while no nod or start is out, since a press lets the selection go.
@@ -344,15 +361,19 @@ function AnswerCard({
   // A quote laid in is heard, so the thread can bring the box in whole rather than its caret's line alone.
   const quoted = useRef(onQuoted);
   quoted.current = onQuoted;
+
   const layQuote = useCallback((quote: string) => {
     replyDoor.current?.(quote);
     quoted.current?.();
   }, []);
+
   useEffect(() => {
     if (onQuoteDoor === undefined || !quotes) return undefined;
     onQuoteDoor(layQuote);
+
     return () => onQuoteDoor(undefined);
   }, [onQuoteDoor, quotes, layQuote]);
+
   return (
     <div ref={box}>
       <AgentComposer

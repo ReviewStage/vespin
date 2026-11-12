@@ -34,6 +34,7 @@ function Asking({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={() => setOpen(true)}>
@@ -57,6 +58,7 @@ function Asking({
 function Showing(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={() => setOpen(true)}>

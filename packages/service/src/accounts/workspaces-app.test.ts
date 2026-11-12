@@ -139,6 +139,7 @@ const RECORDED_RESETS = Layer.succeed(NativeAgentSessions, {
             reset: (sessionId: string) =>
               Effect.sync(() => {
                 RESETS.push({ account, sessionId });
+
                 return { outcome: SESSION_RESET_OUTCOME.RESET } as const;
               }),
           },
@@ -191,6 +192,7 @@ const INSTALL_ADDRESS = "https://github.com/apps/luke/installations/new";
 const LANDING = "/github-installed?status=";
 
 const ACME = { id: 31_001, login: "acme", accountType: "Organization", repositories: [] } as const;
+
 const LABS = {
   id: 31_002,
   login: "acme-labs",
@@ -209,6 +211,7 @@ const openGithubAccount = (name: string) =>
   Effect.gen(function* () {
     const userId = yield* openGithubUser();
     yield* Database.use((db) => db.update(user).set({ name }).where(eq(user.id, userId)));
+
     return userId;
   });
 
@@ -219,6 +222,7 @@ const openGoogleAccount = (name: string) =>
     yield* Database.use((db) =>
       db.insert(user).values({ id: userId, name, email: `${userId}@app.test` }),
     );
+
     return userId;
   });
 
@@ -290,8 +294,10 @@ const answered = <A>(
       INVITATION_MAIL,
       RECORDED_RESETS,
     );
+
     if (HOSTED_PATHS.has(new URL(request.url).pathname)) {
       const context = yield* Effect.context<never>().pipe(Effect.provide(services));
+
       const procedures = hostedFetch({
         workspaceGithub: workspaceGithubProcedures({ resolveUserId: bearerUserId }),
         workspaceInvitations: workspaceInvitationsProcedures({
@@ -300,23 +306,29 @@ const answered = <A>(
         }),
         workspaces: workspacesProcedures({ resolveUserId: bearerUserId, workspaces: seams }),
       });
+
       // SAFETY: the procedures yield the database, the clock, GitHub and the analytics alone, which is all a test provides of the web runtime's services.
       const response = yield* Effect.promise(() =>
         procedures(request, context as Context.Context<WebServices>),
       );
+
       return yield* Effect.promise(() => read(response));
     }
+
     const routes = Layer.mergeAll(
       workspacesApp({ resolveUserId: bearerUserId }),
       githubInstallApp({ resolveSessionUserId: session.resolveSessionUserId }),
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       routes.pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const response = yield* Effect.promise(() => handler(request));
     const result = yield* Effect.promise(() => read(response));
     yield* Effect.promise(() => dispose());
+
     return result;
   });
 
@@ -331,25 +343,30 @@ const send = (
     const text = await response.text();
     // SAFETY: the groups answer JSON or a redirect; the test compares the body as the wire value it is.
     const body = (text === "" ? undefined : JSON.parse(text)) as WireBoundaryInput;
+
     return { status: response.status, body, location: response.headers.get("location") };
   });
 
 /** A bearer's request to the workspaces group: a read, or a POST with the body given. */
 function bearerRequest(path: string, userId: string | undefined, body?: WireBoundaryInput) {
   const headers = new Headers();
+
   if (userId !== undefined) headers.set("authorization", `Bearer ${userId}`);
   const init: RequestInit = { method: "GET", headers };
+
   if (body !== undefined) {
     init.method = "POST";
     init.body = JSON.stringify(body);
     headers.set("content-type", "application/json");
   }
+
   return new Request(new URL(path, ORIGIN), init);
 }
 
 /** GitHub's return through the Setup URL, with the query given. */
 function setupRequest(query: Record<string, string>) {
   const search = new URLSearchParams(query);
+
   return new Request(new URL(`${HOSTED_SERVICE_PATH.GITHUB_INSTALLED}?${search}`, ORIGIN), {
     redirect: "manual",
   });
@@ -363,7 +380,9 @@ function readAs<A>(
 ): A {
   assert.equal(answered.status, status);
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -394,8 +413,10 @@ const connectState = (
       github,
       bearerRequest(HOSTED_SERVICE_PATH.WORKSPACE_GITHUB_CONNECT, userId, { workspaceId }),
     );
+
     const { url } = readAs(answered, workspaceGithubConnectAnswerSchema, HOSTED_HTTP_STATUS.OK);
     assert.equal(url.split("?")[0], INSTALL_ADDRESS);
+
     return new URL(url).searchParams.get("state") ?? assert.fail("no state on the install address");
   });
 
@@ -426,6 +447,7 @@ const landedAt = (
     const setup = yield* send(seams, github, setupRequest(query));
     assert.equal(setup.status, 303);
     const location = setup.location ?? assert.fail("the Setup URL sent the browser nowhere");
+
     if (location.startsWith(LANDING)) return location.replace(LANDING, "");
     const authorize = new URL(location);
     assert.equal(
@@ -437,17 +459,22 @@ const landedAt = (
       callback.toString(),
       `${ORIGIN}${HOSTED_SERVICE_PATH.GITHUB_INSTALLED_AUTHORIZED}`,
     );
+
     if (code !== null) callback.searchParams.set("code", code);
     callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
     const headers = new Headers();
+
     if (browser !== undefined) headers.set("cookie", browser.cookie);
+
     const returned = yield* send(
       seams,
       github,
       new Request(callback, { redirect: "manual", headers }),
       browser?.session,
     );
+
     assert.equal(returned.status, 303);
+
     return returned.location?.replace(LANDING, "");
   });
 
@@ -524,6 +551,7 @@ it.effect(
 
         const acme = yield* createAs(seams, github, ada, "  Acme Platform  ");
         const again = yield* createAs(seams, github, ada, "Acme Platform");
+
         const blank = yield* send(
           seams,
           github,
@@ -575,6 +603,7 @@ it.effect(
         const github = githubReaching([]);
 
         const named = [];
+
         for (const name of ["Admin", "Sign in", "Changelog", "Tasks", "Personal team", "Acme"]) {
           named.push((yield* createAs(seams, github, ada, name)).slug);
         }
@@ -603,6 +632,7 @@ it.effect(
         const mallory = yield* openGithubAccount("Mallory");
         const github = githubReaching([]);
         const acme = yield* createAs(seams, github, ada, "Acme");
+
         for (const [userId, role] of [
           [grace, WORKSPACE_ROLE.ADMIN],
           [linus, WORKSPACE_ROLE.MEMBER],
@@ -611,6 +641,7 @@ it.effect(
             api.addMember({ body: { userId, organizationId: acme.id, role } }),
           );
         }
+
         const connect = (userId: string) =>
           send(
             seams,
@@ -684,8 +715,10 @@ it.effect(
           }),
         );
         const session = { ...NO_SESSION, resolveSessionUserId: plugin.resolveSessionUserId };
+
         const browserOf = (userId: string) =>
           Effect.map(plugin.sessionCookieOf(userId), (cookie) => ({ cookie, session }));
+
         const install = (installer: string, browser: SignedInBrowser) =>
           Effect.flatMap(connectState(seams, github, installer, acme.id), (state) =>
             landedAt(
@@ -705,10 +738,13 @@ it.effect(
 
         assert.equal(elsewhere, GITHUB_INSTALL_STATUS.CONNECTED);
         assert.deepEqual(yield* githubRows, [{ userId: ada, accountId: GITHUB_FIXTURE_MEMBER.ID }]);
+
         const kept = yield* Effect.gen(function* () {
           const app = yield* GitHubApp;
+
           return yield* app.userToken(ada);
         }).pipe(Effect.provide(github.layer));
+
         assert.equal(Redacted.value(kept), GITHUB_FIXTURE_AUTHORIZED_TOKEN);
         assert.equal(github.sent.filter((sent) => sent.method === "DELETE").length, 2);
       }).pipe(Effect.provide(database));
@@ -730,6 +766,7 @@ it.effect(
           setup_action: "install",
           state: yield* connectState(seams, github, ada, acme.id),
         });
+
         const declined = yield* landedAt(
           seams,
           github,
@@ -740,6 +777,7 @@ it.effect(
           },
           null,
         );
+
         const refused = yield* landedAt(
           seams,
           github,
@@ -750,13 +788,16 @@ it.effect(
           },
           GITHUB_FIXTURE_REFUSED_CODE,
         );
+
         const stale = yield* connectState(seams, github, ada, acme.id);
         yield* TestClock.adjust("2 hours");
+
         const expired = yield* landedAt(seams, github, {
           installation_id: String(ACME.id),
           setup_action: "install",
           state: stale,
         });
+
         const requested = yield* landedAt(seams, github, {
           setup_action: "request",
           state: yield* connectState(seams, github, ada, acme.id),
@@ -780,6 +821,7 @@ it.effect("an installation connected to one workspace is refused for a second", 
       const github = githubReaching([ACME]);
       const first = yield* createAs(seams, github, ada, "Acme");
       const second = yield* createAs(seams, github, ada, "Acme Labs");
+
       const connectTo = (workspaceId: string) =>
         Effect.flatMap(connectState(seams, github, ada, workspaceId), (state) =>
           landedAt(seams, github, {
@@ -815,6 +857,7 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const github = githubReaching([ACME, LABS]);
         const acme = yield* createAs(seams, github, ada, "Acme");
+
         const connect = (installation: { readonly id: number }) =>
           Effect.flatMap(connectState(seams, github, ada, acme.id), (state) =>
             landedAt(seams, github, {
@@ -842,9 +885,11 @@ it.effect(
           2,
           "each installation counts once, and reconnecting the first is no new connection",
         );
+
         const [workspace] = (yield* workspacesOf(seams, github, ada)).filter(
           (one) => one.id === acme.id,
         );
+
         assert.deepEqual(
           { github: workspace?.github, githubInstallations: workspace?.githubInstallations },
           {
@@ -894,6 +939,7 @@ it.effect(
         const linus = yield* openGithubAccount("Linus");
         const github = githubReaching([ACME]);
         const acme = yield* createAs(seams, github, ada, "Acme");
+
         for (const [userId, role] of [
           [grace, WORKSPACE_ROLE.ADMIN],
           [linus, WORKSPACE_ROLE.MEMBER],
@@ -902,12 +948,14 @@ it.effect(
             api.addMember({ body: { userId, organizationId: acme.id, role } }),
           );
         }
+
         yield* landedAt(seams, github, {
           installation_id: String(ACME.id),
           setup_action: "install",
           state: yield* connectState(seams, github, ada, acme.id),
         });
         const pending = yield* connectState(seams, github, ada, acme.id);
+
         const disconnect = (userId: string) =>
           send(
             seams,
@@ -928,9 +976,11 @@ it.effect(
             body: { error: HOSTED_API_ERROR.NOT_PERMITTED },
           })),
         );
+
         const [workspace] = (yield* workspacesOf(seams, github, linus)).filter(
           (one) => one.id === acme.id,
         );
+
         assert.deepEqual(
           { github: workspace?.github, githubInstallations: workspace?.githubInstallations },
           {
@@ -986,10 +1036,12 @@ it.effect(
 it.effect("a plugin that refuses the account's first workspace is answered as unavailable", () =>
   Effect.gen(function* () {
     const { database } = yield* openWorkspacePlugin;
+
     const refusing: WorkspaceSeams = {
       createOrganization: () =>
         Effect.fail(new Cause.UnknownError(undefined, "Failed to create organization")),
     };
+
     yield* Effect.gen(function* () {
       const ada = yield* openGithubAccount(`Ada ${randomUUID()}`);
 
@@ -1121,12 +1173,14 @@ const readUnderToken = (plugin: WorkspacePlugin, userId: string, path: string) =
 const readInSession = (plugin: WorkspacePlugin, userId: string, path: string) =>
   Effect.gen(function* () {
     const sessionBearer = yield* plugin.sessionBearerOf(userId);
+
     const { status, body } = yield* send(
       plugin.seams,
       NO_GITHUB_TO_READ,
       bearerRequest(path, sessionBearer),
       plugin,
     );
+
     return { status, body };
   });
 
@@ -1188,6 +1242,7 @@ const openTeam = (
     const made = yield* Effect.promise(() =>
       api.createOrganization({ body: { name: "Acme", slug: `acme-${ownerId}`, userId: ownerId } }),
     );
+
     for (const teammate of teammates) {
       yield* Effect.promise(() =>
         api.addMember({
@@ -1195,6 +1250,7 @@ const openTeam = (
         }),
       );
     }
+
     return made.id;
   });
 
@@ -1205,6 +1261,7 @@ it.effect("a member reads the workspace's members, owners first, then admins, th
       const ada = yield* openGithubAccount("Ada Lovelace");
       const grace = yield* openGithubAccount("Grace Hopper");
       const alan = yield* openGithubAccount("Alan Turing");
+
       const acme = yield* openTeam(api, ada, [
         { userId: grace, role: "member" },
         { userId: alan, role: "admin" },
@@ -1240,11 +1297,13 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const linus = yield* openGithubAccount("Linus Torvalds");
+
         const acme = yield* openTeam(api, ada, [
           { userId: grace, role: "member" },
           { userId: alan, role: "member" },
           { userId: linus, role: "member" },
         ]);
+
         yield* pictured(ada, "https://lh3.googleusercontent.com/a/ada=s96-c");
         yield* pictured(grace, "https://avatars.githubusercontent.com/u/1?v=4");
         yield* pictured(alan, "https://tracker.example/alan.png");
@@ -1341,10 +1400,12 @@ it.effect(
         const mallory = yield* openGithubAccount("Mallory");
         const acme = yield* openTeam(api, ada, [{ userId: grace, role: "member" }]);
         const png = "iVBORw0KGgo=";
+
         const keepLogo = (logo: string | null) =>
           Database.use((db) =>
             db.update(organization).set({ logo }).where(eq(organization.id, acme)),
           );
+
         yield* keepLogo(`data:image/png;base64,${png}`);
 
         const member = yield* readPhoto(seams, grace, acme);
@@ -1368,11 +1429,13 @@ it.effect(
         assert.equal(anonymous.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
         assert.equal(notAPhoto.status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal(none.status, HOSTED_HTTP_STATUS.NOT_FOUND);
+
         const refusal = yield* send(
           seams,
           NO_GITHUB_TO_READ,
           bearerRequest(photoAt(acme), mallory),
         );
+
         assert.deepEqual(refusal.body, { error: HOSTED_API_ERROR.NOT_FOUND });
       }).pipe(Effect.provide(database));
     }),
@@ -1388,10 +1451,12 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(api, ada, [
           { userId: grace, role: "member" },
           { userId: alan, role: "member" },
         ]);
+
         yield* pictured(grace, "https://avatars.githubusercontent.com/u/1?v=4");
         yield* Database.use((db) =>
           db.insert(task).values({
@@ -1435,6 +1500,7 @@ it.effect("a members read names who left having only answered an agent's Inbox i
       const lin = yield* openGithubAccount("Lin Chen");
       const acme = yield* openTeam(api, ada, [{ userId: lin, role: "member" }]);
       const task = yield* createTask(ada, { organizationId: acme, name: "Branch protection" });
+
       const started = yield* createAgent(ada, {
         taskId: task.id,
         idempotencyKey: randomUUID(),
@@ -1445,7 +1511,9 @@ it.effect("a members read names who left having only answered an agent's Inbox i
         prompt: "Sweep the flaky tests.",
         runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       });
+
       const agent = { userId: ada, taskId: task.id, agentId: Option.getOrThrow(started).agent.id };
+
       const posted = yield* postInboxThread(agent, {
         key: "branch-protection",
         title: "Require a review on main",
@@ -1453,16 +1521,21 @@ it.effect("a members read names who left having only answered an agent's Inbox i
         ask: { type: INBOX_ASK.DO, steps: [] },
         needsReply: false,
       });
+
       assert.ok(Result.isSuccess(posted));
+
       const ask = posted.success.thread?.find(
         (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
       );
+
       assert.ok(ask !== undefined);
+
       const done = yield* answerInboxAsk(lin, posted.success.id, {
         answers: { ask: ask.id, reply: INBOX_REPLY.DONE },
         text: "",
         clientKey: randomUUID(),
       });
+
       assert.equal(Option.getOrThrow(done).outcome, INBOX_ASK_ANSWER.TAKEN);
       yield* leaving(plugin, lin, acme);
 
@@ -1489,10 +1562,12 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const lin = yield* openGithubAccount("Lin Chen");
         const kai = yield* openGithubAccount("Kai Ito");
+
         const acme = yield* openTeam(api, ada, [
           { userId: lin, role: "member" },
           { userId: kai, role: "member" },
         ]);
+
         const making = (userId: string, scope: AutomationScope) =>
           createAutomation(userId, {
             organizationId: acme,
@@ -1505,6 +1580,7 @@ it.effect(
             nextRunAt: null,
             webhookSecretHash: null,
           });
+
         assert.ok(Option.isSome(yield* making(lin, AUTOMATION_SCOPE.WORKSPACE)));
         assert.ok(Option.isSome(yield* making(kai, AUTOMATION_SCOPE.PERSONAL)));
         yield* leaving(plugin, lin, acme);
@@ -1535,6 +1611,7 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
@@ -1548,6 +1625,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(byMember, notPermitted);
         assert.deepEqual(ofOwner, notPermitted);
         assert.deepEqual(byAdmin, {
@@ -1599,11 +1677,14 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const linus = yield* openGithubAccount("Linus Torvalds");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         const personal = Option.getOrThrow(yield* ensurePersonalWorkspace(ada, plugin.seams));
+
         const notPermitted = refusedAs(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
@@ -1644,6 +1725,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(ofJoined, notPermitted);
         assert.equal((yield* membersOf(joined)).length, 2);
         assert.deepEqual(ofWorking, notPermitted);
@@ -1664,12 +1746,14 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const agentId = yield* openAgentOnOwnTask(grace, acme);
+
         const [agent] = yield* Database.use((db) =>
           db
             .select({ conversationId: agentTable.conversationId })
             .from(agentTable)
             .where(eq(agentTable.id, agentId)),
         );
+
         const conversationId = (agent ?? assert.fail("no agent")).conversationId;
         yield* inviting(plugin, ada, acme, "alan@example.com");
 
@@ -1713,16 +1797,19 @@ it.effect(
         const mallory = yield* openGithubAccount("Mallory Moriarty");
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "admin" }]);
         yield* openTeam(plugin.api, mallory, []);
+
         const pending = readAs(
           yield* inviting(plugin, ada, acme, "alan@example.com"),
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         const before = {
           workspace: yield* organizationOf(acme),
           members: yield* membersOf(acme),
           invitations: yield* readUnderToken(plugin, ada, invitationsAt(acme)),
         };
+
         const asked: readonly (readonly [string, WireBoundaryInput])[] = [
           [HOSTED_SERVICE_PATH.WORKSPACES_RENAME, { workspaceId: acme, name: "Moriarty Inc" }],
           [HOSTED_SERVICE_PATH.WORKSPACES_PHOTO_SET, { workspaceId: acme, photo: null }],
@@ -1745,6 +1832,7 @@ it.effect(
         ];
 
         const answers = [];
+
         for (const [path, body] of asked)
           answers.push(yield* postedAs(plugin, mallory, path, body));
         answers.push(yield* readUnderToken(plugin, mallory, invitationsAt(acme)));
@@ -1776,11 +1864,13 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const linus = yield* openGithubAccount("Linus Torvalds");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "admin" },
           { userId: linus, role: "member" },
         ]);
+
         const countedIn = (userId: string) =>
           ANALYTICS.recorded
             .filter(
@@ -1792,11 +1882,13 @@ it.effect(
         yield* changingRole(plugin, ada, acme, grace, WORKSPACE_ROLE.MEMBER);
         yield* removing(plugin, ada, acme, linus);
         yield* renaming(plugin, ada, acme, "Acme Labs");
+
         const invited = readAs(
           yield* inviting(plugin, ada, acme, "carl@example.com"),
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         yield* postedAs(plugin, ada, HOSTED_SERVICE_PATH.WORKSPACES_INVITATIONS_CANCEL, {
           workspaceId: acme,
           invitationId: invited.id,
@@ -1832,14 +1924,18 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(api, ada, [
           { userId: grace, role: "member" },
           { userId: alan, role: "member" },
         ]);
+
         const assigned = (assigneeId: string) =>
           createTask(ada, { organizationId: acme, name: "Invites", assigneeId });
+
         const graces = yield* assigned(grace);
         const alans = yield* assigned(alan);
+
         const assigneeOf = (taskId: string) =>
           Effect.map(
             readTask(ada, taskId),
@@ -1926,6 +2022,7 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
@@ -1934,9 +2031,11 @@ it.effect(
         const byAdmin = yield* changingRole(plugin, grace, acme, alan, WORKSPACE_ROLE.ADMIN);
         const byMember = yield* changingRole(plugin, alan, acme, grace, WORKSPACE_ROLE.MEMBER);
         const unchanged = yield* rolesIn(acme);
+
         const promoted = rolesAnswered(
           yield* changingRole(plugin, ada, acme, alan, WORKSPACE_ROLE.ADMIN),
         );
+
         const demoted = rolesAnswered(
           yield* changingRole(plugin, ada, acme, grace, WORKSPACE_ROLE.MEMBER),
         );
@@ -1945,6 +2044,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(byAdmin, notPermitted);
         assert.deepEqual(byMember, notPermitted);
         assert.deepEqual(unchanged, { [ada]: "owner", [grace]: "admin", [alan]: "member" });
@@ -1965,10 +2065,12 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const mallory = yield* openGithubAccount("Mallory");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         // A second owner, as a handover cut short leaves one, is still an owner nobody changes.
         yield* ownerByHand(acme, grace);
 
@@ -1982,6 +2084,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         const notFound = refusedAs(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
         assert.deepEqual(ofOwner, notPermitted);
         assert.deepEqual(ofSelf, notPermitted);
@@ -2009,12 +2112,14 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
 
         const handedOver = rolesAnswered(yield* transferring(plugin, ada, acme, grace));
+
         const roleOf = (userId: string) =>
           Effect.map(
             workspacesOf(plugin.seams, NO_GITHUB_TO_READ, userId),
@@ -2048,10 +2153,12 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const mallory = yield* openGithubAccount("Mallory");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         const first = Option.getOrThrow(yield* ensurePersonalWorkspace(ada, plugin.seams));
         yield* Effect.promise(() =>
           plugin.api.addMember({ body: { userId: grace, organizationId: first, role: "admin" } }),
@@ -2066,6 +2173,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(toMember, notPermitted);
         assert.deepEqual(byAdmin, notPermitted);
         assert.deepEqual(ofFirst, notPermitted);
@@ -2111,6 +2219,7 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const linus = yield* openGithubAccount("Linus Torvalds");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "admin" },
@@ -2126,6 +2235,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(adminOfAdmin, notPermitted);
         assert.deepEqual(adminOfSelf, notPermitted);
         assert.deepEqual(ownerOfSelf, notPermitted);
@@ -2143,10 +2253,12 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         const slug = `acme-${ada}`;
 
         const byOwner = readAs(
@@ -2154,11 +2266,13 @@ it.effect(
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const byAdmin = readAs(
           yield* renaming(plugin, grace, acme, "Acme Research"),
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const byMember = yield* renaming(plugin, alan, acme, "Alan's");
 
         assert.deepEqual(
@@ -2199,6 +2313,7 @@ it.effect(
           Effect.map(workspacesOf(plugin.seams, githubReaching([]), userId), (listed) =>
             listed.map(({ name, personal }) => ({ name, personal })),
           );
+
         const byOwner = yield* renaming(plugin, ada, personal.value, "Ada's");
         const byAdmin = yield* renaming(plugin, grace, personal.value, "Grace's");
 
@@ -2232,12 +2347,14 @@ it.effect(
         const acme = yield* openTeam(plugin.api, ada, []);
 
         const blank = yield* renaming(plugin, ada, acme, "   ");
+
         const long = yield* renaming(
           plugin,
           ada,
           acme,
           "a".repeat(WORKSPACE_BOUNDS.MAX_NAME_CHARS + 1),
         );
+
         const outsider = yield* renaming(plugin, mallory, acme, "Mallory's");
 
         const invalid = refusedAs(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
@@ -2262,18 +2379,22 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const mallory = yield* openGithubAccount("Mallory");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
 
         const byOwner = yield* settingExperiment(plugin, ada, acme, EXPERIMENT.MEMORY, true);
+
         const byAdmin = readAs(
           yield* settingExperiment(plugin, grace, acme, EXPERIMENT.DESCRIPTIONS, true),
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const byMember = yield* settingExperiment(plugin, alan, acme, EXPERIMENT.MEMORY, false);
+
         const byOutsider = yield* settingExperiment(
           plugin,
           mallory,
@@ -2281,20 +2402,24 @@ it.effect(
           EXPERIMENT.MEMORY,
           false,
         );
+
         const accountsOwn = yield* settingExperiment(plugin, ada, acme, EXPERIMENT.SKILLS, true);
         const alansListed = yield* workspacesOf(plugin.seams, NO_GITHUB_TO_READ, alan);
 
         assert.equal(byOwner.status, HOSTED_HTTP_STATUS.OK);
+
         const chosen = (listed: Workspace | undefined) =>
           (listed?.experiments ?? []).map(({ experiment, on, changedBy }) => ({
             experiment,
             on,
             changedBy: changedBy?.name,
           }));
+
         const expected = [
           { experiment: EXPERIMENT.DESCRIPTIONS, on: true, changedBy: "Grace Hopper" },
           { experiment: EXPERIMENT.MEMORY, on: true, changedBy: "Ada Lovelace" },
         ];
+
         assert.deepEqual(chosen(byAdmin), expected);
         assert.deepEqual(chosen(alansListed.find((each) => each.id === acme)), expected);
         assert.deepEqual(
@@ -2323,10 +2448,12 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
         const mallory = yield* openGithubAccount("Mallory");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         yield* openTeam(plugin.api, grace, []);
         const before = `acme-${ada}`;
 
@@ -2335,6 +2462,7 @@ it.effect(
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const byAdmin = yield* settingSlug(plugin, grace, acme, "grace-labs");
         const byMember = yield* settingSlug(plugin, alan, acme, "alan-labs");
         const byOutsider = yield* settingSlug(plugin, mallory, acme, "mallory-labs");
@@ -2343,10 +2471,12 @@ it.effect(
           { slug: byOwner.slug, formerSlugs: byOwner.formerSlugs },
           { slug: "acme-labs", formerSlugs: [before] },
         );
+
         const notPermitted = refusedAs(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(byAdmin, notPermitted);
         assert.deepEqual(byMember, notPermitted);
         assert.deepEqual(
@@ -2366,6 +2496,7 @@ it.effect(
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         assert.deepEqual(
           { slug: back.slug, formerSlugs: back.formerSlugs },
           { slug: before, formerSlugs: ["acme-labs"] },
@@ -2400,14 +2531,17 @@ it.effect(
 
         const refusalsOf = (slugs: readonly string[]) =>
           Effect.forEach(slugs, (slug) => settingSlug(plugin, bob, beta, slug));
+
         const malformed = refusedAs(
           HOSTED_HTTP_STATUS.BAD_REQUEST,
           HOSTED_API_ERROR.WORKSPACE_SLUG_MALFORMED,
         );
+
         const reserved = refusedAs(
           HOSTED_HTTP_STATUS.CONFLICT,
           HOSTED_API_ERROR.WORKSPACE_SLUG_RESERVED,
         );
+
         const taken = refusedAs(HOSTED_HTTP_STATUS.CONFLICT, HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN);
         assert.deepEqual(
           yield* refusalsOf([
@@ -2445,6 +2579,7 @@ const PHOTO_SIGNATURES = {
 const photoOfBytes = (type: WorkspacePhotoType, bytes: number) => {
   const buffer = Buffer.alloc(bytes, 7);
   buffer.set(PHOTO_SIGNATURES[type]);
+
   return `data:${type};base64,${buffer.toString("base64")}`;
 };
 
@@ -2457,12 +2592,15 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const alan = yield* openGithubAccount("Alan Turing");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: alan, role: "member" },
         ]);
+
         const png = "iVBORw0KGgo=";
         const webp = "UklGRgAAAABXRUJQ";
+
         const listed = (userId: string) =>
           Effect.map(
             workspacesOf(plugin.seams, NO_GITHUB_TO_READ, userId),
@@ -2474,16 +2612,20 @@ it.effect(
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const ownerVersion = yield* listed(alan);
         const ownerPhoto = yield* readPhoto(plugin.seams, alan, acme);
+
         const byAdmin = readAs(
           yield* settingPhoto(plugin, grace, acme, `data:image/webp;base64,${webp}`),
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
+
         const adminPhoto = yield* readPhoto(plugin.seams, alan, acme);
         const byMember = yield* settingPhoto(plugin, alan, acme, null);
         const keptThroughMember = yield* logoOf(acme);
+
         const removed = readAs(
           yield* settingPhoto(plugin, grace, acme, null),
           workspaceAnswerSchema,
@@ -2538,6 +2680,7 @@ it.effect(
         const atBound = photoOfBytes(WORKSPACE_PHOTO_TYPE.JPEG, WORKSPACE_PHOTO_BOUNDS.MAX_BYTES);
 
         const refusals = [];
+
         for (const photo of [
           "data:text/plain;base64,aGVsbG8=",
           "data:image/svg+xml;base64,PHN2Zy8+",
@@ -2549,6 +2692,7 @@ it.effect(
         ]) {
           refusals.push(yield* settingPhoto(plugin, ada, acme, photo));
         }
+
         const outsider = yield* settingPhoto(plugin, mallory, acme, atBound);
         const untouched = yield* logoOf(acme);
         const set = yield* settingPhoto(plugin, ada, acme, atBound);
@@ -2581,11 +2725,13 @@ it.effect(
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         const listed = readAs(
           yield* readUnderToken(plugin, ada, invitationsAt(acme)),
           workspaceInvitationsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).invitations;
+
         const canceled = yield* postedAs(
           plugin,
           ada,
@@ -2611,12 +2757,15 @@ it.effect(
 const liveInvitationsOf = (readerId: string, workspaceId: string, now: number) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const statement = Option.getOrThrow(
       workspaceInvitationsRead.statements({ userId: readerId, workspaceId }),
     ).invitations;
+
     const rows = yield* Effect.all({
       invitations: sql.unsafe(statement.sql, [...statement.params]),
     });
+
     return workspaceInvitationsOfLiveRows(
       yield* Schema.decodeUnknownEffect(WORKSPACE_INVITATIONS_READ.rows)(rows),
       ORIGIN,
@@ -2634,16 +2783,19 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const sam = yield* openGithubAccount("Sam Member");
         const outsider = yield* openGithubAccount("Olive Outsider");
+
         const acme = yield* openTeam(plugin.api, ada, [
           { userId: grace, role: "admin" },
           { userId: sam, role: "member" },
         ]);
+
         const madeFor = (email: string, role = "member") =>
           Effect.map(
             inviting(plugin, ada, acme, email, role),
             (made) =>
               readAs(made, workspaceInvitationAnswerSchema, HOSTED_HTTP_STATUS.CREATED).invitation,
           );
+
         yield* madeFor("alan@example.com");
         yield* madeFor("bea@example.com", "admin");
         const canceled = yield* madeFor("carl@example.com");
@@ -2665,13 +2817,16 @@ it.effect(
           workspaceInvitationsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).invitations;
+
         assert.deepEqual(held.map((one) => one.email).toSorted(), [
           "alan@example.com",
           "bea@example.com",
         ]);
+
         for (const reader of [ada, grace]) {
           assert.deepEqual(yield* liveInvitationsOf(reader, acme, now), held);
         }
+
         assert.deepEqual(yield* liveInvitationsOf(sam, acme, now), []);
         assert.deepEqual(yield* liveInvitationsOf(outsider, acme, now), []);
       }).pipe(Effect.provide(plugin.database));
@@ -2688,6 +2843,7 @@ const verified = (userId: string) =>
     yield* Database.use((db) =>
       db.update(user).set({ emailVerified: true }).where(eq(user.id, userId)),
     );
+
     return `${userId}@app.test`;
   });
 
@@ -2695,6 +2851,7 @@ const verified = (userId: string) =>
 const accepting = (plugin: WorkspacePlugin, userId: string, invitationId: string) =>
   Effect.gen(function* () {
     const sessionBearer = yield* plugin.sessionBearerOf(userId);
+
     return yield* Effect.promise(() =>
       plugin.api
         .acceptInvitation({
@@ -2721,6 +2878,7 @@ it.effect(
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "admin" }]);
         // Note that the invitation is made at the wall clock's time, because the plugin's accept reads its expiry against the wall clock.
         yield* TestClock.setTime(Date.now());
+
         const made = readAs(
           yield* inviting(plugin, grace, acme, alanAddress),
           workspaceInvitationAnswerSchema,
@@ -2771,11 +2929,13 @@ it.effect(
         const alan = yield* openGithubAccount("Alan Turing");
         const alanAddress = yield* verified(alan);
         const first = Option.getOrThrow(yield* ensurePersonalWorkspace(ada, plugin.seams));
+
         const made = readAs(
           yield* inviting(plugin, ada, first, alanAddress),
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         yield* Database.use((db) =>
           db.update(user).set({ name: "Dr Ada Lovelace" }).where(eq(user.id, ada)),
         );
@@ -2807,6 +2967,7 @@ it.effect(
         yield* verified(kim);
         const una = yield* openGithubAccount("Una Verified");
         const acme = yield* openTeam(plugin.api, ada, []);
+
         const invited = (email: string) =>
           Effect.map(
             inviting(plugin, ada, acme, email),
@@ -2814,6 +2975,7 @@ it.effect(
               readAs(answer, workspaceInvitationAnswerSchema, HOSTED_HTTP_STATUS.CREATED)
                 .invitation,
           );
+
         const canceled = yield* invited("someone@example.com");
         yield* postedAs(plugin, ada, HOSTED_SERVICE_PATH.WORKSPACES_INVITATIONS_CANCEL, {
           workspaceId: acme,
@@ -2825,12 +2987,14 @@ it.effect(
         const spentWhenCanceled = yield* readInSession(plugin, alan, offerAt(canceled.id));
         const otherAddress = yield* readInSession(plugin, kim, offerAt(forAlan.id));
         const unverifiedAddress = yield* readInSession(plugin, una, offerAt(forUna.id));
+
         const noSession = yield* send(
           plugin.seams,
           NO_GITHUB_TO_READ,
           bearerRequest(offerAt(forAlan.id), undefined),
           plugin,
         );
+
         yield* TestClock.setTime(Date.parse(forAlan.expiresAt) + 1);
         const spentWhenExpired = yield* readInSession(plugin, alan, offerAt(forAlan.id));
 
@@ -2852,6 +3016,7 @@ it.effect("an admin's invitation as an admin is refused, and the owner invites a
       const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "admin" }]);
 
       const byAdmin = yield* inviting(plugin, grace, acme, "alan@example.com", "admin");
+
       const byOwner = readAs(
         yield* inviting(plugin, ada, acme, "alan@example.com", "admin"),
         workspaceInvitationAnswerSchema,
@@ -2887,11 +3052,13 @@ it.effect(
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         const listed = readAs(
           yield* readUnderToken(plugin, ada, invitationsAt(first)),
           workspaceInvitationsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).invitations;
+
         const members = yield* readMembers(plugin.seams, ada, membersAt(first));
 
         assert.equal(made.email, "alan@example.com");
@@ -2926,13 +3093,16 @@ it.effect(
           HOSTED_HTTP_STATUS.CONFLICT,
           HOSTED_API_ERROR.ALREADY_INVITED,
         );
+
         assert.deepEqual(again, alreadyInvited);
         assert.deepEqual(member, alreadyInvited);
+
         const pending = readAs(
           yield* readUnderToken(plugin, ada, invitationsAt(acme)),
           workspaceInvitationsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).invitations;
+
         assert.deepEqual(
           pending.map((one) => one.email),
           ["lin@example.com"],
@@ -2942,12 +3112,14 @@ it.effect(
         assert.equal(emails[0]?.from, INVITE_FROM);
         assert.ok(emails[0]?.text.includes(pending[0]?.acceptUrl ?? "missing"));
         assert.ok(emails[0]?.text.includes("Ada Lovelace invited you as an admin."));
+
         const expiryDay = new Date(pending[0]?.expiresAt ?? 0).toLocaleDateString("en-US", {
           month: "long",
           day: "numeric",
           year: "numeric",
           timeZone: "UTC",
         });
+
         assert.ok(emails[0]?.text.includes(`Expires ${expiryDay}.`));
         assert.ok(!emails[0]?.html.includes("<img"), "no picture stands in for the initials");
         assert.deepEqual(emailsTo(`${grace}@app.test`), []);
@@ -2999,6 +3171,7 @@ it.effect(
           workspaceInvitationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
         ).invitation;
+
         assert.deepEqual(
           { email: made.email, expiresAt: Date.parse(made.expiresAt) },
           { email: "lin@example.com", expiresAt: madeAt + 48 * 60 * 60 * 1_000 },
@@ -3008,6 +3181,7 @@ it.effect(
           HOSTED_HTTP_STATUS.CONFLICT,
           HOSTED_API_ERROR.ALREADY_INVITED,
         );
+
         assert.deepEqual(yield* inviting(plugin, ada, acme, "LIN@example.com"), alreadyInvited);
         assert.deepEqual(
           yield* inviting(plugin, ada, acme, `${grace}@APP.test`.toUpperCase()),
@@ -3028,6 +3202,7 @@ it.effect(
             expiresAt: new Date(madeAt + 60_000),
           });
         }
+
         assert.deepEqual(
           yield* inviting(plugin, ada, acme, "one-too-many@example.com"),
           refusedAs(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
@@ -3046,6 +3221,7 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const other = yield* openTeam(plugin.api, grace, []);
+
         const elsewhere = readAs(
           yield* inviting(plugin, grace, other, "someone@example.com"),
           workspaceInvitationAnswerSchema,
@@ -3056,6 +3232,7 @@ it.effect(
           yield* inviting(plugin, grace, acme, "alan@example.com"),
           yield* readUnderToken(plugin, grace, invitationsAt(acme)),
         ];
+
         const crossed = yield* postedAs(
           plugin,
           ada,
@@ -3067,6 +3244,7 @@ it.effect(
           HOSTED_HTTP_STATUS.FORBIDDEN,
           HOSTED_API_ERROR.NOT_PERMITTED,
         );
+
         assert.deepEqual(answers, [notPermitted, notPermitted]);
         assert.deepEqual(
           crossed,
@@ -3088,6 +3266,7 @@ it.effect("each workspace says how many members it has, to every member alike", 
 
       const countOf = (workspaces: readonly { id: string; memberCount?: number }[]) =>
         workspaces.find((each) => each.id === acme.id)?.memberCount;
+
       assert.equal(countOf(yield* workspacesOf(seams, github, ada)), 2);
       assert.equal(countOf(yield* workspacesOf(seams, github, grace)), 2);
       // The account's first workspace holds the account alone.

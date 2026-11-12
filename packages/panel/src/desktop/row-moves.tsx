@@ -66,18 +66,21 @@ function rowMoveActions(place: RowPlace | undefined, run: RowRun = ROW_RUN.DOWN)
   if (place === undefined) return [];
   const { at, count, onMove } = place;
   const along = run === ROW_RUN.ALONG;
+
   const back: MenuAction = {
     label: along ? "Move left" : "Move up",
     icon: along ? <ArrowLeftIcon /> : <ArrowUpIcon />,
     command: along ? APP_COMMAND.MOVE_TAB_LEFT : APP_COMMAND.MOVE_ROW_UP,
     onSelect: () => onMove(at, at - 1),
   };
+
   const on: MenuAction = {
     label: along ? "Move right" : "Move down",
     icon: along ? <ArrowRightIcon /> : <ArrowDownIcon />,
     command: along ? APP_COMMAND.MOVE_TAB_RIGHT : APP_COMMAND.MOVE_ROW_DOWN,
     onSelect: () => onMove(at, at + 1),
   };
+
   return [...(at > 0 ? [back] : []), ...(at < count - 1 ? [on] : [])];
 }
 
@@ -103,9 +106,12 @@ export function withRowMoves(
   run: RowRun = ROW_RUN.DOWN,
 ): readonly (readonly MenuEntry[])[] {
   const moves = rowMoveActions(place, run);
+
   if (moves.length === 0) return groups;
+
   if (run === ROW_RUN.ALONG) return [moves, ...groups];
   const last = groups.at(-1);
+
   return destroys(last) && last !== undefined
     ? [...groups.slice(0, -1), moves, last]
     : [...groups, moves];
@@ -141,39 +147,51 @@ export function useRowMoveKeys(move: ((from: number, to: number) => void) | unde
   const [held, setHeld] = useState(false);
   useEffect(() => {
     if (list === null) return;
+
     // Note that only a target whose nearest moving list is this one counts, because a section's own tasks stand in a list inside the section's row.
     const ownTarget = (target: EventTarget | null) =>
       target instanceof Element && target.closest(`[${MOVE_LIST}]`) === list;
+
     const focusIn = (event: FocusEvent) => {
       if (!ownTarget(event.target)) return;
       setHeld(!(event.target instanceof Element && event.target.matches(TYPING)));
     };
+
     const focusOut = (event: FocusEvent) => {
       if (ownTarget(event.target)) setHeld(false);
     };
+
     list.addEventListener("focusin", focusIn);
     list.addEventListener("focusout", focusOut);
+
     return () => {
       list.removeEventListener("focusin", focusIn);
       list.removeEventListener("focusout", focusOut);
     };
   }, [list]);
+
   const step = (by: -1 | 1) => {
     const control = document.activeElement;
+
     if (list === null || move === undefined || !(control instanceof HTMLElement)) return;
     const rows = [...list.querySelectorAll<HTMLElement>(MOVING_ROW)];
     const drawnAt = rows.findIndex((row) => row.contains(control));
     const row = rows[drawnAt];
+
     if (row === undefined) return;
     // Note that a row of a run drawing only some of its rows is counted by its place among them all, the rows past either end of those drawn being the list's to refuse.
     const placed = row.getAttribute(ROW_INDEX);
     const at = placed === null ? drawnAt : Number(placed);
+
     if (at + by < 0 || (placed === null && at + by >= rows.length)) return;
     flushSync(() => move(at, at + by));
+
     if (control.isConnected && document.activeElement !== control) control.focus();
   };
+
   const offered = held && move !== undefined;
   useAppCommand(APP_COMMAND.MOVE_ROW_UP, offered ? () => step(-1) : undefined);
   useAppCommand(APP_COMMAND.MOVE_ROW_DOWN, offered ? () => step(1) : undefined);
+
   return { ref: setList, [MOVE_LIST]: "" };
 }

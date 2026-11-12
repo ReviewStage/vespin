@@ -24,6 +24,7 @@ export function useRefocusAfterEdit(
     refocus.current = false;
     target.current?.focus();
   }, [open, target]);
+
   return useCallback((byKey: boolean) => {
     refocus.current = byKey;
   }, []);

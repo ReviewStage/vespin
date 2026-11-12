@@ -98,6 +98,7 @@ export function agentCardReading(
     const now = { writing, runStartedAt: agent.runStartedAt };
     const messages = heldLatest(held.agents.get(agent.id), now, chosen);
     const movedAt = archivedAt ?? lastFinished(messages) ?? agent.runStartedAt ?? agent.createdAt;
+
     return {
       corner: cardCorner({
         writing,
@@ -138,6 +139,7 @@ export function lineSubject(
   const writing = agentStillWriting(line.status);
   const name = agentName(line, models);
   const at = agentMovedAt(line);
+
   const reading: CardReading = {
     corner: cardCorner({
       writing,
@@ -154,6 +156,7 @@ export function lineSubject(
     tile: agentActor(line, name),
     fromSlack: line.source?.kind === AGENT_SOURCE.SLACK,
   };
+
   return { name, tile: agentActor(line, name), read: () => reading };
 }
 
@@ -171,6 +174,7 @@ export function listedRowSubject(
   const name = agentName(agent, agents.models);
   const base = agentCardReading(agent, name, NOTHING_HELD, false, agents);
   const writing = agentStillWriting(agent.status);
+
   const read = (): CardReading => ({
     ...base(),
     corner: cardCorner({
@@ -180,6 +184,7 @@ export function listedRowSubject(
       state: agentStateWords(agent.status),
     }),
   });
+
   return { name, tile: agentActor(agent, name), agent, read };
 }
 
@@ -212,11 +217,14 @@ export function agentSubject(
   const agent =
     agents.agents?.find((each) => each.id === agentId) ??
     agents.archived?.find((each) => each.id === agentId);
+
   if (agent !== undefined) {
     const name = agentName(agent, agents.models);
     const tile = agentActor(agent, name);
+
     return { name, tile, agent, read: agentCardReading(agent, name, held, chosen, agents) };
   }
+
   const reading: CardReading = {
     corner: cardCorner({
       writing: false,
@@ -227,11 +235,14 @@ export function agentSubject(
     choice: undefined,
     transcript: undefined,
   };
+
   const name = line === undefined ? TAB_WORDS.AGENT : agentName(line, agents.models);
+
   const tile: Actor =
     line === undefined
       ? { kind: ACTOR_KIND.AGENT, name, provider: undefined, state: ACTOR_STATE.REST }
       : agentActor(line, name);
+
   return { name, tile, read: () => reading };
 }
 
@@ -351,11 +362,13 @@ export function AgentHoverCard({
   agentId: string;
 }): React.ReactNode {
   const mark = <ActorMark actor={actor} size={ACTOR_SIZE.CARD} />;
+
   const fallback = (
     <HoverCard data-agent-card="">
       <HoverCardHead mark={mark} name={actor.name} />
     </HoverCard>
   );
+
   return (
     <MentionedAgentCard
       agentId={agentId}
@@ -384,6 +397,7 @@ export function SendingAgent({
   const openPlace = useOpenPlace();
   const { taskId } = actor;
   const card = <AgentHoverCard actor={actor} agentId={agentId} />;
+
   const open =
     openPlace === undefined
       ? undefined
@@ -393,5 +407,6 @@ export function SendingAgent({
             ...(taskId === undefined ? undefined : { planId: taskId }),
             agentId,
           });
+
   return <ActorRef actor={actor} card={card} onOpen={open} nameOnly={nameOnly} />;
 }

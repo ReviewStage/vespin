@@ -189,6 +189,7 @@ function senderOf(
   if (agentLogin !== undefined && sender.login.toLowerCase() === agentLogin.toLowerCase()) {
     return GITHUB_SENDER.APP_AGENTS;
   }
+
   return sender.type === BOT_SENDER ? GITHUB_SENDER.OTHER_BOTS : GITHUB_SENDER.PEOPLE;
 }
 
@@ -211,6 +212,7 @@ function pullRequestSender(
   const head = read.pull_request.head?.ref;
   const agentBranch = head !== undefined && isAgentBranch(head);
   const agentOpened = !fork && agentBranch && AGENT_OPENING_ACTIONS.has(read.action);
+
   return sender === GITHUB_SENDER.PEOPLE && agentOpened ? GITHUB_SENDER.APP_AGENTS : sender;
 }
 
@@ -229,7 +231,9 @@ function itemEvent(
   applied: string | undefined,
 ): GitHubTriggerEvent | undefined {
   if (read.action === GITHUB_ACTION.OPENED) return events.opened;
+
   if (read.action === GITHUB_ACTION.LABELED && applied !== undefined) return events.labeled;
+
   return undefined;
 }
 
@@ -244,6 +248,7 @@ function pullRequestEvents(
   agentLogin: string | undefined,
 ): readonly GitHubEventRead[] {
   const { pull_request: pull, label, repository } = read;
+
   const kind = itemEvent(
     read,
     {
@@ -252,9 +257,11 @@ function pullRequestEvents(
     },
     label?.name,
   );
+
   const moment = UPDATE_MOMENT.get(read.action);
   const head = pull.head === undefined ? repository.full_name : pull.head.repo?.full_name;
   const fork = head?.toLowerCase() !== repository.full_name.toLowerCase();
+
   const shared = {
     repository: repository.full_name,
     labels: label === undefined ? pull.labels.map((one) => one.name) : [label.name],
@@ -264,10 +271,12 @@ function pullRequestEvents(
     draft: pull.draft === true,
     fork,
   };
+
   const kinds = [
     ...(kind === undefined ? [] : [{ event: kind, moment: undefined }]),
     ...(moment === undefined ? [] : [{ event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, moment }]),
   ];
+
   return kinds.map(({ event, moment: at }) => ({
     ...shared,
     event,
@@ -292,9 +301,12 @@ function githubEventsOf(
 ): readonly GitHubEventRead[] {
   if (event === GITHUB_EVENT.PULL_REQUEST) {
     const read = readDelivery(PullRequestSchema, payload);
+
     return Result.isFailure(read) ? [] : pullRequestEvents(read.success, agentLogin);
   }
+
   const read = githubEventOf(event, payload, agentLogin);
+
   return read === undefined ? [] : [read];
 }
 
@@ -306,11 +318,14 @@ function githubEventOf(
 ): GitHubEventRead | undefined {
   // Of an issue, a check, or a push, only who sent it is read beside the event itself.
   const plain = { moment: undefined, pushed: false, draft: false, fork: false } as const;
+
   switch (event) {
     case GITHUB_EVENT.ISSUES: {
       const read = readDelivery(IssueSchema, payload);
+
       if (Result.isFailure(read) || read.success.issue.pull_request !== undefined) return undefined;
       const { issue, label, repository } = read.success;
+
       const kind = itemEvent(
         read.success,
         {
@@ -319,7 +334,9 @@ function githubEventOf(
         },
         label?.name,
       );
+
       if (kind === undefined) return undefined;
+
       return {
         ...plain,
         sender: senderOf(read.success.sender, agentLogin),
@@ -337,11 +354,14 @@ function githubEventOf(
         },
       };
     }
+
     case GITHUB_EVENT.CHECK_SUITE: {
       const read = readDelivery(CheckSuiteSchema, payload);
+
       if (Result.isFailure(read)) return undefined;
       const { check_suite: suite, repository, action } = read.success;
       const branch = suite.head_branch;
+
       if (
         action !== GITHUB_ACTION.COMPLETED ||
         !FAILED_CONCLUSIONS.has(suite.conclusion ?? "") ||
@@ -351,6 +371,7 @@ function githubEventOf(
       ) {
         return undefined;
       }
+
       return {
         ...plain,
         sender: undefined,
@@ -368,12 +389,16 @@ function githubEventOf(
         },
       };
     }
+
     case GITHUB_EVENT.PUSH: {
       const read = readDelivery(PushSchema, payload);
+
       if (Result.isFailure(read)) return undefined;
       const { ref, deleted, compare, repository, sender } = read.success;
+
       if (deleted || !ref.startsWith(BRANCH_REF)) return undefined;
       const branch = ref.slice(BRANCH_REF.length);
+
       return {
         ...plain,
         pushed: true,
@@ -391,6 +416,7 @@ function githubEventOf(
         },
       };
     }
+
     default:
       return undefined;
   }
@@ -407,28 +433,36 @@ function githubEventOf(
  */
 function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): boolean {
   if (trigger.kind !== AUTOMATION_TRIGGER.GITHUB || trigger.event !== read.event) return false;
+
   if (
     read.sender !== undefined &&
     !(trigger.senders ?? GITHUB_DEFAULT_SENDERS).includes(read.sender)
   ) {
     return false;
   }
+
   if (read.sender === GITHUB_SENDER.APP_AGENTS && read.pushed) return false;
   const moments = trigger.moments ?? PULL_REQUEST_DEFAULT_MOMENTS;
+
   if (read.moment !== undefined && !moments.includes(read.moment)) return false;
+
   if ((read.draft && trigger.drafts !== true) || (read.fork && trigger.forks !== true)) {
     return false;
   }
+
   const labels = trigger.labels ?? [];
   const branches = trigger.branches ?? [];
+
   // A label is matched the way GitHub folds a label's case.
   const labeled =
     labels.length === 0 ||
     labels.some((wanted) =>
       read.labels.some((label) => label.toLowerCase() === wanted.toLowerCase()),
     );
+
   const branched =
     branches.length === 0 || (read.branch !== undefined && branches.includes(read.branch));
+
   return labeled && branched;
 }
 
@@ -439,6 +473,7 @@ const queueRunsOf = Effect.fnUntraced(function* (deliveryId: string, read: GitHu
     read.event,
     MAXIMUM_AUTOMATIONS,
   )).filter((automation) => triggerMatches(automation.trigger, read));
+
   const firedAt = yield* Clock.currentTimeMillis;
   const cadence = yield* AutomationCadence;
   yield* Effect.forEach(listening, (automation) =>
@@ -449,6 +484,7 @@ const queueRunsOf = Effect.fnUntraced(function* (deliveryId: string, read: GitHu
       firedAt,
     }),
   );
+
   return listening.length;
 });
 
@@ -468,7 +504,9 @@ export function queueGithubRuns(
   agentLogin: string | undefined,
 ): Effect.Effect<number, TaskStoreFailure | AutomationCadenceUnavailable, DatabaseServices> {
   const reads = githubEventsOf(event, payload, agentLogin);
+
   if (reads.length === 0 || deliveryId.length === 0) return Effect.succeed(0);
+
   return Effect.map(
     Effect.forEach(reads, (read) => queueRunsOf(deliveryId, read)),
     (counts) => counts.reduce((sum, count) => sum + count, 0),

@@ -43,6 +43,7 @@ export function lineWatcher<State>(options: LineWatcherOptions<State>): LineWatc
   const handle = (line: string): void => {
     if (done) return;
     const parsed = options.parse(line);
+
     if (parsed === undefined) return;
     options.onState(parsed);
   };
@@ -53,18 +54,24 @@ export function lineWatcher<State>(options: LineWatcherOptions<State>): LineWatc
       // whose lines no one reads, and a restart after an ending would reopen a
       // watch already reported unavailable.
       if (helper || done) return false;
+
       const started = new NativeHelper({
         binary: options.binary,
         ...(options.input ? { input: options.input } : undefined),
         output: "lines",
       });
+
       started.onLine(handle);
       started.onExit(end);
+
       if (!started.start()) {
         end();
+
         return false;
       }
+
       helper = started;
+
       return true;
     },
     send(line: string): boolean {

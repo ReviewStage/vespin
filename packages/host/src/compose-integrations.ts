@@ -132,7 +132,9 @@ function serverOf(
   server: string,
 ): Pick<IntegrationProviderParams, "provider" | "connection"> | undefined {
   const provider = integrationConnectionOf(server)?.provider;
+
   if (provider === undefined) return undefined;
+
   return server === provider ? { provider } : { provider, connection: server };
 }
 
@@ -148,11 +150,13 @@ export function composeIntegrations(
     const http = yield* HttpClient.HttpClient;
     const { kernel, account, client, mcpClients, accountId, focus } = dependencies;
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
+
     /** The service asked behind the gate, over the host's own HTTP client. */
     const asked: Asked = (call) =>
       gate()
         ? Effect.provideService(call, HttpClient.HttpClient, http)
         : Effect.succeed(UNANSWERED);
+
     const integrations = yield* heldIntegrations({
       seal: (userId, poll, after) =>
         asked(client.liveRead(INTEGRATION_STATUSES_READ, { userId }, poll ? { after } : undefined)),
@@ -164,6 +168,7 @@ export function composeIntegrations(
       pool: dependencies.pool,
       tell: liveTold(kernel.emit, INTEGRATION_FOLLOWS.INTEGRATIONS_FOLLOW),
     });
+
     const tools = yield* heldFetch<typeof LIVE_READ.INTEGRATION_TOOLS, string>({
       empty: NO_KEYS_HELD,
       path: (server) => [server],
@@ -171,14 +176,17 @@ export function composeIntegrations(
       focus,
       fetch: (server) => {
         const target = serverOf(server);
+
         if (target === undefined) return Effect.succeed(Option.none());
         const read = client.tools(target.provider, { connection: target.connection });
+
         return Effect.map(asked(read), (answer) =>
           "failure" in answer ? Option.none() : Option.some(answer),
         );
       },
       tell: liveTold(kernel.emit, INTEGRATION_FOLLOWS.INTEGRATIONS_TOOLS_FOLLOW),
     });
+
     // Note that the clients are asked for the account signed in now alone, since the service answers that account's.
     const clients = yield* heldFetch<typeof LIVE_READ.MCP_CLIENTS, string>({
       empty: NO_KEYS_HELD,
@@ -193,6 +201,7 @@ export function composeIntegrations(
             ),
       tell: liveTold(kernel.emit, INTEGRATION_FOLLOWS.MCP_CLIENTS_FOLLOW),
     });
+
     return composed(dependencies, asked, {
       integrations,
       integrationsHold: yield* accountHeld(integrations, accountId),
@@ -218,6 +227,7 @@ function composed(
   ) =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
+
       return userId === undefined
         ? Effect.void
         : integrations.confirmed(userId, connection, txid, moves);
@@ -236,14 +246,17 @@ function composed(
   }: IntegrationProviderParams): Effect.Effect<IntegrationConnectView> =>
     Effect.gen(function* () {
       const answer = yield* asked(client.connect(provider, { connection, add }));
+
       if ("failure" in answer) return answer;
       const opened = yield* openExternal(answer.url);
+
       if (!opened) return { failure: INTEGRATION_CALL_FAILURE.NOT_OPENED };
       yield* confirmed(
         answer.connection ?? connection ?? provider,
         answer.txid,
         (row) => row?.status !== INTEGRATION_STATUS.CONNECTED,
       );
+
       return answer.connection === undefined
         ? { opened: true }
         : { opened: true, connection: answer.connection };
@@ -255,6 +268,7 @@ function composed(
     ({ connection }, label) => {
       const userId = accountId();
       const synced = userId === undefined ? undefined : integrations.synced(userId, connection);
+
       // Note that an account with no label is answered with none, though its row may carry an empty one.
       return (
         synced !== undefined && (synced.label === "" ? null : synced.label) === (label ?? null)
@@ -266,9 +280,12 @@ function composed(
   const revoke = (clientId: string): Effect.Effect<McpClientsView> =>
     Effect.gen(function* () {
       const answer = yield* asked(mcpClients.revoke(clientId));
+
       if ("failure" in answer) return answer;
       const userId = accountId();
+
       if (userId !== undefined) yield* clients.read.answered(userId, answer);
+
       return answer;
     });
 
@@ -276,6 +293,7 @@ function composed(
   const retried = (read: { readonly retry: (userId: string) => Effect.Effect<void> }) =>
     Effect.suspend(() => {
       const userId = accountId();
+
       return userId === undefined ? Effect.void : read.retry(userId);
     });
 
@@ -286,6 +304,7 @@ function composed(
     INTEGRATIONS_CANCEL: ({ provider, connection }) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.cancel(provider, { connection }));
+
         if (!("failure" in answer)) {
           yield* confirmed(
             connection ?? provider,
@@ -293,15 +312,18 @@ function composed(
             (row) => (row?.status ?? INTEGRATION_STATUS.DISCONNECTED) !== answer.status,
           );
         }
+
         return answer;
       }),
     // A Disconnect answers once the held read no longer holds the account.
     INTEGRATIONS_DISCONNECT: ({ provider, connection }) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.disconnect(provider, { connection }));
+
         if (!("failure" in answer)) {
           yield* confirmed(connection ?? provider, answer.txid, (row) => row !== undefined);
         }
+
         return answer;
       }),
     // A rename names the account's row the windows hold, where they hold one, which the pool draws it over.
@@ -309,8 +331,10 @@ function composed(
       read: (asked: IntegrationRenameParams) =>
         Effect.sync((): IntegrationRename => {
           const userId = accountId();
+
           const held =
             userId === undefined ? undefined : integrations.synced(userId, asked.connection);
+
           return { ...asked, id: held?.id };
         }),
     }),

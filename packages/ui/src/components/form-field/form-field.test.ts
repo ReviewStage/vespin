@@ -31,6 +31,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -47,6 +48,7 @@ function subject(optional: boolean | undefined): ReactElement {
 function controlLabel(container: HTMLElement): string | undefined {
   const input = container.querySelector("input");
   assert.ok(input);
+
   return [...(input.labels ?? [])].map((label) => label.textContent).join(" ");
 }
 

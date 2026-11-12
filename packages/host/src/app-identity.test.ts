@@ -19,6 +19,7 @@ function workspace(body: string, home?: string) {
     encoding: "utf8",
     env: { PATH: process.env.PATH, HOME: home ?? process.env.HOME },
   });
+
   return { status: ran.status, stdout: ran.stdout.trim(), stderr: ran.stderr.trim() };
 }
 
@@ -64,19 +65,23 @@ test("a preview run is named for its branch, or for the host given, in a name th
       expected: "preview-vespin-abc123-acme",
     },
   ];
+
   for (const { branch, address, expected } of cases) {
     const named = workspace(`app_preview_instance "${address}" "${branch}"`).stdout;
     assert.equal(named, expected);
     assert.equal(resolveInstance({ packaged: false, requested: named }), named);
   }
+
   const long = workspace(
     `app_preview_instance https://a.vercel.app "feature/${"long-branch-".repeat(8)}"`,
   ).stdout;
+
   assert.equal(resolveInstance({ packaged: false, requested: long }), long);
 });
 
 test("a named launch replaces only its own instance, and the plain launch never a named one", async (t) => {
   const home = await temporaryDirectory(t, "instances-");
+
   // A lock held by a live process that is not the app, which the script reports rather than stops.
   const holdLock = (appName: string) => {
     const directory = join(home, "Library", "Application Support", appName);

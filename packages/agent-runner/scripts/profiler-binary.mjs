@@ -17,6 +17,7 @@ import { RUNNER_UNIT } from "../src/pins.ts";
 const runner = join(import.meta.dirname, "..");
 const profilingNode = createRequire(join(runner, "package.json")).resolve("@sentry/profiling-node");
 const cpuProfiler = createRequire(profilingNode).resolve("@sentry/node-cpu-profiler");
+
 await copyFile(
   join(dirname(cpuProfiler), RUNNER_UNIT.PROFILER),
   join(runner, "dist", RUNNER_UNIT.PROFILER),

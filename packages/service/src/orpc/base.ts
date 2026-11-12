@@ -112,8 +112,10 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
   const caller = callerTrace(Headers.fromInput(context.request.headers));
   const client = presentedClient(context.request.headers);
   const options = { kind: "server", parent: Option.getOrUndefined(caller) } as const;
+
   return yield* Effect.useSpan(procedure, options, (span) => {
     const services = context["effect/context"];
+
     const annotated = Context.add(services, References.CurrentLogAnnotations, {
       ...Context.get(services, References.CurrentLogAnnotations),
       procedure,
@@ -122,6 +124,7 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
         ? undefined
         : { client: `${client.platform}/${client.version}`, apiVersion: client.apiVersion }),
     });
+
     return next({ context: { "effect/context": Context.add(annotated, Tracer.ParentSpan, span) } });
   });
 });
@@ -134,6 +137,7 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
  */
 function forAccount(context: HostedContext, userId: string): WithEffectContext<WebServices> {
   const services = context["effect/context"];
+
   return {
     "effect/context": Context.add(services, References.CurrentLogAnnotations, {
       ...Context.get(services, References.CurrentLogAnnotations),
@@ -149,7 +153,9 @@ export const hosted = implement(hostedContract).$context<HostedContext>().use(pr
 export function accountMiddleware(resolveUserId: UserIdResolver) {
   return middlewareGen<HostedContext, AccountContext<HostedCaller>>(function* ({ context, next }) {
     const account = yield* resolvedAccount(resolveUserId, context.request);
+
     if (Option.isNone(account)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
     return yield* next({
       context: { userId: account.value, ...forAccount(context, account.value) },
     });
@@ -162,7 +168,9 @@ export function bearerOnlyMiddleware(resolveUserId: UserIdResolver) {
     if (!hostedCarriesBearer(context.request))
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const account = yield* resolvedAccount(resolveUserId, context.request);
+
     if (Option.isNone(account)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
     return yield* next({
       context: { userId: account.value, ...forAccount(context, account.value) },
     });
@@ -186,7 +194,9 @@ export const deviceCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
 ): Effect.fn.Return<DeviceCaller, HostedRefusal, DatabaseServices> {
   const host = yield* hostCallerOf(request);
+
   if (Option.isSome(host)) return host.value;
+
   return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
 });
 
@@ -201,6 +211,7 @@ export function deviceMiddleware() {
     if (!hostedCarriesBearer(context.request))
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const caller = yield* deviceCallerOf(context.request);
+
     return yield* next({ context: { ...caller, ...forAccount(context, caller.userId) } });
   });
 }
@@ -220,6 +231,7 @@ export const pairingHostMiddleware = middlewareGen<HostedContext, PairingHost>(f
   next,
 }) {
   const hostVersion = yield* admittedHostVersion(presentedHostVersion(context.request));
+
   return yield* next({ context: { hostVersion } });
 });
 
@@ -239,8 +251,10 @@ export const pollSecretMiddleware = middlewareGen<HostedContext, PollingHost>(fu
   next,
 }) {
   const pollSecret = presentedPollSecret(context.request);
+
   if (pollSecret === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const hostVersion = yield* admittedHostVersion(presentedHostVersion(context.request));
+
   return yield* next({ context: { pollSecret, hostVersion } });
 });
 
@@ -249,13 +263,17 @@ export const hostedKeyRing: Effect.Effect<KeyRing, HostedRefusal, HostedEnvironm
   function* () {
     const environment = yield* HostedEnvironment;
     const configured = environment.providerKeyEncryptionKeys;
+
     if (configured === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     const ring = parseKeyRing(configured);
+
     if (Result.isFailure(ring)) {
       // The fault names the shape that is wrong and never a value.
       yield* Effect.logError(`The provider key encryption keys cannot be read: ${ring.failure}`);
+
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
+
     return ring.success;
   },
 );
@@ -264,6 +282,7 @@ export const hostedKeyRing: Effect.Effect<KeyRing, HostedRefusal, HostedEnvironm
 export const keyRingMiddleware = middlewareGen<HostedContext, { readonly ring: KeyRing }>(
   function* ({ next }) {
     const ring = yield* hostedKeyRing;
+
     return yield* next({ context: { ring } });
   },
 );
@@ -286,18 +305,24 @@ export const writeReceiptMiddleware = middlewareGen<HostedContext & HostedCaller
   next,
 }) {
   const key = context.request.headers.get(IDEMPOTENCY_KEY.HEADER);
+
   if (key === null) return yield* next();
+
   if (key.length === 0 || key.length > IDEMPOTENCY_KEY.MAX_LENGTH) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   const { userId } = context;
+
   if (yield* hostedStoreOrUnavailable(writeReceiptStands(userId, key))) {
     return yield* Effect.fail(HOSTED_REFUSAL.ALREADY_WRITTEN);
   }
+
   const answered = yield* next();
   yield* keepWriteReceipt(userId, key, WRITE_RECEIPT_KEPT_MS).pipe(
     Effect.catch((failure) => Effect.logWarning("a write's receipt was not kept", failure)),
   );
+
   return answered;
 });
 
@@ -316,14 +341,18 @@ export function sessionMiddleware(resolveSessionUserId: SessionUserIdResolver) {
     next,
   }) {
     const sessionHeaders = sessionCredential(context.request.headers);
+
     if (sessionHeaders === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     // The resolver reads a request's headers alone, so it is handed one carrying the credential and nothing else.
     const credentialed = new Request(context.request.url, { headers: sessionHeaders });
+
     const account = yield* resolveSessionUserId(credentialed).pipe(
       Effect.tapError((failure) => Effect.logWarning("the auth service read no session", failure)),
       Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
     );
+
     if (Option.isNone(account)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
     return yield* next({
       context: { userId: account.value, sessionHeaders, ...forAccount(context, account.value) },
     });

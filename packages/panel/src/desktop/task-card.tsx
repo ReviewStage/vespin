@@ -127,6 +127,7 @@ export function TaskRowStatus({
   size?: TaskAgentsMarkSize;
 }): React.JSX.Element | null {
   const pullRequests = useTaskPullRequests(task.id);
+
   return <TaskAgentsMark agents={task.agents} pullRequests={pullRequests} size={size} />;
 }
 
@@ -177,6 +178,7 @@ function CreatorDetail({
   const door = useActorDoor(creator);
   const left = creator.kind === ACTOR_KIND.SOMEONE && creator.reason === SOMEONE_REASON.FORMER;
   const by = `${actorName(creator, { sentence: true })}${left ? ", who left" : ""}`;
+
   return (
     <HoverCardRow
       look={HOVER_CARD_ROW_LOOK.DETAIL}
@@ -236,6 +238,7 @@ export function PullRequestLine({
   // Its page opens as a link to it does: in its agent's Pull request tab where the place or the window knows the agent (`../tasks/use-open-link.ts`), else on GitHub.
   const openLink = useOpenLink();
   const { url } = pullRequest;
+
   return (
     <li data-task-card-pull-request="">
       <HoverCardRow
@@ -310,6 +313,7 @@ function TaskRelations({
   onOpenTask: ((taskId: string) => void) | undefined;
 }): React.JSX.Element {
   const count = subTaskCount(subTasks);
+
   return (
     <>
       {parent === undefined ? null : (
@@ -415,16 +419,20 @@ export function TaskCard({
 }): React.JSX.Element {
   const { members } = useMemberDirectory();
   const { agents: agentRows, pullRequests: pullRequestRows } = useTaskWork(task.id);
+
   const parent =
     task.parentTaskId === undefined || task.parentTaskId === task.id
       ? undefined
       : related.find((each) => each.id === task.parentTaskId);
+
   const subTasks = subTasksOf(related, task.id);
   const placed = parent !== undefined || subTasks.length > 0 || task.blocked === true;
+
   // Note that a task the app or an agent made says so in a workspace of one too, where its member's own needs no saying.
   const creatorShown =
     (task.origin !== undefined || (shared ?? (members !== undefined && members.length > 1))) &&
     (task.createdBy !== undefined || task.ownerId !== undefined);
+
   return (
     <HoverCard data-task-card="">
       <HoverCardHead
@@ -553,6 +561,7 @@ function TaskSub({
   now: number | undefined;
 }): React.JSX.Element {
   const keyed = task.number !== undefined && workspaceName !== undefined;
+
   return (
     <span>
       {keyed ? (
@@ -576,6 +585,7 @@ function TaskSub({
 function TaskMarks({ task }: { task: TaskSummary }): React.JSX.Element {
   const person = usePerson(task.assignee);
   const priority = priorityOf(task);
+
   return (
     <span className="task-card-marks inline-flex items-center gap-tight-gap">
       <StandingMark words={`Priority: ${TASK_PRIORITY_WORDS[priority]}`}>
@@ -601,6 +611,7 @@ function sharedWorkspace(
   task: Pick<TaskSummary, "workspaceId">,
 ): boolean | undefined {
   const count = tasks.workspaces.find((each) => each.id === task.workspaceId)?.memberCount;
+
   return count === undefined ? undefined : count > 1;
 }
 
@@ -647,6 +658,7 @@ export function homeTaskCardOf(
 ): React.JSX.Element {
   const home = tasks.workspaces.find((each) => each.id === task.workspaceId);
   const card = taskCardOf(tasks, task, now, focus);
+
   return home === undefined ? (
     card
   ) : (

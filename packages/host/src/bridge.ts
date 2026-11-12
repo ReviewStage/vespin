@@ -13,7 +13,9 @@ import type { PUSH_METHOD, PushMethod, PushPayload } from "./contract/pushes.js"
 export { ACT_PORT, actPortForwarder } from "./contract/kinds.js";
 
 type BridgeArguments = readonly unknown[];
+
 type BridgeKind = "invoke" | "send";
+
 type BridgeEntry<
   Kind extends BridgeKind,
   Channel extends string,
@@ -42,6 +44,7 @@ function args<Arguments extends BridgeArguments>(
 ): WireGuard<Arguments> {
   return (value) => {
     if (!Array.isArray(value)) return false;
+
     // SAFETY: Array.isArray established the structured-clone argument envelope; the field guards parse every member.
     return guard(value as UnparsedWireValue[]);
   };
@@ -100,10 +103,15 @@ export const BRIDGE = {
 } as const;
 
 export type Bridge = typeof BRIDGE;
+
 export type BridgeMethod = keyof Bridge;
+
 type ArgumentsOf<Entry> = Entry extends { args: WireGuard<infer Arguments> } ? Arguments : never;
+
 type ResultOf<Entry> = Entry extends { result?: WireGuard<infer Result> } ? Result : undefined;
+
 export type BridgeArgumentsFor<Method extends BridgeMethod> = ArgumentsOf<Bridge[Method]>;
+
 export type BridgeResultFor<Method extends BridgeMethod> = ResultOf<Bridge[Method]>;
 
 type DerivedAppBridge = {

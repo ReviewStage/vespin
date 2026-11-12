@@ -33,6 +33,7 @@ function open(address: string): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Catalog, { view: readView(address) })));
+
   return container;
 }
 
@@ -57,9 +58,11 @@ test("every other way to change the view keeps the width", () => {
   const page = open("?example=badges&width=390");
   const links = [...page.querySelectorAll<HTMLAnchorElement>("nav a, [aria-label=Theme] a")];
   assert.ok(links.length > 2);
+
   for (const link of links) {
     assert.equal(new URLSearchParams(link.search).get("width"), "390", link.href);
   }
+
   const field = page.querySelector<HTMLInputElement>("input[name=width]");
   assert.equal(field?.value, "390");
 });
@@ -87,9 +90,11 @@ test("a width typed and applied submits it with the rest of the view", () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, "414");
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+
   const apply = [...page.querySelectorAll("button")].find(
     (button) => button.textContent === "Apply",
   );
+
   assert.ok(apply);
   // jsdom cannot navigate, so the submission is read where the browser would send it, from the form's own data.
   const form = apply.form;

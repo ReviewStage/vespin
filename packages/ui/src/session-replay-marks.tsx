@@ -153,6 +153,7 @@ export function ReplayWords({
   children: ReactNode;
 }): React.JSX.Element {
   if (unmasked === true && !masked) return <ReplayUnmask>{children}</ReplayUnmask>;
+
   return masked || unmasked === false ? <ReplayMask>{children}</ReplayMask> : <>{children}</>;
 }
 
@@ -163,5 +164,6 @@ export function ReplayWords({
  */
 export function showsInReplay(element: Element | null | undefined): boolean {
   if (element === null || element === undefined || element.closest(TYPED) !== null) return false;
+
   return element.closest(EITHER_MARK)?.hasAttribute(UNMASK) === true;
 }

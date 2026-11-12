@@ -16,6 +16,7 @@ const withDirectory = <A, E>(
 ): Effect.Effect<A, E | PlatformError> =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped();
+
     return yield* run(directory);
   }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer)));
 
@@ -46,9 +47,11 @@ describe("writeSettingsFileAtomic", () => {
     withDirectory((directory) =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const writes = Array.from({ length: 8 }, (_, index) =>
           writeSettingsFileAtomic(directory, `{"version":${index}}\n`, `tab-${index}`),
         );
+
         yield* Effect.all(writes, { concurrency: "unbounded" });
 
         const entries = yield* fileSystem.readDirectory(directory);

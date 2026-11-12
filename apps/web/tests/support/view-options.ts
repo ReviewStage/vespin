@@ -12,6 +12,7 @@ const VIEW_OPTIONS = "View options";
 /** The View options button on `page`, pressed. */
 export function openViewOptions(page: HTMLElement): void {
   const button = page.querySelector<HTMLButtonElement>(`button[aria-label="${VIEW_OPTIONS}"]`);
+
   if (button === null) throw new Error("no View options button");
   act(() => button.click());
 }
@@ -20,7 +21,9 @@ export function openViewOptions(page: HTMLElement): void {
 export function menuItems(): { label: string; checked: string | null }[] {
   const menus = [...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving])')];
   const menu = menus.at(-1);
+
   if (menu === undefined) throw new Error("no menu stands");
+
   return [...menu.querySelectorAll<HTMLElement>(".ui-menu-item")]
     .filter((item) => item.closest('[role="menu"]') === menu)
     .map((item) => ({
@@ -35,6 +38,7 @@ export function choose(...names: string[]): void {
     const item = [
       ...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving]) .ui-menu-item'),
     ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === name);
+
     if (item === undefined) throw new Error(`${name} is not in the menu`);
     act(() => item.click());
   }

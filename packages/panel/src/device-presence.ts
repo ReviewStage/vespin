@@ -41,11 +41,15 @@ const FAILED_BOOK: PresenceBook = { hosts: new Map(), settled: true, failed: tru
 /** Where a host's setup keeps it from taking an agent, whatever its presence; none for a host that is ready. */
 function setupStanding(host: HostLine): DeviceStanding | undefined {
   if (host.update === HOST_UPDATE.UPDATING) return DEVICE_STANDING.SETTING_UP;
+
   if (host.setup === DEVICE_SETUP.FAILED) return DEVICE_STANDING.FAILED;
+
   if (host.calledIn === false) {
     const waited = Date.now() - (host.joinedAt ?? Date.now());
+
     return waited > CALL_IN_CEILING_MS ? DEVICE_STANDING.FAILED : DEVICE_STANDING.SETTING_UP;
   }
+
   return host.setup === DEVICE_SETUP.PREPARING ? DEVICE_STANDING.SETTING_UP : undefined;
 }
 
@@ -60,9 +64,12 @@ export function presenceStanding(
   deviceId: string | undefined,
 ): DeviceStanding | undefined {
   if (!book.settled) return DEVICE_STANDING.CHECKING;
+
   if (deviceId === undefined) return undefined;
   const host = book.hosts.get(deviceId);
+
   if (host === undefined) return book.failed ? DEVICE_STANDING.UNKNOWN : undefined;
+
   return (
     setupStanding(host) ?? (host.away === true ? DEVICE_STANDING.OFFLINE : DEVICE_STANDING.ONLINE)
   );
@@ -71,6 +78,7 @@ export function presenceStanding(
 /** The book the hosts read stands at: nothing known before it answers, and failed where it never could. */
 function bookOf(hosts: readonly HostLine[] | undefined, failed: boolean): PresenceBook {
   if (hosts === undefined) return failed ? FAILED_BOOK : NO_BOOK;
+
   return { hosts: new Map(hosts.map((host) => [host.id, host])), settled: true, failed };
 }
 
@@ -79,5 +87,6 @@ export function useDevicePresence(drawing: boolean): PresenceBook {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const { data, isError } = useQuery(hostsQuery(drawing ? accountId : undefined));
   const hosts = data?.hosts;
+
   return useMemo(() => bookOf(hosts, isError), [hosts, isError]);
 }

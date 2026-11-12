@@ -40,6 +40,7 @@ it.layer(getTestDB())("a live statement's immutability", (it) => {
             .from(user)
             .where(and(eq(user.id, "user-1"), eq(user.emailVerified, true))),
         );
+
         assert.deepEqual(yield* mutableFunctionsOf(statement), []);
       }),
   );
@@ -61,6 +62,7 @@ it.layer(getTestDB())("a live statement's immutability", (it) => {
             .from(user)
             .where(eq(user.id, "user-1")),
         );
+
         assert.deepEqual(yield* mutableFunctionsOf(statement), [
           '"extract"(text,timestamp with time zone) s',
           "jsonb_agg(anyelement) s",
@@ -85,6 +87,7 @@ it.layer(getTestDB())("a live statement's immutability", (it) => {
             })
             .from(user),
         );
+
         assert.deepEqual(yield* mutableFunctionsOf(statement), [
           "timestamptz_in(cstring,oid,integer) s",
           "timestamptz_out(timestamp with time zone) s",

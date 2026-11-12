@@ -33,11 +33,14 @@ export function renameWrite<Answer, Variables>(
 ): RenameWrite {
   const { mutate, reset, variables, data, error, isPending } = mutation;
   const { onRefused } = shape;
+
   const refusedBy = (answer: Answer | undefined, failed: Error | null) =>
     failed !== null || (answer !== undefined && shape.refused(answer));
+
   return {
     run: (subjectId, name) => {
       const asked = shape.ask(subjectId, name);
+
       if (onRefused === undefined) return mutate(asked);
       mutate(asked, {
         onSettled: (answer, failed, variables) => {

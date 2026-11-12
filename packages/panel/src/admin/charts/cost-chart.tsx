@@ -73,6 +73,7 @@ export function CostChart({
   generatedAt: number;
 }): React.JSX.Element {
   const totals = daily.map((day) => SOURCES.reduce((total, source) => total + day[source], 0));
+
   if (seriesHasNoData(totals)) {
     return (
       <ChartFrame title={COST_TITLE}>
@@ -85,6 +86,7 @@ export function CostChart({
     day: day.day,
     ...Object.fromEntries(SOURCES.map((source) => [source, day[source]])),
   }));
+
   return (
     <ChartFrame title={COST_TITLE} legend={<CostLegend />}>
       <DailyBars

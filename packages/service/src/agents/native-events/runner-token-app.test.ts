@@ -55,7 +55,9 @@ const MINUTE = 60 * 1000;
 
 function ring(): KeyRing {
   const parsed = parseKeyRing(Redacted.make(KEK));
+
   if (Result.isFailure(parsed)) return assert.fail("not a ring");
+
   return parsed.success;
 }
 
@@ -75,19 +77,24 @@ const ENVIRONMENT: HostedEnvironmentValues = {
 /** OpenAI's token endpoint, in Codex's JSON: each renewal rotates the refresh token and answers the next access token, good for an hour. */
 function openAi() {
   const state = { renewals: 0 };
+
   const respond = async (url: string, init: RequestInit): Promise<Response> => {
     assert.equal(url, CODEX_DEVICE_OAUTH.TOKEN_URL);
+
     const body = JSON.parse(await new Response(init.body).text()) as {
       readonly refresh_token?: string;
     };
+
     assert.equal(body.refresh_token, `refresh-${state.renewals}`);
     state.renewals += 1;
+
     return Response.json({
       access_token: `access-${state.renewals}`,
       refresh_token: `refresh-${state.renewals}`,
       expires_in: 3600,
     });
   };
+
   return { state, respond };
 }
 
@@ -95,6 +102,7 @@ function openAi() {
 const standing = Effect.gen(function* () {
   const openai = openAi();
   const logged: string[] = [];
+
   const services = Layer.mergeAll(
     Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
     Layer.succeed(Database, yield* Database),
@@ -103,23 +111,30 @@ const standing = Effect.gen(function* () {
     fakeHttpClientLayer(openai.respond),
     Logger.layer([Logger.make(({ message }) => logged.push(JSON.stringify(message)))]),
   );
+
   const web = HttpRouter.toWebHandler(runnerTokenApp().pipe(HttpRouter.provideRequest(services)), {
     disableLogger: true,
   });
+
   yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
   const ask = (bearer: string | undefined, method = "POST") =>
     Effect.promise(async () => {
       const headers = new Headers();
+
       if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+
       const response = await web.handler(
         new Request(`${ORIGIN}${RUNNER_TOKEN_PATH}`, { method, headers }),
       );
+
       return {
         status: response.status,
         cache: response.headers.get("cache-control"),
         body: await response.json(),
       };
     });
+
   return { ask, openai, logged };
 });
 
@@ -136,9 +151,11 @@ const agentOn = (
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const task = yield* startTask(userId, { name: "Teammate invitations" });
     const deviceId = randomUUID();
+
     if (machine === AGENT_MACHINE.DEVICE) {
       yield* registerDevice(userId, { id: deviceId, name: "rack-1", ...DEVICE_LAYOUT });
     }
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -151,9 +168,11 @@ const agentOn = (
       payer,
       ...(machine === AGENT_MACHINE.DEVICE ? { machine, deviceId } : undefined),
     });
+
     const agent = Option.getOrThrow(started).agent;
     const bearer = randomBytes(32).toString("base64url");
     yield* recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer));
+
     return { userId, agentId: agent.id, bearer };
   });
 
@@ -167,6 +186,7 @@ const signIn = (userId: string, minutesLeft: number) =>
   Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const accessExpiresAt = new Date(now.getTime() + minutesLeft * 60_000);
+
     const { sealed, hint } = sealCodexDeviceCredentials(ring(), userId, {
       accessToken: "access-0",
       refreshToken: "refresh-0",
@@ -175,6 +195,7 @@ const signIn = (userId: string, minutesLeft: number) =>
       chatgptAccountId: WORKSPACE,
       accessExpiresAt,
     });
+
     yield* saveProviderKey(
       userId,
       PROVIDER_KEY_PROVIDER.OPENAI,
@@ -222,6 +243,7 @@ it.layer(getTestDB())("the runner's token route", (it) => {
         assert.equal(openai.state.renewals, 1);
 
         const log = logged.join("\n");
+
         for (const secret of ["access-0", "access-1", "refresh-1", agent.bearer]) {
           assert.equal(log.includes(secret), false, "a secret in the log");
         }
@@ -261,6 +283,7 @@ it.layer(getTestDB())("the runner's token route", (it) => {
             AGENT_MACHINE.DEVICE,
           ),
         ];
+
         for (const other of others) {
           const { userId, bearer } = yield* other;
           yield* signIn(userId, 60);
@@ -286,6 +309,7 @@ it.layer(getTestDB())("the runner's token route", (it) => {
       for (let asked = 0; asked < RUNNER_TOKEN_BRAKE.maxRequestsPerWindow; asked += 1) {
         assert.equal((yield* ask(agent.bearer)).status, HOSTED_HTTP_STATUS.OK);
       }
+
       const braked = yield* ask(agent.bearer);
       assert.equal(braked.status, HOSTED_HTTP_STATUS.TOO_MANY_REQUESTS);
       assert.deepEqual(braked.body, { error: HOSTED_API_ERROR.QUOTA_EXHAUSTED });

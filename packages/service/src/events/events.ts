@@ -116,7 +116,9 @@ function batchWorkspaceOf(
     const memberOf = yield* memberWorkspaceIds(userId);
     const personal = Option.getOrUndefined(yield* personalWorkspaceOf(userId));
     const shared = memberOf.filter((workspaceId) => workspaceId !== personal);
+
     if (shared.length > 0) return shared.length === 1 ? shared[0] : undefined;
+
     return personal !== undefined && memberOf.includes(personal) ? personal : undefined;
   });
 }
@@ -170,6 +172,7 @@ function batchDocument(
           ? undefined
           : { $groups: { [WORKSPACE_GROUP_TYPE]: workspaceId } }),
       };
+
       return {
         event: event.name,
         distinct_id: userId,
@@ -209,11 +212,14 @@ export function recordEvents(
     // The reader owns the batch limit as well as the vocabulary, and refuses an
     // oversized batch whole rather than trimming it.
     const events = productEventBatchFromWire(payload);
+
     if (!events) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
     // Note that a batch of nothing but retired names is accepted with nothing
     // to post, because the older build that sent it is not at fault.
     if (events.length === 0) return { accepted: 0 };
     const build = productEventBuildFromWire(payload);
+
     const stamp = {
       ...build,
       [PLATFORM_PROPERTY]: build.platform ?? PRODUCT_PLATFORM.DESKTOP,
@@ -221,33 +227,43 @@ export function recordEvents(
     };
 
     const now = yield* Clock.currentTimeMillis;
+
     if (!(yield* eventsBrake.check(userId, events.length))) {
       return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
     }
 
     const upstream: PosthogUpstreamOptions = {};
+
     if (options.host !== undefined) upstream.host = options.host;
+
     // A failed read costs the person's name, never the counts.
     const read = options.readPerson
       ? yield* Effect.option(options.readPerson(userId))
       : Option.none<PosthogPerson | undefined>();
+
     // Note that a read finding no row is an account deleted since its caller
     // was resolved, whose batch would bring back the person it erased.
     if (Option.isSome(read) && read.value === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     const person = Option.getOrUndefined(read);
+
     // A failed read costs the workspace's group, never the counts.
     const workspaceId = yield* batchWorkspaceOf(userId).pipe(
       Effect.orElseSucceed((): string | undefined => undefined),
     );
+
     const response = yield* postBatchEffect(
       batchDocument(events, stamp, options.projectApiKey, userId, now, person, workspaceId),
       upstream,
     );
+
     if (!response) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
+
     // Status alone diagnoses the upstream without carrying its body onward.
     if (!response.ok) return yield* Effect.fail(upstreamRefused(response.status));
+
     // The desktop drops the batch whichever way this lands; the distinction is
     // for the tests and alerts that watch this endpoint.
     return { accepted: events.length };

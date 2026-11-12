@@ -56,6 +56,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -66,11 +67,14 @@ const openAgent = Effect.gen(function* () {
   const task = yield* createTask(userId, { organizationId: workspaceId, name: "Invites" });
   const agentId = yield* openTaskAgent(userId, workspaceId, task.id);
   const db = yield* Database;
+
   const [row] = yield* db
     .select({ conversationId: agentTable.conversationId })
     .from(agentTable)
     .where(eq(agentTable.id, agentId));
+
   const conversationId = row?.conversationId ?? assert.fail("the agent has no conversation");
+
   const params = {
     ownerId: userId,
     conversationId,
@@ -80,12 +84,14 @@ const openAgent = Effect.gen(function* () {
     id: agentId,
     call: "",
   };
+
   const agentTopics: readonly SyncTopic[] = [
     [TOPIC.CONVERSATION, conversationId],
     [TOPIC.AGENT, agentId],
     [TOPIC.TASK, task.id],
     [TOPIC.WORKSPACE, workspaceId],
   ];
+
   return { userId, target: { userId, conversationId }, params, agentTopics };
 });
 
@@ -102,6 +108,7 @@ const wakesTheTranscript = <A, E, R>(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the transcript's read is woken by a topic the write notifies",
     );
+
     return fired;
   });
 
@@ -118,11 +125,13 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
       Effect.gen(function* () {
         const { userId, params } = yield* openAgent;
         const { agentId } = params;
+
         /** What the read answers of the queue now. */
         const queuePart = Effect.map(
           liveQueryParts(agentTranscriptRead, params, {}),
           ({ queries }) => JSON.stringify(queries.queueRevision?.rows ?? []),
         );
+
         yield* queueAgentMessage(userId, agentId, { id: randomUUID(), text: "First" });
         const [queued] = Option.getOrThrow(yield* readAgentQueue(userId, agentId)).messages;
         assert.ok(queued !== undefined);
@@ -217,10 +226,12 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
           const { target, params } = yield* openAgent;
           const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
           const db = yield* Database;
+
           const [row] = yield* db
             .select({ createdAt: agentTable.createdAt })
             .from(agentTable)
             .where(eq(agentTable.id, params.agentId));
+
           const agent = { createdAt: row?.createdAt ?? assert.fail("the agent has no row") };
           const own = { id: params.agentId };
           const turnId = randomUUID();
@@ -238,6 +249,7 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
             at: NOW,
           });
           const catalog = modelCatalogOf([]);
+
           const { page } = yield* transcriptNow(
             target,
             CODER_TOOL_SET,
@@ -245,9 +257,11 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
             agent,
             own,
           ).pipe(Effect.provide(catalog));
+
           const answer = new AssistantMessageBuilder();
           answer.stepStart();
           answer.text("The invites are sent.");
+
           const message = yield* wokenOnHub(
             transcriptPast(target, CODER_TOOL_SET, page.cursor, agent, own).pipe(
               Effect.provide(catalog),

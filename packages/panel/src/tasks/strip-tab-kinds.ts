@@ -83,7 +83,9 @@ export type TabPin = (typeof TAB_PIN)[keyof typeof TAB_PIN];
  */
 function wordSurface(tab: WordTab): ProductSurface {
   if (tab === SIDE_PANEL_TAB.INBOX) return PRODUCT_SURFACE.INBOX;
+
   if (tab === SIDE_PANEL_TAB.COMMENTS) return PRODUCT_SURFACE.COMMENTS;
+
   return PRODUCT_SURFACE.TASK;
 }
 
@@ -287,6 +289,7 @@ const STRIP_TAB_KINDS = {
     // A worker's tab is its agent's, linked by the agent alone; a worker of the app's own is drawn nowhere a link opens.
     link: (tab) => {
       const agent = tab.delegation?.agent;
+
       return agent === undefined
         ? undefined
         : { kind: LINK_DESTINATION.WORKER, agentId: agent, callId: tab.subagent };

@@ -115,6 +115,7 @@ export function PersonBody({
   children: ReactNode;
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null);
+
   return (
     <div ref={root}>
       <ListMotion root={root} reading={reading}>

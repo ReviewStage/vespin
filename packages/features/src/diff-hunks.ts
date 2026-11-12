@@ -86,12 +86,17 @@ export const LOCKFILE_NAMES: ReadonlySet<string> = new Set([
 function rowsOf(lines: readonly string[], oldStart: number, newStart: number): DiffRow[] {
   let oldLine = oldStart;
   let newLine = newStart;
+
   return lines.map((line) => {
     const kind = ROW_MARK.get(line.charAt(0)) ?? DIFF_ROW.CONTEXT;
     const text = line.slice(1);
+
     if (kind === DIFF_ROW.NOTE) return { kind, oldLine: undefined, newLine: undefined, text };
+
     if (kind === DIFF_ROW.ADDED) return { kind, oldLine: undefined, newLine: newLine++, text };
+
     if (kind === DIFF_ROW.REMOVED) return { kind, oldLine: oldLine++, newLine: undefined, text };
+
     return { kind, oldLine: oldLine++, newLine: newLine++, text };
   });
 }
@@ -107,16 +112,20 @@ function rowsOf(lines: readonly string[], oldStart: number, newStart: number): D
  */
 export function patchHunks(patch: string): readonly DiffHunk[] | undefined {
   let parsed: ReturnType<typeof parsePatch>;
+
   try {
     parsed = parsePatch(patch);
   } catch {
     return undefined;
   }
+
   const headers = patch.split("\n").filter((line) => line.startsWith("@@"));
+
   return (parsed[0]?.hunks ?? []).map((hunk, index) => {
     const header = headers[index] ?? "";
     const counts = HUNK_COUNTS.exec(header);
     const [, oldStart, oldLines = "1", newStart, newLines = "1"] = counts ?? [];
+
     return {
       header,
       oldStart: oldStart === undefined ? hunk.oldStart : Number(oldStart),

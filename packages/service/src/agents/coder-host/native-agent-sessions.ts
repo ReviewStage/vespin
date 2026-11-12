@@ -72,6 +72,7 @@ const nativeCoderInstructions = (
 ) =>
   Effect.gen(function* () {
     const target = { userId, conversationId: agent.conversationId };
+
     // Note that we read these together, because none waits on another.
     const [authorship, workspace, taskNumber, standing] = yield* Effect.all(
       [
@@ -85,6 +86,7 @@ const nativeCoderInstructions = (
       ],
       { concurrency: "unbounded" },
     );
+
     return agentCoderInstructions(agent, {
       authorship,
       workspace,
@@ -120,6 +122,7 @@ export function nativeAgentSessionsLayer(
     Effect.gen(function* () {
       const context = yield* Effect.context<RunnerServices | ConnectionDoorServices>();
       const originOf = options.origin ?? deploymentOrigin;
+
       /** What every harness's sessions are handed, for the account given and worded for the harness. */
       const optionsFor = (
         account: string,
@@ -148,10 +151,13 @@ export function nativeAgentSessionsLayer(
             Effect.provideContext(context),
           ),
       });
+
       return {
         sessions: (runtime, account) => {
           const origin = originOf();
+
           if (origin === undefined) return Option.none();
+
           if (runtime === CONVERSATION_RUNTIME.CODEX) {
             return Option.some(
               codexSessions({
@@ -160,6 +166,7 @@ export function nativeAgentSessionsLayer(
               }).pipe(Effect.provideContext(context)),
             );
           }
+
           return Option.some(
             claudeCodeSessions(optionsFor(account, origin, CODER_HARNESS.CLAUDE_CODE)).pipe(
               Effect.provideContext(context),

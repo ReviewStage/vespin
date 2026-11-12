@@ -30,7 +30,9 @@ import type { HostedStoreTestRun } from "./hosted-store-database.js";
 const IdRowSchema = Schema.Struct({ id: Schema.String });
 
 type ConversationInsert = typeof conversations.$inferInsert;
+
 type MessageInsert = typeof messages.$inferInsert;
+
 type TurnInsert = typeof turns.$inferInsert;
 
 export interface ConversationRow {
@@ -50,6 +52,7 @@ export function insertConversation(run: HostedStoreTestRun, row: ConversationRow
   return run(
     Effect.gen(function* () {
       const db = yield* Database;
+
       const rows = yield* db
         .insert(conversations)
         .values({
@@ -64,6 +67,7 @@ export function insertConversation(run: HostedStoreTestRun, row: ConversationRow
           expectsCompletion: row.expectsCompletion ?? true,
         })
         .returning({ id: conversations.id });
+
       return Schema.decodeUnknownSync(IdRowSchema)(rows[0]).id;
     }),
   );
@@ -95,9 +99,11 @@ export interface MessageRow {
 
 export function insertMessage(run: HostedStoreTestRun, row: MessageRow): Promise<string> {
   const createdAt = row.createdAt ?? new Date();
+
   return run(
     Effect.gen(function* () {
       const db = yield* Database;
+
       const rows = yield* db
         .insert(messages)
         .values({
@@ -120,6 +126,7 @@ export function insertMessage(run: HostedStoreTestRun, row: MessageRow): Promise
           finishedAt: row.finishedAt ?? null,
         })
         .returning({ id: messages.id });
+
       return Schema.decodeUnknownSync(IdRowSchema)(rows[0]).id;
     }),
   );
@@ -143,6 +150,7 @@ export function insertTurn(run: HostedStoreTestRun, row: TurnInsertRow): Promise
   return run(
     Effect.gen(function* () {
       const db = yield* Database;
+
       const rows = yield* db
         .insert(turns)
         .values({
@@ -159,6 +167,7 @@ export function insertTurn(run: HostedStoreTestRun, row: TurnInsertRow): Promise
           failure: row.failure ?? null,
         })
         .returning({ id: turns.id });
+
       return Schema.decodeUnknownSync(IdRowSchema)(rows[0]).id;
     }),
   );
@@ -185,7 +194,9 @@ const TurnRowSchema = Schema.Struct({
   failureDetail: Schema.NullOr(Schema.String),
   cancelRequestedAt: Schema.NullOr(InstantColumnSchema),
 });
+
 export type TurnRow = Schema.Schema.Type<typeof TurnRowSchema>;
+
 const decodeTurnRow = Schema.decodeUnknownSync(TurnRowSchema);
 
 export function readTurnById(run: HostedStoreTestRun, id: string): Promise<TurnRow | undefined> {
@@ -199,6 +210,7 @@ export function readTurnById(run: HostedStoreTestRun, id: string): Promise<TurnR
 
 /** Every part this build stores carries at least a `type`, the same shape `writer.ts`'s own column schema checks. */
 const readsPartsShape = Schema.is(Schema.Array(Schema.Struct({ type: Schema.String })));
+
 const StoredPartsColumnSchema: Schema.Codec<StoredUIMessage["parts"]> = Schema.declare(
   (input): input is StoredUIMessage["parts"] => readsPartsShape(input),
 );
@@ -219,7 +231,9 @@ const MessageRowFullSchema = Schema.Struct({
   finishedAt: Schema.NullOr(InstantColumnSchema),
   revision: Schema.NullOr(EpochMillisColumnSchema),
 });
+
 export type MessageRowFull = Schema.Schema.Type<typeof MessageRowFullSchema>;
+
 const decodeMessageRow = Schema.decodeUnknownSync(MessageRowFullSchema);
 
 export function readMessagesByConversationTyped(

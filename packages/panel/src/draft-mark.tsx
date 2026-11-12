@@ -24,5 +24,6 @@ import { DraftMark, NotDeliveredMark } from "@repo/ui";
 /** The mark a place wears for what was left in it: the failed mark where a message was not delivered, else the pencil where a draft waits, else none. */
 export function leftMark(failed: boolean, drafted: boolean): React.JSX.Element | null {
   if (failed) return <NotDeliveredMark />;
+
   return drafted ? <DraftMark /> : null;
 }

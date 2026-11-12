@@ -14,6 +14,7 @@ export function pageLoadedBy(type: NavigationTimingType | undefined): void {
     type,
     toJSON: () => ({ type }),
   };
+
   vi.spyOn(performance, "getEntriesByType").mockImplementation((kind) =>
     kind === "navigation" && type !== undefined ? [loaded] : [],
   );

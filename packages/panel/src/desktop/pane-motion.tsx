@@ -144,11 +144,13 @@ type PaneGlideState = Record<never, never>;
  */
 export function paneTiming(element: Element): KeyframeAnimationOptions | undefined {
   const timing = tokenTiming(element, MOTION_TOKEN.DURATION_PANE, MOTION_TOKEN.EASE_PANE);
+
   return timing === undefined ? undefined : { ...timing, id: PANE_MOTION };
 }
 
 function sameLayout(a: PaneLayout, b: PaneLayout): boolean {
   const names = Object.keys(a);
+
   return names.length === Object.keys(b).length && names.every((name) => a[name] === b[name]);
 }
 
@@ -168,10 +170,13 @@ function isDrawn(element: Element): boolean {
  */
 function frameOf(rect: DOMRect, moving: SheetMotion | undefined): Edges {
   const progress = moving?.motion.effect?.getComputedTiming().progress;
+
   if (moving === undefined || progress === undefined || progress === null) {
     return { left: rect.left, right: rect.right };
   }
+
   const { from, to } = moving;
+
   return {
     left: from.left + (to.left - from.left) * progress,
     right: from.right + (to.right - from.right) * progress,
@@ -181,6 +186,7 @@ function frameOf(rect: DOMRect, moving: SheetMotion | undefined): Edges {
 /** Where each glider, pane, and sheet is drawn now, motion under way included. */
 function measure(root: HTMLElement, sheets: SheetMotions): Snapshot {
   const drawn: Snapshot = new Map();
+
   for (const element of root.querySelectorAll(`${MOVED}, ${PANE}`)) {
     if (!isDrawn(element)) continue;
     const rect = element.getBoundingClientRect();
@@ -193,6 +199,7 @@ function measure(root: HTMLElement, sheets: SheetMotions): Snapshot {
       frame: frameOf(rect, sheets.get(element)),
     });
   }
+
   return drawn;
 }
 
@@ -210,6 +217,7 @@ function running(element: Element): Animation[] {
 function stop(element: Element, sheets: SheetMotions): void {
   for (const motion of running(element)) motion.cancel();
   const moving = sheets.get(element);
+
   if (moving === undefined || !(element instanceof HTMLElement)) return;
   moving.card.cancel();
   sheets.delete(element);
@@ -224,6 +232,7 @@ function stop(element: Element, sheets: SheetMotions): void {
  */
 export function pastRightEdge(pane: Element): string {
   const gap = Number.parseFloat(getComputedStyle(pane).getPropertyValue("--sheet-gap"));
+
   return gap > 0 ? `translateX(calc(100% + ${gap}px))` : "translateX(100%)";
 }
 
@@ -249,10 +258,13 @@ function playPane(
 ): void {
   if (was === undefined) {
     pane.animate([{ transform: pastRightEdge(pane) }, { transform: "none" }], timing);
+
     return;
   }
+
   const grown = was.rect.left - now.left;
   const sameWidth = Math.abs(was.rect.width - now.width) < STILL;
+
   if (sameWidth && was.clip.startsWith("inset(")) {
     pane.animate([{ clipPath: was.clip }, { clipPath: "inset(0)" }], timing);
   } else if (sameWidth) glide(pane, grown, timing);
@@ -288,6 +300,7 @@ function frameClip(left: number, right: number): string {
  */
 function cardClip(left: number, right: number, reach: Edges, radius: number): string {
   const corner = radius + HAIRLINE;
+
   return `inset(${-HAIRLINE}px ${right + reach.right}px ${-HAIRLINE}px ${left + reach.left}px round ${corner}px)`;
 }
 
@@ -311,15 +324,21 @@ function playSheet(
 ): void {
   const left = was.left - now.left;
   const right = now.right - was.right;
+
   if (Math.abs(left) < STILL && Math.abs(right) < STILL) return;
+
   if (!(sheet instanceof HTMLElement)) return;
   const style = getComputedStyle(sheet, "::before");
   const radius = Number.parseFloat(style.borderTopLeftRadius);
+
   if (style.content === "none" || !Number.isFinite(radius)) return;
   const reach = { left: Math.max(0, -left), right: Math.max(0, -right) };
+
   if (reach.left > 0) sheet.style.setProperty(REACH.LEFT, `${reach.left}px`);
+
   if (reach.right > 0) sheet.style.setProperty(REACH.RIGHT, `${reach.right}px`);
   const options = { ...timing, fill: "forwards" } as const;
+
   const motion = sheet.animate(
     [
       { clipPath: frameClip(left - HAIRLINE, right - HAIRLINE) },
@@ -327,6 +346,7 @@ function playSheet(
     ],
     options,
   );
+
   const card = sheet.animate(
     [
       { clipPath: cardClip(left - HAIRLINE, right - HAIRLINE, reach, radius) },
@@ -334,6 +354,7 @@ function playSheet(
     ],
     { ...options, pseudoElement: "::before" },
   );
+
   sheets.set(sheet, { from: was, to: { left: now.left, right: now.right }, motion, card });
   motion.onfinish = () => stop(sheet, sheets);
 }
@@ -345,6 +366,7 @@ function playSheet(
  */
 function playSidebar(sidebar: Element, was: Drawn, timing: KeyframeAnimationOptions): void {
   const now = getComputedStyle(sidebar);
+
   if (now.transform === was.transform && now.opacity === was.opacity) return;
   sidebar.animate(
     [
@@ -358,15 +380,19 @@ function playSidebar(sidebar: Element, was: Drawn, timing: KeyframeAnimationOpti
 /** Replays, from `before`, what the layout change just committed under `root` moved. */
 function play(root: HTMLElement, before: Snapshot, sheets: SheetMotions): void {
   const timing = paneTiming(root);
+
   if (timing === undefined) return;
   const moved = [...root.querySelectorAll(MOVED)].filter(isDrawn);
+
   // Note that a motion still under way is stopped before anything is
   // measured, so each element is read where the new layout stands it, and
   // read all at once, so the layout is worked out once rather than per element.
   for (const element of moved) stop(element, sheets);
   const after = moved.map((element) => ({ element, now: element.getBoundingClientRect() }));
+
   for (const { element, now } of after) {
     const was = before.get(element);
+
     if (element.matches(PANE)) playPane(element, was, now, timing);
     else if (element.matches(SIDEBAR)) {
       if (was !== undefined) playSidebar(element, was, timing);
@@ -396,6 +422,7 @@ export class PaneGlide extends Component<PaneGlideProps, PaneGlideState, Snapsho
    */
   readonly #land = (): void => {
     if (!("getAnimations" in document)) return;
+
     for (const motion of document.getAnimations()) {
       if (motion.id === PANE_MOTION) motion.finish();
     }
@@ -409,6 +436,7 @@ export class PaneGlide extends Component<PaneGlideProps, PaneGlideState, Snapsho
    */
   #settling(root: HTMLElement): boolean {
     const duration = Number(paneTiming(root)?.duration ?? 0);
+
     return performance.now() - this.#arrived < duration;
   }
 
@@ -428,12 +456,16 @@ export class PaneGlide extends Component<PaneGlideProps, PaneGlideState, Snapsho
    */
   override getSnapshotBeforeUpdate(previous: PaneGlideProps): Snapshot | null {
     const root = this.props.root.current;
+
     if (previous.place !== this.props.place) {
       this.#land();
       this.#arrived = performance.now();
+
       return null;
     }
+
     if (root === null || sameLayout(previous.layout, this.props.layout)) return null;
+
     return this.#settling(root) ? null : measure(root, this.#sheets);
   }
 
@@ -443,6 +475,7 @@ export class PaneGlide extends Component<PaneGlideProps, PaneGlideState, Snapsho
     before: Snapshot | null,
   ): void {
     const root = this.props.root.current;
+
     if (root !== null && before !== null) play(root, before, this.#sheets);
   }
 
@@ -490,41 +523,55 @@ export function usePaneSlide(open: boolean, edge: PaneEdge = PANE_EDGE.RIGHT): P
   const pane = useRef<HTMLElement>(null);
   const [shown, setShown] = useState(open);
   const [leaving, setLeaving] = useState(false);
+
   if (shown !== open) {
     setShown(open);
     setLeaving(!open);
   }
+
   const last = useRef(open);
   useLayoutEffect(() => {
     const element = pane.current;
+
     if (last.current === open) return;
     last.current = open;
+
     // Note that a pane its owner draws nowhere, a tab too narrow to stand it beside, has no exit to play, so is let go at once.
     if (element === null) {
       if (!open) setLeaving(false);
+
       return;
     }
+
     const timing = paneTiming(element);
     // Note that the slide under way is read before it is stopped, because
     // the next one starts from where it had brought the pane, and that it is
     // stopped even with no motion to play, because an exit's fill would
     // otherwise hold a pane shown again past the edge.
     const from = getComputedStyle(element).transform;
+
     for (const motion of running(element)) motion.cancel();
+
     if (timing === undefined) {
       if (!open) setLeaving(false);
+
       return;
     }
+
     if (open) {
       const start = from === "" || from === "none" ? PAST_EDGE[edge] : from;
       element.animate([{ transform: start }, { transform: "none" }], timing);
+
       return;
     }
+
     const exit = element.animate(
       [{ transform: from === "" ? "none" : from }, { transform: PAST_EDGE[edge] }],
       { ...timing, fill: "forwards" },
     );
+
     exit.onfinish = () => setLeaving(false);
   }, [open, edge]);
+
   return { drawn: open || leaving, leaving, pane };
 }

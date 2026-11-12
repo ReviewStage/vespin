@@ -43,12 +43,14 @@ function askNotice(askId: string, onClick: () => void = ignore): AgentNotice {
 /** The doors, with every answer from macOS they hand on gathered. */
 function doors() {
   const answers: NotificationsStatus[] = [];
+
   const surface = electronNoticeDoors({
     onAnswered: (status) => answers.push(status),
     panels: { pushToOne: ignore },
     report: ignore,
     system: { app: { setBadgeCount: () => true }, Notification: FakeNotification },
   });
+
   return { surface, answers };
 }
 

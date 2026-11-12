@@ -569,6 +569,7 @@ export function inboxAttachmentPath(itemId: string, attachmentId: string): strin
 export function agentPicturePath(agentId: string, pictureId: string, callId?: string): string {
   const agent = `/api/agents/${encodeURIComponent(agentId)}`;
   const owner = callId === undefined ? agent : `${agent}/subagents/${encodeURIComponent(callId)}`;
+
   return `${owner}/pictures/${encodeURIComponent(pictureId)}`;
 }
 

@@ -151,6 +151,7 @@ function PlaceToggle({
   words: ToggleWords;
 }): React.JSX.Element {
   const label = open && !peeked ? words.open : words.closed;
+
   // Note that the place is the box around the button, because the stylesheet
   // shows one place by the panel's width and a barrel button wears no mark:
   // the place beside the tab stands, and the one over it waits for a narrow
@@ -324,6 +325,7 @@ export function usePaneRoom(
   const narrow = useFloatsOver(toggled, OVER_TOGGLE, BESIDE_TOGGLE) || phone;
   const floating = over !== PANE_FLOAT.CLOSED;
   const closeOver = useCallback(() => setOver(PANE_FLOAT.CLOSED), []);
+
   // Note that a finger's arrival peeks nothing, because iOS plays a tap's
   // arrival as a hover and spends the tap on a pane that comes in with it:
   // a finger opens the pane with its toggle's tap alone.
@@ -331,6 +333,7 @@ export function usePaneRoom(
     if (event.pointerType === "touch") return;
     setOver((was) => (was === PANE_FLOAT.CLOSED ? PANE_FLOAT.PEEK : was));
   };
+
   const unpeek = () => setOver((was) => (was === PANE_FLOAT.PEEK ? PANE_FLOAT.CLOSED : was));
   const toggleOver = () => setOver(over === PANE_FLOAT.OPEN ? PANE_FLOAT.CLOSED : PANE_FLOAT.OPEN);
   // A pane opened beside the tab floats over it no more.
@@ -338,6 +341,7 @@ export function usePaneRoom(
     if (shown.open) setOver(PANE_FLOAT.CLOSED);
   }, [shown.open]);
   const docked = !narrow && beside.drawn;
+
   return {
     beside,
     docked,
@@ -351,10 +355,12 @@ export function usePaneRoom(
       onPointerLeave: (event) => {
         if (over !== PANE_FLOAT.PEEK) return;
         const to = event.relatedTarget;
+
         // A menu or a dialog the pane raised stands outside it, and is no way out either.
         if (to instanceof Element && (to.closest(OVER_TOGGLE) ?? to.closest(KEY_LAYERS)) !== null) {
           return;
         }
+
         closeOver();
       },
     },
@@ -381,8 +387,10 @@ export function usePaneRoom(
       onPointerEnter: peek,
       onPointerLeave: (event) => {
         const to = event.relatedTarget;
+
         // Note that the pane over the tab is the pane the pointer is on its way into, as well as the docked one.
         if (to instanceof Element && to.closest(OVER_PANE) !== null) return;
+
         if (to instanceof Node && beside.pane.current?.contains(to)) return;
         unpeek();
       },
@@ -405,15 +413,19 @@ export function usePaneRoom(
         // held, as a drag holds one, peeks nothing.
         const box = event.currentTarget.getBoundingClientRect();
         const atEdge = event.clientX >= box.right - PEEK_EDGE;
+
         const onPane =
           event.target instanceof Element &&
           (event.target.closest(OVER_PANE) !== null ||
             beside.pane.current?.contains(event.target) === true ||
             event.target.closest(PANE_STRIP) !== null);
+
         if (over === PANE_FLOAT.CLOSED && atEdge && event.buttons === 0) {
           if (floats(event.currentTarget.parentElement, toggled)) peek(event);
+
           return;
         }
+
         if (over === PANE_FLOAT.PEEK && !atEdge && !onPane) unpeek();
       },
     },
@@ -448,6 +460,7 @@ export interface TreeShown {
  */
 export function useTreeEdge(tree: TreeShown): ResizeEdgeHandle | undefined {
   const width = tree.width;
+
   const edge = useResizeEdge({
     side: RESIZE_EDGE_SIDE.LEFT,
     width: width?.width ?? FILE_TREE_WIDTH.DEFAULT,
@@ -457,6 +470,7 @@ export function useTreeEdge(tree: TreeShown): ResizeEdgeHandle | undefined {
     onResize: (asked) => width?.onResize(asked),
     onToggleCollapsed: tree.onToggle,
   });
+
   return width === undefined ? undefined : edge;
 }
 
@@ -514,6 +528,7 @@ interface BarPath {
 /** A File tab's path in its bar: as breadcrumbs where the repository is browsed, else plain. */
 function BarPathWords({ path }: { path: BarPath }): React.JSX.Element {
   const { browse } = path;
+
   if (browse === undefined) {
     return (
       <Tooltip label={path.path}>
@@ -529,6 +544,7 @@ function BarPathWords({ path }: { path: BarPath }): React.JSX.Element {
       </Tooltip>
     );
   }
+
   return (
     <FileBreadcrumbs
       repository={browse.repository}
@@ -616,6 +632,7 @@ export function FileViewBar({
 }): React.JSX.Element {
   // Note that a path stands among the controls, since Back and Forward come before it, and a lead with no history leads the bar as words do.
   const crumbs = history !== undefined;
+
   return (
     <PaneBar
       middle={
@@ -721,6 +738,7 @@ export function FileView({
       refetchType: "none",
     });
   }, [queryClient, taskId, workspaceId, readRepository]);
+
   const listFolder = useCallback(
     (path: string, recursive = false): Promise<TasksTreeAnswer> =>
       queryClient
@@ -728,18 +746,22 @@ export function FileView({
         .catch((error: unknown): TasksTreeAnswer => refusedAnswer(error)),
     [queryClient],
   );
+
   // The whole repository is listed beside the folders, read once however many File tabs search it.
   const listWhole = useCallback(() => listFolder("", true), [listFolder]);
 
   const commit = file.commit;
 
   const [told, setTold] = useState<TabRead | undefined>(undefined);
+
   const read =
     told?.path === file.path && told.commit === commit ? told.read : { kind: FILE_READ.READING };
+
   const onRead = useCallback(
     (next: FileRead) => setTold({ path: file.path, commit, read: next }),
     [file.path, commit],
   );
+
   // The whole text, for a copy or a download: the text the tab draws, so a
   // copy holds the lines shown at the commit they were read at, or, before
   // the tab holds it, read raw at the tab's commit in one read.
@@ -761,6 +783,7 @@ export function FileView({
               ? wholeTextOf(error.answer)
               : { kind: WHOLE_TEXT.UNREAD, cause: error },
           );
+
   const fileViewEnd = useFileViewEnd({
     path: file.path,
     ready: read.kind === FILE_READ.READY,
@@ -772,14 +795,17 @@ export function FileView({
     (path) => listFolder(path).then(listingOf),
     [listFolder],
   );
+
   const browsing = repository !== null;
   const tree = usePaneRoom({ open: browsing && treeOpen, onToggle: onToggleTree });
   const edge = useTreeEdge({ open: treeOpen, onToggle: onToggleTree, width: treeWidth });
+
   // A file chosen in the tree floating over the tab takes the tree down, to show the file.
   const browse = (path: string, newTab: boolean) => {
     tree.closeOver();
     onBrowse(path, newTab);
   };
+
   const ready = read.kind === FILE_READ.READY;
   const onGitHub = ready ? () => openGitHub(fileUrl(read, file)) : undefined;
   // A phone draws no bar: the header's ⋯ offers every control of it, in its order.
@@ -801,6 +827,7 @@ export function FileView({
         ]
       : undefined,
   );
+
   return (
     <Fill className="file-view" {...tree.root}>
       {phone ? (

@@ -114,15 +114,20 @@ function PullRequestRowCard({
 }): React.JSX.Element {
   const doors = useMentionDoors();
   const openLink = useOpenLink();
+
   const standing = useLinkStanding(mention, {
     taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
+
   const known = standing?.pullRequest;
+
   // Note that the row is named as its chip is, so the two never disagree.
   const named =
     githubName(mention, standing) ?? writtenWords(target, words) ?? `#${pullRequest.number}`;
+
   const state = known === undefined ? undefined : pullRequestStateWord(known);
+
   return (
     <OneRowCard label={CARD_LABEL.PULL_REQUEST} kind={LONE_LINK.PULL_REQUEST}>
       <RowHintOptions
@@ -190,18 +195,22 @@ function PageRowCard({
   const doors = useMentionDoors();
   const openLink = useOpenLink();
   const known = useKnownNames();
+
   const place =
     "taskId" in page
       ? ({ kind: LINK_DESTINATION.PAGE, planId: page.taskId, pageId: page.pageId } as const)
       : ({ kind: LINK_DESTINATION.PAGE, agentId: page.agentId, pageId: page.pageId } as const);
+
   // Note that the window holds names for the open task's pages alone, so a page of another task is named by the title read with its pages.
   const name = title ?? placeChipLook(place, writtenWords(target, words), known).name;
   const glyph = <EntityGlyph kind={ENTITY_KIND.PAGE} />;
+
   // Note that the page is named from the link as the bar read it, because a page's link the window reads, one ending in a slash or a fragment, may be no mention's.
   const mention =
     "taskId" in page
       ? ({ kind: MENTION_KIND.PAGE, taskId: page.taskId, pageId: page.pageId } as const)
       : ({ kind: MENTION_KIND.PAGE, agentId: page.agentId, pageId: page.pageId } as const);
+
   return (
     <OneRowCard label={CARD_LABEL.PAGE} kind={LONE_LINK.PAGE}>
       <RowHintOptions
@@ -250,13 +259,16 @@ function PageCards({
   live: boolean;
 }): React.JSX.Element {
   const read = readLink(target);
+
   const numbered = useNumberedTaskId(
     read?.workspace ?? "",
     read === undefined ? undefined : taskNumberOf(read.place),
   );
+
   const named = "taskId" in page && numbered !== undefined ? { ...page, taskId: numbered } : page;
   const place = live && "taskId" in named ? { taskId: named.taskId } : undefined;
   const shown = useQuery(pagesQuery(place)).data?.find((each) => each.id === named.pageId);
+
   return (
     <>
       <PageRowCard page={named} title={shown?.title} target={target} words={words} />
@@ -284,27 +296,33 @@ export function LoneLinkCard({
 }): ReactNode {
   const doors = useContext(LoneLinkDoorsContext);
   const lone = loneLinkOf(target);
+
   switch (lone?.kind) {
     case LONE_LINK.PULL_REQUEST: {
       const repository = doors?.code.repository ?? null;
       const mention = decodeMention(target, repository);
+
       if (mention === undefined) return fallback;
+
       return (
         <PullRequestRowCard pullRequest={lone} mention={mention} target={target} words={words} />
       );
     }
+
     case LONE_LINK.PAGE:
       return <PageCards page={lone} target={target} words={words} live={doors !== undefined} />;
     case LONE_LINK.CODE: {
       if (doors === undefined) return fallback;
       const { repo, path, sha, startLine, endLine } = lone;
       const block = { type: INBOX_BLOCK.CODE, repo, path, sha, startLine, endLine };
+
       return (
         <div className="lone-link-card my-block-gap" data-lone-link={LONE_LINK.CODE}>
           <InboxCodeCard block={block} code={doors.code} />
         </div>
       );
     }
+
     case undefined:
       return fallback;
   }

@@ -56,6 +56,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -66,9 +67,11 @@ function hint(line: ReactElement, clipped: boolean): ReactElement {
 
 test("a line drawn whole raises no hint, and one cut short says its words whole", () => {
   vi.stubGlobal("ResizeObserver", StandInObserver);
+
   const view = render(
     createElement(OneLine, { as: ONE_LINE_ELEMENT.SMALL, hint, children: "sam@example.com" }),
   );
+
   const line = view.querySelector("small") ?? assert.fail("the line");
   assert.equal(line.textContent, "sam@example.com");
   const said = () => view.querySelector("[data-hint]")?.getAttribute("data-hint");
@@ -103,6 +106,7 @@ test("a line whose glyphs stand a pixel past its leading is not cut short, thoug
 /** The pointer arriving on `target` and resting there past the hint's wait, on a faked clock. */
 function restOn(target: Element): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -123,6 +127,7 @@ function renderUnhinted(width: number): { view: HTMLElement; line: Element } {
   vi.spyOn(line, "scrollWidth", "get").mockReturnValue(120);
   vi.spyOn(line, "clientWidth", "get").mockReturnValue(width);
   resize();
+
   return { view, line };
 }
 

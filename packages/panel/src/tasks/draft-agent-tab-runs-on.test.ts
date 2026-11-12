@@ -113,8 +113,10 @@ async function settle(): Promise<void> {
 async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS) {
   const starts: (AgentRunsOnRequest | undefined)[] = [];
   const forks: (AgentRunsOnRequest | undefined)[] = [];
+
   function Tab() {
     const [held, setHeld] = useState(draft);
+
     const control = agentsControl({
       me: ME,
       agents,
@@ -124,15 +126,19 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
       onDraftChange: (change) => setHeld((was) => ({ ...was, ...change })),
       startPrompt: (_id, _prompt, _choice, _attachments, _servers, runsOn) => {
         starts.push(runsOn);
+
         return Promise.resolve(undefined);
       },
       startFork: (_id, _fork, _words, _choice, _attachments, _servers, runsOn) => {
         forks.push(runsOn);
+
         return Promise.resolve(undefined);
       },
     });
+
     return createElement(DraftAgentTab, { draft: held, control });
   }
+
   await writeHandedAppState();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -140,6 +146,7 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
   act(() => root.render(withQueryClient(createElement(Tab))));
   await settle();
   const chip = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]');
+
   return {
     container,
     starts,
@@ -150,10 +157,12 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
         container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click(),
       );
       await settle();
+
       const option =
         [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
           each.textContent?.includes(name),
         ) ?? assert.fail(`Runs on lists ${name}`);
+
       act(() => option.click());
       await settle();
     },
@@ -198,6 +207,7 @@ test("a continue of a teammate's agent on their own device names that device, wh
     machine: AGENT_MACHINE.DEVICE,
     mac: { name: "Dana's Mac mini", deviceId: "9a7d3c1e-4b2f-4e6a-8c5d-1f3b5d7e9a20" },
   };
+
   const tab = await mount({ ...DRAFT, prompt: "", fork: continueFork(theirs.id) }, [
     ...AGENTS,
     theirs,
@@ -208,10 +218,12 @@ test("a continue of a teammate's agent on their own device names that device, wh
 
 test("with Bring your own host off no Runs on stands, and a send names no place, one picked before among them", async () => {
   handState(experimentsOn());
+
   const tab = await mount({
     ...DRAFT,
     runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO },
   });
+
   assert.equal(tab.chip(), null);
 
   await tab.send();

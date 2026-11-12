@@ -116,10 +116,13 @@ function developerReach(pushes: boolean) {
   return (sent: SentToGitHub): Response | undefined => {
     if (sent.headers.get("authorization") !== `Bearer ${DEVELOPER_TOKEN}`) return undefined;
     const { pathname } = new URL(sent.url);
+
     if (pathname === "/user") return Response.json({ ...DEVELOPER, type: "User" });
+
     if (pathname === `/repos/${RELAY_FULL_NAME}`) {
       return Response.json({ full_name: RELAY_FULL_NAME, permissions: { push: pushes } });
     }
+
     return undefined;
   };
 }
@@ -136,20 +139,25 @@ function memberTokenReach(sent: SentToGitHub): Response | undefined {
   if (sent.headers.get("authorization") !== `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`)
     return undefined;
   const { pathname } = new URL(sent.url);
+
   if (pathname === "/user") return Response.json({ ...MEMBER, type: "User" });
+
   if (pathname === `/repos/${RELAY_FULL_NAME}`) {
     return Response.json(memberRepositoryJson(RELAY, true));
   }
+
   return undefined;
 }
 
 /** A member who saved their own token, with one agent on a plan of the repository, which no installation of the plan's workspace reaches. */
 const openTokenAgent = Effect.gen(function* () {
   const userId = yield* openTokenMember();
+
   const task = yield* startTask(userId, {
     name: "Teammate invitations",
     repository: RELAY_FULL_NAME,
   });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: "start-1",
@@ -161,9 +169,11 @@ const openTokenAgent = Effect.gen(function* () {
     githubAccess: GITHUB_ACCESS.TOKEN,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
   const { agent } = started.value;
   assert.ok(hasRepository(agent));
+
   return { agent, target: { userId, conversationId: agent.conversationId } };
 });
 
@@ -173,6 +183,7 @@ const openGoogleUser = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -192,14 +203,17 @@ const openAgent = (
 ) =>
   Effect.gen(function* () {
     const userId = options.userId ?? (yield* openGithubUser());
+
     const task = yield* startTask(userId, {
       name: "Teammate invitations",
       repository: RELAY_FULL_NAME,
     });
+
     assert.equal(
       yield* connectWorkspaceGitHub(task.workspaceId, installation),
       LINK_OUTCOME.LINKED,
     );
+
     const automation =
       options.byAutomation === true
         ? Option.getOrThrow(
@@ -220,6 +234,7 @@ const openAgent = (
             }),
           )
         : undefined;
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: "start-1",
@@ -243,9 +258,11 @@ const openAgent = (
             },
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
     assert.ok(hasRepository(agent));
+
     return { agent, target: { userId, conversationId: agent.conversationId } };
   });
 
@@ -285,6 +302,7 @@ const checkOutAndFinish = (
 ) =>
   Effect.gen(function* () {
     yield* finish(target, agent, sandbox, yield* checkOut(target, agent, sandbox));
+
     return sandbox.policies.at(-1);
   });
 
@@ -294,6 +312,7 @@ const authorizing = (authorization: string, path?: object) =>
 
 /** The App's installation token for the repository, as the session's firewall carries it: on GitHub's two hosts, as Basic credentials, every other host open. */
 const APP_AUTHORIZATION = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
+
 const APP_CREDENTIAL = {
   hosts: {
     "github.com": [authorizing(APP_AUTHORIZATION)],
@@ -335,9 +354,11 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
             permissions: { contents: "write", pull_requests: "write" },
           },
         ]);
+
         for (const run of sandbox.runs) {
           assert.equal(carriesToken(JSON.stringify(run)), false);
         }
+
         // Nothing about who the agent writes as is read until a write needs it.
         assert.equal(yield* authorOf(target.userId, agent), null);
       }),
@@ -357,9 +378,11 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         );
 
         assert.deepEqual(standing, APP_CREDENTIAL);
+
         for (const run of sandbox.runs) {
           assert.equal(carriesToken(JSON.stringify(run)), false);
         }
+
         // The identity is the checkout's own, under the App's bot.
         assert.deepEqual(sandbox.identities, [BOT_IDENTITY]);
         assert.equal(yield* authorOf(target.userId, agent), AGENT_AUTHOR.APP_NO_PUSH);
@@ -385,6 +408,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         const standing = yield* checkOutAndFinish(target, agent, sandbox).pipe(
           Effect.provide(github.layer),
         );
+
         const authorship = yield* agentAuthorship(target, agent).pipe(Effect.provide(github.layer));
 
         assert.deepEqual(standing, APP_CREDENTIAL);
@@ -394,12 +418,15 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
             email: `${DEVELOPER.id}+${DEVELOPER.login}@users.noreply.github.com`,
           },
         ]);
+
         for (const policy of sandbox.policies) {
           assert.equal(JSON.stringify(policy).includes(DEVELOPER_TOKEN), false);
         }
+
         for (const run of sandbox.runs) {
           assert.equal(carriesToken(JSON.stringify(run)), false);
         }
+
         assert.deepEqual(authorship, { by: COMMIT_BY.DEVELOPER, coAuthor: BOT_TRAILER });
         assert.equal(yield* authorOf(target.userId, agent), AGENT_AUTHOR.DEVELOPER);
       }),
@@ -419,6 +446,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         yield* writeAccountPreferences(solo.target.userId, {
           commitAuthor: COMMIT_AUTHOR.DEVELOPER,
         });
+
         const github = githubReaching(
           [appInstallation, soloInstallation],
           undefined,
@@ -430,6 +458,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
           Effect.gen(function* () {
             const sandbox = sandboxDouble(() => undefined);
             yield* checkOutAndFinish(opened.target, opened.agent, sandbox);
+
             return {
               identities: sandbox.identities,
               authorship: yield* agentAuthorship(opened.target, opened.agent),
@@ -461,6 +490,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         const automated = yield* openAgent(byAutomation, { byAutomation: true });
         const unlinked = installationOf(11);
         const google = yield* openAgent(unlinked, { userId: yield* openGoogleUser });
+
         const github = githubReaching(
           [byAutomation, unlinked],
           undefined,
@@ -471,9 +501,11 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         for (const { agent, target } of [automated, google]) {
           const sandbox = sandboxDouble(() => undefined);
           yield* checkOutAndFinish(target, agent, sandbox).pipe(Effect.provide(github.layer));
+
           const authorship = yield* agentAuthorship(target, agent).pipe(
             Effect.provide(github.layer),
           );
+
           assert.deepEqual(sandbox.identities, [BOT_IDENTITY]);
           assert.deepEqual(authorship, { by: COMMIT_BY.APP, coAuthor: undefined });
         }
@@ -505,6 +537,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         const standing = yield* checkOutAndFinish(target, agent, sandbox).pipe(
           Effect.provide(github.layer),
         );
+
         const authorship = yield* agentAuthorship(target, agent).pipe(Effect.provide(github.layer));
 
         // The member's own token, on the repository's own paths, as theirs.
@@ -527,6 +560,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         ]);
         assert.deepEqual(authorship, { by: COMMIT_BY.DEVELOPER, coAuthor: BOT_TRAILER });
         assert.equal(yield* authorOf(target.userId, agent), AGENT_AUTHOR.TOKEN);
+
         for (const run of sandbox.runs) {
           assert.equal(JSON.stringify(run).includes(GITHUB_FIXTURE_MEMBER.TOKEN), false);
         }
@@ -538,9 +572,11 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
     () =>
       Effect.gen(function* () {
         const installation = installationOf(22);
+
         const { agent, target } = yield* openAgent(installation, {
           extraRepositories: [{ repository: "Acme/Gone" }],
         });
+
         const github = githubReaching([installation], undefined, {}, developerReach(false));
 
         const refused = yield* agentRepositoryRead(target, agent).pipe(

@@ -58,10 +58,12 @@ function noted<Answer, E>(
 
 export function agentProcedures(dependencies: AgentProceduresDependencies) {
   const { acts, notices } = dependencies;
+
   const notedAgent = <E>(answer: Effect.Effect<AgentAgentAnswer, E>) =>
     noted(answer, (value) => {
       if ("agent" in value) notices.observeAgents([value.agent]);
     });
+
   return {
     [AGENT_ACT_KIND.AGENTS_LIST]: actPort[AGENT_ACT_KIND.AGENTS_LIST].effect(function* ({ input }) {
       return yield* noted(

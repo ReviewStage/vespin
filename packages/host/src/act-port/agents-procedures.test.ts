@@ -207,15 +207,20 @@ function windowPort(
 ) {
   const asked: unknown[] = [];
   const noted: string[] = [];
+
   const handler = (name: keyof NotedActs) => (input: unknown) =>
     Effect.suspend(() => {
       asked.push([name, input]);
+
       const answer =
         options.answers?.[name] ?? options.fallback ?? (() => Effect.succeed(UNANSWERED));
+
       return answer();
     });
+
   // SAFETY: each handler answers what its test hands it, which the procedure checks against the act's output schema; none is a row write a pool draws.
   const acts = Object.fromEntries(NOTED_ACTS.map((name) => [name, handler(name)])) as NotedActs;
+
   const notices: AgentProceduresDependencies["notices"] = {
     observeAgents: (agents) => {
       noted.push(`agents:${agents.map((agent) => `${agent.id}=${agent.status}`).join(",")}`);
@@ -236,10 +241,12 @@ function windowPort(
       noted.push(`seen:${agentId}`);
     },
   };
+
   const port = testActPort(agentProcedures({ acts, notices }));
   ports.push(port);
   /** One kind called as this window, settled to its answer or the sentence of its refusal. */
   const call = (kind: PortActKind, payload: WireBoundaryInput) => port.call(actor, kind, payload);
+
   return { call, asked, noted };
 }
 
@@ -249,6 +256,7 @@ it.effect.each(Object.values(AGENT_ACTS))(
     Effect.gen(function* () {
       const { port, requests } = yield* hostActPort();
       const noted = windowPort(OTHER_WINDOW);
+
       // Note that an act answered by hand is served by its own procedure, which the standing host's port leaves to the platform.
       const refused = act.byHand
         ? yield* Effect.promise(() => noted.call(act.kind, PAYLOAD[act.name]))
@@ -353,6 +361,7 @@ it("a noted act whose handler fails, dies, or answers what the kind cannot carry
     () => Effect.die(new Error("secret detail")),
     () => Effect.succeed({ agent: "none" }),
   ];
+
   for (const fallback of fallbacks) {
     const { call, noted } = windowPort(PANEL, { fallback });
     assert.deepEqual(await call(AGENT_ACT_KIND.AGENTS_STOP, { agentId: AGENT_ID }), {

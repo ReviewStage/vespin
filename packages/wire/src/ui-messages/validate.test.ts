@@ -38,8 +38,11 @@ async function fixture(name: (typeof FIXTURE)[keyof typeof FIXTURE]): Promise<Wi
   const parsed = JSON.parse(
     await readFile(path.join(FIXTURE_DIRECTORY, name), "utf8"),
   ) as WireBoundaryInput;
+
   const record = wireRecord(unparsedWire(parsed));
+
   if (record === undefined) throw new Error("fixture is not a record");
+
   return record;
 }
 
@@ -67,12 +70,14 @@ test("a stored-row read drops a tool part naming a tool the registry has retired
   assert.ok(Array.isArray(replyParts));
   const read = await runTest(readStoredUIMessages([reply], {}, UNREGISTERED_TOOL_PART.DROP));
   assert.equal(read.ok, true);
+
   if (!read.ok) return;
   const [stored] = read.value;
   assert.deepEqual(stored, {
     ...reply,
     parts: replyParts.filter((part) => wireRecord(part)?.type !== "tool-read_transcript"),
   });
+
   // A call still pending under the retired tool goes the same way, and a registered part beside it stays.
   const mixed = {
     ...reply,
@@ -86,20 +91,25 @@ test("a stored-row read drops a tool part naming a tool the registry has retired
       ...replyParts,
     ],
   };
+
   const readMixed = await runTest(
     readStoredUIMessages([mixed], TOOLS, UNREGISTERED_TOOL_PART.DROP),
   );
+
   assert.deepEqual(readMixed, { ok: true, value: [reply] });
+
   // The Either entry point takes the same word.
   const either = await runTest(
     readStoredUIMessagesEither([mixed], TOOLS, UNREGISTERED_TOOL_PART.DROP),
   );
+
   assert.ok(Result.isSuccess(either));
   assert.deepEqual(either.success, [reply]);
 });
 
 test("a stored-row read holds a row to the structure and the registry's names, not to each tool's schemas, which the write door holds it to", async () => {
   const reply = await fixture(FIXTURE.REPLY_WITH_TOOL_PART);
+
   const answered = {
     ...reply,
     parts: [
@@ -112,6 +122,7 @@ test("a stored-row read holds a row to the structure and the registry's names, n
       },
     ],
   };
+
   assert.equal((await runTest(readStoredUIMessages([answered], TOOLS))).ok, false);
   assert.deepEqual(
     await runTest(readStoredUIMessages([answered], TOOLS, UNREGISTERED_TOOL_PART.DROP)),

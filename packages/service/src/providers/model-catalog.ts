@@ -259,7 +259,9 @@ function splitCatalogId(
   catalogId: string,
 ): { readonly provider: string; readonly name: string } | undefined {
   const separator = catalogId.indexOf(CATALOG_ID_SEPARATOR);
+
   if (separator <= 0 || separator === catalogId.length - 1) return undefined;
+
   return { provider: catalogId.slice(0, separator), name: catalogId.slice(separator + 1) };
 }
 
@@ -272,9 +274,11 @@ function pricingOf(entry: CatalogEntry): ModelPricing | undefined {
   const pricing = Option.getOrUndefined(readPricing(entry.pricing));
   const inputUsd = pricing?.input ?? undefined;
   const outputUsd = pricing?.output ?? undefined;
+
   if (inputUsd === undefined || outputUsd === undefined) return undefined;
   const cachedInputUsd = pricing?.input_cache_read ?? undefined;
   const cacheWriteUsd = pricing?.input_cache_write ?? undefined;
+
   return {
     inputUsd,
     outputUsd,
@@ -294,7 +298,9 @@ function tierCost(tiers: readonly PriceTier[], min: number): number | undefined 
 function priceFactor(tiers: readonly PriceTier[], boundary: number): number | undefined {
   const standard = tierCost(tiers, 0);
   const long = tierCost(tiers, boundary);
+
   if (standard === undefined || long === undefined || standard <= 0) return undefined;
+
   return long / standard;
 }
 
@@ -314,17 +320,21 @@ function contextWindowsOf(
   const tiers = Option.getOrUndefined(readTiers(entry.pricing));
   const input = tiers?.input_tiers ?? [];
   const first = tierCost(input, 0);
+
   // A tier at the first tier's price is no boundary: nothing past it costs more.
   const boundaries = input
     .filter((tier) => tier.cost !== first)
     .map((tier) => tier.min ?? 0)
     .filter((min) => min > 0);
+
   if (boundaries.length === 0) return undefined;
   const boundary = Math.min(...boundaries);
   const standardTokens = Math.floor(boundary / TIER_BOUNDARY_TOKENS) * TIER_BOUNDARY_TOKENS;
+
   if (standardTokens <= 0 || standardTokens >= contextWindow) return undefined;
   const inputFactor = priceFactor(input, boundary);
   const outputFactor = priceFactor(tiers?.output_tiers ?? [], boundary);
+
   return {
     standardTokens,
     longTokens: contextWindow,
@@ -336,18 +346,25 @@ function contextWindowsOf(
 /** The entry as an offered model, or nothing for one we do not offer: a batch slug, a fast slug where its provider's fast option is not confirmed, and an Ultrafast id, which is ours alone (`ultrafastModelOf`). */
 function offeredModel(entry: CatalogEntry): OfferedModel | undefined {
   const named = providerModelOf(entry.id);
+
   if (named === undefined || entry.id.endsWith(BATCH_SLUG_SUFFIX)) return undefined;
+
   if (named.speed === MODEL_SPEED.FAST && !FAST_PROVIDERS.has(named.provider)) return undefined;
+
   if (named.speed === MODEL_SPEED.ULTRAFAST) return undefined;
   const { provider } = named;
   const tags = entry.tags ?? [];
+
   if (!REQUIRED_TAGS.every((tag) => tags.includes(tag))) return undefined;
+
   const efforts =
     (entry.reasoning_options ?? []).find((option) => option.type === EFFORT_OPTION)?.values ?? [];
+
   if (efforts.length === 0) return undefined;
   const contextWindow = entry.context_window ?? undefined;
   const contextWindows = contextWindowsOf(entry, contextWindow);
   const pricing = pricingOf(entry);
+
   return {
     id: entry.id,
     name: entry.name,
@@ -365,9 +382,12 @@ function ultrafastWindows(
   contextWindow: number | undefined,
 ): ContextWindows | undefined {
   const long = tier.long_context;
+
   if (long === undefined || contextWindow === undefined) return undefined;
   const standardTokens = Math.floor(long.threshold / TIER_BOUNDARY_TOKENS) * TIER_BOUNDARY_TOKENS;
+
   if (standardTokens <= 0 || standardTokens >= contextWindow) return undefined;
+
   return {
     standardTokens,
     longTokens: contextWindow,
@@ -387,9 +407,12 @@ function ultrafastModelOf(entry: CatalogEntry, base: OfferedModel): OfferedModel
   if (base.provider !== MODEL_PROVIDER.OPENAI || modelSpeedOf(base.id) !== MODEL_SPEED.STANDARD) {
     return undefined;
   }
+
   const tier = Option.getOrUndefined(readUltrafast(entry.pricing))?.service_tiers.ultrafast;
+
   if (tier === undefined) return undefined;
   const contextWindows = ultrafastWindows(tier, base.contextWindow);
+
   return {
     id: `${base.id}${MODEL_SPEED_SUFFIX[MODEL_SPEED.ULTRAFAST]}`,
     name: `${base.name} (Ultrafast)`,
@@ -418,6 +441,7 @@ function ultrafastModelOf(entry: CatalogEntry, base: OfferedModel): OfferedModel
 export function tokensCostUsd(pricing: ModelPricing, tokens: PricedTokens): number {
   const cached = Math.min(tokens.cachedInputTokens, tokens.inputTokens);
   const written = Math.min(tokens.cacheWriteTokens ?? 0, tokens.inputTokens - cached);
+
   return (
     (tokens.inputTokens - cached - written) * pricing.inputUsd +
     cached * (pricing.cachedInputUsd ?? pricing.inputUsd) +
@@ -429,13 +453,17 @@ export function tokensCostUsd(pricing: ModelPricing, tokens: PricedTokens): numb
 /** The catalog's answer filtered to what we offer, in the catalog's own order, each model's Ultrafast version right after it. */
 function offeredModels(answer: typeof CatalogAnswerSchema.Type): readonly OfferedModel[] {
   const offered: OfferedModel[] = [];
+
   for (const entry of answer.data) {
     const model = offeredModel(entry);
+
     if (model === undefined) continue;
     offered.push(model);
     const ultrafast = ultrafastModelOf(entry, model);
+
     if (ultrafast !== undefined) offered.push(ultrafast);
   }
+
   return offered;
 }
 
@@ -444,12 +472,14 @@ const fetchOfferedModels = /* @__PURE__ */ Effect.fnUntraced(function* (
   client: HttpClient.HttpClient,
 ): Effect.fn.Return<readonly OfferedModel[], ModelCatalogUnavailable> {
   const request = HttpClientRequest.get(MODEL_CATALOG_URL).pipe(HttpClientRequest.acceptJson);
+
   const answer = yield* client.execute(request).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap(HttpClientResponse.schemaBodyJson(CatalogAnswerSchema)),
     Effect.scoped,
     Effect.mapError((cause) => new ModelCatalogUnavailable({ cause })),
   );
+
   return offeredModels(answer);
 });
 
@@ -465,9 +495,11 @@ export const modelCatalogLayer: Layer.Layer<ModelCatalog, never, HttpClient.Http
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient;
       const lastRead = yield* Ref.make<readonly OfferedModel[] | undefined>(undefined);
+
       const cached = yield* Effect.cachedWithTTL(fetchOfferedModels(client), (exit) =>
         Exit.isSuccess(exit) ? MODEL_CATALOG_TTL : Duration.zero,
       );
+
       // Note that a failed refetch answers the last read, because a caller told no models
       // guesses instead: a 200K window for every agent, and no prices.
       const read = cached.pipe(
@@ -478,6 +510,7 @@ export const modelCatalogLayer: Layer.Layer<ModelCatalog, never, HttpClient.Http
           ),
         ),
       );
+
       return { read };
     }),
   );
@@ -514,20 +547,26 @@ export function offeredToAccount(
   fast: AccountFastOffer,
 ): readonly OfferedModel[] {
   const anthropic = fast.anthropic === FAST_ACCESS.NOT_ENABLED;
+
   if (!anthropic && !fast.chatGptPlan) return offered;
   const notEnabled = new Set<string>();
   const kept: OfferedModel[] = [];
+
   for (const model of offered) {
     const speed = modelSpeedOf(model.id);
+
     const openAiUltrafast =
       speed === MODEL_SPEED.ULTRAFAST && model.provider === MODEL_PROVIDER.OPENAI;
+
     if (openAiUltrafast && fast.chatGptPlan) continue;
+
     if (speed === MODEL_SPEED.FAST && anthropic && model.provider === MODEL_PROVIDER.ANTHROPIC) {
       notEnabled.add(standardModelIdOf(model.id));
     } else {
       kept.push(model);
     }
   }
+
   return kept.map((model) => ({
     ...model,
     ...(notEnabled.has(model.id) ? { fastNotEnabled: true } : undefined),
@@ -546,11 +585,15 @@ export function validateModelChoice(
   choice: ModelChoice,
 ): Result.Result<ModelChoice, ModelChoiceRefusal> {
   const model = catalog.find((offered) => offered.id === choice.model);
+
   if (model === undefined) return Result.fail(MODEL_CHOICE_REFUSAL.UNKNOWN_MODEL);
+
   if (!model.efforts.includes(choice.effort))
     return Result.fail(MODEL_CHOICE_REFUSAL.UNKNOWN_EFFORT);
+
   const standard =
     choice.contextWindow === CONTEXT_WINDOW.STANDARD && model.contextWindows !== undefined;
+
   return Result.succeed({
     model: model.id,
     effort: choice.effort,
@@ -566,6 +609,7 @@ export function acceptedModelChoice(
   return Effect.gen(function* () {
     const catalog = yield* ModelCatalog;
     const offered = offeredToAccount(yield* catalog.read, fast);
+
     return yield* Effect.fromResult(validateModelChoice(offered, choice)).pipe(
       Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })),
     );
@@ -586,11 +630,14 @@ export function acceptedModelChoice(
 export function providerModelOf(catalogId: string): ProviderModel | undefined {
   const split = splitCatalogId(catalogId);
   const provider = providerOf(split?.provider ?? "");
+
   if (split === undefined || provider === undefined) return undefined;
   const name = standardModelIdOf(split.name);
+
   const modelId =
     provider === MODEL_PROVIDER.ANTHROPIC
       ? name.replaceAll(CATALOG_VERSION_POINT, ANTHROPIC_VERSION_POINT)
       : name;
+
   return { provider, modelId, speed: modelSpeedOf(split.name) };
 }

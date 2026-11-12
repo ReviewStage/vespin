@@ -50,9 +50,11 @@ function refused(reason: string): ActionResult {
 /** An act answered at once by `answer`, its refusal held as a caller's mutation holds one, until it is let go. */
 function useAnsweredAct(answer: () => ActionResult): ConfirmAct {
   const [answered, setAnswered] = useState<ActionResult | undefined>(undefined);
+
   return {
     run: () => {
       setAnswered(answer());
+
       return Promise.resolve();
     },
     busy: false,
@@ -85,6 +87,7 @@ function Asking({
     useAnsweredAct(answer),
     () => CATALOG_FAILURE,
   );
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={confirm.ask}>
@@ -100,6 +103,7 @@ function Asking({
 /** A key whose deletion is refused the first time, so the refusal and the second try can be seen. */
 function RefusedOnce(): React.JSX.Element {
   const [triedOnce, setTriedOnce] = useState(false);
+
   return (
     <Asking
       label="Delete key…"
@@ -113,6 +117,7 @@ function RefusedOnce(): React.JSX.Element {
       answer={() => {
         if (triedOnce) return ACCEPTED;
         setTriedOnce(true);
+
         return refused("The keychain is locked. Unlock it and try again.");
       }}
     />
@@ -123,11 +128,13 @@ function RefusedOnce(): React.JSX.Element {
 function Named(): React.JSX.Element {
   const [name, setName] = useState("");
   const field = useRef<HTMLInputElement | null>(null);
+
   const confirm = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     useAnsweredAct(() => (name.trim() === "" ? refused("Name the new owner.") : ACCEPTED)),
     () => CATALOG_FAILURE,
   );
+
   return (
     <>
       <Button
@@ -172,18 +179,23 @@ function KeyInADialog(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(true);
   const [triedOnce, setTriedOnce] = useState(false);
+
   const removal = useConfirmDialog(
     { subject: key, surfaceOpen: open },
     useAnsweredAct(() => {
       if (!triedOnce) {
         setTriedOnce(true);
+
         return refused("The keychain is locked. Unlock it and try again.");
       }
+
       setKey(false);
+
       return ACCEPTED;
     }),
     () => CATALOG_FAILURE,
   );
+
   return (
     <>
       <Button

@@ -43,6 +43,7 @@ declare global {
 }
 
 let root: Root | undefined;
+
 /** What the window hears a link the system hands it on, once it listens. */
 let showLink: ((link: ShownLink) => void) | undefined;
 
@@ -70,6 +71,7 @@ afterEach(() => {
 /** Main's document for a fixture run on `profile`: signed out, nothing read, no access. */
 function fixtureRun(profile: string): AppStateSnapshot {
   const { run } = stateWith({}, {});
+
   return stateWith(
     {},
     {
@@ -84,6 +86,7 @@ function fixtureRun(profile: string): AppStateSnapshot {
 /** Hands the window main's document for a fixture run on `profile`, every other bridge call quiet. */
 function handFixtureRun(profile: string): void {
   const snapshot = fixtureRun(profile);
+
   const quiet = Object.fromEntries([
     ...Object.keys(PUSH_METHOD).map((method) => [method, () => () => undefined]),
     ...bridgeEntries().map(([method, entry]) => [
@@ -91,12 +94,14 @@ function handFixtureRun(profile: string): void {
       entry.kind === "invoke" ? () => Promise.resolve(undefined) : () => undefined,
     ]),
   ]);
+
   fakeAppBridge({
     ...quiet,
     requestAppState: () => Promise.resolve(structuredClone(snapshot)),
     onAppState: () => () => undefined,
     onShowLink: (listener: (link: ShownLink) => void) => {
       showLink = listener;
+
       return () => {
         showLink = undefined;
       };
@@ -125,6 +130,7 @@ function drawWindow(profile: string): Effect.Effect<TestWindowRouter> {
     const router = windowRouter();
     act(() => root?.render(withQueryClient(router.drawn())));
     yield* Effect.promise(settle);
+
     return router;
   });
 }
@@ -151,6 +157,7 @@ it.effect("the Admin profile opens Admin's Overview for the account, an admin", 
     const chosen = document.querySelector(
       '[role="radiogroup"][aria-label="Admin sections"] [aria-checked="true"]',
     );
+
     assert.equal(chosen?.textContent, "Overview");
   }),
 );
@@ -206,17 +213,21 @@ it.effect(
   () =>
     Effect.gen(function* () {
       yield* drawWindow(RUN_PROFILE.PERSON);
+
       // The account's button at the sidebar's foot, named by the account alone where the workspace's switcher says more.
       const account = [...document.querySelectorAll("button")].find(
         (button) => button.textContent?.endsWith("Ada Lovelace") && !button.matches("[aria-label]"),
       );
+
       assert.ok(account, "the account's button stands");
       act(() => account.click());
+
       const profile = [...document.querySelectorAll('[role="menuitem"]')].find(
         (item): item is HTMLElement =>
           item instanceof HTMLElement &&
           item.querySelector(".ui-menu-item-label")?.textContent === "Your profile",
       );
+
       assert.ok(profile, "its menu offers Your profile");
       act(() => profile.click());
       yield* Effect.promise(settle);
@@ -249,9 +260,11 @@ it.effect(
       act(() => root?.render(withQueryClient(router.drawn())));
       yield* Effect.promise(settle);
       const standing = [router.history.location.pathname, router.addresses().length];
+
       const home = [...document.querySelectorAll("aside.desktop-sidebar button")].find(
         (button) => button.textContent?.startsWith("Home") === true,
       );
+
       assert.ok(home instanceof HTMLElement, "the sidebar's Home stands");
 
       act(() => home.click());
@@ -265,6 +278,7 @@ it.effect(
 function editedAutomation(): Effect.Effect<TestWindowRouter> {
   return Effect.gen(function* () {
     const router = yield* drawWindow(RUN_PROFILE.AUTOMATIONS_RUNS);
+
     const name = yield* Effect.promise(() =>
       vi.waitFor(
         () =>
@@ -272,8 +286,10 @@ function editedAutomation(): Effect.Effect<TestWindowRouter> {
           assert.fail("the automation's name stands"),
       ),
     );
+
     typeInto(name, "Check each deploy, edited");
     yield* Effect.promise(settle);
+
     return router;
   });
 }
@@ -301,10 +317,12 @@ it.effect(
     Effect.gen(function* () {
       const router = yield* editedAutomation();
       const before = router.addresses().slice(0, router.at() + 1);
+
       const home =
         [...document.querySelectorAll<HTMLElement>("aside.desktop-sidebar button")].find((row) =>
           row.textContent?.startsWith("Home"),
         ) ?? assert.fail("the sidebar's Home row stands");
+
       act(() => home.click());
       yield* leaveAsked();
 
@@ -319,6 +337,7 @@ it.effect(
       const router = yield* editedAutomation();
       const automation = router.addresses()[router.at()];
       act(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE));
+
       const search = yield* Effect.promise(() =>
         vi.waitFor(
           () =>
@@ -326,6 +345,7 @@ it.effect(
             assert.fail("the palette's search stands"),
         ),
       );
+
       typeInto(search, "Billing export");
       yield* Effect.promise(settle);
       act(() => {
@@ -344,6 +364,7 @@ function chooseInPalette(words: string): Effect.Effect<void> {
     act(() => {
       runAppCommand(APP_COMMAND.COMMAND_PALETTE);
     });
+
     const search = yield* Effect.promise(() =>
       vi.waitFor(
         () =>
@@ -351,6 +372,7 @@ function chooseInPalette(words: string): Effect.Effect<void> {
           assert.fail("the palette's search stands"),
       ),
     );
+
     typeInto(search, words);
     yield* Effect.promise(settle);
     act(() => {
@@ -430,11 +452,13 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
         "Check each deploy, edited",
         "and keeps the edit",
       );
+
       if (shows !== undefined) assert.doesNotMatch(drawn(), shows, "and hands nothing on");
 
       yield* press;
       yield* leaveAsked();
       assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...standing, arrived]);
+
       // Note that we wait on the ask itself, because the pairing's read lands after hops a busy runner stretches past any fixed count of ticks.
       if (shows !== undefined) {
         yield* Effect.promise(() => vi.waitFor(() => assert.match(drawn(), shows)));

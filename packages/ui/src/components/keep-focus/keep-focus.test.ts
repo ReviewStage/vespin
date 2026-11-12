@@ -48,7 +48,9 @@ function mount(): { box: HTMLElement; pressed: string[] } {
     ),
   );
   const box = container.querySelector<HTMLElement>("[aria-label=Crumb]");
+
   if (box === null) throw new Error("the box is drawn");
+
   return { box, pressed };
 }
 
@@ -58,6 +60,7 @@ function movesFocus(target: Element): boolean {
   act(() => {
     target.dispatchEvent(down);
   });
+
   return !down.defaultPrevented;
 }
 

@@ -74,6 +74,7 @@ type NodAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure }
 /** What the Undo toast says: the one notice by its title, or how many. */
 function acknowledgedWords(items: readonly InboxItem[]): string {
   const [only] = items;
+
   return items.length === 1 && only !== undefined
     ? `Got it: “${cardTitle(only.title)}”`
     : `Got it: ${countWords(items.length, TERM.INBOX_ITEM)}`;
@@ -82,6 +83,7 @@ function acknowledgedWords(items: readonly InboxItem[]): string {
 /** Why the service did not take one nod, in a toast's words; none where it took it, or where the notice was settled first, which is what the press asked. */
 function refusalWords(answer: NodAnswer): string | undefined {
   if ("failure" in answer) return messageFailureWords(answer.failure);
+
   return answer.taken || answer.item.status !== INBOX_STATUS.OPEN ? undefined : CHANGED;
 }
 
@@ -111,10 +113,14 @@ const ACKNOWLEDGE_WRITE = {
     const refused = answers.flatMap((answer, at) => {
       const words = refusalWords(answer);
       const item = items[at];
+
       return words === undefined || item === undefined ? [] : [{ words, answer, item }];
     });
+
     const [first] = refused;
+
     if (first === undefined) return undefined;
+
     return {
       // Note that a nod the service never answered may have landed, so only a refusal of every one is whole.
       whole: answers.every((answer) => !("failure" in answer) && !answer.taken),
@@ -138,10 +144,13 @@ export function useInboxAcknowledger(): InboxAcknowledger {
   const { mutateAsync: nod } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
   const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
+
   return useCallback(
     (items: readonly InboxItem[]) => {
       const nodding = items.filter((item) => !out.current.has(item.id));
+
       if (nodding.length === 0) return;
+
       for (const item of nodding) out.current.add(item.id);
       const settles = { items: nodding, keys: nodding.map(() => crypto.randomUUID()) };
       void pressTakeBack(ACKNOWLEDGE_WRITE, { nod, takeBack }, settles).then(() => {

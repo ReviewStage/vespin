@@ -314,6 +314,7 @@ function partField(rows: AnyLiveRows, field: Schema.Top): Schema.Top {
 function rowsReading<Row extends LiveRowSchema>(row: Row) {
   const decodeRow = Schema.decodeUnknownOption(row);
   const encodeRow = Schema.encodeUnknownOption(row);
+
   return Schema.Array(Schema.Unknown).pipe(
     Schema.decodeTo(
       Schema.toType(Schema.Array(row)),
@@ -348,20 +349,24 @@ export function liveRead<
     if (rows.order.length === 0)
       throw new Error(`the live read ${spec.name}'s ${part} names no order`);
   }
+
   if (spec.mode === LIVE_MODE.CURSOR && spec.heldOn !== undefined)
     throw new Error(`the live read ${spec.name} follows a cursor, so it is held on every part`);
   // SAFETY: an absent `beside` and `refuses` are the empty records their defaults name.
   const beside = (spec.beside ?? {}) as Beside;
   const own = (spec.refuses ?? {}) as Refuses;
   const query: Readonly<Record<string, Schema.Top | undefined>> = spec.query ?? {};
+
   const params = Object.fromEntries(
     Object.entries<LiveParam>(spec.params).flatMap(([key, param]) =>
       param === LIVE_PARAM.SERVED ? [] : [[key, query[key] ?? PARAM_FIELD[param]]],
     ),
   );
+
   const queries = mapped<string, AnyLiveRows, Schema.Top>(spec.parts, (rows) =>
     partField(rows, sealedLiveQuerySchema),
   );
+
   return {
     name: spec.name,
     path: spec.path,
@@ -415,8 +420,11 @@ export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
 function comparedBy(a: unknown, b: unknown, order: Order): number {
   if (a === b) return 0;
   const before = order === ORDER.ASC ? -1 : 1;
+
   if (a === null) return -before;
+
   if (b === null) return before;
+
   // SAFETY: a row's ordered fields are text or numbers, which compare as Postgres's C collation does.
   return (a as string) < (b as string) ? before : -before;
 }
@@ -430,10 +438,13 @@ export function orderedLiveRows<Part extends AnyLiveRows>(
     // SAFETY: a part's row is a struct, whose ordered fields its declaration names.
     const left = a as Readonly<Record<string, unknown>>;
     const right = b as Readonly<Record<string, unknown>>;
+
     for (const [field, order] of part.order) {
       const compared = comparedBy(left[field], right[field], order);
+
       if (compared !== 0) return compared;
     }
+
     return 0;
   });
 }

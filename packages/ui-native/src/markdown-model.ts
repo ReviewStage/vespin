@@ -192,32 +192,42 @@ function folded(identifier: string): string {
 function definitionsIn(node: Nodes, found: Map<string, Definition> = new Map()): Definitions {
   if (node.type === "definition") {
     const key = folded(node.identifier);
+
     // Note that the first definition of an identifier wins, as CommonMark has it.
     if (!found.has(key)) found.set(key, node);
   }
+
   if ("children" in node) for (const child of node.children) definitionsIn(child, found);
+
   return found;
 }
 
 /** The words a node holds, as written, marks and all dropped. */
 function wordsOf(node: Nodes): string {
   if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
+
   if ("value" in node && node.type !== "yaml") return node.value;
+
   if ("children" in node) return node.children.map(wordsOf).join("");
+
   return "";
 }
 
 /** Where a link written to `href` goes when pressed: a place of the app's, a page on the web, or nowhere. */
 function linkTarget(href: string): LinkTarget {
   const read = readLink(href);
+
   if (read !== undefined) return { kind: LINK_TARGET.PLACE, ...read, href };
   const scheme = /^[a-z][a-z0-9+.-]*:/iu.exec(href)?.[0].toLowerCase();
+
   if (scheme !== undefined && WEB_SCHEMES.has(scheme)) return { kind: LINK_TARGET.WEB, href };
+
   return { kind: LINK_TARGET.NONE };
 }
 
 function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {
   const word = entityWordHeard(entity, name);
+
   return { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
 }
 
@@ -236,15 +246,21 @@ const NO_NAMES = {
 /** A link as its chip, by the rule the panel's `linkChip` reads (`linkChipOf`); nothing where it names nothing, and stays a link. */
 function linkChip(href: string, label: string, reading: MarkdownReading): MarkdownChip | undefined {
   const chip = linkChipOf(label, href, reading.repository);
+
   if (chip === undefined) return undefined;
+
   if (chip.kind === LINK_CHIP.PLACE) {
     const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
+
     return chipOf(entityOfDestination(chip.link.place).kind, look.name, linkTarget(href));
   }
+
   if (chip.mention.kind === MENTION_KIND.DATE) {
     const name = dateChipText(chip.mention, reading.now, reading.zone);
+
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
+
   return chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
 }
 
@@ -255,7 +271,9 @@ function linkRun(
   reader: Reader,
 ): MarkdownRun {
   const chip = linkChip(href, children.map(wordsOf).join(""), reader.reading);
+
   if (chip !== undefined) return { kind: MARKDOWN_RUN.CHIP, chip };
+
   return {
     kind: MARKDOWN_RUN.LINK,
     target: linkTarget(href),
@@ -277,6 +295,7 @@ function wordsRun(text: string, marks: WordMarks): MarkdownRun[] {
 function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): MarkdownRun[] {
   const inside = (children: readonly PhrasingContent[], more: Partial<WordMarks>) =>
     children.flatMap((child) => runsOf(child, { ...marks, ...more }, reader));
+
   switch (node.type) {
     case "text":
     case "html":
@@ -298,9 +317,12 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
       return [linkRun(node.url, node.children, marks, reader)];
     case "linkReference": {
       const definition = referenced(node, reader);
+
       if (definition === undefined) return inside(node.children, {});
+
       return [linkRun(definition.url, node.children, marks, reader)];
     }
+
     // Note that a picture inside a run, a linked one say, is its alternative words, since only a paragraph's own pictures stand as blocks.
     case "image":
     case "imageReference":
@@ -317,6 +339,7 @@ function pictureSource(node: PhrasingContent, reader: Reader): string | undefine
     Match.when({ type: "imageReference" }, (reference) => referenced(reference, reader)?.url),
     Match.orElse(() => undefined),
   );
+
   return url !== undefined && PICTURE_SOURCE.test(url) ? url : undefined;
 }
 
@@ -331,20 +354,26 @@ function blank(run: MarkdownRun): boolean {
 function paragraphBlocks(node: Paragraph, reader: Reader): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   let runs: MarkdownRun[] = [];
+
   const close = () => {
     if (runs.some((run) => !blank(run))) blocks.push({ kind: MARKDOWN_BLOCK.PARAGRAPH, runs });
     runs = [];
   };
+
   for (const child of node.children) {
     const source = pictureSource(child, reader);
+
     if (source === undefined) {
       runs.push(...runsOf(child, PLAIN, reader));
       continue;
     }
+
     close();
     blocks.push({ kind: MARKDOWN_BLOCK.PICTURE, source, alt: wordsOf(child) });
   }
+
   close();
+
   return blocks;
 }
 
@@ -362,16 +391,19 @@ function listBlock(node: List, reader: Reader): MarkdownBlock {
 function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   const width = node.children[0]?.children.length ?? 0;
   const columns = Array.from({ length: width }, (_, at) => at);
+
   return {
     kind: MARKDOWN_BLOCK.TABLE,
     align: columns.map((at) => {
       const align = node.align?.[at];
+
       return align === null || align === undefined ? COLUMN_ALIGN.START : ALIGN[align];
     }),
     // Note that a row is cut or filled to the header's width, as GitHub draws a ragged table.
     rows: node.children.map((row) =>
       columns.map((at) => {
         const cell = row.children[at];
+
         return cell === undefined
           ? []
           : cell.children.flatMap((child) => runsOf(child, PLAIN, reader));
@@ -451,6 +483,7 @@ function heardRun(run: MarkdownRun): string {
 /** Whether a run is a chip or holds one. */
 function holdsChip(run: MarkdownRun): boolean {
   if (run.kind === MARKDOWN_RUN.LINK) return run.runs.some(holdsChip);
+
   return run.kind === MARKDOWN_RUN.CHIP;
 }
 
@@ -469,5 +502,6 @@ export function heardLine(runs: readonly MarkdownRun[]): string | undefined {
 export function markdownBlocks(words: string, reading: MarkdownReading): readonly MarkdownBlock[] {
   if (markdownTooDeep(words)) return [{ kind: MARKDOWN_BLOCK.CODE, text: words }];
   const tree = markdownTree(words);
+
   return blocksOf(tree.children, { reading, definitions: definitionsIn(tree) });
 }

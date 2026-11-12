@@ -57,13 +57,16 @@ function useModelsFollowHosts(accountId: string | undefined): void {
   const seen = useRef<readonly string[] | undefined>(undefined);
   useEffect(() => {
     if (hosts === undefined) return;
+
     // Note that the models offer only a host that has called in, so one calling in moves them as one joining does.
     const ids = hosts
       .filter((host) => host.calledIn !== false)
       .map((host) => host.id)
       .sort();
+
     const before = seen.current;
     seen.current = ids;
+
     if (before !== undefined && !sameHosts(before, ids)) askAgain();
   }, [hosts, askAgain]);
 }
@@ -73,6 +76,7 @@ export function useOfferedModels(drawing = true) {
   const accountId = useAccountKey();
   const held = drawing ? accountId : undefined;
   useModelsFollowHosts(held);
+
   return useQuery(modelsQuery(held));
 }
 
@@ -88,16 +92,20 @@ export function useAgentDefault(): DrawnAgentDefault {
   const models = useOfferedModels();
   const { mutateAsync: retryPreferences } = useMutation(accountPreferencesRetryMutation());
   const { mutateAsync: retryModels } = useMutation(modelsRetryMutation());
+
   const read = models.isError
     ? { failed: true as const }
     : models.data === undefined
       ? {}
       : { rows: models.data };
+
   const choice =
     preferences.data === undefined ? undefined : agentDefaultOf(preferences.data.agent, read);
+
   const retry = useCallback(
     () => Promise.allSettled([retryPreferences(), retryModels()]).then(() => undefined),
     [retryPreferences, retryModels],
   );
+
   return { choice, failed: preferences.isError, retry };
 }

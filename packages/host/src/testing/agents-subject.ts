@@ -191,6 +191,7 @@ const OVERVIEW = {
 
 /** A synthetic key, as Settings carries it once; nothing below may answer it back. */
 export const PROVIDER_KEY = "sk-ant-api03-synthetic-0000000000000000wxyz";
+
 /** The id the service gives a command added by hand. */
 const ADDED_COMMAND_ID = "4d2e6f8a-1b3c-4d5e-8f7a-9b0c1d2e3f4a";
 
@@ -273,11 +274,13 @@ function fakeService() {
   const asked: string[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
   let cursor = AGENT_CURSOR_START;
+
   let transcript:
     | typeof LIVE_ANSWERED
     | { readonly failure: "not-found" }
     | typeof OFFLINE
     | undefined;
+
   let accountLive: typeof LIVE_ANSWERED | typeof LIVE_SIGNED_OUT | undefined;
   let itemsLive: typeof LIVE_ANSWERED | undefined;
   /** What the account's items' read keeps to answer by sync id, so a read past one is answered what moved since. */
@@ -287,6 +290,7 @@ function fakeService() {
   /** Each key a read mark was sent under, in order, and whether the service answers marks at all. */
   const markKeys: (string | undefined)[] = [];
   let marksAnswered = true;
+
   // Each live read's rows, polled; every followed scope's inbox reads the one script.
   const live = {
     transcript: polledLive(TRANSCRIPT_PARTS),
@@ -303,6 +307,7 @@ function fakeService() {
       soundChoices: [],
     })),
   };
+
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
   /** The account's provider keys, as the service answers them; the one Claude key from the start. */
@@ -344,17 +349,22 @@ function fakeService() {
   let removeGate: Effect.Effect<void> = Effect.void;
   /** What an always-allowed command's add waits on before the service answers it; nothing from the start. */
   let commandAddGate: Effect.Effect<void> = Effect.void;
+
   /** How long ago the account's devices beat, as the service answers it; unanswered until a test says, and never where it hangs. */
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
   });
+
   /** A plan's inbox as its live read answers it: polled from the one script, or the refusal standing. */
   const scopeLive = (poll: boolean | undefined, after: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (scope === undefined) return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+
       if (typeof scope === "object") return Effect.succeed(scope);
+
       return poll === true ? live.scope.poll(after) : Effect.succeed(live.scope.first());
     });
+
   // Note that a poll is counted apart from the first ask (`live.transcript.polls`), as each is held until the rows move.
   const transcriptLive = (
     agentId: string | undefined,
@@ -366,57 +376,76 @@ function fakeService() {
       if (poll !== true) {
         asked.push(`transcript-live:${agentId}${callId === undefined ? "" : `:${callId}`}`);
       }
+
       if (transcript === undefined) {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       }
+
       if (typeof transcript === "object") return Effect.succeed(transcript);
+
       return poll === true ? live.transcript.poll(after) : Effect.succeed(live.transcript.first());
     });
+
   /** The account's inbox as its live read answers it: polled from the one script, or the refusal standing. */
   const accountInboxLive = (userId: string | undefined, poll: boolean, after: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (poll !== true) asked.push(`account-inbox-live:${userId}`);
+
       if (accountLive === undefined) {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       }
+
       if (typeof accountLive === "object") return Effect.succeed(accountLive);
+
       return poll === true ? live.account.poll(after) : Effect.succeed(live.account.first());
     });
+
   /** The account's items as their live read answers them, by the sync id the follow asks past. */
   const accountItemsLive = (userId: string | undefined, sync: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (sync === "") asked.push(`account-items-live:${userId}`);
+
       if (sync === undefined) asked.push(`account-items-whole:${userId}`);
+
       if (itemsLive === undefined) {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       }
+
       if (sync === undefined) return Effect.succeed(live.items.first());
+
       const settled = (answer: ItemsAnswer) =>
         itemsStalledAt ?? answer.queries.stamps.digest ?? "0";
+
       if (sync === "") {
         const whole = live.items.first();
+
         return Effect.succeed(
           "failure" in whole ? whole : bySyncId(whole, undefined, settled(whole), itemsBySync),
         );
       }
+
       return Effect.map(live.items.poll(sync), (answer) =>
         "failure" in answer ? answer : bySyncId(answer, sync, settled(answer), itemsBySync),
       );
     });
+
   const client: AgentClient & AccountAsksClient = {
     models: () =>
       Effect.sync(() => {
         asked.push("models");
+
         return { models: offeredModels };
       }),
     writeDefault: (choice) =>
       Effect.sync(() => {
         asked.push(`default:${choice.model}:${choice.effort}`);
+
         return { choice };
       }),
     writeChaptersProvider: (provider) =>
       Effect.sync(() => {
         asked.push(`chapters-provider:${provider}`);
+
         return { provider };
       }),
     // SAFETY: each declared read the client is asked for answers its own script's rows, as its declaration's answer.
@@ -434,6 +463,7 @@ function fakeService() {
       Effect.suspend((): Effect.Effect<unknown> => {
         const answered = <Part extends string>(script: PolledLive<Part>) =>
           poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+
         switch (read.name) {
           case HOSTS_READ.name:
             return Effect.map(answered(live.hosts), (answer) => ({
@@ -442,12 +472,15 @@ function fakeService() {
             }));
           case ACCOUNT_PREFERENCES_READ.name:
             if (poll === undefined) asked.push("preferences-live");
+
             return answered(live.preferences);
           case AGENT_ORIGIN_READ.name:
             if (poll === undefined) asked.push(`agent-origin-live:${params.id}`);
+
             return answered(live.origin);
           case WORKSPACE_MEMORIES_READ.name:
             if (poll === undefined) asked.push(`memories-live:${params.workspaceId}`);
+
             return answered(live.memories);
           case PULL_REQUEST_CHAPTERS_READ.name:
             return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
@@ -455,6 +488,7 @@ function fakeService() {
             return transcriptLive(params.id, params.call, poll !== undefined, poll?.after);
           case TASK_INBOX_READ.name:
             if (poll === undefined) asked.push(`description-inbox-live:${params.id}`);
+
             return scopeLive(poll !== undefined, poll?.after);
           case ACCOUNT_INBOX_READ.name:
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
@@ -467,6 +501,7 @@ function fakeService() {
     devicePresence: () =>
       Effect.suspend(() => {
         asked.push("presence");
+
         return presence;
       }),
     removeHost: (id) =>
@@ -485,28 +520,34 @@ function fakeService() {
     list: (taskId, includeArchived) =>
       Effect.sync(() => {
         asked.push(includeArchived === true ? `list:${taskId}:archived` : `list:${taskId}`);
+
         return { agents: [AGENT] };
       }),
     listWorkspace: ({ workspaceId, repository }) =>
       Effect.sync(() => {
         asked.push(`workspace:${workspaceId}:${repository ?? "any"}`);
+
         return { agents: [AGENT] };
       }),
     start: (taskId, request) =>
       Effect.sync((): AgentAgentAnswer => {
         asked.push(`start:${taskId}:${request.idempotencyKey}:${request.model ?? "default"}`);
+
         if (startsUnanswered) {
           return {
             failure: AGENT_CALL_FAILURE.UNANSWERED,
             cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
           };
         }
+
         const agent = { ...AGENT, status: AGENT_STATUS.STARTING };
+
         return startTxid === undefined ? { agent } : { agent, txid: startTxid };
       }),
     startFrom: (request) =>
       Effect.sync(() => {
         asked.push(`start-from:${request.from?.agentId}:${request.idempotencyKey}`);
+
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
     messagesNow: (agentId, after, callId) =>
@@ -519,8 +560,10 @@ function fakeService() {
               : `worker-now:${agentId}:${callId}:${after}`,
           );
           const [page, ...rest] = pagesNow;
+
           if (rest.length > 0) pagesNow = rest;
           cursor = "2:1";
+
           return page ?? { ...SAID, cursor, holds: false };
         }),
       ),
@@ -531,8 +574,10 @@ function fakeService() {
             ? `messages-newest:${agentId}`
             : `worker-newest:${agentId}:${callId}`) + (cut === true ? ":cut" : ""),
         );
+
         // Note that the service answers an agent the account does not reach not found on every read alike.
         if (typeof transcript === "object") return transcript;
+
         return newestPage ?? { ...SAID, cursor: "1:0" };
       }),
     messagesBefore: (agentId, before, callId, cut) =>
@@ -542,6 +587,7 @@ function fakeService() {
             ? `messages-before:${agentId}:${before}`
             : `worker-before:${agentId}:${callId}:${before}`) + (cut === true ? ":cut" : ""),
         );
+
         return { messages: SAID.messages, before: "3" };
       }),
     message: (agentId, request) =>
@@ -550,31 +596,37 @@ function fakeService() {
         asked.push(
           `message:${agentId}:${request.clientKey}:${request.text}${files === "" ? "" : `:files ${files}`}`,
         );
+
         return sentTxid === undefined ? { agent: AGENT } : { agent: AGENT, txid: sentTxid };
       }),
     choose: (agentId, choice) =>
       Effect.map(changeGate, () => {
         asked.push(`choose:${agentId}:${choice.model}:${choice.effort}`);
+
         return { agent: { ...AGENT, ...choice } };
       }),
     rename: (agentId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`rename:${agentId}:${request.title}`);
+
         return { agent: { ...AGENT, title: request.title } };
       }),
     switchServers: (agentId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`servers:${agentId}:${request.disabledServers.join(",")}`);
+
         return { agent: { ...AGENT, disabledServers: request.disabledServers } };
       }),
     choosePermissionMode: (agentId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`permissionMode:${agentId}:${request.permissionMode}`);
+
         return { agent: { ...AGENT, permissionMode: request.permissionMode } };
       }),
     answerApproval: (agentId, approvalId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);
+
         return { approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[request.answer] } };
       }),
     changeQueue: (agentId, change) =>
@@ -582,22 +634,26 @@ function fakeService() {
         Effect.suspend(() => queueGate),
         Effect.sync(() => {
           asked.push(`queue:${agentId}:${change.change}`);
+
           return queueAnswer;
         }),
       ),
     stop: (agentId) =>
       Effect.sync(() => {
         asked.push(`stop:${agentId}`);
+
         return { agent: { ...AGENT, status: AGENT_STATUS.CANCELED } };
       }),
     rewind: (agentId, messageId) =>
       Effect.sync(() => {
         asked.push(`rewind:${agentId}:${messageId}`);
+
         return { agent: AGENT };
       }),
     clear: (agentId) =>
       Effect.sync(() => {
         asked.push(`clear:${agentId}`);
+
         return { agent: AGENT };
       }),
     warm: () => Effect.succeed({ warm: true as const }),
@@ -606,67 +662,80 @@ function fakeService() {
     boot: (agentId) =>
       Effect.sync(() => {
         asked.push(`boot:${agentId}`);
+
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
+
         return { deleted: true as const, txid: "9102" };
       }),
     archive: (agentId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`archive:${agentId}:${String(request.archived)}`);
+
         return { agent: { ...AGENT, archivedAt: 1_800_000_120_000 } };
       }),
     pin: (agentId, request) =>
       Effect.sync(() => {
         asked.push(`pin:${agentId}:${String(request.pinned)}`);
+
         return { agent: AGENT };
       }),
     agent: (agentId) =>
       Effect.sync(() => {
         asked.push(`page:${agentId}`);
+
         return { agent: PAGE };
       }),
     pullRequest: (agentId) =>
       Effect.sync(() => {
         asked.push(`pull-request:${agentId}`);
+
         return PUBLISHED;
       }),
     changes: (agentId, number) =>
       Effect.sync(() => {
         asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
+
         return CHANGES;
       }),
     turnChanges: (agentId, messageId) =>
       Effect.sync(() => {
         asked.push(`turn-changes:${agentId}:${messageId}`);
+
         return TURN_CHANGES;
       }),
     generateChapters: (agentId, number) =>
       Effect.sync(() => {
         asked.push(`chapters-generate:${agentId}${number === undefined ? "" : `#${number}`}`);
+
         return CHAPTERS;
       }),
     overviewPullRequest: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-pull-request:${agentId}`);
+
         return OVERVIEW.pullRequest;
       }),
     reviewOptions: (agentId) =>
       Effect.sync(() => {
         asked.push(`review-options:${agentId}`);
+
         return REVIEW_OPTIONS;
       }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
     overviewChecks: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-checks:${agentId}`);
+
         return OVERVIEW.checks;
       }),
     overviewConversation: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-conversation:${agentId}`);
+
         return OVERVIEW.conversation;
       }),
     pullRequestAction: (agentId, request, number) =>
@@ -674,46 +743,55 @@ function fakeService() {
         asked.push(
           `pull-request-action:${agentId}${number === undefined ? "" : `#${number}`}:${request.action}`,
         );
+
         return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE };
       }),
     pullRequestViewed: (agentId) =>
       Effect.sync(() => {
         asked.push(`pull-request-viewed:${agentId}`);
+
         return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, files: [] };
       }),
     githubImage: (agentId, src) =>
       Effect.sync(() => {
         asked.push(`github-image:${agentId}:${src}`);
+
         return { contentType: GITHUB_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" };
       }),
     readProviderKeys: () =>
       Effect.sync(() => {
         asked.push("keys");
+
         return { keys: keptKeys };
       }),
     saveProviderKey: (save) =>
       Effect.sync(() => {
         asked.push(`save:${save.provider}:${save.key === PROVIDER_KEY ? "the key" : "another"}`);
+
         return { keys: [KEPT] };
       }),
     removeProviderKey: (removal) =>
       Effect.sync(() => {
         asked.push(`remove:${removal.provider}`);
+
         return { keys: [] };
       }),
     setProviderKeyForAgents: (change) =>
       Effect.sync(() => {
         asked.push(`forAgents:${change.kind}:${String(change.forAgents)}`);
+
         return { keys: [] };
       }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);
+
         return { keys: [] };
       }),
     reorderSubscriptions: (order) =>
       Effect.sync(() => {
         asked.push(`reorder:${order.subscriptionIds.join(",")}`);
+
         return { keys: [] };
       }),
     startChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
@@ -722,16 +800,19 @@ function fakeService() {
     readGitHubToken: () =>
       Effect.sync(() => {
         asked.push("token");
+
         return { token: null };
       }),
     saveGitHubToken: (save) =>
       Effect.sync(() => {
         asked.push(`save-token:${save.token === GITHUB_TOKEN ? "the token" : "another"}`);
+
         return { token: SAVED_TOKEN };
       }),
     removeGitHubToken: () =>
       Effect.sync(() => {
         asked.push("remove-token");
+
         return { token: null };
       }),
     readAllowedCommands: () => Effect.succeed({ commands: [] }),
@@ -780,53 +861,63 @@ function fakeService() {
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);
+
         return { text: "Run the tests" };
       }),
     inboxAttachment: (itemId, attachmentId) =>
       Effect.sync(() => {
         asked.push(`attachment:${itemId}:${attachmentId}`);
+
         return { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" };
       }),
     agentPicture: (agentId, pictureId, callId) =>
       Effect.sync(() => {
         asked.push(`picture:${agentId}:${pictureId}:${callId ?? ""}`);
+
         return { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" };
       }),
     agentPart: (agentId, messageId, index, callId) =>
       Effect.sync(() => {
         asked.push(`part:${agentId}:${messageId}:${index}:${callId ?? ""}`);
+
         return { part: { type: "reasoning", text: "Whole." } };
       }),
     markInboxItemRead: (itemId, key) =>
       Effect.sync(() => {
         asked.push(`inbox-read:${itemId}`);
         markKeys.push(key);
+
         if (!marksAnswered) {
           return {
             failure: AGENT_CALL_FAILURE.UNANSWERED,
             cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
           };
         }
+
         return { id: itemId, unread: false, ...committedIn };
       }),
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
+
         return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-unread:${itemId}`);
+
         return { id: itemId, unread: true, ...committedIn };
       }),
     remindInboxItem: (itemId, until) =>
       Effect.sync(() => {
         asked.push(`inbox-remind:${itemId}:${until ?? "none"}`);
+
         return { id: itemId, unread: false, ...committedIn };
       }),
     markInboxRead: (request) =>
       Effect.sync(() => {
         asked.push(`inbox-read-all:${request?.workspaceId ?? ""}`);
+
         return { marked: 2, ...committedIn };
       }),
     messageInbox: (itemId, request) =>
@@ -834,13 +925,16 @@ function fakeService() {
         Effect.suspend(() => messageGate),
         () => {
           const files = (request.attachments ?? []).map((file) => file.name).join(",");
+
           const answer =
             request.answers === undefined
               ? ""
               : `:answers ${request.answers.ask} ${request.answers.reply} ${(request.answers.choices ?? []).join(",")}`;
+
           asked.push(
             `inbox-message:${itemId}:${request.text}:${files}:${request.clientKey}${answer}`,
           );
+
           return {
             item: {
               ...ITEM,
@@ -862,6 +956,7 @@ function fakeService() {
         asked.push(
           `inbox-start:${request.agentId}:${request.title}:${request.text}:${request.clientKey}`,
         );
+
         return {
           item: {
             ...ITEM,
@@ -883,6 +978,7 @@ function fakeService() {
       }).pipe(
         Effect.map(() => {
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
+
           return {
             item: {
               ...ITEM,
@@ -897,14 +993,17 @@ function fakeService() {
     answerInbox: (itemId, request) =>
       Effect.sync(() => {
         asked.push(`answer:${itemId}:${request.revision}:${request.reply}:${request.clientKey}`);
+
         return { item: { ...ITEM, revision: 3, status: INBOX_STATUS.ANSWERED }, taken: true };
       }),
     takeBackInbox: (itemId, request) =>
       Effect.sync(() => {
         asked.push(`take-back:${itemId}:${request.clientKey}`);
+
         return { item: { ...ITEM, status: INBOX_STATUS.OPEN }, outcome: INBOX_TAKE_BACK.TAKEN };
       }),
   };
+
   return {
     client,
     asked,
@@ -1024,6 +1123,7 @@ export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number]>;
 
 /** That the service answers a live read, its rows polled from the test's script (`polledLive`). */
 export const LIVE_ANSWERED = "answered";
+
 /** A live read whose call got no answer at all, as one sent offline ends. */
 export const OFFLINE = {
   failure: AGENT_CALL_FAILURE.UNANSWERED,
@@ -1049,6 +1149,7 @@ const TRANSCRIPT_PARTS = [
   "launch",
   "boot",
 ] as const;
+
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
 export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;
 export const ITEMS_PARTS = ["stamps", "items", "messages", "files"] as const;
@@ -1074,6 +1175,7 @@ function isRow(row: unknown): row is RowFields {
 /** A row's text field `name`; none where it carries none. */
 function textOf(row: unknown, name: string): string | undefined {
   const value = isRow(row) ? row[name] : undefined;
+
   return typeof value === "string" ? value : undefined;
 }
 
@@ -1104,28 +1206,37 @@ function bySyncId(
 ): ItemsAnswer {
   for (const row of answer.queries.items.rows ?? []) {
     const id = itemIdOf(row);
+
     if (id !== undefined) items.rows.set(id, row);
   }
+
   const stamps = answer.queries.stamps.rows ?? [];
+
   const current = new Map(
     stamps.flatMap((stamp) => {
       const id = itemIdOf(stamp);
       const row = id === undefined ? undefined : items.rows.get(id);
+
       if (id === undefined || typeof row !== "object" || row === null) return [];
       const unread = isRow(stamp) ? stamp.unread : undefined;
+
       return [[id, { stamp, row: { ...row, unread } }] as const];
     }),
   );
+
   const now = new Map([...current].map(([id, each]) => [id, JSON.stringify(each)] as const));
   const before = past === undefined ? undefined : items.at.get(past);
   items.at.set(next, now);
   const stood = past !== undefined && past === next;
   const moved = [...current.keys()].filter((id) => !stood && before?.get(id) !== now.get(id));
   const gone = before === undefined || stood ? [] : [...before.keys()].filter((id) => !now.has(id));
+
   const movedMessages = (answer.queries.messages.rows ?? []).filter((row) =>
     moved.includes(itemIdOf(row) ?? ""),
   );
+
   const messageIds = new Set(movedMessages.flatMap((row) => textOf(row, "id") ?? []));
+
   // Note that a read answered before the test set any rows carries none, as one Realtime sealed does.
   const part = (query: SealedLiveQueryWire, rows: readonly unknown[]): SealedLiveQueryWire => ({
     ...query,
@@ -1133,7 +1244,9 @@ function bySyncId(
     sync: past === undefined ? { next } : { past, next },
     ...(past === undefined ? undefined : { gone }),
   });
+
   const { queries } = answer;
+
   return {
     ...answer,
     queries: {
@@ -1174,6 +1287,7 @@ export function holding(
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
     yield* Scope.provide(hold, scope);
+
     return Scope.close(scope, Exit.void);
   });
 }
@@ -1197,16 +1311,19 @@ export function subject(
     const events: { kind: GatewayEventKind; payload: WireValue; asked: number }[] = [];
     /** Every telling of a live follow's slice (`LIVE_READ_CHANGED`) named `read`, whole, in order. */
     const toldLive = (read: LiveRead) => tellingsOf(events, read);
+
     const kernel = {
       runMode: { sendsNetwork: options.sendsNetwork ?? true },
       emit: (kind: GatewayEventKind, payload: WireValue) =>
         void events.push({ kind, payload, asked: service.asked.length }),
       now: () => NOW,
     };
+
     const account = { capabilitiesActive: () => options.signedIn ?? true };
     const accountId = options.accountId ?? (() => "user-dana");
     const focus = yield* windowFocus;
     const pool = options.pool ?? (yield* entityPool());
+
     const composer = yield* composeAgents({
       kernel,
       account,
@@ -1224,6 +1341,7 @@ export function subject(
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
+
     // Note that the account's asks are composed beside the agents as the host composes them (`compose-host.ts`).
     const accountAsks = yield* composeAccountAsks({
       kernel,
@@ -1237,12 +1355,15 @@ export function subject(
         ? undefined
         : { repositoriesMoved: options.repositoriesMoved }),
     }).pipe(Effect.provide(noNetwork));
+
     /** A Gateway method either composer answers, called as a window calls it. */
     const call = (method: GatewayMethod, params: WireRecord = {}) => {
       const handler = composer.methods[method] ?? accountAsks.methods[method];
       assert.ok(handler, `no handler for ${method}`);
+
       return handler(params, context);
     };
+
     /**
      * Each read of `transcript` the host laid on the held transcripts as it
      * moved, its rows, none where it held none, and how many reads the
@@ -1253,6 +1374,7 @@ export function subject(
     ) => {
       const laid: { readonly rows: AppTranscript | undefined; readonly asked: number }[] = [];
       let was: unknown;
+
       for (const event of events) {
         if (
           event.kind !== GATEWAY_EVENT.LIVE_READ_CHANGED ||
@@ -1263,12 +1385,15 @@ export function subject(
         // SAFETY: the held transcripts are the host's own, told as built.
         const held = event.payload.held as unknown as AppTranscripts;
         const read = held[transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
+
         if (read === was) continue;
         was = read;
         laid.push({ rows: read?.rows, asked: event.asked });
       }
+
       return laid;
     };
+
     return {
       call,
       /** Both composers' declared acts, each handed its input as the port reads it. */

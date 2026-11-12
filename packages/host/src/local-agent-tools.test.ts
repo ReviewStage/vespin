@@ -25,6 +25,7 @@ const release = Effect.gen(function* () {
   yield* fileSystem.writeFileString(`${scratch}/tool-1.0/unpinned.txt`, "left in the archive");
   execFileSync("tar", ["-czf", `${scratch}/tool.tgz`, "-C", scratch, "tool-1.0"]);
   const archive = readFileSync(`${scratch}/tool.tgz`);
+
   const pin: AgentToolPin = {
     NAME: "tool",
     VERSION: "1.0",
@@ -35,6 +36,7 @@ const release = Effect.gen(function* () {
     MEMBERS: ["bin/tool"],
     BINARY: "bin/tool",
   };
+
   return { archive, pin };
 });
 
@@ -50,6 +52,7 @@ describe("localAgentTool", () => {
         const fetched = yield* localAgentTool(root, pin).pipe(
           Effect.provide(fakeHttpClientLayer(() => new Response(archive))),
         );
+
         const again = yield* localAgentTool(root, pin).pipe(
           Effect.provide(fakeHttpClientLayer(() => new Response("never asked", { status: 500 }))),
         );
@@ -89,17 +92,22 @@ describe("localAgentTool", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const root = yield* temporaryDirectoryScoped("agent-tools-");
       const { archive, pin } = yield* release;
+
       const pinned = {
         ...pin,
         FILES: {
           "bin/tool": createHash("sha256").update("#!/bin/sh\necho tool\n").digest("hex"),
         },
       };
+
       let fetches = 0;
+
       const fetching = fakeHttpClientLayer(() => {
         fetches += 1;
+
         return new Response(archive);
       });
+
       const kept = `${root}/agent-tools/tool/1.0/bin/tool`;
 
       yield* localAgentTool(root, pinned).pipe(Effect.provide(fetching));

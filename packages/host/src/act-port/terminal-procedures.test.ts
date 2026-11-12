@@ -78,10 +78,12 @@ function fixture(options: { connectTaken?: boolean } = {}) {
   let outputListener: Listener<{ connectionId: string; data: Uint8Array }> | undefined;
   let stateListener: Parameters<HostOperator["onTerminalState"]>[0] | undefined;
   let ids = 0;
+
   const host: TerminalActsDependencies<Window>["host"] = {
     terminalList: ({ agentId }) =>
       Effect.sync(() => {
         asked.push(`list:${agentId}`);
+
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [SHELL] };
       }),
     terminalCreate: () => Effect.succeed({ failure: TERMINAL_REFUSAL.SANDBOX_STOPPED }),
@@ -106,13 +108,16 @@ function fixture(options: { connectTaken?: boolean } = {}) {
       Effect.sync(() => void asked.push(`disconnect:${connectionId}`)),
     onTerminalOutput: (listener) => {
       outputListener = listener;
+
       return () => undefined;
     },
     onTerminalState: (listener) => {
       stateListener = listener;
+
       return () => undefined;
     },
   };
+
   const actPort = testActPort(
     terminalProcedures<Window>({
       host,
@@ -120,6 +125,7 @@ function fixture(options: { connectTaken?: boolean } = {}) {
         open: (sender, ticket): HostTerminalPort => {
           let heard: ((message: WireBoundaryInput) => void) | undefined;
           let hungUp: (() => void) | undefined;
+
           const port: ScriptedPort = {
             sender,
             ticket,
@@ -128,7 +134,9 @@ function fixture(options: { connectTaken?: boolean } = {}) {
             send: (message) => heard?.(message),
             hangUp: () => hungUp?.(),
           };
+
           opened.push(port);
+
           return {
             post: (message) => void port.posted.push(message),
             onMessage: (listener) => {
@@ -148,7 +156,9 @@ function fixture(options: { connectTaken?: boolean } = {}) {
       fork: (effect) => void pending.push(effect),
     }),
   );
+
   ports.push(actPort);
+
   return {
     actPort,
     asked,
@@ -188,10 +198,12 @@ it.effect(
         { kind: ACT_KIND.TERMINAL_LIST, payload: { agentId: AGENT_ID } },
         panel,
       );
+
       const created = yield* actPort.perform(
         { kind: ACT_KIND.TERMINAL_CREATE, payload: { agentId: AGENT_ID } },
         panel,
       );
+
       const renamed = yield* actPort.perform(
         {
           kind: ACT_KIND.TERMINAL_RENAME,
@@ -220,6 +232,7 @@ it.effect("only a panel is answered", () =>
       { kind: ACT_KIND.TERMINAL_LIST, payload: { agentId: AGENT_ID } },
       other,
     );
+
     const attached = yield* actPort.perform(
       { kind: ACT_KIND.TERMINAL_ATTACH, payload: ATTACH },
       other,
@@ -342,6 +355,7 @@ it.effect(
         panelOf(),
         untrusted,
       );
+
       const attached = yield* actPort.perform(
         { kind: ACT_KIND.TERMINAL_ATTACH, payload: ATTACH },
         panelOf(),

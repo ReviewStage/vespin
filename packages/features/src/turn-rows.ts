@@ -257,8 +257,10 @@ export function browserCallWords(
   const said = [...new Set(actions.flatMap((action) => BROWSER_ACTION_WORDS[action] ?? []))].join(
     ", ",
   );
+
   if (said === "") return undefined;
   const line = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+
   return tabNamed ? `${line} in` : line;
 }
 
@@ -290,6 +292,7 @@ export function isAgentCallKind(kind: CallKind): kind is AgentCallKind {
 /** How the line of a call about one coding agent reads where the agent's chip follows its verb: the verb alone, then the words it sent where it sent any. */
 export function agentCallLine(kind: AgentCallKind, subject: string | undefined): CallLine {
   const words = AGENT_CALL_WORDS[kind];
+
   return { verb: words.verb, subject: words.subject ? subject : undefined, code: false };
 }
 
@@ -343,7 +346,9 @@ export function isCommandKind(kind: CallKind): boolean {
  */
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
+
   if (kind === CALL_KIND.MAC_COMMAND) return ON_YOUR_MAC;
+
   return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
 }
 
@@ -369,10 +374,13 @@ export function callLine(
   description: string | undefined,
 ): CallLine {
   const words = CALL_WORDS[kind];
+
   if (description === undefined) return { verb: words.verb, subject, code: words.code };
+
   if (kind === CALL_KIND.BROWSER || kind === CALL_KIND.OPEN_PULL_REQUEST) {
     return { verb: description, subject, code: false };
   }
+
   return {
     verb: description,
     subject: subject === undefined ? undefined : firstLine(subject),
@@ -398,6 +406,7 @@ function firstLine(text: string): string {
  */
 export function commandDescription(description: string | undefined): string | undefined {
   const words = description?.replace(/\s+/gu, " ").trim();
+
   return words === undefined || words === "" ? undefined : words;
 }
 
@@ -427,6 +436,7 @@ const WEB_SCHEME = /^https?:\/\//iu;
 /** The site a web address is of, as a website chip names it: its host without its `www.`; nothing for an address that is not the web's. */
 export function siteName(href: string): string | undefined {
   if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
+
   return new URL(href).hostname.replace(/^www\./u, "");
 }
 
@@ -500,6 +510,7 @@ function isRecordValue(value: unknown): value is Readonly<Record<string, unknown
  */
 export function sameShape(a: unknown, b: unknown, depth: number): boolean {
   if (Object.is(a, b)) return true;
+
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
       Array.isArray(a) &&
@@ -508,8 +519,10 @@ export function sameShape(a: unknown, b: unknown, depth: number): boolean {
       a.every((item, at) => sameShape(item, b[at], depth))
     );
   }
+
   if (depth <= 0 || !isRecordValue(a) || !isRecordValue(b)) return false;
   const keys = Object.keys(a);
+
   return (
     keys.length === Object.keys(b).length &&
     keys.every((key) => Object.hasOwn(b, key) && sameShape(a[key], b[key], depth - 1))
@@ -527,10 +540,12 @@ export function sameFieldsBy<T extends object>(
   by: { readonly [K in keyof T]?: (ours: T[K], theirs: T[K]) => boolean },
 ): boolean {
   const keys = Object.keys(a) as (keyof T)[];
+
   return (
     keys.length === Object.keys(b).length &&
     keys.every((key) => {
       const read = by[key];
+
       return (
         Object.hasOwn(b, key) &&
         (read === undefined ? Object.is(a[key], b[key]) : read(a[key], b[key]))
@@ -557,10 +572,12 @@ interface Held {
 /** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
 function groupSummary({ calls, subagents, startedAgents }: Held): string {
   const tools = calls + startedAgents;
+
   const said = [
     ...(tools > 0 ? [countWords(tools, { one: "tool call", many: "tool calls" })] : []),
     ...(subagents > 0 ? [countWords(subagents, { one: "subagent", many: "subagents" })] : []),
   ];
+
   return said.join(", ");
 }
 
@@ -599,12 +616,15 @@ export function turnRows<B>(
 ): readonly TurnRow<B>[] {
   const rows: TurnRow<B>[] = [];
   let group: Keyed<B>[] = [];
+
   const flush = (trailing: boolean) => {
     const held = counted(group, read);
     const work = held.calls + held.subagents + held.startedAgents;
     const [first] = group;
+
     if (first === undefined) return;
     const open = trailing && turn.moving;
+
     if (work > 0 && (group.length > 1 || open)) {
       rows.push({
         kind: TURN_ROW.GROUP,
@@ -619,18 +639,24 @@ export function turnRows<B>(
         ...group.map((each) => ({ kind: TURN_ROW.BLOCK, key: each.key, block: each.block })),
       );
     }
+
     group = [];
   };
+
   for (const [index, block] of blocks.entries()) {
     const each = { key: read.key(block, index), block };
+
     if (runsWithCalls(read.part(block))) {
       group.push(each);
       continue;
     }
+
     flush(false);
     rows.push({ kind: TURN_ROW.BLOCK, key: each.key, block });
   }
+
   flush(true);
+
   return rows;
 }
 
@@ -639,11 +665,16 @@ function counted<B>(blocks: readonly Keyed<B>[], read: RowReading<B>): Held {
   let calls = 0;
   let subagents = 0;
   let startedAgents = 0;
+
   for (const { block } of blocks) {
     const part = read.part(block);
+
     if (part === ROW_PART.CALL || part === ROW_PART.LONE_CALL) calls += 1;
+
     if (part === ROW_PART.SUBAGENT) subagents += 1;
+
     if (part === ROW_PART.AGENT) startedAgents += 1;
   }
+
   return { calls, subagents, startedAgents };
 }

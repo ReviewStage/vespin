@@ -51,19 +51,23 @@ function stretchesOf(units: readonly Unit[]): readonly TurnStretch[] {
   const stretches: TurnStretch[] = [];
   let run: TurnRow<AgentPart>[] | undefined;
   let runOf = -1;
+
   for (const unit of units) {
     if ("line" in unit) {
       run = undefined;
       stretches.push({ line: unit.line });
       continue;
     }
+
     if (run === undefined || runOf !== unit.stretch) {
       run = [];
       runOf = unit.stretch;
       stretches.push({ rows: run });
     }
+
     run.push(unit.row);
   }
+
   return stretches;
 }
 
@@ -78,13 +82,16 @@ export function turnPieces(
   size: number = PIECE_ROWS,
 ): readonly TurnPiece[] {
   const units = unitsOf(stretches);
+
   if (units.length <= size * 2 || !units.some((unit) => "row" in unit)) {
     return [{ stretches, first: true, last: true, continues: false }];
   }
+
   // Note that the last piece holds a run of rows, never lines alone, because the turn's foot stands under its last rows.
   const lastRow = units.findLastIndex((unit) => "row" in unit);
   const lastFrom = Math.floor(lastRow / size) * size;
   const pieces: TurnPiece[] = [];
+
   for (let from = 0; from < units.length; from += size) {
     const held = units.slice(from, from === lastFrom ? units.length : from + size);
     const before = units[from - 1];
@@ -100,8 +107,10 @@ export function turnPieces(
         "row" in head &&
         before.stretch === head.stretch,
     });
+
     if (from === lastFrom) break;
   }
+
   return pieces;
 }
 
@@ -129,8 +138,10 @@ export function keptPieces(
   pieces: readonly TurnPiece[],
 ): readonly TurnPiece[] {
   if (held === undefined) return pieces;
+
   return pieces.map((piece, at) => {
     const was = held[at];
+
     return was !== undefined && samePiece(was, piece) ? was : piece;
   });
 }

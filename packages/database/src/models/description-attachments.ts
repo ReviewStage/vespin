@@ -157,20 +157,25 @@ export function keepDescriptionAttachment(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockOpenTask({ userId, taskId });
+
         if (Option.isNone(locked)) return { status: DESCRIPTION_ATTACHMENT_KEEP.NO_TASK } as const;
+
         // A count that returned no row is the database breaking its own contract, not an outcome.
         const { count, videos } = yield* countPictures({ taskId }).pipe(
           Effect.catchTag("NoSuchElementError", Effect.die),
         );
+
         if (count >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION) {
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY } as const;
         }
+
         if (
           isVideoPicture(picture) &&
           videos >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION
         ) {
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS } as const;
         }
+
         const id = randomUUID();
         yield* insertPicture({
           id,
@@ -183,6 +188,7 @@ export function keepDescriptionAttachment(
           mp4Bytes: picture.mp4Bytes ?? null,
           createdAt: yield* DateTime.nowAsDate,
         });
+
         return { status: DESCRIPTION_ATTACHMENT_KEEP.KEPT, id } as const;
       }),
     ),

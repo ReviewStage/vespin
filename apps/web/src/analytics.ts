@@ -112,6 +112,7 @@ function firstCountOf(sessionId: string): boolean {
   } catch {
     // Storage refused: count it, since a double count beats none.
   }
+
   return true;
 }
 
@@ -125,8 +126,11 @@ function withoutAuthParams(part: string): string | undefined {
   if (!part.includes("=")) return undefined;
   const params = new URLSearchParams(part.slice(1));
   const found = [...params.keys()].filter((name) => AUTH_PARAMS.has(name));
+
   if (found.length === 0) return undefined;
+
   for (const name of found) params.delete(name);
+
   return params.toString();
 }
 
@@ -145,17 +149,23 @@ function isLogsScript(script: HTMLScriptElement): boolean {
  */
 function scrubAuthUrl(value: string): string {
   let url: URL;
+
   try {
     url = new URL(value);
   } catch {
     return value;
   }
+
   if (AUTH_PATHS.has(url.pathname)) return `${url.origin}${url.pathname}`;
   const query = withoutAuthParams(url.search);
   const fragment = withoutAuthParams(url.hash);
+
   if (query === undefined && fragment === undefined) return value;
+
   if (query !== undefined) url.search = query;
+
   if (fragment !== undefined) url.hash = fragment;
+
   return url.toString();
 }
 
@@ -172,14 +182,17 @@ function scrubAuthUrl(value: string): string {
  */
 export function sanitizeAnalyticsUrls<Value>(value: Value): Value {
   if (typeof value === "string") return scrubAuthUrl(value) as Value;
+
   if (value !== null && typeof value === "object") {
     const proto = Object.getPrototypeOf(value);
+
     if (proto === Object.prototype || proto === null) {
       return Object.fromEntries(
         Object.entries(value).map(([key, inner]) => [key, sanitizeAnalyticsUrls(inner)]),
       ) as Value;
     }
   }
+
   return value;
 }
 
@@ -205,6 +218,7 @@ let client: Promise<PostHog | undefined> | undefined;
  */
 export function startSiteAnalytics(): void {
   const projectApiKey = PROJECT_API_KEY;
+
   if (client || !projectApiKey) return;
   client = import("posthog-js").then(({ default: posthog }) => {
     posthog.init(projectApiKey, {
@@ -275,6 +289,7 @@ export function startSiteAnalytics(): void {
       disable_product_tours: true,
       advanced_disable_feature_flags: true,
     });
+
     return posthog;
   });
 }
@@ -336,10 +351,13 @@ export async function completeSiteSignIn(
   signedIn: Promise<SiteSession | null | undefined>,
 ): Promise<void> {
   const posthog = await client?.catch(() => undefined);
+
   if (!posthog) return;
   const account = await signedIn.catch(() => undefined);
+
   if (!account) return;
   const { id, name, email } = account.user;
   posthog.identify(id, { name, email });
+
   if (firstCountOf(account.session.id)) posthog.capture(SITE_EVENT.SIGN_IN_COMPLETE);
 }

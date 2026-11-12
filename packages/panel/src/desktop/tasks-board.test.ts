@@ -112,11 +112,13 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       renamed.push([taskId, name]);
+
       return Promise.resolve(true);
     },
     // Note that the name the reader knows a member by goes with them, which the board's own tests leave aside.
     [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, assigneeName: _named, ...standing }) => {
       sent.push([taskId, standing]);
+
       return Promise.resolve(keeps);
     },
   });
@@ -182,6 +184,7 @@ async function mountBoard(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const control = tasksControl({
     tasks: [...tasks],
     workspace: ACME,
@@ -191,8 +194,10 @@ async function mountBoard(
     onSelect: (taskId) => opened.push(taskId),
     ...overrides,
   });
+
   // The window's router, whose routed exits the Board's close leaves by, as the window's history does.
   const { provide } = windowRouter();
+
   const draw = (shown: TasksDisplay, changed: Partial<typeof control> = {}) =>
     root.render(
       withQueryClient(
@@ -222,9 +227,11 @@ async function mountBoard(
         ),
       ),
     );
+
   redrawBoard = (shown, changed) => act(() => draw(shown, changed));
   act(() => draw(display));
   await act(async () => undefined);
+
   return container;
 }
 
@@ -241,7 +248,9 @@ function chipOf(board: HTMLElement, taskId: string, standing: string): HTMLButto
   const chip = board.querySelector<HTMLButtonElement>(
     `li[data-task-id="${taskId}"] button[aria-label^="${standing}:"]`,
   );
+
   assert.ok(chip, `the card of ${taskId} wears its ${standing} chip`);
+
   return chip;
 }
 
@@ -250,6 +259,7 @@ function pick(label: string): void {
   const item = [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find(
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === label,
   );
+
   act(() => (item ?? assert.fail(`no ${label} item`)).click());
 }
 
@@ -258,7 +268,9 @@ function cardOf(board: HTMLElement, taskId: string): HTMLButtonElement {
   const card = board.querySelector<HTMLButtonElement>(
     `li[data-task-id="${taskId}"] ${CARD_PRESS_SELECTOR}`,
   );
+
   assert.ok(card, `the card of ${taskId} stands`);
+
   return card;
 }
 
@@ -308,6 +320,7 @@ test("each column's cards are one Tab stop that ↓ and ↑ walk, and ← and �
     ...DEFAULT_BOARD_DISPLAY,
     completed: COMPLETED_WINDOW.ALL,
   });
+
   const stops = () =>
     [...board.querySelectorAll<HTMLElement>("[data-task-column]")].map(
       (column) =>
@@ -315,6 +328,7 @@ test("each column's cards are one Tab stop that ↓ and ↑ walk, and ← and �
           (press) => press.tabIndex === 0,
         ).length,
     );
+
   assert.deepEqual(stops(), [1, 1, 1, 1, 1], "Tab lands once in each column");
 
   act(() => cardOf(board, "t-38").focus());
@@ -338,10 +352,13 @@ test("End reaches the last card of a column taller than the window, though it is
   const chores = Array.from({ length: 40 }, (_, at) =>
     task(at + 1, `Chore ${at + 1}`, TASK_STATUS.BACKLOG, TASK_PRIORITY.NONE),
   );
+
   const board = await mountBoard(chores);
+
   const backlog =
     board.querySelector<HTMLElement>('[data-task-column="backlog"] .ui-scroll-area') ??
     assert.fail("Backlog scrolls its own cards");
+
   layScrollerOut(backlog, 768, 40 * 70);
   assert.ok(!columns(board)[0]?.[1].includes("ACME-40"), "the last task's card is not drawn");
 
@@ -352,9 +369,11 @@ test("End reaches the last card of a column taller than the window, though it is
 
 test("a refresh that failed after the tasks were read keeps the columns drawn under Could not refresh and Retry, where a first read that failed draws the error alone", async () => {
   let retried = 0;
+
   const onRetryList = () => {
     retried += 1;
   };
+
   const board = await mountBoard(TASKS, SHELL_ROOM.WIDE, DEFAULT_BOARD_DISPLAY, {
     listFailed: true,
     onRetryList,
@@ -363,9 +382,11 @@ test("a refresh that failed after the tasks were read keeps the columns drawn un
   assert.notEqual(columns(board).length, 0, "the columns stand");
   const note = board.querySelector('[role="alert"]');
   assert.match(note?.textContent ?? "", /Could not refresh/u);
+
   const retry = [...(note?.querySelectorAll("button") ?? [])].find((each) =>
     each.textContent?.includes("Retry"),
   );
+
   act(() => retry?.click());
   assert.equal(retried, 1);
 
@@ -373,6 +394,7 @@ test("a refresh that failed after the tasks were read keeps the columns drawn un
     listFailed: true,
     listRead: false,
   });
+
   assert.equal(columns(first).length, 0);
   assert.match(first.querySelector('[role="alert"]')?.textContent ?? "", /could not be read/u);
 });
@@ -384,6 +406,7 @@ test("a task from a service before statuses stands under Todo", async () => {
     TASK_STATUS.TODO,
     TASK_PRIORITY.NONE,
   );
+
   const board = await mountBoard([older]);
   assert.deepEqual(columns(board)[1], ["Todo", ["ACME-30"]]);
 });
@@ -404,9 +427,11 @@ test("a press on a card opens its task", async () => {
 
 test("a card's box chooses it without opening it, ⌘-click one in another column, and the bar's Status settles both at once", async () => {
   const board = await mountBoard();
+
   const box =
     board.querySelector<HTMLElement>('li[data-task-id="t-39"] [role="checkbox"]') ??
     assert.fail("the card of t-39 draws its box");
+
   act(() => box.click());
   act(() => {
     cardOf(board, "t-42").dispatchEvent(
@@ -420,10 +445,13 @@ test("a card's box chooses it without opening it, ⌘-click one in another colum
   const status = [...bar.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => each.textContent?.trim() === "Status",
   );
+
   act(() => (status ?? assert.fail("the bar offers Status")).click());
+
   const done = [...document.querySelectorAll<HTMLElement>('[role="menu"] .ui-menu-item')].find(
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === "Done",
   );
+
   act(() => (done ?? assert.fail("Status offers Done")).click());
   await vi.waitFor(() =>
     assert.deepEqual(sent, [
@@ -441,9 +469,11 @@ test("the settled finished before the past week give way to a foot counting them
     ["Done", []],
     ["Canceled", []],
   ]);
+
   const older = [...(done?.querySelectorAll<HTMLElement>("button") ?? [])].find(
     (button) => button.textContent === "Show 1 more",
   );
+
   act(() => (older ?? assert.fail("no Show more line under Done")).click());
   assert.deepEqual(
     displayed.map((each) => each.completed),
@@ -476,14 +506,19 @@ function layCardsOut(board: HTMLElement): void {
   const COLUMN = 300;
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const all = [...document.querySelectorAll("[data-task-column]")];
+
     if (this.matches(".tasks-board")) return new DOMRect(0, 0, all.length * COLUMN, 600);
     const at = all.indexOf(this);
+
     if (at >= 0) return new DOMRect(at * COLUMN, 0, COLUMN, 600);
     const column = all.indexOf(this.closest("[data-task-column]") ?? this);
+
     if (!this.matches("li[data-task-id]") || column < 0) return new DOMRect();
     const row = [...(this.parentElement?.children ?? [])].indexOf(this);
+
     return new DOMRect(column * COLUMN + 8, 40 + row * 50, COLUMN - 16, 40);
   });
+
   for (const list of board.querySelectorAll(".tasks-board-cards")) {
     Object.assign(list, { setPointerCapture: () => undefined });
   }
@@ -535,6 +570,7 @@ test("a column's + opens a draft there whose chips change it, and Return adds it
   fakeActPort({
     [ACT_KIND.TASKS_START]: (start) => {
       added.push(start);
+
       return Promise.resolve({ planId: "t-50" });
     },
   });
@@ -572,6 +608,7 @@ test("by priority, a card dragged onto Urgent's column is sent urgent", async ()
     ...DEFAULT_BOARD_DISPLAY,
     grouping: TASKS_GROUPING.PRIORITY,
   });
+
   layCardsOut(board);
 
   dragCard(board, "t-39", { x: 150, y: 120 });
@@ -582,15 +619,18 @@ test("by priority, a card dragged onto Urgent's column is sent urgent", async ()
 /** A task of `TASKS` assigned to Charles. */
 function charles(taskId: string): TaskSummary {
   const held = TASKS.find((each) => each.id === taskId) ?? assert.fail(`no ${taskId}`);
+
   return { ...held, assignee: { userId: CHARLES, name: "Charles Pan" } };
 }
 
 test("by assignee, the reader's column stands first, then each teammate's, then No assignee's; a card dragged onto one is assigned to its person, onto No assignee's to no one, and wears no assignee chip there", async () => {
   const tasks = [charles("t-39"), ...TASKS.filter((each) => each.id !== "t-39")];
+
   const board = await mountBoard(tasks, SHELL_ROOM.WIDE, {
     ...DEFAULT_BOARD_DISPLAY,
     grouping: TASKS_GROUPING.ASSIGNEE,
   });
+
   layCardsOut(board);
 
   assert.deepEqual(
@@ -615,6 +655,7 @@ test("by assignee, the reader's column stands first, then each teammate's, then 
 
 test("in a narrow room grouped by assignee, a card keeps its Assignee chip, which moves it without a drag", async () => {
   const deans = { ...(TASKS.find((each) => each.id === "t-40") ?? assert.fail("no t-40")) };
+
   const board = await mountBoard(
     [{ ...deans, assignee: { userId: DEAN, name: "Dean Stratakos" } }],
     SHELL_ROOM.NARROW,
@@ -682,6 +723,7 @@ function columnTabs(board: HTMLElement): ColumnTabs {
   const tabs = [...board.querySelectorAll<HTMLElement>('[role="tablist"] [role="tab"]')];
   const name = (tab: HTMLElement) => tab.querySelector(".ui-choice-bar-label")?.textContent ?? "";
   const chosen = tabs.find((tab) => tab.getAttribute("aria-selected") === "true");
+
   return { names: tabs.map(name), chosen: chosen === undefined ? undefined : name(chosen) };
 }
 
@@ -690,6 +732,7 @@ function pressTab(board: HTMLElement, name: string): void {
   const tab = [...board.querySelectorAll<HTMLElement>('[role="tab"]')].find(
     (each) => each.querySelector(".ui-choice-bar-label")?.textContent === name,
   );
+
   act(() => (tab ?? assert.fail(`no ${name} tab`)).click());
 }
 
@@ -734,6 +777,7 @@ test("in a narrow room a card's chips draw their marks alone, as the List's do, 
     assert.equal(each.dataset.iconOnly, "true", `the ${standing} chip draws its mark alone`);
     assert.equal(each.dataset.look, CHIP_LOOK.TOOLBAR, `the ${standing} chip wears no outline`);
   }
+
   assert.equal(
     chip.closest(".tasks-board-card-title")?.querySelector(".tasks-board-name")?.textContent,
     "Rate limit search",
@@ -774,9 +818,11 @@ test("a card's Priority chip sends the priority picked, and a Status chip the st
 
 test("Rename from a card's ⋯ makes its name a field in place, and Enter sends the name typed", async () => {
   const board = await mountBoard();
+
   const more = board.querySelector<HTMLButtonElement>(
     'li[data-task-id="t-42"] .tasks-board-card-more button',
   );
+
   assert.ok(more, "the card offers its ⋯");
 
   act(() => more.click());
@@ -806,9 +852,11 @@ test("a right-click on a card drops the task's own menu, leaving out the Priorit
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
     );
   });
+
   const labels = [...document.querySelectorAll('[role^="menuitem"] .ui-menu-item-label')].map(
     (label) => label.textContent,
   );
+
   assert.ok(labels.includes("Rename"), "the menu offers Rename");
   assert.deepEqual(
     ["Priority", "Assignee"].filter((item) => labels.includes(item)),
@@ -820,11 +868,13 @@ test("a right-click on a card drops the task's own menu, leaving out the Priorit
 
 test("a section made while the board is drawn is offered under Move to on a card whose task did not move", async () => {
   const board = await mountBoard();
+
   const launch: TaskSections = {
     sections: [{ id: "section-launch", workspaceId: ACME.id, title: "Launch", createdAt: 1 }],
     entries: [],
     agentEntries: [],
   };
+
   act(() => writeListedTasks({ taskSections: launch }));
 
   act(() => {
@@ -833,9 +883,11 @@ test("a section made while the board is drawn is offered under Move to on a card
     );
   });
   pick("Move to");
+
   const labels = [...document.querySelectorAll('[role^="menuitem"] .ui-menu-item-label')].map(
     (label) => label.textContent,
   );
+
   assert.ok(labels.includes("Launch"), "Move to offers the section made");
 });
 
@@ -848,25 +900,30 @@ test("under a finger, a card draws no ⋯, and a long press on it drops the task
     "the card draws no ⋯",
   );
   longPress(cardOf(board, "t-40"));
+
   const labels = [...document.querySelectorAll('[role^="menuitem"] .ui-menu-item-label')].map(
     (label) => label.textContent,
   );
+
   assert.ok(labels.includes("Rename"), "the menu offers Rename");
   assert.deepEqual(opened, []);
 });
 
 test("the menu key drops a card's menu from its press or any control in the card, and its ⋯ is named for the task", async () => {
   const board = await mountBoard();
+
   const key = (target: HTMLElement) =>
     act(() => {
       target.dispatchEvent(
         new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true }),
       );
     });
+
   const offersRename = () =>
     [...document.querySelectorAll('[role^="menuitem"] .ui-menu-item-label')].some(
       (label) => label.textContent === "Rename",
     );
+
   const closeMenu = () =>
     act(() => {
       document.activeElement?.dispatchEvent(
@@ -912,6 +969,7 @@ test("a task from a service before priorities offers No priority on its card, an
     TASK_STATUS.TODO,
     TASK_PRIORITY.NONE,
   );
+
   const board = await mountBoard([older]);
   const chip = chipOf(board, "t-30", "Priority");
 
@@ -931,6 +989,7 @@ test("a card wears one icon for how its agents stand, one at work among them", a
       pullRequestTotal: 2,
     },
   };
+
   const board = await mountBoard([working]);
   const card = board.querySelector('li[data-task-id="t-42"]');
 
@@ -943,11 +1002,13 @@ test("a card wears one icon for how its agents stand, one at work among them", a
 
 test("a card says how many of its sub-tasks are finished, and one with none says nothing of them", async () => {
   const parent = task(42, "Fix Safari login", TASK_STATUS.IN_PROGRESS, TASK_PRIORITY.HIGH);
+
   const board = await mountBoard([
     parent,
     { ...task(43, "Write the fix", TASK_STATUS.DONE, TASK_PRIORITY.HIGH), parentTaskId: parent.id },
     { ...task(44, "Test on iOS", TASK_STATUS.TODO, TASK_PRIORITY.HIGH), parentTaskId: parent.id },
   ]);
+
   const said = (id: string) =>
     board.querySelector(`li[data-task-id="${id}"] .ui-progress-count`)?.textContent ?? "";
 

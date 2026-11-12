@@ -151,11 +151,13 @@ import { useAutomations } from "./use-automations.js";
 function headLine(person: Actor): ReactNode {
   if (person.kind === ACTOR_KIND.PERSON) {
     const role = person.role === undefined ? undefined : ROLE_WORDS[person.role];
+
     // Note that their email is masked in a screen recording, and their role, one of the workspace's own, is not.
     const email =
       person.email === undefined || person.email === "" ? undefined : (
         <ReplayMask>{person.email}</ReplayMask>
       );
+
     if (role !== undefined && email !== undefined) {
       return (
         <>
@@ -163,11 +165,14 @@ function headLine(person: Actor): ReactNode {
         </>
       );
     }
+
     return role ?? email;
   }
+
   if (person.kind === ACTOR_KIND.SOMEONE && person.reason === SOMEONE_REASON.FORMER) {
     return "Former member";
   }
+
   return "Not in this workspace";
 }
 
@@ -243,6 +248,7 @@ function AgentRow({
   const { task, agent, at } = each;
   const { models } = agents;
   const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
+
   return (
     <AgentListRow
       agent={agent}
@@ -299,15 +305,18 @@ function PersonAgentsSection({
   const finding = useFindOpen();
   const more = !useCoarsePointer();
   const queryClient = useQueryClient();
+
   const control: AgentsControl = {
     ...tasks.agents,
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
+
   const selection = useAgentsSelection(
     control,
     agents.map(({ agent }) => agent),
     tasks.shown,
   );
+
   return (
     <PersonSectionFrame
       label={title}
@@ -332,6 +341,7 @@ function PersonAgentsSection({
         >
           {(index, place) => {
             const entry = drawn[index];
+
             return entry === undefined ? null : (
               <AgentRow
                 key={entry.key}
@@ -364,6 +374,7 @@ const PERSON = "Person";
 function linkWorkspaceOf(tasks: TasksControl, standing: string | undefined): string | undefined {
   const theirs = standing === undefined ? undefined : workspaceOfSlug(tasks.workspaces, standing);
   const home = theirs ?? tasks.workspace;
+
   return home?.slug ?? home?.id;
 }
 
@@ -399,22 +410,28 @@ function PersonActions({
   const member = person.kind === ACTOR_KIND.PERSON ? person : undefined;
   const you = member?.you === true;
   const { workspace } = tasks;
+
   // Only a member the members read lists has a row there to manage; someone who left has none.
   const manages =
     member?.role !== undefined &&
     workspace !== undefined &&
     (workspace.role === WORKSPACE_ROLE.OWNER || workspace.role === WORKSPACE_ROLE.ADMIN);
+
   const email = member?.email;
   const slug = linkWorkspaceOf(tasks, standing);
+
   const link =
     slug === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.PERSON, userId }, slug);
+
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
+
   const copies = [
     ...(link === undefined ? [] : linkItems(copy, link)),
     ...(email === undefined
       ? []
       : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),
   ];
+
   const actions: MenuAction[][] = [
     ...(copies.length === 0 ? [] : [copies]),
     ...(phone && shared
@@ -437,6 +454,7 @@ function PersonActions({
           ],
         ]),
   ];
+
   return (
     <>
       {shared && !phone ? (
@@ -478,6 +496,7 @@ interface PersonAutomations {
  */
 function usePersonAutomations(workspaceId: string | undefined, userId: string): PersonAutomations {
   const { read, reload } = useAutomations(workspaceId);
+
   // Note that their automations keep one identity while the read stands, because the list that draws them follows it (`useLeaving`).
   const theirs = useMemo(
     () =>
@@ -490,10 +509,15 @@ function usePersonAutomations(workspaceId: string | undefined, userId: string): 
           ),
     [read, userId],
   );
+
   const none = { automations: [], reading: false, failed: false, onRetry: reload };
+
   if (workspaceId === undefined) return none;
+
   if (read === undefined) return { ...none, reading: true };
+
   if ("failure" in read) return { ...none, failed: true };
+
   return { ...none, automations: theirs };
 }
 
@@ -513,11 +537,14 @@ function AutomationRow({
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const nextWords = automationNextText(automation, now);
   const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+
   const openInTab = useOpenInTab()({
     kind: LINK_DESTINATION.AUTOMATION,
     automationId: automation.id,
   });
+
   const coarse = useCoarsePointer();
+
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>
       <ListRow
@@ -574,6 +601,7 @@ function AutomationRows({
 }): React.JSX.Element {
   const drawn = useLeaving(automations, automationKey);
   const door = useAutomationsDoor(tasks);
+
   return (
     <>
       {drawn.map(({ key, value: automation }) => (
@@ -612,7 +640,9 @@ function PersonHeading({ person }: { person: Actor }): React.JSX.Element {
 function PersonLine({ person }: { person: Actor }): React.ReactNode {
   const line = headLine(person);
   const you = person.kind === ACTOR_KIND.PERSON && person.you;
+
   if (!you) return line;
+
   return (
     <>
       <YouBadge />
@@ -644,6 +674,7 @@ function PersonTasks({
   onShowAll?: (() => void) | undefined;
 }): React.JSX.Element | null {
   if (listed.length === 0) return null;
+
   // Note that the foot stands in the section, close under the rows, so a fold puts it away with them.
   return (
     <PersonSectionFrame
@@ -686,6 +717,7 @@ function PersonTaskRows({
 }): React.JSX.Element {
   const shown = useMemo(() => listed.slice(0, PERSON_TASKS_SHOWN), [listed]);
   const drawn = useLeaving(shown, taskKey);
+
   return (
     <ReplayMask>
       <RecentTasks
@@ -736,18 +768,22 @@ function PersonColumn({
   const taskView = useTaskListView(tasks.workspace?.id, staged);
   const memberCount = tasks.workspace?.memberCount;
   const shared = memberCount === undefined ? (members?.length ?? 0) > 1 : memberCount > 1;
+
   const showTasks = () =>
     taskView.onAssignedTo(
       userId === tasks.me ? { kind: ASSIGNED_TO.ME } : { kind: ASSIGNED_TO.MEMBER, userId },
     );
+
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
   const { liveAgents, listedPullRequests } = tasks;
   const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+
   // The pull request each agent the list follows opened, as a task's agents' rows chip it.
   const pullRequests = useMemo(
     () => new Map((listedPullRequests ?? []).map((each) => [each.agentId, each.pullRequest])),
     [listedPullRequests],
   );
+
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
   const you = userId === tasks.me;
@@ -755,6 +791,7 @@ function PersonColumn({
   const theirAutomations = usePersonAutomations(tasks.workspace?.id, userId);
   const { automations } = theirAutomations;
   const read = useWaitingItems(tasks);
+
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
   // On the reader's own page it must also wait on them now as the sidebar's Inbox row counts it (`waitsOnReaderNow`), so one with a reminder still ahead is left out until it comes due.
   const waiting = read.items.filter(
@@ -762,8 +799,10 @@ function PersonColumn({
       (inboxWaitsOn(item)?.userId ?? agentStarter(liveAgents, item.agentId)) === userId &&
       (!you || waitsOnReaderNow(item, tasks.me, now)),
   );
+
   // Nobody the workspace's members or those who left name, as a link to someone outside it opens, is not found here; until both are read, nobody is.
   const unnamed = person.kind === ACTOR_KIND.SOMEONE && person.reason === SOMEONE_REASON.UNNAMED;
+
   if (unnamed && members !== undefined && former !== undefined) {
     // A phone's page still leads with its way back, the drawer and the places bar out of reach.
     return (
@@ -778,8 +817,10 @@ function PersonColumn({
       />
     );
   }
+
   // Note that someone nothing names yet is drawn as a placeholder, because only settled reads may say they are not in the workspace.
   const theirs = you ? "your" : "their";
+
   // A refused read will not name them, so the page says so and offers Retry rather than wait.
   const note =
     refused && unnamed ? (
@@ -792,6 +833,7 @@ function PersonColumn({
     ) : unnamed ? (
       <PersonReadingSkeleton />
     ) : null;
+
   const actions = (
     <PersonActions
       tasks={tasks}
@@ -802,6 +844,7 @@ function PersonColumn({
       phone={away !== undefined}
     />
   );
+
   const detail = (
     <ReplayUnmask>
       <DetailPage
@@ -942,11 +985,14 @@ function PersonColumn({
       </DetailPage>
     </ReplayUnmask>
   );
+
   // Every link on the page, a row's Copy link among them, is written under the workspace it stands in.
   const linked = (
     <LinkWorkspaceProvider value={linkWorkspaceOf(tasks, standing)}>{detail}</LinkWorkspaceProvider>
   );
+
   if (away === undefined) return linked;
+
   return (
     <Fill className="person-phone">
       <PhoneHead
@@ -978,6 +1024,7 @@ export function PersonPage({
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, usePersonDoor(tasks).close);
+
   return (
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       <PersonColumn tasks={tasks} userId={userId} name={name} staged={staged} away={away} />

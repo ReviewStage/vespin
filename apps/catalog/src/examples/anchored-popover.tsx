@@ -27,6 +27,7 @@ import { CatalogSection } from "../section";
 function Hung({ align, label }: { align: PopoverAlign; label: string }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+
   return (
     <div className="catalog-anchor" ref={root}>
       <Button

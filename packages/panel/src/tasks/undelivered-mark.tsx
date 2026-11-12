@@ -83,9 +83,11 @@ const LINE_CAUSES = {
 /** The cause the line drawn under `messageId` is reported under, kept for it. */
 function lineCause(messageId: string, code: LineCause["code"]): LineCause {
   const kept = LINE_CAUSES[code].get(messageId);
+
   if (kept !== undefined) return kept;
   const made = { code };
   LINE_CAUSES[code].set(messageId, made);
+
   return made;
 }
 
@@ -110,24 +112,28 @@ export function useLineSending(messageId: string): boolean {
 /** Whether the line drawn under `messageId` did not go, which its mark says beside it and its bubble wears faded. */
 export function useLineMarked(messageId: string): boolean {
   const marks = useContext(MarksContext);
+
   return marks.undelivered.has(messageId) || marks.unsent.has(messageId);
 }
 
 /** What a line that did not go says: the plan's limit's own words where its limit refused it for now, "Not delivered" otherwise. */
 function undeliveredWords(marks: SentLineMarks, messageId: string): string {
   const note = marks.unsent.has(messageId) ? marks.notes.get(messageId) : undefined;
+
   return note !== undefined && refusedAtLimit(note.cause) ? note.text : UNDELIVERED_WORDS;
 }
 
 /** What the time under a line that did not go is led by; nothing under any other. */
 export function useLineStatus(messageId: string): string | undefined {
   const marks = useContext(MarksContext);
+
   return useLineMarked(messageId) ? undeliveredWords(marks, messageId) : undefined;
 }
 
 /** The red alert beside a line that did not go, its menu saying why and offering what mends it; nothing beside any other. */
 export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode {
   const marks = useContext(MarksContext);
+
   if (marks.undelivered.has(messageId)) {
     return (
       <MessageFailedMark
@@ -142,8 +148,10 @@ export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode
       />
     );
   }
+
   if (!marks.unsent.has(messageId)) return null;
   const { retry, takeBack } = marks;
+
   return (
     <MessageFailedMark
       label={undeliveredWords(marks, messageId)}

@@ -95,6 +95,7 @@ function inGroupOrder<Selection extends Readonly<Record<string, unknown>>>(
     ...Object.keys(group.columns),
     ...Object.keys(group.instants),
   ]);
+
   // SAFETY: the groups name every key of the selection, which was built from them, once each.
   return Object.fromEntries(keys.map((key) => [key, selection[key]])) as unknown as Selection;
 }
@@ -143,8 +144,10 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       .orderBy(desc(automationRun.firedAt), desc(automationRun.id))
       .limit(1)
       .as("last_run");
+
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
     const { nextRunAt, createdAt, updatedAt: _updatedAt, ...columns } = AUTOMATION_COLUMNS;
+
     const own = {
       columns: {
         ...columns,
@@ -159,6 +162,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       },
       instants: { nextRunAt, createdAt },
     };
+
     const run = {
       columns: {
         runId: outerJoined(lastRun.id),
@@ -168,7 +172,9 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       },
       instants: { runFiredAt: outerJoined(lastRun.firedAt), runSettledAt: lastRun.settledAt },
     };
+
     const agent = runAgentColumns(userId, latest);
+
     return {
       automations: liveRowsStatement(
         AUTOMATIONS_READ.parts.automations,
@@ -204,6 +210,7 @@ export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUN
   topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const readable = and(automationReadableBy(userId), eq(automation.organizationId, workspaceId));
+
     const newest = queryBuilder
       .select({ id: automationRun.id })
       .from(automationRun)
@@ -211,7 +218,9 @@ export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUN
       .where(readable)
       .orderBy(desc(automationRun.firedAt), desc(automationRun.id))
       .limit(AUTOMATION_WORKSPACE_RUNS_HELD);
+
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
+
     const own = {
       columns: {
         id: automationRun.id,
@@ -223,7 +232,9 @@ export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUN
       },
       instants: { firedAt: automationRun.firedAt, settledAt: automationRun.settledAt },
     };
+
     const agent = runAgentColumns(userId, latest);
+
     return {
       runs: liveRowsStatement(
         AUTOMATION_WORKSPACE_RUNS_READ.parts.runs,
@@ -257,7 +268,9 @@ export const automationRunsRead = bindLiveRead(AUTOMATION_RUNS_READ, {
       .where(eq(automationRun.automationId, id))
       .orderBy(desc(automationRun.firedAt), desc(automationRun.id))
       .limit(AUTOMATION_RUNS_HELD);
+
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
+
     const own = {
       columns: {
         id: automationRun.id,
@@ -267,7 +280,9 @@ export const automationRunsRead = bindLiveRead(AUTOMATION_RUNS_READ, {
       },
       instants: { firedAt: automationRun.firedAt, settledAt: automationRun.settledAt },
     };
+
     const agent = runAgentColumns(userId, latest);
+
     return {
       runs: liveRowsStatement(
         AUTOMATION_RUNS_READ.parts.runs,
@@ -296,7 +311,9 @@ export const automationRunsRead = bindLiveRead(AUTOMATION_RUNS_READ, {
   // Note that the automation is read once, as it is asked, for the workspace whose topic its runs wake on.
   serve: Effect.fnUntraced(function* ({ userId, id }) {
     const read = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
     if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return { workspaceId: read.value.organizationId };
   }),
 });

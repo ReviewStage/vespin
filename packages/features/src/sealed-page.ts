@@ -54,5 +54,6 @@ export function sealedPageDocument(html: string, theme: PageTheme): string {
   const end = doctypeEnd(html);
   const policy = `<meta http-equiv="Content-Security-Policy" content="${SEALED_PAGE_CONTENT_SECURITY_POLICY}">${DEVICE_VIEWPORT}`;
   const scripts = `<script>${PAGE_THEME_SCRIPT}</script><script>postMessage(${scriptJson(pageThemeMessage(theme))}, "*");</script>`;
+
   return `${html.slice(0, end)}${policy}${scripts}${html.slice(end)}`;
 }

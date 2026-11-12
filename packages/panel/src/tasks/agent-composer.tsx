@@ -301,6 +301,7 @@ function continuedInCloud(
   onContinueInCloud: ((carry: MoveCarry) => void) | undefined,
 ): (() => void) | undefined {
   if (onContinueInCloud === undefined) return undefined;
+
   return () =>
     onContinueInCloud({ words: noted?.text ?? "", attachments: noted?.attachments ?? [] });
 }
@@ -431,9 +432,11 @@ export function AgentComposer({
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
+
   const planName = planNameOf(
     usePayerPlan(paying, payerSubscriptionId, (payer ?? usage?.payer) === undefined, owner),
   );
+
   const payerValue =
     paying === undefined ? undefined : (
       <PayerValue
@@ -444,6 +447,7 @@ export function AgentComposer({
         planName={planName}
       />
     );
+
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -451,6 +455,7 @@ export function AgentComposer({
   const [modelAsk, setModelAsk] = useState(0);
   // Whether a `/clear` the box ran waits on its answer, which holds the box.
   const [clearing, setClearing] = useState(false);
+
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (stopping && !stoppable) setStopping(false);
@@ -465,6 +470,7 @@ export function AgentComposer({
   // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session.
   const reach = { model: model !== undefined, session: onClear !== undefined };
   const statuses = useIntegrationStatuses();
+
   const box = useMessageBox({
     draft: composer.draft,
     setDraft: composer.setDraft,
@@ -505,9 +511,11 @@ export function AgentComposer({
     focusedByOwner,
     keystrokeSpan: answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
+
   const { editor, room, frame, files } = box;
   // Note that Send waits while files are read, so no message goes without a file the developer already handed the box.
   const sendHeld = held || !sendable || files.reading;
+
   // Note that an edit's Save stands with the box emptied, since saving nothing gives the edit up.
   const empty =
     answer === undefined
@@ -515,6 +523,7 @@ export function AgentComposer({
         !editingQueued &&
         !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
       : !answer.sendable;
+
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
   // While a turn runs and the box holds a message it may go two ways; holding ⌘ says on Send which a send takes.
   const queues = queueing?.working && !empty && !held && !files.reading && !editingQueued;
@@ -522,6 +531,7 @@ export function AgentComposer({
   const queuesNow = queues && queueing.enterQueues !== modifierHeld;
   const sendNote = noteWhileOffline(composer.note, connected);
   const repositoryRemedy = useRepositoryRemedy();
+
   const remedy =
     sendNote === undefined
       ? undefined
@@ -532,8 +542,10 @@ export function AgentComposer({
           repositoryRemedy(sendNote, () => {
             if (latest.current.note === sendNote) latest.current.retry();
           });
+
   // Note that a remedy finished where we cannot watch keeps Retry beside it, since the same send goes once it is done.
   const remedyWords = sendNote === undefined ? undefined : remedyLabel(sendNote);
+
   /** A note of the box's that is a failure of the app's, which no Retry mends: why the box is closed, or a change of model did not take. */
   const refusedNote = (words: string): ComposerNote => ({
     words,
@@ -544,8 +556,10 @@ export function AgentComposer({
       refused: true,
     }),
   });
+
   // Note that a send's failure keeps its words and its Retry over the cut paste's, since a paste into a full box changes nothing a send's failure could be taken down by.
   const own = box.note?.cut === true && sendNote !== undefined ? undefined : box.note?.note;
+
   const note: ComposerNote | undefined =
     answer?.note ??
     (composer.closed === undefined
@@ -572,6 +586,7 @@ export function AgentComposer({
           onRetry:
             remedyWords === undefined || retriesBesideRemedy(sendNote) ? composer.retry : undefined,
         });
+
   const sendLabel = wording?.send ?? BUTTON.SEND;
 
   // Note that a held box gives up the caret, because a field that takes no
@@ -587,6 +602,7 @@ export function AgentComposer({
     if (sends === 0 || held || !refocus.current) return;
     refocus.current = false;
     const active = document.activeElement;
+
     const dropped =
       active === null ||
       active === document.body ||
@@ -594,6 +610,7 @@ export function AgentComposer({
       (active instanceof HTMLButtonElement &&
         active.type === "submit" &&
         frame.current?.contains(active) === true);
+
     if (dropped) {
       editor.current?.focus();
     }
@@ -605,6 +622,7 @@ export function AgentComposer({
     replyDoor.current = (words) => {
       editor.current?.insertQuote(words);
     };
+
     return () => {
       replyDoor.current = undefined;
     };
@@ -636,8 +654,10 @@ export function AgentComposer({
     files.settle();
     setSends((count) => count + 1);
   };
+
   /** The box's message sent now: into the turn under way, or opening one. */
   const steer = () => sentBy(composer.send);
+
   /**
    * One of the box's own commands, chosen from the `/` list or typed as the
    * message's first word: `/model` opens the model chip's menu, its search
@@ -651,16 +671,21 @@ export function AgentComposer({
     switch (name) {
       case SLASH_COMMAND.COMPACT: {
         const words = leadingCommand(composer.draft)?.words ?? "";
+
         if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+
         return;
       }
+
       case SLASH_COMMAND.MODEL:
         editor.current?.clear();
         setModelAsk((was) => was + 1);
+
         return;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:
         editor.current?.clear();
+
         if (onClear === undefined) return;
         // The box holds until the answer lands, then hands the caret back as a send's does.
         refocus.current = frame.current?.contains(document.activeElement) === true;
@@ -670,11 +695,13 @@ export function AgentComposer({
           () => setClearing(false),
           () => setClearing(false),
         );
+
         return;
       default:
         return absurd(name);
     }
   };
+
   /**
    * The command the box's words run rather than send, typed as their first
    * word: `/model`, whatever follows it, which is dropped as the menu opens,
@@ -684,7 +711,9 @@ export function AgentComposer({
   const typedCommand = (): SlashCommand | undefined => {
     if (editingQueued) return undefined;
     const typed = leadingCommand(composer.draft);
+
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
+
     switch (typed.name) {
       case SLASH_COMMAND.MODEL:
         return reach.model ? typed.name : undefined;
@@ -697,32 +726,46 @@ export function AgentComposer({
         return absurd(typed.name);
     }
   };
+
   /** Send as it stands: an edit saved, the message queued where a send queues now, or sent; one of the box's commands typed runs instead. */
   const submit = () => {
     const command = typedCommand();
+
     if (command !== undefined) return runCommand(command, false);
+
     if (editingQueued) return sentBy(queueing.onSave);
+
     if (queuesNow) return sentBy(queueing.onQueue);
     steer();
   };
+
   /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, or the message steered or queued. */
   const sendOtherWay = (pressQueues: boolean) => {
     if (editingQueued) return sentBy(queueing.onSteer);
+
     if (pressQueues) return steer();
+
     if (queueing !== undefined) sentBy(queueing.onQueue);
   };
+
   /** A key the queue takes: ⌘↩ steers an edit, or sends the other way than Enter, held where Send is. */
   const queueKey = (event: KeyboardEvent): boolean => {
     if (queueing === undefined) return false;
+
     if (!modEnterSends(event)) return false;
+
     if (editingQueued) {
       if (!sendHeld) sendOtherWay(false);
+
       return true;
     }
+
     if (!queues || !sendable) return false;
     sendOtherWay(queueing.enterQueues);
+
     return true;
   };
+
   // Send says what a send does while it is other than steering, as its glyph alone in the round send's place:
   // Save for an edit, and Queue or Steer as ⌘ turns it.
   const sendWay =

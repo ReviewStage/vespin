@@ -33,9 +33,11 @@ export const openBrowserLiveOverWebSocket: OpenBrowserLive = (target, listener) 
     done = true;
     listener.closed(event.code);
   });
+
   return {
     send: (text) => {
       if (done) return;
+
       if (socket.readyState === WebSocket.OPEN) socket.send(text);
       else if (socket.readyState === WebSocket.CONNECTING && held.length < HELD_WHILE_OPENING) {
         held.push(text);

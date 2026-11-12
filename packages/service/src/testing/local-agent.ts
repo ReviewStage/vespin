@@ -63,12 +63,14 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
     const reached = installation?.repositories[0];
     const repository = reached === undefined ? null : `${reached.owner}/${reached.name}`;
     const task = yield* startTask(userId, { name: "Invitations", repository });
+
     if (installation !== undefined) {
       assert.equal(
         yield* connectWorkspaceGitHub(task.workspaceId, installation),
         LINK_OUTCOME.LINKED,
       );
     }
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -82,12 +84,14 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
       runtime: options.runtime ?? CONVERSATION_RUNTIME.CLAUDE_CODE,
       payer: AGENT_PAYER.MAC_SIGN_IN,
     });
+
     const { agent } = Option.getOrThrow(started);
     const session = `cc-${randomUUID()}`;
     yield* db
       .update(conversations)
       .set({ runtimeSessionId: session })
       .where(eq(conversations.id, agent.conversationId));
+
     return { userId, deviceId, agent, session };
   });
 
@@ -167,6 +171,7 @@ export const warmLocalAgent = Effect.gen(function* () {
   assert.equal(launch?.kind, DEVICE_AGENT_LINE_KIND.LAUNCH);
   yield* claimedDeviceAgentLine(userId, deviceId, launch.id);
   const settledAt = yield* DateTime.nowAsDate;
+
   const [settled] = yield* db
     .insert(turns)
     .values({
@@ -178,7 +183,9 @@ export const warmLocalAgent = Effect.gen(function* () {
       settledAt,
     })
     .returning({ id: turns.id });
+
   assert.ok(settled !== undefined);
+
   return { ...opened, sessions, sessionId, turnId: settled.id, launchId: launch.id };
 });
 
@@ -197,8 +204,10 @@ export const launchCarries = (warm: WarmLocalAgent, text: string) =>
   Effect.gen(function* () {
     const waiting = yield* deviceAgentLinesWaiting(warm.userId, warm.deviceId);
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
+
     if (launch === undefined) return false;
     const claimed = yield* claimedDeviceAgentLine(warm.userId, warm.deviceId, launch.id);
     const opened = Option.map(claimed, (line) => ("secrets" in line ? line.secrets : null));
+
     return JSON.stringify(Option.getOrNull(opened)).includes(text);
   });

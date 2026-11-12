@@ -52,7 +52,9 @@ const ASSIGNEE_CHANGED_NOTES = {
 /** What ⌘Z's toast calls a change of where one task stands, by what it changed. */
 function standingNote(standing: TaskStanding): string {
   if (standing.status !== undefined) return settledNote(standing.status, 1, 0);
+
   if (standing.assigneeId === undefined) return PRIORITY_CHANGED_NOTE;
+
   return standing.assigneeId === null
     ? ASSIGNEE_CHANGED_NOTES.UNASSIGNED
     : ASSIGNEE_CHANGED_NOTES.ASSIGNED;
@@ -75,9 +77,12 @@ interface HeldSettle {
 function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly TaskSummary[] {
   const { activeTaskId } = rows.tasks;
   const held = activeTaskId === undefined ? undefined : heldTask(rows, activeTaskId);
+
   return taskIds.flatMap((taskId): readonly TaskSummary[] => {
     const task = rows.tasks.tasks.find((each) => each.id === taskId);
+
     if (task !== undefined) return [task];
+
     return held?.id === taskId ? [held] : [];
   });
 }
@@ -85,6 +90,7 @@ function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly T
 /** Whether any of the task's agents is starting or running, read off the agents the list follows, else its count of them. */
 function agentsWorking(rows: TaskRows, task: TaskSummary): boolean {
   const listed = rows.tasks.taskAgents;
+
   return listed === undefined
     ? (task.agents?.working ?? 0) > 0
     : agentsOfTask(listed, task.id).some((agent) => agentStillWriting(agent.status));
@@ -134,8 +140,10 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     // Note that the name the reader knows a member by goes with them, so main draws them by it until the list carries them.
     const named = standing.assigneeId && assigneeName !== undefined ? { assigneeName } : undefined;
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
+
     return askKept(sendStandingRow({ taskId, ...standing, ...named, ...stopping }));
   };
+
   // Each status change is sent as one standing, stopping the tasks' agents
   // where the reader confirmed it. Answers which tasks the service kept, how
   // many it refused, and what refused the first of them.
@@ -143,10 +151,12 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     const answers = changes.map(({ taskId, status }) =>
       sendStanding(taskId, { status }, undefined, stopAgents),
     );
+
     return Promise.all(answers).then((changed) => {
       const landed = changes
         .filter((_, index) => changed[index]?.kept === true)
         .map(({ taskId }) => taskId);
+
       return { landed, refused: changes.length - landed.length, cause: firstRefusal(changed) };
     });
   };
@@ -162,6 +172,7 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
       standingDoors,
       asked.map((change) => ({ id: change.taskId, after: { status: change.status } })),
     );
+
     sendStatuses(asked, stopAgents).then(({ landed, refused, cause }) => {
       if (landed.length === 0) {
         toast({
@@ -170,16 +181,20 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.TASK_SETTLE, cause },
         });
+
         return;
       }
+
       const words = settledNote(status, landed.length, refused);
       const said = pressed.keep(words, (taskId) => landed.includes(taskId));
+
       if (said !== undefined) toast(said);
     });
   };
 
   // A settle confirmed is sent as one that stops the tasks' agents; the question stands while the surface does.
   const [held, setHeld] = useState<HeldSettle>();
+
   const confirm = useConfirmDialog(
     { subject: held !== undefined, surfaceOpen: true },
     neverBusyAct(() => {
@@ -187,16 +202,20 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     }),
     confirmFailure(FAILURE_SURFACE.TASK_SETTLE),
   );
+
   // Done or Canceled asks first where an agent of a task it changes is running.
   // Answers whether it asked, which leaves the change to the answer.
   const askedFirst = (tasks: readonly TaskSummary[], asked: readonly StatusChange[]) => {
     const status = asked[0]?.status;
+
     if (!isTaskSettled(status)) return false;
     const rows = standingDoors.rows();
     const changed = tasks.filter((task) => asked.some((change) => change.taskId === task.id));
+
     if (!changed.some((task) => agentsWorking(rows, task))) return false;
     setHeld({ changes: asked, status, words: settleStopWords(status) });
     confirm.ask();
+
     return true;
   };
 
@@ -204,6 +223,7 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     if (fixture) return;
     const tasks = standingTasksOf(standingDoors.rows(), taskIds);
     const asked = settleChanges(tasks, status);
+
     if (asked.length === 0 || askedFirst(tasks, asked)) return;
     settled(asked, status);
   };
@@ -216,23 +236,30 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     assigneeName?: string,
   ): Promise<Kept> => {
     if (fixture) return Promise.resolve(notKept(FAILURE_CONDITION.NOT_KEPT));
+
     // Note that a change that asks first answers as kept, because nothing went out the service could refuse; once confirmed it toasts as a settle.
     if (standing.status !== undefined) {
       const tasks = standingTasksOf(standingDoors.rows(), [taskId]);
+
       if (askedFirst(tasks, settleChanges(tasks, standing.status))) return Promise.resolve(KEPT);
     }
+
     const { assigneeId, ...rest } = standing;
+
     const assignee =
       assigneeId === undefined
         ? undefined
         : {
             assignee: assigneeId === null ? null : { userId: assigneeId, name: assigneeName ?? "" },
           };
+
     const pressed = pressRows(ROW_WRITE.TASK_STANDING, standingDoors, [
       { id: taskId, after: { ...rest, ...assignee } },
     ]);
+
     return sendStanding(taskId, standing, assigneeName).then((kept) => {
       if (kept.kept) pressed.keep(standingNote(standing));
+
       return kept;
     });
   };

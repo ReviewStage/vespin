@@ -37,13 +37,16 @@ export const TRANSCRIPT_METRIC = {
 /** The bytes of the rows an answer's parts carry, as their JSON text; none where it carries no rows, as a held read that ends unmoved does not. */
 function rowBytes(queries: Readonly<Record<string, SealedLiveQueryWire>>): number | undefined {
   const carried = Object.values(queries).filter(({ rows }) => rows !== undefined);
+
   if (carried.length === 0) return undefined;
+
   return carried.reduce((total, { rows }) => total + Buffer.byteLength(JSON.stringify(rows)), 0);
 }
 
 /** Counts the bytes of the rows a transcript answer carries, where it carries any. */
 export const countAnswerBytes = (queries: Readonly<Record<string, SealedLiveQueryWire>>) => {
   const bytes = rowBytes(queries);
+
   return bytes === undefined ? Effect.void : Metric.update(TRANSCRIPT_METRIC.ANSWER_BYTES, bytes);
 };
 

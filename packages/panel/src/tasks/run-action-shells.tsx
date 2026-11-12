@@ -64,11 +64,13 @@ export function useRunTabLooks(
 ): (tab: TerminalStripTab | undefined) => RunTabLook | undefined {
   const { held } = useContext(TerminalsContext);
   const owned = useOwnedShells(held, useWindowAccount());
+
   const heldOf = useCallback(
     (tab: TerminalStripTab) =>
       owned[TERMINAL_KIND.CLOUD][tab.terminal]?.find((each) => each.shell === tab.shell),
     [owned],
   );
+
   const agentIds = useMemo(
     () => [
       ...new Set(
@@ -77,16 +79,20 @@ export function useRunTabLooks(
     ],
     [terminals, heldOf],
   );
+
   const lists = useQueries({
     queries: agentIds.map((agentId) => shellsQuery(agentId, shown, true)),
   });
+
   return useCallback(
     (tab) => {
       const entry = tab === undefined ? undefined : heldOf(tab);
+
       if (entry?.action === undefined) return undefined;
       const listed = tab === undefined ? undefined : lists[agentIds.indexOf(tab.terminal)]?.data;
       const shells = listed !== undefined && "terminals" in listed ? listed.terminals : [];
       const shell = shells.find((each) => each.id === entry.terminal);
+
       return {
         action: entry.action,
         running: shell?.running,

@@ -9,6 +9,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** Hands the focus back to the page from whatever holds it, as Escape from an agent's box does. */
 export function letGoOfFocus(): void {
   const active = document.activeElement;
+
   if (active instanceof HTMLElement) active.blur();
 }
 

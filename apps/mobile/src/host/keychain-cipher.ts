@@ -41,18 +41,23 @@ const sealer = managedNonce(xchacha20poly1305);
 /** The key the Keychain holds, or none where none was ever made. */
 function heldKey(): Uint8Array | undefined {
   const held = SecureStore.getItem(KEY_ITEM, KEYCHAIN_OPTIONS);
+
   if (held === null) return undefined;
   const key = Result.getOrUndefined(Base64.decode(held));
+
   if (key?.length !== KEY_BYTES) throw new Error("The Keychain's key does not read.");
+
   return key;
 }
 
 /** The key to seal with: the one held, or a new one kept in the Keychain first. */
 function sealingKey(): Uint8Array {
   const held = heldKey();
+
   if (held !== undefined) return held;
   const made = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
   SecureStore.setItem(KEY_ITEM, Base64.encode(made), KEYCHAIN_OPTIONS);
+
   return made;
 }
 
@@ -61,6 +66,7 @@ export const keychainCipher: SecretCipher = {
   isAvailable: () => {
     try {
       sealingKey();
+
       return true;
     } catch {
       return false;
@@ -69,7 +75,9 @@ export const keychainCipher: SecretCipher = {
   encrypt: (plainText) => sealer(sealingKey()).encrypt(utf8ToBytes(plainText)),
   decrypt: (cipherText) => {
     const key = heldKey();
+
     if (key === undefined) throw new Error("The Keychain holds no key to open this with.");
+
     return bytesToUtf8(sealer(key).decrypt(cipherText));
   },
 };

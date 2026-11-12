@@ -92,6 +92,7 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       const { call } = yield* subject(service, { sendsNetwork: false });
+
       const read = (pageId: string, version: number) =>
         call(GATEWAY_METHOD.TASKS_PAGE, { taskId: FIXTURE_IDS.TASK, pageId, version });
 
@@ -120,6 +121,7 @@ it.effect(
         planId: INVITES,
         attachmentId: "picture-1",
       });
+
       const gone = yield* call("TASKS_PICTURE_READ", {
         planId: INVITES,
         attachmentId: "picture-2",
@@ -136,6 +138,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
+
       const window = {
         path: "src/seats.ts",
         repository: "acme/relay",
@@ -144,6 +147,7 @@ it.effect(
         lineCount: 2,
         lines: ["const seats = 3;", "export { seats };"],
       };
+
       service.files["src/seats.ts"] = { file: window };
       const { call } = yield* subject(service);
 
@@ -163,6 +167,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
+
       const window = {
         path: "src/seats.ts",
         repository: "acme/relay",
@@ -171,6 +176,7 @@ it.effect(
         lineCount: 2,
         lines: ["const seats = 3;", "export { seats };"],
       };
+
       service.files["src/seats.ts"] = { file: window };
       const { call } = yield* subject(service);
       const read = { taskId: INVITES, path: "src/seats.ts", firstLine: 1, lastLine: 2 };
@@ -217,6 +223,7 @@ it.effect("the window's refresh lists the plans and opening one draws its saved 
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
     const billing = task(BILLING, "Billing export", "# Billing export", 20);
+
     const { call, last, tasks, listed, openTask, description } = yield* subject(
       fakeService([billing, invites]),
     );
@@ -247,9 +254,11 @@ it.effect(
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("tasks-entities-");
       const earlier = yield* Scope.make();
+
       const kept = yield* Scope.provide(earlier)(
         openEntityStore({ directory, cipher: testCipher(), accountId: "user-dana" }),
       );
+
       yield* kept.keep(KEPT_READ.TASK_LIST, {
         rows: { plans: [rowOfTask(task(INVITES, "Kept invitations", "# Kept", 10))], agents: [] },
         at: "7",
@@ -262,11 +271,13 @@ it.effect(
         pins: [{ repository: "acme/relay", pinnedAt: 3 }],
       });
       yield* Scope.close(earlier, Exit.void);
+
       const entities = yield* openEntityStore({
         directory,
         cipher: testCipher(),
         accountId: "user-dana",
       });
+
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       service.live.list.refuse({ failure: TASK_CALL_FAILURE.UNANSWERED });
       service.workspacesFail = true;
@@ -280,8 +291,10 @@ it.effect(
       const { listLive } = service;
       service.listLive = (userId, sync) => {
         asked.push(sync);
+
         return listLive(userId, sync);
       };
+
       const { last, settled, open } = yield* subject(service, { entities });
 
       yield* open;
@@ -302,15 +315,18 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const disk = Layer.merge(memoryFileSystem().layer, NodePath.layer);
+
       const opened = Effect.provide(
         openEntityStore({ directory: "/state", cipher: testCipher(), accountId: "user-dana" }),
         disk,
       );
+
       /** The sync id the list stands at on disk, as a store opened over it reads it. */
       const keptAt = Effect.map(
         Effect.scoped(opened),
         (store) => store.stored(KEPT_READ.TASK_LIST)?.at,
       );
+
       const quit = yield* Scope.make();
       const entities = yield* Scope.provide(quit)(opened);
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
@@ -338,6 +354,7 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.renameUntaken = WRITE_UNTAKEN.UNANSWERED;
       const options = { mintKey: () => "rename-key", replayRefused: Effect.void };
+
       const opened = (pool: EntityPool) =>
         openEntityStore({
           directory,
@@ -345,16 +362,19 @@ it.effect(
           accountId: "user-dana",
           queued: pool.queued,
         });
+
       const quit = yield* Scope.make();
       const before = yield* Scope.provide(quit)(entityPool(options));
       const kept = yield* Scope.provide(quit)(opened(before));
       const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
+
       const answered = yield* first.call("TASKS_RENAME", {
         taskId: INVITES,
         name: "Invitations",
       });
+
       yield* Scope.close(quit, Exit.void);
 
       const pool = yield* entityPool(options);
@@ -383,12 +403,14 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.renameUntaken = WRITE_UNTAKEN.UNANSWERED;
       const refused = { times: 0 };
+
       const pool = yield* entityPool({
         mintKey: () => "rename-key",
         replayRefused: Effect.sync(() => {
           refused.times += 1;
         }),
       });
+
       const { call, listed, last, settled } = yield* subject(service, { pool });
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
@@ -421,6 +443,7 @@ it.effect(
         untaken: WRITE_UNTAKEN.UNANSWERED,
       };
       const options = { mintKey: () => "start-key", replayRefused: Effect.void };
+
       const opened = (pool: EntityPool) =>
         openEntityStore({
           directory,
@@ -428,16 +451,19 @@ it.effect(
           accountId: "user-dana",
           queued: pool.queued,
         });
+
       const quit = yield* Scope.make();
       const before = yield* Scope.provide(quit)(entityPool(options));
       const kept = yield* Scope.provide(quit)(opened(before));
       const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
+
       const answered = yield* first.call("TASKS_START", {
         name: "Invitation expiry",
         workspaceId: billing.workspaceId,
       });
+
       const waiting = first.last();
       yield* Scope.close(quit, Exit.void);
 
@@ -542,10 +568,12 @@ it.effect(
           quiet: true,
         }),
       );
+
       yield* settled;
       const meanwhile = starting.pollUnsafe();
       const drawn = last()?.tasks.some((row) => row.id === INVITES);
       const made = task(INVITES, "Untitled", "", 30);
+
       const agentStart = {
         agent: {
           id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
@@ -558,6 +586,7 @@ it.effect(
           turnId: null,
         },
       };
+
       service.tasks = [...service.tasks, made];
       service.createAnswer = { ok: true, answer: { task: made, agent: agentStart } };
       yield* listed();
@@ -606,6 +635,7 @@ it.effect(
       const { call } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       service.createAnswer = { ok: true, answer: { task: task(INVITES, "Rate limit", "", 10) } };
+
       const asked = {
         name: "Rate limit",
         brief: "Rate limit search.",
@@ -635,11 +665,14 @@ it.effect(
       const made = task(INVITES, "Invitation expiry", "", 10);
       const refusal = { failure: AGENT_CALL_FAILURE.INVALID_CHOICE };
       service.createAnswer = { ok: true, answer: { task: made } };
+
       const started = yield* call("TASKS_START", {
         name: "Invitation expiry",
         quiet: true,
       });
+
       service.createAnswer = { ok: true, answer: { task: made, agent: refusal } };
+
       const withAgent = yield* call("TASKS_START", {
         agent: { idempotencyKey: "start-1", prompt: "Expire invitations." },
         quiet: true,
@@ -723,6 +756,7 @@ it.effect(
           workspaceId: billing.workspaceId,
         }),
       );
+
       yield* settled;
       const opened = last()?.activeTaskId;
       const drawn = description(INVITES);
@@ -759,6 +793,7 @@ it.effect(
           workspaceId: billing.workspaceId,
         }),
       );
+
       yield* settled;
       service.tasks = [...service.tasks, made];
       const record = polledRecord(service, INVITES);
@@ -991,10 +1026,12 @@ it.effect(
 
       service.editTxid = "tx-edit";
       const mine = `${INVITES_TEXT}\n\nInvites expire.`;
+
       const answer = yield* call("TASKS_EDIT", {
         taskId: INVITES,
         edit: { document: { base: INVITES_TEXT, value: mine } },
       });
+
       assert.deepEqual(answer, { saved: true }, "the edit answers once its description is drawn");
       assert.equal(description(INVITES)?.document.body, mine);
       assert.equal(description(INVITES)?.updatedAt, EDITED_AT);
@@ -1002,11 +1039,13 @@ it.effect(
       // A teammate's save the record carries before the edit's transaction reads nothing, and the list's row from before it is held over.
       const [edited] = service.tasks;
       assert.ok(edited !== undefined);
+
       const theirs = {
         ...edited,
         updatedAt: 9_000,
         document: { ...edited.document, body: "Theirs." },
       };
+
       service.tasks = [theirs];
       yield* answered(() =>
         record.set({ description: [{ taskId: INVITES, savedAt: theirs.updatedAt }] }, ["tx-other"]),
@@ -1036,6 +1075,7 @@ it.effect(
       const service = fakeService([]);
       const { call, last } = yield* subject(service);
       const made = task(INVITES, "Invitation expiry", "", 10);
+
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
         planId: INVITES,
@@ -1046,6 +1086,7 @@ it.effect(
         status: AGENT_STATUS.STARTING,
         turnId: null,
       };
+
       const params = {
         repository: "acme/relay",
         agent: { idempotencyKey: "start-1", prompt: "Expire invitations." },
@@ -1089,12 +1130,14 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last, told, settled } = yield* subject(service);
+
       const launch: TaskSection = {
         id: SECTION_ID,
         workspaceId: PERSONAL.id,
         title: "Launch",
         createdAt: 5,
       };
+
       service.sections = { sections: [launch], entries: [], agentEntries: [] };
       service.pins = [{ repository: "acme/relay", pinnedAt: 3 }];
 
@@ -1131,6 +1174,7 @@ it.effect(
         title: "Later",
         createdAt: 7,
       };
+
       service.sections = { sections: [later, launch], entries: [], agentEntries: [] };
       service.pins = [
         { repository: "acme/relay", pinnedAt: 3 },
@@ -1158,15 +1202,18 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last } = yield* subject(service);
+
       const launch: TaskSection = {
         id: SECTION_ID,
         workspaceId: PERSONAL.id,
         title: "Launch",
         createdAt: 5,
       };
+
       // The service keeps the section, then refuses to put the task in it.
       service.sections = { sections: [launch], entries: [], agentEntries: [] };
       service.sectionRefused = TASK_SECTION_WRITE.PLACE;
+
       const writes: TasksWriteSectionParams["writes"] = [
         {
           kind: TASK_SECTION_WRITE.CREATE,
@@ -1191,25 +1238,30 @@ it.effect(
       service.sections = { sections: [], entries: [], agentEntries: [] };
       yield* call("TASKS_REFRESH", undefined);
       yield* settled;
+
       const create = {
         kind: TASK_SECTION_WRITE.CREATE,
         id: SECTION_ID,
         workspaceId: PERSONAL.id,
         title: "Launch",
       };
+
       const place = { kind: TASK_SECTION_WRITE.PLACE, taskId: INVITES, sectionId: SECTION_ID };
+
       const rename = {
         kind: TASK_SECTION_WRITE.EDIT,
         id: SECTION_ID,
         title: "Launch week",
         icon: null,
       };
+
       const answered = yield* Deferred.make<void>();
       service.sectionAnswered = Deferred.await(answered);
 
       const first = yield* Effect.forkChild(
         call("TASKS_WRITE_SECTION", { writes: [create, place] }),
       );
+
       yield* settled;
       const second = yield* Effect.forkChild(call("TASKS_WRITE_SECTION", { writes: [rename] }));
       yield* settled;
@@ -1235,6 +1287,7 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, settled } = yield* subject(service);
+
       const pin = (repository: string) =>
         call("TASKS_PIN_REPOSITORY", { repository, pinned: true });
 
@@ -1255,8 +1308,10 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last, told, settled } = yield* subject(service);
+
       const pinned = (view: TasksView | undefined) =>
         view?.repositoryPins?.map((pin) => pin.repository) ?? [];
+
       yield* call("TASKS_REFRESH", undefined);
       yield* settled;
       // An answer Sync woke hands the follow its wait for a write's transaction.
@@ -1265,9 +1320,11 @@ it.effect(
 
       service.pinTxid = "tx-pin";
       const from = told.length;
+
       const pin = yield* Effect.forkChild(
         call("TASKS_PIN_REPOSITORY", { repository: "acme/relay", pinned: true }),
       );
+
       yield* settled;
       // Another Mac's change from before the pin landed is answered without it.
       service.live.sidebar.set({ pins: [] }, ["tx-other"]);
@@ -1305,6 +1362,7 @@ it.effect("a pin still being written when the account signs out is drawn for nob
     const pin = yield* Effect.forkChild(
       call("TASKS_PIN_REPOSITORY", { repository: "acme/secret", pinned: true }),
     );
+
     const taskPin = yield* Effect.forkChild(call("TASKS_PIN", { taskId: INVITES, pinned: true }));
     yield* settled;
     const from = told.length;
@@ -1334,8 +1392,10 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last, told, settled, listed } = yield* subject(service);
+
       const pinned = (view: TasksView | undefined) =>
         view?.tasks.find((row) => row.id === INVITES)?.pinnedAt !== undefined;
+
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
       // An answer Sync woke hands the follow its wait for a write's transaction.
@@ -1382,6 +1442,7 @@ it.effect(
         task(INVITES, "Teammate invitations", "# Draft", 10),
         task(BILLING, "Billing", "# Draft", 11),
       ]);
+
       const { call, last, settled, listed } = yield* subject(service);
       const repositoryOf = () => last()?.tasks.find((row) => row.id === INVITES)?.repository;
       yield* call("TASKS_REFRESH", undefined);
@@ -1391,9 +1452,11 @@ it.effect(
       yield* nextPoll(settled);
 
       service.repositoryTxid = "tx-repository";
+
       const changed = yield* Effect.forkChild(
         call("TASKS_SET_REPOSITORY", { taskId: INVITES, repository: "acme/relay" }),
       );
+
       yield* settled;
       // Another task's pin draws the list again before the list carries the repository.
       yield* call("TASKS_PIN", { taskId: BILLING, pinned: true });
@@ -1413,6 +1476,7 @@ it.effect("a block the service answered stands on the open task through the list
       task(INVITES, "Teammate invitations", "# Draft", 10),
       task(BILLING, "Billing", "# Draft", 11),
     ]);
+
     const { call, listed, openTask, description } = yield* subject(service);
     yield* call("TASKS_REFRESH", undefined);
     yield* listed();
@@ -1427,6 +1491,7 @@ it.effect("a block the service answered stands on the open task through the list
         taskId: BILLING,
       },
     });
+
     yield* listed();
 
     assert.deepEqual(answered, { blockedBy: [BILLING], blocks: [] });
@@ -1442,6 +1507,7 @@ it.effect(
         ...task(INVITES, "Teammate invitations", "# Draft", 10),
         blockedBy: [BILLING],
       };
+
       const service = fakeService([invites, task(BILLING, "Billing", "# Draft", 11)]);
       const { call, last, settled, listed, openTask } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
@@ -1451,10 +1517,12 @@ it.effect(
       });
       yield* nextPoll(settled);
       yield* openTask(INVITES);
+
       const blocked = () =>
         [INVITES, BILLING].map(
           (id) => last()?.tasks.find((row) => row.id === id)?.blocked === true,
         );
+
       const answered = yield* Deferred.make<void>();
       service.relationAnswered = Deferred.await(answered);
       service.relationFails = true;
@@ -1469,6 +1537,7 @@ it.effect(
           },
         }),
       );
+
       yield* settled;
       const drawn = blocked();
       yield* Deferred.succeed(answered, undefined);
@@ -1485,6 +1554,7 @@ it.effect("a delete asked draws its task gone before the service answers", () =>
       task(INVITES, "Teammate invitations", "# Draft", 10),
       task(BILLING, "Billing", "# Draft", 11),
     ]);
+
     const { call, last, settled, listed } = yield* subject(service);
     yield* call("TASKS_REFRESH", undefined);
     yield* listed();
@@ -1509,6 +1579,7 @@ it.effect(
         task(INVITES, "Teammate invitations", "# Draft", 10),
         task(BILLING, "Billing", "# Draft", 11),
       ]);
+
       const { call, last, listed, openTask, description } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
@@ -1520,6 +1591,7 @@ it.effect(
         taskId: INVITES,
         parentTaskId: BILLING,
       });
+
       yield* listed();
 
       assert.deepEqual(answered, { parentTaskId: BILLING });
@@ -1568,9 +1640,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([]);
+
       const folder = (path: string): TaskTreeAnswer => ({
         folder: { path, repository: "acme/relay", branch: "main", entries: [], truncated: false },
       });
+
       const skills = (name: string): TaskSkillsAnswer => ({
         skills: {
           repository: "acme/relay",
@@ -1585,6 +1659,7 @@ it.effect(
           ],
         },
       });
+
       const file = (path: string): TaskFileAnswer => ({
         file: {
           path,
@@ -1595,6 +1670,7 @@ it.effect(
           lines: ["const seats = 3;"],
         },
       });
+
       service.places[ACME.id] = {
         "acme/relay": {
           files: { "src/seats.ts": file("src/seats.ts") },
@@ -1636,6 +1712,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([]);
+
       const skillsNamed = (...names: string[]): TaskSkillsAnswer => ({
         skills: {
           repository: "acme/relay",
@@ -1648,6 +1725,7 @@ it.effect(
           })),
         },
       });
+
       const { call, settled, reset } = yield* subject(service);
       const asked = () => call("TASKS_SKILLS", { planId: INVITES });
 
@@ -1683,7 +1761,9 @@ it.effect(
         ...task(INVITES, "Teammate invitations", "# Invites", 10),
         repository: "acme/relay",
       };
+
       const service = fakeService([invites]);
+
       const installed = (name: string): TaskSkillsAnswer => ({
         skills: {
           repository: "acme/relay",
@@ -1691,6 +1771,7 @@ it.effect(
           skills: [{ name, description: "", source: TASK_SKILL_SOURCE.WORKSPACE }],
         },
       });
+
       const { call, listed } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
@@ -1735,6 +1816,7 @@ function standingAt(
 ) {
   const held = standingsOf(events);
   const inWorkspace = isRecord(held) ? held[workspaceId] : undefined;
+
   return isRecord(inWorkspace) ? inWorkspace[address] : undefined;
 }
 
@@ -1743,6 +1825,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([]);
+
       const notPlanned: GitHubRepositoryIssueAnswer = {
         issue: {
           number: 7,
@@ -1751,6 +1834,7 @@ it.effect(
           state: ISSUE_STATE.NOT_PLANNED,
         },
       };
+
       service.pullRequests[ACME.id] = {
         "acme/relay": new Map([
           [42, relayPull("Batch invites")],
@@ -1769,6 +1853,7 @@ it.effect(
       ]) {
         yield* follow("TASKS_LINK_STANDING_FOLLOW", { workspaceId: ACME.id, address });
       }
+
       yield* settled;
 
       assert.deepEqual(standingsOf(events), {
@@ -1791,8 +1876,10 @@ it.effect(
       service.pullRequests[ACME.id] = { "acme/relay": new Map([[42, relayPull("Batch invites")]]) };
       service.pullRequestQuota = 1;
       const { follow, events, settled, focus } = yield* subject(service);
+
       const hold = (address: string) =>
         follow("TASKS_LINK_STANDING_FOLLOW", { workspaceId: ACME.id, address });
+
       /** A window coming forward after `seconds`, and every ask it caused landed. */
       const forwardAfter = (seconds: number) =>
         Effect.gen(function* () {
@@ -1883,6 +1970,7 @@ it.effect(
           { installationId: 9, login: "acme-labs", active: true },
         ],
       };
+
       service.live.workspaces.set(workspacesLiveRows([PERSONAL, installed]));
       yield* nextPoll(settled);
       assert.deepEqual(
@@ -1970,6 +2058,7 @@ it.effect(
         taskId: INVITES,
         assigneeId: "user-ada",
       });
+
       assert.deepEqual(assigned, true);
       assert.deepEqual(
         last()?.tasks.map((each) => each.assignee?.userId),
@@ -2013,6 +2102,7 @@ it.effect(
         task(INVITES, "Teammate invitations", INVITES_TEXT, 10),
         task(BILLING, "Billing export", "# Billing export", 20),
       ]);
+
       const record = polledRecord(service, INVITES);
       service.recordLives[INVITES] = record;
       const { unfollow, call, last, openTask, description } = yield* subject(service);
@@ -2198,6 +2288,7 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       const { unfollow, follow, told, pushed, reset } = yield* subject(service);
+
       const held = (read: WireValue) => [
         LIVE_READ.PAGES,
         { [PAGE_OWNER.TASK]: { [INVITES]: read } },
@@ -2248,6 +2339,7 @@ it.effect(
       service.liveRead = ((...asked: Parameters<TasksClient["liveRead"]>) =>
         Effect.suspend(() => {
           if (asked[0].name === TASK_PAGES_READ.name) seals += 1;
+
           return liveRead(...asked);
         })) as TasksClient["liveRead"];
       const { unfollow, follow, pushed } = yield* subject(service);
@@ -2335,15 +2427,18 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
+
       const description = polledLive<CommentPart, typeof NOT_FOUND_LIVE>([
         "threads",
         "entries",
         "files",
       ]);
+
       const page = polledLive<CommentPart, typeof NOT_FOUND_LIVE>(["threads", "entries", "files"]);
       service.commentLives[INVITES] = description;
       service.commentLives[FUNNEL.id] = page;
       const { follow, told, pushed, reset } = yield* subject(service);
+
       const onPage = {
         ...SEVEN_DAYS,
         id: "3d9e4f5a-6b7c-4d8e-8f9a-1b2c3d4e5f6a",
@@ -2352,6 +2447,7 @@ it.effect(
         page: { id: FUNNEL.id, version: 1 },
         entries: [],
       };
+
       const { anchor: _anchor, ...withoutAnchor } = onPage;
 
       yield* follow("TASKS_COMMENTS_FOLLOW", { taskId: INVITES });
@@ -2387,25 +2483,32 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
+
       const description = polledLive<CommentPart, typeof NOT_FOUND_LIVE>([
         "threads",
         "entries",
         "files",
       ]);
+
       service.commentLives[INVITES] = description;
       const { follow, call, pushed } = yield* subject(service);
+
       const status = () => {
         const [, held] = pushed.findLast(([kind]) => kind === LIVE_READ.DESCRIPTION_COMMENTS) ?? [];
+
         const rows = (held as AppDescriptionComments | undefined)?.[COMMENT_SUBJECT.DESCRIPTION][
           INVITES
         ]?.rows;
+
         return rows?.map((thread) => thread.status);
       };
+
       const resolve = call("TASKS_COMMENT_ACT", {
         planId: INVITES,
         threadId: SEVEN_DAYS.id,
         action: { action: DESCRIPTION_COMMENT_ACTION.RESOLVE },
       });
+
       const resolved = { ...SEVEN_DAYS, status: DESCRIPTION_COMMENT_STATUS.RESOLVED, revision: 2 };
       yield* follow("TASKS_COMMENTS_FOLLOW", { taskId: INVITES });
       yield* followSettled;
@@ -2465,10 +2568,12 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       const { unfollow, follow, told, pushed, reset } = yield* subject(service);
+
       const held = (read: WireValue) => [
         LIVE_READ.BROWSER_TABS,
         { [BROWSER_TABS_PLACE.TASK]: { [INVITES]: read }, [BROWSER_TABS_PLACE.AGENT]: {} },
       ];
+
       const tab = {
         id: SIGN_IN_TAB.id,
         agentId: SIGN_IN_TAB.agentId,
@@ -2606,11 +2711,14 @@ it.effect("an older page laid into a held history stays when a save lands a new 
     const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
     const history = polledLive<"revisions">(["revisions"]);
     service.historyLives[INVITES] = history;
+
     // The service delivers one revision past a page of fifty, so the page reads that an older one stands, here before 3.
     const rows = (newest: number, oldest: number) =>
       revisionsFrom(newest, oldest).map((seq) => historyRow(seq, seq * 1_000));
+
     const lines = (newest: number, oldest: number) =>
       revisionsFrom(newest, oldest).map((seq) => historyLine(seq, seq * 1_000));
+
     service.olderHistory[3] = { revisions: lines(2, 1) };
     const { follow, call, pushed } = yield* subject(service);
     const heldNow = () => pushed.findLast(([kind]) => kind === LIVE_READ.HISTORY);
@@ -2871,8 +2979,10 @@ it.effect(
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
       yield* openTask(INVITES);
+
       const standing = () => {
         const open = description(INVITES);
+
         return [
           open?.status,
           open?.assignee,

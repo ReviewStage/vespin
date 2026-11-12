@@ -44,6 +44,7 @@ function firstIn(column: HTMLElement, selector: string): HTMLElement | undefined
 /** The control in `list` that opens `item`, by the `aria-controls` naming it, where the item has an id to name. */
 function openerIn(list: HTMLElement, item: HTMLElement): HTMLElement | undefined {
   if (item.id === "") return undefined;
+
   return [...list.querySelectorAll<HTMLElement>("[aria-controls]")].find(
     (each) => each.getAttribute("aria-controls") === item.id && each.closest("[inert]") === null,
   );
@@ -52,14 +53,17 @@ function openerIn(list: HTMLElement, item: HTMLElement): HTMLElement | undefined
 /** The column's heading, made able to take the focus it is handed, where the column has no control. */
 function headingOf(column: HTMLElement): HTMLElement | undefined {
   const heading = firstIn(column, "h1, h2");
+
   // Note that the heading is drawn by whichever page the column holds, not by this screen, so it is made focusable here, where the focus is handed to it.
   if (heading !== undefined && !heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+
   return heading;
 }
 
 /** Whether the focus went with a column just hidden: it stood in it, or has already fallen to the body. */
 function focusLost(hidden: HTMLElement): boolean {
   const active = document.activeElement;
+
   return active === null || active === document.body || hidden.contains(active);
 }
 
@@ -89,6 +93,7 @@ interface Shown {
  */
 function swapped(before: Shown | undefined, listed: boolean): boolean {
   if (before === undefined) return !listed;
+
   return before.listed !== listed || before.room !== SHELL_ROOM.NARROW;
 }
 
@@ -118,18 +123,24 @@ export function useNarrowFocus(
     const before = was.current;
     const now = { room, listed };
     const dropped = handed.current?.isConnected === false;
+
     if (room !== SHELL_ROOM.NARROW) {
       was.current = now;
       handed.current = undefined;
+
       return;
     }
+
     if (!swapped(before, listed) && !dropped) {
       was.current = now;
+
       return;
     }
+
     const root = screen.current;
     const list = root?.querySelector<HTMLElement>(columns.list);
     const item = root?.querySelector<HTMLElement>(columns.item);
+
     // Note that a screen still standing in for its columns, as one does
     // while its read is out, keeps the swap pending, so it is handed on once
     // the columns are drawn.
@@ -137,20 +148,26 @@ export function useNarrowFocus(
     was.current = now;
     handed.current = undefined;
     const active = document.activeElement;
+
     if (!listed && active instanceof HTMLElement && list.contains(active)) left.current = active;
+
     if (!focusLost(listed ? item : list)) return;
+
     const back =
       left.current !== undefined &&
       list.contains(left.current) &&
       left.current.closest("[inert]") === null
         ? left.current
         : undefined;
+
     const target = listed
       ? (openerIn(list, item) ?? firstIn(list, CHOSEN) ?? back ?? firstIn(list, FOCUSABLE))
       : (firstIn(item, FOCUSABLE) ?? headingOf(item));
+
     if (listed) left.current = undefined;
     target?.focus();
     handed.current = target;
   });
+
   return screen;
 }

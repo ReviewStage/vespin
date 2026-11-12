@@ -585,6 +585,7 @@ function NotionMark({ className }: MarkProps): React.JSX.Element {
  */
 function PostHogMark({ className }: MarkProps): React.JSX.Element {
   const id = useId();
+
   return (
     <svg className={className} viewBox="-3.17 -15 58 58" aria-hidden="true" focusable="false">
       <rect x="-3.17" y="-15" width="58" height="58" rx="12" fill="#fff" />
@@ -814,6 +815,7 @@ function SlackMark({ className }: MarkProps): React.JSX.Element {
  */
 function StripeMark({ className }: MarkProps): React.JSX.Element {
   const id = useId();
+
   return (
     <svg
       className={className}
@@ -848,6 +850,7 @@ function StripeMark({ className }: MarkProps): React.JSX.Element {
  */
 function SupabaseMark({ className }: MarkProps): React.JSX.Element {
   const id = useId();
+
   return (
     <svg
       className={className}
@@ -977,6 +980,7 @@ function CursorMark({ className }: MarkProps): React.JSX.Element {
  */
 function VsCodeMark({ className }: MarkProps): React.JSX.Element {
   const id = useId();
+
   return (
     <svg
       className={className}
@@ -1020,6 +1024,7 @@ export function ProviderMark({
   size?: ProviderMarkSize | undefined;
 }): React.JSX.Element {
   const className = MARK_CLASS[size];
+
   switch (provider) {
     case MARK_PROVIDER.GOOGLE:
       return <GoogleMark className={className} />;

@@ -1,71 +1,139 @@
 // Better Auth owns its generated schema; our own tables can join this
 // aggregate from their own schema modules without being overwritten by it.
 export * from "./account-allowed-command.js";
+
 export * from "./account-provider-key.js";
+
 export * from "./account-sound.js";
+
 export * from "./agent.js";
+
 export * from "./agent-approval.js";
+
 export * from "./agent-boot.js";
+
 export * from "./agent-browser-tab.js";
+
 export * from "./agent-pin.js";
+
 export * from "./agent-pull-request.js";
+
 export * from "./agent-queue.js";
+
 export * from "./agent-repository.js";
+
 export * from "./agent-runner-lease.js";
+
 export * from "./agent-runner-record.js";
+
 export * from "./agent-sandbox.js";
+
 export * from "./agent-wakeup.js";
+
 export * from "./attachment.js";
+
 export * from "./auth.js";
+
 export * from "./automation.js";
+
 export * from "./claude-session-entry.js";
+
 export * from "./description-comment.js";
+
 export * from "./description-revision.js";
+
 export * from "./device.js";
+
 export * from "./device-agent.js";
+
 export * from "./favorite.js";
+
 export * from "./github-connect-intent.js";
+
 export * from "./github-install-intent.js";
+
 export * from "./github-installation.js";
+
 export * from "./github-personal-token.js";
+
 export * from "./github-rate-hold.js";
+
 export * from "./github-repository.js";
+
 export * from "./github-repository-read.js";
+
 export * from "./held-push.js";
+
 export * from "./host-pairing.js";
+
 export * from "./inbox.js";
+
 export * from "./inbox-item-read.js";
+
 export * from "./inbox-message.js";
+
 export * from "./installed-skill.js";
+
 export * from "./integration.js";
+
 export * from "./integration-installation.js";
+
 export * from "./live-activity.js";
+
 export * from "./mac-command.js";
+
 export * from "./memory.js";
+
 export * from "./native-call-key.js";
+
 export * from "./personal-workspace.js";
+
 export * from "./preferences.js";
+
 export * from "./presence.js";
+
 export * from "./pull-request-chapters.js";
+
 export * from "./push-device.js";
+
 export * from "./repository-pin.js";
+
 export * from "./runner-line.js";
+
 export * from "./sandbox-firewall.js";
+
 export * from "./sandbox-terminal-lease.js";
+
 export * from "./slack-installation.js";
+
 export * from "./storage.js";
+
 export * from "./sync-log.js";
+
 export * from "./task.js";
+
 export * from "./task-block.js";
+
 export * from "./task-page.js";
+
 export * from "./task-pin.js";
+
 export * from "./task-read.js";
+
 export * from "./task-section.js";
+
 export * from "./usage.js";
+
 export * from "./workspace-environment-variable.js";
+
 export * from "./workspace-experiment.js";
+
 export * from "./workspace-former-slug.js";
+
 export * from "./workspace-sandbox-script.js";
+
 export * from "./workspace-sandbox-script-run.js";
+
 export * from "./workspace-token-repository.js";
+
 export * from "./write-receipt.js";

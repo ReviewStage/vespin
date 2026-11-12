@@ -120,10 +120,13 @@ export interface HeldWorkspaceIntegrations extends HeldSlice<string> {
 /** The Slack bot's row as its two statements deliver it, its channels' repositories folded in; none while it is not connected. */
 function slackBotRowOf(rows: WorkspaceIntegrationsLiveRows): readonly SlackBotRow[] {
   const [installation] = rows.slackInstallation;
+
   if (installation === undefined) return [];
+
   const channelRepositories = Object.fromEntries(
     rows.slackChannelRepositories.map((channel) => [channel.channelId, channel.repository]),
   );
+
   return [{ ...installation, channelRepositories }];
 }
 
@@ -134,6 +137,7 @@ function integrationsOf(
   slack: HeldRows<SlackBotRow>,
 ): WorkspaceIntegrations {
   const bots = slack.rows();
+
   return workspaceIntegrationsOfLive(configured, {
     sentryInstallations: sentry.rows(),
     slackInstallation: bots,
@@ -162,17 +166,22 @@ function followIntegrations(
 ): Effect.Effect<void> {
   // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
   const userId = dependencies.accountId();
+
   const seal = (poll: boolean, after?: string) =>
     userId === undefined
       ? Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true })
       : dependencies.seal(workspaceId, userId, poll, after);
+
   const attempt = Effect.scoped(
     Effect.gen(function* () {
       const first = yield* seal(false);
+
       if ("failure" in first) {
         if (first.failure !== LIVE_SIGNED_OUT.failure) answers.unanswered();
+
         return first.gone !== true;
       }
+
       yield* Effect.addFinalizer(() => Effect.sync(() => standing(undefined)));
       let configured: IntegrationsConfigured = first;
       let wait: TxWait | undefined;
@@ -181,27 +190,35 @@ function followIntegrations(
       let team: string | null | undefined;
       /** Whether a poll ended the follow for good, the account no longer reaching the workspace, so the follow is told unanswered. */
       let refused = false;
+
       const drawn: Effect.Effect<void> = Effect.sync(() => {
         if (answered) answers.answered(integrationsOf(configured, sentry, slack));
       });
+
       const read = {
         redraw: () => drawn,
         confirmation: () => {
           const handed = wait;
+
           return handed === undefined ? undefined : (txid: string) => confirmWrite(handed, txid);
         },
       };
+
       const sentry = yield* dependencies.pool.stand(SENTRY_INSTALLATION, read);
       const slack = yield* dependencies.pool.stand(SLACK_BOT, read);
+
       const gone = yield* followTakingRows(
         {
           poll: (after) =>
             Effect.map(seal(true, after), (sealed) => {
               if ("failure" in sealed) {
                 refused ||= sealed.gone === true && sealed.failure !== LIVE_SIGNED_OUT.failure;
+
                 return sealed;
               }
+
               configured = sealed;
+
               return sealed;
             }),
           onTxWait: (handed) => {
@@ -221,17 +238,22 @@ function followIntegrations(
             team = now;
             answered = true;
             yield* drawn;
+
             if (moved) yield* dependencies.slackMoved(workspaceId);
           }),
       ).pipe(
         Effect.as(false),
         Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
       );
+
       if (!gone) return true;
+
       if (refused) answers.unanswered();
+
       return false;
     }),
   );
+
   return restarting(attempt);
 }
 
@@ -247,6 +269,7 @@ export function heldWorkspaceIntegrations(
   return Effect.gen(function* () {
     /** Each standing follow's wait for a write's transaction, by the workspace. */
     const waits = new Map<string, TxWait>();
+
     const slice = yield* heldSlice<typeof LIVE_READ.WORKSPACE_INTEGRATIONS, string>({
       empty: NO_KEYS_HELD,
       path: (workspaceId) => [workspaceId],
@@ -258,6 +281,7 @@ export function heldWorkspaceIntegrations(
         }),
       tell: dependencies.tell,
     });
+
     return {
       ...slice,
       confirmed: (workspaceId, txid) =>
@@ -270,6 +294,7 @@ export function heldWorkspaceIntegrations(
 function sentryAnswered(answer: TasksWorkspaceSentryAnswer): TasksWorkspaceSentryAnswer {
   if (!("sentry" in answer)) return answer;
   const { txid: _txid, ...sentry } = answer.sentry;
+
   return { sentry };
 }
 
@@ -279,6 +304,7 @@ export function slackBotAnswered(
 ): TasksWorkspaceSlackBotAnswer {
   if (!("slackBot" in answer)) return answer;
   const { txid: _txid, ...slackBot } = answer.slackBot;
+
   return { slackBot };
 }
 
@@ -379,8 +405,10 @@ export function slackBotChannel(
     keys: (params) => [params.workspaceId],
     change: (params) => (row) => {
       const repository = params.member === false ? null : params.repository;
+
       if (repository === undefined) return {};
       const { [params.channelId]: _left, ...others } = row.channelRepositories;
+
       return {
         channelRepositories:
           repository === null ? others : { ...others, [params.channelId]: repository },

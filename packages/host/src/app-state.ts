@@ -446,6 +446,7 @@ export const PULL_REQUEST_PART_READ = {
   [PULL_REQUEST_PART.REVIEW_OPTIONS]: LIVE_READ.REVIEW_OPTIONS,
   [PULL_REQUEST_PART.VIEWED]: LIVE_READ.PULL_REQUEST_VIEWED,
 } as const satisfies Record<PullRequestPart, LiveRead>;
+
 /** One of the account's own devices' last beat, at the host's instant: its age as the service answered it, taken from the host's clock as the answer landed. */
 interface AppDeviceBeat {
   deviceId: string;
@@ -557,6 +558,7 @@ export type AppIntegrations = Readonly<Record<string, AppHostRead<IntegrationSta
 
 /** The outside MCP clients the account allowed, by the account, as the host's read of them stands. */
 export type AppMcpClients = Readonly<Record<string, AppHostRead<McpClientsAnswer>>>;
+
 /** Each integration server's tools the windows hold, by the server's name, as the host's read of them stands: its tools, or why it listed none. */
 export type AppIntegrationTools = Readonly<Record<string, AppHostRead<IntegrationToolsAnswer>>>;
 
@@ -1197,6 +1199,7 @@ function keyedOf(entry: HostReadSliceEntry, slice: object | undefined): Keyed | 
 function rowIdOf(entry: HostReadSliceEntry, key: readonly string[]): string | undefined {
   if (entry.keys !== READ_KEYS.PARTS) return entry.rowId;
   const [part] = key;
+
   return part === undefined || entry.rowIds === undefined || !Object.hasOwn(entry.rowIds, part)
     ? undefined
     : entry.rowIds[part];
@@ -1210,6 +1213,7 @@ function rowsAreValue(entry: HostReadSliceEntry): boolean {
 /** The record a key's read's rows are, where its slice names the field its list stands under (`rowsAt`); none otherwise. */
 function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
   if (entry.rowsAt === undefined || !isKeyed(value)) return undefined;
+
   return isKeyed(value.rows) ? value.rows : undefined;
 }
 
@@ -1221,19 +1225,23 @@ function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
  */
 function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly object[] | undefined {
   if (!isKeyed(value)) return undefined;
+
   const rows: unknown =
     entry.rowsAt === undefined
       ? rowsAreValue(entry)
         ? value
         : value.rows
       : recordOf(entry, value)?.[entry.rowsAt];
+
   return Array.isArray(rows) ? rows : undefined;
 }
 
 /** A key's read's record of rows without its list, where its slice names `rowsAt`; none otherwise. */
 function besideOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
   const record = recordOf(entry, value);
+
   if (record === undefined) return undefined;
+
   return Object.fromEntries(Object.entries(record).filter(([field]) => field !== entry.rowsAt));
 }
 
@@ -1258,18 +1266,23 @@ function keyMoved(
 ): KeyMoved {
   const rowId = rowIdOf(entry, key);
   const [before, after] = [rowsOf(entry, sent), rowsOf(entry, next)];
+
   if (rowId === undefined || before === undefined || after === undefined) {
     return { key, value: next };
   }
+
   const sentRows = new Map(before.map((row) => [idOf(rowId, row), row]));
   const sentIds = [...sentRows.keys()];
   const ids = after.map((row) => idOf(rowId, row));
+
   // Note that a list whose ids repeat cannot be laid by them, so it crosses whole.
   if (sentRows.size !== before.length || new Set(ids).size !== ids.length) {
     return { key, value: next };
   }
+
   const reordered = ids.length !== sentIds.length || ids.some((id, at) => id !== sentIds[at]);
   const beside = besideOf(entry, next);
+
   return {
     key,
     rows: after.filter((row) => sentRows.get(idOf(rowId, row)) !== row),
@@ -1286,9 +1299,11 @@ function idsMoved(
   after: Keyed,
 ): KeyMoved[] {
   if (before === after) return [];
+
   return [
     ...Object.entries(after).flatMap(([id, value]) => {
       const sent = ownValue(before, id);
+
       return sent === value ? [] : [keyMoved(entry, [...path, id], sent, value)];
     }),
     ...Object.keys(before)
@@ -1309,6 +1324,7 @@ function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyM
   const kinds = new Set([...Object.keys(before), ...Object.keys(after)]);
   // SAFETY: each kind of a slice keyed by two holds a record of its ids.
   const ofKind = (keyed: Keyed, kind: string) => (ownValue(keyed, kind) ?? {}) as Keyed;
+
   return [...kinds].flatMap((kind) =>
     idsMoved(entry, [kind], ofKind(before, kind), ofKind(after, kind)),
   );
@@ -1318,28 +1334,39 @@ function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyM
 function valueLaid(entry: HostReadSliceEntry, held: unknown, move: KeyMoved): unknown {
   if ("value" in move) {
     if (move.value === null) return undefined;
+
     return held === undefined ? move.value : keepIdentity(held, move.value);
   }
+
   const rowId = rowIdOf(entry, move.key);
+
   if (rowId === undefined) return held;
   const heldList = rowsOf(entry, held) ?? [];
   const heldRows = new Map(heldList.map((row) => [idOf(rowId, row), row]));
+
   const movedRows = new Map(
     move.rows.map((row) => {
       const was = heldRows.get(idOf(rowId, row));
+
       return [idOf(rowId, row), was === undefined ? row : keepIdentity(was, row)];
     }),
   );
+
   const rows =
     move.ids === undefined
       ? heldList.map((row) => movedRows.get(idOf(rowId, row)) ?? row)
       : move.ids.flatMap((id) => movedRows.get(id) ?? heldRows.get(id) ?? []);
+
   const listKept = rows.length === heldList.length && rows.every((row, at) => row === heldList[at]);
+
   if (entry.rowsAt !== undefined) {
     return recordLaid(entry.rowsAt, held, listKept ? heldList : rows, move.beside);
   }
+
   if (listKept) return held;
+
   if (rowsAreValue(entry)) return rows;
+
   return typeof held === "object" && held !== null ? { ...held, rows } : { rows };
 }
 
@@ -1360,18 +1387,23 @@ function recordLaid(
   const was = read.rows;
   // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
   const heldRecord = (typeof was === "object" && was !== null ? was : {}) as Keyed;
+
   const fields =
     beside === undefined
       ? Object.entries(heldRecord).filter(([field]) => field !== rowsAt)
       : Object.entries(beside).map(([field, value]) => {
           const kept = field !== rowsAt && Object.hasOwn(heldRecord, field);
+
           return [field, kept ? keepIdentity(heldRecord[field], value) : value] as const;
         });
+
   const record: Keyed = { ...Object.fromEntries(fields), [rowsAt]: list };
   const entries = Object.entries(record);
+
   const kept =
     entries.length === Object.keys(heldRecord).length &&
     entries.every(([field, value]) => ownValue(heldRecord, field) === value);
+
   return kept ? held : { ...read, rows: record };
 }
 
@@ -1382,12 +1414,15 @@ function withIdsMoved(
   moves: readonly KeyMoved[],
 ): Keyed {
   const next: Record<string, unknown> = { ...held };
+
   for (const move of moves) {
     const id = move.key[move.key.length - 1] ?? "";
     const laid = valueLaid(entry, ownValue(next, id), move);
+
     if (laid === undefined) Reflect.deleteProperty(next, id);
     else next[id] = laid;
   }
+
   return next;
 }
 
@@ -1398,6 +1433,7 @@ function withKindsMoved(
   moves: readonly KeyMoved[],
 ): Keyed {
   const next: Record<string, unknown> = { ...held };
+
   for (const kind of new Set(moves.map((move) => move.key[0] ?? ""))) {
     // SAFETY: each kind of a slice keyed by two holds a record of its ids.
     const ofKind = (held === undefined ? undefined : ownValue(held, kind)) as Keyed | undefined;
@@ -1407,6 +1443,7 @@ function withKindsMoved(
       moves.filter((move) => move.key[0] === kind),
     );
   }
+
   return next;
 }
 
@@ -1417,10 +1454,12 @@ function withSliceMoved(
   moves: readonly KeyMoved[],
 ): object {
   const keyed = keyedOf(entry, held);
+
   const laid =
     entry.keys === READ_KEYS.TWO
       ? withKindsMoved(entry, keyed, moves)
       : withIdsMoved(entry, keyed, moves);
+
   return entry.on === KEYS_ON.SLICE ? laid : { ...held, rows: laid };
 }
 
@@ -1438,21 +1477,28 @@ export function appStateDelivery(
   const names = [...new Set([...Object.keys(sent ?? {}), ...Object.keys(next)])].filter(
     (name) => name !== "version",
   ) as AppStateEntry[];
+
   // Note that a keyed slice crosses as the keys that moved in it wherever the window held it and still does, so it is never walked whole as well.
   const patched = HOST_READ_SLICES.flatMap((slice) => {
     const entry: HostReadSliceEntry = HOST_READ_SLICE[slice];
     const [before, after] = [keyedOf(entry, sent?.[slice]), keyedOf(entry, next[slice])];
+
     return before === undefined || after === undefined
       ? []
       : [[slice, keysMoved(entry, before, after)] as const];
   });
+
   const crossing = new Set<string>(patched.map(([slice]) => slice));
+
   const moved = names.filter(
     (name) => !crossing.has(name) && (sent === undefined || !Equal.equals(sent[name], next[name])),
   );
+
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
+
   if (sent !== undefined && moved.length === 0 && keys.length === 0) return undefined;
+
   return {
     version: next.version,
     entries: Object.fromEntries(
@@ -1481,20 +1527,25 @@ export function withAppStateDelivery(
       keepIdentity(held[name as AppStateEntry], value),
     ]),
   );
+
   const slices = HOST_READ_SLICES.flatMap((slice) => {
     const moves = delivery.moved?.[slice];
+
     return moves === undefined
       ? []
       : [[slice, withSliceMoved(HOST_READ_SLICE[slice], held[slice], moves)] as const];
   });
+
   const next: AppStateSnapshot = {
     ...held,
     ...entries,
     ...Object.fromEntries(slices),
     version: delivery.version,
   };
+
   // Note that an entry gone is held as no key at all, as the document holds it.
   for (const name of delivery.gone ?? []) Reflect.deleteProperty(next, name);
+
   return next;
 }
 

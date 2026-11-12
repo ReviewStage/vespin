@@ -74,19 +74,24 @@ function isContainer(value: unknown): value is object {
 /** A value that stands on its key's line: a scalar, its later lines set in under the first, or an empty list or record as "(none)". */
 function leafWords(value: unknown, indent: string): string {
   if (isContainer(value)) return NONE;
+
   return String(value).replaceAll("\n", `\n${indent}  `);
 }
 
 /** A JSON value as indented `key: value` lines and `- item` lines, with no braces or quotes. */
 function readableLines(value: unknown, indent: string): string[] {
   if (Array.isArray(value) && value.length === 0) return [`${indent}${NONE}`];
+
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
       const [first = "", ...rest] = readableLines(item, `${indent}  `);
+
       return [`${indent}- ${first.trimStart()}`, ...rest];
     });
   }
+
   if (!isContainer(value)) return [`${indent}${leafWords(value, indent)}`];
+
   return Object.entries(value).flatMap(([key, item]) =>
     isContainer(item) && Object.keys(item).length > 0
       ? [`${indent}${key}:`, ...readableLines(item, `${indent}  `)]
@@ -104,7 +109,9 @@ function readableLines(value: unknown, indent: string): string[] {
  */
 export function blockSays(block: ToolBlock, subject: string | undefined): boolean {
   if (subject === undefined || subject === "") return false;
+
   if (block.text === subject) return true;
+
   return block.kind === TOOL_BLOCK.JSON && block.text.includes(`: ${JSON.stringify(subject)}`);
 }
 
@@ -116,11 +123,14 @@ export function blockSays(block: ToolBlock, subject: string | undefined): boolea
 export function readableBlock(block: ToolBlock): ToolBlock {
   if (block.kind !== TOOL_BLOCK.JSON) return block;
   const value = blockValue(block);
+
   if (!isContainer(value)) return block;
   const [only, ...more] = Object.values(value);
+
   if (!Array.isArray(value) && typeof only === "string" && more.length === 0) {
     return { kind: TOOL_BLOCK.TEXT, text: only };
   }
+
   return { kind: TOOL_BLOCK.TEXT, text: readableLines(value, "").join("\n") };
 }
 
@@ -133,8 +143,10 @@ export function readableBlock(block: ToolBlock): ToolBlock {
 function acknowledges(block: ToolBlock): boolean {
   if (block.kind !== TOOL_BLOCK.JSON) return false;
   const value = blockValue(block);
+
   if (!isContainer(value) || Array.isArray(value)) return ACKNOWLEDGMENTS.has(value);
   const entries = Object.entries(value);
+
   return (
     entries.length > 0 &&
     entries.every(
@@ -162,10 +174,13 @@ export function bodyWords(
 ): readonly string[] {
   if (input?.kind === TOOL_BLOCK.COMMAND) {
     const printed = output === undefined ? "" : readableBlock(output).text;
+
     return [input.text, printed, errorText ?? ""].filter((words) => words !== "");
   }
+
   const shown = output === undefined ? undefined : shownOutput(output);
   const answer = shown === undefined || shown.text.trim() !== "" ? shown?.text : NO_OUTPUT;
   const inputWords = input === undefined ? "" : readableBlock(input).text;
+
   return [inputWords, errorText ?? answer ?? ""].filter((words) => words !== "");
 }

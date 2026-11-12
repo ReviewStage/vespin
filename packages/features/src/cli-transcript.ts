@@ -59,18 +59,22 @@ function isPartFields(value: unknown): value is PartFields {
 
 function stringField(part: PartFields, key: string): string | undefined {
   const value = part[key];
+
   return typeof value === "string" ? value : undefined;
 }
 
 /** What a call acted on, as one short line, from the first input key that names it. */
 function subjectOf(input: unknown): string | undefined {
   if (!isPartFields(input)) return undefined;
+
   for (const key of SUBJECT_KEYS) {
     const value = stringField(input, key)?.trim().split("\n")[0];
+
     if (value !== undefined && value.length > 0) {
       return value.length > MAX_SUBJECT_CHARS ? `${value.slice(0, MAX_SUBJECT_CHARS)}…` : value;
     }
   }
+
   return undefined;
 }
 
@@ -78,16 +82,20 @@ function subjectOf(input: unknown): string | undefined {
 function printedPart(part: PartFields): PrintedPart {
   const type = stringField(part, "type") ?? "";
   const state = stringField(part, "state");
+
   if (type === TEXT_PART.TYPE) {
     return { words: stringField(part, "text") ?? "", settled: state !== TEXT_PART.STREAMING };
   }
+
   const tool =
     type === DYNAMIC_TOOL_PART
       ? stringField(part, "toolName")
       : type.startsWith(TOOL_PART_PREFIX)
         ? type.slice(TOOL_PART_PREFIX.length)
         : undefined;
+
   if (tool === undefined) return undefined;
+
   return {
     tool,
     subject: subjectOf(part.input),
@@ -98,6 +106,7 @@ function printedPart(part: PartFields): PrintedPart {
 /** Who wrote a message, as the line above its words names them: the agent, or whoever sent the developer's line. */
 export function transcriptSpeaker(message: AgentTranscriptMessage): string {
   if (message.role === MESSAGE_ROLE.ASSISTANT) return "Agent";
+
   return message.sentBy?.name ?? "You";
 }
 
@@ -114,17 +123,22 @@ export function transcriptPartLines(
 ): { readonly lines: readonly string[]; readonly printed: number } {
   const lines: string[] = [];
   let index = printed;
+
   for (; index < message.parts.length; index += 1) {
     const stored = message.parts[index];
     const part = isPartFields(stored) ? printedPart(stored) : undefined;
+
     if (part === undefined) continue;
+
     if (!part.settled && !ended) break;
+
     if ("words" in part) {
       if (part.words.trim().length > 0) lines.push(part.words.trimEnd());
     } else {
       lines.push(`  ▸ ${part.tool}${part.subject === undefined ? "" : ` ${part.subject}`}`);
     }
   }
+
   return { lines, printed: index };
 }
 
@@ -143,8 +157,10 @@ export function transcriptCallPlace(
     const index = message.parts.findIndex(
       (part) => isPartFields(part) && stringField(part, "toolCallId") === callId,
     );
+
     if (index >= 0) return { messageId: message.id, index };
   }
+
   return undefined;
 }
 
@@ -161,6 +177,7 @@ export function wholeCallLines(stored: unknown): readonly string[] {
   const state = stringField(part, "state");
   const error = stringField(part, "errorText");
   const output = part.output;
+
   return [
     `${tool}${state === undefined ? "" : ` (${state})`}`,
     "",

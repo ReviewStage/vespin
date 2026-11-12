@@ -62,6 +62,7 @@ export function RenamableName({
     refocus.current = false;
     press.current?.focus();
   }, [editing]);
+
   if (editing) {
     return (
       <InlineEdit
@@ -78,8 +79,11 @@ export function RenamableName({
       />
     );
   }
+
   const shown = children ?? value;
+
   if (onBegin === undefined) return <>{shown}</>;
+
   return (
     <button
       ref={press}

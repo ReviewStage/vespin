@@ -36,6 +36,7 @@ export function ShowMoreRow({
   controls?: string | undefined;
 }): React.JSX.Element | null {
   if (more <= 0) return null;
+
   return (
     <LineButton
       look={LINE_BUTTON_LOOK.ROW}

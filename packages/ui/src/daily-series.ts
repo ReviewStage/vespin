@@ -16,6 +16,8 @@ export function partialDayKey(
   generatedAt: number,
 ): string | undefined {
   const last = daily.at(-1);
+
   if (last === undefined) return undefined;
+
   return last.day === new Date(generatedAt).toISOString().slice(0, 10) ? last.day : undefined;
 }

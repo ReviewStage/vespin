@@ -38,6 +38,7 @@ const TASK_ID = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
 const PAGE_ID = "26494df1-595a-4364-abf7-85781c65a9f8";
 const TITLED_AGENT = "7b1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f";
 const UNTITLED_AGENT = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e60";
+
 /** An agent of another listed plan, which a link names by itself alone. */
 const OTHER_AGENT = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f61";
 
@@ -145,16 +146,19 @@ async function drawn(text: string): Promise<{ container: HTMLElement }> {
   fakeAppPlatform(QUIET_PANEL);
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const words = (said: string) =>
     createElement(TaskMentions, {
       value: PAGE,
       children: createElement(TranscriptWords, { text: said }),
     });
+
   act(() => root?.render(withQueryClient(words(text))));
   await settle();
   // Drawn again, as a transcript is drawn as its turn streams.
   act(() => root?.render(withQueryClient(words(`${text} `))));
   await settle();
+
   return { container };
 }
 

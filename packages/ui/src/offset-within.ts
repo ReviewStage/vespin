@@ -6,9 +6,11 @@
 function offsetTo(element: HTMLElement, ancestor: Element | null): number {
   let top = 0;
   let at: HTMLElement = element;
+
   for (;;) {
     top += at.offsetTop;
     const parent = at.offsetParent;
+
     if (!(parent instanceof HTMLElement) || parent === ancestor) return top;
     top += parent.clientTop;
     at = parent;
@@ -25,9 +27,11 @@ function offsetTo(element: HTMLElement, ancestor: Element | null): number {
  */
 export function offsetWithin(element: HTMLElement, scroller: HTMLElement): number {
   let holder = element.offsetParent;
+
   while (holder instanceof HTMLElement && holder !== scroller && !holder.contains(scroller)) {
     holder = holder.offsetParent;
   }
+
   return holder === scroller
     ? offsetTo(element, scroller)
     : offsetTo(element, holder) - offsetTo(scroller, holder) - scroller.clientTop;

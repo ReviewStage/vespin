@@ -35,10 +35,12 @@ interface StubbedHandler {
 /** A handler that answers from the script it was given, recording what it was handed. */
 function stubbedHandler(answer: () => Response): StubbedHandler {
   const requests: Request[] = [];
+
   return {
     requests,
     handle: async (request) => {
       requests.push(request);
+
       return answer();
     },
   };
@@ -48,6 +50,7 @@ function signedInAnswer(): Response {
   const headers = new Headers({ "content-type": "application/json", "x-better-auth": "1" });
   headers.append("set-cookie", "app.session_token=abc; Path=/; HttpOnly; SameSite=Lax");
   headers.append("set-cookie", "app.session_data=def; Path=/; HttpOnly");
+
   return new Response(JSON.stringify({ redirect: false, token: "abc" }), {
     status: HOSTED_HTTP_STATUS.OK,
     headers,
@@ -119,9 +122,11 @@ test("the group answers what the handler answered, as the handler answered it", 
   for (const exchange of EXCHANGES) {
     const stub = stubbedHandler(exchange.answer);
     const request = exchange.request();
+
     const answered = await routeFromHttpRouter(authApp(stub.handle, unreachedWorkspaceSeams)).fetch(
       request,
     );
+
     const carried = await recordedResponse(answered);
     const direct = await recordedResponse(await stub.handle(exchange.request()));
 

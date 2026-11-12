@@ -98,12 +98,18 @@ function request(
   } = {},
 ): Request {
   const headers: Record<string, string> = {};
+
   if (init.userId !== undefined) headers.authorization = `Bearer ${init.userId}`;
+
   if (init.cookie === true) headers.cookie = "session=s1";
+
   if (init.body !== undefined) headers["content-type"] = JSON_TYPE;
+
   if (init.length !== undefined) headers["content-length"] = String(init.length);
   const url = new URL(init.path ?? MAC_COMMANDS, ORIGIN);
+
   if (init.kinds !== undefined) url.searchParams.set("kinds", init.kinds);
+
   return new Request(url, {
     method: init.method ?? "GET",
     headers,
@@ -124,7 +130,9 @@ const bytes = (incoming: Request) =>
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
     );
+
     const context = yield* Effect.context<SqlClient.SqlClient>().pipe(Effect.provide(services));
+
     const handle = hostedFetch({
       macCommands: macCommandsProcedures({
         resolveUserId: (asked) =>
@@ -136,9 +144,11 @@ const bytes = (incoming: Request) =>
           ),
       }),
     });
+
     // SAFETY: the procedures yield the database and the clock alone, which is all a test provides of the web runtime's services.
     const webServices = context as Context.Context<WebServices>;
     const response = yield* Effect.promise(() => handle(incoming, webServices));
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -161,6 +171,7 @@ const emptyRead = (incoming: Request) =>
   Effect.gen(function* () {
     const read = yield* Effect.forkChild(bytes(incoming));
     yield* TestClock.adjust("20 seconds");
+
     return yield* Fiber.join(read);
   });
 
@@ -169,6 +180,7 @@ const untilQueued = (userId: string) =>
   Effect.gen(function* () {
     const since = new Date(yield* Clock.currentTimeMillis);
     const kinds = [MAC_COMMAND_KIND.SHELL];
+
     while (!(yield* macCommandsWaiting(userId, since, kinds))) yield* Effect.yieldNow;
   });
 
@@ -226,6 +238,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           kind: MAC_COMMAND_KIND.SHELL,
           command: COMMAND.command,
         });
+
         const read = yield* emptyRead(request({ userId: "user-no-mac" }));
 
         assert.equal(answer.status, MAC_COMMAND_STATUS.NOT_RUN);
@@ -245,6 +258,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       const call = yield* Effect.forkChild(
         askMac("user-refuses", { kind: MAC_COMMAND_KIND.SHELL, command: COMMAND.command }),
       );
+
       yield* untilQueued("user-refuses");
       const [taken] = commandsOf(yield* bytes(request({ userId: "user-refuses" })));
       const refused = "Not run: this Mac names no home folder.";
@@ -277,6 +291,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
   it.effect("a result is refused as the old group refused it", () =>
     Effect.gen(function* () {
       yield* account("user-refused");
+
       const post = (body: string, length?: number) =>
         bytes(
           request({
@@ -286,6 +301,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             ...(length === undefined ? undefined : { length }),
           }),
         );
+
       const settle = { id: COMMAND.id, result: RESULT };
 
       assert.deepEqual(
@@ -315,8 +331,10 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         yield* account("user-claims-other");
         const queued = { ...COMMAND, id: randomUUID() };
         yield* queueMacCommand("user-claims", queued);
+
         const claim = (userId: string, body: string) =>
           bytes(request({ method: "POST", path: CLAIM, userId, body }));
+
         const asked = JSON.stringify({ id: queued.id });
         const notFound = refused(HOSTED_HTTP_STATUS.NOT_FOUND, "not-found");
 
@@ -382,6 +400,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             macCommandsFor("user-sync", kinds),
             queueMacCommand("user-sync", queued),
           );
+
           const call = yield* wokenOnHub(
             askMac("user-sync", { kind: MAC_COMMAND_KIND.SHELL, command: COMMAND.command }),
             Effect.gen(function* () {

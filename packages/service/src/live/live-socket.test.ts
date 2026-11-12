@@ -49,6 +49,7 @@ const ORIGIN = "https://app.test";
 /** The account a bearer names: the test's bearer is the account's id. */
 const bearerUserId = (request: Request) => {
   const authorization = request.headers.get("authorization") ?? "";
+
   return Effect.succeed(
     authorization.startsWith("Bearer ") ? Option.some(authorization.slice(7)) : Option.none(),
   );
@@ -64,6 +65,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -71,6 +73,7 @@ const openUser = Effect.gen(function* () {
 const hostSocket = Effect.gen(function* () {
   const inbound = yield* Queue.make<VoiceFrame, Cause.Done>();
   const sent = yield* Queue.make<string>();
+
   const socket: VoiceSocket = {
     next: Queue.take(inbound).pipe(
       Effect.map((frame): Option.Option<VoiceFrame> => Option.some(frame)),
@@ -81,6 +84,7 @@ const hostSocket = Effect.gen(function* () {
     close: () => Queue.end(inbound),
     isOpen: Effect.succeed(true),
   };
+
   return {
     socket,
     ask: (ask: LiveSocketAsk) => Queue.offer(inbound, { text: JSON.stringify(ask) }),
@@ -95,11 +99,13 @@ const hostSocket = Effect.gen(function* () {
 /** The tasks a task list answer lists, by id. */
 function listedTasks(answer: LiveSocketAnswer): readonly string[] {
   const listed = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(JSON.parse(answer.body));
+
   const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)({
     plans: listed.queries.plans.rows,
     agents: listed.queries.agents.rows,
     issues: listed.queries.issues?.rows,
   });
+
   return rows.plans.map((plan) => plan.id);
 }
 
@@ -114,6 +120,7 @@ it.layer(getTestDB())("the live socket", (it) => {
           const danaTask = yield* startTask(dana, { name: "Teammate invitations" });
           const eliTask = yield* startTask(eli, { name: "Billing export" });
           const context = yield* Effect.context<SqlClient.SqlClient | Database>();
+
           const answerer = {
             fetch: hostedFetch({
               live: liveProcedures({
@@ -125,6 +132,7 @@ it.layer(getTestDB())("the live socket", (it) => {
             services: context as Context.Context<WebServices>,
             origin: ORIGIN,
           };
+
           const danaHost = yield* hostSocket;
           const eliHost = yield* hostSocket;
           yield* Effect.forkScoped(
@@ -136,9 +144,11 @@ it.layer(getTestDB())("the live socket", (it) => {
 
           yield* danaHost.ask({ id: 1, path: readOf("/api/live/tasks", dana) });
           yield* eliHost.ask({ id: 1, path: readOf("/api/live/tasks", eli) });
+
           const [danaTasks, eliTasks] = yield* Effect.all([danaHost.answer, eliHost.answer], {
             concurrency: "unbounded",
           });
+
           assert.deepEqual(
             [danaTasks.id, danaTasks.status, listedTasks(danaTasks)],
             [1, HOSTED_HTTP_STATUS.OK, [danaTask.id]],
@@ -174,9 +184,11 @@ it.layer(getTestDB())("the live socket", (it) => {
 });
 
 const DANA = "user-dana";
+
 /** The `ios` client's bearer, as the phone's app sends it. */
 const IOS_BEARER = "Bearer ios-token-of-dana";
 const DANA_COOKIE = "__Secure-better-auth.session_token=session-of-dana";
+
 /** An origin React Native's socket may name on the phone's handshake, which is no page's. */
 const IOS_ORIGIN = "http://localhost";
 
@@ -224,6 +236,7 @@ const standingSocket = (resolveUserId: LiveSocketOptions["resolveUserId"]) =>
     }).pipe(Effect.provide(Context.empty() as Context.Context<WebServices>));
     // SAFETY: a listening TCP server answers its bound address as AddressInfo, never a pipe path.
     const { port } = relay.server.address() as AddressInfo;
+
     return `ws://127.0.0.1:${port}${LIVE_SOCKET.PATH}`;
   });
 
@@ -234,11 +247,13 @@ const opened = (url: string, headers: Readonly<Record<string, string>>) =>
     | { readonly authorization: string | null; readonly cookie: string | null }
   >((resume) => {
     let settled = false;
+
     const settle = (end: { readonly refused: number } | ReturnType<typeof decodeEcho>) => {
       if (settled) return;
       settled = true;
       resume(Effect.succeed(end));
     };
+
     const socket = new WebSocket(url, { headers: { ...headers } });
     socket.once("unexpected-response", (_request, response) => {
       settle({ refused: response.statusCode ?? 0 });
@@ -254,6 +269,7 @@ const opened = (url: string, headers: Readonly<Record<string, string>>) =>
       socket.terminate();
     });
     socket.on("error", () => undefined);
+
     return Effect.sync(() => socket.terminate());
   });
 
@@ -267,15 +283,18 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const read: string[] = [];
+
         const url = yield* standingSocket((credential) =>
           Effect.sync(() => {
             const credentialHanded = handed(credential);
             read.push(credentialHanded ?? "");
+
             return credentialHanded === IOS_BEARER || credentialHanded === DANA_COOKIE
               ? Option.some(DANA)
               : Option.none();
           }),
         );
+
         const underBearer = { authorization: IOS_BEARER, cookie: null };
 
         assert.deepEqual(

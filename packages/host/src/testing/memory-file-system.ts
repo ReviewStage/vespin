@@ -37,6 +37,7 @@ const PRIVATE_FOLDER: FileSystem.File.Info = {
 
 export function memoryFileSystem(overrides: Parameters<typeof FileSystem.layerNoop>[0] = {}) {
   const files = new Map<string, string>();
+
   const layer = FileSystem.layerNoop({
     exists: (path) => Effect.sync(() => files.has(path)),
     makeDirectory: () => Effect.void,
@@ -46,6 +47,7 @@ export function memoryFileSystem(overrides: Parameters<typeof FileSystem.layerNo
     readFileString: (path) =>
       Effect.suspend(() => {
         const held = files.get(path);
+
         return held === undefined
           ? Effect.fail(
               systemError({
@@ -64,10 +66,12 @@ export function memoryFileSystem(overrides: Parameters<typeof FileSystem.layerNo
       Effect.sync(() => {
         const held = files.get(from);
         files.delete(from);
+
         if (held !== undefined) files.set(to, held);
       }),
     remove: (path) => Effect.sync(() => void files.delete(path)),
     ...overrides,
   });
+
   return { files, layer };
 }

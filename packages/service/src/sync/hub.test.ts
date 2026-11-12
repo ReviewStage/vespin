@@ -94,6 +94,7 @@ function probeRow() {
   const row = { id: randomUUID(), workspaceId: randomUUID(), taskId: randomUUID() };
   const task: SyncTopic = [TOPIC.TASK, row.taskId];
   const workspace: SyncTopic = [TOPIC.WORKSPACE, row.workspaceId];
+
   return { row, task, workspace };
 }
 
@@ -133,6 +134,7 @@ const probedListener = Effect.gen(function* () {
   const opened = yield* Ref.make(0);
   const acknowledging = Latch.makeUnsafe(true);
   let standing: { readonly ended: Deferred.Deferred<never, SqlError>; deaf: boolean } | undefined;
+
   const listener: SyncListenerShape = {
     listen: Effect.gen(function* () {
       yield* acknowledging.await;
@@ -140,6 +142,7 @@ const probedListener = Effect.gen(function* () {
       const connection = { ended: Deferred.makeUnsafe<never, SqlError>(), deaf: false };
       standing = connection;
       yield* Ref.update(opened, (count) => count + 1);
+
       return {
         payloads: Stream.merge(
           Stream.filter(listening.payloads, () => !connection.deaf),
@@ -149,6 +152,7 @@ const probedListener = Effect.gen(function* () {
       };
     }),
   };
+
   return {
     listener,
     opened: Ref.get(opened),
@@ -168,6 +172,7 @@ const onHub = <A, E, R>(test: (probe: Probe) => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const { clock, asleep } = yield* announcingClock;
     const { listener, ...probe } = yield* probedListener;
+
     return yield* test({ ...probe, asleep }).pipe(
       Effect.provide(
         syncHub.pipe(
@@ -202,6 +207,7 @@ it.layer(probeDB)("Vespin Sync's hub", (it) => {
         const { row, task, workspace } = probeRow();
         const onTask = yield* nextOf(yield* sync.watch([task], NEVER_REACHED));
         const onWorkspace = yield* nextOf(yield* sync.watch([workspace], NEVER_REACHED));
+
         const elsewhere = yield* nextOf(
           yield* sync.watch([[TOPIC.TASK, randomUUID()]], NEVER_REACHED),
         );
@@ -226,14 +232,17 @@ it.layer(probeDB)("Vespin Sync's hub", (it) => {
           const witness = yield* nextOf(yield* sync.watch([task], NEVER_REACHED));
           const reads = yield* Ref.make(0);
           let txid: string | undefined;
+
           const read = Effect.gen(function* () {
             if ((yield* Ref.getAndUpdate(reads, (count) => count + 1)) > 0) return true;
             txid = yield* written(row);
             yield* driven({ fiber: witness, asleep }, STEP);
+
             return false;
           });
 
           const writtenAt = yield* Clock.currentTimeMillis;
+
           const held = yield* Effect.forkChild(
             heldUntil(read, (moved) => moved, [task], NEVER_REACHED, Duration.hours(2)),
             { startImmediately: true },
@@ -309,6 +318,7 @@ it.layer(probeDB)("Vespin Sync's hub", (it) => {
             { fiber: yield* opening([task], FALLBACK, yield* Effect.scope), asleep },
             FALLBACK,
           );
+
           const next = yield* nextOf(watch);
           yield* release;
 
@@ -339,9 +349,11 @@ it.layer(probeDB)("Vespin Sync's hub", (it) => {
         // Note that the reconnect may wake the watch once more, so the write is looked for until it is heard.
         let heard: readonly string[] = [];
         const txid = yield* written(row);
+
         while (!heard.includes(txid ?? "")) {
           heard = yield* driven({ fiber: yield* nextOf(onTask), asleep: probe.asleep }, STEP);
         }
+
         assert.equal(yield* probe.opened, 2);
       }),
     ),
@@ -374,6 +386,7 @@ it.layer(probeDB)("Vespin Sync's hub", (it) => {
         const next = yield* nextOf(yield* sync.watch([probeRow().task], FALLBACK));
         const from = yield* Clock.currentTimeMillis;
         yield* driven({ fiber: next, asleep }, FALLBACK);
+
         return (yield* Clock.currentTimeMillis) - from;
       }).pipe(
         Effect.provide(syncFromEnvironment),

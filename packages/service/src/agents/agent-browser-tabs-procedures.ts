@@ -73,6 +73,7 @@ const agentPlace = (agentId: string): BrowserTabsPlace => ({ agentId });
 /** The Browser tabs resource: an agent's or a task's tabs, an open, a takeover, and a hand-back, each to a signed-in member who reaches them. */
 export function agentBrowserTabsProcedures(seams: AgentBrowserTabsProcedureSeams) {
   const member = hosted.agentBrowserTabs.use(accountMiddleware(seams.resolveUserId));
+
   return {
     agentList: member.agentList.effect(function* ({ input, context }) {
       return yield* listAgentBrowserTabs(context.userId, agentPlace(yield* pathUuid(input.id)));
@@ -82,6 +83,7 @@ export function agentBrowserTabsProcedures(seams: AgentBrowserTabsProcedureSeams
     }),
     agentOpen: member.agentOpen.effect(function* ({ input, context }) {
       const agentId = yield* pathUuid(input.params.id);
+
       return yield* Effect.provide(
         openAgentBrowserTab(context.userId, { agentId, address: input.body.address }),
         seams.agentBrowser,
@@ -89,6 +91,7 @@ export function agentBrowserTabsProcedures(seams: AgentBrowserTabsProcedureSeams
     }),
     open: member.open.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
+
       return yield* Effect.provide(
         openAgentBrowserTab(context.userId, { ...input.body, taskId }),
         seams.agentBrowser,
@@ -96,18 +99,22 @@ export function agentBrowserTabsProcedures(seams: AgentBrowserTabsProcedureSeams
     }),
     agentTakeOver: member.agentTakeOver.effect(function* ({ input, context }) {
       const { place, tabId } = yield* tabPath(input, agentPlace);
+
       return yield* takeOverAgentBrowserTab(context.userId, place, tabId);
     }),
     takeOver: member.takeOver.effect(function* ({ input, context }) {
       const { place, tabId } = yield* tabPath(input, taskPlace);
+
       return yield* takeOverAgentBrowserTab(context.userId, place, tabId);
     }),
     agentHandBack: member.agentHandBack.effect(function* ({ input, context }) {
       const { place, tabId } = yield* tabPath(input, agentPlace);
+
       return yield* handBackAgentBrowserTab(context.userId, place, tabId);
     }),
     handBack: member.handBack.effect(function* ({ input, context }) {
       const { place, tabId } = yield* tabPath(input, taskPlace);
+
       return yield* handBackAgentBrowserTab(context.userId, place, tabId);
     }),
   };

@@ -65,6 +65,7 @@ type RowListProps = {
 /** The one row a SwiftUI `List` selection names, where it names one. */
 function selectedId(selection: readonly (string | number)[]): string | undefined {
   const first = selection[0];
+
   return typeof first === "string" ? first : undefined;
 }
 
@@ -85,11 +86,13 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
+
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
       onSelectionChange={(selection) => {
         const id = selectedId(selection);
+
         if (id !== undefined) onSelect?.(id);
       }}
       modifiers={[
@@ -137,6 +140,7 @@ function GroupHeader({
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
@@ -200,10 +204,12 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+
   const label =
     title === undefined ? undefined : (
       <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
     );
+
   const pressable =
     label === undefined || !foldable ? (
       label
@@ -222,12 +228,14 @@ export function ListSection({
         {label}
       </Button>
     );
+
   const header =
     pressable === undefined || onDropLink === undefined ? (
       pressable
     ) : (
       <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
+
   return (
     <Section
       {...(header === undefined ? {} : { header })}

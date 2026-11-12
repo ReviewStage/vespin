@@ -150,8 +150,10 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
   OnboardingEvents,
   Effect.gen(function* () {
     const sender = yield* readResendSender(WELCOME_MAIL_ENVIRONMENT.FROM);
+
     if (Option.isNone(sender)) {
       yield* Effect.logWarning(EVENTS_UNSET);
+
       return {
         signedUp: () => Effect.void,
         inviteAccepted: () => Effect.void,
@@ -159,8 +161,10 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
         forget: () => Effect.void,
       };
     }
+
     const client = yield* HttpClient.HttpClient;
     const call = resendCall(sender.value.key, REQUEST_TIMEOUT_MS);
+
     // One call, whose refusal is logged by what was asked and its status alone, because the body carries the address.
     const send = (asked: string, method: HttpMethod, path: string, body?: object) =>
       Effect.gen(function* () {
@@ -169,6 +173,7 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
           path,
           body: body === undefined ? undefined : JSON.stringify(body),
         });
+
         if (callAnswered(answer) && answer.response.ok) return;
         yield* Effect.logWarning(
           callAnswered(answer)
@@ -176,8 +181,10 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
             : `Onboarding ${asked} did not reach Resend`,
         );
       }).pipe(Effect.provideService(HttpClient.HttpClient, client));
+
     const sendEvent = (event: string, email: string, payload: Record<string, string>) =>
       send(event, HTTP_METHOD.POST, RESEND_PATH.EVENTS, { event, email, payload });
+
     return {
       signedUp: (email: string, name: string) =>
         Effect.andThen(
@@ -220,6 +227,7 @@ function reportOf(
           label,
           Effect.gen(function* () {
             const person = yield* readAccountPerson(userId);
+
             if (person === undefined) return;
             yield* report(events.value, person);
           }),
@@ -246,6 +254,7 @@ export function taskActivityReported(userId: string): Effect.Effect<void, never,
   return reportOf("Onboarding task activity", userId, (events, person) =>
     Effect.gen(function* () {
       const activity = Option.getOrUndefined(yield* findActivity(userId));
+
       if (activity === undefined || activity.lastDay === null) return;
       yield* events.taskActivity(person.email, { days: activity.days, lastDay: activity.lastDay });
     }),

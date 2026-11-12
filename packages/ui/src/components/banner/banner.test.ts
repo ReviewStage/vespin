@@ -30,6 +30,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -41,6 +42,7 @@ test("a banner is named by its words, and its glyph is not read", () => {
       children: "This task is archived",
     }),
   );
+
   const region = view.querySelector("section") ?? assert.fail("a banner");
   const named = document.getElementById(region.getAttribute("aria-labelledby") ?? "");
   assert.equal(named?.textContent, "This task is archived");
@@ -50,6 +52,7 @@ test("a banner is named by its words, and its glyph is not read", () => {
 
 test("a banner's presses answer it, in reading order after its words", () => {
   const pressed: string[] = [];
+
   const view = render(
     createElement(Banner, {
       look: BANNER_LOOK.STRIP,
@@ -70,7 +73,9 @@ test("a banner's presses answer it, in reading order after its words", () => {
       children: "This repository belongs to Acme",
     }),
   );
+
   assert.equal(view.textContent, "This repository belongs to AcmeStopMove");
+
   for (const button of view.querySelectorAll("button")) act(() => button.click());
   assert.deepEqual(pressed, ["stop", "move"]);
 });

@@ -25,6 +25,7 @@ export function linkAddressOf(element: Element): string | undefined {
 export function useLinkAddress(href: string | undefined): (element: Element | null) => void {
   const latest = useRef(href);
   latest.current = href;
+
   return useCallback((element: Element | null) => {
     if (element !== null) LINK_ADDRESSES.set(element, latest);
   }, []);

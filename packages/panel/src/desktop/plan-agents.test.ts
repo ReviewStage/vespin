@@ -54,11 +54,13 @@ const OLDEST = {
   ...agent("1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d21", "Research providers", 1, AGENT_STATUS.COMPLETED),
   machine: AGENT_MACHINE.DEVICE,
 } satisfies AgentSummary;
+
 const WORKING = {
   ...agent("1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d22", "Expired invite page", 2, AGENT_STATUS.RUNNING),
   machine: AGENT_MACHINE.DEVICE,
   mac: { name: "Studio", deviceId: "6f0c1d0e-6b1a-4d43-9a49-2b7b6f1f0a11" },
 } satisfies AgentSummary;
+
 const NEWEST = agent(
   "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d23",
   "Invite email",
@@ -80,6 +82,7 @@ function waitingOn(agentId: string, count: number): ReadonlyMap<string, readonly
     ...item(`a1b2c3d4-0000-4000-8000-00000000000${at}`, `Which retry budget, ${at}?`, at),
     agentId,
   }));
+
   return new Map([[agentId, items]]);
 }
 
@@ -106,6 +109,7 @@ function mount(
     pullRequests: [],
     phone: [],
   };
+
   const controlOf = (listed: readonly AgentSummary[]) =>
     agentsControl({
       agents: listed,
@@ -128,9 +132,11 @@ function mount(
       ]),
       ...acts,
     });
+
   const host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+
   // Note that a redraw renders the same group over another list, as the task's agents move under it.
   const redraw = (listed: readonly AgentSummary[]) =>
     act(() =>
@@ -158,13 +164,16 @@ function mount(
         ),
       ),
     );
+
   redraw(agents);
+
   return { host, opened, redraw };
 }
 
 /** What a row says but when it last moved, which the fixture's clock leaves at no time worth reading. */
 function rowWords(row: Element): string {
   const time = row.querySelector('[data-cell="updated"]')?.textContent ?? "";
+
   return (row.textContent ?? "").replace(time, "");
 }
 
@@ -177,15 +186,19 @@ test("the agents at work come first, then the newest, each saying where it runs,
     rows.map((row) => row.replace("#42", "")),
     ["Expired invite pageStudio", "Invite emailCloud", "Research providersRemoved device"],
   );
+
   const chip = host.querySelector<HTMLAnchorElement>(
     'a[href="https://github.com/acme/relay/pull/42"]',
   );
+
   assert.ok(chip !== null);
   act(() => chip.click());
   assert.deepEqual(opened, { agents: [], pullRequests: [NEWEST.id], phone: [] });
+
   const press = [...list.querySelectorAll("button")].find((button) =>
     button.textContent?.includes(OLDEST.title),
   );
+
   assert.ok(press !== undefined);
   act(() => press.click());
   assert.deepEqual(opened.agents, [OLDEST.id]);
@@ -196,9 +209,11 @@ test("an agent's row offers the agent's menu from its ⋯, as its row on a perso
   const more = host.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
   assert.ok(more !== null, "the row draws a ⋯");
   act(() => more.click());
+
   const labels = [...document.querySelectorAll('[role="menuitem"]')].map(
     (each) => each.textContent,
   );
+
   assert.ok(labels.includes("Rename"));
   assert.ok(labels.includes("Archive"));
   assert.ok(labels.includes("Permanently delete"));
@@ -209,6 +224,7 @@ test("an agent waiting on the developer comes first, counting what needs them bu
     phone: true,
     waiting: waitingOn(OLDEST.id, 1),
   });
+
   const rows = [...(host.querySelector('[aria-label="Agents"]')?.querySelectorAll("li") ?? [])];
   assert.deepEqual(
     rows.map((row) => rowWords(row).replace("#42", "")),
@@ -234,9 +250,11 @@ test("New agent stands on the group's head, a task with no agent draws the group
     const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
       button.textContent?.includes(words),
     );
+
     assert.ok(found !== undefined, `the group offers ${words}`);
     act(() => found.click());
   };
+
   const none = mount([], { newAgent: true, phone: true });
   assert.ok(!none.host.textContent?.includes("need"), "no Inbox row while nothing waits");
   act(() => none.host.querySelector<HTMLButtonElement>("button[aria-label='New agent']")?.click());
@@ -257,6 +275,7 @@ test("New agent stands on the group's head, a task with no agent draws the group
     phone: true,
     waiting: waitingOn(NEWEST.id, 2),
   });
+
   press(waiting.host, "2 threads need you");
   assert.deepEqual(waiting.opened.phone, ["inbox"]);
   act(() => root?.unmount());
@@ -283,26 +302,33 @@ test("a group folded before its last agent left stands open again for the next o
 
 test("the agents are chosen together by their boxes, and a row chosen among several archives every one chosen at once", async () => {
   const archived: (readonly string[])[] = [];
+
   const { host, opened } = mount([OLDEST, NEWEST], {
     acts: {
       archiveAgents: agentsArchiveMutation(({ agentIds }) => {
         archived.push(agentIds);
+
         return Promise.resolve(agentIds.map(() => ({ status: ACTION_RESULT_STATUS.ACCEPTED })));
       }),
     },
   });
+
   const rows = [...host.querySelectorAll('[aria-label="Agents"] li')];
+
   for (const title of [OLDEST.title, NEWEST.title]) {
     const box = rows
       .find((row) => row.textContent?.includes(title))
       ?.querySelector<HTMLElement>('[role="checkbox"]');
+
     act(() => (box ?? assert.fail(`${title} draws its box`)).click());
   }
+
   assert.deepEqual(opened.agents, [], "choosing opens nothing");
 
   const more = rows
     .find((row) => row.textContent?.includes(OLDEST.title))
     ?.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
+
   act(() => (more ?? assert.fail("the row draws a ⋯")).click());
   const menu = document.querySelector('[role="menu"]:not([data-leaving])');
   assert.match(menu?.textContent ?? "", /2 agents/u);

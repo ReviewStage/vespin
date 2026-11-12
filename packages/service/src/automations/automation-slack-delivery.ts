@@ -31,11 +31,15 @@ function outcomeOf(
 ): { readonly plain: string; readonly words?: string } {
   // A run its plan's usage limit stopped is said so, not that it failed.
   if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return { plain: LIMIT_REACHED_WORDS };
+
   if (turn.status === TURN_STATUS.FAILED) {
     return { plain: turn.failure === null ? "Run failed." : `Run failed: ${turn.failure}.` };
   }
+
   if (turn.status === TURN_STATUS.CANCELED) return { plain: "Run stopped." };
+
   if (words === undefined) return { plain: "Run finished." };
+
   return { plain: slackClipped(words, NOTIFICATION_CHARS), words };
 }
 
@@ -52,6 +56,7 @@ export function runResultContent(
 ): SlackMessageContent {
   const outcome = outcomeOf(turn, words);
   const heading = `*${slackEscaped(automationName)}*`;
+
   const said: SlackBlock[] =
     outcome.words === undefined
       ? [
@@ -64,6 +69,7 @@ export function runResultContent(
           { type: "section", text: { type: "mrkdwn", text: heading } },
           slackMarkdownBlock(outcome.words),
         ];
+
   return {
     text: `${automationName}: ${outcome.plain}`,
     blocks: [

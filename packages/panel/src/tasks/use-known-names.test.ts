@@ -73,15 +73,19 @@ async function twoReaders(first: AppStateSnapshot): Promise<{
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
     requestAppState: () => Promise.resolve(first),
   });
   const seen = new Map<string, KnownNames>();
+
   function Reader({ name }: { name: string }): null {
     seen.set(name, useKnownNames());
+
     return null;
   }
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() =>
     root?.render(
@@ -96,12 +100,14 @@ async function twoReaders(first: AppStateSnapshot): Promise<{
     ),
   );
   await settle();
+
   const deliver = async (next: AppStateSnapshot) => {
     act(() => {
       for (const listener of listeners) listener(next);
     });
     await settle();
   };
+
   return { seen, deliver };
 }
 
@@ -132,34 +138,43 @@ test("the tasks' keys are handed again for a delivery that moves no key, and ane
     role: "owner",
     github: null,
   } as const;
+
   const numbered = (task: TaskSummary, number: number): TaskSummary => ({ ...task, number });
+
   const listing = (tasks: readonly TaskSummary[], version: number): AppStateSnapshot => ({
     ...stateWith({}, { tasks: { ...IDLE_TASKS_VIEW, workspaces: [acme], tasks: [...tasks] } }),
     version,
   });
+
   const listeners = new Set<(snapshot: AppStateSnapshot) => void>();
   fakeAppBridge({
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
     requestAppState: () => Promise.resolve(listing([numbered(INVITES, 41)], 1)),
   });
   const seen: ReadonlyMap<string, string>[] = [];
+
   function Reader(): null {
     seen.push(useWordTargets());
+
     return null;
   }
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(withQueryClient(createElement(Reader))));
   await settle();
+
   const deliver = async (next: AppStateSnapshot) => {
     act(() => {
       for (const listener of listeners) listener(next);
     });
     await settle();
   };
+
   await vi.waitFor(() => expect([...(seen.at(-1)?.keys() ?? [])]).toEqual(["ACME-41"]));
 
   await deliver(listing([{ ...numbered(INVITES, 41), name: "Invites", updatedAt: AT + 1 }], 2));
@@ -171,11 +186,14 @@ test("the tasks' keys are handed again for a delivery that moves no key, and ane
 test("an untitled agent is named by the catalog around the reader, as its tab and its row in the @ list name it", async () => {
   const agentId = "5b2e7c1d-3a4f-4e6b-8c9d-0a1b2c3d4e5f";
   const model = "openai/gpt-6.1-sol";
+
   const task: TaskSummary = {
     ...INVITES,
     agents: { total: 1, working: 1, pullRequestTotal: 0 },
   };
+
   const held = holding([task], 1);
+
   // The task's agent, as the list followed live holds it.
   const followed = {
     id: agentId,
@@ -189,19 +207,24 @@ test("an untitled agent is named by the catalog around the reader, as its tab an
     workspaceId: task.workspaceId,
     repository: task.repository,
   };
+
   fakeAppBridge({
     onAppState: () => () => undefined,
     requestAppState: () =>
       Promise.resolve({ ...held, tasks: { ...held.tasks, taskAgents: [followed] } }),
   });
   let seen: KnownNames | undefined;
+
   function Reader(): null {
     seen = useKnownNames();
+
     return null;
   }
+
   const models = [
     { id: model, name: "GPT-6.1 Sol", provider: MODEL_PROVIDER.OPENAI, efforts: ["high"] },
   ];
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() =>
     root?.render(

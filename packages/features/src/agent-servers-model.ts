@@ -111,9 +111,11 @@ function kindOf(
   readFailed: boolean,
 ): ServerRowKind {
   if (status === undefined) return readFailed ? SERVER_ROW.RETRY : SERVER_ROW.QUIET;
+
   if (status !== INTEGRATION_STATUS.CONNECTED && signIn !== undefined) {
     return signIn.kind === SIGN_IN.WAITING ? SERVER_ROW.SIGNING_IN : SERVER_ROW.TRY_AGAIN;
   }
+
   switch (status) {
     case INTEGRATION_STATUS.CONNECTED:
       return health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect
@@ -146,13 +148,16 @@ function wordsOf(
     if (health.kind === CONNECTION_HEALTH.BROKEN) {
       return { problem: health.problem, ...saidOf(health.said) };
     }
+
     // Note that a read our own service could not answer is said, never drawn as a server that works.
     return health.kind === CONNECTION_HEALTH.FAILED
       ? { problem: readFailedWords("the tools") }
       : undefined;
   }
+
   if (signIn === undefined) return undefined;
   const { text, problem, said } = signInLine(provider, signIn);
+
   return problem ? { problem: text, ...saidOf(said) } : { note: text };
 }
 
@@ -167,9 +172,11 @@ function serverAccountName(
   accounts: readonly IntegrationAccount[],
 ): string | undefined {
   const named = integrationAccountNames(accounts).get(connection);
+
   const labeled = accounts.some(
     (account) => account.connection === connection && (account.label ?? "").trim() !== "",
   );
+
   return named !== undefined && (accounts.length > 1 || labeled) ? named : undefined;
 }
 
@@ -180,6 +187,7 @@ export function serverName(
   accounts: readonly IntegrationAccount[],
 ): string {
   const accountName = serverAccountName(connection, accounts);
+
   return accountName === undefined
     ? INTEGRATION_NAME[provider]
     : `${INTEGRATION_NAME[provider]} · ${accountName}`;
@@ -205,15 +213,18 @@ export function serverRows(input: {
   const offered = INTEGRATION_PROVIDER_LIST.filter(
     (provider) => input.statusOf(provider) !== INTEGRATION_STATUS.UNAVAILABLE,
   );
+
   return offered.flatMap((provider) => {
     const accounts = input.accountsOf?.(provider) ?? [];
     const servers = accounts.length > 0 ? accounts : [undefined];
+
     return servers.map((account): ServerRow => {
       const connection = account?.connection ?? provider;
       const status = input.statusOf(connection);
       const health = input.healthOf(connection);
       const signIn = input.signInOf(connection);
       const accountName = serverAccountName(connection, accounts);
+
       return {
         provider,
         connection,
@@ -266,6 +277,7 @@ function sectionOf(row: ServerRow): ServerSection | undefined {
  */
 export function serverGroups(rows: readonly ServerRow[]): readonly ServerGroup[] {
   const order = [undefined, SERVER_SECTION.CONNECTED, SERVER_SECTION.NOT_CONNECTED] as const;
+
   return order
     .map((heading) => ({ heading, rows: rows.filter((row) => sectionOf(row) === heading) }))
     .filter((group) => group.rows.length > 0);
@@ -283,6 +295,7 @@ export function serversOnWords(rows: readonly ServerRow[]): string {
  */
 export function searchServers(rows: readonly ServerRow[], query: string): readonly ServerRow[] {
   const tokens = searchTokens(query);
+
   return rows.filter(
     (row) =>
       integrationFound(row.provider, tokens) ||
@@ -310,6 +323,7 @@ export function namedServers(input: {
 }): readonly NamedServer[] {
   return INTEGRATION_PROVIDER_LIST.flatMap((provider) => {
     const accounts = input.accountsOf(provider);
+
     const servers: readonly NamedServer[] =
       accounts.length === 0
         ? [{ provider, connection: provider, name: INTEGRATION_NAME[provider] }]
@@ -318,6 +332,7 @@ export function namedServers(input: {
             connection: account.connection,
             name: serverName(provider, account.connection, accounts),
           }));
+
     return servers.filter((server) => input.standing(input.statusOf(server.connection)));
   });
 }
@@ -352,6 +367,7 @@ export function handedServers(
 ): readonly HandedServer[] {
   const standing = serverStandings(answer);
   const accounts = answer.accounts ?? [];
+
   return namedServers({
     statusOf: (server) => standing.get(server),
     accountsOf: (provider) =>
@@ -377,6 +393,7 @@ export function switchedServers(
   on: boolean,
 ): readonly string[] {
   const others = disabled.filter((each) => each !== connection);
+
   return on ? others : [...others, connection];
 }
 
@@ -425,6 +442,7 @@ export function serverMentionNote(
       return undefined;
     case SERVER_ROW.SWITCH:
       if (agent?.handed === undefined || row.on) return undefined;
+
       return agent.handed === SERVER_HANDED.STEERS
         ? SERVER_MENTION_NOTE.OFF_STEERS
         : SERVER_MENTION_NOTE.OFF_OPENS;

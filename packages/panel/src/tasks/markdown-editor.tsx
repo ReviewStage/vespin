@@ -165,6 +165,7 @@ function MountedEditor({
   useLayoutEffect(() => {
     if (host.current === null) return;
     const { mentions } = latest.current;
+
     const mounted = module.mount(host.current, {
       ...latest.current,
       onDraft: (markdown, anchors) => latest.current.onDraft(markdown, anchors),
@@ -208,12 +209,15 @@ function MountedEditor({
               onKey: (event) => latest.current.blocks?.onKey(event) ?? false,
             },
     });
+
     handle.current = mounted;
+
     return () => {
       handle.current = undefined;
       mounted.destroy();
     };
   }, [module, handle]);
+
   return <div ref={host} />;
 }
 
@@ -256,12 +260,15 @@ export function MarkdownEditor({
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
+
   const once = (close: () => void) => {
     if (sending) held.current = close;
     else close();
   };
+
   useEffect(() => {
     const close = held.current;
+
     if (sending || close === undefined) return;
     held.current = undefined;
     close();
@@ -271,13 +278,16 @@ export function MarkdownEditor({
   // An app address pasted whole is called by the name the window holds for what it names.
   const known = useKnownNames();
   const taskIdOf = useNumberedTaskIdOf();
+
   const picker = useMentionPicker({
     source: mentions === undefined ? undefined : { ...mentions.source, text },
     room,
     side: MENTION_MENU_SIDE.BELOW,
     onChoose: (mention) => handle.current?.chooseMention(mention),
   });
+
   const mentioning = picker.aria["aria-expanded"] === "true";
+
   // A `/` opens the block menu under it, which stands aside while the `@` list stands; its Picture opens the chooser Insert image opens.
   const blocks = useBlockPicker({
     room,
@@ -286,11 +296,14 @@ export function MarkdownEditor({
     held: mentioning,
     onChoose: (block) => {
       handle.current?.insertBlock(block);
+
       if (block === SLASH_INSERT.PICTURE) pictures?.choose?.();
     },
   });
+
   // The text names itself a combobox for whichever list stands over it, the `@` list or the block menu, and a textbox while neither does.
   useLayoutEffect(() => handle.current?.setAria(mentioning ? picker.aria : blocks.aria));
+
   // The words selected raise the format toolbar over them, which stands aside while the `@` list or the block menu stands.
   const toolbar = useSelectionToolbar({
     editor: handle,
@@ -299,10 +312,12 @@ export function MarkdownEditor({
     onComment,
     held: mentioning || blocks.open,
   });
+
   // While the toolbar stands, its Comment's command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, toolbar.standing ? onComment : undefined);
   const roomClass = roomClassName === undefined ? ROOM_CLASS : `${ROOM_CLASS} ${roomClassName}`;
   useAnnounceShown(ANNOUNCE.ALERT, module.isError ? EDITOR_LOAD_FAILED : "");
+
   if (!module.isSuccess) {
     return (
       <section ref={room} className={roomClass} aria-busy="true">
@@ -311,6 +326,7 @@ export function MarkdownEditor({
       </section>
     );
   }
+
   const props: DescriptionEditorProps = {
     markdown,
     anchors,
@@ -348,6 +364,7 @@ export function MarkdownEditor({
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },
   };
+
   return (
     <section
       ref={room}
@@ -355,9 +372,11 @@ export function MarkdownEditor({
       aria-label={roomLabel}
       onBlur={(event) => {
         const into = event.relatedTarget;
+
         if (onLeave === undefined || event.currentTarget.contains(into) || toolbar.holds(into)) {
           return;
         }
+
         once(onLeave);
       }}
     >
@@ -434,22 +453,28 @@ interface EditorDrawings<A> {
 function useEditorDrawings<A>(): EditorDrawings<A> {
   const [drawn, setDrawn] = useState<readonly DrawnInEditor<A>[]>([]);
   const counted = useRef(0);
+
   const draw = (element: HTMLElement, what: A): number => {
     counted.current += 1;
     const key = counted.current;
     setDrawn((was) => [...was, { element, what, key }]);
+
     return key;
   };
+
   const undraw = (key: number) => setDrawn((was) => was.filter((each) => each.key !== key));
+
   return {
     drawn,
     draw: (element, what) => {
       const key = draw(element, what);
+
       return () => undraw(key);
     },
     // Note that a drawing kept is drawn again under its own key, so what it holds open, a menu, stays open.
     keep: (element, what) => {
       const key = draw(element, what);
+
       return {
         redraw: (next) =>
           setDrawn((was) => was.map((each) => (each.key === key ? { ...each, what: next } : each))),

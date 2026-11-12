@@ -146,6 +146,7 @@ function refusedRow(
 ): Effect.Effect<RefusedPage> {
   const [index, ...path] = read.path;
   const named = rows.find((_, position) => position === index);
+
   if (named !== undefined) {
     return Effect.succeed({
       ok: false,
@@ -155,6 +156,7 @@ function refusedRow(
       path,
     });
   }
+
   // The reader named no row, so each is read alone until the unreadable one names itself.
   return Effect.gen(function* () {
     for (const row of rows) {
@@ -163,8 +165,10 @@ function refusedRow(
         tools,
         UNREGISTERED_TOOL_PART.DROP,
       );
+
       if (!single.ok) {
         const [, ...inner] = single.path;
+
         return {
           ok: false,
           refusal: single.refusal,
@@ -174,6 +178,7 @@ function refusedRow(
         };
       }
     }
+
     return yield* Effect.die(new Error("a page was refused whole and every row of it read alone"));
   });
 }
@@ -242,18 +247,23 @@ function readSelected(
     ...row,
     stored: { id: row.id, role, parts, ...optionalField("metadata", metadata) },
   }));
+
   const read = readStoredUIMessages(
     unparsedWire(rows.map((row) => row.stored)),
     tools,
     UNREGISTERED_TOOL_PART.DROP,
   );
+
   return Effect.flatMap(read, (read): Effect.Effect<MessageListRead> => {
     if (!read.ok) return refusedRow(rows, read, tools);
+
     return Effect.succeed({
       ok: true,
       value: read.value.map((message, index) => {
         const row = rows[index];
+
         if (row === undefined) throw new Error("a read answered more messages than rows");
+
         return {
           id: row.id,
           conversationId: row.conversationId,
@@ -354,6 +364,7 @@ export function listTurnOpeners(
   turnIds: readonly string[],
 ): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
   if (turnIds.length === 0) return Effect.succeed({ ok: true, value: [] });
+
   return Effect.flatMap(findTurnOpeners({ conversationId, userId, turnIds }), (selected) =>
     readSelected(
       selected.toSorted((first, second) => first.seq - second.seq),
@@ -583,7 +594,9 @@ export function listMessagesPast(
 ): Effect.Effect<MessagePagePast, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const standing = yield* findJournalRevision({ conversationId, userId });
+
     if (Option.isNone(standing)) return { read: { ok: true, value: [] }, cursor };
+
     const selected = yield* findMessagesPast({
       conversationId,
       userId,
@@ -591,8 +604,10 @@ export function listMessagesPast(
       revision: cursor.revision,
       limit: pageLimit({ ...(limit === undefined ? undefined : { limit }) }),
     });
+
     const read = yield* readSelected(selected, tools);
     const seq = selected.reduce((highest, row) => Math.max(highest, row.seq), cursor.seq);
+
     return { read, cursor: { seq, revision: standing.value.journalRevision } };
   });
 }
@@ -628,8 +643,10 @@ export function messageCursorNow(
 ): Effect.Effect<MessageCursor, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const standing = yield* findJournalRevision({ conversationId, userId });
+
     if (Option.isNone(standing)) return { seq: 0, revision: 0 };
     const [highest] = yield* findHighestSeq({ conversationId, userId });
+
     return { seq: highest?.seq ?? 0, revision: standing.value.journalRevision };
   });
 }
@@ -769,6 +786,7 @@ export function newestJournalsOfReached(
   tailParts?: number,
 ): Effect.Effect<ReadonlyMap<string, StoredMessageRecord>, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.flatMap(
     findNewestJournalOf({ conversationIds, ...optionalField("tailParts", tailParts) }),
     (selected) =>
@@ -1009,6 +1027,7 @@ function latestTurnsRead(
   conversationIds: readonly string[],
 ): Effect.Effect<ReadonlyMap<string, LatestTurn>, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findLatestTurns({ userId, conversationIds }),
     (rows) => new Map(rows.map((row) => [row.conversationId, row])),
@@ -1133,6 +1152,7 @@ export function lastSettledTurnsOfReached(
   conversationIds: readonly string[],
 ): Effect.Effect<ReadonlyMap<string, Date>, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findLastSettledTurns({ conversationIds }),
     (rows) => new Map(rows.map((row) => [row.conversationId, row.settledAt])),
@@ -1300,6 +1320,7 @@ export function turnsNamed(
   turnIds: readonly string[],
 ): Effect.Effect<readonly StoredTurnRecord[], StoreFailure, DatabaseServices> {
   if (turnIds.length === 0) return Effect.succeed([]);
+
   return Effect.flatMap(
     Database.use((db) =>
       db
@@ -1386,12 +1407,16 @@ export function turnsBefore(
 ): Effect.Effect<TurnPage, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     let place: { queuedAt: Date; id: string } | undefined;
+
     if (before !== undefined) {
       const named = yield* findTurnQueuedAt({ userId, conversationId, turnId: before });
+
       if (Option.isNone(named)) return { turns: [], earlier: false };
       place = { queuedAt: named.value.queuedAt, id: before };
     }
+
     const size = pageLimit({ limit });
+
     // One more than the page is asked for, so the read can tell whether older turns stand.
     const newestFirst = yield* findTurnsBefore({
       userId,
@@ -1399,6 +1424,7 @@ export function turnsBefore(
       limit: size + 1,
       ...(place === undefined ? undefined : { before: place }),
     });
+
     return { turns: newestFirst.slice(0, size).reverse(), earlier: newestFirst.length > size };
   });
 }

@@ -131,6 +131,7 @@ export function useHeldTerminalTabs(tabs: readonly TerminalStripTab[] | undefine
   useLayoutEffect(() => {
     for (const tab of tabs ?? []) {
       const shells = held.of(account, TERMINAL_KIND.CLOUD, tab.terminal);
+
       if (shells.some((each) => each.shell === tab.shell)) continue;
       held.set(account, TERMINAL_KIND.CLOUD, tab.terminal, [
         ...shells,
@@ -197,7 +198,9 @@ function refusedState(refused: TerminalRefusal): TerminalState | undefined {
 /** A cloud tab's state for a refusal, closing the tab where the agent is gone. */
 function refusedOrGone(refused: TerminalRefusal, onGone: () => void): TerminalState {
   const next = refusedState(refused);
+
   if (next === undefined) onGone();
+
   return next ?? { kind: TERMINAL_STATE.CONNECTING };
 }
 
@@ -243,12 +246,15 @@ function cloudLink(
       const found = held
         .of(account, TERMINAL_KIND.CLOUD, agentId)
         .find((each) => each.shell === shell);
+
       return found?.action !== undefined;
     },
     open: async () => {
       const made = await askAct(ACT_KIND.TERMINAL_CREATE, { agentId });
+
       if ("failure" in made) return { state: refusedOrGone(made.failure, onGone) };
       holdShellId(held, account, agentId, shell, made.terminal.id);
+
       return { terminalId: made.terminal.id };
     },
     attach: (terminalId, size) =>
@@ -260,6 +266,7 @@ function cloudLink(
     ended: (session) => session.replace(),
     resume: async () => {
       const resumed = await askAct(ACT_KIND.TERMINAL_RESUME, { agentId });
+
       return "failure" in resumed ? refusedOrGone(resumed.failure, onGone) : undefined;
     },
     close: (terminalId) => tellAct(ACT_KIND.TERMINAL_KILL, { agentId, terminalId }),
@@ -275,12 +282,14 @@ function cloudSession(
   onGone: () => void,
 ): TerminalSession {
   const found = held.of(account, TERMINAL_KIND.CLOUD, agentId).find((each) => each.shell === shell);
+
   return new TerminalSession(cloudLink(held, account, agentId, shell, onGone), found?.terminal);
 }
 
 /** How a Local tab reaches its shell on this Mac, its open a span from its ask for the mirror to its shell open. */
 function localLink(agentId: string): ShellLink {
   const close = (terminalId: string) => tellAct(ACT_KIND.MAC_SHELL_CLOSE, { agentId, terminalId });
+
   return {
     agentId,
     open: (size) =>
@@ -288,17 +297,21 @@ function localLink(agentId: string): ShellLink {
         const mirrored = await askAct(ACT_KIND.MAC_SHELL_MIRROR, { agentId }).catch(
           () => undefined,
         );
+
         if (mirrored === undefined) {
           return { state: { kind: TERMINAL_STATE.UNREACHABLE, why: TERMINAL_UNREACHED.MIRROR } };
         }
+
         const made = await askAct(ACT_KIND.MAC_SHELL_OPEN, {
           agentId,
           folder: mirrored.folder,
           ...size,
         }).catch(() => undefined);
+
         if (made === undefined) {
           return { state: { kind: TERMINAL_STATE.UNREACHABLE, why: TERMINAL_UNREACHED.SHELL } };
         }
+
         return { terminalId: made.terminalId };
       }),
     attach: (terminalId, size) =>
@@ -355,6 +368,7 @@ function mintedTab(
   const shells = held.of(account, kind, agentId);
   const made: HeldShell = { shell: crypto.randomUUID(), title: nextShellTitle(kind, shells) };
   held.set(account, kind, agentId, [...shells, made]);
+
   return tabOf(kind, agentId, made);
 }
 
@@ -366,9 +380,11 @@ function mintedTab(
 export function useCloudTerminalTab(): (agentId: string) => ShellTab {
   const { held } = useContext(TerminalsContext);
   const account = useWindowAccount();
+
   return useCallback(
     (agentId) => {
       const newest = held.of(account, TERMINAL_KIND.CLOUD, agentId).at(-1);
+
       return newest === undefined
         ? mintedTab(held, account, TERMINAL_KIND.CLOUD, agentId)
         : tabOf(TERMINAL_KIND.CLOUD, agentId, newest);
@@ -391,6 +407,7 @@ export function useTerminalTabSession(
   useLayoutEffect(() => {
     gone.current = onGone;
   });
+
   const session = useMemo(
     () =>
       sessions.session(account, kind, agentId, shell, () =>
@@ -400,6 +417,7 @@ export function useTerminalTabSession(
       ),
     [held, sessions, account, kind, agentId, shell],
   );
+
   const view = useTerminalView(session, shown);
   const sandboxOpen = useSandboxOpen(kind === TERMINAL_KIND.CLOUD ? agentId : null);
   // Note that a later ask stands in for one still waiting, and the tab let go calls it off.
@@ -411,6 +429,7 @@ export function useTerminalTabSession(
     if (!shown || sandboxOpen !== true || view.state.kind !== TERMINAL_STATE.STARTING) return;
     const asked = askedOpen.current?.session === session ? askedOpen.current.asked : 0;
     askedOpen.current = { session, asked: asked + 1 };
+
     if (asked === 0) return session.connect();
     retry.start(
       Effect.andThen(
@@ -420,9 +439,11 @@ export function useTerminalTabSession(
         }),
       ),
     );
+
     // Note that a tab hidden calls the ask off, so only a tab on screen asks again.
     return retry.stop;
   }, [shown, sandboxOpen, view.state, session, retry]);
+
   return view;
 }
 
@@ -443,21 +464,26 @@ export function useOpenTerminalTab(
   const { held: kept } = useContext(TerminalsContext);
   const account = useWindowAccount();
   const { onChoose, terminals, locals, viewedAt } = sidePanel;
+
   return useCallback(
     (agentId, fresh) => {
       const held = kept.of(account, kind, agentId);
+
       const open = (kind === TERMINAL_KIND.CLOUD ? terminals : locals).filter(
         (tab) => shellOf(tab).agentId === agentId,
       );
+
       if (fresh || held.length === 0) {
         onChoose(mintedTab(kept, account, kind, agentId));
       } else if (open.length > 0) {
         const at = (tab: ShellTab) =>
           viewedAt.find((each) => sameTab(each.tab, tab))?.at ?? Number.NEGATIVE_INFINITY;
+
         onChoose(open.reduce((latest, tab) => (at(tab) > at(latest) ? tab : latest)));
       } else {
         for (const each of held) onChoose(tabOf(kind, agentId, each));
       }
+
       onShown();
     },
     [kind, kept, account, onChoose, terminals, locals, viewedAt, onShown],
@@ -486,10 +512,12 @@ export function useShowShellTab(
   const { held: kept } = useContext(TerminalsContext);
   const account = useWindowAccount();
   const { onChoose } = sidePanel;
+
   return useCallback(
     (agentId, terminal) => {
       const shells = kept.of(account, TERMINAL_KIND.CLOUD, agentId);
       const found = shells.find((each) => each.terminal === terminal.id);
+
       const entry: HeldShell = {
         shell: found?.shell ?? crypto.randomUUID(),
         // Note that a tab already open keeps its name, since its tab is found by it.
@@ -497,6 +525,7 @@ export function useShowShellTab(
         terminal: terminal.id,
         ...(terminal.action === undefined ? {} : { action: terminal.action }),
       };
+
       kept.set(
         account,
         TERMINAL_KIND.CLOUD,
@@ -519,6 +548,7 @@ export function useShowShellTab(
 export function useEndTerminalTab(): (tab: ShellTab) => void {
   const { held, sessions } = useContext(TerminalsContext);
   const account = useWindowAccount();
+
   return useCallback(
     (tab) => {
       const { kind, agentId, shell } = shellOf(tab);

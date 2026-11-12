@@ -32,7 +32,9 @@ export function playMotions() {
         onfinish: null,
         cancel: () => undefined,
       };
+
       played.push({ element: this, keyframes, finish: () => animation.onfinish?.() });
+
       return animation;
     },
   });
@@ -41,6 +43,7 @@ export function playMotions() {
     configurable: true,
     value: () => [],
   });
+
   return {
     played,
     remove: () => {
@@ -68,11 +71,14 @@ const LIST_MOTION_TOKENS = {
 export function playListMotions() {
   const motions = playMotions();
   const root = document.documentElement.style;
+
   for (const [name, value] of Object.entries(LIST_MOTION_TOKENS)) root.setProperty(name, value);
+
   return {
     played: motions.played,
     remove: () => {
       motions.remove();
+
       for (const name of Object.keys(LIST_MOTION_TOKENS)) root.removeProperty(name);
     },
   };

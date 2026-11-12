@@ -20,6 +20,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -34,6 +35,7 @@ const openConversation = (userId: string, parentConversationId?: string) =>
       runtimeSessionId: `session-${id}`,
       ...(parentConversationId === undefined ? undefined : { parentConversationId }),
     });
+
     return id;
   });
 
@@ -55,6 +57,7 @@ it.layer(getTestDB())("the delete", (it) => {
           .select({ id: conversations.id })
           .from(conversations)
           .where(inArray(conversations.id, [agent, worker, nested, sibling]));
+
         assert.deepEqual(left, [{ id: sibling }]);
       }),
   );

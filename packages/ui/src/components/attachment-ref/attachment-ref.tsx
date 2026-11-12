@@ -55,6 +55,7 @@ export function AttachmentRef({
         <img className={PREVIEW} src={image} alt={name} />
       </HoverCard>
     );
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}

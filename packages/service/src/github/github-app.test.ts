@@ -80,12 +80,14 @@ function installationJson(id: number): Response {
 function readJwt(jwt: string) {
   const [header, payload, signature] = jwt.split(".");
   assert.ok(header && payload && signature);
+
   const signed = verify(
     "RSA-SHA256",
     Buffer.from(`${header}.${payload}`),
     GITHUB_APP_PUBLIC_KEY,
     Buffer.from(signature, "base64url"),
   );
+
   return {
     signed,
     header: JSON.parse(Buffer.from(header, "base64url").toString()),
@@ -98,11 +100,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(NOW);
+
       const fake = fakeGitHub((sent) =>
         sent.url.endsWith(`/app/installations/${INSTALLATION_ID}`)
           ? installationJson(INSTALLATION_ID)
           : Response.json({ message: "Not Found" }, { status: 404 }),
       );
+
       const app = yield* GitHubApp;
 
       const found = yield* app.installation(INSTALLATION_ID).pipe(Effect.provide(fake.layer));
@@ -209,9 +213,11 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const minted = yield* app
           .repositoryReadToken(workspace, "Octo-Org/Relay", undefined)
           .pipe(Effect.provide(fake.layer));
+
         const missing = yield* app
           .repositoryReadToken(workspace, "octo-org/absent", undefined)
           .pipe(Effect.provide(fake.layer));
+
         const elsewhere = yield* app
           .repositoryReadToken(workspace, "octocat/dotfiles", undefined)
           .pipe(Effect.provide(fake.layer));
@@ -223,10 +229,12 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.equal(String(minted.value.token).includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
         assert.ok(Option.isNone(missing));
         assert.ok(Option.isNone(elsewhere));
+
         // The repository's mint is the App's own request, under its JWT, naming the one repository and contents read.
         const mints = fake.sent.filter(
           (sent) => sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body),
         );
+
         assert.equal(mints.length, 1);
         const [mint] = mints;
         assert.ok(mint);
@@ -246,11 +254,13 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
   it.effect("a mint GitHub refuses is unavailable by status, never a token", () =>
     Effect.gen(function* () {
       const relay = relayInstallation(6);
+
       const refusing = githubReaching([relay], undefined, {}, (sent) =>
         sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body)
           ? Response.json({ message: "Resource not accessible by integration" }, { status: 403 })
           : undefined,
       );
+
       const owner = yield* openGithubUser();
       const workspace = yield* openWorkspace(owner);
       yield* connectWorkspaceGitHub(workspace, relay);
@@ -346,6 +356,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const workspace = yield* openWorkspace(owner);
         yield* connectWorkspaceGitHub(workspace, running);
         const app = yield* GitHubApp;
+
         const active = () =>
           Effect.map(listWorkspaces(owner), (workspaces) =>
             workspaces.filter((each) => each.id === workspace).map((each) => each.github?.active),
@@ -424,11 +435,13 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
           ...relayInstallation(30),
           accountType: GITHUB_ACCOUNT_TYPE.ORGANIZATION,
         };
+
         const personal = {
           id: 32,
           login: "octocat",
           repositories: [{ owner: "octocat", name: "dotfiles" }],
         };
+
         const fake = githubReaching([organization, personal]);
         const owner = yield* openGithubUser();
         const ofOrganization = yield* openWorkspace(owner);
@@ -440,6 +453,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const fromOrganization = yield* app
           .repositoryReach(ofOrganization, "octo-org/absent", undefined)
           .pipe(Effect.provide(fake.layer));
+
         const fromUser = yield* app
           .repositoryReach(ofUser, "octocat/absent", undefined)
           .pipe(Effect.provide(fake.layer));
@@ -469,6 +483,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
       Effect.gen(function* () {
         const relay = relayInstallation(36);
         const formerly = `octo-org/relay-before-${randomUUID().slice(0, 8)}`;
+
         const fake = githubReaching([relay], undefined, undefined, (sent) =>
           new URL(sent.url).pathname === `/repos/${formerly}`
             ? Response.json(
@@ -479,6 +494,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
               )
             : undefined,
         );
+
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         yield* connectWorkspaceGitHub(workspace, relay);
@@ -506,12 +522,15 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
       Effect.gen(function* () {
         const relay = relayInstallation(38);
         const name = `relay-${randomUUID().slice(0, 8)}`;
+
         const team: InstallationFixture = {
           id: 39,
           login: "team",
           repositories: [{ owner: "team", name }],
         };
+
         const formerly = `octo-org/${name}`;
+
         // Note that only the new owner's installation reads the repository GitHub redirects the old name to.
         const fake = githubReaching([relay, team], undefined, undefined, (sent) =>
           new URL(sent.url).pathname === `/repos/${formerly}`
@@ -520,6 +539,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
               : Response.json({ message: "Not Found" }, { status: 404 })
             : undefined,
         );
+
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         yield* connectWorkspaceGitHub(workspace, relay);
@@ -575,6 +595,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
           name: `service-${String(index).padStart(3, "0")}`,
           updatedAt: "2026-09-01T00:00:00Z",
         }));
+
         const organization: InstallationFixture = {
           id: 140,
           login: "octo-org",
@@ -583,6 +604,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
             { owner: "octo-org", name: "relay", updatedAt: "2026-10-05T00:00:00Z" },
           ],
         };
+
         const personal: InstallationFixture = {
           id: 142,
           login: "octocat",
@@ -592,6 +614,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
             { owner: "Octo-Org", name: "Relay", updatedAt: "2026-10-04T00:00:00Z" },
           ],
         };
+
         const fake = githubReaching([organization, personal]);
         const workspace = yield* openWorkspace(yield* openGithubUser());
         yield* connectWorkspaceGitHub(workspace, organization);
@@ -604,6 +627,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
           Option.map(listed, (repositories) => repositories.map((one) => one.fullName)),
           () => [],
         );
+
         assert.equal(names.length, 152);
         assert.deepEqual(names.slice(0, 3), [
           "octocat/dotfiles",
@@ -630,16 +654,19 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
     () =>
       Effect.gen(function* () {
         const organization = relayInstallation(144);
+
         const personal: InstallationFixture = {
           id: 146,
           login: "octocat",
           repositories: [{ owner: "octocat", name: "dotfiles" }],
         };
+
         const refusing = githubReaching([organization, personal], undefined, {}, (sent) =>
           sent.url.endsWith("/app/installations/146/access_tokens")
             ? Response.json({ message: "Server Error" }, { status: 502 })
             : undefined,
         );
+
         const suspended = { ...relayInstallation(148), suspendedAt: "2026-10-10T00:00:00Z" };
         const lapsing = githubReaching([suspended]);
         const owner = yield* openGithubUser();
@@ -654,6 +681,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const failure = yield* app
           .workspaceRepositories(workspace)
           .pipe(Effect.provide(refusing.layer), Effect.flip);
+
         const none = yield* app.workspaceRepositories(lapsed).pipe(Effect.provide(lapsing.layer));
 
         assert.ok(failure._tag === "GitHubUnavailable");
@@ -667,16 +695,19 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
     () =>
       Effect.gen(function* () {
         const organization = relayInstallation(152);
+
         const personal: InstallationFixture = {
           id: 154,
           login: "octocat",
           repositories: [{ owner: "octocat", name: "dotfiles" }],
         };
+
         const elsewhere: InstallationFixture = {
           id: 156,
           login: "third-org",
           repositories: [{ owner: "third-org", name: "secret" }],
         };
+
         const fake = githubReaching([organization, personal, elsewhere]);
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
@@ -689,9 +720,11 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const dotfiles = yield* app
           .repositoryReadToken(workspace, "OctoCat/Dotfiles", undefined)
           .pipe(Effect.provide(fake.layer));
+
         const relay = yield* app
           .repositoryReadToken(workspace, "OCTO-ORG/relay", undefined)
           .pipe(Effect.provide(fake.layer));
+
         const secret = yield* app
           .repositoryReach(workspace, "third-org/secret", undefined)
           .pipe(Effect.provide(fake.layer));
@@ -732,18 +765,22 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const bare = yield* openWorkspace(owner);
         yield* connectWorkspaceGitHub(workspace, relay);
         const app = yield* GitHubApp;
+
         const ask = <A, E, R>(read: Effect.Effect<A, E, R>) =>
           read.pipe(Effect.provide(fake.layer));
 
         const first = yield* ask(
           app.repositoryPullRequestToken(workspace, "octo-org/relay", undefined),
         );
+
         const again = yield* ask(
           app.repositoryPullRequestToken(workspace, "octo-org/relay", undefined),
         );
+
         const read = yield* ask(app.repositoryReadToken(workspace, "octo-org/relay", undefined));
         yield* ask(app.repositoryWriteToken(workspace, "octo-org/relay", undefined));
         yield* ask(app.repositoryWriteToken(workspace, "octo-org/relay", undefined));
+
         const elsewhere = yield* ask(
           app.repositoryPullRequestToken(bare, "octo-org/relay", undefined),
         );
@@ -773,6 +810,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const workspace = yield* openWorkspace(yield* openGithubUser());
         yield* connectWorkspaceGitHub(workspace, before);
         const app = yield* GitHubApp;
+
         const ask = () =>
           app
             .repositoryPullRequestToken(workspace, "octo-org/relay", undefined)
@@ -828,11 +866,14 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         const relay = relayInstallation(202);
         const repositories = [...relay.repositories];
         let refusing = true;
+
         const fake = githubReaching([{ ...relay, repositories }], undefined, {}, (sent) => {
           if (!sent.url.endsWith("/access_tokens") || !("repositories" in JSON.parse(sent.body))) {
             return undefined;
           }
+
           if (refusing) return Response.json({ message: "Bad Gateway" }, { status: 502 });
+
           return Response.json(
             {
               token: GITHUB_FIXTURE_INSTALLATION_TOKEN,
@@ -841,9 +882,11 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
             { status: 201 },
           );
         });
+
         const workspace = yield* openWorkspace(yield* openGithubUser());
         yield* connectWorkspaceGitHub(workspace, relay);
         const app = yield* GitHubApp;
+
         const ask = (fullName: string) =>
           app.repositoryReadToken(workspace, fullName, undefined).pipe(Effect.provide(fake.layer));
 
@@ -889,13 +932,17 @@ const memberToken =
         ? Response.json({ message: "Not Found" }, { status: 404 })
         : undefined;
     }
+
     if (refused()) return Response.json({ message: "Bad credentials" }, { status: 401 });
     const forbidden = MEMBER_FORBIDDEN.get(new URL(sent.url).pathname.toLowerCase());
+
     if (forbidden !== undefined) {
       return Response.json({ message: "Forbidden" }, { status: 403, headers: forbidden });
     }
+
     // GitHub folds case in a repository's path, as it does in its name.
     const known = MEMBER_REPOSITORIES.get(new URL(sent.url).pathname.toLowerCase());
+
     return known === undefined
       ? Response.json({ message: "Not Found" }, { status: 404 })
       : Response.json(memberRepositoryJson(known.fixture, known.push));
@@ -916,6 +963,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const workspace = yield* openWorkspace(member);
         yield* connectWorkspaceGitHub(workspace, relay);
         const app = yield* GitHubApp;
+
         const ask = <A, E, R>(read: Effect.Effect<A, E, R>) =>
           read.pipe(Effect.provide(fake.layer));
 
@@ -939,8 +987,10 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const tokenless = yield* openGithubUser();
         const workspace = yield* openWorkspace(member);
         const app = yield* GitHubApp;
+
         const ask = <A, E, R>(read: Effect.Effect<A, E, R>) =>
           read.pipe(Effect.provide(fake.layer));
+
         const reason = (reach: Result.Result<unknown, { readonly reason: string }>) =>
           Result.isFailure(reach) ? reach.failure.reason : undefined;
 
@@ -948,9 +998,11 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const write = yield* ask(app.repositoryWriteToken(workspace, "octo-member/side", member));
         const fork = yield* ask(app.repositoryReach(workspace, "octo-member/fork", member));
         const hidden = yield* ask(app.repositoryReach(workspace, "octo-member/hidden", member));
+
         const automation = yield* ask(
           app.repositoryReach(workspace, "octo-member/side", undefined),
         );
+
         const noToken = yield* ask(app.repositoryReach(workspace, "octo-member/side", tokenless));
 
         assert.deepEqual(
@@ -959,10 +1011,12 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         );
         assert.ok(Option.isSome(write));
         assert.equal(Redacted.value(write.value.token), GITHUB_FIXTURE_MEMBER.TOKEN);
+
         const { kind, githubLogin, githubUserId } =
           write.value.access.kind === GITHUB_ACCESS.TOKEN
             ? write.value.access
             : { ...write.value.access, githubLogin: undefined, githubUserId: undefined };
+
         assert.deepEqual(
           { kind, githubLogin, githubUserId },
           {
@@ -990,6 +1044,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const member = yield* openTokenMember();
         const workspace = yield* openWorkspace(member);
         const app = yield* GitHubApp;
+
         const ask = (fullName: string) =>
           app.repositoryReach(workspace, fullName, member).pipe(Effect.provide(fake.layer));
 
@@ -1025,6 +1080,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const member = yield* openTokenMember();
         const workspace = yield* openWorkspace(member);
         const app = yield* GitHubApp;
+
         const ask = () =>
           app
             .repositoryReadToken(workspace, "octo-org/relay", member)
@@ -1049,6 +1105,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         {},
         memberToken(() => true),
       );
+
       const member = yield* openTokenMember();
       const workspace = yield* openWorkspace(member);
       const app = yield* GitHubApp;
@@ -1081,6 +1138,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         const other = yield* openTokenMember({ token: "ghp_fixture_other_token" });
         const workspace = yield* openWorkspace(member);
         const app = yield* GitHubApp;
+
         const ask = <A, E, R>(read: Effect.Effect<A, E, R>) =>
           read.pipe(Effect.provide(fake.layer));
 
@@ -1113,12 +1171,14 @@ it.effect(
           codeVerifier: VERIFIER,
         }),
       );
+
       const seen = yield* app
         .authorizedInstallations(
           { code: "one-time", codeVerifier: VERIFIER, redirectUri: CALLBACK },
           Option.none(),
         )
         .pipe(Effect.provide(fake.layer));
+
       const refused = yield* app
         .authorizedInstallations(
           { code: GITHUB_FIXTURE_REFUSED_CODE, codeVerifier: VERIFIER, redirectUri: CALLBACK },

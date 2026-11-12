@@ -57,12 +57,14 @@ export type RelayCredential = { readonly bearer: string } | { readonly page: Hea
 /** The headers a page's session is read from: its cookie alone, which is all a browser's socket can carry; none where it carries none. */
 function pageHeaders(headers: IncomingHttpHeaders): Headers | undefined {
   const cookie = headers.cookie?.trim();
+
   return cookie ? new Headers({ [CREDENTIAL_HEADER.COOKIE]: cookie }) : undefined;
 }
 
 /** The bearer an `Authorization` carries, where it is one with something in it. */
 function bearerOf(authorization: string): string | undefined {
   if (!authorization.startsWith(BEARER_SCHEME)) return undefined;
+
   return authorization.slice(BEARER_SCHEME.length).trim() === "" ? undefined : authorization;
 }
 
@@ -81,13 +83,18 @@ export function relayCredential(
   ownOrigins: ReadonlySet<string>,
 ): RelayCredential | { readonly status: number } {
   const authorization = headers.authorization?.trim();
+
   if (authorization) {
     const bearer = bearerOf(authorization);
+
     return bearer === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { bearer };
   }
+
   if (headers.origin === undefined) return { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED };
+
   if (!ownOrigins.has(headers.origin)) return { status: RELAY_UPGRADE_STATUS.FORBIDDEN };
   const page = pageHeaders(headers);
+
   return page === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { page };
 }
 
@@ -121,18 +128,24 @@ export interface RelayServer {
  */
 export function relayServer(path: string): RelayServer {
   let handle: UpgradeHandler | undefined;
+
   const server = http.createServer((request, response) => {
     const asked = new URL(request.url ?? "/", "http://localhost").pathname;
     response.writeHead(asked === path ? UPGRADE_REQUIRED : RELAY_UPGRADE_STATUS.NOT_FOUND).end();
   });
+
   server.on("upgrade", (request, socket, head) => {
     socket.on("error", () => socket.destroy());
+
     if (handle === undefined) {
       refuseUpgrade(socket, RELAY_UPGRADE_STATUS.SERVICE_UNAVAILABLE);
+
       return;
     }
+
     handle(request, socket, head);
   });
+
   return {
     server,
     serve: (next) => {
@@ -170,6 +183,7 @@ export function standRelay<Asked, Admitted>(
   return Effect.gen(function* () {
     const fibers = yield* FiberSet.make<void>();
     const fork = yield* FiberSet.runtime(fibers)();
+
     const sockets = yield* Effect.acquireRelease(
       Effect.sync(() => new WebSocketServer({ noServer: true, ...options.sockets })),
       (server) =>
@@ -177,6 +191,7 @@ export function standRelay<Asked, Admitted>(
           server.close(() => resume(Effect.void));
         }),
     );
+
     /** The socket the upgrade stands, paused until the connection's own reader stands. */
     const upgraded = (request: IncomingMessage, socket: Duplex, head: Buffer) =>
       Effect.callback<WebSocket>((resume) => {
@@ -185,13 +200,17 @@ export function standRelay<Asked, Admitted>(
           resume(Effect.succeed(webSocket));
         });
       });
+
     const connection = (asked: Asked, request: IncomingMessage, socket: Duplex, head: Buffer) =>
       Effect.gen(function* () {
         const admitted = yield* options.accept(asked);
+
         if (refused(admitted)) {
           refuseUpgrade(socket, admitted.status);
+
           return;
         }
+
         const webSocket = yield* upgraded(request, socket, head);
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -201,20 +220,25 @@ export function standRelay<Asked, Admitted>(
           }),
         );
       });
+
     yield* Effect.acquireRelease(
       Effect.sync(() =>
         options.server.serve((request, socket, head) => {
           const asked = options.admit(request);
+
           if (refused(asked)) {
             refuseUpgrade(socket, asked.status);
+
             return;
           }
+
           fork(Effect.andThen(Effect.yieldNow, connection(asked, request, socket, head)));
         }),
       ),
       () =>
         Effect.gen(function* () {
           options.server.serve(undefined);
+
           for (const client of sockets.clients) client.close(GOING_AWAY);
           yield* FiberSet.awaitEmpty(fibers);
         }),

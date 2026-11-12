@@ -41,6 +41,7 @@ function NewAutomation(): React.JSX.Element {
 /** A task's bar whose name opens its details, open while pressed, led by its trail where one is given. */
 function TitlePressBar({ trailed = false }: { trailed?: boolean }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return (
     <Toolbar
       title={trailed ? "Daily standup · Nov 8, 7:30" : "Teammate invitations"}
@@ -61,6 +62,7 @@ function TitlePressBar({ trailed = false }: { trailed?: boolean }): React.JSX.El
 function RenamedTitleBar(): React.JSX.Element {
   const [name, setName] = useState("Teammate invitations");
   const [editing, setEditing] = useState(true);
+
   return (
     <Toolbar
       title={name}
@@ -72,6 +74,7 @@ function RenamedTitleBar(): React.JSX.Element {
               maxLength: 120,
               onEnd: ({ value }) => {
                 setEditing(false);
+
                 if (value !== undefined) setName(value);
               },
             }

@@ -92,10 +92,12 @@ function lapseOf(row: HostLiveRow): number | undefined {
 export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): readonly HostLine[] {
   return orderedLiveRows(HOSTS_READ.parts.hosts, rows).flatMap((row) => {
     const lapse = lapseOf(row);
+
     if (lapse !== undefined && lapse <= now) return [];
     const platform = readPlatform(row.platform);
     const update = readUpdate(row.update);
     const setup = readSetup(row.setup);
+
     return [
       {
         id: row.id,
@@ -121,7 +123,9 @@ export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): read
 export function nextHostLapse(rows: readonly HostLiveRow[], now: number): number | undefined {
   const lapsing = rows.flatMap((row) => {
     const lapse = lapseOf(row);
+
     return lapse !== undefined && lapse > now ? [lapse] : [];
   });
+
   return lapsing.length === 0 ? undefined : Math.min(...lapsing);
 }

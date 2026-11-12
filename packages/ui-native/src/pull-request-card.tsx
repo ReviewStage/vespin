@@ -46,6 +46,7 @@ type PullRequestCardProps = {
 /** A line count as the card ends with it: "+1.9k", "−312". */
 function lineCount(sign: string, count: number): string {
   const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
+
   return `${sign}${short}`;
 }
 
@@ -67,6 +68,7 @@ export function PullRequestCard({
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
   const count = [font({ textStyle: TYPE_ROLE.TIME }), monospacedDigit()];
+
   const card = (
     <HStack
       spacing={SPACE.ROW}
@@ -104,6 +106,7 @@ export function PullRequestCard({
       )}
     </HStack>
   );
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {onOpen === undefined ? (

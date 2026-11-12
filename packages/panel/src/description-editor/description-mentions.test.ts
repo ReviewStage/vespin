@@ -60,6 +60,7 @@ function mounted(markdown: string) {
   let finished = 0;
   const host = document.createElement("div");
   document.body.append(host);
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: undefined,
@@ -75,11 +76,13 @@ function mounted(markdown: string) {
       onTrigger: (trigger) => triggers.push(trigger),
       onKey: (event) => {
         offered.push(event.key);
+
         return false;
       },
       drawMention: (element, mention) => {
         element.textContent = `@${mention.name}`;
         drawn.push(mention);
+
         return () => undefined;
       },
       retarget: (target, change) => retargetedMention(TASK_ID, PLACE, target, change),
@@ -88,10 +91,12 @@ function mounted(markdown: string) {
       pasted: (words) => (words.trim() === ISSUE_URL ? ISSUE : undefined),
     },
   });
+
   editors.push(handle);
   const element = host.querySelector<TiptapEditorHTMLElement>(".description-document-text");
   const editor = element?.editor;
   assert.ok(editor, "the editor is running");
+
   /** The caret put right after the words given, and the words typed there. */
   const typeAfter = (words: string, typed: string) => {
     let at: number | undefined;
@@ -105,16 +110,19 @@ function mounted(markdown: string) {
     editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, at)));
     editor.view.dispatch(editor.state.tr.insertText(typed));
   };
+
   /** A heading of the words given laid in as its own block, right after the words named. */
   const layHeadingAfter = (words: string, heading: string) => {
     typeAfter(words, "");
     editor.chain().splitBlock().setHeading({ level: 2 }).insertContent(heading).run();
   };
+
   /** A key pressed in the editor. */
   const press = (init: KeyboardEventInit) =>
     editor.view.dom.dispatchEvent(
       new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
     );
+
   /** The caret moved back by the characters given. */
   const back = (characters: number) =>
     editor.view.dispatch(
@@ -122,6 +130,7 @@ function mounted(markdown: string) {
         TextSelection.create(editor.state.doc, editor.state.selection.from - characters),
       ),
     );
+
   return {
     handle,
     drafts,
@@ -247,9 +256,11 @@ test("renaming a heading written with its own formatting still renames its menti
 
   const draft = task.last();
   const anchors = new Set(sectionAnchors(descriptionSections(draft).map((each) => each.heading)));
+
   const found = mentionsIn(draft, PLACE.repository).map(({ mention }) =>
     mention.kind === MENTION_KIND.SECTION ? mention.anchor : "",
   );
+
   assert.equal(found.length, 1);
   assert.ok(
     anchors.has(found[0] ?? "") && found[0] !== "ship-_today_",

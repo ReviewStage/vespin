@@ -15,13 +15,17 @@ import { sanitizeAnalyticsUrls } from "../src/analytics";
 
 const SIGN_IN_URL =
   "https://vespin.dev/sign-in.html?state=github.abc&code_challenge=xyz&redirect_uri=luke%3A%2F%2Fauth&expires_at=1700000000&signature=deadbeef";
+
 const AUTH_CODE = "c".repeat(64);
 const LANDING_WITH_CODE = `/?code=${AUTH_CODE}&state=s1&utm_source=hn`;
 const PROJECT_KEY = "phc_site_analytics_test";
+
 /** Longer than the recorder waits before it sends what it has buffered. */
 const RECORDING_FLUSH_MS = 5_000;
+
 /** The rrweb event type of a recording's page address. */
 const RRWEB_META = 4;
+
 /** The rrweb event type of the recorder's own notes, its options among them. */
 const RRWEB_CUSTOM = 5;
 
@@ -70,6 +74,7 @@ beforeAll(async () => {
   vi.stubEnv("VITE_POSTHOG_PROJECT_API_KEY", PROJECT_KEY);
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     sent.push(new URL(input instanceof Request ? input.url : String(input)));
+
     return new Response("{}", { status: 200 });
   });
   window.history.replaceState(null, "", LANDING_WITH_CODE);
@@ -111,10 +116,12 @@ test("a sign-in address keeps its path and drops the authorization query", () =>
 test("any page's address loses its credential parameters and keeps the rest", () => {
   const credentials =
     "code=a&state=b&sig=c&signature=d&token=e&access_token=f&id_token=g&refresh_token=h&error=i&error_description=j&code_challenge=k&code_verifier=l";
+
   const clean = sanitizeAnalyticsUrls({
     $current_url: `https://vespin.dev/?${credentials}&utm_source=hn&ref=launch`,
     $set_once: { $initial_current_url: `https://vespin.dev/about.html?code=${AUTH_CODE}` },
   });
+
   assert.equal(clean.$current_url, "https://vespin.dev/?utm_source=hn&ref=launch");
   assert.equal(clean.$set_once.$initial_current_url, "https://vespin.dev/about.html");
 });
@@ -124,6 +131,7 @@ test("a credential in a fragment written as parameters is taken out too", () => 
     $current_url: "https://vespin.dev/#access_token=secret&token_type=bearer",
     $referrer: "https://vespin.dev/changelog.html#code",
   });
+
   assert.equal(clean.$current_url, "https://vespin.dev/#token_type=bearer");
   assert.equal(clean.$referrer, "https://vespin.dev/changelog.html#code");
 });
@@ -161,6 +169,7 @@ test("a recording carries no console, network, or timing, whatever the project s
   const options = recorded().find(
     (event) => event.type === RRWEB_CUSTOM && event.data.tag === "$session_options",
   );
+
   assert.ok(options, "the recorder sent its options");
   expect(options.data.payload).toMatchObject({ activePlugins: [] });
 });

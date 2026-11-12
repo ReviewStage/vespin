@@ -74,17 +74,21 @@ async function serversSay(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   function Row({ connection }: { connection: string }) {
     const view = toolCallView({
       tool: INTEGRATION_REMOTE_TOOL[provider],
       input: { remoteTool: "fetch", parentCallId: "wrapper", input: {}, connection },
       output: undefined,
     });
+
     return createElement("span", null, useServerName(view));
   }
+
   const rows = calls.map(({ connection }) => createElement(Row, { key: connection, connection }));
   await act(async () => {
     root.render(withQueryClient(createElement(ConnectionNames, { needed: true, children: rows })));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   const said = () => [...container.querySelectorAll("span")].map((row) => row.textContent);
@@ -101,6 +105,7 @@ test("a call on one of two labeled accounts says the account's name as its card 
     { connection: "notion", label: "Personal" },
     { connection: "notion-2", label: "Work" },
   ];
+
   await serversSay([{ connection: "notion-2", said: "Notion · Work" }], accounts);
   await serversSay([{ connection: "notion", said: "Notion · Personal" }], accounts);
 });
@@ -119,6 +124,7 @@ test("a call on a bare linear connection says Linear, since a workspace's own Li
     { connection: "linear", label: "Home" },
     { connection: "linear-2", label: "Side" },
   ];
+
   const linear = INTEGRATION_PROVIDER.LINEAR;
   await serversSay(
     [

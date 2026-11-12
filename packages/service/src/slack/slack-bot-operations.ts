@@ -76,10 +76,13 @@ const listedChannels = Effect.fn("web/slackBotChannels")(function* (
   channels: readonly SlackChannelRepository[],
 ) {
   const listed = yield* bot.channels;
+
   if (Option.isNone(listed)) return undefined;
   const named = new Map(channels.map((channel) => [channel.channelId, channel.repository]));
+
   return listed.value.map((channel): SlackBotChannel => {
     const repository = named.get(channel.id);
+
     return repository === undefined ? channel : { ...channel, repository };
   });
 });
@@ -96,13 +99,17 @@ const workspaceSlackBot = Effect.fn("web/workspaceSlackBot")(function* (
   const bot = yield* SlackBot;
   const { configured } = bot;
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
+
   if (Option.isNone(installation)) return { configured };
   const { teamId, teamName } = installation.value;
   const notifications = yield* hostedStoreOrUnavailable(slackNotificationsOn(userId));
+
   const { defaultRepository, channels } = yield* hostedStoreOrUnavailable(
     slackStartRepositories(workspace.id),
   );
+
   const listed = managesWorkspace(workspace) ? yield* listedChannels(bot, channels) : undefined;
+
   return {
     configured,
     team: { id: teamId, name: teamName },
@@ -132,6 +139,7 @@ const reachedRepository = Effect.fn("web/slackBotRepository")(function* (
 > {
   if (repository === null) return null;
   const reached = yield* workspaceRepository(workspaceId, repository, userId);
+
   return reached.repository.fullName;
 });
 
@@ -142,9 +150,12 @@ const connectedWorkspace = Effect.fn("web/slackBotConnected")(function* (
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
+
   if (Option.isNone(installation)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const bot = yield* SlackBot;
+
   if (!bot.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return { workspace, bot };
 });
 
@@ -154,6 +165,7 @@ export const readSlackBot = Effect.fn("web/readSlackBot")(function* (
   workspaceId: string,
 ) {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
+
   return yield* workspaceSlackBot(workspace, userId);
 });
 
@@ -164,13 +176,16 @@ export const connectSlackBot = Effect.fn("web/connectSlackBot")(function* (
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const bot = yield* SlackBot;
+
   if (!bot.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   const team = yield* bot.team.pipe(
     Effect.tapError((failure) =>
       Effect.logWarning("The Slack bot could not read its team", failure.message),
     ),
     Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
   );
+
   const txid = yield* hostedStoreOrUnavailable(
     linkSlackInstallation({
       organizationId: workspace.id,
@@ -179,6 +194,7 @@ export const connectSlackBot = Effect.fn("web/connectSlackBot")(function* (
       userId,
     }),
   );
+
   return withTxid(yield* workspaceSlackBot(workspace, userId), Option.some(txid));
 });
 
@@ -189,6 +205,7 @@ export const disconnectSlackBot = Effect.fn("web/disconnectSlackBot")(function* 
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const txid = yield* hostedStoreOrUnavailable(deleteSlackInstallation(workspace.id));
+
   return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
 });
 
@@ -200,6 +217,7 @@ export const setSlackNotifications = Effect.fn("web/setSlackNotifications")(func
 ) {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
   const txid = yield* hostedStoreOrUnavailable(writeSlackNotifications(userId, notifications));
+
   return { ...(yield* workspaceSlackBot(workspace, userId)), txid };
 });
 
@@ -212,6 +230,7 @@ export const setSlackDefaultRepository = Effect.fn("web/setSlackDefaultRepositor
   const { workspace } = yield* connectedWorkspace(userId, workspaceId);
   const reached = yield* reachedRepository(workspace.id, userId, repository);
   const txid = yield* hostedStoreOrUnavailable(writeSlackDefaultRepository(workspace.id, reached));
+
   return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
 });
 
@@ -223,23 +242,30 @@ export const changeSlackChannel = Effect.fn("web/changeSlackChannel")(function* 
 ): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, SlackBotWriteServices> {
   const { workspace, bot } = yield* connectedWorkspace(userId, workspaceId);
   const { channelId } = change;
+
   if (change.member === false) {
     if (!(yield* bot.leave(channelId))) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
     // A channel the bot left keeps no repository, so a later join starts from the workspace's.
     const txid = yield* hostedStoreOrUnavailable(
       writeSlackChannelRepository(workspace.id, channelId, null),
     );
+
     return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
   }
+
   if (change.member === true && !(yield* bot.join(channelId))) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   let txid = Option.none<string>();
+
   if (change.repository !== undefined) {
     const repository = yield* reachedRepository(workspace.id, userId, change.repository);
     txid = yield* hostedStoreOrUnavailable(
       writeSlackChannelRepository(workspace.id, channelId, repository),
     );
   }
+
   return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
 });

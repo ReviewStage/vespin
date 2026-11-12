@@ -47,6 +47,7 @@ const SHARE_SERVICE = {
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
+
   const select = useCallback(
     (state: AppStateSnapshot) =>
       accountId === undefined
@@ -66,6 +67,7 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
           ),
     [accountId, chosenId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -84,12 +86,15 @@ function useOpenDraft(accountId: string | undefined): void {
   const router = useRouter();
   useEffect(() => {
     if (accountId === undefined) return undefined;
+
     const open = () => {
       const kept = readAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
+
       if (kept === undefined) return;
       removeAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
       const draft = shareDraftOf(kept, accountId);
       removeDraftPictures(draft?.pictures);
+
       if (draft === undefined) return;
       router.push({
         pathname: "/start-task",
@@ -103,10 +108,13 @@ function useOpenDraft(accountId: string | undefined): void {
         },
       });
     };
+
     open();
+
     const listening = AppState.addEventListener("change", (state) => {
       if (state === "active") open();
     });
+
     return () => listening.remove();
   }, [accountId, router]);
 }
@@ -133,6 +141,7 @@ export function useShareSheet(updateNeeded: boolean): void {
       removeAppGroupFile(APP_GROUP_FILE.SHARE_DRAFT);
       removeDraftPictures();
     }
+
     signedInBefore.current = accountId;
   }, [accountId]);
   useOpenDraft(updateNeeded ? undefined : accountId);

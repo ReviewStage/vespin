@@ -106,6 +106,7 @@ const FINDING_MAX_CHARS = 4_000;
 const STREAM_END: WireRecord = { type: "agent_probe_stream_end" };
 
 const LAUNCH = { FIRST: "first", RESUMED: "resumed" } as const;
+
 type Launch = (typeof LAUNCH)[keyof typeof LAUNCH];
 
 class ProbeStepFailed extends Data.TaggedError("ProbeStepFailed")<{
@@ -183,6 +184,7 @@ function secretsOf(settings: Settings): readonly string[] {
 /** A sanitizer for everything the run keeps or prints: the run's secrets by value, and the repository's owner and the developer's home and login by name, which a stack trace carries. */
 function scrubberOf(settings: Settings): Sanitizer {
   const owner = settings.repository.split("/")[0] ?? "";
+
   return sanitizer({
     secrets: secretsOf(settings),
     replacements: [
@@ -197,6 +199,7 @@ function scrubberOf(settings: Settings): Sanitizer {
 
 function scrubText(scrub: Sanitizer, text: string): string {
   const out = scrub(text);
+
   return JSON.stringify(out).slice(1, -1);
 }
 
@@ -226,7 +229,9 @@ function networkPolicy(settings: Settings) {
   const basic = Buffer.from(`x-access-token:${Redacted.value(settings.githubToken)}`).toString(
     "base64",
   );
+
   const placeholder = { exact: `Bearer ${Redacted.value(settings.placeholder)}` };
+
   return {
     allow: {
       "*": [],
@@ -274,6 +279,7 @@ const RUN_AS = {
   ROOT: "root",
   AGENT: "agent",
 } as const;
+
 type RunAs = (typeof RUN_AS)[keyof typeof RUN_AS];
 
 /** The command, its argv before `bash -c`, and whether it is asked for as root. */
@@ -310,6 +316,7 @@ const run = Effect.fn("probe/run")(function* (
 ) {
   yield* say(`· ${step}`);
   const prefix = RUN_PREFIX[ask.as ?? RUN_AS.DEFAULT];
+
   const finished = yield* attempt(scrub, step, () =>
     sandbox.runCommand({
       cmd: prefix.cmd,
@@ -319,16 +326,19 @@ const run = Effect.fn("probe/run")(function* (
       cwd: ask.cwd ?? DEFAULT_DIRECTORY,
     }),
   );
+
   const stdout = yield* attempt(scrub, step, () => finished.stdout());
   const stderr = yield* attempt(scrub, step, () => finished.stderr());
   const output = scrubText(scrub, `${stdout}${stderr}`.trim());
   recording.findings.push({ step, output: output.slice(-FINDING_MAX_CHARS) });
+
   if (finished.exitCode !== 0 && ask.allowFailure !== true) {
     return yield* new ProbeStepFailed({
       step,
       detail: `exit ${finished.exitCode}: ${output.slice(-FINDING_MAX_CHARS)}`,
     });
   }
+
   return stdout.trim();
 });
 
@@ -350,14 +360,17 @@ const launchDriver = Effect.fn("probe/launchDriver")(function* (
       stdin: true,
     }),
   );
+
   const events = yield* Queue.unbounded<WireValue>();
   const splitter = lineSplitter();
+
   const take = (line: string) =>
     Effect.gen(function* () {
       const value = valueFromJsonText(line);
       into.push(value);
       yield* Queue.offer(events, value);
     });
+
   yield* Stream.fromAsyncIterable(
     command.logs(),
     (cause) =>
@@ -376,6 +389,7 @@ const launchDriver = Effect.fn("probe/launchDriver")(function* (
     Effect.andThen(Queue.offer(events, STREAM_END)),
     Effect.forkDetach,
   );
+
   const config = {
     token: Redacted.value(settings.placeholder),
     tokenVariable: CLAUDE_TOKEN_VARIABLE,
@@ -384,9 +398,11 @@ const launchDriver = Effect.fn("probe/launchDriver")(function* (
     resume,
     options: QUERY_OPTIONS,
   };
+
   yield* attempt(scrub, "configure the driver", () =>
     command.writeStdin(`${JSON.stringify(config)}\n`),
   );
+
   return { command, events } satisfies DriverRun;
 });
 
@@ -399,10 +415,13 @@ function waitFor(
   const loop = Effect.gen(function* () {
     for (;;) {
       const value = yield* Queue.take(driver.events);
+
       if (value === STREAM_END) return false;
+
       if (found(value)) return true;
     }
   });
+
   return loop.pipe(
     Effect.timeoutOption(within),
     Effect.map((seen) => Option.getOrElse(seen, () => false)),
@@ -419,6 +438,7 @@ const isInit = (value: WireValue) => sessionInit([value]) !== undefined;
 const isResult = (value: WireValue) => turnResults([value]).length > 0;
 const says = (words: string) => (value: WireValue) => assistantText([value]).includes(words);
 const isExit = (value: WireValue) => isRecord(value) && value.type === DRIVER_EVENT.EXIT;
+
 const startsStoppedCommand = (value: WireValue) =>
   toolCalls([value]).some((call) => call.command.includes(STOPPED_COMMAND));
 
@@ -426,6 +446,7 @@ const startsStoppedCommand = (value: WireValue) =>
 const endDriver = Effect.fn("probe/endDriver")(function* (scrub: Sanitizer, driver: DriverRun) {
   yield* send(scrub, driver, { type: DRIVER_COMMAND.END });
   const exited = yield* waitFor(driver, WAIT.EXIT, isExit);
+
   if (!exited) yield* attempt(scrub, "kill the driver", () => driver.command.kill());
 });
 
@@ -437,15 +458,18 @@ const firstLaunch = Effect.fn("probe/firstLaunch")(function* (
   sandbox: Sandbox,
 ) {
   const driver = yield* launchDriver(scrub, settings, sandbox, recording.streams.first, undefined);
+
   if (!(yield* waitFor(driver, WAIT.INIT, isInit))) {
     return yield* new ProbeStepFailed({ step: "start the session", detail: "no init message" });
   }
+
   const leakCheck = (step: string, as: RunAs) =>
     run(scrub, recording, sandbox, step, {
       script: `bash ${PROBE_FILES.LEAK_CHECK}`,
       as,
       allowFailure: true,
     }).pipe(Effect.map(leakReportIn));
+
   recording.terminalAsToday = yield* leakCheck(
     "leak check from a Terminal's shell as today",
     RUN_AS.DEFAULT,
@@ -457,26 +481,33 @@ const firstLaunch = Effect.fn("probe/firstLaunch")(function* (
 
   yield* say("· the workflow turn: edit, background command, ScheduleWakeup, push");
   yield* send(scrub, driver, { type: DRIVER_COMMAND.MESSAGE, text: firstTurn(recording.nonce) });
+
   if (yield* waitFor(driver, WAIT.FIRST_TURN, says(TURN_DONE.FIRST))) {
     yield* waitFor(driver, WAIT.RESULT, isResult);
   }
+
   const branch = `agent-probe/${recording.nonce}`;
+
   const remote = yield* run(scrub, recording, sandbox, "the pushed branch on GitHub", {
     script: 'git ls-remote --heads origin "$1"',
     args: [branch],
     cwd: PROBE_SANDBOX.CHECKOUT,
     allowFailure: true,
   });
+
   recording.branchPushed = remote.includes(`refs/heads/${branch}`);
 
   yield* say("· the stopped turn");
   yield* send(scrub, driver, { type: DRIVER_COMMAND.MESSAGE, text: stoppedTurn() });
+
   if (yield* waitFor(driver, WAIT.STOPPED_COMMAND, startsStoppedCommand)) {
     yield* Effect.sleep(WAIT.BEFORE_STOP);
     yield* send(scrub, driver, { type: DRIVER_COMMAND.STOP });
     recording.stoppedTurnEnded = yield* waitFor(driver, WAIT.RESULT, isResult);
   }
+
   yield* endDriver(scrub, driver);
+
   return sessionInit(recording.streams.first)?.session_id;
 });
 
@@ -495,12 +526,15 @@ const resumedLaunch = Effect.fn("probe/resumedLaunch")(function* (
     recording.streams.resumed,
     sessionId,
   );
+
   if (yield* waitFor(driver, WAIT.INIT, isInit)) {
     yield* send(scrub, driver, { type: DRIVER_COMMAND.MESSAGE, text: resumedTurn() });
+
     if (yield* waitFor(driver, WAIT.RESUMED_TURN, says(TURN_DONE.RESUMED))) {
       yield* waitFor(driver, WAIT.RESULT, isResult);
     }
   }
+
   yield* endDriver(scrub, driver);
 });
 
@@ -514,6 +548,7 @@ const prepareSandbox = Effect.fn("probe/prepareSandbox")(function* (
   const defaultUser = yield* run(scrub, recording, sandbox, "the default user", {
     script: "id -un",
   });
+
   yield* run(scrub, recording, sandbox, "Claude Code and the agent user", {
     script: INSTALL_CLAUDE_CODE,
     args: [defaultUser],
@@ -528,9 +563,11 @@ const prepareSandbox = Effect.fn("probe/prepareSandbox")(function* (
     as: RUN_AS.ROOT,
   });
   const driver = yield* attempt(scrub, "read the driver", () => readFile(SOURCES.DRIVER, "utf8"));
+
   const leakCheck = yield* attempt(scrub, "read the leak check", () =>
     readFile(SOURCES.LEAK_CHECK, "utf8"),
   );
+
   yield* attempt(scrub, "upload the probe's files", () =>
     sandbox.writeFiles([
       { path: `${UPLOAD_DIRECTORY}/driver.mjs`, content: driver },
@@ -550,11 +587,13 @@ const prepareSandbox = Effect.fn("probe/prepareSandbox")(function* (
     as: RUN_AS.ROOT,
     allowFailure: true,
   });
+
   const launched = yield* run(scrub, recording, sandbox, "the launch's drop to the agent user", {
     script: "id -un; awk '/^CapEff:/ { print $2 }' /proc/self/status",
     as: RUN_AS.AGENT,
     allowFailure: true,
   });
+
   [recording.launchUser, recording.launchCapEff] = launched.split("\n");
 });
 
@@ -572,6 +611,7 @@ const sessionFiles = Effect.fn("probe/sessionFiles")(function* (
     as: RUN_AS.ROOT,
     allowFailure: true,
   });
+
   return found.split("\n").filter((line) => line.trim() !== "");
 });
 
@@ -584,22 +624,27 @@ const probe = Effect.fn("probe/probe")(function* (
 ) {
   yield* prepareSandbox(scrub, settings, recording, sandbox);
   const sessionId = yield* firstLaunch(scrub, settings, recording, sandbox);
+
   if (sessionId === undefined) {
     return yield* new ProbeStepFailed({ step: "the first launch", detail: "no session id" });
   }
+
   yield* say("· the placeholder from outside the sandbox");
   const outside = yield* Effect.exit(placeholderOutside(scrub, settings));
+
   if (Exit.isSuccess(outside)) recording.placeholderOutside = outside.value;
   else
     recording.findings.push({
       step: "the placeholder from outside the sandbox",
       output: scrubText(scrub, Cause.pretty(outside.cause)),
     });
+
   const tokenFiles = yield* run(scrub, recording, sandbox, "token-shaped files, as root", {
     script: ROOT_TOKEN_SCAN,
     as: RUN_AS.ROOT,
     allowFailure: true,
   });
+
   recording.rootFilesWithTokenShape = tokenFiles.split("\n").filter((line) => line !== "").length;
   recording.sessionFilesBeforeStop = yield* sessionFiles(
     scrub,
@@ -610,9 +655,11 @@ const probe = Effect.fn("probe/probe")(function* (
   );
   yield* say("· stop the sandbox, then resume it");
   yield* attempt(scrub, "stop the sandbox", () => sandbox.stop());
+
   const resumed = yield* attempt(scrub, "resume the sandbox", () =>
     Sandbox.get({ name: sandbox.name, resume: true }),
   );
+
   recording.sessionFilesAfterResume = yield* sessionFiles(
     scrub,
     recording,
@@ -652,6 +699,7 @@ function writeFixtures(
   const stream = [LAUNCH.FIRST, LAUNCH.RESUMED].flatMap((launch) =>
     recording.streams[launch].map((message) => JSON.stringify(scrub({ launch, message }))),
   );
+
   const raw = {
     placeholder: false,
     recordedAt: new Date().toISOString(),
@@ -669,11 +717,13 @@ function writeFixtures(
     },
     findings: recording.findings,
   };
+
   const report = scrub(valueFromJsonText(JSON.stringify(raw)));
   const streamText = `${stream.join("\n")}\n`;
   const reportText = `${JSON.stringify(report, null, 2)}\n`;
   const secrets = secretsOf(settings);
   const leaks = [...fixtureLeaks(streamText, secrets), ...fixtureLeaks(reportText, secrets)];
+
   if (leaks.length > 0) {
     return Effect.fail(
       new ProbeStepFailed({
@@ -682,6 +732,7 @@ function writeFixtures(
       }),
     );
   }
+
   return Effect.all([
     attempt(scrub, "write the stream fixture", () => writeFile(FIXTURES.STREAM, streamText)),
     attempt(scrub, "write the report fixture", () => writeFile(FIXTURES.REPORT, reportText)),
@@ -695,6 +746,7 @@ function printVerdict(conditions: readonly Condition[]) {
       Effect.gen(function* () {
         const own = conditions.filter((each) => each.check === check);
         yield* say(`\n${passed(own) ? "PASS" : "FAIL"}  ${check}`);
+
         for (const each of own) {
           const mark = each.pass ? "ok  " : each.gating ? "FAIL" : "note";
           yield* say(`  ${mark}  ${each.name} (${each.detail})`);
@@ -709,13 +761,16 @@ const main = Effect.gen(function* () {
     ...(yield* settingsConfig),
     placeholder: Redacted.make(randomBytes(PLACEHOLDER_BYTES).toString("base64url")),
   };
+
   if (!isRepositoryName(settings.repository)) {
     return yield* new ProbeStepFailed({
       step: "read the settings",
       detail: `${PROBE_ENV.REPOSITORY} must name one repository as owner/name`,
     });
   }
+
   const scrub = scrubberOf(settings);
+
   const recording: Recording = {
     nonce: randomBytes(6).toString("hex"),
     streams: { first: [], resumed: [] },
@@ -733,9 +788,11 @@ const main = Effect.gen(function* () {
     rootFilesWithTokenShape: undefined,
     failure: undefined,
   };
+
   yield* say(
     `Vespin's Claude Code probe ${recording.nonce}: Agent SDK ${PINS.AGENT_SDK}, claude ${PINS.CLAUDE_CODE}`,
   );
+
   const sandbox = yield* attempt(scrub, "open the sandbox", () =>
     Sandbox.create({
       name: `agent-probe-${recording.nonce}`,
@@ -751,12 +808,15 @@ const main = Effect.gen(function* () {
       networkPolicy: networkPolicy(settings),
     }),
   );
+
   yield* say(`· sandbox ${sandbox.name} open`);
   const outcome = yield* Effect.exit(probe(scrub, settings, recording, sandbox));
+
   if (Exit.isFailure(outcome)) {
     recording.failure = scrubText(scrub, Cause.pretty(outcome.cause));
     yield* say(`\nThe run stopped early: ${recording.failure}`);
   }
+
   if (!settings.keepSandbox) {
     yield* attempt(scrub, "delete the sandbox", () =>
       Sandbox.get({ name: sandbox.name }).then((found) => found.delete()),
@@ -764,12 +824,14 @@ const main = Effect.gen(function* () {
   } else {
     yield* say(`· sandbox ${sandbox.name} kept`);
   }
+
   const conditions = verdict(observationsOf(recording));
   yield* writeFixtures(scrub, settings, recording, conditions);
   yield* printVerdict(conditions);
   yield* say(
     `\nSanitized fixtures written to ${FIXTURES.STREAM.pathname} and ${FIXTURES.REPORT.pathname}.`,
   );
+
   if (!passed(conditions)) {
     return yield* new ProbeStepFailed({ step: "the verdict", detail: "a condition failed" });
   }

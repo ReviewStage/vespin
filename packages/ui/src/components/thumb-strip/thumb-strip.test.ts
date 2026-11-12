@@ -32,6 +32,7 @@ test("a press on a thumb shows its file, whose thumb alone is current and stops 
   const root = createRoot(container);
   roots.push(root);
   let at = 0;
+
   const draw = () =>
     act(() =>
       root.render(
@@ -46,7 +47,9 @@ test("a press on a thumb shows its file, whose thumb alone is current and stops 
         }),
       ),
     );
+
   draw();
+
   const thumb = (name: string) =>
     container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`) ??
     expect.fail(`the strip holds ${name}`);
@@ -55,10 +58,12 @@ test("a press on a thumb shows its file, whose thumb alone is current and stops 
   act(() => thumb("notes.txt").click());
 
   expect(at).toBe(2);
+
   const current = [...container.querySelectorAll("button")].map((button) => [
     button.getAttribute("aria-current"),
     button.tabIndex,
   ]);
+
   expect(current).toEqual([
     ["false", -1],
     ["false", -1],

@@ -71,6 +71,7 @@ async function handOff(query: DesktopSessionPageQuery | undefined): Promise<View
   if (query === undefined) {
     return said(`This link did not come from ${PRODUCT_NAME}`, "Sign in again.");
   }
+
   // Note that the session is read beside the transfer rather than after it,
   // and under a deadline, so counting the sign-in adds little to the
   // hand-off and never holds it for long (`completeSiteSignIn`).
@@ -78,11 +79,13 @@ async function handOff(query: DesktopSessionPageQuery | undefined): Promise<View
     .getSession({ fetchOptions: { signal: signInCountDeadline() } })
     .then((answer) => answer.data)
     .catch(() => null);
+
   const answered = await authClient.$fetch(TRANSFER_PATH, {
     method: "POST",
     query: { ...query.transfer },
     body: {},
   });
+
   if (answered.error) {
     return answered.error.status === SIGNED_OUT_STATUS
       ? {
@@ -92,6 +95,7 @@ async function handOff(query: DesktopSessionPageQuery | undefined): Promise<View
         }
       : said(`${PRODUCT_NAME} could not be reached`, "Sign in again.");
   }
+
   const code = Schema.decodeUnknownSync(TransferAnswer)(answered.data).electron_authorization_code;
   // Note that the sign-in is counted here, before the page leaves, because
   // the desktop's client skips consent and this is the one page of the flow
@@ -99,6 +103,7 @@ async function handOff(query: DesktopSessionPageQuery | undefined): Promise<View
   // stands between the Mac and its session.
   await completeSiteSignIn(signedIn).catch(() => undefined);
   window.location.replace(desktopSessionReturnUrl(query.returnTo, code, query.transfer.state));
+
   return WORKING;
 }
 

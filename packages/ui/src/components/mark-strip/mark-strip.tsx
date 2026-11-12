@@ -56,12 +56,14 @@ const MARK_SHAPE = {
 function markClass(look: MarkStripLook, mark: StripMark): string {
   const bar = look === MARK_STRIP_LOOK.BARS;
   const width = bar ? (mark.current === true ? "w-ui-12 min-h-ui-2" : "w-ui-6") : "";
+
   const standing =
     mark.current === true
       ? "opacity-100 ring-1 ring-foreground"
       : mark.viewed === true
         ? "opacity-35"
         : "";
+
   return [MARK_INK, MARK_SHAPE[look], width, standing].filter((part) => part !== "").join(" ");
 }
 

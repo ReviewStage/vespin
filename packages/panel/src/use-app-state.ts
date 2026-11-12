@@ -101,6 +101,7 @@ export const appStateQuery = queryOptions({
   queryFn: ({ client }) =>
     rendererPromise(firstRead).then((read) => {
       const held: AppStateSnapshot | undefined = client.getQueryData([QUERY_ROOT.APP_STATE]);
+
       return held !== undefined && held.version >= read.version ? held : read;
     }),
   staleTime: Infinity,
@@ -117,7 +118,9 @@ export const appStateQuery = queryOptions({
 function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
+
     if (typeof bridge.onAppState !== "function") return undefined;
+
     return {
       requestAppState: () => bridge.requestAppState(),
       onAppState: (listener) => bridge.onAppState(listener),
@@ -153,12 +156,15 @@ export interface AppStateFollowing {
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
+
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
   const write = (state: AppStateSnapshot): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
       client.setQueryData(appStateQuery.queryKey, state);
+
       return undefined;
     }
+
     // Note that a staging that throws is reported and passed over, because the readings queued behind it must still land.
     const next = (staging ?? Promise.resolve())
       .then(() => staged(state))
@@ -173,21 +179,28 @@ export function followAppState(client: QueryClient): AppStateFollowing {
       .then(() => {
         if (staging === next) staging = undefined;
       });
+
     staging = next;
+
     return next;
   };
+
   const takeBack = handFixtureClient(client);
   const hearing = heard();
+
   const followed =
     hearing === undefined
       ? undefined
       : followAppStateOver(hearing, write, (message, cause) => {
           console.error(message, cause);
         });
+
   const stopMoves = onFixtureMoved(() => {
     const held = followed?.held();
+
     if (held !== undefined) write(held);
   });
+
   return {
     written: followed?.written ?? Promise.resolve(),
     stop: () => {

@@ -59,13 +59,16 @@ export interface StaleBuildTab {
  */
 export function failedChunkAnswer(tab: StaleBuildTab): () => Effect.Effect<void> {
   let asking = false;
+
   const answered = (): void => {
     asking = false;
   };
+
   const reload = (): void => {
     answered();
     tab.leave.leave(tab.reload);
   };
+
   return () =>
     Effect.sync(() => {
       if (asking || !tab.online()) return;

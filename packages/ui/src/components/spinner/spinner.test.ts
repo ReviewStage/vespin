@@ -40,6 +40,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -47,10 +48,12 @@ test("a wait's status line stands from the start, and its ring waits the settle 
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const inline = render(createElement(Spinner, { label: "Loading transcript" }));
   const region = render(createElement(SpinnerRegion, { label: "Loading transcript" }));
+
   for (const wait of [inline, region]) {
     assert.equal(wait.querySelector('[role="status"]')?.textContent, "Loading transcript");
     assert.equal(ringIn(wait), false);
   }
+
   act(() => vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE - 1));
   assert.deepEqual([ringIn(inline), ringIn(region)], [false, false]);
   act(() => vi.advanceTimersByTime(1));
@@ -78,7 +81,9 @@ test("a busy control keeps its words and says what it is doing; at rest it says 
       children: "Check for updates",
     }),
   );
+
   assert.equal(busy.textContent, "Check for updatesChecking for updates");
+
   const idle = render(
     createElement(BusyLabel, {
       busy: false,
@@ -86,6 +91,7 @@ test("a busy control keeps its words and says what it is doing; at rest it says 
       children: "Check for updates",
     }),
   );
+
   assert.equal(idle.textContent, "Check for updates");
 });
 
@@ -98,6 +104,7 @@ test("a ring drawn at a size beside words that say the wait adds nothing a reade
       "Waiting",
     ),
   );
+
   assert.equal(line.querySelector('[role="status"]'), null);
   const ring = line.firstElementChild?.firstElementChild ?? assert.fail("the ring");
   assert.equal(ring.getAttribute("aria-hidden"), "true");

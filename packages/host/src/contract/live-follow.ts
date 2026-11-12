@@ -75,6 +75,7 @@ interface WindowFollowSpec<Slice extends FollowedSlice, Key, KeyEncoded, Also ex
 /** A procedure's refusal and panel mark, as every act's are (`declared-act.ts`). */
 function refusing(refusal: string, panelOnly: boolean) {
   const refused = actProcedure(refusal);
+
   return panelOnly ? refused.meta(panelOnlyMeta(true)) : refused;
 }
 
@@ -208,6 +209,7 @@ export function liveFollow<
   // Note that a read the account holds is held by no key of a window's, so its hold takes none.
   const key: EffectSchema.Codec<Key | undefined, KeyEncoded | undefined> =
     spec.hold === HOLD.WINDOW ? spec.key : EffectSchema.Undefined;
+
   const declared = {
     slice: spec.slice,
     told: [spec.slice, ...(spec.alsoTold ?? [])],
@@ -216,6 +218,7 @@ export function liveFollow<
     panelOnly: spec.panelOnly,
     procedure: followProcedureOf(spec.refusal, spec.panelOnly, key),
   };
+
   // Note that a follow with no Try again declares no procedure for one, so the port answers none.
   return spec.retry === undefined
     ? declared
@@ -231,6 +234,7 @@ export function liveFollows<
   const Declarations extends { readonly [Name in ReadActName]?: AnyLiveFollowDeclaration },
 >(declarations: Declarations): NamedFollows<Declarations> {
   const named: Record<string, AnyLiveFollow> = {};
+
   for (const [name, declaration] of Object.entries(declarations)) {
     // SAFETY: the declarations' keys are read act names, by their type.
     const key = name as ReadActName;
@@ -242,6 +246,7 @@ export function liveFollows<
       ...(retryName === undefined ? undefined : { retryKind: PORT_ACT_KIND[retryName] }),
     };
   }
+
   // SAFETY: the loop above named every declaration under its own key.
   return named as NamedFollows<Declarations>;
 }
@@ -265,6 +270,7 @@ export function followsContractOf<const Follows extends Readonly<Record<string, 
           ],
     ),
   );
+
   // SAFETY: each procedure is keyed by its own follow's kind, or its Try again's, as the type maps them.
   return procedures as FollowsContract<Follows>;
 }

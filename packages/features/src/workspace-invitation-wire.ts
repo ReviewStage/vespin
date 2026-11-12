@@ -45,12 +45,14 @@ export function invitationAcceptUrl(origin: string, invitationId: string, email:
   const url = new URL(INVITATION_ACCEPT_PAGE.PATH, origin);
   url.searchParams.set(INVITATION_ACCEPT_PAGE.ID_PARAM, invitationId);
   url.searchParams.set(INVITATION_ACCEPT_PAGE.EMAIL_PARAM, email);
+
   return url.href;
 }
 
 /** The accept page's query, as `invitationAcceptUrl` wrote it; an empty parameter is none. */
 export function invitationAcceptQuery(search: string): InvitationAcceptQuery {
   const params = new URLSearchParams(search);
+
   return {
     id: params.get(INVITATION_ACCEPT_PAGE.ID_PARAM) || undefined,
     email: params.get(INVITATION_ACCEPT_PAGE.EMAIL_PARAM) || undefined,
@@ -77,6 +79,7 @@ const INVITATION_BOUNDS = {
  */
 function dottedDomain(address: string): boolean {
   const domain = address.slice(address.indexOf("@") + 1);
+
   return domain.slice(1, -1).includes(".");
 }
 
@@ -127,12 +130,15 @@ function wordsOf(text: string): readonly TypedWord[] {
   let word = "";
   let quoted = false;
   let bracketed = false;
+
   const end = () => {
     if (word !== "") words.push(word);
     word = "";
   };
+
   for (const char of text) {
     const open = quoted || bracketed;
+
     if (!open && (char === "," || char === ";")) {
       end();
       words.push(ENTRY_END);
@@ -140,18 +146,23 @@ function wordsOf(text: string): readonly TypedWord[] {
       end();
     } else {
       if (char === '"' && !bracketed) quoted = !quoted;
+
       if (char === "<" && !quoted) bracketed = true;
+
       if (char === ">" && !quoted) bracketed = false;
       word += char;
     }
   }
+
   end();
+
   return words;
 }
 
 /** Strips a name's quotes and the spaces around it; nothing where it says nothing. */
 function nameOf(words: readonly string[]): string | undefined {
   const name = words.join(" ").replaceAll('"', "").trim();
+
   return name === "" ? undefined : name;
 }
 
@@ -163,16 +174,20 @@ function nameOf(words: readonly string[]): string | undefined {
 function entriesOf(text: string): readonly { address: string; name?: string; typed: string }[] {
   const entries: { address: string; name?: string; typed: string }[] = [];
   let names: string[] = [];
+
   const unnamed = () => {
     for (const word of names) entries.push({ address: word, typed: word });
     names = [];
   };
+
   for (const word of wordsOf(text)) {
     if (word === ENTRY_END) {
       unnamed();
       continue;
     }
+
     const open = word.indexOf("<");
+
     if (open === -1) {
       // Note that a word holding an address ends any name before it, which had no address of its own.
       if (word.includes("@")) {
@@ -181,6 +196,7 @@ function entriesOf(text: string): readonly { address: string; name?: string; typ
       } else names.push(word);
       continue;
     }
+
     const before = word.slice(0, open);
     const close = word.indexOf(">", open);
     const address = word.slice(open + 1, close === -1 ? undefined : close).trim();
@@ -193,7 +209,9 @@ function entriesOf(text: string): readonly { address: string; name?: string; typ
     });
     names = [];
   }
+
   unnamed();
+
   return entries;
 }
 
@@ -206,10 +224,12 @@ function entriesOf(text: string): readonly { address: string; name?: string; typ
 export function inviteesOf(text: string): readonly TypedInvitee[] {
   const seen = new Set<string>();
   const invitees: TypedInvitee[] = [];
+
   for (const entry of entriesOf(text)) {
     const mailto = entry.address.toLowerCase().startsWith(MAILTO);
     const email = mailto ? entry.address.slice(MAILTO.length) : entry.address;
     const key = email.toLowerCase();
+
     if (email === "" || seen.has(key)) continue;
     seen.add(key);
     invitees.push({
@@ -219,6 +239,7 @@ export function inviteesOf(text: string): readonly TypedInvitee[] {
       invitable: isInvitableEmail(email),
     });
   }
+
   return invitees;
 }
 

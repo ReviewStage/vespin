@@ -52,9 +52,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(SIGNED_UP_AT);
+
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
       );
+
       const auth = betterAuth({
         database: authDatabaseAdapter(drizzle({ client })),
         baseURL: BASE_URL,
@@ -64,8 +66,10 @@ it.effect(
         disabledPaths: [...DISABLED_AUTH_PATHS],
         plugins: [organization(ORGANIZATION_OPTIONS)],
       });
+
       yield* Effect.gen(function* () {
         const resend = recordingHttpClient(() => jsonResponse({ id: "email-1" }));
+
         const resendServices = Layer.merge(
           resend.layer,
           ConfigProvider.layer(
@@ -75,8 +79,10 @@ it.effect(
             }),
           ),
         );
+
         const welcomeMail = welcomeMailFromEnvironment.pipe(Layer.provide(resendServices));
         const onboarding = onboardingEventsFromEnvironment.pipe(Layer.provide(resendServices));
+
         const services = Layer.mergeAll(
           Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
           Layer.succeed(Database, yield* Database),
@@ -85,12 +91,14 @@ it.effect(
           accountDeletionTestServices,
           onboarding,
         );
+
         const { handler, dispose } = HttpRouter.toWebHandler(
           authApp((request) => auth.handler(request), workspaceSeams(auth.api)).pipe(
             HttpRouter.provideRequest(services),
           ),
           { disableLogger: true },
         );
+
         const post = (path: string, body: object) =>
           Effect.promise(() =>
             handler(
@@ -101,6 +109,7 @@ it.effect(
               }),
             ),
           );
+
         const answered = yield* post("sign-up/email", ADA);
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const userId = decodeSignedUp(yield* Effect.promise(() => answered.json())).user.id;
@@ -112,10 +121,12 @@ it.effect(
           resend.requests
             .filter((request) => request.pathname === pathname)
             .map((request) => JSON.parse(request.body ?? "{}") as unknown);
+
         assert.deepEqual(sentTo("/contacts"), [{ email: ADA.email }]);
         assert.deepEqual(sentTo("/events/send"), [
           { event: "vespin.signed_up", email: ADA.email, payload: { greeting: "Hey Ada," } },
         ]);
+
         const emails = resend.requests
           .filter((request) => request.pathname === "/emails")
           .map(
@@ -127,6 +138,7 @@ it.effect(
                 template: { id: string; variables: { GREETING: string } };
               },
           );
+
         assert.equal(emails.length, 1);
         assert.equal(emails[0]?.from, WELCOME_FROM);
         assert.deepEqual(emails[0]?.to, [ADA.email]);
@@ -142,6 +154,7 @@ it.effect(
             .from(personalWorkspace)
             .where(eq(personalWorkspace.userId, userId)),
         );
+
         assert.ok(personal);
         assert.equal(others.length, 0);
         assert.deepEqual(

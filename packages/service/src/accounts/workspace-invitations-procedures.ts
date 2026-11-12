@@ -52,6 +52,7 @@ function originOf(request: Request): string {
 export function workspaceInvitationsProcedures(seams: WorkspaceInvitationsProcedureSeams) {
   const account = hosted.workspaceInvitations.use(accountMiddleware(seams.resolveUserId));
   const session = hosted.workspaceInvitations.use(sessionMiddleware(seams.resolveSessionUserId));
+
   return {
     list: account.list.effect(function* ({ input, context }) {
       return yield* workspaceInvitationsRead(
@@ -73,6 +74,7 @@ export function workspaceInvitationsProcedures(seams: WorkspaceInvitationsProced
     }),
     offer: session.offer.effect(function* ({ input, context }) {
       const now = yield* Clock.currentTimeMillis;
+
       return yield* hostedStoreOrUnavailable(invitationOffer(context.userId, input.id, now));
     }),
   };

@@ -37,12 +37,14 @@ function drawn(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(element)));
+
   return container;
 }
 
 /** What the window's pill says once the pointer rests on `row`, none where it raises none. */
 function hintOver(row: Element): string | undefined {
   restOn(row);
+
   return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
 }
 

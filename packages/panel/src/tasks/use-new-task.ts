@@ -136,6 +136,7 @@ export interface QuickAddInto {
 function startingStanding(standing: TaskStanding | undefined) {
   if (standing === undefined) return undefined;
   const { assigneeId, ...rest } = standing;
+
   return assigneeId === undefined || assigneeId === null ? rest : { ...rest, assigneeId };
 }
 
@@ -370,6 +371,7 @@ function useTaskStartMutation() {
  */
 export function useQuickAddStart(workspaceId: string | undefined): QuickAddStart {
   const sendTaskStart = useTaskStartMutation();
+
   return useCallback(
     (name, into) =>
       sendTaskStart({
@@ -396,17 +398,23 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const { shown, place, agents, showTab } = doors;
   const sendTaskStart = useTaskStartMutation();
   const toast = useToast();
+
   const opensNewTask =
     useQuery({ ...appStateQuery, select: selectOpensNewTask }).data ??
     APP_SETTING_DEFAULTS.openNewTask;
+
   const signedIn = useQuery({ ...appStateQuery, select: selectMayStart }).data === true;
+
   const workspaces =
     useQuery({ ...appStateQuery, select: selectListedWorkspaces }).data ?? NO_WORKSPACES;
+
   const repositoriesIn = useRepositoriesIn();
+
   // The New task dialog's ask, standing while the dialog does: the preset it was opened with, if any.
   const [newTaskAsk, setNewTaskAsk] = useState<
     { readonly preset: NewTaskPreset | undefined } | undefined
   >(undefined);
+
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
   // A plain New task pressed while the tab was not shown, read once the window stands where the press brought the tab.
@@ -451,6 +459,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     const stays = !opensNewTask;
     // Note that the starting page's line is stamped at the press.
     const sentAt = Date.now();
+
     const line =
       handed === undefined || stays
         ? undefined
@@ -460,16 +469,19 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
             attachments: handed.attachments,
             sentAt,
           });
+
     // Note that a start's page is let go only while it is still this start's, because another start may have replaced it.
     const letGoOfPage = () =>
       setPage((now) =>
         now?.kind === NEW_TASK_PAGE.STARTING && now.line === line ? now.over : now,
       );
+
     // Staying, an agent's start puts the card away at once and opens nothing; an opening one stands the task bound's own
     // place, or Home, where its page draws, in place of whatever stood in it, as a step the task it starts takes in place,
     // so Back from that task returns to where New task was pressed.
     // Note that what stood at the press is where its address stood, which a refusal opens again.
     let standBack = place.keepPressedOver(false);
+
     if (handed !== undefined && stays) setNewTaskAsk(undefined);
     else if (line !== undefined) {
       const moved = place.standStartPage();
@@ -484,6 +496,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
       }));
       setNewTaskAsk(undefined);
     }
+
     // Note that the host opens a start's task at once, so a bare one pressed on Home's own
     // composer, whose page the task's took the place of, says its refusal in a toast, as no
     // card stands to say it.
@@ -491,6 +504,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // Note that only Home's own route draws its composer, once no task is bound there, so a press
     // with no dialog standing over Home was the composer's own.
     const pressedOnHome = newTaskAsk === undefined && place.atHome();
+
     // Note that a refusal keeps what refused it, so the box that shows it reports that in its place.
     const refusedWith = (note: ComposerNote): ComposerNote => {
       if (saidInToast) {
@@ -500,10 +514,12 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           failure: { surface: FAILURE_SURFACE.TASK_START, cause: note.cause },
         });
       }
+
       if (handed !== undefined) {
         letGoOfPage();
         // Note that what stood before the press comes back only where the developer went nowhere since.
         standBack();
+
         // A start pressed on Home's own composer opens it again where Home still stands, rather than a
         // second composer in a dialog over it holding the same words; elsewhere the dialog says it.
         if (card !== undefined && pressedOnHome && place.atHome()) {
@@ -512,6 +528,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
             refused: { card, note },
             arrivals: place.arrivals(),
           };
+
           setHomeRefusals((was) => was + 1);
           // Note that another start's page standing still stands, over the refusal.
           setPage((now) =>
@@ -529,8 +546,10 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           });
         }
       }
+
       return note;
     };
+
     return sendTaskStart({
       ...(name.length === 0 ? undefined : { name }),
       ...(repository === null ? undefined : { repository }),
@@ -563,6 +582,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
             cause: answer,
           });
         }
+
         // Note that an agent's start put the card and whatever stood away as it was pressed, so
         // what stands now is the developer's since, a New task opened again among it, and stays.
         if (stays) {
@@ -573,16 +593,21 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
             answer.planId,
             handed === undefined || (agentStart !== undefined && !("failure" in agentStart)),
           );
+
           return undefined;
         }
+
         if (handed === undefined) {
           setNewTaskAsk(undefined);
           setPage((now) => homeRefusedUnder(now));
           place.standBound();
+
           return undefined;
         }
+
         letGoOfPage();
         openAgent(answer.planId, handed, answer.agentStart, from.device);
+
         return undefined;
       },
       (refused: Error) =>
@@ -625,8 +650,10 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     if (started !== undefined && !("failure" in started)) {
       agents.onTaskStarted(planId, started.agent);
       showTab(planId, agentTab(started.agent.id));
+
       return;
     }
+
     // Note that the refusal keeps the answer that said it, so the draft's tab reports the service's word for it.
     const answer = started ?? { failure: AGENT_CALL_FAILURE.UNANSWERED };
     const refused = { ...agentStartFailureNote(answer, planId, device), cause: answer };
@@ -644,12 +671,14 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // because a fresh ask would keep the card's draft under another preset.
   const newTaskWith = (preset: NewTaskPreset | undefined) =>
     setNewTaskAsk((standing) => standing ?? { preset });
+
   // Home opens on New task's composer, so a plain New task there takes its
   // caret rather than drawing the same card again in a dialog over it.
   const newTaskHere = () => {
     if (place.atHome() && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
     else newTaskWith(undefined);
   };
+
   // Note that a press while Settings holds the window brings the tab forward
   // first, and the window stands Home only once that lands, so the press is
   // read once the place it landed on is drawn rather than where it was made.
@@ -657,6 +686,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     if (shown) newTaskHere();
     else setNewTaskAway(true);
   };
+
   // The dialog is the Tasks tab's, so Settings taking the window puts it
   // away rather than leaving it to stand again on the way back.
   if (!shown && newTaskAsk !== undefined) setNewTaskAsk(undefined);
@@ -668,16 +698,20 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   useEffect(() => {
     if (!newTaskAway) return;
     setNewTaskAway(false);
+
     if (shown) newTaskHereNow.current();
   }, [newTaskAway, shown]);
 
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
   const arrived = place.arrivals();
+
   const starting =
     page?.kind === NEW_TASK_PAGE.STARTING && arrived <= page.arrivals ? page : undefined;
+
   // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
   const homeRefused = homeRefusedUnder(page);
+
   const homeRefusedNow =
     homeRefused !== undefined && arrived <= homeRefused.arrivals
       ? { opening: homeRefusals, refused: homeRefused.refused }
@@ -689,6 +723,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     onOpenIn: (repository) => newTaskWith({ repository }),
     onOpenRelated: (taskId, kind) => {
       const task = doors.taskOf(taskId);
+
       if (task === undefined) return;
       newTaskWith({ relation: { kind, task } });
     },

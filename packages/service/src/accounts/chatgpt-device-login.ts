@@ -116,9 +116,11 @@ interface ChatGptDevicePoll {
 /** The seconds OpenAI named between polls, or the default where it named none that reads as a count. */
 function intervalOf(interval: string | number | undefined): number {
   const seconds = typeof interval === "string" ? Number(interval.trim()) : interval;
+
   if (seconds === undefined || !Number.isInteger(seconds) || seconds <= 0) {
     return POLL_INTERVAL_SECONDS.DEFAULT;
   }
+
   return Math.max(seconds, POLL_INTERVAL_SECONDS.MIN);
 }
 
@@ -140,20 +142,26 @@ export const startChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(functio
   const answered = yield* postToOpenAi(CODEX_DEVICE_OAUTH.USER_CODE_URL, {
     json: { client_id: CODEX_DEVICE_OAUTH.CLIENT_ID },
   });
+
   if (Option.isNone(answered) || !succeeded(answered.value.status)) return Option.none();
   const issued = Schema.decodeUnknownOption(UserCodeAnswerSchema)(answered.value.body);
+
   if (Option.isNone(issued)) return Option.none();
   const userCode = issued.value.user_code ?? issued.value.usercode;
+
   if (userCode === undefined) return Option.none();
   const owner: DeviceLoginOwner = { userId, loginId: randomUUID() };
+
   const codes = Schema.encodeSync(DeviceCodesJson)({
     deviceAuthId: issued.value.device_auth_id,
     userCode,
   });
+
   const sealed = sealChatGptDeviceCodes(ring, owner, Redacted.make(codes));
   const now = yield* DateTime.nowAsDate;
   const expiresAt = new Date(now.getTime() + Duration.toMillis(DEVICE_CODE_LIFETIME));
   yield* beginChatGptDeviceLogin(owner, sealed, expiresAt, now, add);
+
   const start: ChatGptDeviceStartAnswer = {
     loginId: owner.loginId,
     userCode,
@@ -161,6 +169,7 @@ export const startChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(functio
     intervalSeconds: intervalOf(issued.value.interval),
     expiresAt: expiresAt.getTime(),
   };
+
   return Option.some(start);
 });
 
@@ -184,18 +193,24 @@ const exchangeCode = /* @__PURE__ */ Effect.fnUntraced(function* (
       code_verifier: code.code_verifier,
     },
   });
+
   if (Option.isNone(answered) || !succeeded(answered.value.status)) return undefined;
   const tokens = Schema.decodeUnknownOption(ExchangeAnswerSchema)(answered.value.body);
+
   if (Option.isNone(tokens)) return undefined;
   const checked = yield* verifyCodexDeviceIdToken(tokens.value.id_token, cache);
+
   if (checked.verdict !== CHATGPT_ID_TOKEN.VERIFIED) return undefined;
   const now = yield* DateTime.nowAsDate;
+
   const accessExpiresAt = codexAccessExpiryOf(
     tokens.value.access_token,
     now,
     tokens.value.expires_in,
   );
+
   if (accessExpiresAt === undefined) return undefined;
+
   return {
     accessToken: tokens.value.access_token,
     refreshToken: tokens.value.refresh_token,
@@ -225,28 +240,38 @@ export const pollChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function
     Effect.fnUntraced(function* (locked) {
       const answer = (outcome: ChatGptDeviceLoginOutcome, connectedNow = false) =>
         ({ outcome, connectedNow }) satisfies ChatGptDevicePoll;
+
       const settle = (outcome: ChatGptDeviceSettled) =>
         Effect.as(settleChatGptDeviceLogin(owner, outcome), answer(outcome));
+
       if (Option.isNone(locked)) return answer(CHATGPT_DEVICE_LOGIN.CANCELED);
       const row = locked.value;
+
       if (row.outcome !== null) return answer(row.outcome);
       const now = yield* DateTime.nowAsDate;
+
       if (now.getTime() >= row.expiresAt.getTime()) {
         return yield* settle(CHATGPT_DEVICE_LOGIN.EXPIRED);
       }
+
       const opened =
         row.sealedCodes === null ? undefined : openChatGptDeviceCodes(ring, owner, row.sealedCodes);
+
       const codes =
         opened === undefined || Result.isFailure(opened)
           ? Option.none()
           : Schema.decodeUnknownOption(DeviceCodesJson)(Redacted.value(opened.success));
+
       if (Option.isNone(codes)) return yield* settle(CHATGPT_DEVICE_LOGIN.REFUSED);
+
       // The device authorization and its code are revealed here alone, into the one body OpenAI reads them from.
       const polled = yield* postToOpenAi(CODEX_DEVICE_OAUTH.CODE_POLL_URL, {
         json: { device_auth_id: codes.value.deviceAuthId, user_code: codes.value.userCode },
       });
+
       if (Option.isNone(polled)) return answer(CHATGPT_DEVICE_LOGIN.PENDING);
       const { status, body } = polled.value;
+
       // Note that a throttle or a server error is asked again at the next poll, as a code not entered yet is.
       if (
         PENDING_STATUSES.has(status) ||
@@ -255,11 +280,14 @@ export const pollChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function
       ) {
         return answer(CHATGPT_DEVICE_LOGIN.PENDING);
       }
+
       const code = succeeded(status)
         ? Schema.decodeUnknownOption(CodeAnswerSchema)(body)
         : Option.none();
+
       if (Option.isNone(code)) return yield* settle(CHATGPT_DEVICE_LOGIN.REFUSED);
       const tokens = yield* exchangeCode(code.value, cache);
+
       if (tokens === undefined) return yield* settle(CHATGPT_DEVICE_LOGIN.REFUSED);
       const { sealed, hint } = sealCodexDeviceCredentials(ring, owner.userId, tokens);
       yield* saveProviderKey(
@@ -277,6 +305,7 @@ export const pollChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function
         },
       );
       yield* settleChatGptDeviceLogin(owner, CHATGPT_DEVICE_LOGIN.CONNECTED);
+
       return answer(CHATGPT_DEVICE_LOGIN.CONNECTED, true);
     }),
   );

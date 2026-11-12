@@ -29,6 +29,7 @@ const decodeSubkeys = Schema.decodeUnknownSync(RunnerTranscriptSubkeysSchema);
 /** The SDK's key as a call carries it: no subpath for the main transcript. */
 function keyOf(key: SessionKey): SessionKey {
   const { projectKey, sessionId, subpath } = key;
+
   return subpath === undefined ? { projectKey, sessionId } : { projectKey, sessionId, subpath };
 }
 
@@ -48,9 +49,12 @@ export function transcriptStore(
       },
       body: JSON.stringify(call),
     });
+
     if (!response.ok) throw new Error(`The transcript store answered ${response.status}`);
+
     return response.json();
   };
+
   return {
     append: async (key, entries) => {
       await post({ call: RUNNER_TRANSCRIPTS.CALL.APPEND, key: keyOf(key), entries });
@@ -58,17 +62,22 @@ export function transcriptStore(
     load: async (key) => {
       const entries: SessionStoreEntry[] = [];
       let after: number | null = null;
+
       do {
         const page = decodePage(
           await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE, key: keyOf(key), after }),
         );
+
         for (const entry of page.entries) entries.push(entry as SessionStoreEntry);
+
         // Note that a cursor that does not move on fails the load, which would otherwise never end.
         if (page.next !== null && after !== null && page.next <= after) {
           throw new Error("The transcript store answered a page that did not move on");
         }
+
         after = page.next;
       } while (after !== null);
+
       // Note that a key never written is answered null, as the SDK's `load` answers it.
       return entries.length > 0 ? entries : null;
     },
@@ -76,6 +85,7 @@ export function transcriptStore(
       const answer = decodeSessions(
         await post({ call: RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS, projectKey }),
       );
+
       return [...answer.sessions];
     },
     delete: async (key) => {
@@ -88,6 +98,7 @@ export function transcriptStore(
           key: { projectKey: key.projectKey, sessionId: key.sessionId },
         }),
       );
+
       return [...answer.subkeys];
     },
   };

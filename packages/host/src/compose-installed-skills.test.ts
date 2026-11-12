@@ -89,10 +89,12 @@ interface Replies {
 /** The service as a script: what it answers, every call it was asked, in order, and each workspace's live read. */
 function fakeService(options: { refuseInstall?: boolean } = {}) {
   const asked: string[] = [];
+
   const live: Readonly<Record<string, PolledLive<"skills", typeof LIVE_SIGNED_OUT>>> = {
     [WORKSPACE_ID]: polledLive(["skills"]),
     [OTHER_WORKSPACE_ID]: polledLive(["skills"]),
   };
+
   const replies: Replies = {
     install: options.refuseInstall
       ? {
@@ -103,6 +105,7 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
     remove: { id: SKILL_ID },
     gate: Effect.void,
   };
+
   /** A write's ask written down, then answered with `reply` once the gate lets it. */
   const writing = <A>(ask: string, reply: () => A) =>
     Effect.andThen(
@@ -112,6 +115,7 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
         Effect.sync(reply),
       ),
     );
+
   const client: InstalledSkillsClient = {
     // SAFETY: the skills' read is the one live read the client is asked for, answering its own script's rows.
     liveRead: ((
@@ -120,26 +124,31 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
       poll?: { readonly after?: string | undefined },
     ) => {
       const read = live[workspaceId] ?? assert.fail(`no live read of ${workspaceId}`);
+
       return poll !== undefined
         ? read.poll(poll.after)
         : Effect.sync(() => {
             asked.push(`live:${workspaceId}:${userId}`);
+
             return read.first();
           });
     }) as InstalledSkillsClient["liveRead"],
     read: (skillId) =>
       Effect.sync(() => {
         asked.push(`read:${skillId}`);
+
         return CONTENT;
       }),
     preview: (workspaceId) =>
       Effect.sync(() => {
         asked.push(`preview:${workspaceId}`);
+
         return UNSUPPORTED_PREVIEW;
       }),
     install: (params) => writing(`install:${params.scope}`, () => replies.install),
     remove: (skillId) => writing(`remove:${skillId}`, () => replies.remove),
   };
+
   return { client, asked, live, replies };
 }
 
@@ -149,6 +158,7 @@ function subject(
   return Effect.gen(function* () {
     const service = fakeService(options);
     const emitted: { kind: GatewayEventKind; payload: WireValue }[] = [];
+
     const composer = yield* composeInstalledSkills({
       kernel: {
         runMode: { sendsNetwork: options.sendsNetwork ?? true },
@@ -159,26 +169,33 @@ function subject(
       client: service.client,
       pool: yield* entityPool(),
     }).pipe(Effect.provide(noNetwork));
+
     /** Each skill a workspace's slice last showed, by its id; none where it showed no rows. */
     const shown = (workspaceId: string) => {
       // SAFETY: the host tells the skills slice whole, as built.
       const held = tellingsOf(emitted, LIVE_READ.INSTALLED_SKILLS).at(-1) as
         | AppInstalledSkills
         | undefined;
+
       return held?.[workspaceId]?.rows?.map(({ id }) => id);
     };
+
     /** Holds each workspace's skills, its read answering `rows` woken by a write, so it hands a wait for the next. */
     const holding = (rows: Readonly<Record<string, readonly InstalledSkillSummary[]>>) =>
       Effect.gen(function* () {
         for (const workspaceId of Object.keys(rows)) {
           yield* composer.acts.INSTALLED_SKILLS_FOLLOW.hold({ workspaceId });
         }
+
         yield* settled;
+
         for (const [workspaceId, skills] of Object.entries(rows)) {
           service.live[workspaceId]?.set({ skills: skills.map(rowOf) }, ["9100"]);
         }
+
         yield* nextPoll;
       });
+
     return {
       /** The composer's declared acts, each handed its input as the port reads it. */
       acts: composer.acts,

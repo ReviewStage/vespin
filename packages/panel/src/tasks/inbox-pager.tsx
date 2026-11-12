@@ -58,7 +58,9 @@ export function useInboxPager(
   const onNext = next === undefined ? undefined : () => onChoose(next);
   useAppCommand(APP_COMMAND.PREVIOUS_INBOX_ITEM, place.shown ? onPrevious : undefined);
   useAppCommand(APP_COMMAND.NEXT_INBOX_ITEM, place.shown ? onNext : undefined);
+
   if (at === undefined) return undefined;
+
   return {
     count: row === undefined ? undefined : { at: row.at, total: row.total },
     onPrevious,

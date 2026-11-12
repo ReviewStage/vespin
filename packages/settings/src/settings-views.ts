@@ -8,6 +8,7 @@ import {
 import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 
 export type { SettingsView };
+
 /**
  * Which page of the Settings tab is showing. App state rather than panel state
  * for the same reason the tab is — a shortcut or a button elsewhere in the
@@ -91,6 +92,7 @@ const FOLDED_INTO: ReadonlyMap<string, SettingsView> = new Map([
  */
 export function settingsViewNamed(page: string | undefined): SettingsView | undefined {
   if (page === undefined) return undefined;
+
   return SETTINGS_PAGE_LIST.find((view) => view === page) ?? FOLDED_INTO.get(page);
 }
 
@@ -193,5 +195,6 @@ const HARNESS_SECTION = {
  */
 export function agentKeyLink(provider: ModelProvider | undefined): SettingsLink {
   if (provider === undefined) return { page: SETTINGS_VIEW.AGENTS };
+
   return { page: SETTINGS_VIEW.AGENTS, section: HARNESS_SECTION[provider] };
 }

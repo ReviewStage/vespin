@@ -29,13 +29,16 @@ function liveStatements() {
           param === LIVE_PARAM.USER ? USER_ID : randomUUID(),
         ]),
       );
+
       const whole = Object.entries(Option.getOrThrow(query.statements(params)));
+
       const narrowed =
         query.delta === undefined
           ? []
           : Object.entries(Option.getOrThrow(query.delta.statements(params, MOVED_EVERYTHING))).map(
               ([part, statement]) => [`delta.${part}`, statement] as const,
             );
+
       return [...whole, ...narrowed].map(([part, statement]) => [
         `${query.name}.${part}`,
         statement,
@@ -54,6 +57,7 @@ it.layer(getTestDB())("the live statements", (it) => {
           ([part, statement]) =>
             Effect.map(mutableFunctionsOf(statement), (called) => [part, called] as const),
         );
+
         assert.deepEqual(
           mutable.filter(([, called]) => called.length > 0),
           [],

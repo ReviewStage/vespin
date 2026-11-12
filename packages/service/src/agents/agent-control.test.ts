@@ -50,16 +50,19 @@ const openTokenAgent = Effect.gen(function* () {
   const reader = yield* openTokenMember({ token: "fixture-reader-token" });
   const tokenless = yield* openGithubUser();
   const workspace = yield* openWorkspace(owner);
+
   for (const each of [reader, tokenless]) yield* joinWorkspace(workspace, each);
   const now = yield* DateTime.nowAsDate;
   const sealed = (yield* readGitHubTokenRow(reader))?.sealedToken ?? "";
   const side = [{ repository: "octo-member/side", readable: true }];
   yield* recordRepositoryReads(reader, sealed, side, now);
+
   const task = yield* createTask(owner, {
     organizationId: workspace,
     repository: "octo-member/side",
     githubAccess: GITHUB_ACCESS.TOKEN,
   });
+
   const started = yield* createAgent(owner, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -71,6 +74,7 @@ const openTokenAgent = Effect.gen(function* () {
     githubAccess: GITHUB_ACCESS.TOKEN,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { owner, reader, tokenless, workspace, task, agent: Option.getOrThrow(started).agent };
 });
 
@@ -81,12 +85,14 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
       Effect.gen(function* () {
         const { reader, tokenless, task, agent } = yield* openTokenAgent;
         const agentSessions = yield* routedSessions<TypedTurn>(reader);
+
         const steer = (userId: string) =>
           steerAgent(agentSessions, storeWriter({ tools: CODER_TOOL_SET }), userId, agent, {
             text: "Carry on.",
             clientKey: randomUUID(),
             sender: { kind: MESSAGE_SENDER.MEMBER, userId },
           });
+
         const startFrom = (userId: string, messageId?: string) =>
           startFromOf(
             userId,
@@ -115,6 +121,7 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
         const { owner, tokenless, workspace, task } = yield* openTokenAgent;
         // Note that a native runtime with no payer asks for no API key, so the send reaches the task's gate.
         const repository = "octo-member/app-side";
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -126,10 +133,12 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
           githubAccess: GITHUB_ACCESS.APP,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const agent = Option.getOrThrow(started).agent;
         const agentSessions = yield* routedSessions<TypedTurn>(tokenless);
 
         assert.ok(Option.isSome(yield* readAgent(tokenless, agent.id)));
+
         const refused = yield* Effect.flip(
           steerAgent(agentSessions, storeWriter({ tools: CODER_TOOL_SET }), tokenless, agent, {
             text: "Carry on.",
@@ -137,19 +146,24 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
             sender: { kind: MESSAGE_SENDER.MEMBER, userId: tokenless },
           }),
         );
+
         assert.deepEqual(refused, HOSTED_REFUSAL.NOT_FOUND);
+
         // The workspace's installation reaches the agent's repository, so only the task's visibility refuses the read.
         const installation: InstallationFixture = {
           id: 300,
           login: "octo-member",
           repositories: [{ owner: "octo-member", name: "app-side" }],
         };
+
         yield* connectWorkspaceGitHub(workspace, installation);
+
         const unreached = yield* Effect.flip(
           agentPullRequestReach(tokenless, { ...agent, repository }).pipe(
             Effect.provide(githubReaching([installation]).layer),
           ),
         );
+
         assert.equal(unreached._tag, "RepositoryNotReachable");
       }).pipe(Effect.provide(NO_GITHUB)),
   );
@@ -164,11 +178,13 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
         const teammate = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         yield* joinWorkspace(workspace, teammate);
+
         const task = yield* createTask(owner, {
           organizationId: workspace,
           repository: "octo-member/app",
           githubAccess: GITHUB_ACCESS.APP,
         });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -181,6 +197,7 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           machine: AGENT_MACHINE.DEVICE,
         });
+
         const onMac = Option.getOrThrow(started).agent;
         const agentSessions = yield* routedSessions<TypedTurn>(teammate);
 
@@ -191,6 +208,7 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
             sender: { kind: MESSAGE_SENDER.MEMBER, userId: teammate },
           }),
         );
+
         const from = yield* startFromOf(
           teammate,
           { taskId: task.id },

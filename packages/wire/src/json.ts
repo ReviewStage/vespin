@@ -34,14 +34,17 @@ export type UnparsedWireValue = WireValue | undefined;
  */
 function isPlainWireRecordShape(value: unknown): value is WireRecord {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
   const prototype = Object.getPrototypeOf(value);
+
   return prototype === Object.prototype || prototype === null;
 }
 
 /** A record whose own shape is a wire record and whose every value is itself one. */
 function isWireRecordValue(value: unknown): value is WireRecord {
   if (!isPlainWireRecordShape(value)) return false;
+
   return Object.values(value).every((entry) => readsWireValue(entry));
 }
 
@@ -137,6 +140,7 @@ export function isPlainRecord(value: WireBoundaryInput): value is WireBoundaryRe
 export function text(value: UnparsedWireValue): string | undefined {
   if (!isWireString(value)) return undefined;
   const normalized = value.trim();
+
   return normalized || undefined;
 }
 
@@ -153,6 +157,7 @@ export function isInstant(value: UnparsedWireValue): value is number {
 
 export function wholeNumber(value: UnparsedWireValue): number | undefined {
   if (!isWireNumber(value) || !Number.isFinite(value)) return undefined;
+
   return value;
 }
 
@@ -172,6 +177,7 @@ export function wholeText(value: string | undefined): string | undefined {
     .replace(/[^\S\n]+$/gmu, "")
     .replace(/\n{3,}/gu, "\n\n")
     .replace(/^\n+|\n+$/gu, "");
+
   return normalized || undefined;
 }
 
@@ -201,16 +207,19 @@ export function jsonRoundTrip<Value>(value: Value): UnparsedWireValue {
 
 export function recordFromJsonLine(line: string): WireRecord | undefined {
   const parsed = valueFromJsonText(line);
+
   return isRecord(parsed) ? parsed : undefined;
 }
 
 export function positiveInteger(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return fallback;
+
   return Math.floor(value);
 }
 
 export function nonNegativeNumber(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value) || value < 0) return fallback;
+
   return value;
 }
 
@@ -233,12 +242,15 @@ export function resolveOptions<K extends string>(
   },
 ): ResolvedNumericOptions<K> {
   const resolved: { [P in K]: number } = { ...defaults };
+
   for (const key of bounds.positive ?? []) {
     resolved[key] = positiveInteger(options[key], defaults[key]);
   }
+
   for (const key of bounds.nonNegative ?? []) {
     resolved[key] = nonNegativeNumber(options[key], defaults[key]);
   }
+
   return resolved;
 }
 

@@ -3,6 +3,7 @@ import { Schema } from "effect";
 
 export const USAGE_LIMIT_PART = "data-usage-limit";
 export const USAGE_LIMIT_AGENT = { CLAUDE: "Claude", CODEX: "Codex" } as const;
+
 export type UsageLimitAgent = (typeof USAGE_LIMIT_AGENT)[keyof typeof USAGE_LIMIT_AGENT];
 
 export const UsageLimitNoticeSchema = Schema.Struct({
@@ -12,9 +13,12 @@ export const UsageLimitNoticeSchema = Schema.Struct({
   /** The plan or key that ran out and the one the turn went on with, as Settings named them; absent for a pause or a stop. */
   moved: Schema.optionalKey(Schema.Struct({ from: Schema.String, to: Schema.String })),
 });
+
 export type UsageLimitNotice = typeof UsageLimitNoticeSchema.Type;
+
 export type UsageLimitMove = NonNullable<UsageLimitNotice["moved"]>;
 
 /** A worker's call the plan's usage limit ended, as its answer carries it: the notice its row draws in its answer's place. */
 export const UsageLimitAnswerSchema = Schema.Struct({ usageLimit: UsageLimitNoticeSchema });
+
 export type UsageLimitAnswer = typeof UsageLimitAnswerSchema.Type;

@@ -50,8 +50,10 @@ function stagedTasks(held: AppStateSnapshot, choices: AgentChoices): AppStateSna
   const listed = stagedLists.has(held.tasks)
     ? held.tasks
     : inboxTasksView(held.run.profile, held.tasks);
+
   const staged = chosenTasksView(listed, choices);
   stagedLists.add(staged);
+
   return staged;
 }
 
@@ -83,6 +85,7 @@ type StorePatch = Parameters<AppStateStore["update"]>[0];
 function stagedPatch(held: AppStateSnapshot, staged: AppStateSnapshot): StorePatch {
   // SAFETY: the keys of a snapshot are its slices beside the window's facts and the version, which are the store's own to keep and are left out here.
   const names = Object.keys(staged) as (keyof AppStateSnapshot)[];
+
   return Object.fromEntries(
     names
       .filter((name) => name !== "window" && name !== "version" && staged[name] !== held[name])
@@ -93,6 +96,7 @@ function stagedPatch(held: AppStateSnapshot, staged: AppStateSnapshot): StorePat
 /** The network as held, or with the service refusing this build as older than it serves where the launch asks for that; the slice held where it says so already. */
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
   if (!updateNeeded || held.network.updateNeeded === true) return held.network;
+
   return { ...held.network, updateNeeded: true };
 }
 
@@ -107,20 +111,26 @@ export function stageFixture(
   updateNeeded = false,
 ): void {
   const snapshot = state.snapshot();
+
   if (!snapshot.run.fixtureMode || snapshot.run.profile === RUN_PROFILE.IDLE) return;
   const held: AppStateSnapshot = { ...snapshot, window: { fullScreen: false } };
   const inbox = inboxAppState(held, FIXTURE_WORKSPACE_IDS);
+
   if (inbox === held) return;
+
   const parts = olderPageAppState(
     pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
     OLDER_ASKS.get(state) ?? 0,
   );
+
   const reminded = inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS);
+
   const staged = {
     ...reminded,
     tasks: stagedTasks(held, CHOICES.get(state) ?? NO_CHOICES),
     network: stagedNetwork(held, updateNeeded),
   };
+
   state.update(stagedPatch(held, staged));
 }
 
@@ -144,6 +154,7 @@ function keepChoice(
   payload: PortActPayload<PortActKind>,
 ): void {
   const changed = agentChangeOf(kind, payload);
+
   if (changed === undefined) return;
   const held = CHOICES.get(state) ?? NO_CHOICES;
   const change = { ...held.get(changed.agentId), ...changed.change };
@@ -161,6 +172,7 @@ function keepMove(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
   const move = pullRequestMoveOf(request);
+
   if (number === undefined || move === undefined) return;
   MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
   stageFixture(state);
@@ -178,9 +190,11 @@ function olderRead(
   // SAFETY: the payload is the kind's, which the guard above names.
   const params = payload as PortActPayload<typeof ACT_KIND.AGENTS_TRANSCRIPT_OLDER>;
   const answer = olderPageAnswer(profile, params, asks);
+
   if (answer === undefined) return undefined;
   OLDER_ASKS.set(state, asks);
   stageFixture(state);
+
   return answer;
 }
 
@@ -229,21 +243,27 @@ export function fixtureActs(
     get(target, kind) {
       const port: PortMembers = target;
       const sent = port[kind];
+
       if (typeof kind !== "string" || typeof sent !== "function") return sent;
+
       return (payload: unknown, ...rest: unknown[]) => {
         // SAFETY: the port is keyed by act kind.
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
+
         if (refused !== undefined) return Promise.resolve(refused());
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const asked = payload as PortActPayload<PortActKind>;
         const older = olderRead(state, profile, kind as PortActKind, asked);
+
         if (older !== undefined) return Promise.resolve(older);
+
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const staged = inboxActAnswer(
           profile,
           kind as PortActKind,
           payload as PortActPayload<PortActKind>,
         );
+
         if (staged === undefined) return sent.call(target, payload, ...rest);
         // SAFETY: as above.
         keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
@@ -251,6 +271,7 @@ export function fixtureActs(
         keepReminder(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+
         return Promise.resolve(staged.answer);
       };
     },

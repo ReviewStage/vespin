@@ -206,7 +206,9 @@ const NO_TALLY: FindTally = { count: 0, at: -1 };
 /** Whether two subjects name the same tab of the same plan, the same agent's page, or the same place on the same page. */
 function sameSubject(a: FindSubject, b: FindSubject): boolean {
   if ("task" in a) return "task" in b && a.task === b.task && sameTab(a.tab, b.tab);
+
   if ("agent" in a) return "agent" in b && a.agent === b.agent;
+
   return "page" in b && a.page === b.page && a.at === b.at;
 }
 
@@ -227,6 +229,7 @@ function useFindMatches(
   const folds = useRef(new Set<HTMLDetailsElement>());
   const [tally, setTally] = useState<FindTally>({ count: 0, at: -1 });
   const { onAt } = kept;
+
   const paint = useCallback(
     (next: FindPainting) => {
       repaint(painting.current, next);
@@ -236,31 +239,39 @@ function useFindMatches(
     },
     [onAt],
   );
+
   // The match a find held where its scope is drawn again, which its first search stands on rather than the first.
   const resumed = useRef(kept.at);
 
   useEffect(() => {
     if (root === null || query.length === 0) {
       paint(NO_PAINTING);
+
       return;
     }
+
     const search = (shown: boolean) => {
       const held = painting.current;
       const ranges = findRanges(root, query, leftOut);
       const resume = resumed.current;
       resumed.current = -1;
+
       // Note that a find drawn again stands where it was without bringing the match into view, since the page keeps where it stood scrolled.
       const at =
         resume >= 0 && resume < ranges.length
           ? resume
           : matchFrom(ranges, held.ranges[held.at], root);
+
       paint({ ranges, at });
       const range = ranges[at];
+
       // Note that a query matching nothing closes what the find opened for the one before it.
       if (ranges.length === 0) releaseFolds(folds.current);
       else if (shown && resume < 0 && range !== undefined) reveal(range, root, folds.current);
     };
+
     search(true);
+
     return watchText(root, () => search(false));
   }, [root, query, leftOut, paint]);
 
@@ -270,12 +281,15 @@ function useFindMatches(
   const step = (by: FindStep) => {
     const held = painting.current;
     const count = held.ranges.length;
+
     if (root === null || count === 0) return;
     const at = (held.at + by + count) % count;
     paint({ ranges: held.ranges, at });
     const range = held.ranges[at];
+
     if (range !== undefined) reveal(range, root, folds.current);
   };
+
   return { tally, step };
 }
 
@@ -289,14 +303,18 @@ function useSourceMatches(source: FindSource | undefined, query: string): FindMa
   useEffect(() => source?.onTally(setTally), [source]);
   useEffect(() => {
     if (source === undefined) return;
+
     if (query.length === 0) {
       source.clear();
       setTally(NO_TALLY);
+
       return;
     }
+
     source.search(query);
   }, [source, query]);
   useEffect(() => () => source?.clear(), [source]);
+
   return { tally, step: (by) => source?.step(query, by) };
 }
 
@@ -376,11 +394,13 @@ function FindBar({
 }): React.JSX.Element {
   const left =
     details === undefined || details.searched || query.length === 0 ? 0 : (tally.left ?? 0);
+
   const field = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     field.current?.focus({ preventScroll: true });
     field.current?.select();
   }, [summons]);
+
   return (
     <MenuSurface
       ref={surface}
@@ -467,8 +487,10 @@ export function useFindDetails(): boolean {
   const { offerDetails } = useContext(FindScopeContext);
   useEffect(() => {
     offerDetails(true);
+
     return () => offerDetails(false);
   }, [offerDetails]);
+
   return useContext(FindDetailsContext);
 }
 
@@ -480,6 +502,7 @@ export function useFindDetails(): boolean {
 export function FindDetailFolds({ children }: { children: ReactNode }): React.JSX.Element {
   const finding = useDisclosureFinding();
   const searched = useContext(FindDetailsContext);
+
   return <DisclosureFind finding={finding && searched}>{children}</DisclosureFind>;
 }
 
@@ -491,6 +514,7 @@ export function useFindSource(source: FindSource | undefined): void {
   const { offer } = useContext(FindScopeContext);
   useEffect(() => {
     offer(source);
+
     return () => offer(undefined);
   }, [offer, source]);
 }
@@ -531,12 +555,15 @@ export function FindScope({
   // The query, and where the bar stands open.
   const { query, bar, at } = useSelector(store);
   const setQuery = (next: string) => store.setState((was) => ({ ...was, query: next }));
+
   const setBar = (next: FindSubject | undefined) =>
     store.setState((was) => ({ ...was, bar: next }));
+
   const onAt = useCallback(
     (next: number) => store.setState((was) => (was.at === next ? was : { ...was, at: next })),
     [store],
   );
+
   // How many times ⌘F has summoned the bar.
   const [summons, setSummons] = useState(0);
   const back = useRef<HTMLElement | null>(null);
@@ -559,34 +586,42 @@ export function FindScope({
   const offered = offerings > 0;
   const [detailsSearched, setDetailsSearched] = useKept(FIND_KEPT.DETAILS, false);
   const searchesDetails = !offered || detailsSearched;
+
   const domMatches = useFindMatches(
     source === undefined ? root : null,
     open ? query : "",
     searchesDetails ? undefined : FIND_DETAILS_LEFT_OUT,
     { at, onAt },
   );
+
   const sourceMatches = useSourceMatches(source, open ? query : "");
   const { tally, step } = source === undefined ? domMatches : sourceMatches;
   const [tallied, setTallied] = useState(tally);
+
   if (open && tallied !== tally) setTallied(tally);
 
   const summon = () => {
     if (root === null) return;
     const words = source === undefined ? selectedWords(root) : source.selection();
+
     if (words !== undefined) setQuery(words);
     // Note that the focus to hand back is the one before the bar first
     // opened, since a second ⌘F finds it in the bar's own field.
     const focused = document.activeElement;
+
     if (!open) back.current = focused instanceof HTMLElement ? focused : null;
     setBar(subject);
     setSummons((count) => count + 1);
   };
+
   const close = () => {
     setBar(undefined);
     const target = back.current;
     back.current = null;
+
     if (target?.isConnected) target.focus({ preventScroll: true });
   };
+
   useAppCommand(APP_COMMAND.FIND, active ? summon : undefined);
   useAppCommand(APP_COMMAND.FIND_NEXT, active && open ? () => step(FIND_STEP.NEXT) : undefined);
   useAppCommand(
@@ -601,6 +636,7 @@ export function FindScope({
       else if (open) step(chord === APP_COMMAND.FIND_NEXT ? FIND_STEP.NEXT : FIND_STEP.PREVIOUS);
     };
   });
+
   const [doors] = useState<FindScopeDoors>(() => ({
     offer: setSource,
     press: (chord) => pressed.current(chord),

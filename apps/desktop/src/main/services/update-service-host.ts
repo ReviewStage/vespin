@@ -90,6 +90,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
       fileName: "last-run-version.json",
       read: (record) => {
         const version = text(record.version);
+
         return version === undefined ? undefined : { version };
       },
       write: (state) => state,
@@ -99,8 +100,10 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
     // The menu bar is drawn again only when its item's act changes, not on
     // every download tick.
     let shownAct: UpdateMenuAct | undefined | null = null;
+
     const showMenu = (update: UpdateSnapshot) => {
       const act = updateMenuAct(update, config.packaged);
+
       if (act === shownAct) return;
       shownAct = act;
       config.showMenuBar({
@@ -120,6 +123,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
     };
 
     const engine = dependencies.engine;
+
     const service = yield* UpdateService.make({
       currentVersion: config.appVersion,
       onChange: (update) => {
@@ -156,6 +160,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
         recordProductEvent(PRODUCT_EVENT.UPDATE_ACTION, {
           update_action: PRODUCT_UPDATE_ACTION.CHECK,
         });
+
         return service.check({ asked: true });
       },
       // Note that the press is counted only once the developer says to
@@ -183,8 +188,10 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
         void config.openExternal(UPDATE_ENDPOINT.CHANGELOG_PAGE_URL);
       },
     };
+
     // A build whose updater never moves still shows where it stands.
     showMenu(service.snapshot());
+
     return host;
   },
 );

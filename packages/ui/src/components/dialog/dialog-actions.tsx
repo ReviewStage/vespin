@@ -86,6 +86,7 @@ export type DialogActionsProps =
 /** A dialog's answers at its foot: Cancel, an other way on, then the act; or Done alone. */
 export function DialogActions(props: DialogActionsProps): React.JSX.Element {
   const unmasked = useContext(DialogReplayUnmasked);
+
   if (props.onDone !== undefined) {
     return (
       <Button variant={BUTTON_VARIANT.PRIMARY} onClick={props.onDone}>
@@ -93,8 +94,10 @@ export function DialogActions(props: DialogActionsProps): React.JSX.Element {
       </Button>
     );
   }
+
   const { act, other } = props;
   const settling = act.busy === true || act.landed === true;
+
   return (
     <>
       <Button

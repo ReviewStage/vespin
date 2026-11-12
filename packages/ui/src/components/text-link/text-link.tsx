@@ -110,6 +110,7 @@ function linkClass(
   linked: boolean,
 ): string {
   const { rest, lit } = LOOK_CLASS[look];
+
   return [
     LINK_BASE,
     rest,
@@ -149,9 +150,11 @@ function outWords(children: ReactNode): ReactNode {
       </>
     );
   }
+
   // Note that we split by code point, so a letter outside the basic plane stays whole.
   const letters = Array.from(children);
   const last = letters.pop();
+
   return (
     <>
       {letters.join("")}
@@ -213,13 +216,16 @@ export function TextLink({
       {external ? outWords(children) : children}
     </>
   );
+
   const press = pulseOnPress(onClick, PRESS_PULSE.WORDS);
+
   const face = {
     "data-look": look,
     "data-variant": variant,
     "data-font": font,
     "data-height": height,
   };
+
   if (href === undefined) {
     return (
       <span className={linkClass(look, variant, font, height, false)} {...face} {...hint}>
@@ -227,6 +233,7 @@ export function TextLink({
       </span>
     );
   }
+
   return (
     <a
       className={linkClass(look, variant, font, height, true)}

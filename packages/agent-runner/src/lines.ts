@@ -77,9 +77,11 @@ function readOnce(
   const url = new URL(read.url);
   url.searchParams.set(RUNNER_LINES.QUERY.LAUNCH, String(read.launch));
   url.searchParams.set(RUNNER_LINES.QUERY.AFTER, String(after));
+
   const request = HttpClientRequest.get(url.toString()).pipe(
     HttpClientRequest.bearerToken(read.bearer),
   );
+
   return client.execute(request).pipe(
     Effect.timeout(READ_TIMEOUT),
     // Note that the error is not kept as the cause, because the request it carries holds the bearer in its headers.
@@ -87,10 +89,12 @@ function readOnce(
     Effect.flatMap((response) => {
       if (response.status !== HTTP_OK) {
         const transient = response.status >= SERVER_ERROR || TRANSIENT_STATUS.has(response.status);
+
         return Effect.fail(
           new LinesUnread({ transient, detail: `The service answered ${response.status}` }),
         );
       }
+
       return response.json.pipe(
         Effect.mapError(
           () => new LinesUnread({ transient: true, detail: "The service's answer is not JSON" }),
@@ -121,14 +125,18 @@ export const readLines = Effect.fn("agent-runner/readLines")(function* (
 ) {
   const client = yield* HttpClient.HttpClient;
   let after = 0;
+
   for (;;) {
     const answered = yield* readOnce(client, read, after).pipe(
       Effect.retry({ schedule: READ_BACKOFF, while: (unread) => unread.transient }),
       Effect.result,
     );
+
     if (Result.isFailure(answered)) return yield* answered.failure;
+
     for (const line of answered.success.lines) {
       if (line.seq <= after) continue;
+
       if (!(yield* Queue.offer(lines, line.text))) return;
       after = line.seq;
     }

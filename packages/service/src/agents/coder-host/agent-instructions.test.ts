@@ -53,6 +53,7 @@ const BLANK_JOB = "do what the developer asks of you in this conversation";
 
 test("an agent started with neither a description nor a prompt is told to do what the developer asks, on every harness", () => {
   const blank = agentHanded({ descriptionSnapshot: null, prompt: null });
+
   for (const harness of Object.values(CODER_HARNESS)) {
     const instructions = agentCoderInstructions(blank, { ...CONTEXT, harness });
     assert.ok(instructions.includes(BLANK_JOB), harness);
@@ -62,6 +63,7 @@ test("an agent started with neither a description nor a prompt is told to do wha
 
 test("an agent handed a description is told to implement it, on every harness", () => {
   const planned = agentHanded({ descriptionSnapshot: "# Invitations", prompt: null });
+
   for (const harness of Object.values(CODER_HARNESS)) {
     const instructions = agentCoderInstructions(planned, { ...CONTEXT, harness });
     assert.ok(instructions.includes(DESCRIPTION_JOB), harness);

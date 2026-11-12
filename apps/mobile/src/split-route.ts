@@ -37,6 +37,7 @@ export function useSplitSelection(tab: SplitTab): {
     router.setParams({ selected: undefined });
     router.push(itemRoute(tab, selected));
   }, [regular, selected, router, tab]);
+
   return { selected, select: (id) => router.setParams({ selected: id }) };
 }
 
@@ -53,5 +54,6 @@ export function useHandToSplit(tab: SplitTab, id: string): boolean {
   useEffect(() => {
     if (regular) router.dismissTo({ pathname: tab, params: { selected: id } });
   }, [regular, router, tab, id]);
+
   return regular;
 }

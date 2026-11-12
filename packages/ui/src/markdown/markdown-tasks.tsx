@@ -51,8 +51,11 @@ const TASK_ITEMS = new WeakMap<Element, TaskItem>();
 /** A list item's own words, a picture's alt text among them, without the words of a list nested in it. */
 function itemWords(node: ElementContent): string {
   if (node.type === "text") return node.value;
+
   if (node.type !== "element" || node.tagName === "ul" || node.tagName === "ol") return "";
+
   if (node.tagName === "img") return isWireString(node.properties.alt) ? node.properties.alt : "";
+
   return node.children.map(itemWords).join("");
 }
 
@@ -68,9 +71,11 @@ function placeTasks(parent: Root | Element, item: Element | undefined): void {
     if (child.type !== "element") continue;
     const own = child.tagName === "li" ? child : item;
     const at = own?.position?.start.offset;
+
     if (child.tagName === "input" && child.properties.type === "checkbox" && own) {
       TASK_ITEMS.set(child, { at, label: own.children.map(itemWords).join("").trim() });
     }
+
     placeTasks(child, own);
   }
 }
@@ -110,7 +115,9 @@ export function TaskBox({
  */
 export const readTaskInput: NonNullable<Components["input"]> = ({ node, ...props }) => {
   const item = node === undefined ? undefined : TASK_ITEMS.get(node);
+
   if (props.type !== "checkbox") return <input {...props} />;
+
   return (
     <span className={TASK_BOX_CLASS}>
       <Checkbox
@@ -128,6 +135,7 @@ export function taskInput(drawBox: MarkdownTaskBox): NonNullable<Components["inp
   return ({ node, ...props }) => {
     const item = node === undefined ? undefined : TASK_ITEMS.get(node);
     const at = item?.at;
+
     return item === undefined || at === undefined ? (
       <Checkbox label="Task" checked={props.checked === true} disabled onChange={() => undefined} />
     ) : (

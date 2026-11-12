@@ -13,5 +13,6 @@ export function isComposingKey(event: ReactKeyboardEvent | KeyboardEvent): boole
   // Note that Safari reports the composition's last key with `isComposing`
   // already false, and code 229 still, so both are read.
   const native = "nativeEvent" in event ? event.nativeEvent : event;
+
   return native.isComposing || event.keyCode === 229;
 }

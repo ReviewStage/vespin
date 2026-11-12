@@ -49,6 +49,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -58,6 +59,7 @@ function type(field: HTMLInputElement | HTMLTextAreaElement, value: string): voi
     field instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
       : HTMLInputElement.prototype;
+
   const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
   act(() => {
     setter?.call(field, value);
@@ -75,6 +77,7 @@ function press(field: HTMLElement, init: KeyboardEventInit): void {
 function Name(): React.JSX.Element {
   const [name, setName] = useState("");
   const [enters, setEnters] = useState(0);
+
   return createElement(
     "div",
     null,
@@ -91,6 +94,7 @@ function Name(): React.JSX.Element {
 
 function fieldNamed(page: HTMLElement, name: string): HTMLInputElement {
   const field = page.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
+
   return field ?? assert.fail(`no field named ${name}`);
 }
 
@@ -114,6 +118,7 @@ test("Enter answers onEnter, except the Enter that commits an input method's com
 
 test("Escape answers onEscape, except an input method's composing Escape, and every one reaches the window marked taken", () => {
   const escapes: string[] = [];
+
   const page = render(
     createElement(
       "div",
@@ -132,16 +137,19 @@ test("Escape answers onEscape, except an input method's composing Escape, and ev
       }),
     ),
   );
+
   const pageEscapes: KeyboardEvent[] = [];
   const listen = (event: KeyboardEvent) => pageEscapes.push(event);
   window.addEventListener("keydown", listen);
   const area = page.querySelector("textarea") ?? assert.fail("no text area");
+
   const presses: { field: HTMLElement; init: KeyboardEventInit }[] = [
     { field: fieldNamed(page, "Name"), init: {} },
     { field: area, init: {} },
     { field: area, init: { isComposing: true } },
     { field: area, init: { keyCode: 229 } },
   ];
+
   for (const { field, init } of presses) {
     const event = new KeyboardEvent("keydown", {
       key: "Escape",
@@ -149,10 +157,12 @@ test("Escape answers onEscape, except an input method's composing Escape, and ev
       cancelable: true,
       ...init,
     });
+
     act(() => {
       field.dispatchEvent(event);
     });
   }
+
   window.removeEventListener("keydown", listen);
   assert.deepEqual(escapes, ["name", "notes"]);
   assert.deepEqual(
@@ -165,6 +175,7 @@ test("Escape answers onEscape, except an input method's composing Escape, and ev
 test("a text area holds the many lines its caller holds and hands back every change", () => {
   function Notes(): React.JSX.Element {
     const [notes, setNotes] = useState("");
+
     return createElement(
       "div",
       null,
@@ -172,6 +183,7 @@ test("a text area holds the many lines its caller holds and hands back every cha
       createElement("output", null, notes.split("\n").length),
     );
   }
+
   const page = render(createElement(Notes));
   const area = page.querySelector("textarea") ?? assert.fail("no text area");
   type(area, "One\nTwo");
@@ -182,6 +194,7 @@ test("a text area holds the many lines its caller holds and hands back every cha
 test("a paste reaches a text area's caller, which may take it instead of the text", () => {
   function Note(): React.JSX.Element {
     const [taken, setTaken] = useState(0);
+
     return createElement(
       "div",
       null,
@@ -198,6 +211,7 @@ test("a paste reaches a text area's caller, which may take it instead of the tex
       createElement("output", null, `${String(taken)} taken`),
     );
   }
+
   const page = render(createElement(Note));
   const area = page.querySelector("textarea") ?? assert.fail("no text area");
   const paste = new Event("paste", { bubbles: true, cancelable: true });
@@ -228,6 +242,7 @@ test("a text entry asked not to is left out of the system's spell check, and is 
       createElement(TextField, { label: "Note", value: "", onChange: () => undefined }),
     ),
   );
+
   assert.equal(fieldNamed(page, "Name").getAttribute("spellcheck"), "false");
   assert.equal(page.querySelector("textarea")?.getAttribute("spellcheck"), "false");
   assert.equal(fieldNamed(page, "Note").getAttribute("spellcheck"), null);
@@ -248,6 +263,7 @@ test("a field asked to is left out of the system's autofill, and is the browser'
       createElement(TextField, { label: "Note", value: "", onChange: () => undefined }),
     ),
   );
+
   assert.equal(fieldNamed(page, "API key").autocomplete, "off");
   assert.equal(fieldNamed(page, "Note").getAttribute("autocomplete"), null);
 });
@@ -262,12 +278,15 @@ test("inside a field, a text entry is named, described, and marked invalid by th
         createElement(TextField, { field, value: "", onChange: () => undefined }),
     }),
   );
+
   const field = page.querySelector("input") ?? assert.fail("no field");
   assert.equal(page.querySelector(`label[for="${field.id}"]`)?.textContent, "Workspace name");
+
   const described = (field.getAttribute("aria-describedby") ?? "")
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent)
     .join(" ");
+
   assert.equal(described, "Everyone sees it. Give it a name.");
   assert.equal(field.getAttribute("aria-invalid"), "true");
 });
@@ -286,6 +305,7 @@ test("a text entry standing alone in a settings row is described by the row's de
         }),
     }),
   );
+
   const field = page.querySelector("input") ?? assert.fail("no field");
   const describedBy = field.getAttribute("aria-describedby") ?? assert.fail("not described");
   assert.equal(document.getElementById(describedBy)?.textContent, "Read from the base branch.");
@@ -315,25 +335,31 @@ test("a text entry standing alone in a settings row reports itself invalid while
         }),
       ],
     });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(row(undefined)));
+
   const entries = [
     container.querySelector("input") ?? assert.fail("no field"),
     container.querySelector("textarea") ?? assert.fail("no text area"),
   ];
+
   for (const entry of entries) assert.equal(entry.getAttribute("aria-invalid"), null);
 
   act(() => root.render(row("That isn't a schedule Vespin can read.")));
+
   for (const entry of entries) assert.equal(entry.getAttribute("aria-invalid"), "true");
 
   act(() => root.render(row(undefined)));
+
   for (const entry of entries) assert.equal(entry.getAttribute("aria-invalid"), null);
 });
 
 test("a number field hands back the number typed, and nothing while it is empty or not yet a number", () => {
   const changes: (number | undefined)[] = [];
+
   const page = render(
     createElement(TextField, {
       label: "Count",
@@ -342,14 +368,17 @@ test("a number field hands back the number typed, and nothing while it is empty 
       onChange: (value) => changes.push(value),
     }),
   );
+
   const field = fieldNamed(page, "Count");
   assert.equal(field.value, "3");
+
   for (const typed of ["12", "", "-", "2.5"]) type(field, typed);
   assert.deepEqual(changes, [12, undefined, undefined, 2.5]);
 });
 
 test("a text entry answers the caret leaving it, and says the chord that acts on it", () => {
   const left: string[] = [];
+
   const page = render(
     createElement(
       "div",
@@ -369,6 +398,7 @@ test("a text entry answers the caret leaving it, and says the chord that acts on
       }),
     ),
   );
+
   const title = fieldNamed(page, "Title");
   const body = page.querySelector("textarea") ?? assert.fail("no text area");
   act(() => title.focus());
@@ -381,6 +411,7 @@ test("a text entry answers the caret leaving it, and says the chord that acts on
 /** A text area submitting with `submitKey`, counting its submits. */
 function submitsOf(submitKey: TextAreaSubmit | undefined, presses: KeyboardEventInit[]): number {
   let submits = 0;
+
   const page = render(
     createElement(TextArea, {
       label: "Reply",
@@ -392,8 +423,11 @@ function submitsOf(submitKey: TextAreaSubmit | undefined, presses: KeyboardEvent
       submitKey,
     }),
   );
+
   const area = page.querySelector("textarea") ?? assert.fail("no text area");
+
   for (const init of presses) press(area, { key: "Enter", cancelable: true, ...init });
+
   return submits;
 }
 
@@ -406,6 +440,7 @@ test("a text area asked to submits on ⌘Return or Ctrl+Enter, never a plain Ret
     { metaKey: true, isComposing: true },
     { ctrlKey: true, keyCode: 229 },
   ]);
+
   assert.equal(submits, 2);
 });
 
@@ -416,11 +451,13 @@ test("a text area submits on a plain Return, leaving Shift-Return and an input m
     { isComposing: true },
     { keyCode: 229 },
   ]);
+
   assert.equal(submits, 1);
 });
 
 test("a busy text area takes no typing and answers neither its submit key nor Escape, which it still keeps from the page", () => {
   const answered: string[] = [];
+
   const area = (busy: boolean) =>
     createElement(TextArea, {
       label: "Description",
@@ -430,6 +467,7 @@ test("a busy text area takes no typing and answers neither its submit key nor Es
       onSubmit: () => answered.push("submit"),
       onEscape: () => answered.push("escape"),
     });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -463,6 +501,7 @@ test("a field asked to selects its words as the caret arrives, and is left out o
       autoCorrect: false,
     }),
   );
+
   const field = fieldNamed(page, "Address");
   act(() => field.focus());
   assert.equal(field.selectionStart, 0);
@@ -475,6 +514,7 @@ test("a field not asked to leaves the caret where it lands and the system's corr
   const page = render(
     createElement(TextField, { label: "Name", value: "Ada", onChange: () => undefined }),
   );
+
   const field = fieldNamed(page, "Name");
   act(() => field.focus());
   assert.equal(field.selectionStart, field.selectionEnd);
@@ -490,5 +530,6 @@ test("a text area names its return key's label to an on-screen keyboard", () => 
       enterKeyHint: ENTER_KEY_HINT.SEND,
     }),
   );
+
   assert.equal(page.querySelector("textarea")?.getAttribute("enterkeyhint"), "send");
 });

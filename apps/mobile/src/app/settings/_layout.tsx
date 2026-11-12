@@ -17,6 +17,7 @@ export const unstable_settings = { anchor: "index" };
  */
 export default function SettingsLayout() {
   const colors = useColors();
+
   return (
     <Stack
       screenOptions={{

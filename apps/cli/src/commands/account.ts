@@ -60,6 +60,7 @@ const loginCommand = Command.make(
         // Note that the paste is read inside the trip, so it is handed the terminal's services here.
         const terminal = yield* Effect.context<Stdio.Stdio | Terminal.Terminal>();
         const pasted = Effect.provideContext(readLine(PASTE_BACK.PROMPT), terminal);
+
         const identity = yield* cliSignIn({
           client: accountClient(origin),
           accountBaseUrl: accountBaseUrl(origin),
@@ -74,6 +75,7 @@ const loginCommand = Command.make(
                 openInBrowser(url);
               },
         }).pipe(Effect.mapError(commandFailed));
+
         yield* answer({
           json: { origin, ...identity },
           lines: [`Signed in to ${origin} as ${identity.email}.`],
@@ -95,18 +97,23 @@ const loginCommand = Command.make(
 const logoutCommand = Command.make("logout", {}, () =>
   Effect.gen(function* () {
     const origin = yield* serviceOrigin;
+
     const ended = yield* cliSignOut(yield* storeFor(origin), accountClient(origin)).pipe(
       Effect.mapError(commandFailed),
     );
+
     const { source } = yield* session;
+
     if (source === CREDENTIAL_SOURCE.ENVIRONMENT) {
       yield* note("VESPIN_TOKEN is still set, and commands keep using it until it is unset.");
     }
+
     const line = !ended.signedIn
       ? `Not signed in to ${origin}.`
       : ended.revoked
         ? `Signed out of ${origin}.`
         : `Signed out of ${origin} on this machine. ${PRODUCT_NAME} could not be reached to revoke the sign-in, so it lapses on its own.`;
+
     yield* answer({ json: { origin, ...ended }, lines: [line] });
   }),
 ).pipe(
@@ -117,9 +124,11 @@ const logoutCommand = Command.make("logout", {}, () =>
 const whoamiCommand = Command.make("whoami", {}, () =>
   Effect.gen(function* () {
     const { origin, credential, source, hosted } = yield* session;
+
     const identity = yield* cliIdentity(accountBaseUrl(origin), credential).pipe(
       Effect.mapError(commandFailed),
     );
+
     const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
     const listed = workspaces.map(({ id, name, slug, role }) => ({ id, name, slug, role }));
     yield* answer({

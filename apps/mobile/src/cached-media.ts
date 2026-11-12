@@ -21,10 +21,12 @@ const writing = new Map<string, Promise<string>>();
 /** A video's bytes written under a name of their own and moved into place as `file`, answering its address once they are all on disk. */
 async function written(file: File, name: string, base64: string): Promise<string> {
   const partial = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
   await partial.move(file, { overwrite: true });
+
   return file.uri;
 }
 
@@ -48,10 +50,13 @@ export async function cachedVideo(
   const extension = VIDEO_EXTENSION[contentType];
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
   const file = new File(Paths.cache, name);
+
   if (file.exists) return file.uri;
   const under = writing.get(file.uri);
+
   if (under !== undefined) return under;
   const write = written(file, name, base64).finally(() => writing.delete(file.uri));
   writing.set(file.uri, write);
+
   return write;
 }

@@ -37,11 +37,14 @@ function Hung({ look, label }: { look: PopoverPanelLook; label: string }): React
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const field = useRef<HTMLInputElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   const menu = look === POPOVER_PANEL_LOOK.MENU;
+
   return (
     <div className="catalog-anchor" ref={root}>
       <Button

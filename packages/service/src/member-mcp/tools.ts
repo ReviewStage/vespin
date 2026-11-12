@@ -527,7 +527,9 @@ export function listedMemberMcpTool(
   experimentsOn: ReadonlySet<WorkspaceExperiment>,
 ): Pick<MemberMcpTool, "description" | "inputSchema"> {
   const off = tool.descriptionsOff;
+
   if (off === undefined || experimentsOn.has(EXPERIMENT.DESCRIPTIONS)) return tool;
+
   return { description: off.description, inputSchema: standardSchemaOf(off.input) };
 }
 
@@ -558,14 +560,19 @@ function memberCaller(member: AdmittedMemberValues, workspaceId: string): AgentR
 const listedWorkspace = (userId: string, slug: string | undefined) =>
   Effect.map(listWorkspaces(userId), (workspaces): Result.Result<string, string> => {
     const choices = workspaces.map((one) => `${one.slug ?? one.id} (${one.name})`).join(", ");
+
     if (slug !== undefined) {
       const named = workspaceOfSlug(workspaces, slug);
+
       return named === undefined
         ? Result.fail(MEMBER_WORKSPACE_REFUSAL.UNKNOWN(choices))
         : Result.succeed(named.id);
     }
+
     const [only, ...others] = workspaces;
+
     if (only === undefined) return Result.fail(MEMBER_WORKSPACE_REFUSAL.NONE);
+
     return others.length === 0
       ? Result.succeed(only.id)
       : Result.fail(MEMBER_WORKSPACE_REFUSAL.SEVERAL(choices));
@@ -579,7 +586,9 @@ const listAsMember = <R>(
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
+
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+
     return yield* read(memberCaller(member, workspace.success));
   });
 
@@ -591,7 +600,9 @@ const asMemberInWorkspace = (
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
+
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+
     return yield* run(member.userId, workspace.success);
   });
 
@@ -604,9 +615,11 @@ const readAsMember = <R, RRead>(
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* workspaceOf(member.userId);
+
     if (Option.isNone(workspace)) {
       return typeof refusal === "string" ? agentToolRejected(refusal) : refusal;
     }
+
     return yield* read(memberCaller(member, workspace.value));
   });
 
@@ -645,6 +658,7 @@ export const LIST_WORKSPACES_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const workspaces = yield* listWorkspaces(member.userId);
+
       return {
         workspaces: workspaces.map(({ id, slug, name, role }) => ({ id, slug, name, role })),
       };
@@ -891,8 +905,10 @@ function taskFileAnswerOf(
 ): MemberMcpToolResult {
   if (Option.isNone(read)) return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
   const answer = read.value;
+
   if (!("refusal" in answer)) return { status: ACTION_RESULT_STATUS.ACCEPTED, ...answer };
   const words = TASK_FILE_REFUSAL_WORDS[answer.refusal];
+
   return agentToolRejected(
     answer.branch === undefined ? words : `${words} (read on ${answer.branch})`,
   );
@@ -940,12 +956,14 @@ const READ_TASK_FILE_TOOL = memberMcpTool({
   run: ({ taskId, path, firstLine = 1, commit }) =>
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
+
       const window = {
         path,
         firstLine,
         lastLine: firstLine + TASK_FILE_BOUNDS.WINDOW_LINES - 1,
         ...(commit === undefined ? undefined : { ref: commit }),
       };
+
       return taskFileAnswerOf(yield* readTaskFile(member.userId, taskId, window));
     }),
 });
@@ -985,6 +1003,7 @@ const LIST_TASK_FOLDER_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const folder = { path, ...(recursive === true ? { recursive } : undefined) };
+
       return taskFileAnswerOf(yield* readTaskTree(member.userId, taskId, folder));
     }),
 });
@@ -1097,6 +1116,7 @@ const memberWriteCall = (read: AgentReadCall) =>
   Effect.gen(function* () {
     const agentSessionsAs = yield* sessionsRouter;
     const environment = yield* HostedEnvironment;
+
     const call: AgentCall = {
       ...read,
       agentSessions: agentSessionsAs(callerUserId(read.caller)),
@@ -1108,6 +1128,7 @@ const memberWriteCall = (read: AgentReadCall) =>
           Effect.provideService(HostedEnvironment, environment),
         ),
     };
+
     return call;
   });
 
@@ -1546,7 +1567,9 @@ const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
         if (Option.isNone(revision)) {
           return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
         }
+
         const text = cutOnLine(revision.value.document.body, DESCRIPTION_TEXT_READ_CHARS);
+
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           revision: { seq: asked.seq, text: text.text, leftOutChars: text.leftOutChars },
@@ -1670,22 +1693,27 @@ type StartAgentInput = typeof StartAgentInputSchema.Type;
 /** The workspace a start is about: its task's, the agent's it starts from, or else the one its slug names or the member's only one. */
 const startedAsMember = ({ workspace, ...asked }: StartAgentInput) => {
   const start = (call: AgentCall) => runStartAgent(call, asked);
+
   if (asked.taskId !== undefined) {
     const { taskId } = asked;
+
     return writeAsMember(
       (userId) => readTaskWorkspace(userId, taskId),
       START_AGENT_REFUSAL.NO_SUCH_TASK,
       start,
     );
   }
+
   if (asked.from !== undefined) {
     const { agentId } = asked.from;
+
     return writeAsMember(
       (userId) => agentWorkspace(userId, { id: agentId }),
       START_AGENT_REFUSAL.NO_SOURCE,
       start,
     );
   }
+
   return listWriteAsMember(workspace, start);
 };
 
@@ -1787,11 +1815,14 @@ function queueRefusalWords(refusal: HostedRefusal): string {
 const memberQueue = (call: AgentCall, userId: string, agent: Agent, text: string) =>
   Effect.gen(function* () {
     const id = call.clientKey;
+
     const queued = yield* Effect.result(
       changeAgentQueue(userId, agent, { change: QUEUE_CHANGE.ADD, id, text }),
     );
+
     if (Result.isFailure(queued)) return agentToolRejected(queueRefusalWords(queued.failure));
     const place = queued.success.messages.findIndex((message) => message.id === id);
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       delivery: place === -1 ? MEMBER_QUEUE_DELIVERY.HANDED_ON : MEMBER_QUEUE_DELIVERY.QUEUED,
@@ -1811,15 +1842,21 @@ const memberMessage = (call: AgentCall, { agentId, text, queue }: MessageAgentIn
   orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
       const { agent } = found.value;
+
       if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
       const userId = callerUserId(call.caller);
+
       if (queue === true) return yield* memberQueue(call, userId, agent, text);
+
       const sent = yield* Effect.result(
         steerMemberWords(call.writer, userId, agent, { text, clientKey: call.clientKey }),
       );
+
       if (Result.isFailure(sent)) return agentToolRejected(messageRefusalWords(sent.failure));
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         delivery: sent.success.outcome,
@@ -1949,15 +1986,20 @@ const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueu
   orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
       const { agent } = found.value;
+
       if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+
       const changed = yield* Effect.result(
         changeAgentQueue(callerUserId(call.caller), agent, change),
       );
+
       if (Result.isFailure(changed)) {
         return agentToolRejected(changeQueueRefusalWords(changed.failure));
       }
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         queue: queueRecord(changed.success),
@@ -2147,7 +2189,9 @@ const workspaceAsMember = <A extends WireRecord, R>(
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
+
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+
     return yield* operation(member, workspace.success).pipe(
       Effect.map(
         (answered): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answered }),
@@ -2505,6 +2549,7 @@ const lifecycleAsMember = <R>(
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* run(member.userId).pipe(
       Effect.catch((refusal) =>
         Effect.succeed(agentToolRejected(lifecycleRefusalWords(refusal, verb))),
@@ -2583,6 +2628,7 @@ const WAKE_AGENT_TOOL = memberMcpTool({
       Effect.gen(function* () {
         const sandbox = yield* resumedAgentSandbox(userId, agentId);
         yield* warmedAgent(userId, agentId);
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED, sandbox };
       }),
     ),
@@ -2594,6 +2640,7 @@ const WAKE_AGENT_TOOL = memberMcpTool({
 const memberPortsReach = (agentId: string) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return { userId: member.userId, agentId };
   });
 
@@ -2689,6 +2736,7 @@ function memberBrowserTab(tab: AgentBrowserTab, userId: string) {
       : tab.driver.userId === userId
         ? BROWSER_TAB_DRIVER.YOU
         : BROWSER_TAB_DRIVER.ANOTHER_MEMBER;
+
   return {
     id: tab.id,
     address: tab.address,
@@ -2706,6 +2754,7 @@ const browserTabAnswer = <A, R>(
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* operation(member.userId).pipe(
       Effect.map((answer) => answered(answer, member.userId)),
       Effect.catch((refusal) =>
@@ -2841,6 +2890,7 @@ function readOrRefused<A extends object>(
 ): Effect.Effect<A, string> {
   if (!("refusal" in read)) return Effect.succeed(read);
   const words = REPOSITORY_READ_REFUSAL_WORDS[read.refusal];
+
   return Effect.fail(read.branch === undefined ? words : `${words} (read on ${read.branch})`);
 }
 
@@ -2852,7 +2902,9 @@ const repositoryAsMember = <A extends object, R>(
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
+
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+
     return yield* run(member.userId, workspace.success).pipe(
       Effect.map(
         (found): MemberMcpToolResult => ({
@@ -2900,6 +2952,7 @@ const LIST_REPOSITORIES_TOOL = memberMcpTool({
       Effect.gen(function* () {
         const listed = yield* listWorkspaceRepositories(userId, workspaceId);
         const added = yield* workspaceTokenRepositories(userId, workspaceId);
+
         return { ...listed, tokenRepositories: added.repositories };
       }),
     ),
@@ -3091,6 +3144,7 @@ const READ_GITHUB_ISSUE_TOOL = memberMcpTool({
         const pullRequest = yield* readPlacePullRequest(userId, place, number);
         // Note that a pull request is read as an issue too by GitHub's issues API, so the issue is read only where no pull request answered.
         const issue = pullRequest === null ? yield* readPlaceIssue(userId, place, number) : null;
+
         return { pullRequest, issue };
       }),
     ),
@@ -3109,6 +3163,7 @@ const READ_GITHUB_CONNECTION_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const connection = yield* githubConnection(member.userId);
+
       return { status: ACTION_RESULT_STATUS.ACCEPTED, ...connection };
     }),
 });
@@ -3156,7 +3211,9 @@ const READ_INBOX_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const listed = yield* listedWorkspace(member.userId, workspace);
+
       if (Result.isFailure(listed)) return agentToolRejected(listed.failure);
+
       return yield* readMemberInbox(member.userId, listed.success);
     }),
 });
@@ -3355,7 +3412,9 @@ const MARK_INBOX_READ_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const listed = yield* listedWorkspace(member.userId, workspace);
+
       if (Result.isFailure(listed)) return agentToolRejected(listed.failure);
+
       return yield* markInboxReadAsMember(member.userId, listed.success);
     }),
 });
@@ -3515,7 +3574,9 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
         orStoreRefusal(
           Effect.gen(function* () {
             const found = yield* workspaceAgentOf(call.caller, agentId);
+
             if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+
             return yield* agentPullRequestAction(
               KEPT_PUBLISHED,
               callerUserId(call.caller),
@@ -3585,10 +3646,12 @@ interface PullRequestCall<R> {
 /** A pull request call run as the member on the pull request its input names: by the agent, found as `read_agent` finds it, or by its repository and number in the workspace named. */
 const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestCall<R>) => {
   const { agentId, repository, number, workspace } = named;
+
   if (agentId !== undefined) {
     if (repository !== undefined || workspace !== undefined) {
       return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
     }
+
     return readAsMember(
       (userId) => agentWorkspace(userId, { id: agentId }),
       AGENT_TOOL_REFUSAL.NO_AGENT,
@@ -3596,15 +3659,19 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
         orStoreRefusal(
           Effect.gen(function* () {
             const found = yield* workspaceAgentOf(member.caller, agentId);
+
             if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+
             return yield* call.agent(callerUserId(member.caller), found.value.agent, number);
           }),
         ),
     );
   }
+
   if (repository === undefined || number === undefined) {
     return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
   }
+
   return listAsMember(workspace, (member) =>
     call.repository(callerUserId(member.caller), callerWorkspaceId(member.caller), {
       repository,
@@ -3770,7 +3837,9 @@ const chaptersAsMember = <R>(asked: PullRequestChaptersInput, call: ChaptersCall
         Effect.succeed(agentToolRejected(chaptersRefusalWords(refusal, call.generates))),
       ),
     );
+
   const { agentId, repository, number, workspace } = asked;
+
   return pullRequestAsMember(
     { agentId, repository, number, workspace },
     {
@@ -3901,6 +3970,7 @@ const memberCommented = (outcome: DescriptionCommentOutcome, comment: Mentioning
   if (outcome.status === DESCRIPTION_COMMENT_OUTCOME.DONE) {
     return Effect.map(memberCommentAnswer(outcome, comment), commentAnswerRead);
   }
+
   return Effect.succeed(
     commentToolRejected(
       outcome.status === DESCRIPTION_COMMENT_OUTCOME.NO_TASK
@@ -4011,11 +4081,14 @@ const memberDescriptionComment = (writer: MemberCommentWriter, asked: CommentOnD
   orStoreRefusal(
     Effect.gen(function* () {
       const task = yield* readTask(writer.userId, asked.taskId);
+
       if (Option.isNone(task)) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);
       const { text } = task.value;
       const anchor = locatedPhrase(text, asked.quote);
+
       if (anchor === undefined) return commentToolRejected(MEMBER_NOTE_REFUSAL.NO_WORDS);
       const clientKey = randomUUID();
+
       const outcome = yield* startDescriptionCommentThread(writer, asked.taskId, {
         clientKey,
         scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
@@ -4024,6 +4097,7 @@ const memberDescriptionComment = (writer: MemberCommentWriter, asked: CommentOnD
         text,
         words: asked.words,
       });
+
       return yield* memberCommented(outcome, {
         userId: writer.userId,
         taskId: asked.taskId,
@@ -4084,18 +4158,23 @@ const memberReply = (
       const standing = Option.getOrUndefined(
         yield* readDescriptionCommentThread(writer.userId, asked.taskId, asked.thread),
       );
+
       if (descriptionThreadOff(standing, descriptionsOn)) {
         return commentToolRejected(EXPERIMENT_OFF_REFUSAL);
       }
+
       if (standing?.status === DESCRIPTION_COMMENT_STATUS.RESOLVED) {
         return commentToolRejected(COMMENT_TOOL_REFUSAL.RESOLVED);
       }
+
       const clientKey = randomUUID();
+
       const outcome = yield* actOnDescriptionCommentThread(writer, asked.taskId, asked.thread, {
         action: DESCRIPTION_COMMENT_ACTION.REPLY,
         clientKey,
         words: asked.words,
       });
+
       return yield* memberCommented(outcome, {
         userId: writer.userId,
         taskId: asked.taskId,
@@ -4196,10 +4275,13 @@ const memoryAsMember = <R>(
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
+
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+
     if (!(yield* experimentOnIn(workspace.success, EXPERIMENT.MEMORY))) {
       return agentToolRejected(EXPERIMENT_OFF_REFUSAL);
     }
+
     return yield* run({ workspaceId: workspace.success, userId: member.userId });
   });
 
@@ -4290,6 +4372,7 @@ const memberForget = (memory: MemoryCall, memoryId: string) =>
   Effect.gen(function* () {
     const { userId, workspaceId } = memory;
     const answer = yield* forgetWorkspaceMemory(userId, workspaceId, memoryId);
+
     switch (answer.kind) {
       case WORKSPACE_MEMORY.NOT_MEMBER:
         return agentToolRejected(MEMBER_NOTE_REFUSAL.NOT_MEMBER);
@@ -4297,6 +4380,7 @@ const memberForget = (memory: MemoryCall, memoryId: string) =>
         return agentToolRejected(MEMBER_NOTE_REFUSAL.NOT_FORGETTABLE);
       case WORKSPACE_MEMORY.READ:
         yield* recordServerEvent(SERVER_EVENT.MEMORY_FORGET, { userId, workspaceId }, {});
+
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           forgotten: memoryId,
@@ -4398,6 +4482,7 @@ const MEMBER_LIST_AUTOMATIONS_TOOL = memberMcpTool({
   run: ({ workspace, ...asked }) => {
     const { automationId } = asked;
     const list = (call: AgentReadCall) => runListAutomations(call, asked);
+
     return automationId === undefined
       ? listAsMember(workspace, list)
       : readAsMember(
@@ -4982,6 +5067,7 @@ const runActionAnswer = <A extends object, R>(
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* operation(member.userId).pipe(
       Effect.map((answer): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
       Effect.catch((refusal) =>
@@ -5460,16 +5546,21 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
     asMemberInWorkspace(workspace, (userId, workspaceId) =>
       Effect.gen(function* () {
         let slackBot: WorkspaceSlackBot | undefined;
+
         if (notifications !== undefined) {
           slackBot = yield* setSlackNotifications(userId, workspaceId, notifications);
         }
+
         if (defaultRepository !== undefined) {
           slackBot = yield* setSlackDefaultRepository(userId, workspaceId, defaultRepository);
         }
+
         if (channel !== undefined) {
           slackBot = yield* changeSlackChannel(userId, workspaceId, channel);
         }
+
         slackBot ??= yield* readSlackBot(userId, workspaceId);
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED, slackBot: slackBotRecord(slackBot) };
       }).pipe(
         Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
@@ -5518,6 +5609,7 @@ const LIST_REPOSITORY_PINS_TOOL = memberMcpTool({
   run: () =>
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
+
       return yield* readRepositoryPins(member.userId).pipe(
         Effect.map(pinsRecord),
         Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
@@ -5550,6 +5642,7 @@ const PIN_REPOSITORY_TOOL = memberMcpTool({
   run: ({ repository, pinned }) =>
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
+
       return yield* pinRepository(member.userId, repository, pinned).pipe(
         Effect.map((pins) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...pinsRecord(pins) })),
         Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
@@ -5604,6 +5697,7 @@ const environmentAsMember = <R>(
 ) =>
   listAsMember(slug, ({ caller }) => {
     const workspaceId = callerWorkspaceId(caller);
+
     return run(callerUserId(caller), workspaceId).pipe(
       Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
       Effect.catch((refusal) =>
@@ -5737,6 +5831,7 @@ const CREATE_WORKSPACE_TOOL = memberMcpTool({
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
       const seams = yield* WorkspacePlugin;
+
       return yield* createdWorkspace(seams, member.userId, name).pipe(
         Effect.map((workspace) => ({
           status: ACTION_RESULT_STATUS.ACCEPTED,

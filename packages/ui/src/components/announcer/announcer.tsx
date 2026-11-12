@@ -77,6 +77,7 @@ function tell(next: Saying): void {
 /** Hands the regions to the oldest `Announcer` still standing, its regions drawn empty. */
 function handOver(): void {
   const owner = owners[0];
+
   if (owner !== sayingStore.state.owner) tell({ ...SILENT, owner });
 }
 
@@ -88,6 +89,7 @@ const NOTHING_TO_RETIRE: Retire = () => undefined;
 /** Empties `level`'s region where it still says announcement `id`, and leaves any newer words standing. */
 function retire(level: Announce, id: number): void {
   const saying = sayingStore.state;
+
   if (saying[level]?.id !== id) return;
   tell({ ...saying, [level]: undefined });
 }
@@ -102,6 +104,7 @@ function retire(level: Announce, id: number): void {
 export function announce(level: Announce, words: string): Retire {
   const spoken = words.trim();
   const saying = sayingStore.state;
+
   if (spoken === "" || saying.owner === undefined) return NOTHING_TO_RETIRE;
   said += 1;
   const now = { id: said, words: spoken };
@@ -110,6 +113,7 @@ export function announce(level: Announce, words: string): Retire {
       ? { owner: saying.owner, polite: undefined, alert: now }
       : { ...saying, polite: now },
   );
+
   return () => retire(level, now.id);
 }
 
@@ -151,6 +155,7 @@ export function Announcer(): React.JSX.Element | null {
   useLayoutEffect(() => {
     owners.push(self);
     handOver();
+
     return () => {
       owners.splice(owners.indexOf(self), 1);
       handOver();
@@ -158,7 +163,9 @@ export function Announcer(): React.JSX.Element | null {
   }, [self]);
   // Note that one not yet standing draws its regions while none does, so the regions stand empty before anything is said into them.
   const draws = now.owner === self || now.owner === undefined;
+
   if (!draws) return null;
+
   return (
     <>
       <Region level={ANNOUNCE.POLITE} said={now.owner === self ? now.polite : undefined} />

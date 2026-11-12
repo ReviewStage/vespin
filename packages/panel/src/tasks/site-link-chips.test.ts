@@ -46,6 +46,7 @@ async function drawn(text: string): Promise<HTMLElement> {
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -67,6 +68,7 @@ test("a Google Doc, a Meet, a YouTube video, and an X post each wear their own m
       "https://x.com/acme/status/1850000000000000000",
     ].join(" and "),
   );
+
   const chips = [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")];
   assert.deepEqual(
     chips.map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent),

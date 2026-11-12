@@ -37,6 +37,7 @@ export function refusedSession(): SessionUnreachable {
 /** An account's agent sessions, writing down every message sent, by session, or refusing every send. */
 export function recordingSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
+
   const sessions: AgentSessions = {
     boot: bootedAtOnce,
     open: () =>
@@ -46,6 +47,7 @@ export function recordingSessions(refusing = false) {
         ? Effect.fail(refusedSession())
         : Effect.sync(() => {
             sent.push({ sessionId, message });
+
             return {
               outcome: SESSION_SEND_OUTCOME.ACCEPTED,
               sessionId,
@@ -55,12 +57,14 @@ export function recordingSessions(refusing = false) {
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   };
+
   return { sent, sessions, sessionsFor: () => Effect.succeed(sessions) };
 }
 
 /** The words of a message sent to a session. */
 function sentText(message: SessionMessage["message"]): string {
   if (!Array.isArray(message)) return message;
+
   return message.map((part) => (part.type === "text" ? part.text : "")).join("\n");
 }
 

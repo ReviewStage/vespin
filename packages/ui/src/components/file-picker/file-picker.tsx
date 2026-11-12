@@ -38,6 +38,7 @@ export function useFilePicker({
   onFiles,
 }: FilePickerOptions): FilePicker {
   const element = useRef<HTMLInputElement>(null);
+
   return {
     open: () => element.current?.click(),
     input: (

@@ -47,12 +47,14 @@ const openStarted = () =>
     const organizationId = yield* openWorkspace(member);
     const task = yield* createTask(member, { organizationId });
     const start = { taskId: task.id, descriptionSnapshot: null, repository: null };
+
     const choice = {
       model: "anthropic/claude-opus-5.5",
       effort: "high",
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       payer: AGENT_PAYER.API_KEY,
     };
+
     const starter = Option.getOrThrow(
       yield* createAgent(member, {
         ...start,
@@ -61,6 +63,7 @@ const openStarted = () =>
         ...choice,
       }),
     ).agent;
+
     const agent = Option.getOrThrow(
       yield* createAgent(member, {
         ...start,
@@ -71,12 +74,14 @@ const openStarted = () =>
         ...choice,
       }),
     ).agent;
+
     const sessionId = `wrun_${randomUUID()}`;
     yield* claimRuntimeSession(
       { userId: member, conversationId: starter.conversationId },
       sessionId,
       new Date(T0 - 60_000),
     );
+
     return { member, starter, agent, sessionId };
   });
 
@@ -100,6 +105,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
         const turnId = yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, REPORT).pipe(
           Effect.provide(reporting(agentSessions)),
         );
+
         const [told, ...more] = sentTo(agentSessions, sessionId);
         assert.equal(more.length, 0, more.join("\n"));
         assert.ok(told !== undefined);
@@ -181,6 +187,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
 test("a turn ended with end_turn hands its summary as its final words, and one whose end_turn was refused or never answered its last text", () => {
   const said = "Pushed the fix; the checks run again.";
   const summary = "- Fixed the failing check\n- Pushed to #214";
+
   const ended = (state: "output-available" | "output-error"): StoredUIMessage =>
     ({
       id: "message-1",

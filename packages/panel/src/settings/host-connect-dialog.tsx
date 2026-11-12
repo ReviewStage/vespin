@@ -129,6 +129,7 @@ function boxFacts(box: HostPairingAnswer): string {
 /** When the code lapses, as a time of day, since a pairing lasts minutes. */
 function expiresAt(at: number): string {
   const moment = new Date(at);
+
   return clockText(moment.getHours(), moment.getMinutes());
 }
 
@@ -137,10 +138,12 @@ function refusalWords(refusal: HostPairingFailed): { title: string; body: string
   if (refusal.failure !== HOST_PAIRING_CALL_FAILURE.HELD) {
     return { title: WORDS.NOT_FOUND_TITLE, body: `${WORDS.NOT_FOUND} ${WORDS.AGAIN}` };
   }
+
   const when =
     refusal.heldUntil === undefined
       ? WORDS.HELD_SOON
       : `Try again after ${momentText(refusal.heldUntil)}.`;
+
   return { title: WORDS.HELD_TITLE, body: `${WORDS.HELD} ${when} ${WORDS.AGAIN}` };
 }
 
@@ -167,8 +170,10 @@ function hostPairingQueryOptions(code: string) {
 function readStanding(pairing: UseQueryResult<HostPairingAnswer | HostPairingFailed>): Standing {
   if (pairing.isPending || (pairing.isError && pairing.isFetching))
     return { kind: STANDING.READING };
+
   if (pairing.isError) return failedStanding(UNANSWERED, { kind: STANDING.UNREAD });
   const answer = pairing.data;
+
   return "failure" in answer
     ? failedStanding(answer, { kind: STANDING.UNREAD })
     : { kind: STANDING.ASKING, box: answer };
@@ -183,6 +188,7 @@ export function useOpenHostConnect(): (code: string) => void {
 export function useHostConnect(): readonly [string | undefined, () => void] {
   const code = useSelector(hostConnectStore);
   const close = useCallback(() => hostConnectStore.setState(() => undefined), []);
+
   return [code, close];
 }
 
@@ -204,6 +210,7 @@ function AskDialog({
 }): React.JSX.Element {
   const inFlight = sending === SENDING.CONNECT || sending === SENDING.DENY;
   const settled = inFlight || connected;
+
   return (
     <Dialog
       open
@@ -345,25 +352,31 @@ export function HostConnectDialog({
   const { mutateAsync: sendHostsPairingApprove } = useMutation(
     actMutation(ACT_KIND.HOSTS_PAIRING_APPROVE),
   );
+
   const { mutateAsync: sendHostsPairingDeny } = useMutation(
     actMutation(ACT_KIND.HOSTS_PAIRING_DENY),
   );
+
   // The dialog opening reads the pairing the code names, so the member sees whose box it is before anything is pressed.
   const pairing = useQuery(hostPairingQueryOptions(code));
+
   // Note that a press is the code's own, so a dialog handed another code reads that one afresh.
   const [afterPress, setAfterPress] = useState<{
     readonly code: string;
     readonly standing: Standing;
   }>();
+
   const standing = afterPress?.code === code ? afterPress.standing : readStanding(pairing);
 
   const answer = useCallback(
     (box: HostPairingAnswer, pressed: Answer) => {
       setAfterPress({ code, standing: { kind: STANDING.ASKING, box, sending: pressed } });
+
       const sent =
         pressed === ANSWER.CONNECT
           ? sendHostsPairingApprove({ code })
           : sendHostsPairingDeny({ code });
+
       sent
         .catch(() => UNANSWERED)
         .then((answered) => {

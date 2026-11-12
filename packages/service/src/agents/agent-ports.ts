@@ -69,9 +69,12 @@ const onSandbox = <A>(call: (sandbox: AgentSandboxService) => Effect.Effect<A, S
 const linkOf = (userId: string, id: string, route: string) =>
   Effect.gen(function* () {
     const { sandbox } = yield* PageLinks;
+
     if (sandbox === undefined) return route;
     const key = yield* hostedStoreOrUnavailable(taskKeyOfAgent(userId, id));
+
     if (Option.isNone(key)) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
+
     return `${previewOrigin(sandbox, previewNameOf(key.value.slug, key.value.number, id))}/`;
   });
 
@@ -92,9 +95,12 @@ export function shareAgentPort(
 ): PortsEffect<PortShareAnswer> {
   return Effect.gen(function* () {
     const sessionId = yield* cloudSession(userId, id);
+
     if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
     const url = yield* onSandbox((sandbox) => sandbox.share(sessionId, port));
+
     if (url === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
+
     return { url: yield* linkOf(userId, id, url) };
   });
 }
@@ -103,7 +109,9 @@ export function shareAgentPort(
 export function unshareAgentPort(userId: string, id: string): PortsEffect<SharedPortAnswer> {
   return Effect.gen(function* () {
     const sessionId = yield* cloudSession(userId, id);
+
     if (sessionId !== undefined) yield* onSandbox((sandbox) => sandbox.unshare(sessionId));
+
     return { shared: null };
   });
 }
@@ -112,9 +120,12 @@ export function unshareAgentPort(userId: string, id: string): PortsEffect<Shared
 export function sharedAgentPort(userId: string, id: string): PortsEffect<SharedPortAnswer> {
   return Effect.gen(function* () {
     const sessionId = yield* cloudSession(userId, id);
+
     if (sessionId === undefined) return { shared: null };
     const shared = yield* onSandbox((sandbox) => sandbox.shared(sessionId));
+
     if (shared === null) return { shared: null };
+
     return { shared: { port: shared.port, url: yield* linkOf(userId, id, shared.url) } };
   });
 }

@@ -109,15 +109,18 @@ export function descriptionCommentReads(dependencies: DescriptionCommentReadsDep
             open = false;
           }),
         );
+
         const threads: HeldRows<CommentThreadRow> = yield* dependencies.pool.stand(COMMENT_THREAD, {
           redraw: () => Effect.sync(() => drawn()),
           confirmation: () => (wait === undefined ? undefined : (txid) => confirmWrite(wait, txid)),
           // Note that a thread started shows in the subject it was started in alone: its task's description, or the page it names.
           adopts: (row) => row.taskId === subject.taskId && row.page?.id === subject.pageId,
         });
+
         const drawn = () => {
           if (answered && open) answers.answered(threads.rows().map(drawnThread));
         };
+
         // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
         const userId = dependencies.accountId();
         yield* pushLive({
@@ -129,6 +132,7 @@ export function descriptionCommentReads(dependencies: DescriptionCommentReadsDep
           publish: (read) => {
             if (read === undefined) return Effect.sync(() => answers.unanswered());
             const rows = read.map((thread) => ({ ...thread, taskId: subject.taskId }));
+
             return Effect.andThen(
               threads.answer(rows),
               Effect.sync(() => {
@@ -143,6 +147,7 @@ export function descriptionCommentReads(dependencies: DescriptionCommentReadsDep
         });
       }),
     );
+
   return heldSlice<typeof LIVE_READ.DESCRIPTION_COMMENTS, CommentSubjectKey>({
     empty: NO_DESCRIPTION_COMMENTS,
     path: (subject) =>

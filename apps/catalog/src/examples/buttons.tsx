@@ -55,10 +55,12 @@ const STATES = [
 function Landing(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
+
   const end = (landed: boolean) => {
     setSucceeded(landed);
     setBusy(false);
   };
+
   return (
     <Inline>
       <Button

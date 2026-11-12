@@ -53,6 +53,7 @@ const openAccount = (email: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name: "Test User", email });
+
     return id;
   });
 
@@ -91,6 +92,7 @@ const openConnectedWorkspace = (userId: string) =>
       createdAt: yield* DateTime.nowAsDate,
     });
     yield* linkSlackInstallation({ organizationId: id, teamId: "T0001", teamName: "Team", userId });
+
     return id;
   });
 
@@ -133,6 +135,7 @@ it.layer(getTestDB())("the Slack bot", (it) => {
     Effect.gen(function* () {
       const known = yield* openAccount(`${randomUUID()}-${KNOWN_EMAIL}`);
       const workspace = yield* openConnectedWorkspace(known);
+
       const bot = slackBotOver((method) =>
         Effect.fail(new SlackBotFailure({ method, code: "invalid_auth" })),
       );

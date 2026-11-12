@@ -27,12 +27,15 @@ function logRefusal(error: unknown): void {
 export function useInboxWidget(signedIn: boolean): void {
   const { groups, chosen, workspaces } = useChosenInbox();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   const { data: feed = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+
   useEffect(() => {
     if (!signedIn || chosen === undefined || feed !== INBOX_FEED.ANSWERED) return;
+
     try {
       keepInboxWidget(
         inboxWidgetSnapshot({
@@ -57,6 +60,7 @@ export function useInboxWidget(signedIn: boolean): void {
         logRefusal(error);
       }
     }
+
     wasSignedIn.current = signedIn;
   }, [signedIn]);
 }

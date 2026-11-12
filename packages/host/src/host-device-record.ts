@@ -48,9 +48,11 @@ const encodeDevice = Schema.encodeSync(Schema.fromJsonString(HostDeviceSchema));
 export const readHostDevice = Effect.fnUntraced(function* (stateRoot: string) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const text = yield* fileSystem
     .readFileString(path.join(stateRoot, DEVICE_FILE))
     .pipe(Effect.orElseSucceed(() => ""));
+
   return decodeDevice(text);
 });
 
@@ -114,6 +116,7 @@ export const markHostDeviceRefused = Effect.fnUntraced(function* (
   deviceSecret: string,
 ) {
   const kept = yield* readHostDevice(stateRoot);
+
   if (Option.isNone(kept) || kept.value.deviceSecret !== deviceSecret) return;
   yield* writeHostDevice(stateRoot, { ...kept.value, refused: true });
 });

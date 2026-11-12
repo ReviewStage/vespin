@@ -58,6 +58,7 @@ function fixture() {
   const otherContents = {} as WebContents;
   const heard: string[] = [];
   const events: unknown[] = [];
+
   const port = testActPort(
     windowSurfaceProcedures({
       panels: {
@@ -80,21 +81,25 @@ function fixture() {
       copyRich: ({ html, text }) => heard.push(`copy rich:${html}:${text}`),
       copyImage: (png) => {
         heard.push(`copy image:${png}`);
+
         return png !== UNDRAWN_PNG;
       },
       saveFile: async (sender, name, text) => {
         heard.push(`save:${sender === panelContents ? "panel" : "other"}:${name}:${text}`);
+
         return true;
       },
       deliverFeedback: (submission) =>
         Effect.sync(() => {
           heard.push(`feedback:${submission.message}`);
+
           return { delivered: true };
         }),
       captureStill: async (sender, rect) => {
         heard.push(
           `still:${sender === panelContents ? "panel" : "other"}:${rect.width}x${rect.height}`,
         );
+
         return STILL;
       },
       tellUnsavedWork: (sender, holding) =>
@@ -102,12 +107,16 @@ function fixture() {
       tellMenuOffers: (_sender, commands) => heard.push(`offers:${commands.join()}`),
     }),
   );
+
   ports.push(port);
+
   const panel: ActSender<WebContents> = {
     sender: panelContents,
     panel: true,
   };
+
   const other: ActSender<WebContents> = { sender: otherContents, panel: false };
+
   return { port, panel, other, heard, events };
 }
 

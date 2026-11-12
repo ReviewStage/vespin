@@ -113,6 +113,7 @@ export interface ChapterHunk {
 /** A file's hunks, none where it carries no patch, or one that holds no hunk or does not read as a diff. */
 function fileHunks(file: AgentChangedFile): readonly DiffHunk[] {
   if (file.omitted !== null || file.patch === null) return [];
+
   return patchHunks(file.patch) ?? [];
 }
 
@@ -125,9 +126,11 @@ function fileHunks(file: AgentChangedFile): readonly DiffHunk[] {
 export function chapterHunks(files: readonly AgentChangedFile[]): readonly ChapterHunk[] {
   return files.flatMap((file): readonly ChapterHunk[] => {
     const hunks = fileHunks(file);
+
     if (hunks.length === 0) {
       return [{ ref: { path: file.path, oldStart: HEADER_ONLY_OLD_START }, hunk: null }];
     }
+
     return hunks.map((hunk) => ({ ref: { path: file.path, oldStart: hunk.oldStart }, hunk }));
   });
 }
@@ -138,21 +141,27 @@ type HunkIndex = ReadonlyMap<string, ReadonlyMap<number, ChapterHunk>>;
 /** The hunks indexed by their names, the first of any two that share one kept. */
 function indexHunks(hunks: readonly ChapterHunk[]): HunkIndex {
   const index = new Map<string, Map<number, ChapterHunk>>();
+
   for (const each of hunks) {
     const starts = index.get(each.ref.path) ?? new Map<number, ChapterHunk>();
     index.set(each.ref.path, starts);
+
     if (!starts.has(each.ref.oldStart)) starts.set(each.ref.oldStart, each);
   }
+
   return index;
 }
 
 /** The hunks a chapter's refs name, each once, in the order it names them; a ref naming no hunk is passed over. */
 function chapterOwnHunks(chapter: Chapter, index: HunkIndex): readonly ChapterHunk[] {
   const seen = new Set<ChapterHunk>();
+
   for (const ref of chapter.hunkRefs) {
     const found = index.get(ref.path)?.get(ref.oldStart);
+
     if (found !== undefined) seen.add(found);
   }
+
   return [...seen];
 }
 
@@ -223,12 +232,17 @@ export function coverHunks(
 ): CoveredChapters {
   const index = indexHunks(hunks);
   const placed = new Set<ChapterHunk>();
+
   const covered = chapters.flatMap((chapter) => {
     const own = chapterOwnHunks(chapter, index).filter((each) => !placed.has(each));
+
     for (const each of own) placed.add(each);
+
     return own.length === 0 ? [] : [{ ...chapter, hunkRefs: own.map((each) => each.ref) }];
   });
+
   const missing = hunks.filter((each) => !placed.has(each)).map((each) => each.ref);
+
   return { chapters: covered, missing };
 }
 
@@ -279,30 +293,39 @@ function sameLines(a: LineRef, b: LineRef): boolean {
  */
 export function validLineRefs(chapter: Chapter, hunks: readonly ChapterHunk[]): Chapter {
   const own = chapterOwnHunks(chapter, indexHunks(hunks));
+
   const inChapter = (ref: LineRef) =>
     own.some(({ ref: hunkRef, hunk }) => {
       if (hunk === null || hunkRef.path !== ref.path) return false;
       const { first, last } = sideSpan(hunk, ref.side);
+
       return first <= last && ref.startLine >= first && ref.endLine <= last;
     });
+
   const keyChanges = chapter.keyChanges.flatMap((change) => {
     const kept: LineRef[] = [];
+
     for (const ref of change.lineRefs) {
       if (ref.startLine < 1 || ref.startLine > ref.endLine || !inChapter(ref)) continue;
+
       if (!kept.some((each) => sameLines(each, ref))) kept.push(ref);
     }
+
     return kept.length === 0 ? [] : [{ content: change.content, lineRefs: kept }];
   });
+
   return { ...chapter, keyChanges };
 }
 
 /** A patch's hunks as written, each from its header to the line before the next, in order. */
 function hunkTexts(patch: string): readonly string[] {
   const texts: string[][] = [];
+
   for (const line of patch.split("\n")) {
     if (line.startsWith("@@")) texts.push([line]);
     else texts.at(-1)?.push(line);
   }
+
   return texts.map((lines) => lines.join("\n"));
 }
 
@@ -337,22 +360,29 @@ export function chapterPatches(
 ): readonly AgentChangedFile[] {
   const byPath = new Map(files.map((file) => [file.path, file]));
   const wanted = new Map<string, Set<number>>();
+
   for (const ref of chapter.hunkRefs) {
     if (!byPath.has(ref.path)) continue;
     const starts = wanted.get(ref.path) ?? new Set<number>();
     wanted.set(ref.path, starts);
     starts.add(ref.oldStart);
   }
+
   return [...wanted].flatMap(([path, starts]) => {
     const file = byPath.get(path);
+
     if (file === undefined) return [];
     const hunks = fileHunks(file);
+
     if (hunks.length === 0) return starts.has(HEADER_ONLY_OLD_START) ? [file] : [];
     const kept = hunks.flatMap((hunk, at) => (starts.has(hunk.oldStart) ? [at] : []));
+
     if (kept.length === hunks.length) return [file];
+
     if (kept.length === 0 || file.patch === null) return [];
     const texts = hunkTexts(file.patch);
     const counts = kept.map((at) => hunks[at]).filter((hunk) => hunk !== undefined);
+
     return [
       {
         ...file,
@@ -390,15 +420,19 @@ export function threadInChapter(
   const own = chapterOwnHunks(chapter, indexHunks(hunks)).filter(
     (each) => each.ref.path === thread.path,
   );
+
   if (thread.line === null && thread.originalLine === null) return own.length > 0;
+
   return own.some(({ hunk }) => {
     // A file with no hunks stands in this chapter alone, so every thread on it does too.
     if (hunk === null) return true;
+
     if (thread.line === null) {
       return (
         thread.originalLine !== null && within(thread.originalLine, hunk.oldStart, hunk.oldLines)
       );
     }
+
     return thread.side === DIFF_SIDE.LEFT
       ? within(thread.line, hunk.oldStart, hunk.oldLines)
       : within(thread.line, hunk.newStart, hunk.newLines);
@@ -421,6 +455,7 @@ export function chapterLineCounts(
   files: readonly AgentChangedFile[],
 ): ChapterCounts {
   const drawn = chapterPatches(chapter, files);
+
   return {
     additions: drawn.reduce((sum, file) => sum + file.additions, 0),
     deletions: drawn.reduce((sum, file) => sum + file.deletions, 0),
@@ -444,7 +479,9 @@ const ESCAPED_NEWLINE = /```[\s\S]*?```|``[\s\S]*?``|`[^`]*`|\\n/gu;
 export function unescapeLiteralNewlines(text: string): string {
   return text.replace(ESCAPED_NEWLINE, (match) => {
     if (match.startsWith("```")) return match.replaceAll("\\n", "\n");
+
     if (match.startsWith("`")) return match;
+
     return "\n";
   });
 }

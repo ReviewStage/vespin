@@ -74,6 +74,7 @@ const readRows = EffectSchema.decodeUnknownOption(AGENT_ORIGIN_READ.rows.fields.
 export function originSubjectsOf(firing: AutomationFiring): Pick<AgentOrigin, "subject" | "issue"> {
   if (firing.kind === AUTOMATION_FIRING.INTEGRATION) {
     const { title, url } = firing.subject;
+
     return {
       issue: {
         provider: firing.provider,
@@ -82,7 +83,9 @@ export function originSubjectsOf(firing: AutomationFiring): Pick<AgentOrigin, "s
       },
     };
   }
+
   if (firing.kind !== AUTOMATION_FIRING.GITHUB || firing.number === undefined) return {};
+
   return {
     subject: {
       number: firing.number,
@@ -95,10 +98,12 @@ export function originSubjectsOf(firing: AutomationFiring): Pick<AgentOrigin, "s
 /** The run as its page reads it: the prompt alone, what the firing was about, a webhook's body, and the member who asked for a run now, where their account stands. */
 function originOf({ origin, runnerName }: OriginLiveRow): AgentOrigin {
   const { firing } = origin;
+
   const runner =
     firing.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
       ? firing.userId
       : undefined;
+
   return {
     prompt: origin.prompt,
     ...originSubjectsOf(firing),
@@ -116,7 +121,9 @@ function originOf({ origin, runnerName }: OriginLiveRow): AgentOrigin {
  */
 export function agentOriginOfLive(rows: readonly unknown[]): AgentOrigin | null | undefined {
   const read = readRows(rows);
+
   if (Option.isNone(read)) return undefined;
   const [row] = read.value;
+
   return row === undefined ? null : originOf(row);
 }

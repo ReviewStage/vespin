@@ -50,12 +50,15 @@ function mount(history: RouterHistory) {
   const asked: Asked[] = [];
   const shell: { heard: ShellLeaveAsk | undefined } = { heard: undefined };
   let leave: PlaceLeave | undefined;
+
   function Probe() {
     leave = usePlaceLeave((ask) => {
       shell.heard = ask;
     });
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
@@ -64,6 +67,7 @@ function mount(history: RouterHistory) {
   act(() => {
     down = place().stand((go, stay) => void asked.push({ leave: go, stay }));
   });
+
   return { history, asked, shell, place, down: () => act(() => down()) };
 }
 
@@ -248,14 +252,17 @@ test("Leave on Admin's open of the view already standing keeps the page's ask, s
   const asked: Asked[] = [];
   let leave: PlaceLeave | undefined;
   let admin: AdminDoor | undefined;
+
   function Probe() {
     const place = usePlaceLeave();
     leave = place;
     // As the window's root fills it, a door asking for the place standing tells the leave guard its move stays.
     useRoutedExits().stay = place.stays;
     admin = useAdminDoor({ placeLeave: place, workspace: undefined });
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));

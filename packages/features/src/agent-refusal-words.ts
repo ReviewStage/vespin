@@ -114,6 +114,7 @@ export function localAgentRefusalWords(
   device: RefusingDevice | undefined,
 ): string {
   const name = device?.name ?? UNNAMED_DEVICE;
+
   switch (refusal) {
     case LOCAL_AGENT_REFUSAL.MAC_AWAY:
       return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
@@ -156,6 +157,7 @@ export function credentialMissingWords(
   action: (typeof ACTION)[keyof typeof ACTION],
 ): string {
   const harness = provider === undefined ? "Claude or Codex" : harnessNameOf(provider);
+
   return `Connect ${harness} in Settings to ${action}.`;
 }
 

@@ -34,12 +34,15 @@ export const photoAsJpeg = (photo: Uint8Array): Effect.Effect<Option.Option<Uint
       const source = path.join(folder, "photo.heic");
       const target = path.join(folder, "photo.jpg");
       yield* fileSystem.writeFile(source, photo);
+
       const converted = yield* printed(
         SIPS,
         ["-s", "format", "jpeg", source, "--out", target],
         ANSWER_WITHIN,
       );
+
       if (Result.isFailure(converted)) return Option.none();
+
       return Option.some(yield* fileSystem.readFile(target));
     }),
   ).pipe(

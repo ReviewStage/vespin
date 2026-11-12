@@ -41,6 +41,7 @@ afterEach(() => {
 function Held({ start }: { start: readonly EmailChip[] }): React.JSX.Element {
   const [chips, setChips] = useState(start);
   const [typed, setTyped] = useState("");
+
   return createElement(EmailChipsField, {
     chips,
     typed,
@@ -72,6 +73,7 @@ function render(start: readonly EmailChip[] = []): HTMLInputElement {
   act(() => root.render(createElement(Held, { start })));
   const words = container.querySelector("input");
   assert.ok(words instanceof HTMLInputElement);
+
   return words;
 }
 
@@ -112,6 +114,7 @@ test("Backspace in empty words takes the last address back to edit, but never on
     typed: "dana@acme.dev",
     state: EMAIL_CHIP_STATE.SENT,
   };
+
   const words = render([sent]);
   type(words, "theo@acme.de ");
   act(() => words.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true })));

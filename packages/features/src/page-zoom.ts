@@ -109,8 +109,10 @@ export function pageZoomAfter(zoom: number, key: PageZoomKey): number {
   if (key === PAGE_ZOOM_KEY.ACTUAL) return PAGE_ZOOM_ACTUAL;
   // Note that a step a hair from `zoom` is `zoom` itself, so float drift never leaves a press standing still.
   const near = 0.001;
+
   if (key === PAGE_ZOOM_KEY.IN)
     return PAGE_ZOOM_STEPS.find((step) => step > zoom + near) ?? PAGE_ZOOM_MAX;
+
   return PAGE_ZOOM_STEPS.findLast((step) => step < zoom - near) ?? PAGE_ZOOM_MIN;
 }
 

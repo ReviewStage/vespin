@@ -39,6 +39,7 @@ afterEach(() => {
 /** An autosave that has landed `start` writes, a button that lands one more, and one that falls back to none, as a refused write does. */
 function Autosave({ start }: { start: number }): React.JSX.Element {
   const [saves, setSaves] = useState(start);
+
   return createElement(
     "div",
     null,
@@ -57,11 +58,13 @@ function render(start: number): HTMLElement {
       createElement(Fragment, null, createElement(Announcer), createElement(Autosave, { start })),
     ),
   );
+
   return page;
 }
 
 /** What the window's announcer says politely now. */
 const said = () => document.querySelector('[role="status"]')?.textContent;
+
 /** The tick's words while it stands, or nothing once it is taken. */
 const shown = (page: HTMLElement) => page.querySelector(".ui-saved-tick")?.textContent ?? "";
 const land = (page: HTMLElement) => act(() => page.querySelector("button")?.click());

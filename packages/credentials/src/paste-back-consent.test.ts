@@ -14,6 +14,7 @@ const REFUSED = "Example did not grant access.";
 function trip(pasted: (authorization: LoopbackAuthorization) => string) {
   let authorization: LoopbackAuthorization | undefined;
   const exchanges: LoopbackExchange[] = [];
+
   const consent = pasteBackConsent(
     Effect.sync(() => (authorization === undefined ? undefined : pasted(authorization))),
   )<{ token: string }>({
@@ -25,15 +26,18 @@ function trip(pasted: (authorization: LoopbackAuthorization) => string) {
     reasons: { refused: REFUSED, timedOut: "Timed out." },
     authorizationUrl: (input) => {
       authorization = input;
+
       return "https://example.test/authorize";
     },
     exchange: (input) =>
       Effect.sync(() => {
         exchanges.push(input);
+
         return { token: "granted" };
       }),
     openExternal: () => undefined,
   });
+
   return { outcome: Effect.scoped(consent.signInEffect()), exchanges };
 }
 
@@ -71,6 +75,7 @@ it.effect("exchanges the code the trip's own redirect carried, on that redirect"
     const { outcome, exchanges } = trip(
       (at) => `  ${at.redirectUri}?code=the-code&state=${encodeURIComponent(at.state)}\n`,
     );
+
     assert.deepEqual(yield* outcome, { token: "granted" });
     assert.equal(exchanges[0]?.code, "the-code");
     assert.match(exchanges[0]?.redirectUri ?? "", /^http:\/\/127\.0\.0\.1:\d+\/callback$/u);

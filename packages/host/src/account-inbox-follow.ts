@@ -96,8 +96,10 @@ function answersOf(rows: AccountInboxLiveRows): Stream.Stream<AccountInboxAnswer
     Effect.map(Clock.currentTimeMillis, (at) => {
       const now = Stream.succeed(accountInboxOfLiveRows(rows, at));
       const expiry = nextFailedRunExpiry(rows.failedRuns, at);
+
       if (expiry === undefined) return now;
       const later = Stream.fromEffect(Effect.sleep(Duration.millis(expiry - at + 1)));
+
       return Stream.concat(
         now,
         Stream.flatMap(later, () => answersOf(rows)),
@@ -112,22 +114,29 @@ type Entry = AccountInboxLiveRows["items"][number];
 /** What a change leaves of an open item: gone where it settles it, its reminder where it sets or cancels one, its read mark where it flips it, and none where it leaves it alone, as an item changed since the service answered it. */
 function entryChanged(change: InboxChange, entry: Entry): Entry | "gone" | undefined {
   if (!changedIds(change).includes(entry.id)) return undefined;
+
   // Note that an item a take-back opens again is listed once the service's read holds it open again, since the read lists only open items.
   if (change.kind === INBOX_CHANGE.REOPENED) return undefined;
+
   if (change.kind === INBOX_CHANGE.REMINDED) {
     const { until } = change;
+
     return (entry.remindAt ?? null) === until ? undefined : { ...entry, remindAt: until };
   }
+
   if (change.kind === INBOX_CHANGE.ANSWERED && entry.updatedAt > change.item.updatedAt) {
     return undefined;
   }
+
   if (settles(change)) return "gone";
+
   const unread =
     change.kind === INBOX_CHANGE.MARKED
       ? change.unread
       : change.kind === INBOX_CHANGE.ANSWERED
         ? change.item.unread === true
         : false;
+
   return (entry.unread === true) === unread ? undefined : { ...entry, unread };
 }
 
@@ -151,22 +160,30 @@ function rowsChanged(
 ): Changeable | undefined {
   const answered = new Map<string, number>();
   let moved = false;
+
   const items = rows.items.flatMap((entry) => {
     const changed = entryChanged(change, entry);
+
     if (changed === undefined) return [entry];
     moved = true;
+
     if (changed !== "gone") return [changed];
+
     if (counted(entry, readerId)) {
       answered.set(entry.planId, (answered.get(entry.planId) ?? 0) + 1);
     }
+
     return [];
   });
+
   const plans = rows.plans.map((plan) => {
     const fewer = answered.get(plan.planId) ?? 0;
+
     return fewer === 0 || plan.toDo === undefined
       ? plan
       : { ...plan, toDo: Math.max(0, plan.toDo - fewer) };
   });
+
   return moved ? { items, plans } : undefined;
 }
 
@@ -179,21 +196,26 @@ export function accountInboxes(
     lookup: (userId: string) =>
       Effect.gen(function* () {
         const first = yield* dependencies.seal(userId, false);
+
         if ("failure" in first) return { kind: LIVE_STATE.BROKEN } as const;
         const inbox = yield* SubscriptionRef.make<AccountInboxState>({ kind: LIVE_STATE.WAITING });
         const items = yield* answeredCollection({ getKey: (row: Entry) => row.id });
+
         const plans = yield* answeredCollection({
           getKey: (row: AccountInboxLiveRows["plans"][number]) => row.planId,
         });
+
         let wait: TxWait | undefined;
         /** The rows as the read last answered them, or a write's own answer took them in its place; none before it first answers. */
         let answered: AccountInboxLiveRows | undefined;
+
         /** Takes rows as the read's own, every part's. */
         const taken = (rows: AccountInboxLiveRows) => {
           items.answer(rows.items);
           plans.answer(rows.plans);
           answered = rows;
         };
+
         /** The rows as the read holds them, each write standing drawn over them in turn. */
         const shown = (): Changeable => {
           const held: Changeable = {
@@ -201,23 +223,29 @@ export function accountInboxes(
             items: rowsOf(items.collection) as AccountInboxLiveRows["items"],
             plans: rowsOf(plans.collection),
           };
+
           return writes
             .standing()
             .reduce((rows, change) => rowsChanged(rows, change, userId) ?? rows, held);
         };
+
         // The answer built again from the rows as they stand each time they move, and as a failed run they carry ages out.
         const standing = yield* Queue.sliding<AccountInboxLiveRows>(1);
+
         const drawn = Effect.suspend(() =>
           answered === undefined ? Effect.void : Queue.offer(standing, { ...answered, ...shown() }),
         );
+
         /** Whether the read lists the item `id` names, open. */
         const lists = (id: string) => answered?.items.some((entry) => entry.id === id) === true;
+
         const writes: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(
           INBOX_ITEM,
           {
             redraw: () => Effect.asVoid(drawn),
             confirmation: () => {
               const handed = wait;
+
               return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
             },
             beside: {
@@ -225,12 +253,15 @@ export function accountInboxes(
               take: (change) => {
                 const next =
                   answered === undefined ? undefined : rowsChanged(answered, change, userId);
+
                 if (answered !== undefined && next !== undefined) taken({ ...answered, ...next });
               },
             },
           },
         );
+
         yield* dependencies.accountWide.stand(() => wait);
+
         const follow = followTakingRows<AnsweredPart, AccountInboxLiveRows>(
           {
             poll: (after) => dependencies.seal(userId, true, after),
@@ -243,9 +274,11 @@ export function accountInboxes(
           (rows) =>
             Effect.suspend(() => {
               taken(rows);
+
               return drawn;
             }),
         );
+
         yield* Effect.forkScoped(
           Stream.runForEach(Stream.switchMap(Stream.fromQueue(standing), answersOf), (answer) =>
             SubscriptionRef.set(inbox, { kind: LIVE_STATE.STANDING, answer }),
@@ -257,6 +290,7 @@ export function accountInboxes(
             Effect.ensuring(SubscriptionRef.set(inbox, { kind: LIVE_STATE.BROKEN })),
           ),
         );
+
         return { kind: LIVE_STATE.LIVE, inbox } as const;
       }),
   });
@@ -276,6 +310,7 @@ export function followAccountInbox(
   const attempt = Effect.scoped(
     Effect.gen(function* () {
       const standing = yield* RcMap.get(inboxes, userId);
+
       if (standing.kind === LIVE_STATE.BROKEN) return;
       yield* SubscriptionRef.changes(standing.inbox).pipe(
         Stream.takeWhile((state) => state.kind !== LIVE_STATE.BROKEN),
@@ -284,6 +319,7 @@ export function followAccountInbox(
       );
     }),
   );
+
   return restarting(
     attempt.pipe(Effect.andThen(RcMap.invalidate(inboxes, userId)), Effect.as(true)),
   );

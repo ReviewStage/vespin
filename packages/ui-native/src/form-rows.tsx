@@ -53,6 +53,7 @@ export function WordsField({
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(initialWords);
+
   return (
     <TextField
       text={text}
@@ -91,6 +92,7 @@ type AttachRowProps = {
  */
 export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }: AttachRowProps) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT * 2}
@@ -142,6 +144,7 @@ type PickRowProps = {
  */
 export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
   const colors = useColors();
+
   return (
     <Picker<string | null>
       label={label}

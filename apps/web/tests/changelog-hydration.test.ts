@@ -13,6 +13,7 @@ import { CHANGELOG_VIEW, changelogRoutes, changelogViewForPath } from "../src/ch
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const ROUTES = changelogRoutes(RELEASES);
+
 const SAMPLES = [
   ROUTES.find((route) => route.path === "/changelog"),
   ROUTES.find((route) => route.path === "/changelog/page/2"),
@@ -44,13 +45,16 @@ test("the pager's arrows are named for where they go, not for which way they poi
   const page = ROUTES.find((route) => route.path === "/changelog/page/2");
   const release = ROUTES.find((route) => route.path === `/changelog/${RELEASES[1]?.version}`);
   assert.ok(page !== undefined && release !== undefined);
+
   const named = (view: (typeof ROUTES)[number]["view"]) => {
     const root = document.createElement("div");
     root.innerHTML = renderToString(createElement(ChangelogPage, { view }));
+
     return Array.from(root.querySelectorAll("nav a[rel]")).map((link) =>
       link.getAttribute("aria-label"),
     );
   };
+
   assert.deepEqual(named(page.view), ["Newer page", "Older page"]);
   assert.deepEqual(named(release.view), [
     `Newer release, v${RELEASES[0]?.version}`,
@@ -63,9 +67,11 @@ test("each release on a page is a heading under the page's title, so a screen re
   assert.ok(page !== undefined && page.view.kind === CHANGELOG_VIEW.PAGE);
   const root = document.createElement("div");
   root.innerHTML = renderToString(createElement(ChangelogPage, { view: page.view }));
+
   const versions = Array.from(root.querySelectorAll("h2")).map((heading) =>
     heading.textContent?.trim(),
   );
+
   assert.deepEqual(
     versions,
     page.view.releases.map((release) => `v${release.version}`),

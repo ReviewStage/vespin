@@ -48,12 +48,14 @@ export function LandingSection({
   aside?: ReactNode;
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
+
   const stage = (
     <div className="ui-landing-stage" data-scene={scene}>
       <LandingField pattern={SCENE_FIELD[scene]} />
       <LandingSceneView scene={scene} />
     </div>
   );
+
   return (
     <section className="ui-landing-section" aria-labelledby={titleId}>
       <SiteRule />
@@ -155,6 +157,7 @@ export function LandingPage({
   footer: ReactNode;
 }): React.JSX.Element {
   const closeId = `${useId()}close`;
+
   return (
     <SiteFrame bar={bar} barCall={barCall} footer={footer}>
       <main>

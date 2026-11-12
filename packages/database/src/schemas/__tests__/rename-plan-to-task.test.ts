@@ -40,11 +40,13 @@ const openTask = Effect.gen(function* () {
   yield* db
     .insert(member)
     .values({ id: randomUUID(), organizationId, userId, role: "owner", createdAt: now });
+
   const task = yield* createTask(userId, {
     organizationId,
     name: "Nightly triage",
     repository: "acme/api",
   });
+
   const started = Option.getOrThrow(
     yield* createAgent(userId, {
       taskId: task.id,
@@ -57,6 +59,7 @@ const openTask = Effect.gen(function* () {
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     }),
   );
+
   return { userId, taskId: task.id, agentId: started.agent.id };
 });
 
@@ -72,7 +75,9 @@ it.layer(getTestDB())("the migration that names a plan's row a task", (it) => {
 
         // The database as it stood before the migration, with no sync capture yet, written to as an earlier build wrote it.
         for (const statement of syncCaptureTakenOff()) yield* sql.unsafe(statement);
+
         for (const statement of agentTables.back) yield* sql.unsafe(statement);
+
         for (const statement of [...renames].reverse()) yield* sql.unsafe(undoneRename(statement));
         yield* sql.unsafe(`UPDATE "plan" SET name = 'Written before' WHERE id = '${taskId}'`);
         yield* sql.unsafe(
@@ -80,6 +85,7 @@ it.layer(getTestDB())("the migration that names a plan's row a task", (it) => {
         );
 
         for (const statement of renames) yield* sql.unsafe(statement);
+
         for (const statement of agentTables.forward) yield* sql.unsafe(statement);
 
         const task = Option.getOrThrow(yield* readTask(userId, taskId));

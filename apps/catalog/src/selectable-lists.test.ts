@@ -33,7 +33,9 @@ function drawn(id: string) {
   const root: Root = createRoot(container);
   act(() => root.render(createElement(SELECTION_EXAMPLE.Render)));
   const box = container.querySelector<HTMLElement>(`#${id}`);
+
   if (box === null) throw new Error(`The example draws no box ${id}`);
+
   return {
     root: box,
     opened: () =>
@@ -49,4 +51,5 @@ function drawn(id: string) {
 }
 
 selectableListBehavior("CATALOG", { part: "List", mount: () => drawn("selection-tasks-list") });
+
 selectableListBehavior("CATALOG", { part: "cards", mount: () => drawn("selection-cards-region") });

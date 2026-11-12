@@ -49,10 +49,12 @@ export function SettingsPageLink({
 }): React.JSX.Element {
   const openSettings = useOpenSettings();
   const workspace = useLinkWorkspace();
+
   const href =
     workspace === undefined
       ? undefined
       : linkOf({ kind: LINK_DESTINATION.SETTINGS, page }, workspace);
+
   return (
     <TextButton
       tone={TEXT_BUTTON_TONE.ACCENT}

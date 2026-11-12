@@ -207,18 +207,22 @@ function connectPort(answers: {
   readonly sentry: Effect.Effect<string, ActRefused>;
 }) {
   const opened: string[] = [];
+
   const dependencies: WorkspaceProceduresDependencies = {
     openExternal: async (url) => {
       opened.push(url);
     },
   };
+
   const port = testActPort(
     workspaceProcedures(dependencies, {
       WORKSPACE_GITHUB_CONNECT: () => answers.github,
       WORKSPACE_SENTRY_INSTALL: () => answers.sentry,
     }),
   );
+
   ports.push(port);
+
   return { port, opened };
 }
 
@@ -233,6 +237,7 @@ it.effect.each(ACTS)(
               github: Effect.succeed(INSTALL_URL),
               sentry: Effect.succeed(SENTRY_INSTALL_URL),
             });
+
             return { port: connect.port, done: () => connect.opened };
           })
         : Effect.map(hostActPort({ account: SIGNED_IN }), ({ port, requests }) => ({
@@ -255,6 +260,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let refusal: string | undefined;
+
       const { port } = yield* hostActPort({
         account: SIGNED_IN,
         respond: (request) =>
@@ -262,6 +268,7 @@ it.effect(
             ? Response.json({ error: refusal }, { status: 403 })
             : new Response(null, { status: 503 }),
       });
+
       const remove = ACTS.find((act) => act.kind === WORKSPACE_ACT_KIND.WORKSPACE_MEMBER_REMOVE);
       const invite = ACTS.find((act) => act.kind === WORKSPACE_ACT_KIND.WORKSPACE_INVITE);
       const slug = ACTS.find((act) => act.kind === WORKSPACE_ACT_KIND.WORKSPACE_SLUG_SET);
@@ -291,14 +298,17 @@ it.effect(
     Effect.gen(function* () {
       const github = { kind: WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT, payload: WORKSPACE };
       const sentry = { kind: WORKSPACE_ACT_KIND.WORKSPACE_SENTRY_INSTALL, payload: WORKSPACE };
+
       const own = connectPort({
         github: Effect.succeed(INSTALL_URL),
         sentry: Effect.succeed(SENTRY_INSTALL_URL),
       });
+
       const elsewhere = connectPort({
         github: Effect.succeed("https://evil.test/apps/luke/installations/new"),
         sentry: Effect.succeed("https://sentry.example/sentry-apps/luke/external-install/"),
       });
+
       const refused = connectPort({
         github: Effect.fail(new ActRefused({ sentence: WORKSPACE_NOT_PERMITTED_REFUSAL })),
         sentry: Effect.fail(new ActRefused({})),
@@ -308,10 +318,12 @@ it.effect(
         yield* own.port.perform(github, PANEL),
         yield* own.port.perform(sentry, PANEL),
       ];
+
       const offOrigin = [
         yield* elsewhere.port.perform(github, PANEL),
         yield* elsewhere.port.perform(sentry, PANEL),
       ];
+
       const refusing = [
         yield* refused.port.perform(github, PANEL),
         yield* refused.port.perform(sentry, PANEL),

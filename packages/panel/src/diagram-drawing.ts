@@ -67,7 +67,9 @@ function keep(appearance: DiagramAppearance, code: string, answer: DiagramDrawin
     held.delete(code);
     held.set(code, answer);
     const oldest = held.keys().next();
+
     if (held.size > HELD_PICTURES && oldest.done !== true) held.delete(oldest.value);
+
     return new Map(now).set(appearance, held);
   });
 }
@@ -79,15 +81,20 @@ function drawnBy(
   code: string,
 ): Promise<DiagramDrawing> {
   const running = drawing.get(appearance)?.get(code);
+
   if (running !== undefined) return running;
   const pending = drawing.get(appearance) ?? new Map<string, Promise<DiagramDrawing>>();
   drawing.set(appearance, pending);
+
   const answer = module.draw(code, appearance).then((settled) => {
     keep(appearance, code, settled);
     pending.delete(code);
+
     return settled;
   });
+
   pending.set(code, answer);
+
   return answer;
 }
 
@@ -124,15 +131,20 @@ export function useDrawing(
   const bundle = useQuery({ ...diagram, enabled: code !== undefined });
   const retryBundle = () => void bundle.refetch();
   const module = bundle.data;
+
   const held = useSelector(drawnStore, (now) =>
     code === undefined ? undefined : now.get(appearance)?.get(code),
   );
+
   useEffect(() => {
     if (code === undefined || held !== undefined || module === undefined) return;
     void drawnBy(module, appearance, code);
   }, [held, module, appearance, code]);
+
   if (code === undefined) return { drawing: undefined, retry: undefined };
+
   if (held !== undefined) return { drawing: held, retry: undefined };
+
   return bundle.isError
     ? { drawing: { kind: DIAGRAM_DRAWING.REFUSED }, retry: retryBundle }
     : { drawing: undefined, retry: undefined };
@@ -141,6 +153,7 @@ export function useDrawing(
 /** The words kept of a title or first line, cut at the limit with an ellipsis. */
 function altWords(line: string): string {
   const words = line.replace(/^["']|["']$/gu, "").trim();
+
   return words.length > ALT_LIMIT ? `${words.slice(0, ALT_LIMIT).trimEnd()}…` : words;
 }
 
@@ -151,5 +164,6 @@ export function diagramAlt(code: string): string {
   const title = FRONT_TITLE.exec(front?.[1] ?? "")?.[1] ?? BODY_TITLE.exec(body)?.[1];
   const first = body.split("\n").find((line) => !SILENT_LINE.test(line));
   const words = altWords(title ?? first ?? "");
+
   return words === "" ? DIAGRAM_ALT : `${DIAGRAM_ALT}: ${words}`;
 }

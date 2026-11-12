@@ -23,6 +23,7 @@ let count = 0;
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => listeners.delete(listener);
 }
 
@@ -32,6 +33,7 @@ export function askTurnFileReveal(agentId: string, messageId: string, path: stri
   asks.set(agentId, ofAgent);
   count += 1;
   ofAgent.set(messageId, { path, ask: count });
+
   for (const listener of listeners) listener();
 }
 

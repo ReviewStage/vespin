@@ -24,9 +24,11 @@ type GuardValue<Definition> = Definition extends {
   : never;
 
 export type AppSettingField = keyof typeof APP_SETTING_SCHEMA;
+
 export type AppSettingValue<Field extends AppSettingField> = GuardValue<
   (typeof APP_SETTING_SCHEMA)[Field]
 >;
+
 export type StoredAppSettings = {
   [Field in AppSettingField as undefined extends AppSettingValue<Field>
     ? never
@@ -136,20 +138,25 @@ function parseAccountPreferences(
 ): AccountPreferences | undefined {
   if (!isRecord(value)) return undefined;
   const preferences: Record<string, UnparsedWireValue> = {};
+
   for (const [field, rawValue] of Object.entries(value)) {
     if (!fields.has(field) || !isAppSettingField(field)) continue;
     const wireValue = rawValue === null ? undefined : rawValue;
     const parsed = APP_SETTING_SCHEMA[field].guard(wireValue);
+
     if (!parsed.valid) {
       if (source === PREFERENCE_SOURCE.WIRE) return undefined;
       continue;
     }
+
     // SAFETY: The account-preference guard accepted this value as that setting's stored JSON shape.
     const parsedValue = parsed.value as UnparsedWireValue;
+
     if (parsedValue !== undefined) {
       preferences[field] = parsedValue;
     }
   }
+
   // SAFETY: Every key is an account preference field and every value passed that field's guard.
   return preferences;
 }
@@ -173,6 +180,7 @@ export function ownPreferenceFromWire<Field extends OwnPartField>(
   value: UnparsedWireValue,
 ): AccountPreferences[Field] {
   const parsed = APP_SETTING_SCHEMA[field].guard(value);
+
   // SAFETY: the field's own guard read the value as that preference's stored shape.
   return (parsed.valid ? parsed.value : undefined) as AccountPreferences[Field];
 }
@@ -189,9 +197,11 @@ export type AccountPreferencesParts = { preferences: AccountPreferences } & {
 /** The own parts' choices a record holds, by field, leaving out those it holds none for. */
 function ownChoices(record: Partial<Record<OwnPartField, UnparsedWireValue>>): AccountPreferences {
   const chosen: Record<string, UnparsedWireValue> = {};
+
   for (const field of OWN_PART_FIELDS) {
     if (record[field] !== undefined) chosen[field] = record[field];
   }
+
   // SAFETY: each value is an own part's choice, read by its guard where it came off a wire.
   return chosen;
 }
@@ -199,7 +209,9 @@ function ownChoices(record: Partial<Record<OwnPartField, UnparsedWireValue>>): A
 /** An account's preferences without its own parts' choices: its shared part. */
 function sharedOf(preferences: AccountPreferences): AccountPreferences {
   const shared: Record<string, UnparsedWireValue> = { ...preferences };
+
   for (const field of OWN_PART_FIELDS) delete shared[field];
+
   // SAFETY: what is left is the record's shared preferences, as they were.
   return shared;
 }
@@ -223,9 +235,12 @@ export function accountPreferencesFromParts(
   snapshot: Record<string, UnparsedWireValue>,
 ): AccountPreferences | undefined {
   const shared = accountPreferencesFromWire(snapshot.preferences);
+
   if (shared === undefined) return undefined;
   const owned: Record<string, UnparsedWireValue> = {};
+
   for (const field of OWN_PART_FIELDS) owned[field] = ownPreferenceFromWire(field, snapshot[field]);
+
   return { ...shared, ...ownChoices(owned) };
 }
 
@@ -246,6 +261,7 @@ export function snapshotAccountPreferences(
   local: AccountPreferences,
 ): AccountPreferences {
   const shared = sharedWritten ? sharedOf(remote) : sharedOf(local);
+
   return { ...shared, ...ownChoices(local), ...ownChoices(remote) };
 }
 
@@ -261,11 +277,13 @@ export function accountPreferencesToWrite(
   baseline: AccountPreferences | undefined,
 ): AccountPreferences {
   const written: Record<string, UnparsedWireValue> = { ...local };
+
   for (const field of OWN_PART_FIELDS) {
     if (local[field] === undefined && baseline?.[field] !== undefined) {
       written[field] = APP_SETTING_SCHEMA[field].default;
     }
   }
+
   // SAFETY: each value is the device's own choice or the preference's default.
   return written;
 }
@@ -283,9 +301,11 @@ export function accountPreferencesToPush(
   const written: Record<string, UnparsedWireValue> = {
     ...accountPreferencesToWrite(local, baseline),
   };
+
   for (const field of OWN_PART_FIELDS) {
     if (written[field] === baseline?.[field]) delete written[field];
   }
+
   // SAFETY: what is left is what the device writes, less its unchanged own parts.
   return written;
 }
@@ -315,13 +335,16 @@ function descriptionsFor(
   read: AppSettingReader,
 ): readonly DescribedSetting[] {
   const built = APP_SETTING_SCHEMA[field].describe(read);
+
   if (built === undefined) return [];
+
   return isDescribedSettingList(built) ? built : [built];
 }
 
 function settingReader(settings: Pick<StoredAppSettings, AppSettingField>): AppSettingReader {
   return (field) => {
     if (!isAppSettingField(field)) return undefined;
+
     // SAFETY: Every stored value is one of the runtime families a guard answers in.
     return settings[field] as StoredSettingValue;
   };
@@ -332,6 +355,7 @@ export function describedSettings(
   settings: Pick<StoredAppSettings, AppSettingField>,
 ): DescribedSetting[] {
   const read = settingReader(settings);
+
   return APP_SETTING_FIELDS.flatMap((field) => [...descriptionsFor(field, read)]);
 }
 
@@ -343,6 +367,7 @@ export function settingVisible(field: AppSettingField, view: SettingsVisibility)
 /** Whether the row one setting id names is drawn right now. */
 export function settingIdVisible(id: string, view: SettingsVisibility): boolean {
   const field = settingFieldForId(id);
+
   return field !== undefined && settingVisible(field, view);
 }
 
@@ -386,13 +411,18 @@ export function settingRowsForPage(
   view: SettingsRowsInput,
 ): readonly SchemaSettingRow[] {
   const read = settingReader(view.settings);
+
   return APP_SETTING_FIELDS.flatMap((field): SchemaSettingRow[] => {
     const definition = APP_SETTING_SCHEMA[field];
+
     if (definition.rows !== SETTING_ROWS.SCHEMA) return [];
+
     if (definition.page !== page || definition.section !== section) return [];
+
     if (!settingVisible(field, view)) return [];
     const control = settingControl(field);
     const stored = view.settings[field];
+
     return descriptionsFor(field, read).map((entry) => ({
       field,
       entry,
@@ -441,7 +471,9 @@ export function settingAnalytics(
 ): SettingAnalytics | undefined {
   const definition = APP_SETTING_SCHEMA[field];
   const id = definition.ids[0];
+
   if (!definition.analytics || id === undefined) return undefined;
+
   // SAFETY: The reading belongs to the field selected, whose stored value this is.
   return { id, value: definition.analytics.value(settings[field] as StoredSettingValue) };
 }
@@ -449,6 +481,7 @@ export function settingAnalytics(
 const appSettingDefaults = Object.fromEntries(
   APP_SETTING_FIELDS.map((field) => [field, APP_SETTING_SCHEMA[field].default]),
 );
+
 type AppSettingDefaults = {
   readonly [Field in AppSettingField]: (typeof APP_SETTING_SCHEMA)[Field]["default"];
 };
@@ -468,8 +501,11 @@ export function settingsScopeChanged(
 ): boolean {
   return APP_SETTING_FIELDS.some((field) => {
     const definition = APP_SETTING_SCHEMA[field];
+
     if (definition.resetScope !== scope) return false;
+
     if (!settingVisible(field, view)) return false;
+
     return settings[field] !== definition.default;
   });
 }

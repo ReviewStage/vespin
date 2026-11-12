@@ -43,5 +43,6 @@ export function useLastSignIn(
     writeKept(STORAGE_KEY, storedProvider, signedIn);
     setKept(signedIn);
   }, [signedIn, staged]);
+
   return staged ? undefined : kept;
 }

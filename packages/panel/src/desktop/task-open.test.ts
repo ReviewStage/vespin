@@ -78,6 +78,7 @@ afterEach(() => {
 /** A host that records each transcript the window holds and lays its pages only when the test pushes them. */
 function heldTranscript() {
   const telling = tellingTranscripts();
+
   return {
     followed: () => telling.asked.map((transcript) => transcript.agentId),
     push: (page: AgentTranscriptPage) =>
@@ -127,6 +128,7 @@ function mount(tasks: TasksControl) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (next: TasksControl) =>
     act(() =>
       root.render(
@@ -140,7 +142,9 @@ function mount(tasks: TasksControl) {
         ),
       ),
     );
+
   draw(tasks);
+
   return { container, draw };
 }
 
@@ -154,16 +158,22 @@ async function settle(): Promise<void> {
 /** What stands in the column's log as a reader sees it: a spinner, nothing, the placeholder's blocks by their shapes and widths, or the log's lines. */
 function columnLog(container: HTMLElement): string {
   const pane = container.querySelector(".desktop-agent");
+
   if (pane === null || pane.textContent === null) return "empty";
+
   if (pane.querySelector(".ui-spinner") !== null) return "spinner";
+
   if (/Reading the agent/u.test(pane.textContent)) return "loading agent";
   const region = pane.querySelector(".agent-tab > .agent-log-skeleton-wait");
+
   if (region !== null) {
     const blocks = [...region.querySelectorAll(".ui-skeleton")].map(
       (block) => `${block.getAttribute("data-shape")}:${block.getAttribute("style")}`,
     );
+
     return `skeleton ${blocks.join(" ")}`;
   }
+
   return pane.querySelector(".agent-tab .conversation-log") === null ? "empty" : "transcript";
 }
 

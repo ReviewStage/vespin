@@ -19,5 +19,6 @@ type ReactNativeWebSocket = new (
 export const openRelaySocket = openTerminalSocketOver((url, headers) => {
   // SAFETY: the global is React Native's own `WebSocket`, which takes the headers option the DOM's declaration does not name.
   const Socket = WebSocket as unknown as ReactNativeWebSocket;
+
   return new Socket(url, null, { headers });
 });

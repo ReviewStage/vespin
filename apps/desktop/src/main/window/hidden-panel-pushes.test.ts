@@ -92,6 +92,7 @@ function shownPanel() {
     placementPath: undefined,
     closing: () => false,
   });
+
   panels.reconcile();
   const [window] = windows;
   expect(window).toBeDefined();
@@ -100,12 +101,14 @@ function shownPanel() {
   window?.emit("show");
   const stop = new AbortController();
   stops.push(stop);
+
   return { panels, window, stream: windowPushes.stream(page, stop.signal), page };
 }
 
 /** What the next read of a stream carries once everything pending has run, a document by its version; nothing while it waits. */
 async function nextHeard(stream: AsyncIteratorObject<PushEvent>) {
   let heard: number | string | undefined;
+
   // Note that a read still waiting when its test ends is refused by the stream's abort, which ends nothing here.
   const read = stream.next().then(
     (result) => {
@@ -115,7 +118,9 @@ async function nextHeard(stream: AsyncIteratorObject<PushEvent>) {
     },
     () => undefined,
   );
+
   await new Promise((resolve) => setImmediate(resolve));
+
   return { heard: () => heard, read };
 }
 
@@ -130,6 +135,7 @@ afterEach(() => {
 test("three documents pushed while the panel is hidden are one delivery, the third, as it shows", async () => {
   const { window, stream, page } = shownPanel();
   window?.emit("hide");
+
   for (const version of [1, 2, 3]) windowPushes.pushState(page, documentAt(version));
 
   const pending = await nextHeard(stream);

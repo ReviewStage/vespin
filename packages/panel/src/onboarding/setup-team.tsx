@@ -85,6 +85,7 @@ const PRESS_WORDS = {
 /** The press's words for what it will write: a workspace made, one changed, or nothing but going on. */
 function pressWords(made: boolean, changed: boolean): string {
   if (!made) return PRESS_WORDS[PRESS.CREATE].label;
+
   return changed ? PRESS_WORDS[PRESS.SAVE].label : "Continue";
 }
 
@@ -123,11 +124,13 @@ export function useTeamForm({
   const refusal = removing.refusal ?? creating.refusal ?? pickRefusal;
   const [setPhoto, setSetPhoto] = useState<string | undefined>(undefined);
   const invitees = useInvitees(signedIn?.email);
+
   const { photo, reading, picker, clear } = useWorkspacePhotoPick((picked) => {
     setPickRefusal(picked);
     creating.clear();
     removing.clear();
   });
+
   // Note that a workspace made before a reload is named once the list holds it, unless something was typed meanwhile.
   useEffect(() => {
     if (made?.name === undefined || named.current) return;
@@ -145,6 +148,7 @@ export function useTeamForm({
     const refused: string[] = [];
     // Note that a refused photo is said under the fields, as a refused address is beside its chip.
     let photoRefusal: string | undefined;
+
     if (newPhoto) {
       await setWorkspacePhoto({ workspaceId, photo }).then(
         () => setSetPhoto(photo),
@@ -154,32 +158,41 @@ export function useTeamForm({
         },
       );
     }
+
     refused.push(...(await invitees.send(workspaceId, emails)));
     onDone(refused);
+
     return photoRefusal;
   };
+
   const create = () => {
     if (!ready || busy) return;
     // Note that an address typed and never ended is read as the press lands, and one typed wrong is left unsent, its chip saying why.
     const { pending } = invitees.commit();
+
     if (made !== undefined && !renamed && !newPhoto && pending.length === 0) {
       onDone([]);
+
       return;
     }
+
     setPressed(made === undefined ? PRESS.CREATE : PRESS.SAVE);
     setPickRefusal(undefined);
     removing.clear();
     void creating.run(async () => {
       let workspaceId = made?.id;
+
       if (workspaceId === undefined) {
         workspaceId = (await createWorkspace({ name: trimmed })).id;
         onCreated(workspaceId);
       } else if (renamed) {
         await renameWorkspace({ workspaceId, name: trimmed });
       }
+
       return write(workspaceId, pending);
     });
   };
+
   return {
     name,
     onName: (typed) => {
@@ -195,6 +208,7 @@ export function useTeamForm({
         ? undefined
         : () => {
             clear();
+
             if (made === undefined || setPhoto === undefined) return;
             void removing.run(() =>
               setWorkspacePhoto({ workspaceId: made.id, photo: null }).then(() =>

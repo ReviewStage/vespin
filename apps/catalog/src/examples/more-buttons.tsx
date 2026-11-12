@@ -34,6 +34,7 @@ const AUTOMATION_ACTIONS: readonly (readonly MenuEntry[])[] = [
 /** A ⋯ in a page's strip and the menu it drops. */
 function AutomationHeader(): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <>
       <PageToolbar actions={<MoreButton thing="Automation" {...menu.trigger()} />} />

@@ -105,14 +105,18 @@ type ThreadOrder = (typeof THREAD_ORDER)[keyof typeof THREAD_ORDER];
 /** Who wrote a message, as the outside agent reads it: the thread's agent, `you` for the member it acts for, another member by name, or a former member whose account is gone. */
 function writerOf(message: InboxMessage, userId: string): string {
   if (message.author === INBOX_MESSAGE_AUTHOR.AGENT) return "agent";
+
   if (message.member === undefined) return "a former member";
+
   return message.member.userId === userId ? "you" : message.member.name;
 }
 
 /** Where a thread stands in what waits on the member. */
 function orderOf(item: InboxItem, userId: string): ThreadOrder {
   if (item.status !== INBOX_STATUS.OPEN) return THREAD_ORDER.SETTLED;
+
   if (threadNeedsReader(item, userId)) return THREAD_ORDER.NEEDS_MEMBER;
+
   return openAskOf(item.thread ?? []) === undefined ? THREAD_ORDER.NOTICE : THREAD_ORDER.ASKING;
 }
 
@@ -131,6 +135,7 @@ function threadOf(item: InboxItem, userId: string): WireRecord {
   const earlier = messages.length - told.length;
   const waitsOn = inboxWaitsOn(item);
   const asking = open ? openAskOf(messages) : undefined;
+
   return {
     id: item.id,
     title: item.title,
@@ -184,11 +189,13 @@ export function readMemberInbox(userId: string, workspaceId: string) {
   return orStoreRefusal(
     Effect.map(workspaceInboxItems(userId, workspaceId), (items) => {
       const orders = Object.values(THREAD_ORDER);
+
       const threads = orders.flatMap((order) =>
         items
           .filter((item) => orderOf(item, userId) === order)
           .map((item) => threadOf(item, userId)),
       );
+
       return { threads };
     }),
   );
@@ -205,14 +212,17 @@ export function answerAskAsMember(
     attachments: [],
     answers: asked.answers,
   };
+
   return answerAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map((answered) => {
       if (answered.outcome === INBOX_ASK_ANSWER.NOT_OPEN) {
         return agentToolRejected(MEMBER_INBOX_REFUSAL.NOT_OPEN);
       }
+
       if (answered.outcome === INBOX_ASK_ANSWER.REFUSED) {
         return agentToolRejected(MEMBER_INBOX_REFUSAL.NOT_FITTING(answered.refusal ?? ""));
       }
+
       return accepted(answered.item, userId);
     }),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
@@ -225,6 +235,7 @@ export function acknowledgeThreadAsMember(
   asked: { readonly threadId: string; readonly revision: number },
 ) {
   const sent = { revision: asked.revision, clientKey: randomUUID() };
+
   return acknowledgeAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item, taken }) =>
       taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.UNSEEN),
@@ -245,6 +256,7 @@ export function replyAsMember(
   asked: { readonly threadId: string; readonly text: string },
 ) {
   const sent = { text: asked.text, clientKey: randomUUID(), attachments: [] };
+
   return messageAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item }) => accepted(item, userId)),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
@@ -257,6 +269,7 @@ export function closeThreadAsMember(
   asked: { readonly threadId: string; readonly revision: number },
 ) {
   const sent = { revision: asked.revision, clientKey: randomUUID() };
+
   return closeAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item, taken }) =>
       taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.MOVED),
@@ -278,6 +291,7 @@ export function startThreadAsMember(
     clientKey: randomUUID(),
     attachments: [],
   };
+
   return startAsMember({}, WRITER, userId, sent).pipe(
     Effect.map(({ item }) => accepted(item, userId)),
     Effect.catch((refusal) =>
@@ -333,6 +347,7 @@ export function remindThreadAsMember(
     ),
     Effect.catch((refusal) => Effect.succeed(unmarkedAs(refusal))),
   );
+
   // Note that a time already past is refused, as the window's picker does, since it would end a reminder still pending.
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>
     asked.at !== null && asked.at <= now

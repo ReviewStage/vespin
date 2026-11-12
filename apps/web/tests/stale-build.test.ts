@@ -14,6 +14,7 @@ import { failedChunkAnswer, type StaleBuildTab } from "../src/app/stale-build";
 function tabWith(options: { online?: boolean } = {}) {
   const leave = pageLeave(new EventTarget());
   const seen = { reloads: 0, asks: [] as (() => void)[], dismisses: [] as (() => void)[] };
+
   const tab: StaleBuildTab = {
     online: () => options.online ?? true,
     leave,
@@ -25,6 +26,7 @@ function tabWith(options: { online?: boolean } = {}) {
       seen.dismisses.push(dismissed);
     },
   };
+
   return { answer: failedChunkAnswer(tab), leave, seen };
 }
 

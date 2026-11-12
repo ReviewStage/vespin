@@ -12,6 +12,7 @@ import {
 } from "./maintenance-sweep.js";
 
 const CRON_SECRET = Redacted.make("cron-secret-1");
+
 /** The scheduler's call; `null` sends no bearer at all. */
 function sweepRequest(
   authorization: string | null = `Bearer ${Redacted.value(CRON_SECRET)}`,
@@ -48,6 +49,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     awayHosts: [],
     sandboxReleases: [],
   };
+
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
     cronSecret: CRON_SECRET,
@@ -55,50 +57,60 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     pruneSyncLog: (now) =>
       Effect.sync(() => {
         recorded.syncLog.push(now);
+
         return 5;
       }),
     reconcileAgents: (now) =>
       Effect.sync(() => {
         recorded.turns.push(now);
+
         return 0;
       }),
     republishTurns: (now) =>
       Effect.sync(() => {
         recorded.republished.push(now);
+
         return 0;
       }),
     keepSandboxesUp: (now) =>
       Effect.sync(() => {
         recorded.keptUp.push(now);
+
         return 0;
       }),
     resumeWaitedTurns: (now) =>
       Effect.sync(() => {
         recorded.resumed.push(now);
+
         return 0;
       }),
     releaseHeldPushes: (now) =>
       Effect.sync(() => {
         recorded.heldPushes.push(now);
+
         return 0;
       }),
     refreshLiveActivities: (now) =>
       Effect.sync(() => {
         recorded.liveActivities.push(now);
+
         return 0;
       }),
     markAwayHosts: (now) =>
       Effect.sync(() => {
         recorded.awayHosts.push(now);
+
         return 0;
       }),
     releaseSandboxes: (now) =>
       Effect.sync(() => {
         recorded.sandboxReleases.push(now);
+
         return { due: 0, published: 0 };
       }),
     ...overrides,
   };
+
   return { options, recorded };
 }
 
@@ -197,6 +209,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const checkIns: string[] = [];
+
       const { options, recorded } = sweepOptions({
         pruneSyncLog: () => Effect.fail(new Error("a sync log row could not be read")),
         reconcileAgents: (now) =>
@@ -213,6 +226,7 @@ it.effect(
             ),
         },
       });
+
       const answer = yield* sweep(options);
 
       assert.equal(answer.status, 500);

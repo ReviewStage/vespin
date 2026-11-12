@@ -39,8 +39,10 @@ function git(cwd: string, ...args: string[]): string {
     encoding: "utf8",
     env: { PATH: process.env.PATH, ...GIT_ENV },
   });
+
   if (ran.status !== 0)
     throw new Error(`git ${args.join(" ")} exited ${ran.status}: ${ran.stderr}`);
+
   return ran.stdout.trim();
 }
 
@@ -65,6 +67,7 @@ const world = Effect.acquireRelease(
     mkdirSync(remote, { recursive: true });
     mkdirSync(workspace);
     git(remote, "init", "--quiet", "--bare", "--initial-branch=main");
+
     const sandbox: RepositorySandbox = {
       run: async ({ command, workingDirectory, env }) => {
         const ran = spawnSync("bash", ["-c", `umask 0022\n${command}`], {
@@ -79,10 +82,12 @@ const world = Effect.acquireRelease(
             ...env,
           },
         });
+
         return { exitCode: ran.status ?? 1, stdout: ran.stdout, stderr: ran.stderr };
       },
       firewall: { write: () => Effect.void },
     };
+
     return { root, remote, checkout: join(workspace, "repository"), sandbox };
   }),
   ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
@@ -94,6 +99,7 @@ function pushFirstCommit(root: string, remote: string): string {
   git(root, "init", "--quiet", "--initial-branch=main", seed);
   git(seed, "commit", "--quiet", "--allow-empty", "--message", "First commit");
   git(seed, "push", "--quiet", remote, "main");
+
   return git(seed, "rev-parse", "HEAD");
 }
 
@@ -136,9 +142,11 @@ it.effect(
 /** A commit adding the file named pushed to the bare repository's `main`, from the seed clone, made where it is missing. */
 function pushFile(root: string, remote: string, name: string): void {
   const seed = join(root, "seed");
+
   if (!gitSucceeds(root, "-C", seed, "rev-parse", "--git-dir")) {
     git(root, "clone", "--quiet", remote, seed);
   }
+
   writeFileSync(join(seed, name), `${name}\n`);
   git(seed, "add", name);
   git(seed, "commit", "--quiet", "--message", `Add ${name}`);

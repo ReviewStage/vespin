@@ -43,11 +43,14 @@ export function OfflineMark(): React.JSX.Element | null {
   // Note that the last mark is held drawn through its fade, as anything leaving is.
   const shown = useDisclosure(mark !== undefined);
   const last = useRef(mark);
+
   if (mark !== undefined) last.current = mark;
   const drawn = mark ?? last.current;
+
   if (!shown.mounted || drawn === undefined) return null;
   const { word, hint } = LIVE_MARK_WORDS[drawn];
   const Icon = LIVE_MARK_GLYPH[drawn];
+
   return (
     <Tooltip label={hint}>
       <span
@@ -75,9 +78,11 @@ export function OfflineMark(): React.JSX.Element | null {
  */
 export function OfflineStrip(): React.JSX.Element | null {
   const mark = useQuery({ ...appStateQuery, select: selectLiveMark }).data;
+
   if (mark === undefined) return null;
   const { hint } = LIVE_MARK_WORDS[mark];
   const Icon = LIVE_MARK_GLYPH[mark];
+
   return (
     <Banner
       look={BANNER_LOOK.STRIP}

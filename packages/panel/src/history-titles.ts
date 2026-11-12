@@ -54,8 +54,10 @@ function agentNameNow(tasks: StepNameTasks, taskId: string, agentId: string): st
     taskId === tasks.activeTaskId
       ? tasks.agents.agents?.find((agent) => agent.id === agentId)
       : undefined;
+
   const line =
     open ?? tasks.liveAgents?.find((agent) => agent.id === agentId && agent.planId === taskId);
+
   return line === undefined ? undefined : agentName(line, tasks.agents.models);
 }
 
@@ -110,6 +112,7 @@ export type StepTitleTasks = Pick<
 /** The name of a task the account lists, where it is listed. */
 export function taskName(tasks: StepNameTasks, taskId: string | undefined): string | undefined {
   if (taskId === undefined) return undefined;
+
   return tasks.tasks.find((task) => task.id === taskId)?.name;
 }
 
@@ -120,6 +123,7 @@ export function stepTitle(
   views: RoutedViews,
 ): StepTitle | undefined {
   const under = () => stateStepTitle(tasks);
+
   return routed === undefined ? under() : routed.title(tasks, under, views);
 }
 
@@ -127,22 +131,29 @@ export function stepTitle(
 function stateStepTitle(tasks: StepTitleTasks): StepTitle | undefined {
   if (tasks.boundFor === undefined) return { label: HOME_WORDS };
   const name = taskName(tasks, tasks.boundFor);
+
   if (name === undefined) return undefined;
+
   // Note that the strips are named only once they are the task's, as the history reads them.
   if (tasks.activeTaskId !== tasks.boundFor) return { label: name };
   const { boundFor } = tasks;
   // Note that the column's Overview is the task itself, which the step's name already says.
   const columnTab = tasks.mainTabs.tab;
+
   const column =
     columnTab === undefined || isOverviewTab(columnTab)
       ? undefined
       : columnTabLabel(columnTab, boundFor, tasks);
+
   const side =
     tasks.sidePanel.open && tasks.sidePanel.tab !== undefined
       ? shownSideTabLabel(tasks.sidePanel.tab, boundFor, tasks)
       : undefined;
+
   const shown = [column, side].filter((part) => part !== undefined);
+
   if (shown.length === 0) return { label: name, detail: undefined };
+
   return { label: name, detail: shown.join(" · "), panes: { column, side } };
 }
 
@@ -181,17 +192,22 @@ function liveTaskTitle(
   tasks: StepNameTasks,
 ): StepTitle | undefined {
   const label = taskName(tasks, step.taskId) ?? kept?.label;
+
   if (label === undefined) return undefined;
   const { taskId, column, side } = step;
+
   // Note that `null` is a pane that showed no tab, or the column's Overview, which is the task itself, and `undefined` a tab named neither now nor as kept, which leaves the words kept whole.
   const columnName =
     column === undefined || isOverviewTab(column)
       ? null
       : (columnTabLabel(column, taskId, tasks) ?? kept?.panes?.column);
+
   const sideName =
     side === undefined ? null : (sideTabLabel(side, taskId, tasks) ?? kept?.panes?.side);
+
   if (columnName === undefined || sideName === undefined) return { label, detail: kept?.detail };
   const shown = [columnName, sideName].filter((part) => part !== null);
+
   return { label, detail: shown.length === 0 ? undefined : shown.join(" · ") };
 }
 
@@ -215,15 +231,20 @@ export function liveStepTitle(
       return liveTaskTitle(step, kept, tasks);
     case NAMED_STEP.VERSION_HISTORY: {
       const label = taskName(tasks, step.taskId) ?? kept?.label;
+
       return label === undefined ? undefined : { label, detail: VERSION_HISTORY_WORDS };
     }
+
     case NAMED_STEP.INBOX: {
       // Note that an Inbox step names an item only where it was kept naming one, as one column standing its list names none.
       const detail = kept?.detail === undefined ? undefined : taskName(tasks, step.taskId);
+
       return { label: kept?.label ?? INBOX_WORDS, detail: detail ?? kept?.detail };
     }
+
     case NAMED_STEP.PERSON: {
       const label = memberName(members, step.userId) ?? kept?.label;
+
       return label === undefined ? undefined : { label, detail: kept?.detail };
     }
   }

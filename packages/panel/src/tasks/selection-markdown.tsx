@@ -84,15 +84,18 @@ const SAFE_LINK = /^(?:https?:\/\/|mailto:)/iu;
 function clipped(text: Text, range: Range): string {
   const from = text === range.startContainer ? range.startOffset : 0;
   const to = text === range.endContainer ? range.endOffset : text.length;
+
   return text.data.slice(from, to);
 }
 
 /** Words wrapped in a mark's delimiters, the spaces at their edges kept outside it, as Markdown reads a mark only against words. */
 function wrapped(words: string, delimiter: string): string {
   const inner = words.trim();
+
   if (inner === "") return words;
   const lead = words.slice(0, words.length - words.trimStart().length);
   const trail = words.slice(words.trimEnd().length);
+
   return `${lead}${delimiter}${inner}${delimiter}${trail}`;
 }
 
@@ -106,18 +109,21 @@ function codeSpan(words: string): string {
   if (words.trim() === "") return words;
   const fence = "`".repeat(longestTicks(words) + 1);
   const pad = words.startsWith("`") || words.endsWith("`") ? " " : "";
+
   return `${fence}${pad}${words}${pad}${fence}`;
 }
 
 /** Code as a fenced block, fenced past any backticks it holds. */
 function fencedBlock(code: string): string {
   const fence = "`".repeat(Math.max(3, longestTicks(code) + 1));
+
   return `${BLOCK_GAP}${fence}${NEWLINE}${code.replace(/\n+$/u, "")}${NEWLINE}${fence}${BLOCK_GAP}`;
 }
 
 /** Words standing as a block of their own. */
 function block(words: string): string {
   const inner = words.trim();
+
   return inner === "" ? "" : `${BLOCK_GAP}${inner}${BLOCK_GAP}`;
 }
 
@@ -129,8 +135,10 @@ function lines(words: string): string {
 /** Whether an element's words are left out: words no selection takes, and words drawn for a screen reader alone. */
 function leftOut(element: Element): boolean {
   if (element.getAttribute("aria-hidden") === "true") return true;
+
   if (element.classList.contains(HEARD_ONLY_CLASS)) return true;
   const style = getComputedStyle(element);
+
   // Note that WebKit answers the property by its prefixed name alone.
   return (style.userSelect || style.webkitUserSelect) === "none";
 }
@@ -145,13 +153,16 @@ const LINE_BOXES: ReadonlySet<string> = new Set(["block", "flex", "grid", "list-
  */
 function linedCode(element: Element, words: string): string {
   if (words === "" || words.endsWith(NEWLINE)) return words;
+
   return LINE_BOXES.has(getComputedStyle(element).display) ? `${words}${NEWLINE}` : words;
 }
 
 /** The children of `parent` inside `range`, written. */
 function childrenWritten(parent: Node, range: Range, inside: Inside): string {
   let words = "";
+
   for (const child of parent.childNodes) words += written(child, range, inside);
+
   return words;
 }
 
@@ -160,47 +171,66 @@ function listWritten(list: Element, range: Range, inside: Inside): string {
   const ordered = list.tagName === "OL";
   let number = Number(list.getAttribute("start") ?? "1") || 1;
   const items: string[] = [];
+
   for (const item of list.children) {
     if (item.tagName !== "LI") continue;
     const marker = ordered ? `${number}. ` : "- ";
     number += 1;
+
     if (!range.intersectsNode(item)) continue;
     const words = lines(childrenWritten(item, range, inside));
+
     if (words !== "")
       items.push(`${marker}${words.replaceAll(NEWLINE, `\n${" ".repeat(marker.length)}`)}`);
   }
+
   return block(items.join(NEWLINE));
 }
 
 /** A link's words as a Markdown link where it goes to the web, else as its words. */
 function linkWritten(element: Element, words: string): string {
   const href = element.getAttribute("href");
+
   if (href === null || !SAFE_LINK.test(href) || words.trim() === "") return words;
+
   return `[${words}](${linkTarget(href)})`;
 }
 
 /** An element inside `range` written as Markdown, its marks around its words. */
 function elementWritten(element: Element, range: Range, inside: Inside): string {
   const source = WRITTEN.get(element);
+
   if (source !== undefined) return source;
+
   if (leftOut(element)) return "";
   const tag = element.tagName;
   const coded = { ...inside, code: true };
+
   if (tag === "BR") return NEWLINE;
+
   if (tag === "PRE") return fencedBlock(childrenWritten(element, range, coded));
+
   if (tag === "UL" || tag === "OL") return listWritten(element, range, inside);
+
   if (tag === "CODE") {
     const code = childrenWritten(element, range, coded);
+
     return inside.code ? code : codeSpan(code);
   }
+
   // Note that a heading is written bold, so its words escape as a bold run's do.
   const marked = inside.marked || element.matches(MARK_SELECTOR) || HEADING_TAGS.has(tag);
   const words = childrenWritten(element, range, { ...inside, marked });
+
   if (inside.code) return linedCode(element, words);
   const delimiter = MARK_DELIMITER[tag];
+
   if (delimiter !== undefined) return wrapped(words, delimiter);
+
   if (tag === "A") return linkWritten(element, words);
+
   if (HEADING_TAGS.has(tag)) return block(wrapped(words, STRONG_DELIMITER));
+
   if (tag === "BLOCKQUOTE") {
     return block(
       lines(words)
@@ -209,18 +239,24 @@ function elementWritten(element: Element, range: Range, inside: Inside): string 
         .join(NEWLINE),
     );
   }
+
   if (tag === "LI" || tag === "TR") return `${NEWLINE}${words.trim()}${NEWLINE}`;
+
   if (tag === "TD" || tag === "TH") return `${words.trim()} `;
+
   return BLOCK_TAGS.has(tag) ? block(words) : words;
 }
 
 /** A node inside `range` written as Markdown; nothing for one outside it. */
 function written(node: Node, range: Range, inside: Inside): string {
   if (!range.intersectsNode(node)) return "";
+
   if (node instanceof Text) {
     const words = clipped(node, range);
+
     return inside.marked && !inside.code ? words.replace(MARK_SPECIAL, "\\$&") : words;
   }
+
   return node instanceof Element ? elementWritten(node, range, inside) : "";
 }
 
@@ -233,29 +269,35 @@ function written(node: Node, range: Range, inside: Inside): string {
 function insideAncestors(words: string, from: Element): string {
   let kept = words;
   let start: Element | null = from;
+
   // Note that a chip's name lies under its press and its label's own boxes, so its whole run of ancestors is asked first, and the marks around the chip go on from it.
   for (let at: Element | null = from; at !== null; at = at.parentElement) {
     const source = WRITTEN.get(at);
+
     if (source === undefined) continue;
     kept = source;
     start = at.parentElement;
     break;
   }
+
   for (let at: Element | null = start; at !== null; at = at.parentElement) {
     const tag = at.tagName;
     const delimiter = MARK_DELIMITER[tag];
+
     if (delimiter !== undefined) kept = wrapped(kept, delimiter);
     else if (tag === "CODE") kept = at.parentElement?.tagName === "PRE" ? kept : codeSpan(kept);
     else if (tag === "PRE") return fencedBlock(kept);
     else if (tag === "A") kept = linkWritten(at, kept);
     else if (tag !== "SPAN" && tag !== "INS" && tag !== "MARK") return kept;
   }
+
   return kept;
 }
 
 /** What `node` stands inside: code, whose words are written as they are, or a mark, whose delimiters its words escape. */
 function insideOf(node: Node): Inside {
   const element = node instanceof Element ? node : node.parentElement;
+
   return {
     code: (element?.closest("code, pre") ?? null) !== null,
     marked: (element?.closest(MARK_SELECTOR) ?? null) !== null,
@@ -270,6 +312,7 @@ function insideOf(node: Node): Inside {
 export function selectedMarkdown(range: Range): string {
   const common = range.commonAncestorContainer;
   const words = keptBlankLines(written(common, range, insideOf(common)), 1);
+
   // Note that the walk up starts over the common node, which wrote its own marks already.
   return (
     common.parentElement === null ? words : insideAncestors(words, common.parentElement)
@@ -295,6 +338,7 @@ export function WrittenAs({
     },
     [markdown],
   );
+
   return (
     <span ref={hold} className="contents">
       {children}

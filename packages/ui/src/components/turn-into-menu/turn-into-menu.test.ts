@@ -39,6 +39,7 @@ function Harness({
   onTurn: (block: WritingBlock) => void;
 }): React.JSX.Element {
   const menu = useMenu(true);
+
   return createElement(
     Fragment,
     null,
@@ -60,6 +61,7 @@ function open(current: WritingBlock | undefined): { rows: HTMLElement[]; turned:
   );
   act(() => container.querySelector("button")?.click());
   const rows = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]')];
+
   return { rows, turned };
 }
 

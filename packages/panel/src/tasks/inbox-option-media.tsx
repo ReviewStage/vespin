@@ -81,11 +81,14 @@ function FileThumb({
   openers: FileOpeners;
 }) {
   const thumb = useInboxPictureThumb(file.attachmentId, words);
+
   if (thumb === undefined) openers.delete(file.attachmentId);
   else openers.set(file.attachmentId, thumb.open);
   const url = thumb?.state.kind === PICTURE_STATE.READY ? thumb.state.url : undefined;
+
   const gone =
     thumb?.state.kind === PICTURE_STATE.FAILED || thumb?.state.kind === PICTURE_STATE.MISSING;
+
   return (
     <span ref={thumb?.anchor} className="block">
       <PageThumb
@@ -102,6 +105,7 @@ function FileThumb({
 function PageFrameThumb({ page }: { page: InboxOptionPage }) {
   const frame = useRef<HTMLIFrameElement>(null);
   usePageTheme(frame, PAGE_ROOM.OWN);
+
   return (
     <PageThumb
       frameRef={frame}
@@ -136,6 +140,7 @@ function pieceOf(
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const words = fileWords(option.label, piece, at);
+
       return {
         kind: isRecording(piece) ? OPTION_MEDIA_KIND.RECORDING : OPTION_MEDIA_KIND.PICTURE,
         caption: piece.caption,
@@ -143,6 +148,7 @@ function pieceOf(
         onOpen: () => doors.openers.get(piece.attachmentId)?.(),
       };
     }
+
     case INBOX_OPTION_MEDIA.PAGE:
       return {
         kind: OPTION_MEDIA_KIND.PAGE,
@@ -166,6 +172,7 @@ export function OptionCardMedia({ option }: { option: InboxOption }): React.JSX.
   const openPlace = useOpenPlace();
   const openLink = useOpenLink();
   const openers = useRef<FileOpeners>(new Map()).current;
+
   const doors: PieceDoors = {
     openers,
     openLink,
@@ -176,6 +183,8 @@ export function OptionCardMedia({ option }: { option: InboxOption }): React.JSX.
         pageId: page.pageId,
       }),
   };
+
   const pieces = knownOptionMedia(option).map((piece, at) => pieceOf(option, piece, at, doors));
+
   return <OptionMedia label={option.label} pieces={pieces} />;
 }

@@ -91,8 +91,10 @@ function joined(
   standing: SyncStanding | undefined,
 ): readonly string[] {
   const answered = rows.map((row) => row.id);
+
   if (standing?.past === undefined) return answered;
   const gone = new Set(standing.gone);
+
   return [...new Set([...held, ...answered])].filter((id) => !gone.has(id));
 }
 
@@ -112,25 +114,32 @@ export function taskListCollections(
         open = false;
       }),
     );
+
     const confirmation = (): Confirmation | undefined => {
       const wait = dependencies.txWait();
+
       return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
     };
+
     const redraw = () => Effect.suspend(() => drawn);
+
     // Note that every plan made is the list's, since it holds every task the account reaches.
     const plans: HeldRows<PlanRow> = yield* pool.stand(PLAN, {
       redraw,
       confirmation,
       adopts: () => true,
     });
+
     const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, { redraw, confirmation });
 
     const drawing = taskListDrawer();
+
     /** Draws the list as it stands now, what every standing write drew among it, and arms its next edge. */
     const drawn: Effect.Effect<void> = yield* drawnAtEdges((at) => {
       if (!open) return undefined;
       const { edge, ...list } = drawing({ plans: plans.rows(), agents: agents.rows() }, at);
       dependencies.draw({ ...list, pendingTasks: plans.pending() });
+
       return edge;
     });
 
@@ -139,24 +148,29 @@ export function taskListCollections(
         Effect.suspend(() => {
           const nextPlans = joined(planKeys, rows.plans, standing);
           const nextAgents = joined(agentKeys, rows.agents, standing);
+
           // Note that an answer past a sync id carrying no row and letting none go moves nothing, as most of a busy service's do, so neither the pool nor the list is walked: the edge armed stands, and a write settles on the follow's wait.
           const still =
             standing?.past !== undefined &&
             rows.plans.length + rows.agents.length === 0 &&
             nextPlans.length === planKeys.length &&
             nextAgents.length === agentKeys.length;
+
           if (still) return Effect.succeed(false);
           planKeys = nextPlans;
           agentKeys = nextAgents;
           const at = syncIdOf(standing);
+
           const answered = (held: readonly string[]) => ({
             held,
             ...(at === undefined ? undefined : { at }),
           });
+
           return Effect.gen(function* () {
             const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
             yield* drawn;
+
             return plansMoved.length + agentsMoved.length > 0;
           });
         }),

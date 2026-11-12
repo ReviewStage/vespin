@@ -19,6 +19,7 @@ const CHOSEN_WORKSPACE_KEY = "chosenWorkspace";
 /** The id kept, or none where nothing was ever chosen. */
 function keptChoice(): string | undefined {
   const kept: unknown = Settings.get(CHOSEN_WORKSPACE_KEY);
+
   return typeof kept === "string" ? kept : undefined;
 }
 
@@ -34,6 +35,7 @@ const readers = new Set<() => void>();
 function watchChoice(listener: () => void): () => void {
   readers.add(listener);
   const watching = Settings.watchKeys([CHOSEN_WORKSPACE_KEY], listener);
+
   return () => {
     readers.delete(listener);
     Settings.clearWatch(watching);
@@ -43,6 +45,7 @@ function watchChoice(listener: () => void): () => void {
 /** Keeps `id` as the workspace the phone works in, and tells every screen reading it. */
 function choose(id: string): void {
   Settings.set({ [CHOSEN_WORKSPACE_KEY]: id });
+
   for (const reader of readers) reader();
 }
 
@@ -53,5 +56,6 @@ export function useChosenWorkspace(workspaces: readonly Workspace[]): {
 } {
   const kept = useSyncExternalStore(watchChoice, keptChoice);
   const chosen = workspaces.find((workspace) => workspace.id === kept) ?? workspaces[0];
+
   return { chosen, choose };
 }

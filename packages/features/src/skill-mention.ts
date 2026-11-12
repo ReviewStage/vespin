@@ -47,7 +47,9 @@ export const SKILLS_UNANSWERED = SKILLS_REFUSAL_LINE[TASK_FILE_REFUSAL.UNAVAILAB
 /** A read of a repository's skills as the list reads it: the skills, or why there are none to offer. */
 export function skillsReadOf(answer: TasksSkillsAnswer): SkillsRead {
   if ("skills" in answer) return { skills: answer.skills.skills };
+
   if (!("refusal" in answer)) return { unread: SKILLS_UNANSWERED };
+
   return { unread: SKILLS_REFUSAL_LINE[answer.refusal] };
 }
 
@@ -64,6 +66,7 @@ export interface TextRange {
 }
 
 const SLASH = "/";
+
 /** A line that opens or closes a fenced block: up to three spaces, then three or more backticks or tildes. */
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/u;
 
@@ -80,10 +83,13 @@ const SPACE = /\s/u;
 function insideFence(text: string, at: number): boolean {
   let open: string | undefined;
   let start = 0;
+
   for (const line of text.split("\n")) {
     const end = start + line.length;
     const fence = FENCE_LINE.exec(line)?.[1];
+
     if (at >= start && at <= end) return open !== undefined || fence !== undefined;
+
     // A fence closes on a run of its own character at least as long as the one that opened it.
     if (fence !== undefined && open === undefined) open = fence;
     else if (
@@ -95,6 +101,7 @@ function insideFence(text: string, at: number): boolean {
       open = undefined;
     start = end + 1;
   }
+
   return false;
 }
 
@@ -103,21 +110,28 @@ function insideSpan(text: string, at: number): boolean {
   const lineStart = text.lastIndexOf("\n", at - 1) + 1;
   const lineEnd = text.indexOf("\n", at);
   const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
   const runs = [...line.matchAll(TICKS)].map((run) => ({
     start: run.index,
     end: run.index + run[0].length,
   }));
+
   const offset = at - lineStart;
+
   for (let index = 0; index < runs.length; index += 1) {
     const opening = runs[index];
+
     if (opening === undefined) continue;
     const length = opening.end - opening.start;
     const closing = runs.findIndex((run, later) => later > index && run.end - run.start === length);
+
     // A run no later run closes is backticks as words.
     if (closing === -1) continue;
+
     if (offset >= opening.end && offset < (runs[closing]?.start ?? 0)) return true;
     index = closing;
   }
+
   return false;
 }
 
@@ -130,7 +144,9 @@ export function insideCode(text: string, at: number): boolean {
 function startsWord(text: string, at: number): boolean {
   if (text[at] !== SLASH) return false;
   const before = text[at - 1];
+
   if (before !== undefined && !SPACE.test(before)) return false;
+
   return !insideCode(text, at);
 }
 
@@ -139,15 +155,19 @@ export function holdsSlashWord(text: string): boolean {
   for (let at = text.indexOf(SLASH); at !== -1; at = text.indexOf(SLASH, at + 1)) {
     if (startsWord(text, at)) return true;
   }
+
   return false;
 }
 
 /** The `/` word the caret ends, as far as it has been typed; nothing where the caret stands in no such word. */
 export function mentionAt(text: string, caret: number): SkillMention | undefined {
   let at = caret;
+
   while (at > 0 && NAME_CHARACTER.test(text[at - 1] ?? "")) at -= 1;
   const start = at - 1;
+
   if (start < 0 || !startsWord(text, start)) return undefined;
+
   return { start, query: text.slice(at, caret) };
 }
 
@@ -162,26 +182,34 @@ export function matchingSkills(
 ): readonly SkillOption[] {
   const asked = query.toLowerCase();
   const starts = skills.filter((skill) => skill.name.startsWith(asked));
+
   const holds = skills.filter(
     (skill) => !skill.name.startsWith(asked) && skill.name.includes(asked),
   );
+
   const describes = skills.filter(
     (skill) => !skill.name.includes(asked) && skill.description.toLowerCase().includes(asked),
   );
+
   return [...starts, ...holds, ...describes];
 }
 
 /** Every chosen skill the message names, as `/name` words of the skills given, in order. */
 export function skillTokens(text: string, names: ReadonlySet<string>): readonly TextRange[] {
   const tokens: TextRange[] = [];
+
   for (let at = text.indexOf(SLASH); at !== -1; at = text.indexOf(SLASH, at + 1)) {
     if (!startsWord(text, at)) continue;
     let end = at + 1;
+
     while (end < text.length && NAME_CHARACTER.test(text[end] ?? "")) end += 1;
     const next = text[end];
+
     if (next !== undefined && !SPACE.test(next)) continue;
+
     if (names.has(text.slice(at + 1, end))) tokens.push({ start: at, end });
   }
+
   return tokens;
 }
 
@@ -196,10 +224,14 @@ export function leadingCommandToken(
   names: ReadonlySet<string>,
 ): TextRange | undefined {
   const at = text.search(/\S/u);
+
   if (at === -1 || !startsWord(text, at)) return undefined;
   let end = at + 1;
+
   while (end < text.length && NAME_CHARACTER.test(text[end] ?? "")) end += 1;
   const next = text[end];
+
   if (next !== undefined && !SPACE.test(next)) return undefined;
+
   return names.has(text.slice(at + 1, end)) ? { start: at, end } : undefined;
 }

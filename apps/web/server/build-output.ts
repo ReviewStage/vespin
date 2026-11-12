@@ -31,6 +31,7 @@ import { basename, dirname, join, posix } from "node:path";
  */
 export const BUILD_OUTPUT_DIRECTORY = join(".vercel", "output");
 const BUILD_OUTPUT_VERSION = 3;
+
 /** Vercel's runtime for the Node this app's `engines` names (`@vercel/build-utils`'s node-version table). */
 const FUNCTION_RUNTIME = "nodejs24.x";
 const FUNCTION_ENTRY = "index.mjs";
@@ -63,6 +64,7 @@ interface QueueTrigger {
  */
 function consumerNameOf(path: string): string {
   let name = "";
+
   for (const character of path) {
     if (character === "_") name += "__";
     else if (character === "/") name += "_S";
@@ -70,6 +72,7 @@ function consumerNameOf(path: string): string {
     else if (/[A-Za-z0-9-]/u.test(character)) name += character;
     else name += `_${(character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(2, "0")}`;
   }
+
   return name;
 }
 
@@ -139,12 +142,15 @@ function functionConfig(fn: EmittedFunction): FunctionConfig {
     ...NODE_LAUNCHER,
     ...(fn.maxDuration === undefined ? undefined : { maxDuration: fn.maxDuration }),
   };
+
   if (fn.queueTopic === undefined) return config;
+
   const trigger: QueueTrigger = {
     type: QUEUE_TRIGGER_TYPE,
     topic: fn.queueTopic,
     consumer: consumerNameOf(fn.path),
   };
+
   return { ...config, experimentalTriggers: [trigger] };
 }
 
@@ -164,19 +170,23 @@ export async function emitBuildOutput(input: BuildOutputInput): Promise<readonly
     join(input.outputDirectory, "config.json"),
     `${JSON.stringify({ version: BUILD_OUTPUT_VERSION }, null, 2)}\n`,
   );
+
   if (input.staticDirectory !== undefined) {
     await cp(input.staticDirectory, join(input.outputDirectory, STATIC_DIRECTORY), {
       recursive: true,
     });
   }
+
   for (const fn of input.functions) {
     const directory = functionDirectory(input.outputDirectory, fn.path);
     await mkdir(directory, { recursive: true });
     await writeFile(functionEntryPath(input.outputDirectory, fn.path), fn.contents);
+
     for (const file of fn.files ?? []) {
       await mkdir(dirname(join(directory, file.name)), { recursive: true });
       await writeFile(join(directory, file.name), file.contents);
     }
+
     await writeFile(
       functionConfigPath(input.outputDirectory, fn.path),
       `${JSON.stringify(functionConfig(fn), null, 2)}\n`,
@@ -185,5 +195,6 @@ export async function emitBuildOutput(input: BuildOutputInput): Promise<readonly
     await mkdir(dirname(alias), { recursive: true });
     await symlink(basename(directory), alias, "dir");
   }
+
   return input.functions.map((fn) => fn.path).sort();
 }

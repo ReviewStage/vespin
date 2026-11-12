@@ -47,12 +47,14 @@ export function codeLanguage(language: string): {
 } {
   const id = language.toLowerCase();
   const extension = LANGUAGE_EXTENSION[id] ?? id;
+
   return { id, extension, name: LANGUAGE_NAMES[extension] };
 }
 
 /** What a fence's header calls its language: its name ("TypeScript"), its id where it has none here, and "text" for a fence that names none. */
 export function codeTitle(language: string): string {
   const { id, name } = codeLanguage(language);
+
   return name ?? (id === "" ? PLAIN_LANGUAGE : id);
 }
 
@@ -80,6 +82,8 @@ export const CODE_LANGUAGE_CHOICES: readonly CodeLanguageChoice[] = [
 /** The choice a fence's language stands for, by its extension, so a fence written ```typescript stands checked as TypeScript; none for one this file names no choice for. */
 export function codeLanguageChoice(language: string): CodeLanguageChoice | undefined {
   const { id, name } = codeLanguage(language);
+
   if (id === "") return CODE_LANGUAGE_CHOICES[0];
+
   return CODE_LANGUAGE_CHOICES.find((choice) => choice.id !== "" && choice.name === name);
 }

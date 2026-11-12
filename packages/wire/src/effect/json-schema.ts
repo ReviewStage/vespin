@@ -106,25 +106,33 @@ export const wireKeys =
   (self: Schema.Struct<F>) => {
     const toWire: Record<string, string | undefined> = mapping;
     const fromWire: Record<string, string> = {};
+
     for (const [key, wireKey] of Object.entries(toWire)) {
       if (wireKey !== undefined) fromWire[wireKey] = key;
     }
+
     const onWire = Object.fromEntries(
       Object.entries(self.fields).map(([key, field]) => [toWire[key] ?? key, field]),
     );
+
     // Two fields under one wire key would leave one unreadable, which is a declaration's mistake.
     if (Object.keys(onWire).length !== Object.keys(self.fields).length) {
       throw new Error(`wireKeys: two fields travel under one key in ${JSON.stringify(toWire)}`);
     }
+
     // SAFETY: `onWire` is `self.fields` with each key the mapping names under its wire name, which is `WireKeyedFields` spelled out.
     const wire = Schema.Struct(onWire as WireKeyedFields<F, M>);
+
     type Read = Schema.Struct<F>["Type"];
+
     type OnWire = (typeof wire)["Type"];
+
     // Note that renaming a `Read` by `toWire` makes an `OnWire`, and renaming one back by `fromWire` makes the `Read` again.
     const renaming = SchemaTransformation.transform<Read, OnWire>({
       decode: renamed<OnWire, Read>(fromWire),
       encode: renamed<Read, OnWire>(toWire),
     });
+
     return wire.pipe(Schema.decodeTo(Schema.toType(self), renaming));
   };
 
@@ -146,6 +154,7 @@ const boundReader = <A>(
   bounds: (payload: A) => Bounds,
 ): BoundReader => {
   const read = Schema.decodeUnknownOption(payload);
+
   return (annotation) => Option.map(read(annotation), bounds);
 };
 
@@ -242,17 +251,21 @@ type Annotations = Schema.Annotations.Annotations | undefined;
 
 function gatherAnnotations(annotations: Annotations, gathered: Gathered): Gathered {
   if (annotations === undefined) return gathered;
+
   const described =
     gathered.description === undefined
       ? Option.getOrUndefined(readDescription(annotations[WIRE_ANNOTATION.DESCRIPTION]))
       : undefined;
+
   // SAFETY: wire's own annotation namespace is written only by the helpers above, and
   // `verbatimJsonSchema` is the one that writes this key, taking a `JsonSchemaNode`.
   const verbatim =
     gathered.verbatim === undefined
       ? (annotations[WIRE_ANNOTATION.JSON_SCHEMA] as JsonSchemaNode | undefined)
       : undefined;
+
   if (described === undefined && verbatim === undefined) return gathered;
+
   return {
     ...gathered,
     description: described ?? gathered.description,
@@ -266,18 +279,23 @@ function gatherBounds(
   gathered: Gathered,
 ): Gathered {
   const identifier = checkIdentifier(check);
+
   if (identifier === undefined) return gathered;
   const reader = BOUND_READERS.get(identifier);
+
   if (reader === undefined) return gathered;
   const bounds = reader(check.annotations?.representation?.payload);
+
   if (Option.isNone(bounds)) {
     throw unshowable(ast, "its bound annotation does not carry the bound its id names");
   }
+
   for (const key of Object.keys(bounds.value)) {
     if (Object.hasOwn(gathered.bounds, key)) {
       throw unshowable(ast, `${key} is declared twice`);
     }
   }
+
   return { ...gathered, bounds: { ...gathered.bounds, ...bounds.value } };
 }
 
@@ -292,14 +310,17 @@ function gatherBounds(
 function gatherNode(ast: SchemaAST.AST, above: Gathered): Gathered {
   let gathered = above;
   const checks = ast.checks;
+
   if (checks !== undefined) {
     for (let index = checks.length - 1; index >= 0; index -= 1) {
       const check = checks[index];
+
       if (check === undefined) continue;
       gathered = gatherAnnotations(check.annotations, gathered);
       gathered = gatherBounds(ast, check, gathered);
     }
   }
+
   return gatherAnnotations(ast.annotations, gathered);
 }
 
@@ -310,9 +331,11 @@ function gatherNode(ast: SchemaAST.AST, above: Gathered): Gathered {
  */
 function takeBounds(ast: SchemaAST.AST, bounds: Bounds, allowed: readonly BoundKey[]): Bounds {
   const permitted = new Set<string>(allowed);
+
   for (const key of Object.keys(bounds)) {
     if (!permitted.has(key)) throw unshowable(ast, `it cannot carry ${key}`);
   }
+
   return bounds;
 }
 
@@ -324,7 +347,9 @@ function withDescription(node: JsonSchemaNode, description: string | undefined):
 type Draft<Node> = { -readonly [Key in keyof Node]: Node[Key] };
 
 type StringNodeDraft = Draft<Extract<JsonSchemaNode, { type: "string" }>>;
+
 type NumberNodeDraft = Draft<Extract<JsonSchemaNode, { type: "number" | "integer" }>>;
+
 type ArrayNodeDraft = Draft<Extract<JsonSchemaNode, { type: "array" }>>;
 
 /**
@@ -335,16 +360,22 @@ type ArrayNodeDraft = Draft<Extract<JsonSchemaNode, { type: "array" }>>;
 function stringNode(ast: SchemaAST.AST, bounds: Bounds): JsonSchemaNode {
   const { minLength, maxLength } = takeBounds(ast, bounds, ["minLength", "maxLength"]);
   const node: StringNodeDraft = { type: "string" };
+
   if (minLength !== undefined) node.minLength = minLength;
+
   if (maxLength !== undefined) node.maxLength = maxLength;
+
   return node;
 }
 
 function numberNode(ast: SchemaAST.AST, bounds: Bounds): JsonSchemaNode {
   const { minimum, maximum, integer } = takeBounds(ast, bounds, ["minimum", "maximum", "integer"]);
   const node: NumberNodeDraft = { type: integer === true ? "integer" : "number" };
+
   if (minimum !== undefined) node.minimum = minimum;
+
   if (maximum !== undefined) node.maximum = maximum;
+
   return node;
 }
 
@@ -356,8 +387,11 @@ function numberNode(ast: SchemaAST.AST, bounds: Bounds): JsonSchemaNode {
 function arrayNode(ast: SchemaAST.AST, items: JsonSchemaNode, bounds: Bounds): JsonSchemaNode {
   const { minLength, maxLength } = takeBounds(ast, bounds, ["minLength", "maxLength"]);
   const node: ArrayNodeDraft = { type: "array", items };
+
   if (minLength !== undefined) node.minItems = minLength;
+
   if (maxLength !== undefined) node.maxItems = maxLength;
+
   return node;
 }
 
@@ -367,10 +401,13 @@ function arrayNode(ast: SchemaAST.AST, items: JsonSchemaNode, bounds: Bounds): J
  */
 function literalNode(ast: SchemaAST.Literal): JsonSchemaNode {
   const { literal } = ast;
+
   if (isString(literal)) return { type: "string", enum: [literal] };
+
   if (isNumber(literal)) {
     return { type: Number.isSafeInteger(literal) ? "integer" : "number", enum: [literal] };
   }
+
   if (isBoolean(literal)) return { type: "boolean", enum: [literal] };
   throw unshowable(ast, "a bigint has no wire form");
 }
@@ -384,13 +421,16 @@ function literalNode(ast: SchemaAST.Literal): JsonSchemaNode {
  */
 function enumNode(literals: readonly SchemaAST.LiteralValue[]): JsonSchemaNode | undefined {
   if (literals.every(isString)) return { type: "string", enum: literals };
+
   if (literals.every(isNumber)) {
     return {
       type: literals.every((literal) => Number.isSafeInteger(literal)) ? "integer" : "number",
       enum: literals,
     };
   }
+
   if (literals.every(isBoolean)) return { type: "boolean", enum: literals };
+
   return undefined;
 }
 
@@ -402,10 +442,13 @@ function unionNode(
   takeBounds(ast, bounds, []);
   const members = ast.types;
   const literals = members.flatMap((member) => (member._tag === "Literal" ? [member.literal] : []));
+
   if (literals.length === members.length) {
     const asEnum = enumNode(literals);
+
     if (asEnum !== undefined) return asEnum;
   }
+
   return { anyOf: members.map((member) => emit(member, NOTHING_GATHERED, visiting)) };
 }
 
@@ -418,9 +461,12 @@ function unionNode(
 function propertyType(type: SchemaAST.AST): SchemaAST.AST {
   if (type._tag !== "Union") return type;
   const defined = type.types.filter((member) => member._tag !== "Undefined");
+
   if (defined.length === type.types.length) return type;
   const only = defined[0];
+
   if (defined.length === 1 && only !== undefined) return only;
+
   return new SchemaAST.Union(defined, type.options, type.annotations);
 }
 
@@ -430,17 +476,22 @@ function objectNode(
   visiting: Set<SchemaAST.AST>,
 ): JsonSchemaNode {
   takeBounds(ast, bounds, []);
+
   if (ast.indexSignatures.length > 0) {
     throw unshowable(ast, "a strict object has no index signature");
   }
+
   const properties: [string, JsonSchemaNode][] = [];
   const required: string[] = [];
+
   for (const signature of ast.propertySignatures) {
     if (!isString(signature.name)) throw unshowable(ast, "a property is keyed by a symbol");
     const key = gatherAnnotations(signature.type.context?.annotations, NOTHING_GATHERED);
     properties.push([signature.name, emit(propertyType(signature.type), key, visiting)]);
+
     if (signature.type.context?.isOptional !== true) required.push(signature.name);
   }
+
   return {
     type: "object",
     properties: Object.fromEntries(properties),
@@ -455,48 +506,61 @@ function arraysNode(
   visiting: Set<SchemaAST.AST>,
 ): JsonSchemaNode {
   const [rest, ...more] = ast.rest;
+
   if (ast.elements.length > 0 || rest === undefined || more.length > 0) {
     throw unshowable(ast, "only an array of one item type has a wire form");
   }
+
   return arrayNode(ast, emit(rest, NOTHING_GATHERED, visiting), bounds);
 }
 
 function emit(ast: SchemaAST.AST, above: Gathered, visiting: Set<SchemaAST.AST>): JsonSchemaNode {
   const gathered = gatherNode(ast, above);
+
   if (gathered.verbatim !== undefined) {
     takeBounds(ast, gathered.bounds, []);
+
     return withDescription(gathered.verbatim, gathered.description);
   }
+
   /**
    * A transformation states its wire side as the node it decodes from, which
    * in v4 is the last link of the node's own encoding rather than a node
    * wrapped around it.
    */
   const encoding = ast.encoding;
+
   if (encoding !== undefined) {
     const link = encoding[encoding.length - 1];
+
     if (link !== undefined) return emit(link.to, gathered, visiting);
   }
+
   switch (ast._tag) {
     case "Suspend": {
       if (visiting.has(ast)) throw unshowable(ast, "a recursive declaration has no finite node");
       visiting.add(ast);
       const node = emit(ast.thunk(), gathered, visiting);
       visiting.delete(ast);
+
       return node;
     }
+
     case "String":
       return withDescription(stringNode(ast, gathered.bounds), gathered.description);
     case "Number":
       return withDescription(numberNode(ast, gathered.bounds), gathered.description);
     case "Boolean":
       takeBounds(ast, gathered.bounds, []);
+
       return withDescription({ type: "boolean" }, gathered.description);
     case "Null":
       takeBounds(ast, gathered.bounds, []);
+
       return withDescription({ type: "null" }, gathered.description);
     case "Literal":
       takeBounds(ast, gathered.bounds, []);
+
       return withDescription(literalNode(ast), gathered.description);
     case "Union":
       return withDescription(unionNode(ast, gathered.bounds, visiting), gathered.description);
@@ -537,9 +601,11 @@ export function standardSchemaOf<S extends Schema.Top & Schema.ConstraintDecoder
   schema: S,
 ): StandardSchemaWithJson<S> {
   const node = emitJsonSchema(schema);
+
   const standard = Schema.toStandardSchemaV1(schema, {
     parseOptions: { onExcessProperty: EXCESS_KEYS.REFUSE },
   });
+
   return {
     "~standard": {
       ...standard["~standard"],
@@ -562,6 +628,7 @@ function pathSegments(path: ReadonlyArray<PropertyKey>): SchemaPath {
 
 function annotatedRefusal(annotations: Annotations): SchemaRefusal | undefined {
   if (annotations === undefined) return undefined;
+
   return Option.getOrUndefined(readRefusal(annotations[WIRE_ANNOTATION.REFUSAL]));
 }
 
@@ -580,11 +647,14 @@ function nodeRefusal(ast: SchemaAST.AST): SchemaRefusal | undefined {
 
 function checkRefusal(check: SchemaAST.Check<unknown>): SchemaRefusal {
   const named = annotatedRefusal(check.annotations);
+
   if (named !== undefined) return named;
   const identifier = checkIdentifier(check);
+
   if (identifier !== undefined && TOO_LARGE_CHECKS.has(identifier)) {
     return SCHEMA_REFUSAL.TOO_LARGE;
   }
+
   return SCHEMA_REFUSAL.MALFORMED;
 }
 
@@ -606,26 +676,33 @@ function refusalOf(issue: SchemaIssue.Issue, path: SchemaPath): SchemaRefusalErr
       return refusalOf(issue.issue, [...path, ...pathSegments(issue.path)]);
     case "Composite": {
       const named = nodeRefusal(issue.ast);
+
       return named === undefined
         ? refusalOf(issue.issues[0], path)
         : new SchemaRefusalError({ refusal: named, path });
     }
+
     case "AnyOf": {
       const named = nodeRefusal(issue.ast);
+
       if (named !== undefined) return new SchemaRefusalError({ refusal: named, path });
       const first = issue.issues[0];
+
       return first === undefined
         ? new SchemaRefusalError({ refusal: SCHEMA_REFUSAL.MALFORMED, path })
         : refusalOf(first, path);
     }
+
     case "Filter":
       return new SchemaRefusalError({ refusal: checkRefusal(issue.filter), path });
     case "Encoding": {
       const named = nodeRefusal(issue.ast);
+
       return named === undefined
         ? refusalOf(issue.issue, path)
         : new SchemaRefusalError({ refusal: named, path });
     }
+
     case "InvalidType":
       return new SchemaRefusalError({
         refusal: nodeRefusal(issue.ast) ?? SCHEMA_REFUSAL.MALFORMED,
@@ -667,6 +744,7 @@ export const readEither =
       errors: "first",
       onExcessProperty: options?.excess ?? EXCESS_KEYS.REFUSE,
     })(value);
+
     return Result.mapError(decoded, (error) => refusalOf(error.issue, []));
   };
 
@@ -688,11 +766,13 @@ export function declareReader<Value>(
       // `unknown` by Effect's own decode signature; the reader is the boundary's own defensive parser.
       const value = input as UnparsedWireValue;
       const result = read(value);
+
       return result.ok
         ? Effect.succeed(result.value)
         : Effect.fail(refusalIssue(result.refusal, result.path, value));
     },
   );
+
   return verbatimJsonSchema(declaration, node);
 }
 
@@ -715,5 +795,6 @@ function refusalIssue(
   actual: unknown,
 ): SchemaIssue.Issue {
   const issue = new SchemaIssue.InvalidType(REFUSAL_AST[refusal], actual);
+
   return Arr.isReadonlyArrayNonEmpty(path) ? new SchemaIssue.Pointer(path, issue) : issue;
 }

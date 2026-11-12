@@ -80,6 +80,7 @@ function drawn(message: AgentTranscriptMessage, moving = false, page?: TaskMenti
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const turn = createElement(AgentMessage, {
     message,
     description: false,
@@ -87,6 +88,7 @@ function drawn(message: AgentTranscriptMessage, moving = false, page?: TaskMenti
     moving,
     delegation: { models: [], onOpenTarget: (target) => opened.push(target) },
   });
+
   act(() =>
     root.render(
       page === undefined
@@ -99,6 +101,7 @@ function drawn(message: AgentTranscriptMessage, moving = false, page?: TaskMenti
           ),
     ),
   );
+
   return { container, opened };
 }
 
@@ -188,9 +191,11 @@ for (const call of OPENING_CALLS) {
       const { container, opened } = drawn(
         assistant([toolPart(call.tool, call.input, call.output)]),
       );
+
       const row = container.querySelector<HTMLButtonElement>(
         `button[data-call-id="call-${call.tool}"]`,
       );
+
       assert.ok(row, "the row is a button");
       assert.equal(container.querySelector("details"), null, "the row folds nothing open in place");
       act(() => row.click());
@@ -198,6 +203,7 @@ for (const call of OPENING_CALLS) {
     });
     continue;
   }
+
   test(`${call.name}: its row folds as any call's, its verb alone before the chip, whose press folds nothing`, () => {
     fakeAppBridge({});
     const left: string[] = [];
@@ -206,6 +212,7 @@ for (const call of OPENING_CALLS) {
       openWeb: (url) => left.push(url),
       openGitHub: (url) => left.push(url),
     });
+
     const page = {
       ...TASK_PAGE,
       doors: {
@@ -213,11 +220,13 @@ for (const call of OPENING_CALLS) {
         onOpenTask: (description: DescriptionMention) => left.push(description.taskId),
       },
     };
+
     const { container } = drawn(
       assistant([toolPart(call.tool, call.input, call.output)]),
       false,
       page,
     );
+
     const row = container.querySelector<HTMLElement>(`[data-call-id="call-${call.tool}"] summary`);
     assert.ok(row, "the row is a fold's line");
     const chip = row.querySelector<HTMLElement>("[data-mention-ref]");
@@ -238,6 +247,7 @@ test("a call's row opened while it runs stays open as its answer lands and names
   const root = createRoot(container);
   roots.push(root);
   const input = { title: "Pricing explorer", path: "pricing.html" };
+
   const draw = (part: WireRecord) =>
     act(() =>
       root.render(
@@ -255,10 +265,13 @@ test("a call's row opened while it runs stays open as its answer lands and names
         ),
       ),
     );
+
   draw(toolPart("show_page", input));
+
   const row = () =>
     container.querySelector<HTMLElement>('[data-call-id="call-show_page"] summary') ??
     assert.fail("the row is a fold's line");
+
   act(() => row().click());
   draw(toolPart("show_page", input, { status: "accepted", page: { id: "page-1", version: 1 } }));
   assert.ok(row().querySelector("[data-mention-ref]"), "the row names the page by its chip");
@@ -390,6 +403,7 @@ test("a run of calls folds under a line that says it is open", () => {
     ]),
     true,
   );
+
   const group = container.querySelector("[data-turn-fold] > summary");
   assert.ok(group !== null);
   assert.equal(heardWords(group), "2 tool calls");
@@ -405,6 +419,7 @@ test("a finished turn's run of calls folds under a line that opens as it is pres
       { type: "text", text: "All clean." },
     ]),
   );
+
   const fold = container.querySelector<HTMLElement>("[data-turn-fold] > summary");
   assert.equal(fold?.textContent, "2 tool calls");
   assert.ok(
@@ -443,6 +458,7 @@ function cardOn(row: HTMLElement | null): readonly (string | boolean | null | un
   focusRestOn(row);
   const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
   assert.ok(card, "the row hangs its agent's card");
+
   return [
     card.querySelector(".ui-hover-card-name")?.textContent,
     card.querySelector(".ui-hover-card-corner")?.textContent,
@@ -460,16 +476,19 @@ test("in an agent's transcript, a call about an agent hangs that agent's tab's c
       }),
     ],
   });
+
   const cards = taskCards({
     agents,
     held: NOTHING_HELD,
     chosen: () => false,
     pages: undefined,
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const message = assistant([
     toolPart("message_coding_agent", { agentId: "agent-7", text: "Rebase on main" }, ACCEPTED),
     toolPart("read_coding_agent", { agentId: "agent-8" }, { status: "cancelled" }),
@@ -480,6 +499,7 @@ test("in an agent's transcript, a call about an agent hangs that agent's tab's c
     ),
     toolPart("delegate", { task: "Audit the retry paths" }),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -498,11 +518,14 @@ test("in an agent's transcript, a call about an agent hangs that agent's tab's c
       ),
     ),
   );
+
   const row = (callId: string) =>
     container.querySelector<HTMLElement>(`button[data-call-id="call-${callId}"]`);
+
   // A call that sent words hangs the card from its chip, the row's way to the agent.
   const chip = (callId: string) =>
     container.querySelector<HTMLElement>(`[data-call-id="call-${callId}"] [data-tool-agent-ref]`);
+
   // The calls run together fold under one line, which a press opens.
   const fold = container.querySelector<HTMLElement>("[data-turn-fold] > summary");
   act(() => fold?.click());
@@ -522,10 +545,12 @@ test("in an agent's transcript, a call that folds open in place still hangs its 
     chosen: () => false,
     pages: undefined,
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const message = assistant([
     toolPart(
       "message_coding_agent",
@@ -533,6 +558,7 @@ test("in an agent's transcript, a call that folds open in place still hangs its 
       { status: "rejected", reason: "The agent has ended." },
     ),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -553,6 +579,7 @@ test("in an agent's transcript, a call that folds open in place still hangs its 
   );
   // A call run alone is folded under its own line, which a press opens.
   act(() => container.querySelector<HTMLElement>("[data-turn-fold] > summary")?.click());
+
   const chip = container.querySelector<HTMLElement>(
     '[data-call-id="call-message_coding_agent"] summary [data-tool-agent-ref]',
   );
@@ -566,17 +593,20 @@ test("in an agent's transcript, a call that folds open in place still hangs its 
 
 test("a call about an agent names it by its chip in the place of the words, as its tab names it or its answer does, wearing the harness its answer's model runs in, a chip that opens the agent on a row that folds what was sent and is no target of its own on a row that opens it", () => {
   const agents = agentsControl({ agents: [listedAgent("agent-7", "Invoice export")] });
+
   const cards = taskCards({
     agents,
     held: NOTHING_HELD,
     chosen: () => false,
     pages: undefined,
   });
+
   const opened: ToolTarget[] = [];
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const message = assistant([
     toolPart("message_agent", { agentId: "agent-7", text: "Rebase on main" }, ACCEPTED),
     toolPart(
@@ -594,6 +624,7 @@ test("a call about an agent names it by its chip in the place of the words, as i
     ),
     toolPart("start_agent", { prompt: "Ship the invoice export" }),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -611,12 +642,15 @@ test("a call about an agent names it by its chip in the place of the words, as i
       ),
     ),
   );
+
   const line = (callId: string) =>
     container.querySelector<HTMLElement>(
       `button[data-call-id="call-${callId}"], [data-call-id="call-${callId}"] summary`,
     );
+
   const chip = (callId: string) =>
     line(callId)?.querySelector("[data-tool-agent-ref]")?.textContent;
+
   const said = (callId: string) => line(callId)?.textContent?.replace(/\s+/gu, " ").trim();
   assert.equal(chip("message_agent"), "Invoice export", "a listed agent is named as its tab is");
   assert.equal(said("message_agent"), "Messaged Invoice export Rebase on main");
@@ -648,6 +682,7 @@ test("a call about an agent names it by its chip in the place of the words, as i
 
 test("a message or a start another agent was sent shows its words whole under its row once the row is pressed, a start's note under them, with no toggle at the row's end; a start on the description folds nothing", () => {
   const long = "Rebase on main.\n\nThe invoice table moved to billing.ts, so take the new path.";
+
   const message = assistant([
     toolPart("message_agent", { agentId: "agent-7", text: long }, ACCEPTED),
     toolPart(
@@ -656,10 +691,13 @@ test("a message or a start another agent was sent shows its words whole under it
       { status: "accepted", agent: { id: "agent-9", onYourTask: true } },
     ),
   ]);
+
   // Note that a turn still moving draws its calls in the open, rather than folded under how many there were.
   const { container, opened } = drawn(message, true);
+
   const row = (callId: string) =>
     container.querySelector<HTMLElement>(`[data-call-id="call-${callId}"] summary`);
+
   const words = (callId: string) =>
     container.querySelector(`[data-call-id="call-${callId}"] .tool-sent-words`)?.textContent ??
     null;
@@ -694,12 +732,14 @@ test("a message or a start another agent was sent shows its words whole under it
       ),
     ]),
   );
+
   assert.equal(sentNothing.container.querySelector("details"), null, "nothing was sent to show");
 });
 
 /** Main's document holding one agent on another task, running on Codex, as the plan list carries it. */
 function stateHoldingCodexAgent(agentId: string): AppStateSnapshot {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
+
   return {
     ...snapshot,
     tasks: {
@@ -735,6 +775,7 @@ test("a call about an agent the place lists not, whose answer names no model, we
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   // An answer from a service before it named the agent's model.
   const message = assistant([
     toolPart(
@@ -743,6 +784,7 @@ test("a call about an agent the place lists not, whose answer names no model, we
       { status: "accepted", agent: { id: "agent-8", title: "Retry audit", onYourTask: false } },
     ),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -790,6 +832,7 @@ function madeChip(container: HTMLElement, callId: string): HTMLElement {
 test("a call that showed or read a page hangs the page's card as its tab does, previewing it, and one the window holds not yet its name as the row says it", async () => {
   const taskId = "task-pricing";
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
+
   const state: AppStateSnapshot = {
     ...snapshot,
     tasks: { ...IDLE_TASKS_VIEW, activeTaskId: taskId },
@@ -799,6 +842,7 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
       },
     },
   };
+
   fakeAppBridge({
     recordSurfaceEvent: () => undefined,
     onAppState: () => () => undefined,
@@ -807,16 +851,19 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
   // Note that the test's Query client is handed the document at once, so the first frame draws on it.
   writeAppState(state);
   fakeAppPlatform({ ...QUIET_PANEL, pageFrameUrl });
+
   const cards = taskCards({
     agents: agentsControl({}),
     held: NOTHING_HELD,
     chosen: () => false,
     pages: { taskId },
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const message = assistant([
     toolPart(
       "show_page",
@@ -829,6 +876,7 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
       { status: "accepted", page: { id: "page-2", title: "Old pricing", isYourTask: true } },
     ),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -848,11 +896,13 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   const cardOf = (callId: string) => {
     const chip = madeChip(container, callId);
     document.documentElement.dataset.keyboard = "true";
     focusRestOn(chip);
     const card = [...document.querySelectorAll(".ui-tooltip-card [data-page-card]")].at(-1);
+
     return {
       name: card?.querySelector(".ui-hover-card-name")?.textContent,
       sub: card?.querySelector(".ui-hover-card-sub")?.textContent,
@@ -875,11 +925,13 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
 
 test("a page shown is drawn live under its row, at the version the call showed, and stays out of the finished turn's fold", () => {
   const wrote = toolPart("write", { file_path: "pricing.html" }, { status: "ok" });
+
   const shown = toolPart(
     "show_page",
     { title: "Pricing explorer", path: "pricing.html" },
     { status: "accepted", page: { id: "page-1", version: 2 } },
   );
+
   const said = { type: "text", text: "The explorer is up." };
   const { container } = drawn(assistant([wrote, shown, said]), false, TASK_PAGE);
   const frame = container.querySelector<HTMLIFrameElement>('iframe[title="Pricing explorer"]');
@@ -897,21 +949,26 @@ test("a call about the plan or another task hangs that task's card as its Plan t
     pages: { taskId: "task-invoices" },
     task: { name: "Invoice export", status: undefined, card: undefined },
   });
+
   // The window lists the plan and one other task, whose cards its sidebar rows hang.
   const listed = new Map([
     ["task-invoices", "Invoice export"],
     ["task-retries", "Retry audit"],
   ]);
+
   const taskCard = (taskId: string) => {
     const name = listed.get(taskId);
+
     return name === undefined
       ? undefined
       : createElement("div", { "data-task-card": taskId }, createElement("b", null, name));
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const message = assistant([
     toolPart("edit_description", { notes: [] }, ACCEPTED),
     toolPart(
@@ -925,6 +982,7 @@ test("a call about the plan or another task hangs that task's card as its Plan t
       { status: "accepted", task: { id: "task-billing", name: "Billing cleanup" } },
     ),
   ]);
+
   act(() =>
     root.render(
       withQueryClient(
@@ -946,11 +1004,13 @@ test("a call about the plan or another task hangs that task's card as its Plan t
   );
   const fold = container.querySelector<HTMLElement>("[data-turn-fold] > summary");
   act(() => fold?.click());
+
   const cardOf = (callId: string) => {
     const chip = madeChip(container, callId);
     document.documentElement.dataset.keyboard = "true";
     focusRestOn(chip);
     const card = [...document.querySelectorAll(".ui-tooltip-card > *")].at(-1);
+
     return {
       task: card?.getAttribute("data-task-card") ?? undefined,
       name: card?.querySelector("b, .ui-hover-card-name")?.textContent,
@@ -1012,16 +1072,20 @@ test("a connection_execute that failed keeps its own row beside the call it ran,
   assert.ok(execute && remote);
   const failed = { ...execute, state: "output-error", errorText: "Linear stopped answering." };
   const { container } = drawn(assistant([failed, remote]), true);
+
   const row = container.querySelector<HTMLElement>(
     '[data-call-id="call-connection_execute"] summary',
   );
+
   assert.ok(row, "the failed wrapper's row stands");
   act(() => row.click());
   const body = container.querySelector('[data-call-id="call-connection_execute"]')?.textContent;
   assert.ok(body?.includes("Linear stopped answering."), "its error is read under it");
+
   const output = container.querySelector(
     '[data-call-id="call-connection_execute"] [data-tool-output]',
   );
+
   assert.equal(output?.textContent, "Linear stopped answering.", "as the call's output");
   assert.equal(
     output?.querySelector('[role="alert"]'),
@@ -1066,6 +1130,7 @@ function agentMessageDrawn(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const drawn = createElement(TranscriptAgent, {
     value: agentId,
     children: createElement(AgentMessage, {
@@ -1077,6 +1142,7 @@ function agentMessageDrawn(
       sender,
     }),
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -1084,6 +1150,7 @@ function agentMessageDrawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -1097,6 +1164,7 @@ test("a message another agent sent draws as its sender's bubble at the left, nam
       model: "anthropic/claude-opus-5.5",
     },
   });
+
   const bubble = container.querySelector<HTMLElement>("[data-agent-message]");
   assert.ok(bubble, "the message draws as its sender's bubble");
   assert.equal(bubble.dataset.messageId, "message", "a link to the line finds its bubble");
@@ -1142,6 +1210,7 @@ const TASK_PAGE: TaskMentionsValue = {
 
 test("a teammate's message on a thread is headed by who sent it, what they did and the thread's chip named by the thread's title, its words without the header that names the item to the agent, whatever its title spells", () => {
   fakeAppBridge({});
+
   const container = agentMessageDrawn(
     {
       id: "thread-line",
@@ -1162,6 +1231,7 @@ test("a teammate's message on a thread is headed by who sent it, what they did a
     TASK_AGENT,
     { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED, name: "Ada Lovelace" },
   );
+
   const head = container.querySelector<HTMLElement>("[data-thread-line]");
   assert.match(head?.textContent ?? "", /^wrote in/u);
   assert.equal(
@@ -1182,6 +1252,7 @@ test("a teammate's message on a thread is headed by who sent it, what they did a
 
 test("a comment that reached the agent is headed as a comment on the page it is on, its member's words under what it is on, never the instructions the agent was handed", () => {
   fakeAppBridge({});
+
   const container = agentMessageDrawn(
     {
       id: "comment-line",
@@ -1206,6 +1277,7 @@ test("a comment that reached the agent is headed as a comment on the page it is 
     TASK_AGENT,
     { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED, name: "Ada Lovelace" },
   );
+
   const head = container.querySelector<HTMLElement>("[data-comment-line]");
   assert.match(head?.textContent ?? "", /^commented on.*Invite funnel/u);
   const content = container.querySelector(".message-content")?.textContent ?? "";
@@ -1270,6 +1342,7 @@ test("a review from GitHub draws as a folding card, closed, headed by who did wh
     },
     sentBy: { kind: "github", name: "octocat" },
   });
+
   const card = container.querySelector<HTMLElement>("[data-github-line]");
   assert.ok(card, "the line draws as GitHub's card");
   const head = cardHead(card);
@@ -1299,6 +1372,7 @@ test("a check line is headed by how many of its checks failed on the pull reques
       ],
     }),
   );
+
   const card = container.querySelector<HTMLElement>("[data-github-line]");
   assert.ok(card, "the line draws as GitHub's card");
   assert.equal(cardHead(card).getAttribute("aria-label"), "2 of 3 checks failed on #42");
@@ -1319,6 +1393,7 @@ test("a check line whose checks were skipped rather than passed says so, and hol
       checks: [{ name: "deploy", conclusion: "skipped" }],
     }),
   );
+
   const card = container.querySelector<HTMLElement>("[data-github-line]");
   assert.ok(card, "the line draws as GitHub's card");
   const head = cardHead(card);

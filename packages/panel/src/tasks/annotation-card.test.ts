@@ -30,6 +30,7 @@ const FIRST = "Can we use the constant in the resend copy too?";
 const REPLY = "Yes, in the copy PR.";
 
 const roots: Root[] = [];
+
 /** The presses the card's ⋯ took. */
 const pressed: string[] = [];
 let laid: HTMLStyleElement | undefined;
@@ -45,6 +46,7 @@ afterEach(() => {
 /** A card of two comments, its fold its own, starting as `open` says, inside a box as wide as given. */
 function Card({ startsOpen }: { startsOpen: boolean }): ReactNode {
   const [open, setOpen] = useState(startsOpen);
+
   return createElement(AnnotationCard, {
     label: "Review thread by charlespan",
     open,
@@ -80,6 +82,7 @@ function draw(startsOpen: boolean, width = 900): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Card, { startsOpen })));
+
   return container;
 }
 
@@ -87,14 +90,18 @@ function draw(startsOpen: boolean, width = 900): HTMLElement {
 function pixels(element: Element, value: string): number {
   const style = getComputedStyle(element);
   let text = value.trim();
+
   for (let depth = 0; text.includes("var(") && depth < 20; depth += 1) {
     text = text.replace(/var\((--[a-z0-9-]+)\)/gu, (_, name: string) =>
       style.getPropertyValue(name).trim(),
     );
   }
+
   const terms = text.replaceAll(/calc|[()]/gu, "").split("+");
+
   return terms.reduce((sum, term) => {
     assert.match(term.trim(), /^\d+(?:\.\d+)?px$/u, `${value} resolves to a sum of pixels`);
+
     return sum + Number.parseFloat(term);
   }, 0);
 }
@@ -123,8 +130,10 @@ function columns(card: HTMLElement) {
   const commentStyle = getComputedStyle(comment);
   const [faceColumn = ""] = parts(commentStyle.gridTemplateColumns);
   const bodyFace = paddingStart(content);
+
   const bodyWords =
     bodyFace + pixels(comment, faceColumn) + pixels(comment, commentStyle.columnGap);
+
   return { headFace, headName, bodyFace, bodyWords };
 }
 
@@ -141,6 +150,7 @@ test("the head's face stands over every reply's face, and its name over every co
     /^danak2h/u,
     "a reply says who and how long ago",
   );
+
   for (const words of card.querySelectorAll(".annotation-comment-words")) {
     assert.equal(
       getComputedStyle(words).getPropertyValue("grid-column"),

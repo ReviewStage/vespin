@@ -135,6 +135,7 @@ function signatureOf(key: Redacted.Redacted, claims: string): string {
 function sameText(offered: string, held: string): boolean {
   const left = Buffer.from(offered);
   const right = Buffer.from(held);
+
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
@@ -151,10 +152,13 @@ function originOf(address: string): string | undefined {
 /** The link that admits one version of one page to the account, from `now` until its lifetime has passed. */
 export function mintPageLink(sandbox: PageSandbox, page: LinkedPage, now: number): string {
   const until = now + Duration.toMillis(PAGE_LINK_LIFETIME);
+
   const claims = Buffer.from(
     Schema.encodeSync(PageLinkClaimsJson)({ site: sandbox.origin, ...page, until }),
   ).toString("base64url");
+
   const token = `${claims}.${signatureOf(sandbox.key, claims)}`;
+
   return new URL(`/${PAGE_LINK_ROUTE.STEP}/${token}`, sandbox.origin).href;
 }
 
@@ -170,13 +174,18 @@ export function readPageLink(
   now: number,
 ): LinkedPage | undefined {
   const [claims, signature, ...rest] = token.split(".");
+
   if (claims === undefined || signature === undefined || rest.length > 0) return undefined;
+
   if (!sameText(signature, signatureOf(sandbox.key, claims))) return undefined;
+
   const read = Schema.decodeUnknownOption(PageLinkClaimsJson)(
     Buffer.from(claims, "base64url").toString("utf8"),
   );
+
   if (Option.isNone(read)) return undefined;
   const { site, until, ...page } = read.value;
+
   return site === sandbox.origin && now < until ? page : undefined;
 }
 
@@ -188,19 +197,28 @@ function pageSandboxIn(environment: Readonly<Record<string, string | undefined>>
   const secret = text(environment[AGENT_PAGES_ENVIRONMENT.SECRET]);
   const origin = text(environment[AGENT_PAGES_ENVIRONMENT.ORIGIN]);
   const none = (unset: string | undefined) => ({ sandbox: undefined, unset });
+
   if (secret === undefined && origin === undefined) return none(undefined);
+
   if (environment[AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT] !== DEPLOYMENT_ENVIRONMENT.PRODUCTION) {
     return none(SANDBOX_UNSET.NOT_PRODUCTION);
   }
+
   if (secret === undefined || origin === undefined) return none(SANDBOX_UNSET.HALF);
+
   if (secret.length < MINIMUM_SECRET_CHARACTERS) return none(SANDBOX_UNSET.SHORT);
+
   const shared = OTHER_SECRETS.some((name) => {
     const other = text(environment[name]);
+
     return other !== undefined && sameText(secret, other);
   });
+
   if (shared) return none(SANDBOX_UNSET.SHARED);
+
   if (originOf(origin) !== PAGE_SANDBOX_ORIGIN) return none(SANDBOX_UNSET.ORIGIN);
   const appOrigins = authDeployment({ ...environment }).ownOrigins;
+
   return {
     sandbox: { origin: PAGE_SANDBOX_ORIGIN, key: Redacted.make(secret), appOrigins },
     unset: undefined,
@@ -223,6 +241,7 @@ export const pageLinksFromEnvironment: Layer.Layer<PageLinks> = Layer.effect(
   PageLinks,
   Effect.suspend(() => {
     const { sandbox, unset } = pageSandboxIn(process.env);
+
     return Effect.as(unset === undefined ? Effect.void : Effect.logWarning(unset), { sandbox });
   }),
 );

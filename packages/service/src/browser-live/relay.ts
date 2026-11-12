@@ -210,6 +210,7 @@ const readFrame = read(
     metadata: Schema.Struct({ deviceWidth: Schema.Number, deviceHeight: Schema.Number }),
   }),
 );
+
 const readTargetInfo = read(
   Schema.Struct({
     targetInfo: Schema.Struct({
@@ -219,15 +220,18 @@ const readTargetInfo = read(
     }),
   }),
 );
+
 const readTargetId = read(Schema.Struct({ targetId: Schema.String }));
 const readFrameId = read(Schema.Struct({ frameId: Schema.String }));
 const readSessionId = read(Schema.Struct({ sessionId: Schema.String }));
+
 const readHistory = read(
   Schema.Struct({
     currentIndex: Schema.Number,
     entries: Schema.Array(Schema.Struct({ id: Schema.Number })),
   }),
 );
+
 const readClientMessage = readEither(browserLiveClientMessageSchema);
 
 const shown = (text: string) => text.slice(0, BROWSER_SHOWN_MAX_CHARS);
@@ -244,8 +248,10 @@ function foldMoves(batch: readonly QueuedInput[]): readonly QueuedInput[] {
 /** The text a key down types, where it types one: a printable key with no Control or Meta held, and Enter. */
 function typedText(key: string, modifiers: number): string | undefined {
   if (key === "Enter") return "\r";
+
   if ((modifiers & (BROWSER_LIVE_MODIFIER.CONTROL | BROWSER_LIVE_MODIFIER.META)) !== 0)
     return undefined;
+
   return [...key].length === 1 ? key : undefined;
 }
 
@@ -277,9 +283,11 @@ function steeringOf(message: SteerMessage): QueuedInput {
       move: false,
     };
   }
+
   if (message.step === BROWSER_LIVE_HISTORY.RELOAD) {
     return { command: { method: CDP_METHOD.RELOAD }, move: false };
   }
+
   return { step: message.step === BROWSER_LIVE_HISTORY.BACK ? -1 : 1, move: false };
 }
 
@@ -295,10 +303,12 @@ function commandOf(
       move: false,
     };
   }
+
   if (message.type === BROWSER_LIVE_CLIENT.KEY) {
     const down = message.action === BROWSER_LIVE_KEY_ACTION.DOWN;
     const text = down ? typedText(message.key, message.modifiers) : undefined;
     const type = down ? (text === undefined ? "rawKeyDown" : "keyDown") : "keyUp";
+
     const params = {
       type,
       key: message.key,
@@ -308,11 +318,14 @@ function commandOf(
       nativeVirtualKeyCode: message.keyCode,
       ...(text === undefined ? {} : { text, unmodifiedText: text }),
     };
+
     return { command: { method: CDP_METHOD.KEY, params }, move: false };
   }
+
   if (viewport === undefined || page === undefined) return undefined;
   const x = (Math.min(message.x, viewport.width) * page.width) / viewport.width;
   const y = (Math.min(message.y, viewport.height) * page.height) / viewport.height;
+
   if (message.type === BROWSER_LIVE_CLIENT.WHEEL) {
     const params = {
       type: "mouseWheel",
@@ -322,8 +335,10 @@ function commandOf(
       deltaY: message.deltaY,
       modifiers: message.modifiers,
     };
+
     return { command: { method: CDP_METHOD.MOUSE, params }, move: false };
   }
+
   const params = {
     type: MOUSE_EVENT[message.action],
     x,
@@ -333,7 +348,9 @@ function commandOf(
     clickCount: message.clickCount,
     modifiers: message.modifiers,
   };
+
   const move = message.action === BROWSER_LIVE_MOUSE_ACTION.MOVE && message.buttons === 0;
+
   return { command: { method: CDP_METHOD.MOUSE, params }, move };
 }
 
@@ -343,11 +360,13 @@ function idleWatch(view: LiveView): Effect.Effect<LiveEnd> {
     const now = yield* Clock.currentTimeMillis;
     const watched = now - (yield* Ref.get(view.lastActive));
     const touched = now - (yield* Ref.get(view.lastInput));
+
     return (
       watched < Duration.toMillis(BROWSER_LIVE_BOUNDS.IDLE) &&
       touched < Duration.toMillis(BROWSER_LIVE_BOUNDS.INPUT_IDLE)
     );
   });
+
   return Effect.as(
     Effect.repeat(activeLately, {
       schedule: Schedule.spaced(BROWSER_LIVE_BOUNDS.IDLE_CHECK_EVERY),
@@ -409,6 +428,7 @@ function openView(
 ): Effect.Effect<LiveView> {
   return Effect.gen(function* () {
     const { tab, agent } = reached;
+
     return {
       viewer,
       ask,
@@ -450,14 +470,18 @@ function isYours(view: LiveView, driver: { readonly userId: string } | null | un
 function publishDriver(view: LiveView, row: ReachedBrowserTab): Effect.Effect<void> {
   return Effect.gen(function* () {
     const found = browserTabDriver(row.tab, yield* DateTime.nowAsDate);
+
     const driver =
       found === null ? null : { userId: found.userId, heldUntil: found.heldUntil.getTime() };
+
     if (driver?.userId !== view.ask.userId) yield* Ref.set(view.driving, undefined);
     const last = yield* Ref.get(view.lastDriver);
+
     const same =
       last !== undefined &&
       last?.userId === driver?.userId &&
       last?.heldUntil === driver?.heldUntil;
+
     if (same) return;
     yield* Ref.set(view.lastDriver, driver);
     yield* send(view, {
@@ -473,9 +497,12 @@ function readStanding(view: LiveView): Effect.Effect<Option.Option<boolean>> {
   return Effect.gen(function* () {
     const { ask, deps } = view;
     const found = yield* Effect.result(deps.readTab(ask.userId, ask.place, ask.tabId));
+
     if (Result.isFailure(found)) return Option.none();
+
     if (Option.isNone(found.success)) return Option.some(false);
     yield* publishDriver(view, found.success.value);
+
     return Option.some(true);
   });
 }
@@ -495,6 +522,7 @@ function checkTab(view: LiveView): Effect.Effect<boolean> {
  */
 function tabTopics(view: LiveView): readonly SyncTopic[] {
   const { taskId } = view.reached.tab;
+
   return [
     [TOPIC.TASK, taskId],
     [TOPIC.ACCOUNT, view.ask.userId],
@@ -513,8 +541,10 @@ function watchTab(view: LiveView): Effect.Effect<LiveEnd> {
     Effect.gen(function* () {
       const sync = yield* Sync;
       const watch = yield* sync.watch(tabTopics(view), BROWSER_LIVE_BOUNDS.TAB_CHECK_EVERY);
+
       while (true) {
         const standing = yield* readStanding(view);
+
         if (Option.isSome(standing) && !standing.value) return BROWSER_LIVE_CLOSE_REASON.GONE;
         // Note that a read the store could not answer is tried again on the clock, because the write
         // that woke it may be the last, and a member who lost the tab must not keep watching it.
@@ -535,14 +565,18 @@ function takeOver(view: LiveView, at: Date): Effect.Effect<void> {
         reason: BROWSER_LIVE_REFUSAL.NOT_PERMITTED,
       });
     }
+
     const heldUntil = new Date(at.getTime() + BROWSER_TAKEOVER_HOLD_MS);
+
     const taken = yield* Effect.result(
       view.deps.takeOver(view.reached.tab.id, view.ask.userId, heldUntil, at),
     );
+
     // Note that the member's takeover another window of theirs holds stands too, as the tab was last read, since a takeover is theirs rather than a socket's.
     const standing = (yield* Ref.get(view.driving)) !== undefined || (yield* adoptable(view, at));
     const took = Result.isSuccess(taken) && taken.success;
     yield* Ref.set(view.driving, took ? at.getTime() : undefined);
+
     // Note that a takeover the member already held, moved on, is no new one, so it is not counted again.
     if (took && !standing) {
       yield* view.deps.counted(
@@ -551,6 +585,7 @@ function takeOver(view: LiveView, at: Date): Effect.Effect<void> {
         SERVER_AGENT_TOOL.BROWSER_TAKEOVER,
       );
     }
+
     yield* checkTab(view);
   });
 }
@@ -571,10 +606,12 @@ function handBack(view: LiveView, at: Date): Effect.Effect<void> {
   return Effect.gen(function* () {
     const wrote = (yield* Ref.get(view.driving)) !== undefined;
     const pending = yield* Ref.get(view.releasePending);
+
     if (!wrote && !pending && !(yield* adoptable(view, at))) return;
     yield* Ref.set(view.driving, undefined);
     const released = yield* Effect.result(view.deps.handBack(view.reached.tab.id, view.ask.userId));
     yield* Ref.set(view.releasePending, Result.isFailure(released));
+
     // Counted only where the store gave the tab back, as the member's own hand-back; the close's release is not.
     if (Result.isSuccess(released) && released.success) {
       yield* view.deps.counted(
@@ -583,6 +620,7 @@ function handBack(view: LiveView, at: Date): Effect.Effect<void> {
         SERVER_AGENT_TOOL.BROWSER_HANDBACK,
       );
     }
+
     yield* checkTab(view);
   });
 }
@@ -598,14 +636,19 @@ function releaseOnClose(view: LiveView): Effect.Effect<void> {
   return Effect.gen(function* () {
     const { ask, deps, reached } = view;
     const writtenAt = yield* Ref.get(view.driving);
+
     if (writtenAt === undefined && !(yield* Ref.get(view.releasePending))) return;
+
     if (writtenAt !== undefined) {
       const found = yield* Effect.result(deps.readTab(ask.userId, ask.place, ask.tabId));
+
       const heldUntil = Result.isSuccess(found)
         ? Option.getOrUndefined(found.success)?.tab.heldUntil
         : undefined;
+
       if (heldUntil != null && heldUntil.getTime() > lapsesAt(writtenAt)) return;
     }
+
     yield* Effect.ignore(deps.handBack(reached.tab.id, ask.userId));
   });
 }
@@ -615,6 +658,7 @@ function adoptable(view: LiveView, at: Date): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     if (yield* Ref.get(view.releasePending)) return false;
     const driver = yield* Ref.get(view.lastDriver);
+
     return driver != null && isYours(view, driver) && at.getTime() < driver.heldUntil;
   });
 }
@@ -629,23 +673,31 @@ function adoptable(view: LiveView, at: Date): Effect.Effect<boolean> {
 function holding(view: LiveView, at: Date): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     const renewedAt = yield* Ref.get(view.driving);
+
     if (renewedAt === undefined && !(yield* adoptable(view, at))) return false;
     const fresh = Duration.toMillis(BROWSER_LIVE_BOUNDS.RENEW_EVERY);
+
     if (renewedAt !== undefined && at.getTime() - renewedAt < fresh) return true;
     const heldUntil = new Date(at.getTime() + BROWSER_TAKEOVER_HOLD_MS);
+
     const renewed = yield* Effect.result(
       view.deps.renew(view.reached.tab.id, view.ask.userId, heldUntil, at),
     );
+
     // Note that a store that could not say leaves the takeover standing only until its last write lapses,
     // since no other member can take the row before then.
     if (Result.isFailure(renewed))
       return renewedAt !== undefined && at.getTime() < lapsesAt(renewedAt);
+
     if (renewed.success) {
       yield* Ref.set(view.driving, at.getTime());
+
       return true;
     }
+
     yield* Ref.set(view.driving, undefined);
     yield* checkTab(view);
+
     return false;
   });
 }
@@ -659,7 +711,9 @@ function drive(view: LiveView, message: InputMessage, at: Date): Effect.Effect<v
         reason: BROWSER_LIVE_REFUSAL.NOT_DRIVING,
       });
     }
+
     const input = commandOf(message, yield* Ref.get(view.viewport), yield* Ref.get(view.page));
+
     if (input !== undefined) yield* Queue.offer(view.inputs, input);
   });
 }
@@ -675,6 +729,7 @@ function steer(view: LiveView, message: SteerMessage, at: Date): Effect.Effect<v
       // Note that a refused takeover says why itself, so nothing more is sent.
       if (!view.drivable) return yield* takeOver(view, at);
       yield* takeOver(view, at);
+
       if (!(yield* standsAt(view, at.getTime()))) {
         return yield* send(view, {
           type: BROWSER_LIVE_SERVER.REFUSED,
@@ -682,6 +737,7 @@ function steer(view: LiveView, message: SteerMessage, at: Date): Effect.Effect<v
         });
       }
     }
+
     yield* Queue.offer(view.inputs, steeringOf(message));
   });
 }
@@ -705,11 +761,15 @@ function resizes(view: LiveView, size: PixelSize): Effect.Effect<boolean> {
 function onMessage(view: LiveView, message: BrowserLiveClientMessage): Effect.Effect<void> {
   return Effect.gen(function* () {
     const at = yield* DateTime.nowAsDate;
+
     const watching =
       message.type !== BROWSER_LIVE_CLIENT.VIEWPORT || (yield* resizes(view, message));
+
     if (watching) yield* Ref.set(view.lastActive, at.getTime());
+
     if (watching && message.type !== BROWSER_LIVE_CLIENT.WATCHING)
       yield* Ref.set(view.lastInput, at.getTime());
+
     switch (message.type) {
       case BROWSER_LIVE_CLIENT.TAKE_OVER:
         return yield* takeOver(view, at);
@@ -734,6 +794,7 @@ function readViewer(view: LiveView): Effect.Effect<LiveEnd> {
     Stream.runForEach(view.viewer.frames, (frame) => {
       if (!("text" in frame)) return Effect.void;
       const message = readClientMessage(jsonOf(frame.text));
+
       return Result.isFailure(message) ? Effect.void : onMessage(view, message.success);
     }),
     VIEWER_LEFT,
@@ -750,8 +811,10 @@ function dispatchInput(view: LiveView, target: LiveTarget): Effect.Effect<void, 
   return Effect.forever(
     Effect.gen(function* () {
       const batch = yield* Queue.takeAll(view.inputs);
+
       for (const input of foldMoves(batch)) {
         if (!(yield* standsAt(view, yield* Clock.currentTimeMillis))) return;
+
         if ("step" in input) yield* stepHistory(target, input.step);
         else
           yield* Effect.ignore(target.cdp.send({ ...input.command, sessionId: target.sessionId }));
@@ -763,11 +826,14 @@ function dispatchInput(view: LiveView, target: LiveTarget): Effect.Effect<void, 
 /** Steps the tab's page back or forward by one, where its history holds a page there; a page with none there stays. */
 function stepHistory(target: LiveTarget, by: -1 | 1): Effect.Effect<void> {
   const { cdp, sessionId } = target;
+
   return Effect.gen(function* () {
     const answer = yield* cdp.send({ method: CDP_METHOD.HISTORY, sessionId });
     const history = readHistory(answer);
+
     if (Result.isFailure(history)) return;
     const entry = history.success.entries[history.success.currentIndex + by];
+
     if (entry === undefined) return;
     yield* cdp.send({
       method: CDP_METHOD.HISTORY_ENTRY,
@@ -780,6 +846,7 @@ function stepHistory(target: LiveTarget, by: -1 | 1): Effect.Effect<void> {
 function publishPage(view: LiveView, next: PageState): Effect.Effect<void> {
   return Effect.gen(function* () {
     const last = yield* Ref.get(view.pageState);
+
     if (last.address === next.address && last.title === next.title && last.loading === next.loading)
       return;
     yield* Ref.set(view.pageState, next);
@@ -795,13 +862,17 @@ function relayFrame(
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     const frame = readFrame(params);
+
     if (Result.isFailure(frame)) return;
     const { data, sessionId: ackId, metadata } = frame.success;
+
     const size = {
       width: Math.max(0, metadata.deviceWidth),
       height: Math.max(0, metadata.deviceHeight),
     };
+
     yield* Ref.set(view.page, size);
+
     if ((yield* view.viewer.buffered) <= BROWSER_LIVE_BOUNDS.MAX_BUFFERED_BYTES) {
       yield* send(view, {
         type: BROWSER_LIVE_SERVER.FRAME,
@@ -810,20 +881,26 @@ function relayFrame(
         pageHeight: size.height,
       });
     }
+
     const last = yield* Ref.get(view.lastFrame);
+
     if (last !== undefined) {
       const wait =
         last +
         Duration.toMillis(BROWSER_LIVE_BOUNDS.FRAME_EVERY) -
         (yield* Clock.currentTimeMillis);
+
       if (wait > 0) yield* Effect.sleep(Duration.millis(wait));
     }
+
     yield* Ref.set(view.lastFrame, yield* Clock.currentTimeMillis);
+
     const ack = {
       method: "Page.screencastFrameAck",
       params: { sessionId: ackId },
       sessionId: target.sessionId,
     };
+
     yield* Effect.ignore(target.cdp.send(ack));
   });
 }
@@ -834,46 +911,61 @@ function onEvent(view: LiveView, event: CdpEvent): Effect.Effect<void> {
     const targetId = yield* Ref.get(view.targetId);
     const target = yield* Ref.get(view.live);
     const gone = Deferred.succeed(view.browserEnded, BROWSER_LIVE_CLOSE_REASON.GONE);
+
     switch (event.method) {
       case CDP_METHOD.SCREENCAST_FRAME:
         if (target !== undefined && event.sessionId === target.sessionId) {
           yield* relayFrame(view, target, event.params);
         }
+
         return;
       case CDP_METHOD.TARGET_INFO_CHANGED: {
         const info = readTargetInfo(event.params);
+
         if (Result.isFailure(info) || info.success.targetInfo.targetId !== targetId) return;
         const { url, title } = info.success.targetInfo;
         const last = yield* Ref.get(view.pageState);
+
         // Note that a page the member moved, from the bar or by driving it, is kept for a restart to
         // reopen; one no Browser tab loads, a blank or an error page, is not.
         if ((url !== last.address || title !== last.title) && isBrowserAddress(url)) {
           yield* view.deps.notePage(view.reached.tab.id, targetId, { address: url, title });
         }
+
         return yield* publishPage(view, { ...last, address: shown(url), title: shown(title) });
       }
+
       case CDP_METHOD.STARTED_LOADING:
       case CDP_METHOD.STOPPED_LOADING: {
         // A page's main frame has the id of its target.
         const frame = readFrameId(event.params);
+
         if (Result.isFailure(frame) || frame.success.frameId !== targetId) return;
         const last = yield* Ref.get(view.pageState);
+
         return yield* publishPage(view, {
           ...last,
           loading: event.method === CDP_METHOD.STARTED_LOADING,
         });
       }
+
       case CDP_METHOD.TARGET_DESTROYED: {
         const destroyed = readTargetId(event.params);
+
         if (Result.isSuccess(destroyed) && destroyed.success.targetId === targetId) yield* gone;
+
         return;
       }
+
       case CDP_METHOD.DETACHED: {
         const detached = readSessionId(event.params);
+
         if (Result.isSuccess(detached) && detached.success.sessionId === target?.sessionId)
           yield* gone;
+
         return;
       }
+
       default:
         return;
     }
@@ -884,6 +976,7 @@ function onEvent(view: LiveView, event: CdpEvent): Effect.Effect<void> {
 function endCast(target: LiveTarget): Effect.Effect<void> {
   const settle = (command: CdpCommand) =>
     Effect.ignore(Effect.timeout(target.cdp.send(command), BROWSER_LIVE_BOUNDS.CAST_END_TIMEOUT));
+
   return Effect.andThen(
     settle({ method: "Page.stopScreencast", sessionId: target.sessionId }),
     settle({ method: "Target.detachFromTarget", params: { sessionId: target.sessionId } }),
@@ -899,6 +992,7 @@ function castTab(
     const targetId = yield* Ref.get(view.targetId);
     const pages = yield* cdp.pages;
     const page = pages.find((candidate) => candidate.targetId === targetId);
+
     if (page === undefined) return undefined;
     yield* publishPage(view, {
       address: shown(page.url),
@@ -908,6 +1002,7 @@ function castTab(
     yield* cdp.send({ method: "Target.setDiscoverTargets", params: { discover: true } });
     const attach = { method: "Target.attachToTarget", params: { targetId, flatten: true } };
     const answer = readSessionId(yield* cdp.send(attach));
+
     if (Result.isFailure(answer)) return undefined;
     const target = { cdp, sessionId: answer.success.sessionId };
     // The cast ends with the view, ahead of the connection's own close, so no frame is made for nobody.
@@ -920,6 +1015,7 @@ function castTab(
       params: screencast,
       sessionId: target.sessionId,
     });
+
     return target;
   });
 }
@@ -929,11 +1025,15 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
   return Effect.gen(function* () {
     const { deps } = view;
     const session = yield* Effect.result(deps.sessionOf(view.reached.tab.conversationId));
+
     if (Result.isFailure(session)) return BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
+
     if (Option.isNone(session.success)) return BROWSER_LIVE_CLOSE_REASON.NOT_OPENED;
+
     const connected = yield* Effect.result(
       deps.browser.connect(session.success.value, view.reached.tab.conversationId),
     );
+
     if (Result.isFailure(connected)) {
       // A sandbox still starting closes as not opened, which the pane asks again after a wait.
       return connected.failure.reason === BROWSER_UNREACHABLE.NOT_OPENED ||
@@ -941,13 +1041,17 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
         ? BROWSER_LIVE_CLOSE_REASON.NOT_OPENED
         : BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
     }
+
     const cdp = connected.success;
+
     // The tab is read again, since a browser that started afresh reopened it on a new target.
     const current = yield* Effect.result(
       deps.readTab(view.ask.userId, view.ask.place, view.ask.tabId),
     );
+
     // A store that could not say is unavailable, and a tab the member no longer reaches, or that closed, is gone.
     if (Result.isFailure(current)) return BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
+
     if (Option.isNone(current.success)) return BROWSER_LIVE_CLOSE_REASON.GONE;
     yield* Ref.set(view.targetId, current.success.value.tab.targetId);
     // Note that the events are read from before the first command, so the screencast's first frame, after
@@ -960,10 +1064,13 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
     );
     yield* Effect.yieldNow;
     const cast = yield* Effect.result(castTab(view, cdp));
+
     if (Result.isFailure(cast)) return BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
+
     // The browser holds no such target: the tab closed, or a resume began the browser afresh.
     if (cast.success === undefined) return BROWSER_LIVE_CLOSE_REASON.GONE;
     yield* Effect.forkScoped(Effect.ignore(dispatchInput(view, cast.success)));
+
     return yield* Deferred.await(view.browserEnded);
   });
 }
@@ -980,13 +1087,16 @@ export function relayBrowserTab(
     const view = yield* openView(viewer, ask, reached, deps, startedAt);
     // A takeover this socket took is handed back as it closes, however it closes.
     yield* Effect.addFinalizer(() => releaseOnClose(view));
+
     const end = yield* Effect.raceAll([
       readViewer(view),
       watchBrowser(view),
       watchTab(view),
       idleWatch(view),
     ]);
+
     yield* Queue.end(view.inputs);
+
     if (end === VIEWER_LEFT) return;
     yield* send(view, { type: BROWSER_LIVE_SERVER.CLOSED, reason: end });
     yield* viewer.close(BROWSER_LIVE_CLOSE_CODE[end]);

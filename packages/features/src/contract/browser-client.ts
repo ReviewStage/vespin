@@ -82,7 +82,9 @@ async function sent(url: string, init: RequestInit): Promise<Response> {
     credentials: "include",
     redirect: "follow",
   });
+
   if (response.redirected) throw new BrowserRedirected("The answer arrived through a redirect");
+
   return response;
 }
 
@@ -99,10 +101,13 @@ const link = new OpenAPILink<Record<never, never>>(hostedContract, {
     async ({ next, path }) => {
       const output = await next();
       const wire = outputWireSchema(path);
+
       if (wire === undefined) return output;
       // SAFETY: the link's serializer read the output out of the response's JSON text.
       const read = readServiceAnswer(wire)(output as UnparsedWireValue);
+
       if (Result.isFailure(read)) throw new BrowserAnswerUnread("The answer did not read");
+
       return read.success;
     },
   ],

@@ -39,6 +39,7 @@ function draw(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Fragment, null, createElement(Announcer), element)));
+
   return container;
 }
 
@@ -49,6 +50,7 @@ function drawing(Glyph: () => React.JSX.Element): string {
   act(() => root.render(createElement(Glyph)));
   const markup = container.innerHTML;
   act(() => root.unmount());
+
   return markup;
 }
 

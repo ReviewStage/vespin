@@ -91,12 +91,14 @@ function savingKey(event: KeyboardEvent): boolean {
   const key = event.key.toLowerCase();
   const isS = key === "s" || (event.code === "KeyS" && !LATIN_LETTER.test(key));
   const saves = isS || event.key === "Enter";
+
   return saves && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 }
 
 /** One line as drawn beneath: in its colors where they spell it, plain where they do not. */
 function drawnLine(text: string, tokens: CodeLines[number] | undefined): ReactNode {
   const spelled = tokens?.map((token) => token.text).join("") === text;
+
   return spelled && tokens !== undefined ? lineRuns(tokens) : text;
 }
 
@@ -183,11 +185,13 @@ export function CodeEditor({
   }, []);
   const start = lineNumbers ? LAYER_START.NUMBERED : LAYER_START.PLAIN;
   const lineCount = value.split("\n").length;
+
   const gutter = lineNumbers
     ? cssCustomProperties({
         "--ui-code-editor-gutter": `${Math.max(GUTTER_DIGITS, String(lineCount).length)}ch`,
       })
     : undefined;
+
   // Note that a key taken is marked even mid-composition, so the browser's Save Page never opens, and answered only once composing ends.
   const answerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const answer =
@@ -196,10 +200,13 @@ export function CodeEditor({
         : onEscape !== undefined && event.key === "Escape"
           ? onEscape
           : undefined;
+
     if (answer === undefined) return;
     event.preventDefault();
+
     if (!isComposingKey(event)) answer();
   };
+
   return (
     <div className={WELL} style={gutter} data-changed={changed || undefined}>
       <pre className={`${LAYER_BASE} ${start} ${SHOWN}`} aria-hidden>

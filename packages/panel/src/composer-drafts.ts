@@ -255,8 +255,10 @@ function placeOf(
   stored: StoredPlace,
 ): { readonly place: DraftPlace; readonly revision?: number } | undefined {
   if (retired(stored) || "issueId" in stored) return undefined;
+
   if (!("revision" in stored)) return { place: stored };
   const { kind, planId, agentId, itemId, revision } = stored;
+
   return { place: { kind, planId, agentId, itemId }, revision };
 }
 
@@ -367,9 +369,11 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
     .filter((kept) => kept.accountId === owner)
     .flatMap(({ place: storedPlace, text, choices = [], values = [], ...rest }) => {
       const read = placeOf(storedPlace);
+
       if (read === undefined) return [];
       const { steps, press, dropped, element } = rest;
       const revision = rest.revision ?? read.revision;
+
       return [
         {
           place: read.place,
@@ -386,6 +390,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
       ];
     })
     .filter(stored);
+
   // Note that an inbox card's answer and its thread, kept apart before, are one place now, so the one written later stands.
   return read.filter(
     (kept, at) => !read.slice(at + 1).some((later) => Equal.equals(later.place, kept.place)),
@@ -434,6 +439,7 @@ function sameStored(
   other: KeptDraft | undefined,
 ): boolean {
   if (one === undefined || !stored(one)) return other === undefined || !stored(other);
+
   return other !== undefined && storedAs(owner, one, entryOf(owner, other));
 }
 
@@ -447,14 +453,18 @@ function sameStored(
  */
 function writeDrafts(owner: Owner, drafts: readonly KeptDraft[]): readonly KeptDraft[] {
   const kept = drafts.filter(stored);
+
   const standing = readStored().filter(
     (entry) => entry.accountId !== owner || kept.some((draft) => storedAs(owner, draft, entry)),
   );
+
   const written = kept
     .filter((draft) => !standing.some((entry) => storedAs(owner, draft, entry)))
     .map((draft) => entryOf(owner, draft));
+
   const entries = [...standing, ...written].slice(-MAX_KEPT);
   writeKept(STORAGE_KEY, storedDrafts, entries);
+
   return drafts.filter(
     (draft) => !stored(draft) || entries.some((entry) => storedAs(owner, draft, entry)),
   );
@@ -467,6 +477,7 @@ function withDraft(
   draft: Draft,
 ): readonly KeptDraft[] {
   const others = drafts.filter((kept) => !Equal.equals(kept.place, place));
+
   return holds(draft) ? [...others, { ...draft, place }] : others;
 }
 
@@ -538,11 +549,14 @@ function storeLater(owner: Owner): void {
 function readBeside(owner: Owner, held: readonly KeptDraft[]): readonly KeptDraft[] {
   const read = readDrafts(owner).map((kept) => {
     const was = held.find((each) => Equal.equals(each.place, kept.place));
+
     if (was === undefined) return kept;
+
     return Equal.equals({ ...was, attachments: [] }, kept)
       ? was
       : { ...kept, attachments: was.attachments };
   });
+
   // Note that files storage has no word of stay as a draft of files alone, even where another
   // window let the words beside them go, because they live in this window and nowhere else.
   const filesAlone = held
@@ -551,6 +565,7 @@ function readBeside(owner: Owner, held: readonly KeptDraft[]): readonly KeptDraf
         kept.attachments.length > 0 && !read.some((each) => Equal.equals(each.place, kept.place)),
     )
     .map((kept) => ({ ...EMPTY_DRAFT, place: kept.place, attachments: kept.attachments }));
+
   return [...filesAlone, ...read];
 }
 
@@ -587,6 +602,7 @@ type DraftEdit = Extract<
  */
 function filesGoWith(owner: Owner, theirs: KeptDraft, standing: KeptDraft | undefined): boolean {
   if (!stored(theirs)) return standing === undefined;
+
   // Note that the two are compared as storage keeps them, since a box may hold a field unset that storage leaves out.
   return standing !== undefined && sameStored(owner, theirs, standing);
 }
@@ -598,6 +614,7 @@ function withFilesOf(
   theirs: readonly KeptDraft[],
 ): readonly KeptDraft[] {
   const standing = readDrafts(owner);
+
   return theirs
     .filter((kept) => kept.attachments.length > 0)
     .filter((kept) =>
@@ -609,6 +626,7 @@ function withFilesOf(
     )
     .reduce<readonly KeptDraft[]>((drafts, { place, attachments }) => {
       const was = drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT;
+
       return withDraft(drafts, place, { ...was, attachments });
     }, held);
 }
@@ -617,14 +635,17 @@ function withFilesOf(
 function edited(held: readonly KeptDraft[], edit: DraftEdit): readonly KeptDraft[] {
   if ("drop" in edit) return held.filter((kept) => !edit.drop(kept.place));
   const was = held.find((kept) => Equal.equals(kept.place, edit.place)) ?? EMPTY_DRAFT;
+
   return withDraft(held, edit.place, edit.next(was));
 }
 
 /** What the window holds unwritten once `place` is changed: it moves last and keeps what storage held before its first change. */
 function unstoredWith(unstored: Unstored, held: readonly KeptDraft[], place: DraftPlace): Unstored {
   const standing = unstored.find((each) => Equal.equals(each.place, place));
+
   const was =
     standing === undefined ? held.find((kept) => Equal.equals(kept.place, place)) : standing.was;
+
   return [...unstored.filter((each) => each !== standing), { place, was }];
 }
 
@@ -635,6 +656,7 @@ function unstoredWith(unstored: Unstored, held: readonly KeptDraft[], place: Dra
  */
 function unstoredAfter(unstored: Unstored, held: readonly KeptDraft[], edit: DraftEdit): Unstored {
   if (!("drop" in edit)) return unstoredWith(unstored, held, edit.place);
+
   return held
     .filter((kept) => edit.drop(kept.place))
     .reduce((after, kept) => unstoredWith(after, held, kept.place), unstored);
@@ -680,9 +702,11 @@ const draftsByOwner = new Map<Owner, Store<readonly KeptDraft[]>>();
 /** The store of one account's drafts, read from storage where the window holds none yet. */
 function draftsOf(owner: Owner): Store<readonly KeptDraft[]> {
   const standing = draftsByOwner.get(owner);
+
   if (standing !== undefined) return standing;
   const made = new Store<readonly KeptDraft[]>(readDrafts(owner));
   draftsByOwner.set(owner, made);
+
   return made;
 }
 
@@ -692,23 +716,30 @@ function changeDrafts(owner: Owner, change: DraftChange): void {
   const held = drafts.state;
   const unstored = unstoredOf(owner);
   const hold = (next: readonly KeptDraft[]) => drafts.setState(() => next);
+
   if ("drop" in change || "place" in change) {
     hold(edited(held, change));
     unstoredByOwner.set(owner, unstoredAfter(unstored, held, change));
     storeLater(owner);
+
     return;
   }
+
   // Note that the files an address held are this window's alone, so they are carried here rather than read from storage, and the address keeps none.
   if ("adopt" in change) {
     hold(withFilesOf(owner, held, draftsOf(change.adopt).state));
     changeDrafts(change.adopt, FORGET);
+
     return;
   }
+
   if ("forget" in change) {
     unstoredByOwner.delete(owner);
     hold(readDrafts(owner));
+
     return;
   }
+
   // A store with nothing unwritten reads nothing, so a pause ending after a flush costs nothing.
   if ("store" in change && nothingUnstored(unstored)) return;
   const standing = readBeside(owner, held);
@@ -766,14 +797,17 @@ export function heldLines<Line>(): AccountLines<Line> {
     adopt: (address, accountId) =>
       all.setState((lines) => {
         const theirs = lines.get(address);
+
         if (theirs === undefined) return lines;
         const moved = new Map(lines).set(accountId, [...(lines.get(accountId) ?? []), ...theirs]);
         moved.delete(address);
+
         return moved;
       }),
     forget: () => all.setState(() => new Map()),
   });
   const store = createStore((): readonly Line[] => all.state.get(ownerStore.state) ?? NO_LINES);
+
   return {
     store,
     set: (next) => {
@@ -819,6 +853,7 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
   const stored = Schema.fromJsonString(
     Schema.Array(Schema.Struct({ accountId: Schema.String, line: spec.kept })),
   );
+
   const idOf = (line: Line) => spec.idOf(spec.toKept(line));
   // Each line as this window last wrote it, its files among it, by its id.
   const held = new Store<ReadonlyMap<string, Line>>(new Map());
@@ -826,6 +861,7 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
     adopt: () => undefined,
     forget: () => held.setState(() => new Map()),
   });
+
   const read = (owner: Owner, lines: ReadonlyMap<string, Line>): readonly Line[] =>
     owner === null
       ? NO_LINES
@@ -833,41 +869,53 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
           .filter((entry) => entry.accountId === owner)
           .map(({ line: kept }) => {
             const was = lines.get(spec.idOf(kept));
+
             return was !== undefined && Equal.equals(spec.toKept(was), kept)
               ? was
               : spec.fromKept(kept);
           });
+
   const store = createStore((): readonly Line[] => {
     // Note that the revision is read for its moves alone, so a write here or in another window reads storage again.
     void keptRevision.state;
+
     return read(ownerStore.state, held.state);
   });
+
   const set = (change: (now: readonly Line[]) => readonly Line[]): void => {
     const owner = ownerStore.state;
+
     if (owner === null) return;
     const now = store.state;
     const next = change(now);
     const was = new Set(now.map(idOf));
     const changed = new Map(next.map((line) => [idOf(line), line]));
     const all = readKept(spec.key, stored, []);
+
     const standing = all.flatMap((entry) => {
       if (entry.accountId !== owner) return [entry];
       const id = spec.idOf(entry.line);
       const line = changed.get(id);
+
       if (line !== undefined) return [{ accountId: owner, line: spec.toKept(line) }];
+
       // Note that a line this window held and lets go goes, and one only another window holds stands.
       return was.has(id) ? [] : [entry];
     });
+
     const kept = new Set(
       standing.flatMap((entry) => (entry.accountId === owner ? [spec.idOf(entry.line)] : [])),
     );
+
     const added = next
       .filter((line) => !was.has(idOf(line)) && !kept.has(idOf(line)))
       .map((line) => ({ accountId: owner, line: spec.toKept(line) }));
+
     writeKept(spec.key, stored, [...standing, ...added]);
     held.setState((lines) => new Map([...lines, ...changed]));
     rereadKept();
   };
+
   return { store, set };
 }
 
@@ -880,6 +928,7 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
 function adoptHeld(address: string, accountId: string): void {
   if (ownerStore.state !== address) return;
   changeDrafts(accountId, { adopt: address });
+
   for (const held of HELD_BESIDE) held.adopt(address, accountId);
 }
 
@@ -894,7 +943,9 @@ function adoptHeld(address: string, accountId: string): void {
 function forgetWindow(): void {
   for (const wait of storeLaterByOwner.values()) wait.stop();
   storeLaterByOwner.clear();
+
   for (const owner of draftsByOwner.keys()) changeDrafts(owner, FORGET);
+
   for (const held of HELD_BESIDE) held.forget();
   ownerStore.setState(() => null);
 }
@@ -907,10 +958,13 @@ function forgetWindow(): void {
  */
 function adoptDrafts(address: string, accountId: string): void {
   const entries = readStored();
+
   if (!entries.some((entry) => entry.accountId === address)) return;
+
   const moved = entries.map((entry) =>
     entry.accountId === address ? { ...entry, accountId } : entry,
   );
+
   const latest = moved.filter(
     (entry, at) =>
       entry.accountId !== accountId ||
@@ -918,6 +972,7 @@ function adoptDrafts(address: string, accountId: string): void {
         .slice(at + 1)
         .some((later) => later.accountId === accountId && Equal.equals(later.place, entry.place)),
   );
+
   writeKept(STORAGE_KEY, storedDrafts, latest);
 }
 
@@ -937,11 +992,13 @@ export function useDraftsOwner(
   useLayoutEffect(() => {
     // What the account signed in until now typed is written as its own before another's are read.
     changeOwned(STORE);
+
     if (id !== undefined && email !== undefined) {
       adoptDrafts(email, id);
       // Note that what this window holds and storage does not, files and lines not sent, moves too.
       adoptHeld(email, id);
     }
+
     ownerStore.setState(() => id ?? email ?? null);
     // Note that the account's drafts are read again, because a window that held them before may
     // hold them as they stood then, before a move from its address added to them.
@@ -954,7 +1011,9 @@ export function useDraftsOwner(
       // Note that lines kept beside the drafts are read from storage again on any other write, which costs a read.
       else rereadKept();
     };
+
     window.addEventListener("storage", heard);
+
     return () => window.removeEventListener("storage", heard);
   }, []);
   // Note that what the window holds unwritten is written at once wherever the words could be lost
@@ -963,17 +1022,22 @@ export function useDraftsOwner(
   // the rest; a page kept in the back-forward cache has not ended, as it may come back as it stood.
   useEffect(() => {
     const store = () => changeOwned(STORE);
+
     const hidden = () => {
       if (document.visibilityState === "hidden") store();
     };
+
     const leaving = (event: PageTransitionEvent) => {
       store();
+
       if (!event.persisted) forgetWindow();
     };
+
     window.addEventListener("focusout", store);
     window.addEventListener("blur", store);
     window.addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", hidden);
+
     return () => {
       window.removeEventListener("focusout", store);
       window.removeEventListener("blur", store);
@@ -1024,7 +1088,9 @@ export function useDraft(place: DraftPlace): DraftControl {
     draftsStore,
     (drafts) => drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT,
   );
+
   useStoreOnLeave();
+
   return { draft, update: (next) => changeOwned({ place, next }) };
 }
 
@@ -1055,6 +1121,7 @@ export function useNewAgentDraft(
 ): KeptDraft<NewAgentPlace> | undefined {
   return useSelector(draftsStore, (drafts) => {
     const onTask = drafts.filter(isNewAgent).filter((kept) => kept.place.planId === taskId);
+
     return draftId === undefined
       ? onTask.at(-1)
       : onTask.find((kept) => kept.place.draftId === draftId);
@@ -1158,15 +1225,21 @@ const NO_ROW_DRAFTS: ReadonlyMap<string, InboxRowDraft> = new Map();
  */
 export function useInboxRowDrafts(): ReadonlyMap<string, InboxRowDraft> {
   const last = useRef(NO_ROW_DRAFTS);
+
   return useSelector(draftsStore, (all) => {
     const drafts = inboxRowDrafts(all);
     const was = last.current;
+
     const kept = drafts.map((draft): [string, InboxRowDraft] => {
       const held = was.get(draft.itemId);
+
       return [draft.itemId, held !== undefined && Equal.equals(held, draft) ? held : draft];
     });
+
     const same = kept.length === was.size && kept.every(([id, draft]) => was.get(id) === draft);
+
     if (!same) last.current = new Map(kept);
+
     return last.current;
   });
 }
@@ -1237,11 +1310,15 @@ export function rowPicks(
  */
 export function useInboxDrafts(taskId: string | null): readonly KeptDraft<InboxPlace>[] {
   const last = useRef<readonly KeptDraft<InboxPlace>[]>([]);
+
   return useSelector(draftsStore, (drafts) => {
     const found = drafts.filter(isInbox).filter((kept) => kept.place.planId === taskId);
+
     const same =
       found.length === last.current.length && found.every((kept, at) => kept === last.current[at]);
+
     if (!same) last.current = found;
+
     return last.current;
   });
 }
@@ -1263,6 +1340,7 @@ const DRAFT_WRITER: DraftWriter = {
 /** The draft writer, for an owner that reads its drafts on its own, the same one for as long as the window stands. */
 export function useDraftWriter(): DraftWriter {
   useStoreOnLeave();
+
   return DRAFT_WRITER;
 }
 

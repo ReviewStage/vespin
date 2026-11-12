@@ -388,6 +388,7 @@ it.effect(
       const { port, requests } = yield* hostActPort({ account: SIGNED_IN });
       const refused = [];
       const expected = [];
+
       for (const each of FOLLOWS) {
         const kinds: readonly (readonly [PortActKind, string])[] =
           "retry" in each
@@ -396,6 +397,7 @@ it.effect(
                 [each.retry, each.retryRefusal],
               ]
             : [[each.follow, each.followRefusal]];
+
         for (const [kind, words] of kinds) {
           refused.push(yield* port.perform({ kind, payload: each.key }, OTHER_WINDOW));
           refused.push(yield* port.perform({ kind, payload: each.key }, PANEL, { trusted: false }));
@@ -418,13 +420,16 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { port, requests, told } = yield* hostActPort({ account: SIGNED_IN });
+
       for (const each of FOLLOWS) {
         const asked = () => requests.filter((request) => request.pathname === each.path).length;
         const slice = () => told.filter((changed) => changed.read === each.slice).at(-1)?.held;
         const one = yield* Effect.promise(() => port.as(PANEL)[each.follow](each.key as never));
+
         const two = yield* Effect.promise(() =>
           port.as(SECOND_PANEL)[each.follow](each.key as never),
         );
+
         yield* Effect.promise(() => until(() => readAt(slice(), each.at) !== undefined));
 
         assert.equal(asked(), 1, `${each.follow}: two holds share one follow`);

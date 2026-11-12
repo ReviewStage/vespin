@@ -50,11 +50,13 @@ export function land(element: HTMLElement, where: Landed = LANDED.AROUND): void 
   // Note that reading the layout here makes the engine see the mark gone before it is set again, which starts the light anew.
   void element.offsetWidth;
   element.setAttribute(LANDED_ATTRIBUTE, where);
+
   // Note that only the light's own end takes the mark, since the element's other motions, and those it holds, end here too.
   const ended = (event: AnimationEvent) => {
     if (event.target !== element || event.animationName !== LANDED_ANIMATION) return;
     element.removeAttribute(LANDED_ATTRIBUTE);
     element.removeEventListener("animationend", ended);
   };
+
   element.addEventListener("animationend", ended);
 }

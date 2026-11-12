@@ -61,6 +61,7 @@ const BINARY_PACKAGES: ReadonlyMap<string, ReadonlyMap<string, string>> = new Ma
 
 /** The paths a binaries package exports, of the two programs run here. */
 const PostgresBinaries = Schema.Struct({ initdb: Schema.String, pg_ctl: Schema.String });
+
 type PostgresBinaries = typeof PostgresBinaries.Type;
 
 /** A cluster as its caller reaches it. */
@@ -87,16 +88,19 @@ export class StepFailed extends Data.TaggedError("StepFailed")<{
 /** The binaries for this machine, or a failure naming the platform where none are published. */
 const binaries = Effect.gen(function* () {
   const name = BINARY_PACKAGES.get(process.platform)?.get(process.arch);
+
   if (name === undefined) {
     return yield* new StepFailed({
       step: `finding Postgres for ${process.platform}-${process.arch}`,
       printed: "",
     });
   }
+
   const exported = yield* Effect.tryPromise({
     try: () => import(name),
     catch: (cause) => new StepFailed({ step: `loading ${name}`, printed: String(cause) }),
   });
+
   return yield* Schema.decodeUnknownEffect(PostgresBinaries)(exported).pipe(
     Effect.mapError((error) => new StepFailed({ step: `reading ${name}`, printed: error.message })),
   );
@@ -121,10 +125,12 @@ export function completed(
         extendEnv: true,
         stdin: "ignore",
       });
+
       const [printed, code] = yield* Effect.all(
         [Stream.mkString(Stream.decodeText(handle.all)), handle.exitCode],
         { concurrency: "unbounded" },
       );
+
       if (Number(code) !== 0) return yield* new StepFailed({ step, printed: printed.trim() });
     }),
   ).pipe(
@@ -146,9 +152,11 @@ const freeLoopbackPort = Effect.tryPromise({
     const address = server.address();
     server.close();
     await once(server, "close");
+
     if (address === null || typeof address === "string") {
       throw new Error("the loopback server answered no TCP address");
     }
+
     return address.port;
   },
   catch: (cause) => new StepFailed({ step: "finding a free port", printed: String(cause) }),
@@ -193,6 +201,7 @@ function running(bin: PostgresBinaries, folder: string, port: number) {
     const path = yield* Path.Path;
     const data = path.join(folder, CLUSTER_FILE.DATA);
     const log = path.join(folder, CLUSTER_FILE.LOG);
+
     const start = completed("starting Postgres", bin.pg_ctl, [
       "start",
       `--pgdata=${data}`,
@@ -208,10 +217,12 @@ function running(bin: PostgresBinaries, folder: string, port: number) {
         Effect.gen(function* () {
           const logged = yield* Effect.orElseSucceed(fileSystem.readFileString(log), () => "");
           const printed = [failed.printed, logged.trim()].filter((text) => text.length > 0);
+
           return yield* new StepFailed({ step: failed.step, printed: printed.join("\n") });
         }),
       ),
     );
+
     const stop = completed("stopping Postgres", bin.pg_ctl, [
       "stop",
       `--pgdata=${data}`,
@@ -220,6 +231,7 @@ function running(bin: PostgresBinaries, folder: string, port: number) {
       "--wait",
       "--silent",
     ]);
+
     yield* Effect.acquireRelease(start, () => Effect.orDie(stop));
   });
 }
@@ -251,6 +263,7 @@ function connectionString(
   url.username = CLUSTER.USER;
   url.password = Redacted.value(password);
   url.pathname = `/${database}`;
+
   return Redacted.make(url.href);
 }
 
@@ -271,6 +284,7 @@ export const ephemeralCluster = Effect.gen(function* () {
   const port = yield* freeLoopbackPort;
   yield* running(bin, folder, port);
   yield* databaseCreated(port, password);
+
   return {
     folder,
     port,

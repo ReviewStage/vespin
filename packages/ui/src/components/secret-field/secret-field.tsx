@@ -70,10 +70,12 @@ export function SecretField({
 }): React.JSX.Element {
   const [shown, setShown] = useState(false);
   const typed = value !== "";
+
   // Note that a field emptied is masked again in the render that sees it,
   // because the next secret typed must not arrive in plain sight.
   if (shown && !typed) setShown(false);
   const toggle = shown ? FIELD_WORDS.HIDE : FIELD_WORDS.SHOW;
+
   return (
     <FormField label={label} description={description} error={error} optional={optional}>
       {(control) => (

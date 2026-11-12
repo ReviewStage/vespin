@@ -75,6 +75,7 @@ function notice(asked: InboxItem): InboxItem {
   const [opening] = asked.thread ?? [];
   assert.ok(opening !== undefined, "the item opens with a message");
   const { ask: _ask, ...said } = opening;
+
   return { ...asked, needsReply: false, thread: [said] };
 }
 
@@ -84,6 +85,7 @@ const Z = "a1b2c3d4-0000-4000-8000-000000000003";
 const W = "a1b2c3d4-0000-4000-8000-000000000004";
 const V = "a1b2c3d4-0000-4000-8000-000000000005";
 const U = "a1b2c3d4-0000-4000-8000-000000000006";
+
 /** The revision the agent has since moved a notice on from, so the service takes no nod at it and answers the notice still open. */
 const MOVED_ON = 2;
 const READER = "user-reader";
@@ -108,6 +110,7 @@ function marks() {
   const keys = new Map<string, string>();
   /** Each take-back sent, by its item, and whether it named the key its nod went under. */
   const tookBack: string[] = [];
+
   /** One write held until the test answers it, with the value it answers when it does not fail. */
   const sending = <Value>(words: string, value: Value) =>
     new Promise<Value | { failure: typeof AGENT_CALL_FAILURE.UNANSWERED }>((resolve) => {
@@ -116,11 +119,13 @@ function marks() {
         answer: async (failed = false) => {
           await act(async () => {
             resolve(failed ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : value);
+
             for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
           });
         },
       });
     });
+
   fakeActPort({
     [ACT_KIND.AGENTS_INBOX_READ_ALL]: ({ workspaceId, itemIds }) =>
       sending(`all:${workspaceId}:${itemIds.join(",")}`, { marked: 1 }),
@@ -128,6 +133,7 @@ function marks() {
       sending(`${unread ? "unread" : "read"}:${itemId}`, { id: itemId, unread }),
     [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId, revision, reply, clientKey }) => {
       keys.set(clientKey, itemId);
+
       return sending(`${reply}:${itemId}@${revision}`, {
         item: item(itemId, false),
         taken: revision !== MOVED_ON,
@@ -135,17 +141,22 @@ function marks() {
     },
     [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId, clientKey }) => {
       tookBack.push(`${itemId === keys.get(clientKey) ? "taken back" : "wrong key"}:${itemId}`);
+
       return Promise.resolve({ item: item(itemId, false), outcome: INBOX_TAKE_BACK.TAKEN });
     },
   });
   let control: InboxReadMarks | undefined;
+
   function Harness() {
     control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
+
     return createElement(Fragment, null, createElement(ToastHost));
   }
+
   root = createRoot(document.createElement("div"));
   act(() => root?.render(withQueryClient(createElement(Harness))));
   const held = () => control ?? assert.fail("the hook stands");
+
   return {
     sent,
     tookBack,
@@ -246,6 +257,7 @@ test("a refused mark from a caller that says the refusal itself toasts nothing, 
 test("⌘Z puts back the reminder a new one replaced, through the undo stack", async () => {
   const EARLIER = Date.UTC(2026, 10, 9, 9);
   const LATER = Date.UTC(2026, 10, 16, 9);
+
   // The window's document holds the item in the account's feed, reminded as given, as the host draws a reminder the moment it is asked.
   const holding = (remindAt: number): AppStateSnapshot =>
     stateWith(
@@ -258,21 +270,26 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
         },
       },
     );
+
   const sent: (number | null)[] = [];
   fakeActPort({
     [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId, until }) => {
       sent.push(until);
       writeAppState(holding(until ?? 0));
+
       return Promise.resolve({ id: itemId, unread: false });
     },
   });
   handState({}, holding(EARLIER));
   writeAppState(holding(EARLIER));
   let control: InboxReadMarks | undefined;
+
   function Harness() {
     control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
+
     return createElement(Fragment, null, createElement(ToastHost));
   }
+
   root = createRoot(document.createElement("div"));
   act(() => root?.render(withQueryClient(createElement(Harness))));
 

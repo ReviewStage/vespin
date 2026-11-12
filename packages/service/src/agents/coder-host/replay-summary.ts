@@ -177,6 +177,7 @@ export function replayBudgetBytes(
   const threshold = Math.floor(windowTokens * CODER.COMPACTION_THRESHOLD_SHARE);
   const words = replayTokens(firstMessageBytes);
   const left = threshold - instructionsTokens - words - REPLAY_FIT.HEADROOM_TOKENS;
+
   return Math.max(0, left) * BYTES_PER_TOKEN;
 }
 
@@ -193,6 +194,7 @@ export function measuredBoundBytes(
 ): number | undefined {
   if (measured === undefined) return undefined;
   const bound = measured.inputTokens * BYTES_PER_TOKEN;
+
   return measured.compacted || rawBytes > bound * RAW_PAST_MEASURED ? bound : undefined;
 }
 
@@ -223,6 +225,7 @@ function senderName(kind: string): string {
 /** A step as a summary call reads it: its sender where it has one, its line, then its words. */
 function stepWords(step: ReplayStep): string {
   const sender = step.sender === undefined ? "" : `[from ${senderName(step.sender.kind)}] `;
+
   return `${sender}${step.summary}\n${step.words}`;
 }
 
@@ -237,13 +240,16 @@ function chunksOf(parts: readonly SummaryPart[], chunkBytes: number): SummaryPar
   const chunks: SummaryPart[][] = [];
   let current: SummaryPart[] = [];
   let used = 0;
+
   for (const part of parts) {
     const size = new TextEncoder().encode(part.words).byteLength;
+
     if (used + size > chunkBytes && current.length > 0) {
       chunks.push(current);
       current = [];
       used = 0;
     }
+
     current.push(
       size > chunkBytes
         ? { ...part, words: part.words.slice(0, Math.floor(chunkBytes / UTF8_BYTES_PER_UNIT)) }
@@ -251,7 +257,9 @@ function chunksOf(parts: readonly SummaryPart[], chunkBytes: number): SummaryPar
     );
     used += Math.min(size, chunkBytes);
   }
+
   if (current.length > 0) chunks.push(current);
+
   return chunks;
 }
 
@@ -272,12 +280,16 @@ function summaryCall(model: SummaryModel, system: string, prompt: string, maxOut
         providerOptions: model.providerOptions,
       }),
     );
+
     // Note that a cut-off summary fails, because handing it over as whole would end the new agent's history mid-sentence.
     if (answer.finishReason === "length") {
       return yield* Effect.fail(new Error("the summary was cut off at its token limit"));
     }
+
     const text = answer.text.trim();
+
     if (text === "") return yield* Effect.fail(new Error("the summary came back empty"));
+
     return text;
   });
 }
@@ -301,22 +313,27 @@ export function summarizeSteps(
 ): Effect.Effect<Option.Option<ReplaySummary>> {
   const window = Math.min(windowTokens, model.windowTokens ?? windowTokens);
   const threshold = Math.floor(window * CODER.COMPACTION_THRESHOLD_SHARE);
+
   const room = Math.max(
     1,
     threshold - REPLAY_FIT.SUMMARY_OUTPUT_TOKENS - REPLAY_FIT.SUMMARY_PROMPT_TOKENS,
   );
+
   const recap: SummaryPart[] =
     earlier === undefined
       ? []
       : [{ words: `Recap of the earlier steps:\n${earlier.text}`, steps: earlier.steps }];
+
   const read = [...recap, ...steps.map((step) => ({ words: stepWords(step), steps: 1 }))];
   const all = chunksOf(read, room * BYTES_PER_TOKEN);
   const kept = all.slice(-REPLAY_FIT.MAX_CHUNKS);
   const leftOut = chunkSteps(all.slice(0, all.length - kept.length));
+
   const chunkOutput = Math.min(
     REPLAY_FIT.SUMMARY_OUTPUT_TOKENS,
     Math.max(REPLAY_FIT.MIN_CHUNK_OUTPUT_TOKENS, Math.floor(room / Math.max(1, kept.length))),
   );
+
   const written = Effect.gen(function* () {
     const parts = yield* Effect.forEach(
       kept,
@@ -329,6 +346,7 @@ export function summarizeSteps(
         ),
       { concurrency: REPLAY_FIT.CONCURRENCY },
     );
+
     const combined =
       parts.length === 1
         ? (parts[0] ?? "")
@@ -338,12 +356,15 @@ export function summarizeSteps(
             parts.map((part, at) => `Part ${at + 1}:\n${part}`).join("\n\n"),
             REPLAY_FIT.SUMMARY_OUTPUT_TOKENS,
           );
+
     const lead =
       leftOut === 0
         ? ""
         : `(The oldest ${leftOut} steps were too many to summarize and are left out.)\n\n`;
+
     return { text: `${lead}${combined}`, steps: chunkSteps(kept) };
   });
+
   return written.pipe(
     Effect.timeoutOption(REPLAY_FIT.TIMEOUT),
     Effect.catch((failure) =>
@@ -382,18 +403,23 @@ export function fitReplay(
     if (stepsBytes(steps) + summaryBytes(carried) <= budgetBytes) {
       return { kept: steps, summary: carried };
     }
+
     // A summary is held to its output bound, so that is the room it is counted for before it is written.
     const reserve = REPLAY_FIT.SUMMARY_OUTPUT_TOKENS * BYTES_PER_TOKEN + SUMMARY_MARKER_BYTES;
     const beside = newestStepsWithin(steps, Math.max(0, budgetBytes - reserve));
     const summary = yield* summarize(steps.slice(0, steps.length - beside.length), carried);
+
     if (Option.isSome(summary) && stepsBytes(beside) + summaryBytes(summary.value) <= budgetBytes) {
       return { kept: beside, summary: summary.value };
     }
+
     // A summary that could not be written leaves the carried one, where it fits, beside the newest steps.
     const carriedBytes = summaryBytes(carried);
+
     if (carried !== undefined && carriedBytes <= budgetBytes) {
       return { kept: newestStepsWithin(steps, budgetBytes - carriedBytes), summary: carried };
     }
+
     return { kept: newestStepsWithin(steps, budgetBytes), summary: undefined };
   });
 }
@@ -413,9 +439,12 @@ export function withinWindow(
   windowTokens: number,
 ): FittedSteps {
   let held = fitted;
+
   for (;;) {
     const over = promptTokens(held) - windowTokens;
+
     if (over <= 0) return held;
+
     if (held.kept.length > 0) {
       const room = Math.max(0, stepsBytes(held.kept) - over * BYTES_PER_TOKEN);
       const fewer = newestStepsWithin(held.kept, room);
@@ -448,8 +477,10 @@ export const productionSummaryModel = (
 ): Effect.Effect<SummaryModel | undefined, never, DatabaseServices | HostedEnvironment> =>
   Effect.gen(function* () {
     const named = providerModelOf(choice.model);
+
     if (named === undefined) return undefined;
     const environment = yield* HostedEnvironment;
+
     const own = yield* ownKeyOf(userId, named.provider, environment).pipe(
       Effect.catch((failure) =>
         Effect.as(
@@ -458,18 +489,24 @@ export const productionSummaryModel = (
         ),
       ),
     );
+
     if (own === undefined) return undefined;
+
     const settings = {
       apiKey: Redacted.value(own.key),
       ...(fetch === undefined ? undefined : { fetch }),
     };
+
     const same = own.provider === named.provider;
     const modelId = same ? named.modelId : OTHER_PROVIDER_SUMMARY[own.provider];
+
     const model =
       own.provider === MODEL_PROVIDER.ANTHROPIC
         ? createAnthropic(settings)(modelId)
         : createOpenAI(settings).responses(modelId);
+
     if (same) return { model, providerOptions: summaryOptions(own.provider, effort) };
+
     return {
       model,
       providerOptions: summaryOptions(own.provider, OTHER_PROVIDER_SUMMARY_EFFORT),

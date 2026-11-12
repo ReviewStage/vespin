@@ -51,9 +51,12 @@ function docked(todos: Todos): { view: HTMLElement; to: (next: Todos) => void } 
   const view = document.body.appendChild(document.createElement("div"));
   const root = createRoot(view);
   roots.push(root);
+
   const draw = (list: Todos) =>
     act(() => root.render(createElement(TranscriptTodosDock, { todos: list, focus: undefined })));
+
   draw(todos);
+
   return { view, to: draw };
 }
 
@@ -71,8 +74,10 @@ test("a step done springs its check in, the next taken up arrives, and the count
   assert.equal(view.querySelectorAll(".todo-item").length, 3, "the list stands open");
   to(steps(2));
   assert.ok(view.textContent?.includes("2 of 3 done"), view.textContent ?? "");
+
   const mark = view.querySelector(
     '.todo-item[data-todo-status="done"] > .ui-glyph-slot[data-arrival="check"]',
   );
+
   assert.equal(mark?.getAttribute("aria-label"), "Done");
 });

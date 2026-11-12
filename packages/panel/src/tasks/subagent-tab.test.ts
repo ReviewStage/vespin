@@ -71,12 +71,14 @@ async function workerTab(
   opens?: (target: ToolTarget) => void,
 ): Promise<HTMLElement> {
   const agents = [AGENT, TEAMMATE];
+
   const cards = taskCards({
     agents: agentsControl({ agents }),
     held: NOTHING_HELD,
     chosen: () => false,
     pages: undefined,
   });
+
   pushedTranscripts(() => [
     {
       messages: [
@@ -105,9 +107,11 @@ async function workerTab(
       title: null,
     },
   ]);
+
   const control = agentsControl({
     agents,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -133,6 +137,7 @@ async function workerTab(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return container;
 }
 
@@ -173,6 +178,7 @@ test("a worker that finished folds its lead under one line, its last words stand
 
 test("in a worker's transcript, a call about an agent opens its tab, and an agent's chip hangs its card", async () => {
   const opened: ToolTarget[] = [];
+
   const container = await workerTab(
     AGENT_STATUS.RUNNING,
     [
@@ -216,6 +222,7 @@ test("in a worker's transcript, a worker of its own, which opens no tab, folds o
   const line = container.querySelector<HTMLElement>(
     '[data-subagent-row][data-call-id="nested-call"]',
   );
+
   assert.ok(line, "the worker's line is drawn");
   assert.notEqual(line.tagName, "BUTTON", "no tab reads a worker's own worker");
   assert.match(line.textContent ?? "", /Check the retry timeouts/u);
@@ -249,6 +256,7 @@ test("a worker's tab whose earlier messages could not be read says so over its l
   fakeActPort({
     [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: (payload: unknown) => {
       asked.push(payload);
+
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
     },
   } as unknown as Parameters<typeof fakeActPort>[0]);
@@ -265,17 +273,21 @@ test("a worker's tab whose earlier messages could not be read says so over its l
       caughtUp: true,
     },
   ]);
+
   const control = agentsControl({
     agents: [AGENT],
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const settle = async () => {
     await act(async () => {
       for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
     });
     await settleQueries();
   };
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -296,9 +308,11 @@ test("a worker's tab whose earlier messages could not be read says so over its l
   // A log its lines do not fill asks for the earlier ones at once.
   assert.equal(asked.length, 1);
   assert.ok(container.textContent?.includes("Earlier messages could not be read."));
+
   const retry = [...container.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Retry"),
   );
+
   assert.ok(retry, "the line offers Retry");
   act(() => retry.click());
   await settle();

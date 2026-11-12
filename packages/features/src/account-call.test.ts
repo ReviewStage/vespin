@@ -37,6 +37,7 @@ function account(tokens: (string | undefined)[], holders?: (string | undefined)[
   const renewals: string[] = [];
   let token = tokens.shift();
   let holder = holders?.shift();
+
   return {
     renewals,
     credential: accountBearer({
@@ -63,6 +64,7 @@ function callOn(
   requestTimeoutMs?: number,
 ) {
   const recording = recordingHttpClient(respond);
+
   return {
     requests: recording.requests,
     call: accountCall({
@@ -77,6 +79,7 @@ function callOn(
 it.effect("a 401 renews the credential and retries once, on the credential that changed", () =>
   Effect.gen(function* () {
     const { credential, renewals } = account(["stale", "fresh"]);
+
     const { call, requests, client } = callOn(credential, (request) =>
       request.authorization === "Bearer fresh" ? jsonResponse({ ok: true }) : refusal(),
     );
@@ -133,6 +136,7 @@ it.effect(
 it.effect("a late credential renews and retries on the bearer it resolves", () =>
   Effect.gen(function* () {
     const { credential } = account(["stale", "fresh"]);
+
     const { call, requests, client } = callOn(
       lateCredential(Effect.succeed(credential)),
       (request) =>
@@ -158,11 +162,15 @@ it.effect(
     Effect.gen(function* () {
       const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
       let asked = 0;
+
       const { call, client } = callOn(NO_CREDENTIAL, () => {
         asked += 1;
+
         if (asked === 1) throw new TypeError("Load failed");
+
         return refusal();
       });
+
       const send = Effect.provideService(
         Effect.provide(call.send({ method: HTTP_METHOD.GET, path: PATH }), client),
         ServiceReach,
@@ -186,17 +194,21 @@ it.effect(
     Effect.gen(function* () {
       const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
       let asked = 0;
+
       const { call, client } = callOn(NO_CREDENTIAL, () => {
         asked += 1;
+
         return asked === 1
           ? jsonResponse({ error: "host-upgrade-needed" }, HTTP_STATUS.UPGRADE_REQUIRED)
           : jsonResponse({ ok: true });
       });
+
       const send = Effect.provideService(
         Effect.provide(call.send({ method: HTTP_METHOD.GET, path: PATH }), client),
         ServiceReach,
         reach,
       );
+
       yield* send;
       assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, true);
       yield* send;
@@ -210,10 +222,13 @@ it.effect(
     Effect.gen(function* () {
       const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
       let asked = 0;
+
       const { call, client } = callOn(NO_CREDENTIAL, () => {
         asked += 1;
+
         return asked === 1 ? jsonResponse({ ok: true }) : new Promise<Response>(() => undefined);
       });
+
       const send = Effect.provideService(
         Effect.provide(call.send({ method: HTTP_METHOD.GET, path: PATH }), client),
         ServiceReach,
@@ -225,6 +240,7 @@ it.effect(
       // A quiet gap no call was answered in, longer than the deadline and shorter than the silence it takes.
       yield* TestClock.adjust("25 seconds");
       const silent = yield* Effect.forkChild(send);
+
       while (asked < 2) yield* Effect.yieldNow;
       yield* TestClock.adjust("10 seconds");
       const unanswered = yield* Fiber.join(silent);

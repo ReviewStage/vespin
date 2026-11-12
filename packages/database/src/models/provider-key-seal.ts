@@ -219,6 +219,7 @@ type SealNames = readonly string[];
 function additionalData(purpose: string, names: SealNames, version?: number): Buffer {
   // A JSON array, so no account id can be spelled to run into the name beside it.
   const named = version === undefined ? [purpose, ...names] : [purpose, ...names, version];
+
   return Buffer.from(JSON.stringify(named), "utf8");
 }
 
@@ -227,20 +228,24 @@ function sealBytes(key: Uint8Array, plaintext: Uint8Array, aad: Buffer): string 
   const cipher = createCipheriv(SEAL.ALGORITHM, key, nonce);
   cipher.setAAD(aad);
   const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+
   return Buffer.concat([nonce, body, cipher.getAuthTag()]).toString("base64");
 }
 
 /** The plaintext, or nothing where the tag does not verify or the bytes are no seal. */
 function openBytes(key: Uint8Array, sealed: string, aad: Buffer): Buffer | undefined {
   const bytes = Buffer.from(sealed, "base64");
+
   if (bytes.length < SEAL.NONCE_BYTES + SEAL.TAG_BYTES) return undefined;
   const nonce = bytes.subarray(0, SEAL.NONCE_BYTES);
   const tag = bytes.subarray(bytes.length - SEAL.TAG_BYTES);
   const body = bytes.subarray(SEAL.NONCE_BYTES, bytes.length - SEAL.TAG_BYTES);
+
   try {
     const decipher = createDecipheriv(SEAL.ALGORITHM, key, nonce);
     decipher.setAAD(aad);
     decipher.setAuthTag(tag);
+
     return Buffer.concat([decipher.update(body), decipher.final()]);
   } catch {
     // Note that the cause is dropped on purpose: a failed tag is the one answer, and its wording is no one's to read.
@@ -256,9 +261,11 @@ function openDataKey(
   wrapped: WrappedDataKey,
 ): Buffer | undefined {
   const wrapping = ring.keys.get(wrapped.keyVersion);
+
   if (wrapping === undefined) return undefined;
   const aad = additionalData(purpose.DATA_KEY, names, wrapped.keyVersion);
   const dataKey = openBytes(Redacted.value(wrapping), wrapped.sealedDataKey, aad);
+
   return dataKey?.length === SEAL.KEY_BYTES ? dataKey : undefined;
 }
 
@@ -269,10 +276,12 @@ function wrapDataKey(
   dataKey: Uint8Array,
 ): WrappedDataKey {
   const wrapping = ring.keys.get(ring.current);
+
   // The parse puts the current version in the map, so its absence is a ring built by hand wrongly.
   if (wrapping === undefined)
     throw new Error("The key ring names a current version it does not hold.");
   const aad = additionalData(purpose.DATA_KEY, names, ring.current);
+
   return {
     keyVersion: ring.current,
     sealedDataKey: sealBytes(Redacted.value(wrapping), dataKey, aad),
@@ -287,13 +296,16 @@ function sealSecret(
   secret: Redacted.Redacted<string>,
 ): WrappedDataKey & { readonly sealed: string } {
   const dataKey = randomBytes(SEAL.KEY_BYTES);
+
   const sealed = sealBytes(
     dataKey,
     Buffer.from(Redacted.value(secret), "utf8"),
     additionalData(purpose.SECRET, names),
   );
+
   const wrapped = wrapDataKey(ring, purpose, names, dataKey);
   dataKey.fill(0);
+
   return { ...wrapped, sealed };
 }
 
@@ -306,12 +318,15 @@ function openSecret(
   sealed: string,
 ): Redacted.Redacted<string> | undefined {
   const dataKey = openDataKey(ring, purpose, names, wrapped);
+
   if (dataKey === undefined) return undefined;
   const opened = openBytes(dataKey, sealed, additionalData(purpose.SECRET, names));
   dataKey.fill(0);
+
   if (opened === undefined) return undefined;
   const secret = Redacted.make(opened.toString("utf8"));
   opened.fill(0);
+
   return secret;
 }
 
@@ -323,9 +338,11 @@ function rewrapSecret(
   wrapped: WrappedDataKey,
 ): WrappedDataKey | undefined {
   const dataKey = openDataKey(ring, purpose, names, wrapped);
+
   if (dataKey === undefined) return undefined;
   const rewrapped = wrapDataKey(ring, purpose, names, dataKey);
   dataKey.fill(0);
+
   return rewrapped;
 }
 
@@ -341,20 +358,27 @@ export function parseKeyRing(value: Redacted.Redacted): Result.Result<KeyRing, K
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "");
+
   if (entries.length === 0) return Result.fail(KEY_RING_FAULT.EMPTY);
   const keys = new Map<number, Redacted.Redacted<Uint8Array>>();
   let current: number | undefined;
+
   for (const entry of entries) {
     const matched = KEY_ENTRY.exec(entry);
+
     if (matched === null) return Result.fail(KEY_RING_FAULT.MALFORMED);
     const version = Number(matched[1]);
     const key = Buffer.from(matched[2] ?? "", "base64");
+
     if (version < 1 || key.length !== SEAL.KEY_BYTES) return Result.fail(KEY_RING_FAULT.MALFORMED);
+
     if (keys.has(version)) return Result.fail(KEY_RING_FAULT.DUPLICATE);
     keys.set(version, Redacted.make(new Uint8Array(key)));
     current ??= version;
   }
+
   if (current === undefined) return Result.fail(KEY_RING_FAULT.EMPTY);
+
   return Result.succeed({ current, keys });
 }
 
@@ -370,6 +394,7 @@ export function sealProviderKey(
     providerNames(owner),
     key,
   );
+
   return { ...wrapped, sealedKey: sealed };
 }
 
@@ -386,6 +411,7 @@ export function openProviderKey(
     sealed,
     sealed.sealedKey,
   );
+
   return key === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(key);
 }
 
@@ -396,6 +422,7 @@ export function rewrapProviderKey(
   sealed: SealedProviderKey,
 ): Result.Result<SealedProviderKey, ProviderKeyUnreadable> {
   const wrapped = rewrapSecret(ring, SEAL_PURPOSE.PROVIDER_KEY, providerNames(owner), sealed);
+
   return wrapped === undefined
     ? Result.fail(PROVIDER_KEY_UNREADABLE)
     : Result.succeed({ ...wrapped, sealedKey: sealed.sealedKey });
@@ -408,6 +435,7 @@ export function sealGitHubToken(
   token: Redacted.Redacted<string>,
 ): SealedGitHubToken {
   const { sealed, ...wrapped } = sealSecret(ring, SEAL_PURPOSE.GITHUB_TOKEN, [userId], token);
+
   return { ...wrapped, sealedToken: sealed };
 }
 
@@ -418,6 +446,7 @@ export function openGitHubToken(
   sealed: SealedGitHubToken,
 ): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
   const token = openSecret(ring, SEAL_PURPOSE.GITHUB_TOKEN, [userId], sealed, sealed.sealedToken);
+
   return token === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(token);
 }
 
@@ -428,6 +457,7 @@ export function rewrapGitHubToken(
   sealed: SealedGitHubToken,
 ): Result.Result<SealedGitHubToken, ProviderKeyUnreadable> {
   const wrapped = rewrapSecret(ring, SEAL_PURPOSE.GITHUB_TOKEN, [userId], sealed);
+
   return wrapped === undefined
     ? Result.fail(PROVIDER_KEY_UNREADABLE)
     : Result.succeed({ ...wrapped, sealedToken: sealed.sealedToken });
@@ -440,6 +470,7 @@ export function sealMacLaunchSecrets(
   secrets: Redacted.Redacted<string>,
 ): string {
   const sealed = sealSecret(ring, SEAL_PURPOSE.MAC_LAUNCH, [owner.userId, owner.agentId], secrets);
+
   return encodeSealedColumn(sealed);
 }
 
@@ -450,7 +481,9 @@ export function openMacLaunchSecrets(
   column: string,
 ): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
   const read = decodeSealedColumn(column);
+
   if (Result.isFailure(read)) return Result.fail(PROVIDER_KEY_UNREADABLE);
+
   const secrets = openSecret(
     ring,
     SEAL_PURPOSE.MAC_LAUNCH,
@@ -458,6 +491,7 @@ export function openMacLaunchSecrets(
     read.success,
     read.success.sealed,
   );
+
   return secrets === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(secrets);
 }
 
@@ -468,6 +502,7 @@ export function sealFirewallEntries(
   entries: Redacted.Redacted<string>,
 ): string {
   const names = [owner.userId, owner.sandboxSessionId];
+
   return encodeSealedColumn(sealSecret(ring, SEAL_PURPOSE.SANDBOX_FIREWALL, names, entries));
 }
 
@@ -478,7 +513,9 @@ export function openFirewallEntries(
   column: string,
 ): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
   const read = decodeSealedColumn(column);
+
   if (Result.isFailure(read)) return Result.fail(PROVIDER_KEY_UNREADABLE);
+
   const entries = openSecret(
     ring,
     SEAL_PURPOSE.SANDBOX_FIREWALL,
@@ -486,6 +523,7 @@ export function openFirewallEntries(
     read.success,
     read.success.sealed,
   );
+
   return entries === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(entries);
 }
 
@@ -496,6 +534,7 @@ export function sealChatGptDeviceCodes(
   codes: Redacted.Redacted<string>,
 ): string {
   const names = [owner.userId, owner.loginId];
+
   return encodeSealedColumn(sealSecret(ring, SEAL_PURPOSE.CHATGPT_DEVICE_LOGIN, names, codes));
 }
 
@@ -506,7 +545,9 @@ export function openChatGptDeviceCodes(
   column: string,
 ): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
   const read = decodeSealedColumn(column);
+
   if (Result.isFailure(read)) return Result.fail(PROVIDER_KEY_UNREADABLE);
+
   const codes = openSecret(
     ring,
     SEAL_PURPOSE.CHATGPT_DEVICE_LOGIN,
@@ -514,6 +555,7 @@ export function openChatGptDeviceCodes(
     read.success,
     read.success.sealed,
   );
+
   return codes === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(codes);
 }
 
@@ -525,6 +567,7 @@ export function sealWorkspaceVariable(
 ): SealedWorkspaceVariable {
   const names = [owner.organizationId, owner.name];
   const { sealed, ...wrapped } = sealSecret(ring, SEAL_PURPOSE.WORKSPACE_ENVIRONMENT, names, value);
+
   return { ...wrapped, sealedValue: sealed };
 }
 
@@ -541,5 +584,6 @@ export function openWorkspaceVariable(
     sealed,
     sealed.sealedValue,
   );
+
   return value === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(value);
 }

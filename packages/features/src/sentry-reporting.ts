@@ -19,6 +19,7 @@ import { Duration, Effect, ErrorReporter, type Layer } from "effect";
 
 /** The Sentry levels an event here is sent at. */
 const SENTRY_LEVEL = { FATAL: "fatal", WARNING: "warning", ERROR: "error" } as const;
+
 type SentryLevel = (typeof SENTRY_LEVEL)[keyof typeof SENTRY_LEVEL];
 
 /** Sentry's level for an error a class annotated with `ErrorReporter.severity`; `error` for the rest, as the service's reporter does. */
@@ -99,9 +100,11 @@ export function launchFailureReported(sentry: SentryCapture, error: Error): Effe
       captureContext: { level: SENTRY_LEVEL.FATAL },
     }),
   );
+
   const flushed = Effect.tryPromise(() => sentry.flush(LAUNCH_FAILURE_FLUSH_MS)).pipe(
     Effect.timeoutOption(Duration.millis(LAUNCH_FAILURE_FLUSH_MS)),
     Effect.ignore,
   );
+
   return Effect.andThen(captured, flushed);
 }

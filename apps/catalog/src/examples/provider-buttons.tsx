@@ -42,6 +42,7 @@ function Choices({
   initial?: WayIn;
 }): React.JSX.Element {
   const [pending, setPending] = useState<WayIn | undefined>(initial);
+
   return (
     <div className="catalog-column">
       <Stack gap={GAP.CONTROL}>

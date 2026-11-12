@@ -19,6 +19,7 @@ const TERMINAL = { stand: "terminal" } as unknown as TerminalModule;
 it.effect("a bundle whose import failed is imported again by its next reader", () =>
   Effect.gen(function* () {
     let online = false;
+
     const bundles = sideBundles({
       terminal: () => (online ? Promise.resolve(TERMINAL) : Promise.reject(new Error("offline"))),
     });
@@ -37,9 +38,11 @@ it.effect("a bundle whose import failed is imported again by its next reader", (
 it.effect("a bundle that landed is had by a later reader though its import would fail now", () =>
   Effect.gen(function* () {
     let online = true;
+
     const bundles = sideBundles({
       terminal: () => (online ? Promise.resolve(TERMINAL) : Promise.reject(new Error("offline"))),
     });
+
     assert.equal(yield* bundleLanded(bundles.terminal), TERMINAL);
 
     online = false;

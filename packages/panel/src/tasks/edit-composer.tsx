@@ -72,6 +72,7 @@ function sendQuestion(
   cuts: boolean,
 ): DialogQuestion {
   const dropped = `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the conversation, and the agent stopped if it is working.`;
+
   return {
     title: "Send the edited message?",
     body: !cuts
@@ -119,10 +120,13 @@ function unheld(
   files: readonly AgentAttachment[],
 ): readonly LineAttachment[] {
   const free = [...files];
+
   return line.filter((each) => {
     const at = free.findIndex((file) => Equal.equals(file, each.attachment));
+
     if (at === -1) return true;
     free.splice(at, 1);
+
     return false;
   });
 }
@@ -137,6 +141,7 @@ function joined(
     line.filter((each) => !dropped.includes(each.key)),
     files,
   ).map((each) => each.attachment);
+
   return [...files, ...joining];
 }
 
@@ -158,17 +163,20 @@ export function EditComposer({
   // join it but for those it took off, since a relaunch keeps a draft's words and not its files.
   const [resumed] = useState(() => kept !== EMPTY_DRAFT);
   const [draft, setDraft] = useState(() => (resumed ? kept.text : words));
+
   const [attachments, setAttachments] = useState<readonly AgentAttachment[]>(() =>
     resumed
       ? joined(kept.attachments, line.attachments, kept.dropped ?? [])
       : line.attachments.map((each) => each.attachment),
   );
+
   // What the box holds as last drawn, which a change landing before the next draw moves on from.
   const held = useRef({ text: draft, attachments, dropped: resumed ? (kept.dropped ?? []) : [] });
   held.current = { ...held.current, text: draft, attachments };
   // Note that each of the line's files joins the box once, as it opens or as its picture lands,
   // so one taken off stays off when a read lands after.
   const offered = useRef(new Set(line.attachments.map((each) => each.key)));
+
   // What the box holds is kept, the files of the line it took off named beside it, and let go where it holds the line as it stands.
   const keep = (text: string, files: readonly AgentAttachment[]) => {
     const dropped = [
@@ -177,7 +185,9 @@ export function EditComposer({
         .filter((each) => offered.current.has(each.key))
         .map((each) => each.key),
     ];
+
     held.current = { text, attachments: files, dropped };
+
     const asLine =
       text === words &&
       dropped.length === 0 &&
@@ -185,6 +195,7 @@ export function EditComposer({
         files,
         line.attachments.map((each) => each.attachment),
       );
+
     writer.update(place, (was) =>
       asLine
         ? EMPTY_DRAFT
@@ -196,10 +207,13 @@ export function EditComposer({
           },
     );
   };
+
   // A picture that lands joins the box and its draft, as one there as it opened did.
   useEffect(() => {
     const landed = line.attachments.filter((each) => !offered.current.has(each.key));
+
     if (landed.length === 0) return;
+
     for (const each of landed) offered.current.add(each.key);
     const files = joined(held.current.attachments, landed, held.current.dropped);
     setAttachments(files);
@@ -210,16 +224,19 @@ export function EditComposer({
   const restoring = edit.restorable && restoreFiles;
   // A send that drops what follows, or puts the files back, is asked first, since neither comes back.
   const asks = edit.cuts || restoring;
+
   const send = () => {
     writer.update(place, () => EMPTY_DRAFT);
     edit.onSend(draft, attachments, restoring);
   };
+
   // Note that the send answers at once: the tab takes it in turn behind any send, and says there if it did not go.
   const confirm = useConfirmDialog(
     { subject: asks, surfaceOpen: true },
     neverBusyAct(send),
     confirmFailure(FAILURE_SURFACE.MESSAGE_EDIT),
   );
+
   const composer: AgentComposerControl = {
     draft,
     setDraft: (text) => {
@@ -238,12 +255,14 @@ export function EditComposer({
     // Note that the box sends nothing while one of the line's pictures is still read, which it would leave behind.
     send: () => {
       if (line.reading) return;
+
       if (asks) confirm.ask();
       else send();
     },
     retry: noop,
     sent: [],
   };
+
   return (
     <>
       <AgentComposer

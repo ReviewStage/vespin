@@ -170,6 +170,7 @@ export function addSound(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
         const sha256 = sha256Hex(clip.bytes);
+
         // An insert that answered no row is the database breaking its own contract, not an outcome.
         const sound = yield* insertSound({
           userId,
@@ -179,7 +180,9 @@ export function addSound(
           bytes: clip.bytes,
           now,
         }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
         if (slot !== undefined) yield* upsertChoice({ userId, slot, soundId: sound.id });
+
         return sound;
       }),
     ),
@@ -223,14 +226,20 @@ export function chooseSound(
       Effect.gen(function* () {
         if (id === null) {
           yield* deleteChoice({ userId, slot });
+
           return null;
         }
+
         const sound = yield* findSound({ userId, id });
+
         if (Option.isNone(sound)) {
           const standing = yield* findChoice({ userId, slot });
+
           return Option.match(standing, { onNone: () => null, onSome: (choice) => choice.soundId });
         }
+
         yield* upsertChoice({ userId, slot, soundId: id });
+
         return id;
       }),
     ),

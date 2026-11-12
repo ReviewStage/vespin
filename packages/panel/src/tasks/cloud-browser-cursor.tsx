@@ -57,8 +57,10 @@ export function cursorPlacement(
   frame: CloudBrowserCursorFrame,
 ): { readonly x: number; readonly y: number } | undefined {
   const { width, height } = cursor.viewport;
+
   if (width < 1 || height < 1 || frame.width < 1 || frame.height < 1) return undefined;
   const clamp = (value: number, most: number) => Math.max(0, Math.min(most, value));
+
   return {
     x: clamp((cursor.x / width) * frame.width, frame.width),
     y: clamp((cursor.y / height) * frame.height, frame.height),
@@ -70,6 +72,7 @@ function idleSince(activeAt: number): Effect.Effect<void> {
   return Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const left = activeAt + Duration.toMillis(CLOUD_BROWSER_CURSOR_IDLE) - now;
+
     if (left > 0) yield* Effect.sleep(Duration.millis(left));
   });
 }
@@ -92,6 +95,7 @@ function useIdle(activeAt: number): boolean {
       ),
     [activeAt, idleFor],
   );
+
   return useSelector(idleFor) === activeAt;
 }
 
@@ -114,15 +118,18 @@ export function CloudBrowserCursor({
   const still = useMotionHeld();
   const idle = useIdle(Math.max(lastActedAt, cursor?.at ?? 0));
   const placed = cursor === undefined ? undefined : cursorPlacement(cursor, frame);
+
   if (cursor === undefined || placed === undefined) return null;
   const shown = !hidden && !idle;
   // Mirrored about the tip where its body would reach past the page's edge.
   const flipX = placed.x > frame.width - ARROW_REACH;
   const flipY = placed.y > frame.height - ARROW_REACH;
+
   const style: CSSProperties = {
     "--cloud-browser-cursor-x": `${placed.x}px`,
     "--cloud-browser-cursor-y": `${placed.y}px`,
   };
+
   return (
     <div
       className="cloud-browser-cursor"

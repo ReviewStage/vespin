@@ -43,6 +43,7 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
   dependencies: GatewayWiringDependencies,
 ): Effect.fn.Return<GatewayWiring, never, Scope.Scope> {
   const { gateway, state, report } = dependencies;
+
   const host = createHostOperator({
     client: gateway,
     report,
@@ -54,6 +55,7 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
   const stopTasks = host.onTasksChanged((tasks) => {
     state.update({ tasks: tasks });
   });
+
   yield* Effect.addFinalizer(() => Effect.sync(stopTasks));
 
   /**
@@ -66,10 +68,13 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
     Effect.suspend(() => {
       const failed = (reason: string): Effect.Effect<NodeCapabilityResult> =>
         Effect.succeed({ status: NODE_CAPABILITY_STATUS.FAILED, capability, reason });
+
       switch (capability) {
         case HOST_NODE_CAPABILITY.OPEN_EXTERNAL: {
           const { url } = params;
+
           if (!isWireString(url)) return failed("open needs a url");
+
           return Effect.tryPromise({
             try: () => dependencies.node.openExternal(url),
             catch: (cause) => new OpenExternalFailed({ cause }),
@@ -81,6 +86,7 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
             Effect.catch((error) => failed(error.message)),
           );
         }
+
         default:
           return Effect.succeed({
             status: NODE_CAPABILITY_STATUS.UNAVAILABLE,
@@ -122,6 +128,7 @@ class OpenExternalFailed extends Data.TaggedError("OpenExternalFailed")<{
 }> {
   override get message(): string {
     const { cause } = this;
+
     return cause instanceof Error ? cause.message : String(cause);
   }
 }

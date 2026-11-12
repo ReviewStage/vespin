@@ -100,6 +100,7 @@ function statusLabel(status: GitHubTokenStatus): string | undefined {
 /** A problem said in the attention tint, announced as it lands. */
 function Problem({ children }: { children: string }): React.JSX.Element {
   useAnnounceShown(ANNOUNCE.ALERT, children);
+
   return (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>{children}</SettingsRowStateLine>
   );
@@ -122,6 +123,7 @@ function expiryWords(expiresAt: number): string {
  */
 export function TokenFacts({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
   const status = statusLabel(token.status);
+
   return (
     <SettingsFacts>
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
@@ -155,6 +157,7 @@ const TOKEN_REMOVE_MUTATION = mutationOptions({
         if (answer === undefined || "failure" in answer) {
           return { status: ACTION_RESULT_STATUS.REJECTED, reason: LINE.REMOVE_FAILED };
         }
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED };
       }),
 });
@@ -162,15 +165,18 @@ const TOKEN_REMOVE_MUTATION = mutationOptions({
 /** A saved token with Disconnect, which asks first, as every connection in Settings ends. */
 function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
   const removing = useMutation(TOKEN_REMOVE_MUTATION);
+
   const removalAct = useConfirmAct(removing, {
     send: () => removing.mutateAsync(),
     answered: sameAnswer,
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     removalAct,
     confirmFailure(FAILURE_SURFACE.GITHUB_TOKEN_REMOVE),
   );
+
   return (
     <Inline justify={JUSTIFY.BETWEEN}>
       <TokenFacts token={token} />
@@ -204,6 +210,7 @@ function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element
  */
 export function useGitHubTokenSave(): (pasted: string) => Promise<ReactNode> {
   const { mutateAsync: sendGithubTokenSave } = useMutation(actMutation(ACT_KIND.GITHUB_TOKEN_SAVE));
+
   return (pasted) =>
     !pastedTokenFits(pasted)
       ? Promise.resolve(rejectionLabel(GITHUB_TOKEN_REJECTION.INVALID))
@@ -211,6 +218,7 @@ export function useGitHubTokenSave(): (pasted: string) => Promise<ReactNode> {
           .catch(() => undefined)
           .then((answer) => {
             if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
+
             return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
           });
 }
@@ -236,18 +244,22 @@ export function GitHubTokenPaste({
   const [pasted, setPasted] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ReactNode>(undefined);
+
   const save = (value: string) => {
     const token = value.trim();
+
     if (token === "" || saving) return;
     setSaving(true);
     setProblem(undefined);
     void onSave(token).then((refused) => {
       setSaving(false);
       setProblem(refused);
+
       // Kept: the token leaves the field, and the surface draws the service's word for it.
       if (refused === undefined) setPasted("");
     });
   };
+
   return (
     <PasteSteps
       first={{

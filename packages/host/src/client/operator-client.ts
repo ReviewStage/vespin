@@ -141,16 +141,21 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       ensureSettings: () =>
         Effect.gen(function* () {
           const held = state.snapshot().settings;
+
           if (held) return held;
           const settings = yield* gateway.host.settingsSnapshot();
+
           if (Option.isSome(settings)) state.update({ settings: settings.value });
+
           return Option.getOrUndefined(settings);
         }),
       signedIn: () => state.snapshot().account.status === ACCOUNT_STATUS.SIGNED_IN,
       readBootstrap: () =>
         Effect.gen(function* () {
           const boot = yield* gateway.host.bootstrap();
+
           if (Option.isSome(boot)) adoptBootstrap(boot.value);
+
           return Option.getOrUndefined(boot);
         }),
       haltSessionReplay: () => setSessionReplayHalted(true),
@@ -159,6 +164,7 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       start: () =>
         Effect.gen(function* () {
           const boot = yield* gateway.host.bootstrap();
+
           if (Option.isNone(boot))
             return yield* Effect.die(new Error("the host answered no bootstrap"));
           adoptBootstrap(boot.value);

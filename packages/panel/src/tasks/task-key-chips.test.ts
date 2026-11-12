@@ -104,6 +104,7 @@ let landed = false;
 /** Marks `landed` once the document's tasks reach the client. */
 function Landed(): null {
   landed = useQuery({ ...appStateQuery, select: selectTasks }).data !== undefined;
+
   return null;
 }
 
@@ -115,16 +116,19 @@ async function drawn(element: ReactElement, opened: Mention[] = []): Promise<HTM
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const page = createElement(TaskMentions, {
     value: planPage(opened),
     children: createElement(Fragment, null, createElement(Landed), element),
   });
+
   // Note that the words are drawn before the document lands, as a window drawn before its tasks are listed draws them.
   act(() => root.render(withQueryClient(page)));
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await vi.waitFor(() => expect(landed).toBe(true));
+
   return container;
 }
 
@@ -139,6 +143,7 @@ function chips(container: HTMLElement): [string | undefined, string | null][] {
 /** Whether any element drawn carries an address on an attribute the session recording keeps, other than a link's own. */
 function carriesTarget(container: HTMLElement): boolean {
   const masked = new Set(["title", "href", "xmlns"]);
+
   return [...container.querySelectorAll("*")]
     .flatMap((element) => [...element.attributes])
     .some((attribute) => !masked.has(attribute.name) && attribute.value.includes("://"));
@@ -177,6 +182,7 @@ test("in a transcript a listed task's key is its chip saying the key, which open
   )) {
     act(() => chip.click());
   }
+
   assert.deepEqual(opened, [
     { kind: MENTION_KIND.TASK, taskId: task(STAGE, 421, "").id },
     { kind: MENTION_KIND.TASK, taskId: task(STAGE, 422, "").id },
@@ -185,6 +191,7 @@ test("in a transcript a listed task's key is its chip saying the key, which open
 
 test("a mention labeled with one task's key that links another says the task it opens, by its name", async () => {
   const other = task(STAGE, 422, "").id;
+
   const container = await drawn(
     createElement(TranscriptWords, {
       text: `See [@STAG-421](https://vespin.dev/stage/plan/${other}).`,
@@ -209,9 +216,11 @@ test("a key alone on its line of an Inbox item's document is its chip in the par
 test("in a description's or a comment's words a listed task's key is its chip, and a place that draws no chips leaves it as words", async () => {
   const doors = planPage([]).doors;
   const words = "See STAG-421, not `STAG-422` nor STAG-422/notes.";
+
   const chipped = await drawn(
     createElement(MarkdownMessage, { words, link: mentionLinkDrawer(doors) }),
   );
+
   const plain = await drawn(createElement(MarkdownMessage, { words, link: null }));
 
   assert.deepEqual(chips(chipped), [[MENTION_KIND.TASK, "STAG-421"]]);

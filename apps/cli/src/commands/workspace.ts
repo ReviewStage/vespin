@@ -45,12 +45,14 @@ const workspacesRead = Effect.gen(function* () {
   const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
   const kept = yield* Effect.mapError(configuredWorkspace(origin), configFailed);
   const fallback = kept === undefined ? undefined : workspaceOfSlug(workspaces, kept);
+
   return { origin, workspaces, defaultId: fallback?.id };
 });
 
 const listCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const { workspaces, defaultId } = yield* workspacesRead;
+
     const listed = workspaces.map(({ id, slug, name, role }) => ({
       id,
       slug,
@@ -58,6 +60,7 @@ const listCommand = Command.make("list", {}, () =>
       role,
       default: id === defaultId,
     }));
+
     yield* answer({
       json: { workspaces: listed },
       lines: listed.map(
@@ -86,6 +89,7 @@ const useCommand = Command.make(
     Effect.gen(function* () {
       const { origin, workspaces } = yield* workspacesRead;
       const chosen = workspaceOfSlug(workspaces, workspace);
+
       if (chosen === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
@@ -95,6 +99,7 @@ const useCommand = Command.make(
           ].join("\n"),
         });
       }
+
       yield* Effect.mapError(keepWorkspace(origin, chosen.id), configFailed);
       yield* answer({
         json: { origin, workspace: { id: chosen.id, slug: chosen.slug, name: chosen.name } },

@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
  * and capture runs zero; a hold zeroed would open the menu on every tap.
  */
 const LONG_PRESS_MS = 500;
+
 /** How far a held touch may drift, in CSS pixels, before it is a scroll or a drag rather than a long press. */
 const LONG_PRESS_SLOP = 8;
 
@@ -39,6 +40,7 @@ export interface HeldPoint {
 /** Whether a press on `target` went down in a control inside `carrier` that keeps its menu (`NO_CONTEXT_MENU`). */
 function refusesMenu(target: EventTarget, carrier: HTMLElement): boolean {
   const zone = target instanceof Element ? target.closest("[data-no-context-menu]") : null;
+
   return zone !== null && zone !== carrier && carrier.contains(zone);
 }
 
@@ -57,14 +59,17 @@ export function useTouchHold() {
   const press = useRef<TouchPress | undefined>(undefined);
   // Whether the touch still down opened the menu by its hold.
   const held = useRef(false);
+
   // Note that the handlers are made once, so the window's listeners are the same ones to remove.
   const [touch] = useState(() => {
     const stopCounting = () => {
       const pending = press.current;
+
       if (pending === undefined) return;
       window.clearTimeout(pending.timer);
       pending.timer = undefined;
     };
+
     const letGo = () => {
       stopCounting();
       press.current = undefined;
@@ -74,25 +79,34 @@ export function useTouchHold() {
       window.removeEventListener("scroll", stopCounting, true);
       window.removeEventListener("gotpointercapture", captured, true);
     };
+
     function moved(event: PointerEvent) {
       const pending = press.current;
+
       if (pending === undefined || event.pointerId !== pending.pointerId) return;
       const drift = Math.hypot(event.clientX - pending.x, event.clientY - pending.y);
+
       if (drift > LONG_PRESS_SLOP) stopCounting();
     }
+
     // Note that the touch's own capture, a browser's on what it went down on, is no drag.
     function captured(event: PointerEvent) {
       const pending = press.current;
+
       if (pending === undefined || event.pointerId !== pending.pointerId) return;
+
       if (event.target instanceof Node && pending.element.contains(event.target)) return;
       stopCounting();
     }
+
     // Note that a canceled touch makes no touchend, so the hold is over with it.
     function ended(event: PointerEvent) {
       if (event.pointerId !== press.current?.pointerId) return;
+
       if (event.type === "pointercancel") held.current = false;
       letGo();
     }
+
     return {
       letGo,
       /** Whether a touch is down and still counting toward its long press. */
@@ -110,16 +124,21 @@ export function useTouchHold() {
       ) => {
         letGo();
         held.current = false;
+
         const mouseHeld =
           counts.mouse === true && event.pointerType === "mouse" && event.button === 0;
+
         if ((event.pointerType !== "touch" && !mouseHeld) || !event.isPrimary) return;
+
         if (refusesMenu(event.target, event.currentTarget)) return;
         const { currentTarget: element, pointerId, clientX: x, clientY: y } = event;
+
         const timer = window.setTimeout(() => {
           stopCounting();
           held.current = true;
           open({ x, y });
         }, LONG_PRESS_MS);
+
         press.current = { element, pointerId, x, y, timer };
         window.addEventListener("pointermove", moved, true);
         window.addEventListener("pointerup", ended, true);
@@ -136,6 +155,8 @@ export function useTouchHold() {
       },
     };
   });
+
   useEffect(() => touch.letGo, [touch]);
+
   return { ...touch, held };
 }

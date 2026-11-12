@@ -58,15 +58,19 @@ async function fixture(t: Parameters<typeof temporaryDirectory>[0]) {
   git(origin, ["checkout", "--quiet", "-b", "agent/fix-relay"]);
   // Note that a clone filters blobs only from a server allowing it, as GitHub does; a local origin is asked to.
   git(origin, ["config", "uploadpack.allowFilter", "true"]);
+
   const push = (text: string) => {
     writeFileSync(path.join(origin, "README.md"), text);
     git(origin, ["commit", "--quiet", "-am", text.trim()]);
+
     return git(origin, ["rev-parse", "HEAD"]);
   };
+
   // The developer's login shell, which answers as sh does.
   const shell = path.join(scratch, "login-shell");
   writeFileSync(shell, '#!/bin/sh\nexec /bin/sh "$@"\n', { mode: 0o700 });
   const state = path.join(scratch, "state");
+
   return { scratch, origin, push, shell, state };
 }
 
@@ -74,10 +78,12 @@ async function fixture(t: Parameters<typeof temporaryDirectory>[0]) {
 function runEnded(scratch: string, shell: string, script: string) {
   const file = path.join(scratch, "open.sh");
   writeFileSync(file, script, { mode: 0o700 });
+
   const ran = spawnSync("/bin/bash", [file], {
     env: { ...GIT_ENVIRONMENT, HOME: scratch, SHELL: shell },
     encoding: "utf8",
   });
+
   return { printed: ran.stdout, code: ran.status };
 }
 
@@ -97,6 +103,7 @@ function worktreesListed(clone: string): string[] {
     .split("\n")
     .filter((line) => line.startsWith("worktree "))
     .map((line) => line.slice("worktree ".length));
+
   return realPaths(listed);
 }
 
@@ -117,6 +124,7 @@ test(
     assert.ok(address !== null && typeof address === "object");
     const clone = cloneFolder(state, "acme/app");
     const own = path.join(scratch, "agents", "agent", "repository");
+
     const script = (remote: string) =>
       agentWorktreeScript({
         repository: "acme/app",
@@ -126,19 +134,23 @@ test(
         branch: "agent/fix-relay",
         remote,
       });
+
     const file = path.join(scratch, "open.sh");
     writeFileSync(file, script(`http://127.0.0.1:${address.port}/acme/app.git`), { mode: 0o700 });
+
     const child = spawn("/bin/bash", [file], {
       env: { ...GIT_ENVIRONMENT, HOME: scratch, SHELL: shell },
       stdio: "ignore",
       detached: true,
     });
+
     const ended = new Promise<void>((resolve) => child.on("exit", () => resolve()));
 
     // Note that the launch is killed whole once its clone has begun, as a restart kills it, so nothing of it has a say in what it leaves.
     for (let waited = 0; sockets.size === 0 && waited < 20_000; waited += 100) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+
     assert.ok(sockets.size > 0, "the clone never began");
     assert.ok(child.pid !== undefined);
     process.kill(-child.pid, "SIGKILL");
@@ -162,6 +174,7 @@ test(
     const other = git(origin, ["rev-parse", "HEAD"]);
     const clone = cloneFolder(state, "acme/app");
     const own = (name: string) => path.join(scratch, "agents", name, "repository");
+
     const launching = (branch: string, name: string) => {
       const file = path.join(scratch, `${name}.sh`);
       writeFileSync(
@@ -176,6 +189,7 @@ test(
         }),
         { mode: 0o700 },
       );
+
       // Note that each launch answers what it printed, so one that failed says which step of Git refused it.
       return new Promise<string>((resolve) =>
         execFile(
@@ -191,14 +205,18 @@ test(
       launching("agent/fix-relay", "one"),
       launching("agent/other", "two"),
     ]);
+
     // Note that once the clone is made, six launches at once each fetch into it, which only the lock keeps from refusing each other.
     const more = ["a", "b", "c", "d", "e", "f"].map((name) => `agent/more-${name}`);
+
     for (const branch of more) git(origin, ["branch", branch, "main"]);
     const then = await Promise.all(more.map((branch, index) => launching(branch, `more-${index}`)));
     const said = [...first, ...then].join("\n");
+
     for (const name of ["one", "two", ...more.map((_, index) => `more-${index}`)]) {
       assert.ok(existsSync(path.join(own(name), ".git")), said);
     }
+
     // Note that two agents then fetch into the one clone at once, under no lock of ours.
     const fetching = (worktree: string) =>
       new Promise<string>((resolve) =>
@@ -209,6 +227,7 @@ test(
           (error, _stdout, stderr) => resolve(error === null ? "" : `${worktree}: ${stderr}`),
         ),
       );
+
     const fetched = await Promise.all([fetching(own("one")), fetching(own("two"))]);
 
     assert.equal(git(own("one"), ["rev-parse", "HEAD"]), relay, first.join("\n"));
@@ -246,6 +265,7 @@ test(
       }),
       { mode: 0o700 },
     );
+
     const ended = new Promise<void>((resolve) =>
       execFile(
         "/bin/bash",
@@ -303,6 +323,7 @@ test(
         env: { ...GIT_ENVIRONMENT, HOME: scratch, SHELL: shell },
         stdio: "ignore",
       });
+
       const bound = setTimeout(() => child.kill("SIGKILL"), 15_000);
       child.on("exit", (status) => {
         clearTimeout(bound);
@@ -323,6 +344,7 @@ test(
     const head = push("first\n");
     const clone = cloneFolder(state, "acme/app");
     const agent = (name: string) => path.join(scratch, "agents", name, "repository");
+
     const script = (worktree: string) =>
       agentWorktreeScript({
         repository: "acme/app",
@@ -389,6 +411,7 @@ test(
     const clone = cloneFolder(state, "acme/app");
     const folder = path.join(scratch, "agents", "agent");
     const own = path.join(folder, "repository");
+
     const launch = agentWorktreeScript({
       repository: "acme/app",
       clone,
@@ -397,6 +420,7 @@ test(
       branch: "agent/fix-relay",
       remote: origin,
     });
+
     run(scratch, shell, launch);
     writeFileSync(path.join(own, "README.md"), "changed\n");
     writeFileSync(path.join(own, "notes.txt"), "new\n");
@@ -408,6 +432,7 @@ test(
       shell,
       agentSnapshotScript({ worktree: own, agentId: "agent" }),
     );
+
     assert.equal(saved.code, 0, saved.printed);
     // The discard removes the folder and prunes its entry.
     rmSync(folder, { recursive: true, force: true });
@@ -429,6 +454,7 @@ test(
     const head = push("first\n");
     const clone = cloneFolder(state, "acme/app");
     const own = path.join(scratch, "agents", "agent", "repository");
+
     const script = agentWorktreeScript({
       repository: "acme/app",
       clone,
@@ -437,6 +463,7 @@ test(
       branch: "agent/fix-relay",
       remote: origin,
     });
+
     // A folder in the worktree's place holding files and no repository, which the make never takes away, so its last step fails.
     mkdirSync(own, { recursive: true });
     writeFileSync(path.join(own, "notes.md"), "kept\n");
@@ -461,6 +488,7 @@ test(
     const head = push("first\n");
     const clone = cloneFolder(state, "acme/app");
     const agent = (name: string) => path.join(scratch, "agents", name, "repository");
+
     const script = (name: string) =>
       agentWorktreeScript({
         repository: "acme/app",
@@ -470,6 +498,7 @@ test(
         branch: "agent/fix-relay",
         remote: origin,
       });
+
     run(scratch, shell, script("other"));
     // What a launch killed while Git checked its worktree out leaves: the worktree half made beside its place, its entry still locked.
     mkdirSync(path.dirname(agent("agent")), { recursive: true });
@@ -506,6 +535,7 @@ test(
     push("second\n");
     const clone = cloneFolder(state, "acme/app");
     const own = (agent: string) => path.join(scratch, "mirrors", agent, "repository");
+
     const input = (agent: string) => ({
       repository: "acme/app",
       clone,
@@ -517,8 +547,10 @@ test(
       run(scratch, shell, mirrorPrefetchScript(input(agent)));
       assert.equal(existsSync(path.join(own(agent), ".git")), false, "a prefetch never stands");
     }
+
     // A prefetch cut off before its checkout wrote a file the base shares with the default branch.
     rmSync(path.join(`${own("cut")}.making`, "kept.txt"));
+
     const ended = [
       runEnded(scratch, shell, mirrorWorktreeScript({ ...input("whole"), base, prefetched: true })),
       runEnded(scratch, shell, mirrorWorktreeScript({ ...input("cut"), base, prefetched: false })),
@@ -529,6 +561,7 @@ test(
       [0, 0],
     );
     assert.deepEqual(worktreesListed(clone), realPaths([clone, own("whole"), own("cut")]));
+
     for (const agent of ["whole", "cut"]) {
       assert.equal(git(own(agent), ["rev-parse", "HEAD"]), base, agent);
       assert.equal(git(own(agent), ["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD", agent);

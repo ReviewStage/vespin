@@ -96,11 +96,14 @@ async function drawn(
       })),
     held,
   );
+
   const control = agentsControl({
     agents: [agent],
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const draw = (asked: MessageReveal | undefined) =>
     act(() =>
       root?.render(
@@ -124,14 +127,17 @@ async function drawn(
         ),
       ),
     );
+
   const settle = async () => {
     await act(async () => {
       for (let tick = 0; tick < 24; tick += 1) await Promise.resolve();
     });
     await settleQueries();
   };
+
   draw(reveal);
   await settle();
+
   return {
     container,
     revealed,
@@ -147,7 +153,9 @@ function messageNamed(container: HTMLElement, id: string): HTMLElement {
   const found = [...container.querySelectorAll<HTMLElement>("[data-message-id]")].find(
     (each) => each.dataset.messageId === id,
   );
+
   assert.ok(found, `the message ${id} is drawn`);
+
   return found;
 }
 
@@ -157,6 +165,7 @@ test("a message offers Copy link beside its Copy, copying its link under the age
   const copyLink = messageNamed(container, "msg-7").querySelector<HTMLButtonElement>(
     '[aria-label="Copy link"]',
   );
+
   assert.ok(copyLink, "the message offers Copy link");
   await act(async () => copyLink.click());
 
@@ -228,10 +237,13 @@ test("a line the service has not read back yet has no link of its own", () => {
 
 test("a link to a message a working agent wrote since its last idle page waits for the next page, rather than calling it gone", async () => {
   let release: () => void = () => undefined;
+
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   const working = { ...AGENT, status: AGENT_STATUS.RUNNING };
+
   const { container, revealed, redraw } = await drawn(
     undefined,
     [[line("task-1", "Add the invite flow.")], [], [line("msg-7", "Use seven days.")]],
@@ -254,6 +266,7 @@ test("a link to a message older than the page held reads older pages for it, but
   const root = createRoot(container);
   const reads: string[] = [];
   const reveal: MessageReveal = { agentId: AGENT.id, messageId: "m-1", ask: 1 };
+
   function Probe(props: { olderFailed: boolean; draws: number }) {
     useMessageReveal({
       agentId: AGENT.id,
@@ -267,8 +280,10 @@ test("a link to a message older than the page held reads older pages for it, but
       drawn: () => false,
       gone: () => assert.fail("a message older pages may hold is not gone"),
     });
+
     return null;
   }
+
   const draw = (olderFailed: boolean, draws: number) =>
     act(() =>
       root.render(
@@ -279,6 +294,7 @@ test("a link to a message older than the page held reads older pages for it, but
         ),
       ),
     );
+
   draw(false, 1);
   assert.deepEqual(reads, ["read 1"]);
   draw(true, 2);

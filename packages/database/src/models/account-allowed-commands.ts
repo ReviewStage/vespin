@@ -153,11 +153,15 @@ export function addAllowedCommand(add: {
       Effect.gen(function* () {
         yield* client`select pg_advisory_xact_lock(hashtextextended(${add.userId}, ${ADD_LOCK_SEED}))`;
         const [counted] = yield* countOfUser({ userId: add.userId });
+
         if ((counted?.kept ?? 0) >= ALLOWED_COMMAND_BOUNDS.MAX_COMMANDS) {
           const found = yield* findPrefix({ userId: add.userId, prefix: add.prefix });
+
           return found.length > 0 ? ALLOWED_COMMAND_ADDED.KEPT : ALLOWED_COMMAND_ADDED.FULL;
         }
+
         const inserted = yield* insertPrefix(add);
+
         return inserted.length > 0 ? ALLOWED_COMMAND_ADDED.ADDED : ALLOWED_COMMAND_ADDED.KEPT;
       }),
     ),

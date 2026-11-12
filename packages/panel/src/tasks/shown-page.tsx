@@ -89,12 +89,15 @@ let fitted: Map<string, Map<number, PageFit>> | undefined;
 function fittedNow(): Map<string, Map<number, PageFit>> {
   if (fitted !== undefined) return fitted;
   const known = new Map<string, Map<number, PageFit>>();
+
   for (const kept of readKept(KEPT.name, KEPT.schema, [])) {
     const versions = known.get(kept.page) ?? new Map<number, PageFit>();
     versions.set(kept.version, kept.fit);
     known.set(kept.page, versions);
   }
+
   fitted = known;
+
   return known;
 }
 
@@ -106,6 +109,7 @@ function noteFit(
 ): void {
   const known = fittedNow();
   const was = known.get(pageId)?.get(version);
+
   if (
     was !== undefined &&
     was.kind === fit.kind &&
@@ -118,11 +122,13 @@ function noteFit(
   versions.set(version, fit);
   known.delete(pageId);
   known.set(pageId, versions);
+
   const entries = [...known].flatMap(([page, kept]) =>
     [...kept].flatMap(([at, each]) =>
       each.kind === PAGE_FIT.PENDING ? [] : [{ page, version: at, fit: each }],
     ),
   );
+
   writeKept(KEPT.name, KEPT.schema, entries.slice(-KEPT_FITS));
 }
 
@@ -132,7 +138,9 @@ const readPick = Schema.decodeUnknownOption(pagePickAnswerSchema);
 /** The height the frame stands at for how the page is fitted. */
 function embedHeight(fit: PageFit): PageEmbedHeight {
   if (fit.kind === PAGE_FIT.CONTENT) return { kind: PAGE_EMBED_HEIGHT.CONTENT, height: fit.height };
+
   if (fit.kind === PAGE_FIT.FILLS) return { kind: PAGE_EMBED_HEIGHT.FILL };
+
   return { kind: PAGE_EMBED_HEIGHT.STAND_IN };
 }
 
@@ -145,22 +153,28 @@ function useFrameFit(
   const [fit, setFit] = useState<PageFit>(
     () => fittedNow().get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
   );
+
   useEffect(() => {
     if (fit.kind !== PAGE_FIT.PENDING) noteFit(pageId, version, fit);
   }, [fit, pageId, version]);
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current;
+
       if (framed === null || framed.contentWindow === null || event.source !== framed.contentWindow)
         return;
       const size = readSize(event.data);
+
       if (Option.isNone(size)) return;
       const frameHeight = framed.getBoundingClientRect().height;
       setFit((last) => pageFitAfter(last, size.value.height, frameHeight));
     };
+
     window.addEventListener("message", hear);
+
     return () => window.removeEventListener("message", hear);
   }, [frame]);
+
   return fit;
 }
 
@@ -191,6 +205,7 @@ function FrameReply({
   const [, redraw] = useReducer((drawn: number) => drawn + 1, 0);
   const layer = useRef<HTMLDivElement>(null);
   const shown = selected !== undefined;
+
   const letGo = () => {
     setSelected(undefined);
     unselect(frame);
@@ -199,12 +214,16 @@ function FrameReply({
   // The frame says its words as they are selected, and that none are once they go; another frame's words, or a press in it, take Reply from this one's.
   useEffect(() => {
     const element = frame.current;
+
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined) return;
       const said = readPick(event.data);
+
       if (Option.isNone(said)) return;
       const words = "selected" in said.value ? said.value.selected : undefined;
+
       if (event.source === framed && words !== undefined) {
         setSelected(words === null ? undefined : { quote: words.quote, box: words.box });
       } else if (event.source !== framed && (words != null || "pressed" in said.value)) {
@@ -212,10 +231,12 @@ function FrameReply({
         unselect(frame);
       }
     };
+
     // Note that a frame loading again, a reload or another version, holds a new document, whose words selected are none.
     const loaded = () => setSelected(undefined);
     window.addEventListener("message", hear);
     element?.addEventListener("load", loaded);
+
     return () => {
       window.removeEventListener("message", hear);
       element?.removeEventListener("load", loaded);
@@ -230,6 +251,7 @@ function FrameReply({
     hiding.observe(document.body, { attributes: true, attributeFilter: ["hidden"], subtree: true });
     document.addEventListener("scroll", redraw, true);
     window.addEventListener("resize", redraw);
+
     return () => {
       hiding.disconnect();
       document.removeEventListener("scroll", redraw, true);
@@ -241,9 +263,11 @@ function FrameReply({
   usePressAway(layer, () => undefined, { onPressAway: shown ? letGo : undefined });
 
   const framed = frame.current;
+
   if (selected === undefined || framed === null || framed.closest("[hidden]") !== null) return null;
   const at = framed.getBoundingClientRect();
   const { box } = selected;
+
   return (
     <ReplyPress
       place={pressPlace(
@@ -281,6 +305,7 @@ function PageVersionFrame({
   usePageTheme(frame, PAGE_ROOM.WORDS);
   const fit = useFrameFit(frame, pageId, version);
   const replyDoor = useReplyDoor();
+
   return (
     <div className="my-block-gap">
       <PageEmbed
@@ -311,5 +336,6 @@ export function ShownPage({
   title: string;
 }): React.JSX.Element {
   const src = appPlatform().pageFrameUrl({ ...place, pageId, version });
+
   return <PageVersionFrame key={src} pageId={pageId} version={version} title={title} src={src} />;
 }

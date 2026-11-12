@@ -30,16 +30,20 @@ function listingServer(tools: readonly unknown[]) {
   return fakeHttpClientLayer(async (_url, init) => {
     // The session's end, and a notification, answer nothing.
     if ((init.method ?? "GET") !== "POST") return new Response(null, { status: 200 });
+
     // SAFETY: the client sends one JSON-RPC message per request.
     const message = JSON.parse(await new Response(init.body).text()) as {
       id?: number;
       method: string;
     };
+
     if (message.id === undefined) return new Response(null, { status: 202 });
+
     const result =
       message.method === "tools/list"
         ? { tools }
         : { protocolVersion: "2025-06-18", capabilities: {} };
+
     return Response.json({ jsonrpc: "2.0", id: message.id, result });
   });
 }
@@ -47,6 +51,7 @@ function listingServer(tools: readonly unknown[]) {
 it.effect("a tool keeps its description whole, every line of it, up to a bound", () =>
   Effect.gen(function* () {
     const long = "x".repeat(9000);
+
     const tools = yield* listMcpTools(URL, TOKEN).pipe(
       Effect.provide(
         listingServer([

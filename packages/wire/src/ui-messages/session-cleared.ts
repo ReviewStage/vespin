@@ -7,4 +7,5 @@ export const SessionClearedMarkSchema = Schema.Struct({
   /** When the session was let go, in epoch milliseconds. */
   at: Schema.Number,
 });
+
 export type SessionClearedMark = typeof SessionClearedMarkSchema.Type;

@@ -43,6 +43,7 @@ export const mcpClientsRead = Effect.fn("web/mcpClientsRead")(function* (
   const grants = yield* hostedStoreOrUnavailable(
     listOAuthGrants(userId, { except: FIRST_PARTY_CLIENTS, tokenOnly: TOKEN_LISTED_CLIENTS }),
   );
+
   return {
     serverUrl,
     clients: grants.map(
@@ -66,5 +67,6 @@ export const mcpClientRevoke = Effect.fn("web/mcpClientRevoke")(function* (
   if (!FIRST_PARTY_CLIENTS.includes(clientId)) {
     yield* hostedStoreOrUnavailable(revokeOAuthClient(userId, clientId));
   }
+
   return yield* mcpClientsRead(userId, serverUrl);
 });

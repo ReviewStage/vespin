@@ -58,15 +58,19 @@ function foldClaims<Key extends string, Handler, E>(
   refused: (key: Key) => E,
 ): Result.Result<Partial<Record<Key, Handler>>, E> {
   const merged: Partial<Record<Key, Handler>> = {};
+
   for (const table of tables) {
     // SAFETY: a handler table's keys are the names it was built from.
     for (const key of Object.keys(table) as Key[]) {
       const handler = table[key];
+
       if (handler === undefined) continue;
+
       if (Object.hasOwn(merged, key)) return Result.fail(refused(key));
       merged[key] = handler;
     }
   }
+
   return Result.succeed(merged);
 }
 

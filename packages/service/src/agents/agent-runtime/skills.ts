@@ -42,18 +42,22 @@ type WorkspaceOf = Effect.Effect<Option.Option<string>, StoreFailure, DatabaseSe
 /** One installed skill as a session is offered it; nothing where it holds no `SKILL.md`. */
 function installedAgentSkill(skill: InstalledSkillWithFiles): AgentSkill | undefined {
   const main = skill.files.find((file) => file.path === INSTALLED_SKILL_MAIN_FILE);
+
   if (main === undefined) return undefined;
   const siblings = skill.files.filter((file) => file.path !== INSTALLED_SKILL_MAIN_FILE);
   const text = new TextDecoder("utf-8", { fatal: false }).decode(main.bytes);
   // The body is handed without its frontmatter.
   const body = readSkillFile(text)?.body ?? text.replace(/^\uFEFF/u, "").trim();
+
   const offered = {
     name: skill.name,
     description: skill.description,
     markdown: body,
     skillFile: main.bytes,
   };
+
   if (siblings.length === 0) return offered;
+
   return { ...offered, files: Object.fromEntries(siblings.map((file) => [file.path, file.bytes])) };
 }
 
@@ -73,8 +77,10 @@ export const installedSkills = /* @__PURE__ */ Effect.fn("web/installedSkills")(
   const read = Effect.gen(function* () {
     if (!(yield* accountExperimentOn(target.userId, EXPERIMENT.SKILLS))) return [];
     const workspace = yield* workspaceOf;
+
     return yield* sessionInstalledSkills(target.userId, Option.getOrNull(workspace));
   });
+
   const installed = yield* read.pipe(
     Effect.catch((failure) =>
       Effect.as(
@@ -85,9 +91,12 @@ export const installedSkills = /* @__PURE__ */ Effect.fn("web/installedSkills")(
       ),
     ),
   );
+
   const skills: AgentSkill[] = [];
+
   for (const skill of installed) {
     const offered = installedAgentSkill(skill);
+
     if (offered === undefined) {
       yield* Effect.logWarning(
         `The installed skill ${skill.id} of conversation ${target.conversationId} was left out: it holds no SKILL.md`,
@@ -96,14 +105,17 @@ export const installedSkills = /* @__PURE__ */ Effect.fn("web/installedSkills")(
       skills.push(offered);
     }
   }
+
   return skills;
 });
 
 /** The skills of every source as one session is offered them, in the order the sources are given, earliest first: a name an earlier source offers is left out of a later one. */
 export function mergedSkills(sources: readonly (readonly AgentSkill[])[]): readonly AgentSkill[] {
   const offered = new Map<string, AgentSkill>();
+
   for (const skill of sources.flat()) {
     if (!offered.has(skill.name)) offered.set(skill.name, skill);
   }
+
   return [...offered.values()];
 }

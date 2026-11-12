@@ -37,6 +37,7 @@ test("a popover turns below only where the room above cannot hold it and below c
       height,
       align: POPOVER_ALIGN.END,
     }).side;
+
   // 60 - 4 - 8 = 48 above, too short for 200; 600 - 90 - 12 = 498 below.
   assert.equal(place(60, 200), POPOVER_SIDE.BELOW);
   // 212 - 12 = 200 above holds a 200-tall popover exactly.
@@ -52,6 +53,7 @@ test("a popover neither side holds opens on the side with more room, and is told
       height: 700,
       align: POPOVER_ALIGN.END,
     });
+
   // 60 - 12 = 48 above against 600 - 90 - 12 = 498 below.
   assert.deepEqual([place(60).side, place(60).room], [POPOVER_SIDE.BELOW, 498]);
   // 500 - 12 = 488 above against 600 - 530 - 12 = 58 below.
@@ -67,6 +69,7 @@ test("a popover takes the other edge where the asked one runs past the room", ()
     height: 200,
     align: POPOVER_ALIGN.END,
   });
+
   assert.equal(place.width, 340);
   assert.equal(place.inset, 100 - 340, "its trailing edge stands 240px past the anchor's");
 });
@@ -79,6 +82,7 @@ test("a popover narrows to its room less both margins and is pushed back inside 
     height: 200,
     align: POPOVER_ALIGN.START,
   });
+
   assert.equal(place.width, 224, "240 less 8 each side");
   assert.equal(place.inset, 8 - 70, "its leading edge stands at the room's 8px margin");
 });
@@ -93,6 +97,7 @@ test("a popover asked to hang below does so, turning above only where below cann
       align: POPOVER_ALIGN.START,
       side: POPOVER_SIDE.BELOW,
     }).side;
+
   // 600 - 230 - 12 = 358 below holds a 200-tall popover.
   assert.equal(place(200, 200), POPOVER_SIDE.BELOW);
   // 600 - 530 - 12 = 58 below is too short; 500 - 12 = 488 above holds it.

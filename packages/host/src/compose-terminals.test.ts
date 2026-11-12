@@ -55,6 +55,7 @@ import {
 const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const SHELL_ID = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
 const CONNECTION_ID = "connection-1";
+
 const SHELL = {
   id: SHELL_ID,
   title: "zsh",
@@ -62,6 +63,7 @@ const SHELL = {
   cwd: "/workspace/repository",
   running: false,
 };
+
 const CONNECT = { connectionId: CONNECTION_ID, agentId: AGENT_ID, terminalId: SHELL_ID };
 const context = { client: { clientId: "desktop", role: GATEWAY_CLIENT_ROLE.OPERATOR } };
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -70,25 +72,30 @@ const readOutput = readEither(terminalOutputEventSchema);
 /** A service that answers each call from the script and keeps what it was asked. */
 function scriptedService() {
   const asked: string[] = [];
+
   const client: TerminalClient = {
     list: (agentId) =>
       Effect.sync(() => {
         asked.push(`list:${agentId}`);
+
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [SHELL] };
       }),
     create: (agentId, title) =>
       Effect.sync(() => {
         asked.push(`create:${agentId}:${title ?? ""}`);
+
         return { failure: TERMINAL_REFUSAL.SANDBOX_STOPPED };
       }),
     rename: (agentId, terminalId, title) =>
       Effect.sync(() => {
         asked.push(`rename:${agentId}:${terminalId}:${title}`);
+
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [{ ...SHELL, title }] };
       }),
     kill: () => Effect.succeed({ failure: TERMINAL_REFUSAL.UNANSWERED }),
     resume: () => Effect.succeed({ sandbox: SANDBOX_STATE.RUNNING }),
   };
+
   return { client, asked };
 }
 
@@ -97,12 +104,14 @@ const scriptedSocket = Effect.gen(function* () {
   const inbound = yield* Queue.unbounded<TerminalSocketArrival, Cause.Done>();
   const sent: TerminalSocketFrame[] = [];
   const flow: string[] = [];
+
   const socket: TerminalSocket = {
     arrivals: Stream.fromQueue(inbound),
     send: (frame) => Effect.sync(() => void sent.push(frame)),
     pause: Effect.sync(() => void flow.push("pause")),
     resume: Effect.sync(() => void flow.push("resume")),
   };
+
   return {
     opening: { socket } satisfies TerminalSocketOpening,
     push: (arrival: TerminalSocketArrival) => Queue.offer(inbound, arrival),
@@ -134,6 +143,7 @@ function subject(
     const bearers = [...(options.bearers ?? ["bearer-1"])];
     // The task list's word that the agent's sandbox opened, which a test gives.
     const sandboxOpen = yield* Deferred.make<void>();
+
     const composer = yield* composeTerminals({
       kernel: {
         runMode: { sendsNetwork: true },
@@ -160,28 +170,36 @@ function subject(
         Effect.gen(function* () {
           if (yield* Deferred.isDone(sandboxOpen)) return false;
           yield* Deferred.await(sandboxOpen);
+
           return true;
         }),
     }).pipe(Effect.provide(noNetwork));
+
     const call = (method: GatewayMethod, params: WireRecord = {}) => {
       const handler = composer.methods[method];
       assert.ok(handler, `no handler for ${method}`);
+
       return handler(params, context);
     };
+
     /** The states the connection was told, in order. */
     const states = () =>
       events.flatMap((event) =>
         event.kind === GATEWAY_EVENT.TERMINAL_STATE ? [event.payload] : [],
       );
+
     /** The bytes the connection handed up, decoded. */
     const printed = () =>
       events.flatMap((event) => {
         if (event.kind !== GATEWAY_EVENT.TERMINAL_OUTPUT) return [];
         const output = Result.getOrUndefined(readOutput(event.payload));
+
         if (output === undefined) return [];
         const bytes = Base64.decode(output.data);
+
         return bytes._tag === "Success" ? [new TextDecoder().decode(bytes.success)] : [];
       });
+
     return {
       call,
       composer,
@@ -201,6 +219,7 @@ const settle = Effect.forEach(Array.from({ length: 20 }), () => Effect.yieldNow,
 });
 
 const connected = (cols = 120, rows = 32) => ({ ...CONNECT, cols, rows });
+
 const state = (value: string, code?: number) => ({
   connectionId: CONNECTION_ID,
   state: value,
@@ -214,15 +233,18 @@ it.effect(
       const { call, asked } = yield* subject();
 
       const listed = yield* call(GATEWAY_METHOD.TERMINALS_LIST, { agentId: AGENT_ID });
+
       const created = yield* call(GATEWAY_METHOD.TERMINALS_CREATE, {
         agentId: AGENT_ID,
         title: "server",
       });
+
       const renamed = yield* call(GATEWAY_METHOD.TERMINALS_RENAME, {
         agentId: AGENT_ID,
         terminalId: SHELL_ID,
         title: "tests",
       });
+
       const resumed = yield* call(GATEWAY_METHOD.TERMINALS_RESUME, { agentId: AGENT_ID });
 
       assert.deepEqual(listed, { sandbox: SANDBOX_STATE.RUNNING, terminals: [SHELL] });
@@ -250,9 +272,11 @@ it.effect(
       const unanswered = yield* Effect.exit(
         signedIn.call(GATEWAY_METHOD.TERMINALS_KILL, { agentId: AGENT_ID, terminalId: SHELL_ID }),
       );
+
       const gated = yield* Effect.exit(
         signedOut.call(GATEWAY_METHOD.TERMINALS_LIST, { agentId: AGENT_ID }),
       );
+
       const malformed = yield* Effect.exit(
         signedIn.call(GATEWAY_METHOD.TERMINALS_CONNECT, { ...CONNECT, cols: 0, rows: 32 }),
       );
@@ -319,6 +343,7 @@ it.effect("a shell's exit, a stopped sandbox, and an archived agent each end the
       { close: TERMINAL_RELAY_CLOSE.STOPPED, ends: state(TERMINAL_CONNECTION.STOPPED) },
       { close: TERMINAL_RELAY_CLOSE.GONE, ends: state(TERMINAL_CONNECTION.GONE) },
     ];
+
     for (const ending of endings) {
       const { call, hand, opened, states } = yield* subject();
       const relay = yield* scriptedSocket;
@@ -344,6 +369,7 @@ it.effect(
       const { call, hand, opened, states, printed } = yield* subject();
       const first = yield* scriptedSocket;
       const second = yield* scriptedSocket;
+
       const minutes = (count: number) =>
         Effect.forEach(
           Array.from({ length: count }),
@@ -388,6 +414,7 @@ it.effect(
         { refused: 404, ends: state(TERMINAL_CONNECTION.UNAVAILABLE) },
         { refused: 403, ends: state(TERMINAL_CONNECTION.GONE) },
       ];
+
       for (const refusal of refusals) {
         const { call, hand, opened, states } = yield* subject();
         yield* call(GATEWAY_METHOD.TERMINALS_CONNECT, connected());
@@ -638,6 +665,7 @@ it.effect(
     Effect.gen(function* () {
       const { call, hand } = yield* subject();
       const relay = yield* scriptedSocket;
+
       const type = (data: string) =>
         call(GATEWAY_METHOD.TERMINALS_INPUT, { connectionId: CONNECTION_ID, data });
 

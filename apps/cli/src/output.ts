@@ -46,8 +46,10 @@ export interface Answer {
 /** Whether this run prints JSON: asked for, or stdout is not a terminal. */
 const printsJson = Effect.gen(function* () {
   const asked = yield* JSON_FLAG;
+
   if (asked) return true;
   const stdio = yield* Stdio.Stdio;
+
   return !(yield* stdio.stdoutIsTerminal);
 });
 
@@ -55,12 +57,16 @@ const printsJson = Effect.gen(function* () {
 export const answer = Effect.fnUntraced(function* (found: Answer) {
   if (yield* QUIET_FLAG) {
     for (const id of found.ids ?? []) yield* Console.log(id);
+
     return;
   }
+
   if (yield* printsJson) {
     yield* Console.log(JSON.stringify(found.json, null, JSON_INDENT));
+
     return;
   }
+
   for (const line of found.lines) yield* Console.log(line);
 });
 
@@ -71,6 +77,7 @@ export const answer = Effect.fnUntraced(function* (found: Answer) {
  */
 export const streamLines = Effect.fnUntraced(function* (lines: readonly string[]) {
   if ((yield* QUIET_FLAG) || (yield* printsJson)) return;
+
   for (const line of lines) yield* Console.log(line);
 });
 
@@ -95,9 +102,12 @@ export const readLine = Effect.fnUntraced(function* (prompt: string) {
   if (yield* canPrompt) {
     yield* note(prompt);
     const terminal = yield* Terminal.Terminal;
+
     return yield* Effect.option(terminal.readLine).pipe(Effect.map(Option.getOrUndefined));
   }
+
   const piped = yield* Effect.orElseSucceed(stdinText, () => "");
+
   return piped.split("\n")[0];
 });
 
@@ -117,14 +127,18 @@ export const confirmOrYes = Effect.fnUntraced(function* (
   declined = "Nothing was deleted.",
 ) {
   if (yes) return;
+
   if (!(yield* canPrompt)) {
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: `${question} Pass --yes to go ahead without a terminal to confirm at.`,
     });
   }
+
   const answered = yield* readLine(`${question} [y/N]`);
+
   if (answered !== undefined && CONFIRM_WORDS.has(answered.trim().toLowerCase())) return;
+
   return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: declined });
 });
 
@@ -150,11 +164,15 @@ const hiddenLine = (prompt: string) =>
       const keys = yield* terminal.readInput;
       yield* note(prompt);
       const typed: string[] = [];
+
       for (;;) {
         const pressed = yield* Effect.option(Queue.take(keys));
+
         if (Option.isNone(pressed)) return undefined;
         const { input, key } = pressed.value;
+
         if (LINE_END_KEYS.has(key.name)) return typed.join("");
+
         if (key.name === "backspace") typed.pop();
         else if (Option.isSome(input) && !key.ctrl && !key.meta) typed.push(input.value);
       }
@@ -175,9 +193,11 @@ export const readSecret = Effect.fnUntraced(function* (prompt: string) {
     : yield* Effect.orElseSucceed(stdinText, () => undefined).pipe(
         Effect.map((piped) => piped?.replace(TRAILING_NEWLINE, "")),
       );
+
   if (read === undefined || read === "") {
     return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "No value was read." });
   }
+
   return read;
 });
 
@@ -189,7 +209,9 @@ export const readInput = Effect.fnUntraced(function* (source: string) {
       () => new CommandFailed({ exit: CLI_EXIT.USAGE, message: "Could not read stdin." }),
     );
   }
+
   const fileSystem = yield* FileSystem.FileSystem;
+
   return yield* Effect.mapError(
     fileSystem.readFileString(source),
     () => new CommandFailed({ exit: CLI_EXIT.USAGE, message: `Could not read ${source}.` }),
@@ -206,11 +228,13 @@ const COLUMN_GAP = "  ";
  */
 export function columns(rows: readonly (readonly string[])[]): string[] {
   const widths: number[] = [];
+
   for (const row of rows) {
     row.forEach((cell, index) => {
       widths[index] = Math.max(widths[index] ?? 0, cell.length);
     });
   }
+
   return rows.map((row) =>
     row
       .map((cell, index) => (index === row.length - 1 ? cell : cell.padEnd(widths[index] ?? 0)))

@@ -53,13 +53,16 @@ function codeReadFrom(
   file: UseQueryResult<TasksFileAnswer>,
 ): CodeRead {
   if (place === undefined) return codeReadOf(block, UNREAD_FILE);
+
   if (file.isPending || file.isFetching) return { kind: CODE_READ.READING };
+
   // Note that a refusal says why where the service said it, and a read that never arrived is failed.
   if (file.isError) {
     return file.error instanceof ReadRefused
       ? codeReadOf(block, file.error.answer)
       : CODE_READ_FAILED;
   }
+
   return codeReadOf(block, file.data);
 }
 
@@ -81,14 +84,17 @@ export function InboxCodeCard({
   const unread = codeNotice(block, code.repository);
   const { path, sha, startLine, endLine } = block;
   const codeRef = { path, startLine, endLine };
+
   const file = useQuery({
     ...taskFileQueryOptions(code.place, codeWindow(block)),
     enabled: unread === undefined,
   });
+
   const read = codeReadFrom(block, code.place, file);
 
   const shown: CodeRead =
     unread === undefined ? read : { kind: CODE_READ.NOTICE, line: unread, again: false };
+
   // Note that a failure that offers Retry is said by its `ErrorState`, so only a notice with none is said here.
   useAnnounceShown(
     ANNOUNCE.ALERT,
@@ -96,6 +102,7 @@ export function InboxCodeCard({
   );
   // Note that lines the task does not read open nothing, because the File tab reads the task's repository alone.
   const onOpen = unread === undefined ? () => code.onOpenFile(codeRef, sha) : undefined;
+
   return (
     <FileCodeCard
       title={<FileRef codeRef={codeRef} repository={block.repo} onOpen={onOpen} />}

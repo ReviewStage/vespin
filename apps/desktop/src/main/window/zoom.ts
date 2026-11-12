@@ -57,6 +57,7 @@ export function zoomFactorOf(preference: ZoomPercent | undefined): number {
  */
 export function trafficLightsAt(factor: number): Point {
   const middle = TRAFFIC_LIGHTS.Y + TRAFFIC_LIGHTS.SIZE / 2;
+
   return { x: TRAFFIC_LIGHTS.X, y: Math.round(middle * factor - TRAFFIC_LIGHTS.SIZE / 2) };
 }
 
@@ -69,6 +70,7 @@ export const applyZoomPreference = /* @__PURE__ */ Effect.fn("desktop/applyZoomP
   function* (preference: ZoomPercent | undefined) {
     const panels = yield* PanelWindows;
     const factor = zoomFactorOf(preference);
+
     for (const window of panels.standing()) {
       window.webContents.setZoomFactor(factor);
       window.setWindowButtonPosition?.(trafficLightsAt(factor));
@@ -88,11 +90,14 @@ export function zoomSteer(): (
   preference: ZoomPercent | undefined,
 ) => Effect.Effect<void, never, PanelWindows> {
   const applied = MutableRef.make<number | undefined>(undefined);
+
   return (preference) =>
     Effect.suspend(() => {
       const factor = zoomFactorOf(preference);
+
       if (MutableRef.get(applied) === factor) return Effect.void;
       MutableRef.set(applied, factor);
+
       return applyZoomPreference(preference);
     });
 }

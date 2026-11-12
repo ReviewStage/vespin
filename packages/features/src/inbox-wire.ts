@@ -552,6 +552,7 @@ const isKnownOptionMedia = EffectSchema.is(EffectSchema.Union(KNOWN_OPTION_MEDIA
  */
 export function optionFileIds(ask: InboxReadAsk | undefined): ReadonlySet<string> {
   if (ask === undefined || ask.type !== INBOX_ASK.DECIDE || !("options" in ask)) return new Set();
+
   return new Set(
     ask.options.flatMap((option) =>
       knownOptionMedia(option).flatMap((media) =>
@@ -684,7 +685,9 @@ interface Recommending {
 /** The labels a choice recommends, in order, as it was posted or as it is kept: none, one, or several. */
 export function recommendedLabels(choice: Recommending): readonly string[] {
   if (choice.recommendations !== undefined) return choice.recommendations;
+
   if (choice.recommended === undefined) return [];
+
   return typeof choice.recommended === "string" ? [choice.recommended] : choice.recommended;
 }
 
@@ -695,7 +698,9 @@ function keptRecommendation(choice: Recommending): {
 } {
   const labels = recommendedLabels(choice);
   const [first] = labels;
+
   if (first === undefined) return {};
+
   return labels.length === 1
     ? { recommended: first }
     : { recommended: first, recommendations: labels };
@@ -827,6 +832,7 @@ export type InboxReply = typeof inboxReplySchema.Type;
  */
 function unknownTypeOf(known: readonly string[]) {
   const knownTypes: ReadonlySet<string> = new Set(known);
+
   return EffectSchema.String.check(EffectSchema.makeFilter((type) => !knownTypes.has(type))).pipe(
     EffectSchema.brand("UnknownInboxType"),
   );
@@ -935,10 +941,13 @@ export function keptInboxAsk(
 ): InboxAsk {
   if (ask.type !== INBOX_ASK.DECIDE) return ask;
   const { recommended: _recommended, options, ...rest } = ask;
+
   const kept = options.map(({ media: _posted, ...option }, at) => {
     const own = media[at];
+
     return own === undefined || own.length === 0 ? option : { ...option, media: own };
   });
+
   return { ...rest, options: kept, ...keptRecommendation(ask) };
 }
 
@@ -1206,6 +1215,7 @@ export interface InboxAsking {
 /** The thread's open ask: the latest message whose ask stands open; none where none does. */
 export function openAskOf(thread: readonly InboxMessage[]): InboxAsking | undefined {
   const message = thread.findLast((each) => each.ask?.status === INBOX_ASK_STATUS.OPEN);
+
   return message?.ask === undefined ? undefined : { message, ask: message.ask };
 }
 
@@ -1368,6 +1378,7 @@ export const INBOX_CLOSE_LEAD = "Thread closed";
 export function inboxClosedMessage(item: Pick<InboxItem, "key" | "title">, note = ""): string {
   const title = item.title.replace(/\s+/gu, " ").trim();
   const header = `${INBOX_CLOSE_LEAD} on "${title}" (key ${item.key}): Resolved without an answer.`;
+
   return note.trim() === "" ? header : `${header}\n\n${note.trim()}`;
 }
 
@@ -1443,6 +1454,7 @@ const THEMATIC_BREAK = /^\s*([-*_])(?:[ \t]*\1){2,}\s*$/u;
  */
 function plainLine(line: string): string {
   if (CODE_FENCE.test(line) || THEMATIC_BREAK.test(line)) return "";
+
   return linkLabels(line.replace(/!\[/gu, "["))
     .replace(/^\s*(?:#{1,6}|>+|[-*+]|\d+[.)])\s+/u, "")
     .replace(/[*`~]/gu, "")
@@ -1456,6 +1468,7 @@ function shortTitle(words: string): string {
   if (words.length <= STARTED_TITLE_CHARS) return words;
   const cut = words.slice(0, STARTED_TITLE_CHARS);
   const space = cut.lastIndexOf(" ");
+
   return `${(space > STARTED_TITLE_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
@@ -1469,11 +1482,13 @@ export function inboxStartTitle(
   request: Pick<InboxStartRequest, "title" | "text" | "attachments">,
 ): string {
   if (request.title !== undefined) return request.title;
+
   // Note that a file's marker reads as its name, since a title draws no chip.
   const line = markersAsNames(request.text)
     .split("\n")
     .map(plainLine)
     .find((each) => each !== "");
+
   return shortTitle(line ?? request.attachments?.[0]?.name ?? STARTED_TITLE_FALLBACK);
 }
 
@@ -1532,6 +1547,7 @@ export const INBOX_MESSAGE_LEAD = "Thread message";
 export function inboxThreadMessage(item: Pick<InboxItem, "key" | "title">, text: string): string {
   const title = item.title.replace(/\s+/gu, " ").trim();
   const header = `${INBOX_MESSAGE_LEAD} on "${title}" (key ${item.key}):`;
+
   return text.trim() === "" ? header : `${header}\n\n${text.trim()}`;
 }
 
@@ -1567,10 +1583,12 @@ export function threadLineWords(text: string, event: ThreadLineMetadata["event"]
   const cut = text.indexOf(PARAGRAPH);
   const head = cut === -1 ? text : text.slice(0, cut);
   const rest = cut === -1 ? "" : text.slice(cut + PARAGRAPH.length);
+
   if (event !== THREAD_LINE_EVENT.ANSWER) return rest.trim();
   const key = head.lastIndexOf(KEY_OPENS);
   const close = key === -1 ? -1 : head.indexOf(KEY_CLOSES, key + KEY_OPENS.length);
   const did = close === -1 ? head : head.slice(close + KEY_CLOSES.length).trim();
+
   return [did, rest.trim()].filter((part) => part !== "").join(PARAGRAPH);
 }
 
@@ -1588,14 +1606,17 @@ export function threadLineTitle(
   const cut = text.indexOf(PARAGRAPH);
   const head = cut === -1 ? text : text.slice(0, cut);
   const key = head.lastIndexOf(KEY_OPENS);
+
   if (!head.startsWith(opens) || key < opens.length) return undefined;
   const title = head.slice(opens.length, key);
+
   return title === "" ? undefined : title;
 }
 
 /** A field's value as words: a number as it prints, yes or no for a boolean. */
 export function fieldValueWords(value: InboxFieldValue): string {
   if (isWireBoolean(value)) return value ? "yes" : "no";
+
   return String(value);
 }
 
@@ -1609,9 +1630,12 @@ function replyWords(reply: InboxReply): string {
   switch (reply.reply) {
     case INBOX_REPLY.CHOSE: {
       const choices = reply.choices ?? [];
+
       if (choices.length === 0) return `Chose ${NONE_OF_THESE.toLowerCase()}.`;
+
       return `Chose ${choices.map((choice) => `"${choice}"`).join(", ")}.`;
     }
+
     case INBOX_REPLY.APPROVED:
       return "Approved.";
     case INBOX_REPLY.DECLINED:
@@ -1660,7 +1684,9 @@ function answerHeadWords(reply: InboxReply, todo: InboxTodoTicks | undefined): s
   if (reply.reply !== INBOX_REPLY.ANSWERED || todo === undefined || todo.ticked.length === 0) {
     return replyWords(reply);
   }
+
   const total = todo.steps.length;
+
   return `Ticked ${todo.ticked.length} of ${total} ${total === 1 ? "step" : "steps"}.`;
 }
 
@@ -1668,6 +1694,7 @@ function answerHeadWords(reply: InboxReply, todo: InboxTodoTicks | undefined): s
 function checklistLines(todo: InboxTodoTicks | undefined): string {
   if (todo === undefined) return "";
   const ticked = new Set(todo.ticked);
+
   return todo.steps
     .map((step, at) => `- [${ticked.has(at) ? "x" : " "}] ${step.replace(/\s+/gu, " ").trim()}`)
     .join("\n");
@@ -1686,8 +1713,10 @@ export function inboxTodoTicks(
   answered?: InboxAsk,
 ): InboxTodoTicks | undefined {
   const ask = answered ?? (item.thread ?? []).find((message) => message.id === answers.ask)?.ask;
+
   if (ask?.type !== INBOX_ASK.DO || !("steps" in ask)) return undefined;
   const steps = ask.steps;
+
   return steps.length === 0 ? undefined : { steps, ticked: answers.steps ?? [] };
 }
 
@@ -1708,6 +1737,7 @@ export function inboxAnswerMessage(
   const checklist = checklistLines(todo);
   const values = reply.values === undefined ? "" : valueLines(reply.values);
   const note = reply.note?.trim() ?? "";
+
   return [header, checklist, values, note].filter((part) => part !== "").join("\n\n");
 }
 
@@ -1747,19 +1777,28 @@ function formRefusal(
   said: boolean,
 ): string | undefined {
   const given = new Map((values ?? []).map(({ label, value }) => [label, value]));
+
   if (given.size !== (values ?? []).length) return "A value names a field twice.";
   const fields = new Map(form.fields.map((field) => [field.label, field]));
+
   for (const [label, value] of given) {
     const field = fields.get(label);
+
     if (field === undefined) return "A value names no field of the form.";
+
     if (!fieldTakes(field, value)) return "A value is not of its field's type.";
+
     if (field.required === true && !filled(value)) return REQUIRED_EMPTY;
   }
+
   if (said || [...given.values()].some(filled)) return undefined;
+
   for (const field of form.fields) {
     const value = given.get(field.label);
+
     if (field.required === true && value === undefined) return REQUIRED_EMPTY;
   }
+
   return undefined;
 }
 
@@ -1774,11 +1813,16 @@ function choiceRefusal(
   choices: readonly string[] | undefined,
 ): string | undefined {
   const picked = choices ?? [];
+
   if (picked.length === 0) return optionsCarryMedia(choice) ? undefined : "A pick names no option.";
+
   if (picked.length > 1 && choice.multiple !== true) return "The choice takes one option.";
+
   if (new Set(picked).size !== picked.length) return "A pick names an option twice.";
   const offered = new Set(choice.options.map((option) => option.label));
+
   if (!picked.every((label) => offered.has(label))) return "The pick names no option of the item.";
+
   return undefined;
 }
 
@@ -1787,6 +1831,7 @@ function ownWordsRefusal(words: string, files: AnswerFiles): string | undefined 
   if (!saysAny(words, files)) {
     return "An answer in the developer's own words needs words or a file.";
   }
+
   return undefined;
 }
 
@@ -1803,14 +1848,19 @@ export function inboxReplyRefusal(
   files: AnswerFiles = [],
 ): string | undefined {
   const takes: readonly InboxReplyKind[] = INBOX_REPLIES_OF[response.type];
+
   if (!takes.includes(reply.reply)) return "The item does not take that answer.";
+
   if (reply.reply === INBOX_REPLY.CHOSE && response.type === INBOX_RESPONSE.CHOICE) {
     return choiceRefusal(response, reply.choices);
   }
+
   if (reply.reply === INBOX_REPLY.SUBMITTED && response.type === INBOX_RESPONSE.FORM) {
     return formRefusal(response, reply.values, saysAny(reply.note ?? "", files));
   }
+
   if (reply.reply === INBOX_REPLY.ANSWERED) return ownWordsRefusal(reply.note ?? "", files);
+
   return undefined;
 }
 
@@ -1826,11 +1876,15 @@ function stepsRefusal(
   answers: InboxAnswers,
 ): string | undefined {
   const ticked = answers.steps ?? [];
+
   if (new Set(ticked).size !== ticked.length) return "A step is ticked twice.";
+
   if (!ticked.every((step) => step < ask.steps.length)) return "A tick names no step of the ask.";
+
   if (answers.reply === INBOX_REPLY.DONE && ticked.length !== ask.steps.length) {
     return "Mark done needs every step ticked.";
   }
+
   return undefined;
 }
 
@@ -1853,16 +1907,20 @@ export function inboxAnswersRefusal(
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       if (answers.reply === INBOX_REPLY.CHOSE) return choiceRefusal(ask, answers.choices);
+
       if (answers.reply === INBOX_REPLY.ANSWERED) return ownWordsRefusal(words, files);
+
       return NOT_TAKEN;
     case INBOX_ASK.DO:
       if (answers.reply === INBOX_REPLY.DONE || answers.reply === INBOX_REPLY.NOT_DONE) {
         return stepsRefusal(ask, answers);
       }
+
       // Steps ticked with neither press go as an answer that decides nothing, so it must tick one.
       if (answers.reply === INBOX_REPLY.ANSWERED && (answers.steps ?? []).length > 0) {
         return stepsRefusal(ask, answers);
       }
+
       return NOT_TAKEN;
     case INBOX_ASK.ANSWER:
       if (ask.fields !== undefined) {
@@ -1870,6 +1928,7 @@ export function inboxAnswersRefusal(
           ? formRefusal({ fields: ask.fields }, answers.values, saysAny(words, files))
           : NOT_TAKEN;
       }
+
       return answers.reply === INBOX_REPLY.ANSWERED ? ownWordsRefusal(words, files) : NOT_TAKEN;
   }
 }
@@ -1889,6 +1948,7 @@ export function inboxReplyAnswers(
   reply: InboxReply,
 ): InboxAnswers | undefined {
   const ask = asking.id;
+
   switch (reply.reply) {
     case INBOX_REPLY.CHOSE:
       return reply.choices === undefined
@@ -1924,6 +1984,7 @@ export function inboxReplyAnswers(
  */
 export function inboxAnswersReply(answers: InboxAnswers, words: string): InboxReply {
   const note = words.trim();
+
   return {
     reply: answers.reply,
     ...(answers.choices === undefined ? undefined : { choices: answers.choices }),
@@ -1941,6 +2002,7 @@ export function knownAsk(ask: InboxReadAsk): InboxAsk | undefined {
     withdrawnBy: _by,
     ...kept
   } = ask;
+
   return EffectSchema.is(inboxAskSchema)(kept) ? kept : undefined;
 }
 
@@ -1969,7 +2031,9 @@ export function standingAsk(
 ): InboxReadAsk {
   if (ask.status !== INBOX_ASK_STATUS.OPEN) return ask;
   const replaced = { ...ask, status: INBOX_ASK_STATUS.REPLACED };
+
   if (messageId !== item.openAskMessageId) return replaced;
+
   switch (item.status) {
     case INBOX_STATUS.OPEN:
       return ask;

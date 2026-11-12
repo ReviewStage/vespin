@@ -38,6 +38,7 @@ function heldRead(): AppHostRead<IntegrationStatusesAnswer> {
       provider === NOTION ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.DISCONNECTED,
     ]),
   ) as Record<IntegrationProvider, IntegrationStatus>;
+
   return {
     rows: {
       integrations,
@@ -79,8 +80,10 @@ test("a connected account is named beside its provider, and a tool not connected
     [...container.querySelectorAll('[id$="label"]')].map((label) => {
       const beside = label.nextElementSibling;
       const account = beside?.classList.contains("ui-account-words") ? beside.textContent : "";
+
       return account ? `${label.textContent} · ${account}` : label.textContent;
     });
+
   await vi.waitFor(() => assert.deepEqual(names(), ["Linear", "Slack", "Sentry", "Notion · Acme"]));
   assert.equal(
     container

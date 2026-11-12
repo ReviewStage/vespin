@@ -76,10 +76,12 @@ function controlOf(agent: AgentSummary, overrides: Partial<AgentsControl> = {}):
     macs: MACS,
     continueAgent: (agentId, _note, _attachments, runsOn) => {
       continued.push({ agentId, runsOn });
+
       return Promise.resolve(undefined);
     },
     onStop: (agentId) => {
       continued.push({ agentId, stop: true });
+
       return Promise.resolve(true);
     },
     ...overrides,
@@ -102,15 +104,19 @@ async function menuOf(
   // Note that the menu is read once, so the document is in the client from its first frame.
   writeAppState(await appBridge().requestAppState());
   let groups: MenuEntry[][] = [];
+
   function Probe(): null {
     const actions = useAgentActions(agent, control, {
       label: agent.title ?? "",
       shown: true,
       terminals: { onOpenTerminal: undefined },
     });
+
     groups = agentMenuGroups(actions.doors);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   act(() => root.render(withQueryClient(createElement(Probe))));
   await act(async () => {
@@ -119,12 +125,14 @@ async function menuOf(
   // Note that the hosts read every surface reads a device's standing from is drawn a notify tick after it lands.
   await settleQueries();
   act(() => root.unmount());
+
   return groups.flat();
 }
 
 /** The menu's Move to ›, none where it offers none. */
 function moveTo(entries: readonly MenuEntry[]) {
   const entry = entries.find((each) => each.label === "Move to");
+
   return entry !== undefined && "items" in entry ? entry : undefined;
 }
 
@@ -162,6 +170,7 @@ test("an agent on a device moves to the cloud or another device, never its own, 
 
 test("an agent on a device the service did not name is offered the cloud alone", async () => {
   const unnamed = { ...ON_STUDIO, mac: { name: "Studio" } };
+
   const entry =
     moveTo(await menuOf(unnamed, controlOf(unnamed))) ?? assert.fail("Move to is offered");
 
@@ -173,8 +182,10 @@ test("an agent on a device the service did not name is offered the cloud alone",
 
 test("an agent still writing is stopped before it moves, each place saying so, and moves nowhere where the Stop did not take", async () => {
   const working = { ...AT_REST, status: AGENT_STATUS.RUNNING };
+
   const entry =
     moveTo(await menuOf(working, controlOf(working))) ?? assert.fail("Move to is offered");
+
   assert.equal(entry.items[0]?.detail, "Stops the agent first");
   entry.items[0]?.onSelect();
   await act(async () => {
@@ -187,8 +198,10 @@ test("an agent still writing is stopped before it moves, each place saying so, a
 
   // A second place picked while the Stop is still out moves nothing more.
   continued = [];
+
   const twice =
     moveTo(await menuOf(working, controlOf(working))) ?? assert.fail("Move to is offered");
+
   twice.items[0]?.onSelect();
   twice.items[0]?.onSelect();
   await act(async () => {

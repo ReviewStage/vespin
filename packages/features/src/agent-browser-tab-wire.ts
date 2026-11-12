@@ -123,8 +123,11 @@ export type AgentBrowserTabLine = typeof agentBrowserTabLineSchema.Type;
 /** Where the agent's pointer last went on the tab; none until every cursor column is written. */
 function cursorOfLine(line: AgentBrowserTabLine): AgentBrowserTabCursor | undefined {
   const { cursorX, cursorY, cursorKind, cursorViewportW, cursorViewportH, cursorAt } = line;
+
   if (cursorX === null || cursorY === null || cursorKind === null) return undefined;
+
   if (cursorViewportW === null || cursorViewportH === null || cursorAt === null) return undefined;
+
   return {
     x: cursorX,
     y: cursorY,
@@ -146,7 +149,9 @@ export function agentBrowserTabOf(line: AgentBrowserTabLine, now: number): Agent
     line.driverUserId !== null && line.heldUntil !== null && line.heldUntil > now
       ? { userId: line.driverUserId, heldUntil: line.heldUntil }
       : null;
+
   const cursor = cursorOfLine(line);
+
   return {
     id: line.id,
     agentId: line.agentId,

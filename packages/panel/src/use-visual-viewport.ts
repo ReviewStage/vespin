@@ -53,8 +53,10 @@ import { scrollerOf } from "./scroll-within.js";
 
 /** How far down the layout viewport the visible part begins, as a phone pans it to a focused field. */
 const VIEWPORT_TOP = "--ui-viewport-top";
+
 /** The visible height, in CSS pixels. */
 const STAGE_HEIGHT = "--ui-stage-height";
+
 /** How much of the layout viewport stands below the visible part: the keyboard's height while it is up. */
 const KEYBOARD_INSET = "--ui-keyboard-inset";
 
@@ -77,16 +79,20 @@ function unzoomed(viewport: VisualViewport): boolean {
  */
 function caretBox(field: HTMLElement): DOMRect {
   const selection = window.getSelection();
+
   const range =
     field.isContentEditable && selection !== null && selection.rangeCount > 0
       ? selection.getRangeAt(0)
       : undefined;
+
   if (range === undefined || !field.contains(range.startContainer)) {
     return field.getBoundingClientRect();
   }
+
   // Note that a range's box is read as possibly missing, since a page with no layout, as a test's is, draws none.
   const measured: Partial<Pick<Range, "getBoundingClientRect">> | undefined = range;
   const box = measured?.getBoundingClientRect?.();
+
   return box === undefined || (box.top === 0 && box.bottom === 0)
     ? field.getBoundingClientRect()
     : box;
@@ -108,11 +114,15 @@ function typedField(target: EventTarget | null): target is HTMLElement {
  */
 function caretAboveKeyboard(bottom: number): void {
   const field = document.activeElement;
+
   if (!typedField(field)) return;
   const column = scrollerOf(field);
+
   if (column === undefined) return;
+
   const below =
     caretBox(field).bottom + CARET_MARGIN - Math.min(bottom, column.getBoundingClientRect().bottom);
+
   if (below > 0) column.scrollTop += below;
 }
 
@@ -125,6 +135,7 @@ function caretAboveKeyboard(bottom: number): void {
 export function useVisualViewport(): void {
   useLayoutEffect(() => {
     const viewport = window.visualViewport;
+
     if (viewport === null || viewport === undefined) return undefined;
     const root = document.documentElement.style;
     /** Where the visible part begins, as last measured at the page's own scale. */
@@ -140,9 +151,11 @@ export function useVisualViewport(): void {
      * its whole slide, the room it left standing empty.
      */
     let going = false;
+
     const write = () => {
       let layout: number;
       let bottom: number;
+
       if (unzoomed(viewport)) {
         // A viewport panned down to the field (`offsetTop`) is seen, not
         // covered: the stage begins there, and only what stands below its
@@ -156,6 +169,7 @@ export function useVisualViewport(): void {
         // Note that rounding keeps a pinch's fractions from moving the stage by a pixel.
         bottom = Math.min(layout, top + Math.round(viewport.height * viewport.scale));
       }
+
       // The keyboard measured gone, or let go of ahead of it.
       if (going && bottom - top >= layout) going = false;
       const stageTop = going ? 0 : top;
@@ -164,26 +178,31 @@ export function useVisualViewport(): void {
       root.setProperty(VIEWPORT_TOP, `${stageTop}px`);
       root.setProperty(STAGE_HEIGHT, `${stageBottom - stageTop}px`);
       root.setProperty(KEYBOARD_INSET, `${Math.max(0, layout - stageBottom)}px`);
+
       // A keyboard that rose, or grew, over the focused field keeps its caret in view.
       if (taken > covered) caretAboveKeyboard(stageBottom);
       covered = taken;
     };
+
     // Focus leaving every typed field lets the keyboard go at once; a field taking it measures the keyboard again.
     const left = (event: FocusEvent) => {
       if (covered <= 0 || typedField(event.relatedTarget)) return;
       going = true;
       write();
     };
+
     const entered = (event: FocusEvent) => {
       if (!typedField(event.target)) return;
       going = false;
       write();
     };
+
     write();
     viewport.addEventListener("resize", write);
     viewport.addEventListener("scroll", write);
     document.addEventListener("focusout", left);
     document.addEventListener("focusin", entered);
+
     return () => {
       viewport.removeEventListener("resize", write);
       viewport.removeEventListener("scroll", write);

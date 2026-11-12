@@ -72,6 +72,7 @@ function draw(props: Parameters<typeof Breadcrumbs>[0]): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Breadcrumbs, props)));
+
   return container;
 }
 
@@ -80,7 +81,9 @@ function button(container: HTMLElement, name: string): HTMLButtonElement {
   const found = [...container.querySelectorAll("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`no button named ${name}`);
+
   return found;
 }
 
@@ -93,6 +96,7 @@ test("a path is one named landmark listing its crumbs in order, the current one 
       { label: "index.ts", current: true, onPress: () => undefined },
     ],
   });
+
   const nav = container.querySelector("nav");
   expect(nav?.getAttribute("aria-label")).toBe("Path");
   const items = [...(nav?.querySelectorAll("ol > li") ?? [])];
@@ -105,6 +109,7 @@ test("a path is one named landmark listing its crumbs in order, the current one 
 
 test("a crumb with no press is words, and a pressed crumb is handed itself", () => {
   const pressed: HTMLElement[] = [];
+
   const container = draw({
     label: "Path",
     crumbs: [
@@ -112,6 +117,7 @@ test("a crumb with no press is words, and a pressed crumb is handed itself", () 
       { label: "Launch", current: true },
     ],
   });
+
   expect([...container.querySelectorAll("button")].map((each) => each.textContent)).toEqual([
     "Tasks",
   ]);
@@ -124,6 +130,7 @@ test("a crumb that opens a dialog says so, and whether it stands open", () => {
   const crumbs = (expanded: boolean): Crumb[] => [
     { label: "src", popup: BREADCRUMB_POPUP.DIALOG, expanded, onPress: () => undefined },
   ];
+
   const container = draw({ label: "Path", crumbs: crumbs(false) });
   expect(button(container, "src").getAttribute("aria-haspopup")).toBe("dialog");
   expect(button(container, "src").getAttribute("aria-expanded")).toBe("false");
@@ -133,10 +140,13 @@ test("a crumb that opens a dialog says so, and whether it stands open", () => {
 
 test("a crumb's own name stands over its words, and the app's hint raises its hint", () => {
   const hinted: (string | undefined)[] = [];
+
   const Hint: FoldingButtonHint = ({ label, children }) => {
     hinted.push(label);
+
     return children;
   };
+
   const container = draw({
     label: "Path",
     hint: Hint,
@@ -144,6 +154,7 @@ test("a crumb's own name stands over its words, and the app's hint raises its hi
       { label: "…", name: "Folders: packages/db", hint: "packages/db", onPress: () => undefined },
     ],
   });
+
   expect(button(container, "Folders: packages/db").textContent).toBe("…");
   expect(hinted).toContain("packages/db");
 });
@@ -156,6 +167,7 @@ test("a crumb's glyph is decoration, and the app's hint hangs its card, a crumb 
       children,
       card === undefined ? null : createElement("aside", null, card),
     );
+
   const container = draw({
     label: "Path",
     hint: Hint,
@@ -174,6 +186,7 @@ test("a crumb's glyph is decoration, and the app's hint hangs its card, a crumb 
       },
     ],
   });
+
   const agent = button(container, "Quarantine the flaky test");
   expect(agent.textContent).toBe("Quarantine the flaky test");
   expect(agent.querySelector("svg")?.closest("[aria-hidden='true']")).not.toBeNull();
@@ -183,6 +196,7 @@ test("a crumb's glyph is decoration, and the app's hint hangs its card, a crumb 
 
 test("a toolbar's way back is a button named by its words, answering a press", () => {
   const pressed: string[] = [];
+
   const container = draw({
     label: "Path",
     variant: BREADCRUMBS_VARIANT.TITLE,
@@ -191,6 +205,7 @@ test("a toolbar's way back is a button named by its words, answering a press", (
       { label: "REL-1", current: true },
     ],
   });
+
   act(() => button(container, "Issues").click());
   expect(pressed).toEqual(["back"]);
   expect(container.querySelector("[aria-current='page']")?.textContent).toBe("REL-1");
@@ -230,10 +245,12 @@ test("a path too wide for its bar folds its first crumbs into one … naming the
 
 test("a path too wide for its bar led by a kept crumb folds nothing, as one led by a crumb that opens something", () => {
   layOut(250);
+
   const container = draw({
     label: "Path",
     crumbs: [{ label: "acme/relay", kept: true }, ...THREE_CRUMBS],
   });
+
   const items = [...container.querySelectorAll("ol > li")].map((item) => item.textContent);
   expect(items).toEqual([
     "acme/relay",
@@ -257,6 +274,7 @@ test("a path that fits its bar folds nothing", () => {
 test("the … of a folded path opens a menu of the crumbs it stands for, each leading where its crumb did", () => {
   layOut(250);
   const opened: string[] = [];
+
   const container = draw({
     label: "Path",
     crumbs: [
@@ -265,6 +283,7 @@ test("the … of a folded path opens a menu of the crumbs it stands for, each le
       { label: "What the expired invite page says", current: true },
     ],
   });
+
   act(() => button(container, "Teammate invitations › Build teammate invitations").click());
   const rows = [...document.body.querySelectorAll("[role='menuitem']")];
   expect(rows.map((row) => row.textContent)).toEqual([

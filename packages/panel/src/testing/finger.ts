@@ -38,12 +38,14 @@ export function underAFinger(): void {
         removeEventListener: () => undefined,
       }) as unknown as MediaQueryList,
   );
+
   onTestFinished(() => stub.mockRestore());
 }
 
 /** A finger held still on `target` well past a long press, then lifted. */
 export function longPress(target: HTMLElement): void {
   vi.useFakeTimers();
+
   try {
     act(() => {
       target.dispatchEvent(touch("pointerdown"));
@@ -54,6 +56,7 @@ export function longPress(target: HTMLElement): void {
   } finally {
     vi.useRealTimers();
   }
+
   act(() => {
     target.dispatchEvent(touch("pointerup"));
     target.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true }));

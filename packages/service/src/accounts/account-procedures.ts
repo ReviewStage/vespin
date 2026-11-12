@@ -66,6 +66,7 @@ const PRESENCE_DONE: PresenceDoneAnswer = { done: true };
 /** The account resource: every procedure but the provider keys' own, which are `provider-keys-procedures.ts`'s. */
 export function accountProcedures(seams: AccountProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** The caller's own stored snapshot, or the defaults for a user with none stored, the coding agents' the one its credentials pay for. */
     preferences: signedIn.preferences.effect(function* ({ context }) {
@@ -80,6 +81,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     access: signedIn.access.effect(function* ({ context }) {
       const access = yield* hostedStoreOrUnavailable(seams.readAccess(context.userId));
       const now = yield* Clock.currentTimeMillis;
+
       return {
         admin: isAdminRole(access.role),
         supportAccessUntil: standingSupportAccess(access.supportAccessUntil, now),
@@ -89,6 +91,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/inbox-pushes.ts`). */
     active: signedIn.active.effect(function* ({ context }) {
       yield* hostedStoreOrUnavailable(stampPresence(context.userId));
+
       return PRESENCE_DONE;
     }),
 

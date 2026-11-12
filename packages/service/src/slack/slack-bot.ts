@@ -372,14 +372,19 @@ const connectedMemberSlackId = Effect.fnUntraced(function* (
   userId: string,
 ) {
   const connections = yield* readIntegrationConnections(userId);
+
   for (const connection of connections) {
     if (connection.provider !== INTEGRATION_PROVIDER.SLACK) continue;
+
     if (connection.status !== INTEGRATION_ROW_STATUS.CONNECTED) continue;
     const found = yield* connectedSlackId(api, teamId, connection.connectSubject);
+
     if (Option.isNone(found)) continue;
     yield* recordSlackMemberLookup(organizationId, userId, found.value);
+
     return found;
   }
+
   return Option.none<string>();
 });
 
@@ -397,21 +402,30 @@ const memberSlackId = Effect.fn("web/slackMemberId")(function* (
   userId: string,
 ) {
   const kept = yield* slackMemberLookup(organizationId, userId);
+
   if (Option.isSome(kept) && kept.value.slackUserId !== null) {
     return Option.some(kept.value.slackUserId);
   }
+
   const connected = yield* connectedMemberSlackId(api, organizationId, teamId, userId);
+
   if (Option.isSome(connected)) return connected;
+
   if (Option.isSome(kept)) {
     const { lookedUpAt } = kept.value;
+
     const askedAgainAt = DateTime.addDuration(
       DateTime.fromDateUnsafe(lookedUpAt),
       SLACK_MEMBER_MISS_LIFETIME,
     );
+
     if (DateTime.isLessThan(yield* DateTime.now, askedAgainAt)) return Option.none<string>();
   }
+
   const email = (yield* readAccountPerson(userId))?.email;
+
   if (email === undefined) return Option.none<string>();
+
   const found = yield* api(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, { email }).pipe(
     Effect.flatMap((answer) =>
       readAnswer(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, LookupSchema, answer),
@@ -422,7 +436,9 @@ const memberSlackId = Effect.fn("web/slackMemberId")(function* (
       () => Effect.succeed(Option.none<string>()),
     ),
   );
+
   yield* recordSlackMemberLookup(organizationId, userId, Option.getOrNull(found));
+
   return found;
 });
 
@@ -440,20 +456,27 @@ const memberOfSlackUser = Effect.fn("web/slackMemberOf")(function* (
   slackUserId: string,
 ) {
   const kept = yield* slackMemberOf(organizationId, teamId, slackUserId);
+
   if (Option.isSome(kept)) return kept;
   const installation = yield* workspaceSlackInstallation(organizationId);
+
   if (Option.isNone(installation) || installation.value.teamId !== teamId) {
     return Option.none<string>();
   }
+
   const resolved = new Set<string>();
+
   for (const { userId, connectSubject } of yield* slackUnresolvedConnections(organizationId)) {
     if (resolved.has(userId)) continue;
     const found = yield* connectedSlackId(api, teamId, connectSubject);
+
     if (Option.isNone(found)) continue;
     resolved.add(userId);
     yield* recordSlackMemberLookup(organizationId, userId, found.value);
+
     if (found.value === slackUserId) return Option.some(userId);
   }
+
   return Option.none<string>();
 });
 
@@ -492,6 +515,7 @@ function uploadFiles(
     const sent = (yield* Effect.forEach(files, (file) => sentFile(api, transfer, file))).flatMap(
       (one) => (Option.isSome(one) ? [one.value] : []),
     );
+
     if (sent.length === 0) return;
     yield* api(SLACK_METHOD.FILES_COMPLETE_UPLOAD_EXTERNAL, {
       files: JSON.stringify(sent),
@@ -525,6 +549,7 @@ export function slackBotOver(
       download: () => Effect.succeedNone,
     };
   }
+
   return {
     configured: true,
     team: api(SLACK_METHOD.AUTH_TEST, {}).pipe(
@@ -534,14 +559,18 @@ export function slackBotOver(
     dm: (organizationId, userId, content, thread) =>
       Effect.gen(function* () {
         const installation = yield* workspaceSlackInstallation(organizationId);
+
         if (Option.isNone(installation)) return Option.none<SlackMessage>();
+
         const slackId = yield* memberSlackId(
           api,
           organizationId,
           installation.value.teamId,
           userId,
         );
+
         if (Option.isNone(slackId)) return Option.none<SlackMessage>();
+
         // Note that a user id as the channel writes to the bot's own conversation with them.
         const posted = yield* api(SLACK_METHOD.CHAT_POST_MESSAGE, {
           ...(thread === undefined
@@ -549,7 +578,9 @@ export function slackBotOver(
             : { channel: thread.channel, thread_ts: thread.ts }),
           ...postArgs(content),
         });
+
         const message = yield* readAnswer(SLACK_METHOD.CHAT_POST_MESSAGE, PostedSchema, posted);
+
         return Option.some<SlackMessage>({ channel: message.channel, ts: message.ts });
       }).pipe(Effect.catch(swallowed<SlackMessage>("write to a member"))),
     memberOf: (organizationId, teamId, slackUserId) =>
@@ -698,6 +729,7 @@ function tokenFor(
   if (memberSubject === undefined) {
     return botToken(connector).pipe(Effect.mapError(() => new SlackBotFailure({ method })));
   }
+
   return members.token(memberSubject, { fresh: false }).pipe(
     Effect.map((issued) => Redacted.value(issued.token)),
     Effect.mapError(() => new SlackBotFailure({ method })),
@@ -713,23 +745,29 @@ function slackWebApi(
   return (method, args, memberSubject) =>
     Effect.gen(function* () {
       const token = yield* tokenFor(method, connector, members, memberSubject);
+
       const request = HttpClientRequest.post(`${SLACK_API_ORIGIN}/api/${method}`).pipe(
         HttpClientRequest.bearerToken(token),
         HttpClientRequest.acceptJson,
         HttpClientRequest.bodyUrlParams(args),
       );
+
       const answer = yield* client.execute(request).pipe(
         Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Unknown)),
         Effect.scoped,
         Effect.mapError(() => new SlackBotFailure({ method })),
       );
+
       const said = yield* readAnswer(method, AnswerSchema, answer);
+
       if (!said.ok) {
         const code = codeOf(said.error);
+
         return yield* Effect.fail(
           new SlackBotFailure(code === undefined ? { method } : { method, code }),
         );
       }
+
       return answer;
     });
 }
@@ -740,6 +778,7 @@ const SLACK_FILE_HOST = "files.slack.com";
 /** Whether an address is https on the host given, and none other. */
 function isHttpsOn(url: string, host: string | undefined): boolean {
   const parsed = URL.parse(url);
+
   return (
     parsed !== null &&
     parsed.protocol === "https:" &&
@@ -755,13 +794,16 @@ function isHttpsOn(url: string, host: string | undefined): boolean {
  */
 function slackFileTransfer(connector: string, client: HttpClient.HttpClient): SlackFileTransfer {
   const failed = () => new SlackFileFailure();
+
   return {
     send: (url, bytes) =>
       Effect.gen(function* () {
         if (!isHttpsOn(url, undefined)) return yield* Effect.fail(failed());
+
         const request = HttpClientRequest.post(url).pipe(
           HttpClientRequest.bodyUint8Array(bytes, "application/octet-stream"),
         );
+
         yield* client
           .execute(request)
           .pipe(
@@ -775,14 +817,19 @@ function slackFileTransfer(connector: string, client: HttpClient.HttpClient): Sl
         if (!isHttpsOn(url, SLACK_FILE_HOST)) return yield* Effect.fail(failed());
         const token = yield* botToken(connector).pipe(Effect.mapError(failed));
         const request = HttpClientRequest.get(url).pipe(HttpClientRequest.bearerToken(token));
+
         const bytes = yield* Effect.gen(function* () {
           const response = yield* HttpClientResponse.filterStatusOk(yield* client.execute(request));
+
           if (Number(response.headers["content-length"] ?? 0) > maxBytes) {
             return yield* Effect.fail(failed());
           }
+
           return yield* response.arrayBuffer;
         }).pipe(Effect.scoped, Effect.mapError(failed));
+
         if (bytes.byteLength > maxBytes) return yield* Effect.fail(failed());
+
         return new Uint8Array(bytes);
       }),
   };
@@ -799,9 +846,11 @@ export const slackBotFromEnvironment: Layer.Layer<
     const connector = text(
       Option.getOrUndefined(yield* Config.option(Config.String(SLACK_BOT_ENVIRONMENT.CONNECTOR))),
     );
+
     if (connector === undefined) return slackBotOver(undefined);
     const members = (yield* IntegrationConnect)[INTEGRATION_PROVIDER.SLACK];
     const client = yield* HttpClient.HttpClient;
+
     return slackBotOver(
       slackWebApi(connector, members, client),
       slackFileTransfer(connector, client),

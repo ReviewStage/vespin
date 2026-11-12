@@ -13,16 +13,19 @@ it.effect(
       // A parent's write at 100 ms wakes a look that finds nothing; the write that moves the read is heard at 900 ms.
       const heard = [Option.some(100), Option.some(900)];
       let wakes = 0;
+
       const hub: SyncShape = {
         watch: () =>
           Effect.succeed({
             next: Effect.sync(() => {
               wakes += 1;
+
               return [`tx-${wakes}`];
             }),
             heardAt: Effect.sync(() => heard[wakes - 1] ?? Option.none()),
           }),
       };
+
       const reads = [false, false, true];
       let looks = 0;
 

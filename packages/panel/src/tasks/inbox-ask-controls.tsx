@@ -128,6 +128,7 @@ function choiceOptions(
       : { detail: option.detail }),
     badge: option.recommended ? RECOMMENDED : undefined,
   }));
+
   return cards ? [...drawn, { value: NONE_VALUE, label: NONE_OF_THESE }] : drawn;
 }
 
@@ -143,9 +144,12 @@ function cardValues(draft: InboxDraft): readonly string[] {
  */
 function withCardValues(draft: InboxDraft, values: readonly string[]): InboxDraft {
   const none = values.includes(NONE_VALUE);
+
   if (none && !picksNone(draft)) return withNoneOfThese(draft);
   const choices = values.filter((value) => value !== NONE_VALUE);
+
   if (none && choices.length === 0) return draft;
+
   return withPicks(picksNone(draft) ? withNoneOfThese(draft) : draft, choices);
 }
 
@@ -185,6 +189,7 @@ function ChoiceOptions({
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
   const cards = optionsCarryMedia(choice);
+
   const options = choiceOptions(
     choice.options.map((option) => ({
       ...option,
@@ -192,6 +197,7 @@ function ChoiceOptions({
     })),
     cards,
   );
+
   return (
     <div {...(readOnly ? {} : { [OPTIONS_ATTRIBUTE]: "" })}>
       <ChoiceList
@@ -315,8 +321,10 @@ function InboxFormField({
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
   const value = fieldValueOf(draft, field.label);
+
   const set = (next: string | number | boolean | undefined) =>
     onDraft(withValue(draft, field.label, next));
+
   switch (field.type) {
     case INBOX_FIELD.TEXT:
       return (
@@ -335,9 +343,12 @@ function InboxFormField({
           >
             {(control) => {
               const words = value === undefined ? "" : String(value);
+
               const onChange = (typed: string | undefined) =>
                 set(typed === undefined || typed === "" ? undefined : typed);
+
               if (readOnly) return <AnsweredText control={control} words={words} />;
+
               return text === undefined ? (
                 <TextField
                   field={control}
@@ -457,12 +468,14 @@ const WRITES_LINES = 'textarea, [contenteditable]:not([contenteditable="false"])
 /** Whether a key goes to whatever takes typing: a field, a select, or an editor. */
 export function takesTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+
   return target.isContentEditable || target.matches(`input, select, ${WRITES_LINES}`);
 }
 
 /** Whether a key goes to something written in lines, whose own Enter breaks one: an editor or a field of several lines. */
 function writesLines(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+
   return target.isContentEditable || target.matches(WRITES_LINES);
 }
 
@@ -492,23 +505,31 @@ const FIELD_CONTROL = 'input, [contenteditable="true"], button:not([tabindex="-1
  */
 export function focusMissing(box: HTMLElement | null, missing: InboxMissing): void {
   if (box === null) return;
+
   switch (missing.kind) {
     case INBOX_MISSING.OPTION: {
       const rows = optionRows(box);
+
       const option =
         rows.find((row) => row.tabIndex === 0) ??
         rows[0] ??
         box.querySelector<HTMLElement>(`[${OPTIONS_ATTRIBUTE}] button`);
+
       option?.focus();
+
       return;
     }
+
     case INBOX_MISSING.FIELD: {
       const field = [...box.querySelectorAll<HTMLElement>("[data-inbox-field-label]")].find(
         (each) => each.dataset.inboxFieldLabel === missing.label,
       );
+
       field?.querySelector<HTMLElement>(FIELD_CONTROL)?.focus();
+
       return;
     }
+
     case INBOX_MISSING.WORDS:
       [...box.querySelectorAll<HTMLElement>('form.inbox-answer [contenteditable="true"]')]
         .find((editor) => editor.closest("[data-inbox-draft-ask]") === null)
@@ -532,6 +553,7 @@ function onResponseKey(
   event: React.KeyboardEvent,
 ): void {
   if (event.key !== "Enter" || event.shiftKey || event.altKey || isComposingKey(event)) return;
+
   if (writesLines(event.target) || opensLink(event.target)) return;
   // Note that the key is held back here, as it bubbles, which keeps a focused option's button from pressing it.
   event.preventDefault();
@@ -621,6 +643,7 @@ function StepBox({
   const openLink = useOpenLink();
   const link = useMentionLink();
   const { say, fences } = stepParts(step);
+
   const detail =
     fences.length === 0 ? undefined : (
       <Stack gap={GAP.CONTROL}>
@@ -640,6 +663,7 @@ function StepBox({
         ))}
       </Stack>
     );
+
   return (
     <Checkbox
       checked={checked}
@@ -700,12 +724,14 @@ function OpenControls({
   doors: AskDoors;
 }): React.JSX.Element | null {
   const { draft, disabled, onDraft } = doors;
+
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       return decideButtons(ask) ? (
         <div className={INBOX_ASK_PRESSES} {...{ [OPTIONS_ATTRIBUTE]: "" }}>
           {ask.options.map((option, at) => {
             const picked = draft.choices.includes(option.label);
+
             return (
               <AskPress
                 key={option.label}
@@ -734,6 +760,7 @@ function OpenControls({
       const steps = stepsOf(ask, title);
       const ticked = new Set(shownTicks(ask, draft));
       const decision = doDecision(ask, draft);
+
       return (
         <>
           {steps.length === 0 ? null : (
@@ -773,6 +800,7 @@ function OpenControls({
         </>
       );
     }
+
     case INBOX_ASK.ANSWER:
       // An ask of words alone has no controls: the box's line is its answer.
       return ask.fields === undefined ? null : (
@@ -861,6 +889,7 @@ function LeftControls({
     case INBOX_ASK.DO: {
       const steps = stepsOf(ask, title);
       const ticked = new Set(draft.steps ?? []);
+
       return (
         <>
           {steps.length === 0 ? null : (
@@ -895,6 +924,7 @@ function LeftControls({
         </>
       );
     }
+
     case INBOX_ASK.ANSWER:
       return ask.fields === undefined ? null : (
         <FormFields
@@ -951,6 +981,7 @@ export function DraftQuestion({
 /** The steps a `do` ask shows: its own, or the one its title names where it names none; none where nothing names that step. */
 function stepsOf(ask: Extract<InboxAsk, { type: typeof INBOX_ASK.DO }>, title: string | undefined) {
   if (ask.steps.length > 0) return ask.steps;
+
   return title === undefined ? [] : [title];
 }
 
@@ -973,6 +1004,7 @@ export function AnsweredCard({
   answers: InboxAnswers;
 }): React.JSX.Element | null {
   if (!hasControls(ask)) return null;
+
   return (
     // Note that it is no `inbox-ask` card: the controls stand in the reply itself, at its words' left edge.
     <div
@@ -990,6 +1022,7 @@ export const ANSWERED = "Answered";
 /** Why an ask was taken back, as a muted sentence under the line saying so; nothing where none was said. */
 export function WithdrawnWhy({ reason }: { reason: string | undefined }): React.JSX.Element | null {
   if (reason === undefined) return null;
+
   return (
     <p
       className="inbox-ask-why m-0 text-muted-foreground wrap-anywhere"

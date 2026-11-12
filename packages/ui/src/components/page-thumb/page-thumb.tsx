@@ -75,7 +75,9 @@ function VideoStill({
   fit: PageThumbFit;
 }): React.JSX.Element | null {
   const url = useBlobUrl(dataUrl);
+
   if (url === undefined) return null;
+
   return (
     <video
       className={`ui-page-thumb-image pointer-events-none size-full ${FIT_CLASS[fit]}`}
@@ -114,6 +116,7 @@ export function PageThumb({
   glyph?: ReactNode;
 }): React.JSX.Element {
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
+
   return (
     <AspectRatio
       as="span"

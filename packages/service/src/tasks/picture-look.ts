@@ -131,6 +131,7 @@ export const LOOK_AT_PICTURE_TOOL = {
 /** The tool in the words of the agent's workspace's experiments: a thread's pictures alone where Task descriptions are off. */
 export function lookAtPictureToolOf(on: { readonly descriptionsOn: boolean }) {
   if (on.descriptionsOn) return LOOK_AT_PICTURE_TOOL;
+
   return {
     name: AGENT_TOOL.LOOK_AT_PICTURE,
     description: lookWordsOf(LOOK_WORDS.off.tool),
@@ -141,6 +142,7 @@ export function lookAtPictureToolOf(on: { readonly descriptionsOn: boolean }) {
 /** The plan a call's address names, whose picture it looks at; nothing where the call names no picture's address. */
 export function lookedTaskOf(input: UnparsedWireValue): string | undefined {
   const read = readInput(input);
+
   return Result.isSuccess(read)
     ? descriptionAttachmentOf(read.success.address.trim())?.taskId
     : undefined;
@@ -149,6 +151,7 @@ export function lookedTaskOf(input: UnparsedWireValue): string | undefined {
 /** The thread's picture a call's address names; nothing where it names no thread's picture. */
 export function lookedThreadPictureOf(input: UnparsedWireValue): InboxAttachmentRef | undefined {
   const read = readInput(input);
+
   return Result.isSuccess(read) ? inboxAttachmentOf(read.success.address.trim()) : undefined;
 }
 
@@ -167,6 +170,7 @@ function looked(picture: Picture): PictureLookResult {
   if (!isImageType(picture.contentType)) {
     return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
   }
+
   return {
     status: PICTURE_LOOK_STATUS.LOOKED,
     mediaType: picture.contentType,
@@ -184,12 +188,15 @@ export function runLookAtPicture(
   input: UnparsedWireValue,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   const read = readInput(input);
+
   if (Result.isFailure(read))
     return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNREADABLE));
   const named = descriptionAttachmentOf(read.success.address.trim());
+
   if (named === undefined || named.taskId !== description.taskId) {
     return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
   }
+
   return readDescriptionAttachment(description.userId, description.taskId, named.attachmentId).pipe(
     Effect.map((picture) =>
       Option.isNone(picture)
@@ -215,7 +222,9 @@ export function runLookAtThreadPicture(
     Effect.map((file) => {
       if (Option.isNone(file)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
       const { contentType, bytes } = file.value;
+
       if (isImageType(contentType)) return looked({ contentType, bytes });
+
       return isPictureMediaType(contentType)
         ? pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO)
         : pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);

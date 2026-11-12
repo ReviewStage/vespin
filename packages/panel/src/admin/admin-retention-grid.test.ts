@@ -57,6 +57,7 @@ function render(retention: AdminMetrics["retention"]): HTMLElement {
   document.body.replaceChildren(container);
   root = createRoot(container);
   act(() => root?.render(createElement(RetentionGrid, { retention })));
+
   return container;
 }
 
@@ -73,6 +74,7 @@ test("the grid names its weeks, its cohorts, and each cohort's size", () => {
   for (const label of ["Cohort", "Accounts", "Wk 0", "Wk 1", "Wk 2", "Sep 28", "Oct 5", "Oct 12"]) {
     expect(cellsReading(page, label)).toHaveLength(1);
   }
+
   expect(page.textContent).not.toContain("No accounts created");
 });
 
@@ -110,6 +112,7 @@ test("a week the calendar has not reached draws no cell", () => {
     page.querySelectorAll<HTMLElement>("div[title]"),
     (cell) => cell.textContent,
   );
+
   expect(shares).toEqual(["100%", "25%", "0%", "—", "—", "50%"]);
 });
 

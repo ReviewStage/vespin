@@ -85,18 +85,21 @@ const LONG = Array.from(
 /** A code editor over `COLORED`, holding its colors for the lines they still spell, as the host's would arrive a moment after a keystroke. */
 function EditedCode(): React.JSX.Element {
   const [code, setCode] = useState(COLORED);
+
   return <CodeEditor label="Colored code" value={code} onChange={setCode} lines={COLORED_LINES} />;
 }
 
 /** A code editor numbering its lines, as a script's stands, a few lines tall while it holds fewer. */
 function NumberedCode(): React.JSX.Element {
   const [code, setCode] = useState(SCRIPT);
+
   return <CodeEditor label="Numbered code" value={code} onChange={setCode} rows={3} lineNumbers />;
 }
 
 /** An empty code editor, its placeholder standing. */
 function EmptyCode(): React.JSX.Element {
   const [code, setCode] = useState("");
+
   return (
     <CodeEditor label="Empty code" value={code} onChange={setCode} placeholder={SHORT} rows={3} />
   );
@@ -105,6 +108,7 @@ function EmptyCode(): React.JSX.Element {
 /** The header alone, its language a press, as a block open in a text's editor wears it; the press here only says the menu is open. */
 function PickedLanguage(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return (
     <CodeCardHeader
       glyph={<TerminalIcon />}

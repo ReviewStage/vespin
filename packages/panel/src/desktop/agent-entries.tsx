@@ -36,6 +36,7 @@ export function agentEntries(
   return listed.map((agent) => {
     const label = agentName(agent, agents.models);
     const chosen = main.tab !== undefined && sameTab(agentTab(agent.id), main.tab);
+
     return {
       row: {
         id: agent.id,

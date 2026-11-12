@@ -230,16 +230,21 @@ function firstDriven(
 ): { readonly index: number; readonly tab: string } | undefined {
   // Note that `null` is a tab this call opened, whose id is not known until it runs.
   let tab: string | null | undefined;
+
   for (const [index, action] of actions.entries()) {
     if (action.action === BROWSER_AGENT_ACTION.LIST || isRecordingAction(action)) continue;
+
     if (action.action === BROWSER_AGENT_ACTION.OPEN) {
       tab = null;
       continue;
     }
+
     const named = action.tab ?? tab;
+
     if (typeof named === "string" && driven.has(named)) return { index, tab: named };
     tab = action.action === BROWSER_AGENT_ACTION.CLOSE ? undefined : named;
   }
+
   return undefined;
 }
 
@@ -269,6 +274,7 @@ function withOpeners(
       .filter((row) => row.openedBy === AGENT_BROWSER_TAB_OPENER.MEMBER)
       .map((row) => row.targetId),
   );
+
   return tabs.map((tab) =>
     memberOpened.has(tab.tab) ? { ...tab, openedBy: AGENT_BROWSER_TAB_OPENER.MEMBER } : tab,
   );
@@ -277,20 +283,26 @@ function withOpeners(
 /** The tabs the steps acted on, every tab a list named among them, in the order first acted on, a closed one left out. */
 function tabsActedOn(steps: readonly BrowserAgentStep[]): readonly string[] {
   const acted: string[] = [];
+
   for (const step of steps) {
     if (step.status !== BROWSER_STEP_STATUS.DONE) continue;
+
     if (step.action === BROWSER_AGENT_ACTION.LIST) {
       for (const { tab } of step.tabs) if (!acted.includes(tab)) acted.push(tab);
       continue;
     }
+
     if (!("tab" in step)) continue;
     const at = acted.indexOf(step.tab);
+
     if (step.action === BROWSER_AGENT_ACTION.CLOSE) {
       if (at >= 0) acted.splice(at, 1);
       continue;
     }
+
     if (at < 0) acted.push(step.tab);
   }
+
   return acted;
 }
 
@@ -301,11 +313,14 @@ function tabsActedOn(steps: readonly BrowserAgentStep[]): readonly string[] {
  */
 function tabsMoved(steps: readonly BrowserAgentStep[]): readonly string[] {
   const moved = new Set<string>();
+
   for (const step of steps) {
     if (step.status !== BROWSER_STEP_STATUS.DONE || !("tab" in step)) continue;
+
     if (step.action === BROWSER_AGENT_ACTION.CLOSE) moved.delete(step.tab);
     else if (MOVING_ACTIONS.has(step.action)) moved.add(step.tab);
   }
+
   return [...moved];
 }
 
@@ -326,15 +341,19 @@ function keepTabs(
   return Effect.gen(function* () {
     const done = steps.filter((step) => step.status === BROWSER_STEP_STATUS.DONE);
     const listed = done.some((step) => step.action === BROWSER_AGENT_ACTION.LIST);
+
     const closed = new Set(
       done.flatMap((step) =>
         step.action === BROWSER_AGENT_ACTION.CLOSE && "tab" in step ? [step.tab] : [],
       ),
     );
+
     const held = new Map(pages.map((page) => [page.targetId, page]));
     const written = listed ? [...held.keys()] : tabsActedOn(done);
+
     for (const targetId of written) {
       const page = held.get(targetId);
+
       if (page === undefined) continue;
       yield* upsertBrowserTab({
         conversationId,
@@ -344,8 +363,10 @@ function keepTabs(
         openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
       });
     }
+
     const rows = yield* listAgentBrowserTabs(conversationId);
     const gone = rows.filter((row) => closed.has(row.targetId) && !held.has(row.targetId));
+
     for (const row of gone) yield* closeBrowserTab(conversationId, row.id);
   });
 }
@@ -368,6 +389,7 @@ function browserFor(call: BrowserCall) {
  */
 function withoutStartPage(cdp: CdpSession, kept: ReadonlySet<string>): CdpSession {
   const opened = new Set<string>();
+
   return {
     ...cdp,
     pages: Effect.map(cdp.pages, (pages) =>
@@ -389,11 +411,13 @@ function withoutStartPage(cdp: CdpSession, kept: ReadonlySet<string>): CdpSessio
  */
 function settleTitles(cdp: CdpSession, steps: readonly BrowserAgentStep[]) {
   const moved = tabsMoved(steps);
+
   const waits = moved.map((tab) =>
     runBrowserActions(cdp, [
       { action: BROWSER_AGENT_ACTION.WAIT, tab, timeoutMs: TITLE_SETTLE_MS },
     ]),
   );
+
   return Effect.all(waits, { concurrency: "unbounded", discard: true }).pipe(
     Effect.timeout(Duration.millis(TITLE_SETTLE_MS)),
     Effect.ignore,
@@ -413,6 +437,7 @@ function withSettledTitles(
 ): readonly BrowserAgentStep[] {
   // Each tab still standing that the call moved, by the step that last moved it.
   const lastMoved = new Map<string, number>();
+
   for (const tab of tabsMoved(steps)) {
     lastMoved.set(
       tab,
@@ -425,17 +450,22 @@ function withSettledTitles(
       ),
     );
   }
+
   return steps.map((step, at) => {
     if (step.action !== BROWSER_AGENT_ACTION.LIST || step.status !== BROWSER_STEP_STATUS.DONE) {
       return step;
     }
+
     const tabs = step.tabs.map((listed) => {
       const page = byId.get(listed.tab);
       const moved = lastMoved.get(listed.tab);
+
       if (moved === undefined || moved > at || page === undefined) return listed;
       const settled = shownTab(page);
+
       return settled.url === listed.url ? { ...listed, title: settled.title } : listed;
     });
+
     return { ...step, tabs };
   });
 }
@@ -473,9 +503,11 @@ const RECORDING_REFUSAL = {
  */
 function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | DatabaseServices> {
   const unreachable = (failure: BrowserUnreachable) => failure.message;
+
   return {
     start: Effect.gen(function* () {
       const browser = yield* AgentBrowser;
+
       const started = yield* browser
         .startRecording(
           call.browserSession,
@@ -483,6 +515,7 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
           CONVERSATION_PICTURE_BOUNDS.MAX_BYTES,
         )
         .pipe(Effect.mapError(unreachable));
+
       if (!started.ok) {
         return yield* Effect.fail(
           started.exitCode === RECORDING_START_EXIT.NO_ENCODER
@@ -490,20 +523,26 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
             : RECORDING_REFUSAL.NOT_STARTED,
         );
       }
+
       if (started.running) return yield* Effect.fail(RECORDING_REFUSAL.RUNNING);
+
       return BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS;
     }),
     stop: (caption) =>
       Effect.gen(function* () {
         const browser = yield* AgentBrowser;
+
         const read = yield* browser
           .stopRecording(call.browserSession, CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)
           .pipe(Effect.mapError(unreachable));
+
         if (!read.ok) return yield* Effect.fail(RECORDING_REFUSAL[read.reason]);
         const captioned = caption === undefined ? {} : { caption };
         const dimensions = webmDimensions(read.bytes);
+
         if (dimensions === undefined)
           return yield* Effect.fail(RECORDING_REFUSAL[RECORDING_FAILURE.ENCODER]);
+
         const kept = yield* keepConversationPicture(call.transcript, {
           bytes: read.bytes,
           contentType: CONVERSATION_MEDIA_TYPE.WEBM,
@@ -513,6 +552,7 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
           Effect.tapError(logStoreFailure),
           Effect.mapError(() => RECORDING_REFUSAL.UNKEPT),
         );
+
         if (Option.isNone(kept)) {
           return {
             seconds: read.seconds,
@@ -522,6 +562,7 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
             byteCount: read.bytes.byteLength,
           };
         }
+
         return {
           seconds: read.seconds,
           ...captioned,
@@ -541,17 +582,22 @@ function runOn(cdp: CdpSession, call: BrowserCall, actions: readonly BrowserAgen
     yield* settleTitles(cdp, run.steps);
     const pages = yield* Effect.result(cdp.pages);
     const held = Result.isSuccess(pages) ? pages.success : [];
+
     if (Result.isSuccess(pages)) {
       yield* keepTabs(call.conversationId, run.steps, held).pipe(
         Effect.tapError(logStoreFailure),
         Effect.ignore,
       );
     }
+
     const byId = new Map(held.map((page) => [page.targetId, page]));
+
     const tabs = tabsActedOn(run.steps).flatMap((tab) => {
       const page = byId.get(tab);
+
       return page === undefined ? [] : [shownTab(page)];
     });
+
     return { run: { ...run, steps: withSettledTitles(run.steps, byId) }, tabs };
   });
 }
@@ -569,16 +615,20 @@ function keepScreenshot(
     const bytes = new Uint8Array(Buffer.from(kept.data, "base64"));
     const contentType = sniffImageType(bytes);
     const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
+
     if (contentType === undefined || dimensions === undefined) {
       return { omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength };
     }
+
     const picture = yield* keepConversationPicture(transcript, {
       bytes,
       contentType,
       ...dimensions,
     });
+
     if (Option.isNone(picture))
       return { omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength };
+
     return { picture: { ...picture.value } };
   });
 }
@@ -597,7 +647,9 @@ function keptSteps(
     if (step.action !== BROWSER_AGENT_ACTION.SCREENSHOT || step.status !== BROWSER_STEP_STATUS.DONE)
       return Effect.succeed(step);
     const { kept, ...shown } = step;
+
     if (kept === undefined) return Effect.succeed(shown);
+
     return keepScreenshot(transcript, kept).pipe(
       Effect.map((note) => ({ ...shown, ...note })),
       Effect.tapError(logStoreFailure),
@@ -618,8 +670,10 @@ export function runBrowserTool(
   input: UnparsedWireValue,
 ): Effect.Effect<BrowserToolResult, never, AgentBrowser | DatabaseServices> {
   const read = readInput(input);
+
   if (Result.isFailure(read)) {
     const at = read.failure.path.join(".");
+
     return Effect.succeed(
       browserNotRun(
         `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. Name 1 to ` +
@@ -627,14 +681,18 @@ export function runBrowserTool(
       ),
     );
   }
+
   const { actions } = read.success;
+
   return Effect.gen(function* () {
     // Note that the sandbox is opened first, because the browser
     // is found by the sandbox its session is tagged with, and an agent's first call may be this one.
     const opened = yield* Effect.result(
       Effect.tryPromise({ try: async () => call.openSandbox(), catch: () => "not opened" }),
     );
+
     if (Result.isFailure(opened)) return browserNotRun(BROWSER_TOOL_REFUSAL.NO_SANDBOX);
+
     // Note that the browser is reached before the takeovers are read, because a browser that
     // started afresh reopens the kept tabs on new targets, which the takeovers then name.
     const ran = yield* Effect.result(
@@ -646,24 +704,32 @@ export function runBrowserTool(
           const refused = firstDriven(actions, drivenTabs(rows, now));
           const runnable = refused === undefined ? actions : actions.slice(0, refused.index);
           const kept = new Set(rows.map((row) => row.targetId));
+
           const outcome =
             runnable.length === 0
               ? { run: { steps: [], skipped: 0 }, tabs: [] }
               : yield* runOn(withoutStartPage(cdp, kept), call, runnable);
+
           return { ...outcome, tabs: withOpeners(outcome.tabs, rows), refused, runnable };
         }),
       ),
     );
+
     if (Result.isFailure(ran)) {
       if (ran.failure._tag !== "BrowserUnreachable") return yield* Effect.fail(ran.failure);
+
       return browserNotRun(`${BROWSER_TOOL_REFUSAL.UNREACHABLE} ${ran.failure.message}.`);
     }
+
     const { run, tabs, refused, runnable } = ran.success;
+
     const reachedRefused =
       refused !== undefined &&
       run.steps.length === runnable.length &&
       run.steps.every((step) => step.status === BROWSER_STEP_STATUS.DONE);
+
     const ranSteps = yield* keptSteps(call.transcript, run.steps);
+
     const steps: readonly BrowserToolStep[] =
       refused === undefined || !reachedRefused
         ? ranSteps
@@ -676,6 +742,7 @@ export function runBrowserTool(
               error: cutBrowserText(drivenWords(refused.tab), BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS),
             },
           ];
+
     return {
       status: BROWSER_TOOL_STATUS.RAN,
       steps,
@@ -716,14 +783,17 @@ const KEPT_NOTE_KEYS: readonly string[] = ["picture", "omitted", "byteCount"];
 function withoutPictures(output: UnparsedWireValue, forModel: boolean): UnparsedWireValue {
   if (!isRecord(output) || !isRan(output) || !Array.isArray(output.steps)) return output;
   const steps: readonly UnparsedWireValue[] = output.steps;
+
   return unparsedWire({
     ...output,
     steps: steps.map((step) => {
       if (!isRecord(step) || !isScreenshotted(step)) return step;
       const { data: _data, ...image } = step.image;
+
       const kept = forModel
         ? Object.fromEntries(Object.entries(step).filter(([key]) => !KEPT_NOTE_KEYS.includes(key)))
         : step;
+
       return { ...kept, image };
     }),
   });
@@ -752,11 +822,15 @@ export function browserModelOutput(output: UnparsedWireValue): BrowserModelOutpu
   if (!isRecord(output) || !isRan(output) || !Array.isArray(output.steps)) {
     return { type: "json", value: output };
   }
+
   const steps: readonly UnparsedWireValue[] = output.steps;
+
   const pictures = steps.flatMap((step) =>
     isScreenshotted(step) ? [{ tab: step.tab, mime: step.image.mime, data: step.image.data }] : [],
   );
+
   if (pictures.length === 0) return { type: "json", value: output };
+
   return {
     type: "content",
     value: [

@@ -49,13 +49,19 @@ export function dispatchRoutes(routes: ReadonlyMap<string, Route>): Route {
       url.searchParams.delete(DISPATCH_QUERY.ROUTE);
       url.searchParams.delete(DISPATCH_QUERY.PATH);
       const member = key === null || key === ORPC_ROUTE_KEY ? undefined : routes.get(key);
+
       if (key !== null && member !== undefined) {
         url.pathname = `${API_PREFIX}${carried ?? key}`;
+
         return member.fetch(restoredRequest(url, request));
       }
+
       const orpc = routes.get(ORPC_ROUTE_KEY);
+
       if (orpc === undefined) return new Response(null, { status: 404 });
+
       if (carried !== null) url.pathname = `${API_PREFIX}${carried}`;
+
       return orpc.fetch(restoredRequest(url, request));
     },
   };
@@ -70,7 +76,9 @@ function restoredRequest(url: URL, request: Request): Request {
     headers: request.headers,
     signal: request.signal,
   };
+
   if (request.body === null) return new Request(url, init);
   const streaming: StreamingRequestInit = { ...init, body: request.body, duplex: "half" };
+
   return new Request(url, streaming);
 }

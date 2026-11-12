@@ -10,6 +10,7 @@ export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
 export default function NewTaskScreen() {
   const router = useRouter();
   const switcher = useWorkspaceSwitcher();
+
   return (
     <>
       <Stack.Screen options={{ title: "New task" }} />

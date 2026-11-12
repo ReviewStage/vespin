@@ -9,9 +9,11 @@ function nodeId(parts: readonly string[]): string {
     .update(JSON.stringify(parts), "utf8")
     .digest()
     .subarray(0, 16);
+
   digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x80;
   digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
   const hex = digest.toString("hex");
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
@@ -24,6 +26,7 @@ describe("host ids", () => {
       ["sent", "naïve — ünïcode 🙂"],
       ["sent", ""],
     ];
+
     for (const parts of coordinates) expect(hostMintedId(parts)).toBe(nodeId(parts));
   });
 

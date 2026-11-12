@@ -36,6 +36,7 @@ export function askForName({ title, act, name, onName }: NameAsk): void {
         isPreferred: true,
         onPress: (typed) => {
           const kept = typed?.trim() ?? "";
+
           if (kept !== "" && kept !== name.trim()) onName(kept);
         },
       },

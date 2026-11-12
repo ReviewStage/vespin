@@ -20,6 +20,7 @@ export const webAuthSession: AuthSession = {
       preferEphemeralSession: false,
       preferUniversalLinks: true,
     });
+
     return result.type === "success"
       ? { end: AUTH_SESSION_END.REDIRECTED, url: result.url }
       : { end: AUTH_SESSION_END.CLOSED };

@@ -54,7 +54,9 @@ export function Refreshing({
       <PageSections>{children}</PageSections>
     </div>
   );
+
   if (failure === undefined) return dimmed;
+
   return (
     <Stack gap={GAP.SECTION}>
       <ErrorState
@@ -108,6 +110,7 @@ export function AdminViewOptions({
 }): React.JSX.Element {
   const menu = useMenu(true);
   const groups: MenuEntry[][] = [];
+
   if (windowDays !== undefined && onWindowDaysChange !== undefined) {
     groups.push([
       {
@@ -121,7 +124,9 @@ export function AdminViewOptions({
       },
     ]);
   }
+
   const switches: MenuEntry[] = [];
+
   if (sharedOnly !== undefined && onSharedOnlyChange !== undefined) {
     switches.push({
       label: "Shared only",
@@ -131,6 +136,7 @@ export function AdminViewOptions({
       onSelect: () => onSharedOnlyChange(!sharedOnly),
     });
   }
+
   if (hideAdmins !== undefined && onHideAdminsChange !== undefined) {
     switches.push({
       label: "Include admins",
@@ -140,7 +146,9 @@ export function AdminViewOptions({
       onSelect: () => onHideAdminsChange(!hideAdmins),
     });
   }
+
   if (switches.length > 0) groups.push(switches);
+
   return (
     <>
       <Tooltip label={VIEW_OPTIONS}>

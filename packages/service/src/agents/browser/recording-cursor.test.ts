@@ -94,6 +94,7 @@ test("a key a viewer could not see shows as key caps, and a key that only types 
   const field = document.createElement("input");
   field.type = "password";
   document.body.append(field);
+
   const press = (init: KeyboardEventInit) =>
     field.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
 

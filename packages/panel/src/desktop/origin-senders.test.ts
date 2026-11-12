@@ -92,6 +92,7 @@ async function mount(input: {
       title: null,
     },
   ]);
+
   const control = tasksControl({
     me: input.reader,
     page: TASKS_PAGE.DOCUMENT,
@@ -117,6 +118,7 @@ async function mount(input: {
       me: input.reader,
     }),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -136,6 +138,7 @@ async function mount(input: {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return { container, chosen };
 }
 
@@ -144,9 +147,11 @@ function words(line: Element | null | undefined): string {
   if (line == null) return "";
   const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
   let said = "";
+
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (node.parentElement?.closest(".actor-mark") == null) said += node.textContent ?? "";
   }
+
   return said;
 }
 
@@ -182,15 +187,19 @@ test("the line naming who sent the description stands under its card, then when 
   const card =
     container.querySelector<HTMLElement>(".agent-origin [data-origin-description]") ??
     assert.fail("the page opens on its card");
+
   const line = senderLine(container);
   assert.ok(
     card.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING,
     "the sender's line follows the card",
   );
+
   const meta =
     line.closest(".ui-message-line") ?? assert.fail("the sender's line is the card's meta");
+
   const time =
     meta.querySelector("time") ?? assert.fail("the meta says when the description was sent");
+
   assert.equal(time.getAttribute("datetime"), new Date(BRIEF_SENT_AT).toISOString());
   assert.ok(
     line.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -206,6 +215,7 @@ test("the card a transcript opens on offers Copy, which copies the brief's text"
   const copy = container.querySelector<HTMLButtonElement>(
     '.agent-origin button[aria-label="Copy message"]',
   );
+
   assert.ok(copy, "the card has Copy");
   await act(async () => {
     copy.click();

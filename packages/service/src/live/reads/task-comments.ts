@@ -191,6 +191,7 @@ export const taskCommentsRead = bindLiveRead(TASK_COMMENTS_READ, {
   ],
   statements: ({ userId, id, page }) => {
     const subject = page === DESCRIPTION_THREADS ? { taskId: id } : { taskId: id, pageId: page };
+
     return {
       threads: threadsStatement(userId, subject),
       entries: entriesStatement(userId, subject),

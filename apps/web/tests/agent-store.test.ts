@@ -54,6 +54,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -61,6 +62,7 @@ const openUser = Effect.gen(function* () {
 const openTask = Effect.gen(function* () {
   const userId = yield* openUser;
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   return { userId, taskId: task.id };
 });
 
@@ -91,6 +93,7 @@ function start(
 function started(answer: Option.Option<AgentStarted>): Agent {
   const start = Option.getOrElse(answer, () => assert.fail("the start answered no agent"));
   assert.equal(start.created, true);
+
   return start.agent;
 }
 
@@ -98,6 +101,7 @@ function started(answer: Option.Option<AgentStarted>): Agent {
 function found(answer: Option.Option<AgentStarted>): Agent {
   const start = Option.getOrElse(answer, () => assert.fail("the start answered no agent"));
   assert.equal(start.created, false);
+
   return start.agent;
 }
 
@@ -145,6 +149,7 @@ function listedLine({ descriptionSnapshot, prompt, automationOrigin, ...row }: A
       : descriptionSnapshot !== null
         ? AGENT_BRIEF.DESCRIPTION
         : AGENT_BRIEF.BLANK;
+
   return { ...row, automationName: automationOrigin?.name ?? null, brief };
 }
 
@@ -186,6 +191,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
     Effect.gen(function* () {
       const { userId, taskId } = yield* openTask;
       const agent = started(yield* createAgent(userId, start(taskId)));
+
       const archived = Option.getOrElse(yield* archiveAgent(userId, agent.id, true), () =>
         assert.fail("the agent is archived"),
       );
@@ -272,12 +278,14 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
       Effect.gen(function* () {
         const { userId, taskId } = yield* openTask;
         const other = yield* openTask;
+
         const agent = started(
           yield* createAgent(
             userId,
             start(taskId, { mentionedServers: [INTEGRATION_PROVIDER.SENTRY] }),
           ),
         );
+
         const taken = Effect.succeed(true);
         const refused = Effect.succeed(false);
 
@@ -369,10 +377,12 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         );
         const renamed = yield* renameAgent(teammate, agent.id, "Invite emails");
         assert.equal(Option.getOrUndefined(renamed)?.title, "Invite emails");
+
         const chosen = yield* updateAgentChoice(teammate, agent.id, {
           model: "openai/gpt-5.5",
           effort: "low",
         });
+
         assert.equal(Option.getOrUndefined(chosen)?.model, "openai/gpt-5.5");
         assert.equal(
           Option.getOrUndefined(yield* readAgent(starter, agent.id))?.title,
@@ -383,6 +393,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         const theirs = started(
           yield* createAgent(teammate, start(task.id, { idempotencyKey: asked.idempotencyKey })),
         );
+
         assert.notEqual(theirs.id, agent.id);
         assert.equal(theirs.userId, teammate);
         assert.equal(found(yield* createAgent(starter, asked)).id, agent.id);
@@ -410,6 +421,7 @@ it.layer(getTestDB())("the plan list's agent lines", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, taskId } = yield* openTask;
+
         const snapshotted = started(
           yield* createAgent(
             userId,
@@ -420,8 +432,10 @@ it.layer(getTestDB())("the plan list's agent lines", (it) => {
             ),
           ),
         );
+
         yield* TestClock.adjust("1 minute");
         const source = { agentId: snapshotted.id, steps: 3, totalSteps: 5, branch: "agent/invite" };
+
         const continued = started(
           yield* createAgent(
             userId,
@@ -432,6 +446,7 @@ it.layer(getTestDB())("the plan list's agent lines", (it) => {
             ),
           ),
         );
+
         const [listed] = yield* withTaskAgents(userId, yield* listTasks(userId));
         assert.deepEqual(
           listed?.agents?.agents.map(({ id, title, model }) => ({ id, title, model })),

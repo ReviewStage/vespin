@@ -29,6 +29,7 @@ export type SettingsRoute = (typeof SETTINGS_ROUTE)[keyof typeof SETTINGS_ROUTE]
  */
 export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();
+
   // Note that a page is pushed with its stack's anchor, so Settings opened on Workspace stands its main list under it and Back goes there.
   return (route = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true });
 }
@@ -37,7 +38,9 @@ export function useOpenSettings(): (route?: SettingsRoute) => void {
 export function useSettingsAccount(): BarAccount | undefined {
   const open = useOpenSettings();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
+
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
@@ -58,13 +61,16 @@ export function useSettingsAccount(): BarAccount | undefined {
  */
 export function SettingsBarButton({ switcher }: { readonly switcher?: SwitcherProps | undefined }) {
   const account = useSettingsAccount();
+
   const lead =
     switcher !== undefined ? (
       <WorkspaceSwitcher {...switcher} />
     ) : account !== undefined ? (
       <AccountButton {...account} />
     ) : undefined;
+
   if (lead === undefined) return null;
+
   return (
     <Stack.Toolbar placement="left">
       <Stack.Toolbar.View>{lead}</Stack.Toolbar.View>

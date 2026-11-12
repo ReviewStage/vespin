@@ -163,6 +163,7 @@ function InboxRows({
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
+
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {listed.map((each) => (
@@ -217,6 +218,7 @@ export function InboxRow({
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
+
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
     () =>
@@ -231,6 +233,7 @@ export function InboxRow({
       ),
     [item, agentName, readerId, pictureOf, harness],
   );
+
   const resolve =
     item.status === INBOX_STATUS.OPEN
       ? [
@@ -242,6 +245,7 @@ export function InboxRow({
           } as const,
         ]
       : [];
+
   return (
     <ListRow
       id={item.id}
@@ -307,6 +311,7 @@ function InboxEmpty({
 }) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
@@ -316,9 +321,11 @@ function InboxEmpty({
       />
     );
   }
+
   if (search.trim() !== "") {
     return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
   }
+
   return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol="tray" />;
 }
 
@@ -358,12 +365,14 @@ function moreMenu(
 /** Every agent's title the document holds, by the agent's id. */
 function useAgentTitles(): ReadonlyMap<string, string> {
   const { data = NO_TITLES } = useQuery({ ...appStateQuery, select: selectAgentTitles });
+
   return data;
 }
 
 /** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
 function useAgentHarness(agentId: string): ModelProvider | undefined {
   const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
+
   return data?.get(agentId);
 }
 
@@ -405,10 +414,12 @@ function ThreadDetail({
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const pictureOf = useMemberPictures();
+
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
   );
+
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
     () => [
@@ -430,6 +441,7 @@ function ThreadDetail({
     ],
     [messages, item],
   );
+
   // The videos the words draw in place, by attachment.
   const drawnVideos = useMemo(
     () =>
@@ -442,9 +454,11 @@ function ThreadDetail({
       ),
     [messages],
   );
+
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const { workspaceId } = holder.task;
   const workspace = workspaces.find(({ id }) => id === workspaceId);
+
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
     const place = {
@@ -452,9 +466,11 @@ function ThreadDetail({
       planId: holder.task.id,
       itemId: item.id,
     } as const;
+
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openInSafari(address);
   };
+
   const sources = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
@@ -463,6 +479,7 @@ function ThreadDetail({
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
   const menu = threadMenu(item, answer, () => openRemind(item));
+
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
     writer: {
@@ -491,26 +508,33 @@ function ThreadDetail({
           },
     ),
   }));
+
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
   const pictureSource = (written: string): string | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
+
     return named === undefined || named.itemId !== item.id
       ? written
       : sources.get(named.attachmentId);
   };
+
   // A video the words name as a picture is played where they name it, from its bytes as read.
   const videoAt = (written: string): MarkdownVideo | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
+
     if (named === undefined || named.itemId !== item.id || !drawnVideos.has(named.attachmentId)) {
       return undefined;
     }
+
     return {
       source: sources.get(named.attachmentId),
       label: VIDEO_LABEL,
       onOpenElsewhere: openOnWeb,
     };
   };
+
   const path = [holder.task.name, agentName];
+
   const page = (
     <ThreadPage
       path={path}
@@ -547,7 +571,9 @@ function ThreadDetail({
       {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
     />
   );
+
   if (!inStack) return page;
+
   return (
     <>
       <Stack.Screen
@@ -580,8 +606,10 @@ function ThreadDetail({
 /** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
 function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
   const { refresh, refreshTasks } = useInboxActs();
+
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
@@ -595,6 +623,7 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
       />
     );
   }
+
   return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
 }
 
@@ -611,7 +640,9 @@ function ThreadColumn({
   readonly onRemind: (item: InboxItem) => void;
 }) {
   const { listed, readerId, feed } = useInboxThread(id);
+
   if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+
   return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
 }
 
@@ -626,6 +657,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   const scopes = scopePills(show, choose, listing.counts);
   const menu = moreMenu(listing.unread, acts.markAll);
   const remind = useRemindSheet();
+
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
@@ -639,6 +671,7 @@ function InboxStackList(words: InboxSearch) {
   const switcher = useWorkspaceSwitcher();
   const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(words);
   const field = useRefilledSearchField(search);
+
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE }}>
@@ -713,8 +746,10 @@ function InboxSplitScreen({
     words,
     selected,
   );
+
   const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -772,6 +807,7 @@ export function InboxListScreen() {
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
   const [search, setSearch] = useState("");
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
+
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
@@ -785,7 +821,9 @@ export function InboxThreadScreen() {
   const { listed, readerId, feed } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
+
   if (handed) return null;
+
   return (
     <>
       <Stack.Screen

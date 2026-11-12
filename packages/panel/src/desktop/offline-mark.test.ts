@@ -35,6 +35,7 @@ function documentOf(
   reachable = true,
 ): AppStateSnapshot {
   const tasks = live === undefined ? IDLE_TASKS_VIEW : { ...IDLE_TASKS_VIEW, live };
+
   return { ...stateWith({}, { network: { online, reachable }, tasks }), version };
 }
 
@@ -46,12 +47,14 @@ async function mount(first: AppStateSnapshot): Promise<(next: AppStateSnapshot) 
     requestAppState: () => Promise.resolve(first),
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(OfflineMark))));
+
   return (next) =>
     act(async () => {
       for (const listener of listeners) listener(deliveryOf(next));
@@ -67,6 +70,7 @@ function said(): string | undefined {
 function why(): string | undefined {
   const mark = document.querySelector(".offline-mark");
   const id = mark?.getAttribute("aria-describedby") ?? mark?.getAttribute("aria-owns");
+
   return id == null ? undefined : (document.getElementById(id)?.textContent ?? undefined);
 }
 

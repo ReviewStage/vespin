@@ -52,6 +52,7 @@ export function claudeCodeConnectionLost(
   // Note that a status is an answer, so a result carrying one was reached.
   if (result.api_error_status !== undefined && result.api_error_status !== null) return false;
   const said = result.result ?? "";
+
   return CLAUDE_CODE_CONNECTION_WORDS.some((word) => said.includes(word));
 }
 
@@ -71,13 +72,17 @@ const CODEX_CONNECTION_KINDS: ReadonlySet<string> = new Set([
  */
 export function codexConnectionLost(info: unknown): boolean {
   const kind = codexErrorKind(info);
+
   if (kind === undefined || !CODEX_CONNECTION_KINDS.has(kind)) return false;
+
   if (typeof info !== "object" || info === null) return true;
   const detail: unknown = Object.values(info)[0];
+
   const status =
     typeof detail === "object" && detail !== null && "httpStatusCode" in detail
       ? detail.httpStatusCode
       : null;
+
   return status === null || status === undefined;
 }
 
@@ -96,6 +101,7 @@ const PROXY_VARIABLES = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
 /** The port a URL is reached on: the one it names, else its scheme's. */
 function portOf(url: URL): number {
   if (url.port !== "") return Number(url.port);
+
   return url.protocol === "http:" ? HTTP_PORT : HTTPS_PORT;
 }
 
@@ -107,10 +113,12 @@ function portOf(url: URL): number {
 export function providerTargetOf(urlOrHost: string): ProbeTarget {
   try {
     const url = new URL(urlOrHost);
+
     if (url.hostname !== "") return { host: url.hostname, port: portOf(url) };
   } catch {
     // Not a URL: a bare host name.
   }
+
   return { host: urlOrHost, port: HTTPS_PORT };
 }
 
@@ -125,16 +133,21 @@ export function probeTargetOf(
 ): ProbeTarget {
   for (const name of PROXY_VARIABLES) {
     const proxy = env[name];
+
     if (proxy === undefined || proxy === "") continue;
+
     try {
       const url = new URL(proxy);
+
       // Note that a value with no scheme, such as `proxy.corp:3128`, parses with its name as the scheme and no host, so it is left to the harness as a value that is no URL is.
       if (url.hostname === "") continue;
+
       return { host: url.hostname, port: portOf(url) };
     } catch {
       // A proxy that is no URL is left to the harness; the provider is probed directly.
     }
   }
+
   return provider;
 }
 
@@ -162,6 +175,7 @@ export const providerProbeLive: Layer.Layer<ProviderProbe> = Layer.succeed(Provi
         resume(Effect.void);
       });
       socket.once("error", () => resume(Effect.fail(new Unreachable({ target }))));
+
       return Effect.sync(() => socket.destroy());
     }).pipe(
       Effect.timeoutOrElse({
@@ -190,6 +204,7 @@ export const awaitProvider = Effect.fn("agent-runner/awaitProvider")(function* (
   target: ProbeTarget,
 ) {
   const probe = yield* ProviderProbe;
+
   return yield* probe.reach(target).pipe(
     Effect.retry({ schedule: PROBE_BACKOFF }),
     Effect.as(true),

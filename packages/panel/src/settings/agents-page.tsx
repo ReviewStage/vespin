@@ -192,14 +192,17 @@ function DefaultRows({
   const effortWrite = choiceWrite(useMutation(actMutation(ACT_KIND.AGENTS_DEFAULT_WRITE)));
   const speedWrite = choiceWrite(useMutation(actMutation(ACT_KIND.AGENTS_DEFAULT_WRITE)));
   const contextWrite = choiceWrite(useMutation(actMutation(ACT_KIND.AGENTS_DEFAULT_WRITE)));
+
   const fastMutation = useMutation({
     ...actMutation(ACT_KIND.AGENTS_DEFAULT_WRITE),
     onSettled: refusalToast(choiceRefused),
   });
+
   const listed = models?.find((model) => model.id === choice.model);
   const remedy = useRepositoryRemedy();
   // A default nothing pays for says so under the model row, with the press that connects it.
   const unrunnable = models === undefined ? undefined : unrunnableChoice(models, choice);
+
   const note =
     unrunnable === undefined ? undefined : (
       <>
@@ -209,20 +212,24 @@ function DefaultRows({
         </TextButton>
       </>
     );
+
   // The stored effort stands alone until the catalog is read, and where the catalog has
   // stopped offering the stored model, so the row never draws nothing.
   const offered = models === undefined ? [] : effortsOf(models, choice.model);
   const efforts = offered.length === 0 ? [choice.effort] : offered;
   const read = readModelChoice(models ?? [], choice.model);
   const base = offeredModels(models ?? []).find((each) => each.model.id === read.base);
+
   const fastNote =
     base === undefined ? undefined : fastRestingNote(base.model.id, base, models ?? []);
+
   // Only the account's own organization can ask for fast mode, so the link stands on its own key alone.
   const fastAskable = base?.model.fastNotEnabled === true && ownKeys.has(MODEL_PROVIDER.ANTHROPIC);
   const openLink = useOpenLink();
   const unsearched = unsearchedModels(models ?? [], read.base);
   const windows = contextWindowsOf(models ?? [], choice.model);
   const window = windowOf(models ?? [], choice);
+
   /** The choice at a catalog id, at the stored effort where the model lists it, else its first, on the stored window where the model offers it. */
   const choiceAt = (modelId: string): ModelChoice =>
     choiceOn(
@@ -233,6 +240,7 @@ function DefaultRows({
       },
       choice.contextWindow,
     );
+
   const fastWrite = rowWrite(fastMutation, {
     ask: (fast: boolean) =>
       base === undefined
@@ -241,6 +249,7 @@ function DefaultRows({
     refused: choiceRefused,
     drawn: (asked) => readModelChoice(models ?? [], asked.model).speed === MODEL_SPEED.FAST,
   });
+
   return (
     <>
       <PickerRow
@@ -286,9 +295,11 @@ function DefaultRows({
         onPick={(id) => {
           // The pick keeps the speed chosen where the model has a version at it, and drops to standard where it has none.
           const picked = offeredModels(models ?? []).find((each) => each.model.id === id);
+
           if (picked === undefined) return;
           // A model nothing pays for is never kept as the default: its pick goes to connect it.
           const missing = modelConnectFailure(picked.model);
+
           if (missing !== undefined) return remedy(missing)?.();
           modelWrite.run(choiceAt(choiceModelId(picked, read.speed)));
         }}
@@ -310,6 +321,7 @@ function DefaultRows({
               onChange={(speed) => {
                 // A model nothing pays for runs no faster: the press goes to connect it, as its pick does.
                 const missing = modelConnectFailure(base.model);
+
                 if (missing !== undefined) return remedy(missing)?.();
                 speedWrite.run(choiceAt(choiceModelId(base, speed)));
               }}
@@ -351,6 +363,7 @@ function DefaultRows({
             run: (fast) => {
               if (base === undefined) return;
               const missing = modelConnectFailure(base.model);
+
               if (missing !== undefined) return remedy(missing)?.();
               fastWrite.run(fast);
             },
@@ -409,7 +422,9 @@ function modeGlyph(field: AppSettingField, token: string): React.ReactNode {
   if (field !== APP_SETTING_SCHEMA.agentPermissionMode.field || !isPermissionMode(token)) {
     return undefined;
   }
+
   const Glyph = MODE_GLYPH[token];
+
   return <Glyph />;
 }
 
@@ -481,9 +496,11 @@ export function AgentsPage({
   view?: SettingsRowsInput | undefined;
 }): React.JSX.Element {
   const [ownKeys, setOwnKeys] = useState<ReadonlyMap<ModelProvider, ProviderKeyStatus>>();
+
   const onKeys = useCallback((keys: readonly ProviderKeySummary[]) => {
     setOwnKeys(new Map(keys.map((key) => [key.provider, key.status])));
   }, []);
+
   return (
     <>
       <AgentAuthSection signedIn={signedIn} onKeys={onKeys} />

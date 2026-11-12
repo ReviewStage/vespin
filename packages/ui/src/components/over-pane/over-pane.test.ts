@@ -38,6 +38,7 @@ afterEach(() => {
 function Tab(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
+
   return createElement(
     "div",
     null,
@@ -65,6 +66,7 @@ function mount(): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Tab)));
+
   return container;
 }
 
@@ -74,7 +76,9 @@ function pane(): HTMLElement | null {
 
 function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find((each) => each.textContent === name);
+
   if (found === undefined) throw new Error(`the ${name} button is drawn`);
+
   return found;
 }
 
@@ -174,6 +178,7 @@ function PeekTab(): React.JSX.Element {
   const [peek, setPeek] = useState(true);
   const first = useRef<HTMLButtonElement>(null);
   const second = useRef<HTMLButtonElement>(null);
+
   return createElement(
     "div",
     null,

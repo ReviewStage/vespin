@@ -18,6 +18,7 @@ test("the authorization URL carries the native public-client contract", () => {
     baseUrl: "https://vespin.dev/api/auth/",
     clientId: "desktop",
   });
+
   const url = new URL(
     client.authorizeUrl({
       redirectUri: "http://127.0.0.1:49152/callback",
@@ -25,6 +26,7 @@ test("the authorization URL carries the native public-client contract", () => {
       codeChallenge: "challenge-value",
     }),
   );
+
   assert.equal(url.searchParams.get("client_id"), "desktop");
   assert.equal(url.searchParams.get("response_type"), "code");
   assert.equal(url.searchParams.get("redirect_uri"), "http://127.0.0.1:49152/callback");
@@ -39,10 +41,13 @@ test("the authorization URL carries the native public-client contract", () => {
 it.effect("the code exchange sends the verifier and redirect as form fields", () =>
   Effect.gen(function* () {
     let request: Request | undefined;
+
     const fetch: FakeResponder = async (input, init) => {
       request = new Request(input, init);
+
       return json({ access_token: "access", refresh_token: "refresh" });
     };
+
     const client = new AccountClient({
       baseUrl: "https://vespin.dev/api/auth",
       clientId: "desktop",
@@ -74,12 +79,14 @@ it.effect("userinfo returns the identity fields and nothing else the claim carri
   Effect.gen(function* () {
     const fetch: FakeResponder = async (_input, init) => {
       assert.equal(new Headers(init?.headers).get("authorization"), "Bearer access-token");
+
       return json({
         sub: "internal-user-id",
         email: "developer@example.com",
         name: "Developer",
       });
     };
+
     const client = new AccountClient({
       baseUrl: "https://vespin.dev/api/auth",
       clientId: "desktop",
@@ -102,6 +109,7 @@ it.effect("invalid token and identity responses are refused", () =>
       clientId: "desktop",
       httpClient: fakeHttpClientLayer(async () => json({ access_token: "access-only" })),
     });
+
     const tokens = yield* Effect.flip(
       tokenClient.exchangeCode({
         code: "authorization-code",
@@ -109,6 +117,7 @@ it.effect("invalid token and identity responses are refused", () =>
         redirectUri: "http://127.0.0.1:49152/callback",
       }),
     );
+
     assert.match(tokens.message, /both tokens/);
 
     const identityClient = new AccountClient({
@@ -116,6 +125,7 @@ it.effect("invalid token and identity responses are refused", () =>
       clientId: "desktop",
       httpClient: fakeHttpClientLayer(async () => json({ provider: "unknown" })),
     });
+
     const identity = yield* Effect.flip(identityClient.userInfo("access", ACCOUNT_PROVIDER.GOOGLE));
     assert.match(identity.message, /invalid identity/);
   }),
@@ -133,6 +143,7 @@ it.effect("a failed account completion revokes every issued refresh token", () =
   Effect.gen(function* () {
     const revoked: string[] = [];
     const failure = new Error("identity failed");
+
     const outcome = yield* Effect.exit(
       withIssuedAccountTokens({
         issue: Effect.succeed(ISSUED_TOKENS),
@@ -152,15 +163,19 @@ it.effect("a failed account completion revokes every issued refresh token", () =
 /** A client over a fake service that records the one request it was sent. */
 function recordingClient(answer: () => Response) {
   let request: Request | undefined;
+
   const fetch: FakeResponder = async (input, init) => {
     request = new Request(input, init);
+
     return answer();
   };
+
   const client = new AccountClient({
     baseUrl: "https://vespin.dev/api/auth",
     clientId: "desktop",
     httpClient: fakeHttpClientLayer(fetch),
   });
+
   return { client, sent: () => request };
 }
 
@@ -173,7 +188,9 @@ it.effect(
           token: "bare-session",
           user: { id: "user-1", email: "dev@example.com" },
         });
+
         answered.headers.set("set-auth-token", "bare-session.signature");
+
         return answered;
       });
 

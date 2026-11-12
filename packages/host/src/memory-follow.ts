@@ -86,6 +86,7 @@ export function heldMemories(
     follow: (workspaceId, answers) => {
       // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
       const userId = dependencies.accountId();
+
       return followLiveRead(
         {
           seal: (poll, after) =>
@@ -157,6 +158,7 @@ export function memorySave(
       Effect.map(send(save), (answer) => {
         if (!("memory" in answer)) return { refused: answer };
         const { memory } = answer;
+
         return {
           answer,
           txid: undefined,

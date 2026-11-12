@@ -65,6 +65,7 @@ function refusalOf<Answer>(
 ): SettingRefusal | undefined {
   if (error !== null) return { words: actFailureWords(error), cause: error };
   const words = answer === undefined ? undefined : refused(answer);
+
   return words === undefined ? undefined : { words, cause: answer };
 }
 
@@ -77,6 +78,7 @@ export function rowWrite<Value, Answer, Variables>(
   const refusal = isPending ? undefined : refusalOf(data, error, shape.refused);
   const { drawn } = shape;
   const ahead = variables !== undefined && refusal === undefined && drawn !== undefined;
+
   return {
     run: (value) => mutate(shape.ask(value)),
     ahead: ahead ? { value: drawn(variables) } : undefined,
@@ -127,6 +129,7 @@ export function useSettingRowWrite<Value>(
     ...settingMutation(),
     ...(toasts ? { onSettled: refusalToast(actionRefused) } : undefined),
   });
+
   return settingRowWrite(mutation, field, stored, drawn);
 }
 
@@ -140,6 +143,7 @@ export function refusalToast<Answer>(
 ): (answer: Answer | undefined, error: Error | null) => void {
   return (answer, error) => {
     const refusal = refusalOf(answer, error, refused);
+
     if (refusal === undefined) return;
     showToast({
       words: refusal.words,

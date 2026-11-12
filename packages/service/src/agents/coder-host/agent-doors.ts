@@ -123,15 +123,19 @@ export function runAgentEditDescription(
 ): Effect.Effect<DescriptionEditResult, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
+
     if (Result.isFailure(found)) return descriptionEditRejected(found.failure);
     const taskId = editedTaskOf(input);
+
     if (taskId === undefined)
       return descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.NO_TASK_NAMED);
     const task = yield* agentTaskOf(admitted, found.success, taskId);
+
     if (Option.isNone(task)) return descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.NO_TASK);
     const agentId = found.success.id;
     // The description is written as the member whose turn this is, whoever started the agent.
     const binding = { userId: admitted.caller, taskId };
+
     return yield* recordDescriptionEdit(binding, { agentId }, input, takenInTurn, sandbox);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -152,9 +156,11 @@ function lookInThread(
 ): InboxStoreEffect<PictureLookResult> {
   return Effect.gen(function* () {
     const home = yield* readInboxItemHome(agent.userId, named.itemId);
+
     if (Option.isNone(home) || home.value.workspaceId !== agent.organizationId) {
       return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
     }
+
     return yield* runLookAtThreadPicture(agent.userId, named);
   });
 }
@@ -167,16 +173,22 @@ export function runAgentLookAtPicture(
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
+
     if (Result.isFailure(found)) return pictureNotLooked(found.failure);
     const inThread = lookedThreadPictureOf(input);
+
     if (inThread !== undefined) return yield* lookInThread(found.success, inThread);
     const taskId = lookedTaskOf(input);
+
     if (taskId === undefined) return pictureNotLooked(PICTURE_LOOK_REFUSAL.UNREADABLE);
+
     // A description's picture is none an agent is told of where its workspace has Task descriptions off.
     if (!descriptionsOn) return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
+
     if (Option.isNone(yield* agentTaskOf(admitted, found.success, taskId))) {
       return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
     }
+
     // The description is read as the member whose turn this is, as `editDescription` writes it.
     return yield* runLookAtPicture({ userId: admitted.caller, taskId }, input);
   }).pipe(
@@ -196,9 +208,12 @@ export function runAgentOpenPullRequest(
 > {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
+
     if (Result.isFailure(found)) return pullRequestRejected(found.failure);
+
     // Note that the catalog refuses the call of an agent with no repository at its `REPOSITORY` gate (`../tool-catalog/gates.ts`), so this only narrows the row it read since.
     if (!hasRepository(found.success)) return pullRequestRejected(CODER_REFUSAL.NO_REPOSITORY);
+
     return yield* openPullRequest(admitted.target, found.success, input);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -220,18 +235,23 @@ export function runAgentComment(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
+
     if (Result.isFailure(found)) return commentToolRejected(found.failure);
     const taskId = commentedTaskOf(input);
+
     if (taskId === undefined) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK_NAMED);
     const task = yield* agentTaskOf(admitted, found.success, taskId);
+
     if (Option.isNone(task)) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);
     const agentId = found.success.id;
+
     // The comments are read and written as the member whose turn this is, as `editDescription` writes the description.
     const writer = {
       actor: DESCRIPTION_COMMENT_ACTOR.AGENT,
       userId: admitted.caller,
       agentId,
     } as const;
+
     // A page's threads stand whatever the workspace's Task descriptions; the description's are left out while it is off.
     return yield* runCommentTool(name, { taskId, writer, descriptionsOn }, input);
   }).pipe(
@@ -248,13 +268,16 @@ export function runAgentShowPage(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentHeaderOfConversation(admitted);
+
     if (Result.isFailure(found)) return showPageRejected(found.failure);
     const { id: agentId, taskId } = found.success;
+
     const binding = {
       userId: admitted.target.userId,
       taskId,
       sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
     };
+
     return yield* runShowPage(binding, input, {
       kind: PAGE_SHOWER.AGENT,
       agentId,

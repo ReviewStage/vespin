@@ -14,11 +14,13 @@ import { sessionReplay } from "./session-replay.js";
 /** The client as the controller drives it, every call heard in one order. */
 const client = (() => {
   const calls: unknown[][] = [];
+
   const heard =
     (name: string) =>
     (...args: unknown[]) => {
       calls.push([name, ...args]);
     };
+
   return {
     calls,
     posthog: Object.fromEntries(
@@ -52,6 +54,7 @@ test("the installed bundles still know every name the masking and the recorder r
   const resolve = createRequire(import.meta.url).resolve;
   const client = readFileSync(resolve("posthog-js/dist/module.no-external"), "utf8");
   const recorder = readFileSync(resolve("posthog-js/dist/posthog-recorder"), "utf8");
+
   const names = [
     "maskTextSelector",
     "maskAttributeFn",
@@ -67,6 +70,7 @@ test("the installed bundles still know every name the masking and the recorder r
     "capture_performance",
     "enable_recording_console_log",
   ];
+
   for (const name of names) assert.ok(client.includes(name) || recorder.includes(name), name);
   // The text masking is a function the recorder calls, so it is the recorder that must know it.
   assert.ok(recorder.includes("maskTextFn"), "maskTextFn");
@@ -100,9 +104,11 @@ test("the recorder is handed a text masking that shows only the words under the 
     accountId: "user-1",
   });
   await vi.waitFor(() => assert.ok(client.calls.some(([name]) => name === "init")));
+
   const options = client.calls.find(([name]) => name === "init")?.[2] as {
     session_recording: { maskTextFn: (text: string, element?: HTMLElement | null) => string };
   };
+
   const mask = options.session_recording.maskTextFn;
   document.body.innerHTML = renderToStaticMarkup(
     h(
@@ -134,6 +140,7 @@ test("a recording is grouped under the listed workspace, follows a switch, and l
   window.__PosthogExtensions__ = { initSessionRecording: () => undefined };
   const apply = sessionReplay(testShell());
   const word = { permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" };
+
   const groupCalls = () =>
     client.calls.filter(([name]) => name === "group" || name === "resetGroups" || name === "reset");
 

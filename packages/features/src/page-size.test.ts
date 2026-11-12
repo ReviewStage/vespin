@@ -35,6 +35,7 @@ function fitsOver(reports: ReadonlyArray<(frame: number) => number>): PageFit[] 
   const fits: PageFit[] = [];
   let fit = PAGE_FIT_PENDING;
   let frame = STAND_IN;
+
   for (const report of reports) {
     fit = pageFitAfter(fit, report(frame), frame);
     fits.push(fit);
@@ -45,6 +46,7 @@ function fitsOver(reports: ReadonlyArray<(frame: number) => number>): PageFit[] 
           ? SCREENFUL
           : STAND_IN;
   }
+
   return fits;
 }
 
@@ -58,6 +60,7 @@ function framedPage(): { posted: unknown[]; handTheme: () => void } {
   const posted: unknown[] = [];
   const page = new EventTarget();
   const parent = { postMessage: (data: unknown) => posted.push(data) };
+
   const document = {
     readyState: "complete",
     head: null,
@@ -69,6 +72,7 @@ function framedPage(): { posted: unknown[]; handTheme: () => void } {
     },
     createElement: () => ({ textContent: "" }),
   };
+
   for (const script of [PAGE_SIZE_SCRIPT, PAGE_THEME_SCRIPT]) {
     new Function("document", "parent", "addEventListener", "dispatchEvent", script)(
       document,
@@ -77,16 +81,19 @@ function framedPage(): { posted: unknown[]; handTheme: () => void } {
       page.dispatchEvent.bind(page),
     );
   }
+
   const theme: PageTheme = {
     scheme: PAGE_THEME_SCHEME.DARK,
     variables: {} as PageTheme["variables"],
     inset: "",
     narrowInset: "",
   };
+
   const handTheme = () => {
     const data = pageThemeMessage(theme);
     page.dispatchEvent(Object.assign(new Event("message"), { source: parent, data }));
   };
+
   return { posted, handTheme };
 }
 

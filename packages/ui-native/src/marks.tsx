@@ -54,6 +54,7 @@ export function UnreadDot({
   readonly faded?: boolean;
 }) {
   const colors = useColors();
+
   return (
     <Circle
       modifiers={[
@@ -86,6 +87,7 @@ export function ToneGlyph({
 }) {
   const colors = useColors();
   const drawn = isLucideSymbol(glyph) ? { assetName: glyph } : { systemName: glyph };
+
   return (
     <Image
       {...drawn}
@@ -102,6 +104,7 @@ export function ToneGlyph({
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
   const look = STATUS_MARK_LOOK[status];
+
   return (
     <Image
       systemName={look.symbol}
@@ -148,6 +151,7 @@ export function AvatarPhoto({
   readonly onFail: () => void;
 }) {
   const round = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
+
   return (
     <RNHostView>
       <View
@@ -182,6 +186,7 @@ export function Avatar({
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
+
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       {photoDrawn ? null : (
@@ -252,6 +257,7 @@ export function AgentTile({
 }) {
   const colors = useColors();
   const glyph = size * TILE_GLYPH_SCALE;
+
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       <RoundedRectangle
@@ -282,6 +288,7 @@ export function AgentTile({
 /** The dot a row ends with where a thread of it waits on the reader, in the attention ink, heard as Needs you. */
 export function NeedsYouDot() {
   const colors = useColors();
+
   return (
     <Circle
       modifiers={[
@@ -299,6 +306,7 @@ const FAILED_WORDS = "Failed";
 /** The mark a failed agent's row, or its task's, ends with: the filled alert in the danger ink, heard as Failed. */
 export function FailedMark() {
   const colors = useColors();
+
   return (
     <Image
       systemName="exclamationmark.circle.fill"
@@ -314,6 +322,7 @@ const WORKING_WORDS = "Working";
 /** The system's spinner, small and in the working ink, where an agent is at work. */
 export function WorkingMark() {
   const colors = useColors();
+
   return (
     <ProgressView
       modifiers={[controlSize("mini"), tint(colors.WORKING), accessibilityLabel(WORKING_WORDS)]}

@@ -25,6 +25,7 @@ beforeAll(() => {
 
 afterEach(() => {
   for (const remove of listeners.splice(0)) remove();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -45,10 +46,12 @@ function mount(pins: boolean): { pane: HTMLElement; heard: string[] } {
     ),
   );
   const pane = container.querySelector<HTMLElement>("[aria-label=Pane]");
+
   if (pane === null) throw new Error("the pane is drawn");
   const hear = () => heard.push("document");
   document.addEventListener("pointerdown", hear);
   listeners.push(() => document.removeEventListener("pointerdown", hear));
+
   return { pane, heard };
 }
 

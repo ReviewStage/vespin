@@ -43,6 +43,7 @@ function drawn(element: ReactElement, finding = false): HTMLElement {
   act(() =>
     root.render(withQueryClient(createElement(DisclosureFind, { finding, children: element }))),
   );
+
   return container;
 }
 
@@ -88,14 +89,17 @@ test("a read's path gives way while a find draws its body hidden, so the find co
     call(CALL_KIND.READ_FILE, PATH, { kind: TOOL_BLOCK.TEXT, text: PATH }),
     true,
   );
+
   assert.doesNotMatch(line(drawing), /accept-invite\.ts/u);
 });
 
 test("a search's pattern gives way while its input, which holds it among its values, is drawn", () => {
   const input = JSON.stringify({ pattern: "useDisclosure\\b", path: "packages" }, null, 2);
+
   const drawing = drawn(
     call(CALL_KIND.SEARCH, "useDisclosure\\b", { kind: TOOL_BLOCK.JSON, text: input }),
   );
+
   assert.match(line(drawing), /useDisclosure/u);
 
   press(drawing);
@@ -106,6 +110,7 @@ test("a written file's path stays on its open row, since its input is the conten
   const drawing = drawn(
     call(CALL_KIND.WRITE_FILE, PATH, { kind: TOOL_BLOCK.TEXT, text: "export {};" }),
   );
+
   press(drawing);
   assert.match(line(drawing), /accept-invite\.ts/u);
 });
@@ -119,6 +124,7 @@ test("a described command keeps its description open and drops the command its b
       "Run the checks",
     ),
   );
+
   assert.match(line(drawing), /Run the checks pnpm check/u);
 
   press(drawing);
@@ -128,9 +134,11 @@ test("a described command keeps its description open and drops the command its b
 
 test("an open row whose body says its subject drops its verb's colon, which its closed row keeps before the subject", () => {
   const input = JSON.stringify({ text: "Merge on green" }, null, 2);
+
   const drawing = drawn(
     call(CALL_KIND.REMEMBER, "Merge on green", { kind: TOOL_BLOCK.JSON, text: input }),
   );
+
   assert.equal(line(drawing), "Saved to memory: Merge on green");
 
   press(drawing);
@@ -180,6 +188,7 @@ test("the to-do dock keeps its count open and drops the item it is at, which the
       focus: "Drop the preview",
     }),
   );
+
   assert.match(line(drawing), /1 of 2 done/u);
   assert.match(line(drawing), /Drop the preview/u);
 

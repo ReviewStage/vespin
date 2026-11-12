@@ -22,6 +22,7 @@ function pressed(): void {}
 
 function RepliesToggle(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return (
     <Text>
       <TextButton

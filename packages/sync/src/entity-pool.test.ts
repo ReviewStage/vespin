@@ -32,6 +32,7 @@ function standing(pool: EntityPool, adopts = false) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
     const drawn = { times: 0 };
+
     const rows: HeldRows<Row> = yield* Scope.provide(scope)(
       pool.stand(ROW, {
         redraw: () =>
@@ -42,6 +43,7 @@ function standing(pool: EntityPool, adopts = false) {
         ...(adopts ? { adopts: () => true } : undefined),
       }),
     );
+
     return { rows, drawn, letGo: Scope.close(scope, Exit.void) };
   });
 }
@@ -63,6 +65,7 @@ function shownOver(pool: EntityPool, row: Row) {
     const shown = probe.rows.rows();
     yield* Fiber.interrupt(write);
     yield* probe.letGo;
+
     return shown;
   });
 }
@@ -104,6 +107,7 @@ it.effect(
         { id: "2", name: "Deploy", runs: 0 },
       ]);
       const answered = yield* Deferred.make<void>();
+
       const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
         kind: ROW,
         keys: () => ["1"],
@@ -148,6 +152,7 @@ it.effect(
     Effect.gen(function* () {
       const reachable = { now: false };
       const sentUnder: (string | undefined)[] = [];
+
       const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
         kind: ROW,
         keys: () => ["1"],
@@ -155,12 +160,14 @@ it.effect(
         send: (_name, { key }) =>
           Effect.sync(() => {
             sentUnder.push(key);
+
             return reachable.now
               ? { answer: "renamed", txid: undefined }
               : { refused: "not renamed", unanswered: true as const };
           }),
         queue: { name: "rename", input: Schema.String, queued: () => "waits" },
       };
+
       const options = { mintKey: () => "key-1", replayRefused: Effect.void };
       const quit = yield* Scope.make();
       const before = yield* Scope.provide(quit)(entityPool(options));
@@ -197,6 +204,7 @@ it.effect(
     Effect.gen(function* () {
       const network = yield* Deferred.make<void>();
       const reachable = { now: false };
+
       const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
         kind: ROW,
         keys: () => ["1"],
@@ -207,6 +215,7 @@ it.effect(
             : Effect.succeed({ refused: "not renamed", unanswered: true as const }),
         queue: { name: "rename", input: Schema.String, queued: () => "waits" },
       };
+
       const pool = yield* entityPool({ mintKey: () => "key", replayRefused: Effect.void });
       const list = yield* standing(pool);
       yield* list.rows.answer([{ id: "1", name: "Triage", runs: 0 }]);
@@ -231,12 +240,14 @@ it.effect(
       const gate = yield* Deferred.make<void>();
       const sentAs: string[] = [];
       const refusedCount = { now: 0 };
+
       const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
         kind: ROW,
         keys: () => ["1"],
         change: (name) => () => ({ name }),
         send: () => {
           const sent = Effect.sync(() => sentAs.push(session.holder));
+
           return reachable.now
             ? Effect.andThen(
                 sent,
@@ -249,6 +260,7 @@ it.effect(
         },
         queue: { name: "rename", input: Schema.String, queued: () => "waits" },
       };
+
       const pool = yield* entityPool({
         mintKey: () => "key",
         replayRefused: Effect.sync(() => {
@@ -256,6 +268,7 @@ it.effect(
         }),
         holder: () => session.holder,
       });
+
       const list = yield* standing(pool);
       yield* list.rows.answer([{ id: "1", name: "Triage", runs: 0 }]);
       yield* pool.write(rename, "Triage issues");

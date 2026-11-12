@@ -56,6 +56,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -85,6 +86,7 @@ const wakesTheWorkspaces = <A, E, R>(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the workspaces read is woken by a topic the write notifies",
     );
+
     return fired;
   });
 
@@ -140,6 +142,7 @@ it.effect(
       const plugin = yield* openWorkspacePlugin;
       yield* Effect.gen(function* () {
         const userId = yield* openAccount("Ada Lovelace");
+
         // Note that the workspace is made first under the account's own slug and marked personal,
         // as a racing ensure would have made it, so the ensure held below adopts it and writes only
         // the row naming it.
@@ -176,6 +179,7 @@ it.effect(
           woken.some(([kind, id]) => kind === TOPIC.WORKSPACE_INTEGRATIONS && id === workspaceId),
           "the integrations read is woken by the workspace's integrations topic",
         );
+
         const sentry = (externalId: string) =>
           linkIntegrationInstallation({
             provider: TRIGGER_PROVIDER.SENTRY,
@@ -183,7 +187,9 @@ it.effect(
             organizationId: workspaceId,
             userId: owner,
           });
+
         const [disconnected, uninstalled] = [randomUUID(), randomUUID()];
+
         /** A write that answers its transaction, which must be the one its notification carries. */
         const answersItsTransaction = (fired: {
           readonly value: Option.Option<string> | string;
@@ -191,6 +197,7 @@ it.effect(
         }) => {
           const txid =
             typeof fired.value === "string" ? fired.value : Option.getOrThrow(fired.value);
+
           assert.deepEqual(fired.txids, [txid]);
         };
 

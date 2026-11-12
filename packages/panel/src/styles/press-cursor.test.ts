@@ -35,6 +35,7 @@ function drawnAt(profile: Profile, element: ReactElement): HTMLElement {
   const root = createRoot(surface);
   roots.push(root);
   act(() => root.render(element));
+
   return surface;
 }
 
@@ -46,6 +47,7 @@ function drawnAt(profile: Profile, element: ReactElement): HTMLElement {
 function cursorOf(element: Element): string {
   const style = getComputedStyle(element);
   const named = /^var\((--[\w-]+)\)$/u.exec(style.cursor)?.[1];
+
   return named === undefined ? style.cursor : style.getPropertyValue(named).trim();
 }
 
@@ -64,5 +66,6 @@ test("a link to a page keeps the pointing hand in the desktop's window", () => {
     href: "https://example.com/docs",
     children: "Read the docs",
   });
+
   assert.equal(cursorOf(the(drawnAt(PROFILE.DESKTOP, link), "a")), "pointer");
 });

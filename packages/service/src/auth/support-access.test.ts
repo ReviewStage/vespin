@@ -105,10 +105,13 @@ const decodeSession = Schema.decodeUnknownSync(
     }),
   ),
 );
+
 const decodeCode = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }));
+
 const decodeGrant = Schema.decodeUnknownSync(
   Schema.Struct({ supportAccessUntil: Schema.NullOr(Schema.Date) }),
 );
+
 /** What `auth.api` throws when a call is refused: its status, and its code on the body. */
 const decodeThrown = Schema.decodeUnknownSync(
   Schema.Struct({ statusCode: Schema.Number, body: Schema.Struct({ code: Schema.String }) }),
@@ -160,6 +163,7 @@ function keep(browser: Browser, headers: Headers): void {
     const name = pair.slice(0, at).trim();
     const value = pair.slice(at + 1);
     const expired = attributes.some((attribute) => /^\s*max-age=0\s*$/iu.test(attribute));
+
     if (expired || value === "") browser.delete(name);
     else browser.set(name, value);
   }
@@ -171,6 +175,7 @@ function cookieOf(browser: Browser): Record<string, string> {
 
 async function withSupportAuth(body: (auth: SupportAuth) => Promise<void>): Promise<void> {
   const client = await openMigratedPglite();
+
   try {
     await body(supportAuth(client));
   } finally {
@@ -183,10 +188,12 @@ async function signUp(auth: SupportAuth, name: string): Promise<SignedUp> {
     body: { name, email: `${name}@example.com`, password: "a-password-long-enough" },
     returnHeaders: true,
   });
+
   const browser: Browser = new Map();
   keep(browser, headers);
   const signed = headers.get("set-auth-token");
   assert.ok(signed);
+
   return { id: response.user.id, browser, bearer: signed };
 }
 
@@ -194,6 +201,7 @@ async function signUp(auth: SupportAuth, name: string): Promise<SignedUp> {
 async function signUpAdmin(auth: SupportAuth, name: string): Promise<SignedUp> {
   const account = await signUp(auth, name);
   await (await auth.$context).internalAdapter.updateUser(account.id, { role: USER_ROLE.ADMIN });
+
   return account;
 }
 
@@ -228,6 +236,7 @@ async function sessionOf(auth: SupportAuth, browser: Browser, query = "") {
   const answered = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/get-session${query}`, { headers: cookieOf(browser) }),
   );
+
   return decodeSession(await answered.json());
 }
 
@@ -267,6 +276,7 @@ test("an admin's browser signs in as a member who granted support access, for an
       "POST",
       cookieOf(maintainer.browser),
     );
+
     assert.equal(stopped.status, 200);
     keep(maintainer.browser, stopped.headers);
     assert.equal((await sessionOf(auth, maintainer.browser))?.user.id, maintainer.id);
@@ -301,6 +311,7 @@ test("every other admin endpoint is shut to an admin's browser", async () => {
 
     for (const endpoint of SHUT_ADMIN_ENDPOINTS) {
       const query = endpoint.method === "GET" ? `?${new URLSearchParams({ id: member.id })}` : "";
+
       const answer = await send(
         auth,
         `${endpoint.path}${query}`,
@@ -308,6 +319,7 @@ test("every other admin endpoint is shut to an admin's browser", async () => {
         cookieOf(maintainer.browser),
         endpoint.method === "GET" ? undefined : { userId: member.id, role: USER_ROLE.ADMIN },
       );
+
       assert.equal(answer.status, 404, endpoint.path);
     }
   });
@@ -329,6 +341,7 @@ test("a support sign-in passes none of the doors that mint from a session, and n
         cookieOf(maintainer.browser),
         door.body,
       );
+
       assert.equal(asMember.status, 403, door.path);
       assert.equal(await codeOf(asMember), SUPPORT_ACCESS_ERROR.IMPERSONATION_REFUSED, door.path);
 
@@ -352,6 +365,7 @@ test("a support sign-in starts only from a browser's own session, never a bearer
       { authorization: `Bearer ${maintainer.bearer}` },
       member.id,
     );
+
     assert.equal(byBearer.status, 403);
     assert.equal(await codeOf(byBearer), SUPPORT_ACCESS_ERROR.BROWSER_ONLY);
   });
@@ -410,15 +424,19 @@ test("the member grants seven days, which the account's session answers; nothing
     const overHttp = await send(auth, SUPPORT_ACCESS_PATH.GRANT, "POST", cookieOf(member.browser));
     assert.equal(overHttp.status, 404);
     const farOut = new Date(NOW.getTime() + 365 * DAY_MS).toISOString();
+
     const updated = await send(auth, "/update-user", "POST", cookieOf(member.browser), {
       supportAccessUntil: farOut,
     });
+
     assert.equal(updated.status, 400);
 
     await signedInAs(auth, maintainer, member);
+
     const refusal = await auth.api
       .grantSupportAccess({ headers: new Headers(cookieOf(maintainer.browser)) })
       .then(() => undefined, decodeThrown);
+
     assert.equal(refusal?.statusCode, 403);
     assert.equal(refusal?.body.code, SUPPORT_ACCESS_ERROR.IMPERSONATION_REFUSED);
   });
@@ -435,6 +453,7 @@ test("the member's revoke clears the grant and ends the support sign-in under wa
     const revoked = decodeGrant(
       await auth.api.revokeSupportAccess({ headers: new Headers(cookieOf(member.browser)) }),
     );
+
     assert.equal(revoked.supportAccessUntil, null);
 
     // A browser's cookie cache may answer for up to its minute, so the sign-in is read from the store.

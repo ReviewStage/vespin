@@ -40,6 +40,7 @@ export const workspaceNamingOf = (
 > =>
   Effect.map(workspaceOf(userId, workspaceId), (found) => {
     const workspace = Option.getOrUndefined(found);
+
     return { step: workspace?.slug ?? workspaceId, name: workspace?.name ?? "" };
   });
 

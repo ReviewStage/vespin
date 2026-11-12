@@ -89,6 +89,7 @@ const FILE_TYPES: ReadonlyMap<string, GitHubImageType> = new Map([
 /** The type a file of a repository is read as, by its path's extension; none for a path whose extension names no image the window draws. */
 export function imageTypeOfPath(path: string): GitHubImageType | undefined {
   const extension = /\.([^./]+)$/u.exec(path)?.[1]?.toLowerCase() ?? "";
+
   return FILE_TYPES.get(extension);
 }
 
@@ -105,17 +106,21 @@ const SECURE = "https:";
 /** An upload's id on `github.com`: `/user-attachments/assets/<id>`, or `/<owner>/<name>/assets/<id>`. */
 function githubAssetId(segments: readonly string[]): string | undefined {
   const [first, second, third, fourth, ...rest] = segments;
+
   if (first === "user-attachments" && second === "assets" && fourth === undefined) return third;
+
   return third === "assets" && rest.length === 0 ? fourth : undefined;
 }
 
 /** The asset id a URL names an upload by, where it names one. */
 function assetIdOf(url: URL): string | undefined {
   const segments = url.pathname.split("/").filter((segment) => segment !== "");
+
   const id =
     url.hostname === HOST.GITHUB
       ? githubAssetId(segments)
       : SIGNED_FILE.exec(segments.at(-1) ?? "")?.[1];
+
   return id !== undefined && ASSET_ID.test(id) ? id.toLowerCase() : undefined;
 }
 
@@ -123,22 +128,27 @@ function assetIdOf(url: URL): string | undefined {
 function decodedSegment(segment: string): string | undefined {
   if (!/^(?:[^%]|%[0-9a-f]{2})+$/iu.test(segment)) return undefined;
   let decoded: string;
+
   try {
     decoded = decodeURIComponent(segment);
   } catch {
     // Note that an escape may spell no UTF-8 (`%FF`), which names no file.
     return undefined;
   }
+
   return decoded === "." || decoded === ".." || decoded.includes("/") ? undefined : decoded;
 }
 
 /** The repository's file `<owner>/<name>/<ref>/<path>` names, where its path ends in an image's extension. */
 function fileOf(segments: readonly string[]): GitHubFileImage | undefined {
   const decoded = segments.map(decodedSegment).filter((segment) => segment !== undefined);
+
   if (decoded.length !== segments.length || decoded.length < 4) return undefined;
   const [owner = "", name = "", ref = "", ...path] = decoded;
   const contentType = imageTypeOfPath(path.at(-1) ?? "");
+
   if (contentType === undefined) return undefined;
+
   return {
     source: GITHUB_IMAGE_SOURCE.FILE,
     repository: `${owner}/${name}`,
@@ -153,21 +163,29 @@ export function githubImageOf(address: string): GitHubImage | undefined {
   if (address.length > GITHUB_IMAGE_BOUNDS.MAX_URL_CHARS || !URL.canParse(address)) {
     return undefined;
   }
+
   const url = new URL(address);
+
   if (url.protocol !== SECURE || url.username !== "" || url.password !== "") return undefined;
   const segments = url.pathname.split("/").filter((segment) => segment !== "");
+
   if (url.hostname === HOST.RAW) return fileOf(segments);
+
   // Note that `github.com/<owner>/<name>/raw/<ref>/<path>` names the same file the raw host does.
   if (url.hostname === HOST.GITHUB && segments[2] === RAW_SEGMENT) {
     return fileOf([...segments.slice(0, 2), ...segments.slice(3)]);
   }
+
   if (url.hostname === HOST.GITHUB || url.hostname === HOST.PRIVATE_UPLOADS) {
     const assetId = assetIdOf(url);
+
     return assetId === undefined ? undefined : { source: GITHUB_IMAGE_SOURCE.ASSET, assetId };
   }
+
   if (url.hostname === HOST.CAMO || url.hostname === HOST.PUBLIC_UPLOADS) {
     return { source: GITHUB_IMAGE_SOURCE.PUBLIC, url: url.href };
   }
+
   return undefined;
 }
 
@@ -178,5 +196,6 @@ export function githubImageOf(address: string): GitHubImage | undefined {
  */
 export function isUploadOf(address: string, assetId: string): boolean {
   const image = githubImageOf(address);
+
   return image?.source === GITHUB_IMAGE_SOURCE.ASSET && image.assetId === assetId.toLowerCase();
 }

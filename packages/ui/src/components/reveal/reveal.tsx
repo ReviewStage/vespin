@@ -67,6 +67,7 @@ export function RevealArea({
   children: ReactNode;
 }): React.JSX.Element {
   const outer = useContext(RevealAreaContext);
+
   return (
     <RevealAreaContext.Provider value={own ? root : (outer ?? root)}>
       {children}
@@ -83,12 +84,14 @@ let minted = 0;
 /** A motion key no other set of rows wears. */
 function mintKey(): string {
   minted += 1;
+
   return `reveal-${minted}`;
 }
 
 /** The rows of the set revealed, and those of a set left, rolling up, in their box each. */
 function RevealedRows({ revealed }: { revealed: readonly Revealed[] }): React.JSX.Element {
   const drawn = useLeaving(revealed, (each) => each.key);
+
   return (
     <>
       {drawn.map(({ key, value }) => (
@@ -117,15 +120,18 @@ function RevealMotion({
   const fallback = useRef<HTMLElement | null>(null);
   const keys = useRef(new Map<string, string>());
   let key: string | undefined;
+
   if (revealed !== undefined) {
     key = keys.current.get(revealed) ?? mintKey();
     keys.current.set(revealed, key);
   }
+
   // Note that the set is kept while nothing changed, so the rows held while it leaves are those it last drew.
   const listed = useMemo<readonly Revealed[]>(
     () => (key === undefined ? [] : [{ key, rows: children }]),
     [key, children],
   );
+
   return (
     <ListMotion root={area ?? fallback} change={key ?? HIDDEN} way={LIST_MOTION_WAY.UNROLL}>
       <RevealedRows revealed={listed} />
@@ -161,5 +167,6 @@ export function RevealChoice<Value extends string>({
 }): React.JSX.Element {
   const rows = children(value);
   const none = rows === null || rows === undefined || rows === false;
+
   return <RevealMotion revealed={none ? undefined : value}>{rows}</RevealMotion>;
 }

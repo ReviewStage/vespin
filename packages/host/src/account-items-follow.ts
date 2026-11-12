@@ -95,26 +95,35 @@ function heldAfter(
   const carried = new Map(inboxOfLiveRows(rows).map((item) => [item.id, item]));
   const next = new Map<string, HeldItem>(standing?.past === undefined ? [] : held);
   const placed: string[] = [];
+
   for (const stamp of rows.stamps) {
     const item = carried.get(stamp.id);
+
     if (item === undefined) continue;
     const before = held.get(stamp.id);
+
     if (before !== undefined && before.planId !== stamp.planId) placed.push(stamp.id);
     next.set(stamp.id, { item, planId: stamp.planId });
   }
+
   for (const id of standing?.gone ?? []) next.delete(id);
   const settledSince = now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS;
+
   for (const [id, { item }] of next) {
     if (item.status === INBOX_STATUS.OPEN) continue;
+
     // A nod on an old notice settles it without moving its last change, and a reminder brings it back when it comes due, so it stands by the latest of the three, as the service carries it.
     const standsBy = Math.max(
       item.updatedAt,
       item.settledAt ?? item.updatedAt,
       item.remindAt ?? item.updatedAt,
     );
+
     if (standsBy < settledSince) next.delete(id);
   }
+
   const sent = [...carried.values()].filter((item) => next.has(item.id));
+
   return { held: next, sent, placed };
 }
 
@@ -136,24 +145,32 @@ function inboxItemsPatched(
   drawnOf: (id: string) => InboxItem | undefined,
 ): AppInboxItems {
   const touched = new Set<string>();
+
   for (const id of moved) {
     for (const on of [was.get(id), held.get(id)]) if (on !== undefined) touched.add(on.planId);
   }
+
   if (touched.size === 0) return told;
   const lists = new Map<string, InboxItem[]>();
+
   for (const [id, { item, planId }] of held) {
     if (!touched.has(planId)) continue;
     const items = lists.get(planId);
     const shown = drawnOf(id) ?? item;
+
     if (items === undefined) lists.set(planId, [shown]);
     else items.push(shown);
   }
+
   const next = { ...told[INBOX_SCOPE_KIND.PLAN] };
+
   for (const planId of touched) {
     const items = lists.get(planId);
+
     if (items === undefined) Reflect.deleteProperty(next, planId);
     else next[planId] = inboxInOrder(items);
   }
+
   return { [INBOX_SCOPE_KIND.PLAN]: next };
 }
 
@@ -171,53 +188,68 @@ export function followAccountItems(
 ): Effect.Effect<void> {
   /** Whether any read answered, so a later refusal keeps what was told. */
   let answered = false;
+
   const attempt = Effect.scoped(
     Effect.gen(function* () {
       const first = yield* dependencies.seal(userId, "");
+
       if ("failure" in first) {
         if (!answered) yield* tell({ failed: true });
+
         return true;
       }
+
       let wait: TxWait | undefined;
       /** Every item as the follow last took it, with its plan. */
       let held: Held | undefined;
       /** The items as last drawn, a standing write's among them, by the plan each is on. */
       let told = NO_ITEMS;
+
       /** Tells the items as last drawn, once the read first answered. */
       const toldNow = Effect.suspend(() => {
         if (held === undefined) return Effect.void;
         answered = true;
+
         return tell({ rows: told });
       });
+
       /** Draws the items `ids` names again, a write standing over them, on the plans the read answered them on. */
       const drawn = (ids: readonly string[]) =>
         Effect.suspend(() => {
           if (held !== undefined) {
             told = inboxItemsPatched(told, ids, held, held, items.row);
           }
+
           return toldNow;
         });
+
       const items: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(INBOX_ITEM, {
         redraw: drawn,
         confirmation: () => {
           const handed = wait;
+
           return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
         },
       });
+
       yield* dependencies.accountWide.stand(() => wait);
+
       const landed = (decoded: AccountInboxItemsLiveRows, standing?: SyncStanding) =>
         Effect.gen(function* () {
           const was = held ?? new Map<string, HeldItem>();
           const after = heldAfter(was, decoded, standing, yield* Clock.currentTimeMillis);
           held = after.held;
           const at = syncIdOf(standing);
+
           const moved = yield* items.answer(after.sent, {
             held: [...after.held.keys()],
             ...(at === undefined ? undefined : { at }),
           });
+
           told = inboxItemsPatched(told, [...moved, ...after.placed], was, after.held, items.row);
           yield* toldNow;
         });
+
       yield* followTakingRows(
         {
           poll: (_after, _cursor, sync) => dependencies.seal(userId, sync),
@@ -229,8 +261,10 @@ export function followAccountItems(
         INBOX_ITEMS_READ.rows,
         landed,
       ).pipe(Effect.catch(() => Effect.void));
+
       return true;
     }),
   );
+
   return restarting(attempt);
 }

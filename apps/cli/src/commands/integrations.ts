@@ -53,6 +53,7 @@ const decodeAccount = Schema.decodeUnknownOption(integrationAccountSchema);
 /** The provider a connection name is an account at, or a usage failure where it names none. */
 function accountOf(connection: string) {
   const named = integrationConnectionOf(connection);
+
   return named === undefined
     ? Effect.fail(
         new CommandFailed({
@@ -71,10 +72,12 @@ const listCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
     const read = yield* askService(hosted.integrations.statuses, undefined);
+
     // Note that each account is read on its own, so one this build does not know hides none of the others.
     const accounts = (read.accounts ?? []).flatMap((account) =>
       Option.toArray(decodeAccount(account)),
     );
+
     yield* answer({
       json: { ...read, accounts },
       lines:
@@ -120,20 +123,24 @@ const connectCommand = Command.make(
     Effect.gen(function* () {
       const { hosted } = yield* session;
       const connection = Option.getOrUndefined(account);
+
       if (connection !== undefined && (yield* accountOf(connection)) !== provider) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `${connection} is no account at ${INTEGRATION_NAME[provider]}.`,
         });
       }
+
       const begun = yield* askService(
         hosted.integrations.connect,
         integrationAccountInput(provider, { connection, add }),
         undefined,
         ACCOUNT_REFUSAL,
       );
+
       const stdio = yield* Stdio.Stdio;
       const opens = !noBrowser && (yield* stdio.stdoutIsTerminal);
+
       if (opens) openInBrowser(begun.url);
       yield* note(
         `${opens ? "Opening" : "Open"} this link in your browser to sign in to ${INTEGRATION_NAME[provider]}; vespin integrations list reads where it stands after.`,
@@ -159,22 +166,27 @@ const toolsCommand = Command.make("tools", { connection: connectionArgument }, (
   Effect.gen(function* () {
     const provider = yield* accountOf(connection);
     const { hosted } = yield* session;
+
     const read = yield* askService(
       hosted.integrations.tools,
       { provider, [INTEGRATION_QUERY.CONNECTION]: connection },
       undefined,
       TOOLS_REFUSAL,
     );
+
     // Note that a server that listed none is an answer, why, rather than a failure.
     if ("problem" in read) {
       const said = read.problem.message === undefined ? "" : `: ${read.problem.message}`;
+
       // Only a refused grant is mended by signing in again, and GitHub's grant is the account's own sign-in.
       const mends =
         read.problem.reason === INTEGRATION_TOOLS_PROBLEM.REFUSED &&
         INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
+
       const hint = mends
         ? ` vespin integrations connect ${provider} --account ${connection} signs it in again.`
         : "";
+
       return yield* answer({
         json: { connection, problem: read.problem },
         lines: [
@@ -183,6 +195,7 @@ const toolsCommand = Command.make("tools", { connection: connectionArgument }, (
         ids: [],
       });
     }
+
     yield* answer({
       json: { connection, tools: read.tools },
       lines:
@@ -209,12 +222,14 @@ const renameCommand = Command.make(
     Effect.gen(function* () {
       const provider = yield* accountOf(connection);
       const { hosted } = yield* session;
+
       const renamed = yield* askService(
         hosted.integrations.rename,
         { ...integrationAccountInput(provider, { connection }), body: { label } },
         undefined,
         ACCOUNT_REFUSAL,
       );
+
       yield* answer({
         json: { account: renamed.account },
         lines: [`Renamed ${connection} ${integrationAccountLabel(renamed.account)}.`],
@@ -249,12 +264,14 @@ const disconnectCommand = Command.make(
         yes,
       );
       const { hosted } = yield* session;
+
       const ended = yield* askService(
         hosted.integrations.disconnect,
         integrationAccountInput(provider, { connection }),
         undefined,
         ACCOUNT_REFUSAL,
       );
+
       yield* answer({
         json: { connection, status: ended.status },
         lines: [`Disconnected ${connection}.`],

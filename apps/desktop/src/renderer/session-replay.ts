@@ -53,8 +53,10 @@ const ACCOUNTS_DIRECTORY = "/Users/";
  */
 function loadedFrom(): string | undefined {
   const path = globalThis.location?.pathname;
+
   if (path === undefined) return undefined;
   const directory = path.slice(0, path.lastIndexOf("/") + 1);
+
   // A page at the filesystem root would match everything, which is not a
   // narrowing at all; the two rules either side of this still cover it.
   return directory.length > 1 ? directory : undefined;
@@ -77,6 +79,7 @@ function loadedFrom(): string | undefined {
 function namesThisMachine(value: string): boolean {
   if (value.startsWith("file://") || value.startsWith(ACCOUNTS_DIRECTORY)) return true;
   const directory = loadedFrom();
+
   return directory !== undefined && value.startsWith(directory);
 }
 

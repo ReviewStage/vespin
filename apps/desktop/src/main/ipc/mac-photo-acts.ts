@@ -25,13 +25,16 @@ export function macPhotoProcedures(
   dependencies: MacPhotoActsDependencies,
 ): Pick<PlatformActProcedures<WebContents>, MacPhotoActKind> {
   const { toJpeg } = dependencies;
+
   return {
     [MAC_PHOTO_ACT_KIND.MAC_PHOTO_TO_JPEG]: macPhotoPort[
       MAC_PHOTO_ACT_KIND.MAC_PHOTO_TO_JPEG
     ].effect(function* ({ context, errors, input }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
       const jpeg = yield* toJpeg(Buffer.from(input.base64, "base64"));
+
       if (Option.isNone(jpeg)) return yield* Effect.fail(errors.REFUSED());
+
       return { base64: Buffer.from(jpeg.value).toString("base64") };
     }),
   };

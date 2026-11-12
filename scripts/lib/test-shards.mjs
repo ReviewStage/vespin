@@ -29,11 +29,14 @@ function recordedDurations(root) {
  */
 function weighed(files, durations) {
   const sizes = files.map((file) => statSync(file.absolute).size);
+
   const rates = files
     .map((file, index) => (durations[file.relative] ?? 0) / sizes[index])
     .filter((rate) => rate > 0)
     .sort((a, b) => a - b);
+
   const rate = rates.length > 0 ? rates[Math.floor(rates.length / 2)] : 1;
+
   return files.map((file, index) => ({
     ...file,
     weight: durations[file.relative] ?? sizes[index] * rate,
@@ -51,6 +54,7 @@ export class DurationSharding extends BaseSequencer {
   async shard(specs) {
     const { index, count } = this.ctx.config.shard;
     const byRoot = new Map();
+
     for (const spec of specs) {
       const root = spec.project.config.root;
       const relative = path.relative(root, spec.moduleId).split(path.sep).join("/");
@@ -58,15 +62,19 @@ export class DurationSharding extends BaseSequencer {
       files.push({ spec, absolute: spec.moduleId, relative });
       byRoot.set(root, files);
     }
+
     const files = [...byRoot].flatMap(([root, inRoot]) => weighed(inRoot, recordedDurations(root)));
     files.sort((a, b) => b.weight - a.weight || (a.absolute < b.absolute ? -1 : 1));
     const totals = Array.from({ length: count }, () => 0);
     const mine = [];
+
     for (const file of files) {
       const lightest = totals.indexOf(Math.min(...totals));
       totals[lightest] += file.weight;
+
       if (lightest === index - 1) mine.push(file.spec);
     }
+
     return mine;
   }
 }

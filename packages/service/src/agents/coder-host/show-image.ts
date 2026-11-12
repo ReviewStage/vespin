@@ -143,7 +143,9 @@ function measuredPicture(
     }),
     Result.flatMap((image) => {
       const dimensions = mediaDimensions(image.bytes, image.contentType);
+
       if (dimensions === undefined) return Result.fail(`${SHOW_IMAGE_REFUSAL.NOT_IMAGE} ${path}`);
+
       return Result.succeed({ ...image, ...dimensions });
     }),
   );
@@ -176,15 +178,21 @@ export function runShowImage(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return Effect.gen(function* () {
     const read = readEither(SHOW_IMAGE_INPUT)(asPictureList(input));
+
     if (Result.isFailure(read)) return showImageRejected(SHOW_IMAGE_REFUSAL.UNREADABLE);
     const pictures: ReadPicture[] = [];
+
     for (const image of read.success.images) {
       const picture = yield* readPicture(binding, image.path);
+
       if (Result.isFailure(picture)) return showImageRejected(picture.failure);
       pictures.push(picture.success);
     }
+
     const kept = yield* keepAll(binding.target, pictures);
+
     if (Option.isNone(kept)) return showImageRejected(SHOW_IMAGE_REFUSAL.FULL);
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       pictures: kept.value.map((each) => ({ ...each })),

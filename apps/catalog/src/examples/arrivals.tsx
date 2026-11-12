@@ -11,6 +11,7 @@ import { CatalogSection } from "../section";
 
 function Arrivals(): React.JSX.Element {
   const [reading, setReading] = useState(true);
+
   return (
     <>
       <CatalogSection id="arrival-reading" title="Reading, past a second">

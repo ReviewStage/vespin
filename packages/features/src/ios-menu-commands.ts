@@ -78,15 +78,21 @@ function segmentsOf(pathname: string): readonly string[] {
 export function menuFocusOf(pathname: string, selected: string | undefined): MenuFocus {
   const [tab, first, second] = segmentsOf(pathname);
   const chosen = selected === undefined || selected === "" ? undefined : selected;
+
   if (tab === MENU_ROUTE.INBOX) {
     const id = first ?? chosen;
+
     return id === undefined ? NOTHING : { kind: MENU_SUBJECT.THREAD, id };
   }
+
   if (tab !== MENU_ROUTE.TASKS) return NOTHING;
+
   if (first === MENU_ROUTE.AGENT) {
     return second === undefined ? NOTHING : { kind: MENU_SUBJECT.AGENT, id: second };
   }
+
   if (first === MENU_ROUTE.PAGE) return NOTHING;
   const id = first ?? chosen;
+
   return id === undefined ? NOTHING : { kind: MENU_SUBJECT.TASK, id };
 }

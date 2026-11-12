@@ -180,6 +180,7 @@ export function openerFieldsOf(
 ): OpenerFields {
   if (user == null) return {};
   const avatarUrl = githubAvatarUrl(user.avatar_url);
+
   return {
     author: user.login,
     authorBot: user.type === GITHUB_BOT_TYPE || user.login.endsWith(BOT_LOGIN_SUFFIX),
@@ -345,12 +346,14 @@ function readOptional<A>(
 function momentOf(spelled: string | null | undefined): number | undefined {
   if (spelled == null) return undefined;
   const at = Date.parse(spelled);
+
   return Number.isNaN(at) ? undefined : at;
 }
 
 /** How many comments a pull request holds, on its conversation and its diff together; none where GitHub counted neither. */
 function commentCountOf(record: typeof PullRequestSchema.Type): number | undefined {
   if (record.comments === undefined && record.review_comments === undefined) return undefined;
+
   return (record.comments ?? 0) + (record.review_comments ?? 0);
 }
 
@@ -362,10 +365,12 @@ function pullRequestOf(record: typeof PullRequestSchema.Type): GitHubPullRequest
       : record.draft
         ? PULL_REQUEST_STATE.DRAFT
         : PULL_REQUEST_STATE.OPEN;
+
   const openedAt = momentOf(record.created_at);
   const mergedAt = momentOf(record.merged_at);
   const closedAt = momentOf(record.closed_at);
   const comments = commentCountOf(record);
+
   return {
     number: record.number,
     title: record.title,
@@ -415,6 +420,7 @@ export function pullRequestOfBranch(
   branch: string,
 ): Read<Option.Option<GitHubPullRequest>> {
   const [owner = ""] = fullName.split("/");
+
   const listing = githubRead(`${repositoryPath(fullName)}/pulls`, token).pipe(
     HttpClientRequest.setUrlParams({
       head: `${owner}:${branch}`,
@@ -424,8 +430,10 @@ export function pullRequestOfBranch(
       per_page: NEWEST_ONE,
     }),
   );
+
   return Effect.flatMap(readOptional(listing, ListedPullRequestsSchema), (listed) => {
     const [newest] = Option.getOrElse(listed, () => []);
+
     return newest === undefined
       ? Effect.succeed(Option.none())
       : pullRequestByNumber(token, fullName, newest.number);
@@ -498,7 +506,9 @@ export function headCheckFailed(check: HeadCheck): boolean {
 /** What one set of outcomes says: failing beats pending beats passing, and nothing at all is none. */
 function summaryOf(checks: HeadChecks): CheckSummary {
   if (checks.failing) return CHECK_SUMMARY.FAILING;
+
   if (checks.pending) return CHECK_SUMMARY.PENDING;
+
   return checks.any ? CHECK_SUMMARY.PASSING : CHECK_SUMMARY.NONE;
 }
 
@@ -518,6 +528,7 @@ function forbiddenNotLimited(
 /** How a check run ended, where it has; none while it runs, or for a conclusion GitHub adds that the wire does not name. */
 function runConclusionOf(status: string, conclusion: string | null): GitHubCheckConclusion | null {
   if (status !== COMPLETED || conclusion === null) return null;
+
   return RUN_CONCLUSION.get(conclusion) ?? null;
 }
 
@@ -535,9 +546,11 @@ function readChecks<A>(
     outcomes: [],
     checks: [],
   };
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response: HttpClientResponse.HttpClientResponse) => {
       if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Effect.succeed(none);
+
       return Effect.flatMap(forbiddenNotLimited(response), (forbidden) =>
         forbidden
           ? Effect.as(
@@ -567,6 +580,7 @@ export function headChecksOf(
 ): Read<HeadChecks> {
   const commit = `${repositoryPath(fullName)}/commits/${segment(sha)}`;
   const perPage = HttpClientRequest.setUrlParams({ per_page: CHECKS_PER_PAGE });
+
   const runs = readChecks(
     "check runs",
     githubRead(`${commit}/check-runs`, token).pipe(perPage),
@@ -588,6 +602,7 @@ export function headChecksOf(
       })),
     }),
   );
+
   const statuses = readChecks(
     "commit statuses",
     githubRead(`${commit}/status`, token).pipe(perPage),
@@ -607,6 +622,7 @@ export function headChecksOf(
       })),
     }),
   );
+
   return Effect.map(Effect.all([runs, statuses]), ([a, b]) => ({
     failing: a.failing || b.failing,
     pending: a.pending || b.pending,
@@ -637,6 +653,7 @@ function changedFileOf(file: (typeof PullRequestFilesSchema.Type)[number]): Agen
   const status = GITHUB_FILE_STATUS.get(file.status) ?? CHANGED_FILE_STATUS.MODIFIED;
   const movedOnly = status === CHANGED_FILE_STATUS.RENAMED && file.changes === 0;
   const patch = file.patch ?? (movedOnly ? "" : null);
+
   const omitted =
     patch === null
       ? file.changes === 0
@@ -645,6 +662,7 @@ function changedFileOf(file: (typeof PullRequestFilesSchema.Type)[number]): Agen
       : patch.length > CHANGES_BOUNDS.MAX_PATCH_CHARS
         ? PATCH_OMITTED.TOO_LARGE
         : null;
+
   return {
     path: file.filename,
     previousPath: file.previous_filename ?? null,
@@ -680,15 +698,20 @@ export const pullRequestFiles = /* @__PURE__ */ Effect.fn("web/pullRequestFiles"
 ): Effect.fn.Return<PullRequestFiles, PullRequestReadFailure, HttpClient.HttpClient> {
   const files: AgentChangedFile[] = [];
   const path = `${repositoryPath(fullName)}/pulls/${pullRequest.number}/files`;
+
   for (let page = 1; files.length < CHANGES_BOUNDS.MAX_FILES; page += 1) {
     const request = githubRead(path, token).pipe(
       HttpClientRequest.setUrlParams({ per_page: String(FILES_PER_PAGE), page: String(page) }),
     );
+
     const read = Option.getOrElse(yield* readOptional(request, PullRequestFilesSchema), () => []);
     files.push(...read.map(changedFileOf));
+
     if (read.length < FILES_PER_PAGE) break;
   }
+
   const kept = files.slice(0, CHANGES_BOUNDS.MAX_FILES);
+
   return { files: kept, truncated: pullRequest.changedFiles > kept.length };
 });
 
@@ -714,6 +737,7 @@ export function pullRequestCommitMessages(
   const request = githubRead(`${repositoryPath(fullName)}/pulls/${number}/commits`, token).pipe(
     HttpClientRequest.setUrlParams({ per_page: String(MAX_COMMIT_MESSAGES) }),
   );
+
   return Effect.map(readOptional(request, PullRequestCommitsSchema), (read) =>
     Option.getOrElse(read, () => []).map(({ commit }) => commit.message),
   );
@@ -736,6 +760,7 @@ export interface ReadCommits {
  */
 function readAtBase(file: AgentChangedFile): boolean {
   if (file.status === CHANGED_FILE_STATUS.ADDED) return false;
+
   return (
     imageTypeOfPath(file.previousPath ?? file.path) !== undefined ||
     file.omitted === PATCH_OMITTED.TOO_LARGE
@@ -761,11 +786,14 @@ export const readCommits = /* @__PURE__ */ Effect.fn("web/readCommits")(function
 ): Effect.fn.Return<ReadCommits, never, HttpClient.HttpClient> {
   if (Option.isNone(pullRequest)) return {};
   const { headSha, baseSha } = pullRequest.value;
+
   if (baseSha === undefined || !files.some(readAtBase)) return { headSha };
+
   const request = githubRead(
     `${repositoryPath(fullName)}/compare/${segment(baseSha)}...${segment(headSha)}`,
     token,
   ).pipe(HttpClientRequest.setUrlParams({ per_page: "1" }));
+
   const compared = yield* readOptional(request, CompareSchema).pipe(
     Effect.catch((failure) =>
       Effect.as(
@@ -774,6 +802,7 @@ export const readCommits = /* @__PURE__ */ Effect.fn("web/readCommits")(function
       ),
     ),
   );
+
   return Option.match(compared, {
     onNone: () => ({ headSha }),
     onSome: (compare) => ({ headSha, baseSha: compare.merge_base_commit.sha }),
@@ -822,7 +851,9 @@ function accountOf(record: typeof GitHubAccountSchema.Type): GitHubAccount {
 /** Each account once, the first time it stands, up to the bound. */
 function distinctAccounts(accounts: readonly GitHubAccount[]): readonly GitHubAccount[] {
   const seen = new Map<number, GitHubAccount>();
+
   for (const account of accounts) if (!seen.has(account.id)) seen.set(account.id, account);
+
   return [...seen.values()].slice(0, CHANGES_BOUNDS.MAX_PEOPLE);
 }
 
@@ -841,17 +872,22 @@ function reviewersOf(
   requested: readonly GitHubAccount[],
 ): readonly GitHubReviewer[] {
   const standing = new Map<number, GitHubReviewer>();
+
   for (const review of reviews) {
     const state = GITHUB_REVIEW_STATE.get(review.state);
+
     if (review.user === null || state === undefined) continue;
     const account = accountOf(review.user);
     const held = standing.get(account.id);
+
     // Note that a comment after a decision leaves the decision standing, as GitHub reads it.
     if (state === REVIEW_STATE.COMMENTED && held !== undefined) continue;
     standing.set(account.id, { account, state });
   }
+
   for (const account of requested)
     standing.set(account.id, { account, state: REVIEW_STATE.REQUESTED });
+
   return [...standing.values()].slice(0, CHANGES_BOUNDS.MAX_PEOPLE);
 }
 
@@ -861,8 +897,10 @@ function commentsOf(reviews: typeof ReviewsSchema.Type): readonly GitHubReviewCo
     .flatMap((review) => {
       const state = GITHUB_REVIEW_STATE.get(review.state);
       const words = review.body?.trim() ?? "";
+
       if (review.user === null || state === undefined || words === "") return [];
       const at = Date.parse(review.submitted_at ?? "");
+
       return [
         {
           account: accountOf(review.user),
@@ -891,15 +929,19 @@ const everyPage = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
   rendered = false,
 ) {
   const listed: A[] = [];
+
   for (let page = 1; page <= maxPages; page += 1) {
     const request = githubRead(path, token).pipe(
       HttpClientRequest.setUrlParams({ per_page: String(PEOPLE_PER_PAGE), page: String(page) }),
       rendered ? withRendering : (each) => each,
     );
+
     const read = Option.getOrElse(yield* readOptional(request, schema), () => []);
     listed.push(...read);
+
     if (read.length < PEOPLE_PER_PAGE) break;
   }
+
   return listed;
 });
 
@@ -916,6 +958,7 @@ export const pullRequestPeople = /* @__PURE__ */ Effect.fn("web/pullRequestPeopl
   number: number,
 ): Effect.fn.Return<PullRequestPeople, PullRequestReadFailure, HttpClient.HttpClient> {
   const path = `${repositoryPath(fullName)}/pulls/${number}`;
+
   const [pull, reviews] = yield* Effect.all(
     [
       readOptional(githubRead(path, token), PullRequestPeopleSchema),
@@ -923,8 +966,10 @@ export const pullRequestPeople = /* @__PURE__ */ Effect.fn("web/pullRequestPeopl
     ],
     { concurrency: "unbounded" },
   );
+
   if (Option.isNone(pull)) return NOBODY;
   const requested = (pull.value.requested_reviewers ?? []).map(accountOf);
+
   return {
     author: pull.value.user === null ? undefined : accountOf(pull.value.user),
     reviewers: reviewersOf(reviews, requested),
@@ -982,6 +1027,7 @@ export const reviewLineComments = /* @__PURE__ */ Effect.fn("web/reviewLineComme
     REVIEW_COMMENTS_MAX_PAGES,
     true,
   );
+
   return comments.map((comment) => ({
     path: comment.path,
     line: comment.line ?? comment.original_line ?? undefined,
@@ -1009,6 +1055,7 @@ const SIGNED_UPLOAD =
  */
 function renderingOf(html: string | null | undefined): string | undefined {
   const rendered = html?.trim().replace(SIGNED_UPLOAD, "$1") ?? "";
+
   return rendered === "" ? undefined : rendered;
 }
 
@@ -1032,6 +1079,7 @@ export type RenderedBody =
 /** The path GitHub answers a comment or a review at, under its repository. */
 function renderedBodyPath(fullName: string, body: RenderedBody): string {
   const repository = repositoryPath(fullName);
+
   return body.kind === RENDERED_BODY.ISSUE_COMMENT
     ? `${repository}/issues/comments/${body.commentId}`
     : `${repository}/pulls/${body.number}/reviews/${body.reviewId}`;
@@ -1051,6 +1099,7 @@ export const renderedBody = /* @__PURE__ */ Effect.fn("web/renderedBody")(functi
     withRendering(githubRead(renderedBodyPath(fullName, body), token)),
     RenderedBodySchema,
   );
+
   return Option.flatMap(read, (each) => Option.fromNullishOr(renderingOf(each.body_html)));
 });
 
@@ -1303,6 +1352,7 @@ interface GitHubReviewThread {
 /** A time GitHub spells, in epoch milliseconds; none where it spells none or nothing a date reads. */
 function timeOf(spelled: string | null | undefined): number | null {
   const at = Date.parse(spelled ?? "");
+
   return Number.isNaN(at) ? null : at;
 }
 
@@ -1314,12 +1364,15 @@ function nameOf(name: string): string {
 /** Where a check run stands: running until it completes, then by its conclusion, a conclusion GitHub adds reading as failed. */
 function runStateOf(status: string, conclusion: string | null): CheckState {
   if (status !== COMPLETED || conclusion === null) return CHECK_STATE.PENDING;
+
   if (conclusion === SUCCESS) return CHECK_STATE.PASSED;
+
   return SKIPPED_CONCLUSIONS.has(conclusion) ? CHECK_STATE.SKIPPED : CHECK_STATE.FAILED;
 }
 
 function statusStateOf(state: string): CheckState {
   if (state === SUCCESS) return CHECK_STATE.PASSED;
+
   return FAILING_STATUS_STATES.has(state) ? CHECK_STATE.FAILED : CHECK_STATE.PENDING;
 }
 
@@ -1330,6 +1383,7 @@ function statusStateOf(state: string): CheckState {
  */
 function checkAvatarOf(spelled: string | null | undefined): string | undefined {
   if (spelled === null || spelled === undefined) return undefined;
+
   return githubAvatarUrl(spelled) ?? (githubImageOf(spelled) === undefined ? undefined : spelled);
 }
 
@@ -1369,6 +1423,7 @@ export function pullRequestChecks(
 ): Read<readonly PullRequestCheck[]> {
   const commit = `${repositoryPath(fullName)}/commits/${segment(pullHeadRef(number))}`;
   const perPage = HttpClientRequest.setUrlParams({ per_page: CHECKS_PER_PAGE });
+
   const runs = readListed(
     "check runs",
     githubRead(`${commit}/check-runs`, token).pipe(perPage),
@@ -1388,6 +1443,7 @@ export function pullRequestChecks(
         ),
       ),
   );
+
   const statuses = readListed(
     "commit statuses",
     githubRead(`${commit}/status`, token).pipe(perPage),
@@ -1395,6 +1451,7 @@ export function pullRequestChecks(
     (answer): readonly PullRequestCheck[] =>
       answer.statuses.map((status) => {
         const state = statusStateOf(status.state);
+
         const check: PullRequestCheck = {
           name: nameOf(status.context),
           app: null,
@@ -1403,9 +1460,11 @@ export function pullRequestChecks(
           startedAt: timeOf(status.created_at),
           completedAt: state === CHECK_STATE.PENDING ? null : timeOf(status.updated_at),
         };
+
         return withAvatar(check, checkAvatarOf(status.avatar_url));
       }),
   );
+
   return Effect.map(Effect.all([runs, statuses], { concurrency: "unbounded" }), ([a, b]) =>
     [...a, ...b]
       .sort((one, other) => CHECK_RANK[one.state] - CHECK_RANK[other.state])
@@ -1423,6 +1482,7 @@ function readListed<A>(
   return Effect.scoped(
     Effect.flatMap(send(request), (response: HttpClientResponse.HttpClientResponse) => {
       if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Effect.succeed([]);
+
       return Effect.flatMap(forbiddenNotLimited(response), (forbidden) =>
         forbidden
           ? Effect.as(
@@ -1445,6 +1505,7 @@ interface EntryWords {
 function wordsOf(body: string | null | undefined, html: string | null | undefined): EntryWords {
   const words = body?.trim() ?? "";
   const rendered = html?.trim() ?? "";
+
   return rendered === ""
     ? { html: null, body: words, said: words !== "" }
     : { html: rendered, body: "", said: words !== "" };
@@ -1697,6 +1758,7 @@ const NO_GRAPH: ReadGraph = {
 function threadAccountOf(author: typeof GraphActorSchema.Type | null): GitHubAccount {
   if (author === null) return GHOST;
   const bot = author.__typename === GRAPHQL_BOT;
+
   return {
     id: author.databaseId ?? 0,
     login:
@@ -1719,10 +1781,13 @@ function reactionsOf(
   const given = (groups ?? []).flatMap((group): GitHubReaction[] => {
     const content = GRAPHQL_REACTION.get(group.content);
     const { totalCount, nodes } = group.reactors;
+
     if (content === undefined || totalCount === 0) return [];
     const accounts = nodes?.flatMap((node) => (node === null ? [] : [threadAccountOf(node)]));
+
     return [{ content, count: totalCount, accounts, mine: undefined }];
   });
+
   return given.sort(
     (a, b) => REACTION_ORDER.indexOf(a.content) - REACTION_ORDER.indexOf(b.content),
   );
@@ -1733,9 +1798,11 @@ function reactionsById(
   list: { readonly nodes: readonly (typeof ReactedSchema.Type | null)[] } | undefined,
 ): ReactionsById {
   const byId = new Map<number, readonly GitHubReaction[]>();
+
   for (const node of list?.nodes ?? []) {
     if (node?.databaseId != null) byId.set(node.databaseId, reactionsOf(node.reactionGroups));
   }
+
   return byId;
 }
 
@@ -1747,8 +1814,10 @@ function reactionsAt(byId: ReactionsById, id: number | undefined): readonly GitH
 /** The reactions a REST rollup counts, in GitHub's order, those given, naming nobody. */
 function rolledUpReactions(rollup: ReactionRollup | undefined): readonly GitHubReaction[] {
   if (rollup === undefined) return [];
+
   return REACTION_ORDER.flatMap((content): GitHubReaction[] => {
     const count = rollup[ROLLUP_KEY[content]] ?? 0;
+
     return count === 0 ? [] : [{ content, count, accounts: undefined, mine: undefined }];
   });
 }
@@ -1762,7 +1831,9 @@ function threadOf(node: typeof ThreadSchema.Type): GitHubReviewThread | undefine
   const read = node.comments.nodes.flatMap((comment) => (comment === null ? [] : [comment]));
   const published = read.filter((comment) => comment.pullRequestReview?.state !== GRAPHQL_PENDING);
   const [first] = published;
+
   if (first === undefined) return undefined;
+
   return {
     reviewId: first.pullRequestReview?.databaseId ?? null,
     id: node.id,
@@ -1778,6 +1849,7 @@ function threadOf(node: typeof ThreadSchema.Type): GitHubReviewThread | undefine
     outdated: node.isOutdated,
     comments: published.map((comment) => {
       const { said: _said, ...words } = wordsOf(comment.body, comment.bodyHTML);
+
       return {
         account: threadAccountOf(comment.author),
         ...words,
@@ -1803,15 +1875,18 @@ function conversationGraphOf(
   number: number,
 ): Effect.Effect<ReadGraph, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost(GRAPHQL_PATH, token, {
     query: CONVERSATION_QUERY,
     variables: { owner, name, number },
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, ConversationAnswerSchema)),
   ).pipe(
     Effect.flatMap((answer) => {
       const pullRequest = answer.data?.repository?.pullRequest;
+
       if (pullRequest == null) {
         return Effect.as(
           Effect.logWarning(
@@ -1820,8 +1895,10 @@ function conversationGraphOf(
           NO_GRAPH,
         );
       }
+
       const listed = pullRequest.reviewThreads;
       const nodes = listed.nodes.flatMap((node) => (node === null ? [] : [node]));
+
       return Effect.succeed({
         threads: nodes.flatMap((node) => threadOf(node) ?? []),
         left: Math.max(0, listed.totalCount - listed.nodes.length),
@@ -1854,6 +1931,7 @@ function threadAt(thread: GitHubReviewThread): number {
  */
 function threadEntryOf(thread: GitHubReviewThread, pageUrl: string): GitHubConversationEntry {
   const first = thread.comments[0];
+
   return {
     kind: CONVERSATION_ENTRY.REVIEW,
     account: first?.account ?? GHOST,
@@ -1891,14 +1969,19 @@ function conversationOf(
   pageUrl: string,
 ): KeptConversation {
   const byReview = new Map<number, GitHubReviewThread[]>();
+
   for (const thread of [...read.threads].sort((a, b) => threadAt(a) - threadAt(b))) {
     if (thread.reviewId === null) continue;
     byReview.set(thread.reviewId, [...(byReview.get(thread.reviewId) ?? []), thread]);
   }
+
   const placed = new Set<number>();
+
   const said = comments.flatMap((comment): GitHubConversationEntry[] => {
     const { said, ...words } = wordsOf(comment.body, comment.body_html);
+
     if (comment.user === null || !said) return [];
+
     return [
       {
         kind: CONVERSATION_ENTRY.COMMENT,
@@ -1917,13 +2000,18 @@ function conversationOf(
       },
     ];
   });
+
   const reviewed = reviews.flatMap((review): GitHubConversationEntry[] => {
     const state = GITHUB_REVIEW_STATE.get(review.state);
     const { said, ...words } = wordsOf(review.body, review.body_html);
+
     if (review.user === null || state === undefined) return [];
     const threads = review.id === undefined ? [] : (byReview.get(review.id) ?? []);
+
     if (state === REVIEW_STATE.COMMENTED && !said && threads.length === 0) return [];
+
     if (review.id !== undefined) placed.add(review.id);
+
     return [
       {
         kind: CONVERSATION_ENTRY.REVIEW,
@@ -1938,11 +2026,14 @@ function conversationOf(
       },
     ];
   });
+
   const unplaced = read.threads
     .filter((thread) => thread.reviewId === null || !placed.has(thread.reviewId))
     .map((thread) => threadEntryOf(thread, pageUrl));
+
   const entries = [...said, ...reviewed, ...unplaced].sort((a, b) => a.at - b.at);
   const conversation = entries.slice(-OVERVIEW_BOUNDS.MAX_ENTRIES);
+
   return { conversation, earlier: entries.length - conversation.length + read.left };
 }
 
@@ -2034,6 +2125,7 @@ function openPullRequestsOf(
   fullName: string,
 ): Effect.Effect<readonly StackCandidate[] | undefined, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const page = (
     after: string | null,
     held: readonly StackCandidate[],
@@ -2047,11 +2139,13 @@ function openPullRequestsOf(
       query: OPEN_PULL_REQUESTS_QUERY,
       variables: { owner, name, after },
     });
+
     return Effect.scoped(
       Effect.flatMap(send(request), (response) => readBody(response, OpenPullRequestsAnswerSchema)),
     ).pipe(
       Effect.flatMap((answer) => {
         const listed = answer.data?.repository?.pullRequests;
+
         if (listed === undefined) {
           return Effect.as(
             Effect.logWarning(
@@ -2060,19 +2154,24 @@ function openPullRequestsOf(
             undefined,
           );
         }
+
         const read = [...held, ...candidatesOf(listed.nodes)];
         const { hasNextPage, endCursor } = listed.pageInfo;
+
         if (!hasNextPage || endCursor === null) return Effect.succeed(read);
+
         if (pages + 1 >= STACK_PAGES) {
           return Effect.as(
             Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
             undefined,
           );
         }
+
         return page(endCursor, read, pages + 1);
       }),
     );
   };
+
   return page(null, [], 0).pipe(
     Effect.catch((failure) =>
       Effect.as(
@@ -2103,6 +2202,7 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
   HttpClient.HttpClient
 > {
   const path = `${repositoryPath(fullName)}/pulls/${number}`;
+
   const [read, open] = yield* Effect.all(
     [
       readOptional(withRendering(githubRead(path, token)), OverviewPullSchema),
@@ -2110,9 +2210,11 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
     ],
     { concurrency: "unbounded" },
   );
+
   if (Option.isNone(read)) return Option.none();
   const pull = read.value;
   const pullRequest = pullRequestOf(pull);
+
   const current: StackCandidate = {
     number: pullRequest.number,
     title: pullRequest.title,
@@ -2126,9 +2228,12 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
       ? { queued: true }
       : undefined),
   };
+
   const stands =
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT;
+
   const forkOwner = current.crossRepository ? pull.head.repo?.owner?.login : undefined;
+
   return Option.some({
     pullRequest,
     body: pull.body ?? "",
@@ -2173,6 +2278,7 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
     const { number } = pullRequest;
     // The member's own read runs beside the App's and is waited on only briefly once they land, so it never holds the conversation.
     const viewing = yield* Effect.forkChild(viewer);
+
     const [comments, reviews, graph] = yield* Effect.all(
       [
         everyPage(
@@ -2193,12 +2299,15 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
       ],
       { concurrency: "unbounded" },
     );
+
     const viewed = yield* Fiber.join(viewing).pipe(
       Effect.timeoutOption(VIEWER_GRACE),
       Effect.map(Option.getOrUndefined),
     );
+
     const kept = conversationOf(comments, reviews, graph, pullRequest.url);
     const mark = viewerMarks(viewed);
+
     return {
       reviewers: reviewersOf(reviews, []),
       earlier: kept.earlier,
@@ -2240,7 +2349,9 @@ function viewerMarks(
 ) => readonly GitHubReaction[] {
   return (subject, reactions) => {
     const given = subject === undefined ? undefined : viewer?.get(subject);
+
     if (given === undefined) return reactions;
+
     return reactions.map((reaction) => ({ ...reaction, mine: given.has(reaction.content) }));
   };
 }
@@ -2320,6 +2431,7 @@ function givenOf(groups: (typeof ViewedSchema.Type)["reactionGroups"]): Readonly
   return new Set(
     (groups ?? []).flatMap((group) => {
       const content = GRAPHQL_REACTION.get(group.content);
+
       return group.viewerHasReacted && content !== undefined ? [content] : [];
     }),
   );
@@ -2336,16 +2448,20 @@ export function viewerReactionsOf(
   number: number,
 ): Effect.Effect<ViewerReactions | undefined, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost(GRAPHQL_PATH, token, {
     query: VIEWER_REACTIONS_QUERY,
     variables: { owner, name, number },
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, ViewerAnswerSchema)),
   ).pipe(
     Effect.map((answer) => {
       const pullRequest = answer.data?.repository?.pullRequest;
+
       if (pullRequest == null) return undefined;
+
       const viewed = [
         ...(pullRequest.comments?.nodes ?? []),
         ...(pullRequest.reviews?.nodes ?? []),
@@ -2353,11 +2469,14 @@ export function viewerReactionsOf(
           (thread) => thread?.comments?.nodes ?? [],
         ),
       ];
+
       const given = new Map<string, ReadonlySet<Reaction>>([
         [pullRequest.id, givenOf(pullRequest.reactionGroups)],
       ]);
+
       for (const node of viewed)
         if (node !== null) given.set(node.id, givenOf(node.reactionGroups));
+
       return given;
     }),
     Effect.catch((failure) =>
@@ -2461,6 +2580,7 @@ const GITHUB_DEPLOYMENT_STATE = new Map<string, DeploymentState>([
 /** The address a deployment serves, only where it is https, since the window opens it in the browser. */
 function deploymentUrlOf(spelled: string | null | undefined): string | null {
   if (spelled === null || spelled === undefined) return null;
+
   try {
     return new URL(spelled).protocol === "https:" ? spelled : null;
   } catch {
@@ -2472,12 +2592,15 @@ function deploymentUrlOf(spelled: string | null | undefined): string | null {
 function deploymentOf(node: typeof DeploymentSchema.Type): PullRequestDeployment | undefined {
   if (node.environment === null || node.environment === "") return undefined;
   const spelled = node.latestStatus?.state ?? node.state ?? "";
+
   const deployment: PullRequestDeployment = {
     environment: nameOf(node.environment),
     state: GITHUB_DEPLOYMENT_STATE.get(spelled) ?? DEPLOYMENT_STATE.PENDING,
     url: deploymentUrlOf(node.latestStatus?.environmentUrl),
   };
+
   const avatarUrl = githubAvatarUrl(node.creator?.avatarUrl);
+
   return avatarUrl === undefined ? deployment : { ...deployment, avatarUrl };
 }
 
@@ -2486,10 +2609,12 @@ function newestOfEach(
   deployments: readonly PullRequestDeployment[],
 ): readonly PullRequestDeployment[] {
   const seen = new Set<string>();
+
   return deployments
     .filter((deployment) => {
       if (seen.has(deployment.environment)) return false;
       seen.add(deployment.environment);
+
       return true;
     })
     .slice(0, OVERVIEW_BOUNDS.MAX_DEPLOYMENTS);
@@ -2509,16 +2634,19 @@ export function pullRequestDeployments(
   number: number,
 ): Effect.Effect<readonly PullRequestDeployment[], never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost(GRAPHQL_PATH, token, {
     query: DEPLOYMENTS_QUERY,
     variables: { owner, name, number },
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, DeploymentsAnswerSchema)),
   ).pipe(
     Effect.flatMap((answer) => {
       const head = answer.data?.repository?.pullRequest?.commits.nodes.at(-1);
       const listed = head?.commit.deployments;
+
       if (listed === undefined || listed === null) {
         return Effect.as(
           Effect.logWarning(
@@ -2527,9 +2655,11 @@ export function pullRequestDeployments(
           [],
         );
       }
+
       const deployments = listed.nodes.flatMap((node) =>
         node === null ? [] : (deploymentOf(node) ?? []),
       );
+
       return Effect.succeed(newestOfEach(deployments));
     }),
     Effect.catch((failure) =>
@@ -2700,19 +2830,23 @@ function pendingCommentsOf(pull: PendingAnswerPull, reviewId: string): GitHubPen
     const side = SIDE_OF_GRAPHQL[thread.diffSide];
     const startSide = thread.startDiffSide === null ? null : SIDE_OF_GRAPHQL[thread.startDiffSide];
     const oneLine = thread.startLine === thread.line && (startSide === null || startSide === side);
+
     // Note that the thread's first comment is read beside its last ones, since a long run of pending replies can push every published one out of that window.
     const published = [...(thread.opening?.nodes ?? []), ...thread.comments.nodes].some(
       (each) => each !== null && each.state !== PENDING_STATE,
     );
+
     return thread.comments.nodes.flatMap((comment) => {
       if (comment?.state !== PENDING_STATE || comment.pullRequestReview?.id !== reviewId) return [];
       const author = comment.author;
+
       const account: GitHubAccount = {
         id: author?.databaseId ?? 0,
         login: author?.login ?? "",
         bot: author?.__typename === GITHUB_BOT_TYPE,
         avatarUrl: githubAvatarUrl(author?.avatarUrl),
       };
+
       return [
         {
           id: comment.id,
@@ -2730,6 +2864,7 @@ function pendingCommentsOf(pull: PendingAnswerPull, reviewId: string): GitHubPen
       ];
     });
   });
+
   return drafts.toSorted((a, b) => a.at - b.at).slice(0, OVERVIEW_BOUNDS.MAX_PENDING_COMMENTS);
 }
 
@@ -2746,17 +2881,21 @@ export function viewerPendingReviewOf(
   number: number,
 ): Effect.Effect<ViewerPendingReview | null, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost(GRAPHQL_PATH, token, {
     query: VIEWER_PENDING_QUERY,
     variables: { owner, name, number },
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, ViewerPendingAnswerSchema)),
   ).pipe(
     Effect.map((answer) => {
       const pull = answer.data?.repository?.pullRequest;
       const own = pull?.reviews.nodes.find((node) => node?.viewerDidAuthor === true);
+
       if (pull == null || own == null) return null;
+
       return { comments: own.comments.totalCount, drafts: pendingCommentsOf(pull, own.id) };
     }),
     Effect.catch((failure) =>
@@ -2819,15 +2958,18 @@ export function viewerRightsOf(
   number: number,
 ): Effect.Effect<ViewerRights, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost(GRAPHQL_PATH, token, {
     query: VIEWER_RIGHTS_QUERY,
     variables: { owner, name, number },
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, ViewerRightsAnswerSchema)),
   ).pipe(
     Effect.map((answer) => {
       const pull = answer.data?.repository?.pullRequest;
+
       return {
         canEditDescription: pull?.viewerCanUpdate === true,
         canBypassRules: pull?.viewerCanMergeAsAdmin === true,
@@ -2904,6 +3046,7 @@ export const pullRequestReviewOptions = /* @__PURE__ */ Effect.fn("web/pullReque
     fullName: string,
   ): Effect.fn.Return<GitHubReviewOptions, PullRequestReadFailure, HttpClient.HttpClient> {
     const path = repositoryPath(fullName);
+
     const [labels, users, teams] = yield* Effect.all(
       [
         optionsListing(token, `${path}/labels`, LabelsSchema, "labels"),
@@ -2912,6 +3055,7 @@ export const pullRequestReviewOptions = /* @__PURE__ */ Effect.fn("web/pullReque
       ],
       { concurrency: "unbounded" },
     );
+
     return {
       labels,
       users: users.map(accountOf),

@@ -173,10 +173,12 @@ export function LineSummary({
 }): React.JSX.Element {
   const { open } = useDisclosureState();
   const toggle = useDisclosureSummaryClick();
+
   const click = (event: MouseEvent<HTMLElement>) => {
     onClick?.(event);
     toggle(event);
   };
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a summary is the platform's own disclosure control, focusable and opened by Enter and Space; the click it already takes is routed to React's state.
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a summary is exposed as its details' disclosure button, which takes aria-expanded; the rule's table gives the element no role.

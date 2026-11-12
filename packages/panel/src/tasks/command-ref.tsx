@@ -79,9 +79,11 @@ export function runsCommand(name: SlashCommand, reach: CommandReach): boolean {
 /** The listed commands the box reaches that the `/` word's query finds, by name or by alias. */
 export function matchingCommands(query: string, reach: CommandReach): readonly SlashCommand[] {
   const typed = query.toLowerCase();
+
   return LISTED_COMMANDS.filter((name) => {
     const entry: CommandEntry = COMMANDS[name];
     const found = name.startsWith(typed) || (entry.alias?.startsWith(typed) ?? false);
+
     return found && runsCommand(name, reach);
   });
 }
@@ -89,6 +91,7 @@ export function matchingCommands(query: string, reach: CommandReach): readonly S
 /** A command as the `/` list draws its row: its glyph, its `/name`, and what it does. */
 export function commandOption(name: SlashCommand): ComboboxOption {
   const entry = COMMANDS[name];
+
   return {
     id: name,
     label: skillWord(name),
@@ -100,6 +103,7 @@ export function commandOption(name: SlashCommand): ComboboxOption {
 /** The command's card: its glyph and name, that it is a command, and what it does. */
 function CommandCard({ name }: { name: SlashCommand }): React.JSX.Element {
   const entry = COMMANDS[name];
+
   return (
     <HoverCard data-command-card="">
       <HoverCardHead glyph={entry.glyph()} name={skillWord(name)} sub={COMMAND_KIND} />

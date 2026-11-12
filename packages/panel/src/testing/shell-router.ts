@@ -102,10 +102,14 @@ interface StandingProps {
 function standingOf(shell: ReactElement): string {
   const props: StandingProps =
     typeof shell.props === "object" && shell.props !== null ? shell.props : {};
+
   if (props.tab === PANEL_TAB.SETTINGS) return SHELL_AT.SETTINGS;
+
   if (props.tasks?.history?.open === true) return SHELL_AT.VERSION_HISTORY;
   const agent = props.tasks?.agentView?.agentId;
+
   if (agent !== undefined) return agentAt(agent);
+
   return props.tasks?.page === TASKS_PAGE.DOCUMENT ? SHELL_AT.TASK : SHELL_AT.PLACES;
 }
 
@@ -113,31 +117,37 @@ function standingOf(shell: ReactElement): string {
 function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
   const root = createRootRoute({ component: ShellRoot });
   const places = createRoute({ getParentRoute: () => root, id: "places", component: ShellPlaces });
+
   const homeRoute = createRoute({
     getParentRoute: () => places,
     path: SHELL_AT.PLACES,
     component: HomePlace,
   });
+
   const admin = createRoute({
     getParentRoute: () => places,
     path: "/$workspace/admin",
     pendingComponent: AdminRouteLoading,
     ...LAZY_ROUTE,
   }).lazy(() => import("../desktop/admin-route.lazy.js").then((loaded) => loaded.adminLazyRoute));
+
   const board = createRoute({
     getParentRoute: () => places,
     path: "/$workspace/tasks",
     pendingComponent: BoardRouteLoading,
     ...LAZY_ROUTE,
   }).lazy(() => import("../desktop/board-route.lazy.js").then((loaded) => loaded.boardLazyRoute));
+
   const person = createRoute({
     getParentRoute: () => places,
     path: "/$workspace/person/$userId",
     pendingComponent: PersonRouteLoading,
     ...LAZY_ROUTE,
   }).lazy(() => import("../desktop/person-route.lazy.js").then((loaded) => loaded.personLazyRoute));
+
   // Note that the pages' layout stands under a workspace's step, as in the window's tree, so their lazy module's id is theirs here too.
   const workspace = createRoute({ getParentRoute: () => places, path: "/$workspace" });
+
   const automationPages = createRoute({
     getParentRoute: () => workspace,
     id: "automation-pages",
@@ -146,38 +156,48 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
   }).lazy(() =>
     import("../desktop/automations-route.lazy.js").then((loaded) => loaded.automationsLazyRoute),
   );
+
   const automations = createRoute({
     getParentRoute: () => automationPages,
     path: "automations",
   });
+
   const automation = createRoute({
     getParentRoute: () => automationPages,
     path: "automation/$automationId",
   });
+
   // Note that the pages' leaves are the window's tree's, by which the page standing is read (`automations-route.ts`).
   const automationsLeaves = ["/", "runs", "new"].map((path) =>
     createRoute({ getParentRoute: () => automations, path }),
   );
+
   const automationLeaves = ["/", "runs", "run/$runId"].map((path) =>
     createRoute({ getParentRoute: () => automation, path }),
   );
+
   const inbox = createRoute({
     getParentRoute: () => workspace,
     path: "inbox",
     component: InboxPlace,
   });
+
   const inboxItem = createRoute({ getParentRoute: () => inbox, path: "$itemId" });
+
   const task = createRoute({
     getParentRoute: () => workspace,
     path: "task/$taskId",
     component: StatePlace,
   });
+
   const agent = createRoute({
     getParentRoute: () => workspace,
     path: "agent/$agentId",
     component: AgentPlace,
   });
+
   const agentPage = createRoute({ getParentRoute: () => agent, path: "/" });
+
   const settings = createRoute({
     getParentRoute: () => root,
     path: SHELL_AT.SETTINGS,
@@ -186,7 +206,9 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
   }).lazy(() =>
     import("../desktop/settings-route.lazy.js").then((loaded) => loaded.appSettingsLazyRoute),
   );
+
   const settingsPage = createRoute({ getParentRoute: () => settings, path: "$page" });
+
   // Note that the history's layout is pathless under the root, as in the window's tree, so its lazy module's id is its own here too.
   const versionHistory = createRoute({
     getParentRoute: () => root,
@@ -198,14 +220,17 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
       (loaded) => loaded.versionHistoryLazyRoute,
     ),
   );
+
   const versions = createRoute({
     getParentRoute: () => versionHistory,
     path: "/$workspace/task/$taskId/versions",
   });
+
   const version = createRoute({
     getParentRoute: () => versionHistory,
     path: "/$workspace/task/$taskId/version/$revision",
   });
+
   const router = createRouter({
     routeTree: root.addChildren([
       places.addChildren([
@@ -229,19 +254,24 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
     history: createMemoryHistory({ initialEntries: [at] }),
     context: { queryClient: new QueryClient(), access: routeAccessNow(testQueryClientNow()) },
   });
+
   // The router's latest move, which a test awaits rather than guessing how many turns its chunk takes to read.
   let moving: Promise<void> = Promise.resolve();
+
   const go = (to: string) => {
     if (router.history.location.href !== to) moving = router.navigate({ href: to });
   };
+
   const draw = (shell: ReactElement, to?: string) => {
     if (to !== undefined) go(to);
+
     return createElement(
       ShellElement,
       { value: shell },
       createElement(RoutedExitsProvider, null, createElement(RouterProvider, { router })),
     );
   };
+
   return {
     router,
     draw,
@@ -258,5 +288,6 @@ export function shellRouterEachTest(): () => ShellRouter {
     routed = shellRouter();
     await routed.router.load();
   });
+
   return () => routed;
 }

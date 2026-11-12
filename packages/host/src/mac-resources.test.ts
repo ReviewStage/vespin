@@ -27,6 +27,7 @@ it("picks the app's processes out of the table, each under the process that star
     host: HOST,
     electron: new Map([[501, { kind: MAC_PROCESS_KIND.RENDERER, name: "Renderer" }]]),
   });
+
   const helper = "/Applications/Visual Studio Code.app/Contents/MacOS/Code Helper (Plugin)";
   assert.deepEqual(processes, [
     {

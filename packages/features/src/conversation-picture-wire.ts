@@ -117,12 +117,15 @@ export function keptImageMetadataOf(
   providerMetadata: unknown,
 ): typeof keptImageSchema.Type | undefined {
   const read = Option.getOrUndefined(readKeptImageMetadata(providerMetadata));
+
   if (read === undefined) return undefined;
+
   return KEPT_IMAGE_PROVIDER_KEY in read ? read[KEPT_IMAGE_PROVIDER_KEY] : read[LEGACY_APP_WORD];
 }
 
 /** The id of the picture an image file part's provider metadata names it kept as; none where it names none. */
 export function keptPictureIdOf(providerMetadata: unknown): string | undefined {
   const kept = keptImageMetadataOf(providerMetadata);
+
   return kept !== undefined && "attachmentId" in kept ? kept.attachmentId : undefined;
 }

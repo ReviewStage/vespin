@@ -107,6 +107,7 @@ function transcriptEntry({ messageId, text, callId }: PageEntry): WireRecord {
 /** Words cut on a line to the read's bound, and how many characters were left out. */
 function wordsCut(value: UnparsedWireValue): WireRecord {
   const cut = cutOnLine(wordsOf(value), READ_PAGE_CHARS);
+
   return { text: cut.text, leftOutChars: cut.leftOutChars };
 }
 
@@ -121,15 +122,18 @@ const wholeCallOf = (
     (read): WireRecord | undefined => {
       const parts = read.ok ? (read.value[0]?.message.parts ?? []) : [];
       const part = parts.find((each) => isStoredToolPart(each) && each.toolCallId === callId);
+
       if (part === undefined || !isStoredToolPart(part)) return undefined;
       // SAFETY: a stored part's input and output are the JSON the row carried, and they are only said, never read into.
       const input = wordsCut(part.input as UnparsedWireValue);
+
       const settled =
         part.state === TOOL_PART_STATE.OUTPUT_AVAILABLE
           ? { output: wordsCut(part.output as UnparsedWireValue) }
           : part.state === TOOL_PART_STATE.OUTPUT_ERROR
             ? { error: wordsCut(part.errorText) }
             : undefined;
+
       return { tool: storedToolName(part), state: part.state, input, ...settled };
     },
   );
@@ -141,20 +145,26 @@ export function runReadAgentTranscript(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readTranscriptAsked(input);
   const page = Result.isSuccess(asked) ? pageAskedOf(asked.success) : undefined;
+
   if (Result.isFailure(asked) || page === undefined) {
     return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_PAGE));
   }
+
   const { agentId, worker, call: named } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent } = found.value;
+
       // Note that a worker's transcript is read under the member who started the agent, as the agent's own is.
       const own: ConversationTarget = {
         userId: agent.userId,
         conversationId: agent.conversationId,
       };
+
       const target: ConversationTarget =
         worker === undefined
           ? own
@@ -162,19 +172,27 @@ export function runReadAgentTranscript(
               userId: agent.userId,
               conversationId: childConversationId(own.conversationId, worker),
             };
+
       if (worker !== undefined) {
         const delegation = yield* readDelegation(own, target.conversationId);
+
         if (Option.isNone(delegation)) {
           return agentToolRejected(READ_AGENT_TRANSCRIPT_REFUSAL.NO_WORKER);
         }
       }
+
       if (named !== undefined) {
         const whole = yield* wholeCallOf(target, named.messageId, named.callId);
+
         if (whole === undefined) return agentToolRejected(READ_AGENT_TRANSCRIPT_REFUSAL.NO_CALL);
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED, call: whole };
       }
+
       const read = yield* transcriptPage(target, page);
+
       if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
+
       return { status: ACTION_RESULT_STATUS.ACCEPTED, ...pageAnswer(page, read, transcriptEntry) };
     }),
   );

@@ -39,6 +39,7 @@ afterEach(() => {
 function Stage(): React.JSX.Element {
   const stage = useStageRoom();
   reading = { room: stage.room, compact: stage.compact };
+
   return createElement("div", { ref: stage.ref, className: "app-stage" });
 }
 
@@ -50,6 +51,7 @@ function mount(width: number, height = 0): void {
     this: HTMLElement,
   ) {
     const stage = this.classList.contains("app-stage");
+
     return DOMRect.fromRect({ width: stage ? stageWidth : 0, height: stage ? stageHeight : 0 });
   });
   const container = document.createElement("div");
@@ -63,6 +65,7 @@ function resizeTo(width: number, height = stageHeight) {
   stageWidth = width;
   stageHeight = height;
   act(() => relayout());
+
   return reading;
 }
 

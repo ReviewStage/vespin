@@ -124,6 +124,7 @@ function senderOf(row: TranscriptWindowRow): AgentSender | undefined {
       return { name: SENDER_NAME.APP, kind: AGENT_SENDER.APP };
     case MESSAGE_SENDER.AUTOMATION: {
       const automationId = row.automationId ?? null;
+
       return row.senderName === null
         ? undefined
         : {
@@ -132,6 +133,7 @@ function senderOf(row: TranscriptWindowRow): AgentSender | undefined {
             ...(automationId === null ? undefined : { automationId }),
           };
     }
+
     case MESSAGE_SENDER.GITHUB:
       return row.senderName === null
         ? undefined
@@ -171,6 +173,7 @@ function windowMessageOf(
   partRows: readonly TranscriptWindowPartRow[],
 ): AgentTranscriptMessage {
   const ordered = partRows.toSorted((a, b) => a.index - b.index);
+
   const cutParts = ordered.flatMap((each): PartCut[] =>
     each.cutField === null || each.bytes === null || each.head === null || each.tail === null
       ? []
@@ -184,6 +187,7 @@ function windowMessageOf(
           },
         ],
   );
+
   const message = {
     id: row.id,
     role: row.role,
@@ -191,8 +195,10 @@ function windowMessageOf(
     ...(row.metadata === null ? undefined : { metadata: row.metadata }),
     ...(cutParts.length === 0 ? undefined : { cutParts }),
   };
+
   if (row.role === MESSAGE_ROLE.USER) {
     const sentBy = senderOf(row);
+
     return {
       ...message,
       clientId: row.clientId,
@@ -207,8 +213,11 @@ function windowMessageOf(
         : undefined),
     };
   }
+
   if (spokenOnCall(row)) return { ...message, sentAt: row.placedAt };
+
   if (row.turnStartedAt === null || row.turnStatus === null) return message;
+
   return {
     ...message,
     startedAt: row.turnStartedAt,
@@ -236,15 +245,19 @@ export function windowMessagesOf(
   partRows: readonly TranscriptWindowPartRow[],
 ): readonly AgentTranscriptMessage[] {
   const partsOf = new Map<string, TranscriptWindowPartRow[]>();
+
   for (const each of partRows) {
     const held = partsOf.get(each.messageId);
+
     if (held === undefined) partsOf.set(each.messageId, [each]);
     else held.push(each);
   }
+
   return rows
     .toSorted((a, b) => a.seq - b.seq)
     .flatMap((row) => {
       const parts = partsOf.get(row.id) ?? [];
+
       return parts.length === row.partCount ? [windowMessageOf(row, parts)] : [];
     });
 }
@@ -268,13 +281,17 @@ interface WindowRows {
 export function joinedWindowRows<Rows extends WindowRows>(held: Rows, past: Rows): Rows {
   const rowsAnswered = new Set(past.window.map((row) => row.id));
   const partsAnswered = new Set([...rowsAnswered, ...past.windowParts.map((row) => row.messageId)]);
+
   const window = [...held.window.filter((row) => !rowsAnswered.has(row.id)), ...past.window]
     .toSorted((a, b) => b.seq - a.seq)
     .slice(0, TRANSCRIPT_WINDOW);
+
   const kept = new Set(window.map((row) => row.id));
+
   const windowParts = [
     ...held.windowParts.filter((row) => !partsAnswered.has(row.messageId)),
     ...past.windowParts,
   ].filter((row) => kept.has(row.messageId));
+
   return { ...past, window, windowParts };
 }

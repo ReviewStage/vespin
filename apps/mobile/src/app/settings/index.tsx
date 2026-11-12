@@ -84,6 +84,7 @@ const WEB_PAGES = [
 function buildWords(): string {
   const version = Constants.expoConfig?.version ?? "";
   const build = Constants.expoConfig?.ios?.buildNumber;
+
   return build === undefined ? version : `${version} (${build})`;
 }
 
@@ -106,6 +107,7 @@ export default function SettingsScreen() {
   const push = usePushDeviceStanding(device);
   const fixture = useFixtureRun();
   const allowed = notificationsAllowed(fixture, notifications.standing);
+
   // A page kept on the web, under the chosen workspace, opens in Safari, where the member is signed in.
   const onWeb = (page: SettingsView) =>
     openInSafari(
@@ -113,6 +115,7 @@ export default function SettingsScreen() {
         ? LINK_ORIGIN
         : linkOf({ kind: LINK_DESTINATION.SETTINGS, page }, chosen.slug ?? chosen.id),
     );
+
   return (
     <>
       <Stack.Toolbar placement="right">

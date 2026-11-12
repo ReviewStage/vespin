@@ -167,9 +167,12 @@ const SENTRY_TRACE_PATTERN = /^([0-9a-f]{32})-([0-9a-f]{16})-([01])$/;
 /** The span a send's trace names, as the parent its ask continues; none where it does not parse. */
 function sendParent(trace: SendTrace): Tracer.ExternalSpan | undefined {
   const named = SENTRY_TRACE_PATTERN.exec(trace.sentryTrace.trim());
+
   if (named === null) return undefined;
   const [, traceId, spanId, sampled] = named;
+
   if (traceId === undefined || spanId === undefined) return undefined;
+
   return Tracer.externalSpan({ traceId, spanId, sampled: sampled === "1" });
 }
 
@@ -226,12 +229,15 @@ export type HostedFailure = HostedRefused | HostedUnanswered;
 export function hostedFailureFacts(failed: HostedFailure): FailureFacts {
   const { traceId } = failed;
   const trace = traceId === undefined ? undefined : { traceId };
+
   if (failed._tag === "HostedRefused") {
     return { _tag: FAILURE_FACT.HOSTED_REFUSED, refusal: failed.refusal, ...trace };
   }
+
   const { fault, unread, errorName, status } = failed;
   // Note that what went unread is sent as the code, which an answer the link could not read has no other of.
   const code = failed.code ?? unread;
+
   return {
     _tag: FAILURE_FACT.HOSTED_UNANSWERED,
     ...(fault === undefined ? undefined : { fault }),
@@ -293,15 +299,19 @@ function isHttpMethod(method: string | undefined): method is HttpMethod {
 /** The request the link built, as the account call sends it; a body is only ever the JSON text the link serialized. */
 function callRequest(url: string, init: RequestInit): CallRequest {
   const method = init.method?.toUpperCase();
+
   if (!isHttpMethod(method)) throw new TypeError(`A hosted procedure cannot be asked by ${method}`);
   const body = init.body ?? undefined;
+
   if (body !== undefined && !isJsonText(body)) {
     throw new TypeError("A hosted procedure's body is JSON text");
   }
+
   const headers: Record<string, string> = {};
   new Headers(init.headers).forEach((value, name) => {
     if (name !== CONTENT_TYPE_HEADER) headers[name] = value;
   });
+
   return {
     method,
     path: url,
@@ -318,13 +328,18 @@ function callRequest(url: string, init: RequestInit): CallRequest {
  */
 function refusalOf(payload: UnparsedWireValue): HostedRefused | undefined {
   const refusal = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
+
   if (refusal === undefined) return undefined;
+
   if (!refusalCarriesData(refusal)) return new HostedRefused({ refusal });
+
   const data: HostedRefusalData | undefined = Result.getOrUndefined(
     readServiceAnswer(HOSTED_REFUSAL_DATA[refusal])(payload),
   );
+
   // Note that a refusal that carries none of its fields is the bare refusal, as one that declares none is.
   const carried = data !== undefined && Object.keys(data).length > 0;
+
   return new HostedRefused({ refusal, ...(carried ? { data } : undefined) });
 }
 
@@ -338,8 +353,10 @@ const isRefusedStatus = Schema.is(Schema.Struct({ status: Schema.Number }));
 function declaredOnly(path: readonly string[], error: unknown): unknown {
   if (!(error instanceof ORPCError) || !(error.cause instanceof HostedRefused)) return error;
   const { refusal } = error.cause;
+
   if (refusalDeclared(path, refusal)) return error;
   const status = isRefusedStatus(error.data) ? error.data.status : undefined;
+
   return new HostedUnanswered({
     code: refusal,
     ...(status === undefined ? undefined : { status }),
@@ -351,8 +368,10 @@ function textOf(reader: ReadableStreamDefaultReader<Uint8Array>): Effect.Effect<
   return Effect.gen(function* () {
     const decoder = new TextDecoder();
     let text = "";
+
     for (;;) {
       const { done, value } = yield* Effect.tryPromise(() => reader.read());
+
       if (done) return text + decoder.decode();
       text += decoder.decode(value, { stream: true });
     }
@@ -369,7 +388,9 @@ export function textWithin(
   deadline: Duration.Duration,
 ): Effect.Effect<string | undefined> {
   const reader = response.body?.getReader();
+
   if (reader === undefined) return Effect.succeed("");
+
   return textOf(reader).pipe(
     Effect.catch(() => Effect.succeed(undefined)),
     Effect.timeoutOrElse({
@@ -406,6 +427,7 @@ function readWhole(
   return Effect.gen(function* () {
     // Note that the time spent is read off the monotonic clock, so a wall clock set back or forward moves no budget.
     const startedAt = yield* Clock.monotonicTimeNanos;
+
     const answer = yield* send(request).pipe(
       Effect.timeoutOrElse({
         duration: Duration.millis(budgetMs),
@@ -413,11 +435,13 @@ function readWhole(
           Effect.succeed<CallAnswer>({ fault: CALL_FAULT.NETWORK, errorName: DEADLINE_ERROR_NAME }),
       }),
     );
+
     if (!callAnswered(answer)) return { answer };
     // The body gets what the headers left of the budget, never a deadline of its own.
     const spentMs = Number((yield* Clock.monotonicTimeNanos) - startedAt) / NANOS_PER_MILLI;
     const leftMs = Math.max(0, budgetMs - spentMs);
     const text = yield* textWithin(answer.response, Duration.millis(leftMs));
+
     return { answer, text };
   });
 }
@@ -442,9 +466,11 @@ async function sent(
         ? options.requestTimeoutMs
         : LONG_DEADLINE_MS[context.deadline],
   });
+
   const send = options.inSession === true ? sendInSession(call, options.credential) : call.send;
   const request = callRequest(url, init);
   const { idempotencyKey, trace } = context;
+
   const keyed: CallRequest =
     idempotencyKey === undefined && trace === undefined
       ? request
@@ -458,22 +484,28 @@ async function sent(
             ...(trace === undefined ? undefined : sendTraceHeaders(trace)),
           },
         };
+
   const exit = await Effect.runPromiseExitWith(context.services)(
     readWhole(send, keyed, call.requestTimeoutMs),
     init.signal ? { signal: init.signal } : undefined,
   );
+
   if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
   const { answer, text } = exit.value;
+
   if (!callAnswered(answer)) {
     throw new HostedUnanswered({
       fault: answer.fault,
       ...(answer.errorName === undefined ? undefined : { errorName: answer.errorName }),
     });
   }
+
   const { response } = answer;
+
   if (text === undefined) {
     throw new HostedUnanswered({ unread: HOSTED_UNREAD.BODY, status: response.status });
   }
+
   return new Response(text, {
     status: response.status,
     statusText: response.statusText,
@@ -488,6 +520,7 @@ export function hostedClient(options: HostedClientOptions): HostedClient {
     customErrorResponseBodyDecoder: (body, response) => {
       // SAFETY: the link's serializer read the body out of the response's JSON text.
       const refused = refusalOf(body as UnparsedWireValue);
+
       // Note that the status rides as the link's own error's data, which only `declaredOnly` reads, since oRPC's error carries no status.
       if (refused !== undefined) {
         return new ORPCError(refused.refusal, {
@@ -495,12 +528,15 @@ export function hostedClient(options: HostedClientOptions): HostedClient {
           data: { status: response.status },
         });
       }
+
       // Note that an error the service declares no refusal for, a server error among them, keeps its status and oRPC code, since oRPC's own error carries no status.
       const code = isORPCErrorJson(body) ? body.code : undefined;
+
       const unanswered = new HostedUnanswered({
         status: response.status,
         ...(code === undefined ? undefined : { code }),
       });
+
       return new ORPCError(UNDECLARED_CODE, { cause: unanswered });
     },
     interceptors: [
@@ -508,26 +544,35 @@ export function hostedClient(options: HostedClientOptions): HostedClient {
         const output = await next().catch((error: unknown) => {
           throw declaredOnly(path, error);
         });
+
         const wire = outputWireSchema(path);
+
         if (wire === undefined) return output;
         // SAFETY: the link's serializer read the output out of the response's JSON text.
         const read = readServiceAnswer(wire)(output as UnparsedWireValue);
+
         if (Result.isFailure(read)) throw new HostedUnanswered({ unread: HOSTED_UNREAD.OUTPUT });
+
         return read.success;
       },
     ],
   });
+
   return createEffectClient(createORPCClient<HostedLinkClient<typeof hostedContract>>(link));
 }
 
 /** What a procedure's failure was, read off what oRPC or the link threw. */
 function hostedFailureOf(error: unknown): HostedFailure {
   if (error instanceof HostedUnanswered) return error;
+
   if (error instanceof ORPCError && error.cause instanceof HostedRefused) return error.cause;
+
   if (error instanceof ORPCError && error.cause instanceof HostedUnanswered) return error.cause;
+
   if (error instanceof MalformedResponseError) {
     return new HostedUnanswered({ status: error.response.status, errorName: error.name });
   }
+
   return new HostedUnanswered(error instanceof Error ? { errorName: error.name } : {});
 }
 
@@ -535,9 +580,12 @@ function hostedFailureOf(error: unknown): HostedFailure {
 function traced(failed: HostedFailure, traceId: string): HostedFailure {
   if (failed._tag === "HostedRefused") {
     const { refusal, data } = failed;
+
     return new HostedRefused({ refusal, ...(data === undefined ? undefined : { data }), traceId });
   }
+
   const { fault, unread, errorName, status, code } = failed;
+
   return new HostedUnanswered({
     ...(fault === undefined ? undefined : { fault }),
     ...(unread === undefined ? undefined : { unread }),
@@ -575,9 +623,11 @@ export function askHosted<Input, Output>(
     const parent = sent === undefined ? undefined : sendParent(sent);
     const trace = parent === undefined ? undefined : sent;
     const sampled = parent?.sampled ?? (yield* Random.next) < SENTRY_TRACES_SAMPLE_RATE;
+
     const asked = Effect.gen(function* () {
       const span = yield* Effect.orDie(Effect.currentSpan);
       const services = yield* Effect.context<HttpClient.HttpClient>();
+
       return yield* Effect.mapError(
         procedure(input, {
           context: {
@@ -590,6 +640,7 @@ export function askHosted<Input, Output>(
         (error) => traced(hostedFailureOf(error), span.traceId),
       );
     });
+
     return yield* Effect.withSpan(asked, HOSTED_ASK_SPAN, {
       kind: "client",
       sampled,

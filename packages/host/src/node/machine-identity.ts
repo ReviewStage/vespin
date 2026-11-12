@@ -88,13 +88,16 @@ function machineOf(raw: string | undefined, model: string): DeviceMachine {
 export function macMachine(): DeviceMachine {
   const platform = printed("/usr/sbin/ioreg", ["-rd1", "-c", "IOPlatformExpertDevice"]);
   const productName = MAC_PRODUCT_NAME.exec(platform)?.[1]?.replaceAll("\0", "").trim() ?? "";
+
   const model =
     productName.length > 0 ? productName : printed("/usr/sbin/sysctl", ["-n", "hw.model"]);
+
   return machineOf(MAC_UUID.exec(platform)?.[1], model);
 }
 
 /** A Linux box: its machine id, from the first file that holds one; it reports no model. */
 export function linuxMachine(): DeviceMachine {
   const raw = LINUX_MACHINE_ID_FILES.map(held).find((id) => LINUX_MACHINE_ID.test(id));
+
   return machineOf(raw, "");
 }

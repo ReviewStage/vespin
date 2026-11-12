@@ -32,6 +32,7 @@ export function unlessInterrupted<E, B, E2, R>(
   onOther: (cause: Cause.Cause<E>) => Effect.Effect<B, E2, R>,
 ): Effect.Effect<B, E2, R> {
   if (!Cause.hasInterruptsOnly(cause)) return onOther(cause);
+
   // SAFETY: a cause of interruptions only carries no failure, so re-raising it cannot join the typed failure channel.
   return Effect.failCause(cause as Cause.Cause<never>);
 }

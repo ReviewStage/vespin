@@ -34,14 +34,17 @@ export function SavedTick({ saves }: { saves: number }): React.JSX.Element {
   /** How many writes landed while the tick watched, each a tick of its own. */
   const [landed, setLanded] = useState(0);
   const [standing, setStanding] = useState(false);
+
   // Note that the move is taken in the render that sees it, as a disclosure's is, so the tick arrives on that frame.
   if (saves !== seen) {
     setSeen(saves);
+
     if (saves > seen) {
       setLanded(landed + 1);
       setStanding(true);
     }
   }
+
   const tick = useRef<HTMLSpanElement | null>(null);
   const said = useRef(0);
   const taken = useRef<Retire>(() => undefined);
@@ -63,20 +66,27 @@ export function SavedTick({ saves }: { saves: number }): React.JSX.Element {
   useLayoutEffect(() => {
     if (!standing) return undefined;
     const motions = tick.current === null ? [] : runningMotions(tick.current);
+
     if (motions.length === 0) {
       setStanding(false);
+
       return undefined;
     }
+
     let current = true;
     const left = new Set(motions);
+
     for (const motion of motions) {
       const ended = () => {
         left.delete(motion);
+
         if (current && left.size === 0) setStanding(false);
       };
+
       motion.addEventListener("finish", ended, { once: true });
       motion.addEventListener("cancel", ended, { once: true });
     }
+
     return () => {
       current = false;
     };

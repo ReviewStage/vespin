@@ -34,6 +34,7 @@ const FAR_FUTURE = Date.UTC(2100, 0, 1);
 /** A deployment's own Vercel OIDC token, as the SDK reads it from the environment: unsigned, and good past any test. */
 function deploymentOidcToken(): string {
   const encoded = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
   return `${encoded({ alg: "none" })}.${encoded({ exp: Math.floor(FAR_FUTURE / 1000) })}.`;
 }
 
@@ -51,6 +52,7 @@ function beginningAt(url: string) {
     revokeToken: () => Promise.reject(new Error("this suite revokes nothing")),
     deleteTokenCacheEntry: () => undefined,
   };
+
   return vercelConnector("oauth/granola", sdk);
 }
 
@@ -58,9 +60,11 @@ it.effect("beginning a sign-in answers the address the browser opens, and only a
   Effect.gen(function* () {
     const begun = yield* beginningAt(SIGN_IN_URL).authorize("user-1", "https://app.test/callback");
     assert.deepEqual(begun, { url: SIGN_IN_URL });
+
     const refused = yield* Effect.result(
       beginningAt("javascript:alert(1)").authorize("user-1", "https://app.test/callback"),
     );
+
     assert.ok(Result.isFailure(refused));
     assert.equal(refused.failure.reason, INTEGRATION_CONNECT_FAILURE.UNAVAILABLE);
   }),
@@ -75,10 +79,12 @@ it.effect(
         ["user-1", "token-acme"],
         ["subject-2", "token-personal"],
       ]);
+
       const sdk: ConnectSdk = {
         startAuthorization: () => Promise.reject(new Error("this suite begins no sign-in")),
         getTokenResponse: (_connector, { subject }) => {
           const token = subject.type === "user" ? grants.get(subject.id) : undefined;
+
           return token === undefined
             ? Promise.reject(
                 new UserAuthorizationRequiredError("no grant", {
@@ -93,11 +99,14 @@ it.effect(
         },
         revokeToken: (_connector, { subject }) => {
           if (subject.type === "user") grants.delete(subject.id);
+
           return Promise.resolve();
         },
         deleteTokenCacheEntry: () => undefined,
       };
+
       const connector = vercelConnector("oauth/notion", sdk);
+
       const tokenOf = (subject: string) =>
         Effect.map(Effect.result(connector.token(subject, { fresh: true })), (read) =>
           Result.isSuccess(read) ? Redacted.value(read.success.token) : read.failure.reason,
@@ -120,6 +129,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const revoked: string[] = [];
+
       const recording = (provider: string): ConnectorService => ({
         ...CONNECTOR_ASKED_NOTHING,
         revoke: (subject) =>
@@ -127,6 +137,7 @@ it.effect(
             revoked.push(`${provider} ${subject}`);
           }),
       });
+
       yield* revokeIntegrationGrants("user-1", [
         { provider: INTEGRATION_PROVIDER.NOTION, connectSubject: "user-1" },
         { provider: INTEGRATION_PROVIDER.NOTION, connectSubject: "subject-2" },
@@ -159,11 +170,13 @@ it.effect(
           revokeToken: () => Promise.reject(new Error("this suite revokes nothing")),
           deleteTokenCacheEntry: () => undefined,
         };
+
         return Effect.map(
           vercelConnector("oauth/notion", sdk).token("user-1", { fresh: true }),
           (issued) => issued.accountName,
         );
       };
+
       assert.equal(yield* answering({ metadata: { workspace_name: "Acme" } }), "Acme");
       assert.equal(yield* answering({ metadata: { team: { name: "Acme Eng" } } }), "Acme Eng");
       assert.equal(yield* answering({ name: "oauth/notion" }), undefined);
@@ -187,6 +200,7 @@ it.effect(
       let asked = 0;
       vi.spyOn(globalThis, "fetch").mockImplementation(() => {
         asked += 1;
+
         return Promise.resolve(
           Response.json({
             token: `token-${asked}`,
@@ -196,6 +210,7 @@ it.effect(
         );
       });
       const connector = vercelConnector("oauth/linear-evicted");
+
       const tokenOf = Effect.map(connector.token("user-1", { fresh: false }), (issued) =>
         Redacted.value(issued.token),
       );

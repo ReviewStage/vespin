@@ -70,11 +70,13 @@ function onBoundaries(periodMs: number, onTick: (now: number) => void): Effect.E
 export function TimeTicks({ children }: { readonly children?: ReactNode }): ReactNode {
   useEffect(() => {
     const stop = forkEffect(minuteTicking);
+
     return () => {
       stop();
       minuteStore.setState(() => undefined);
     };
   }, []);
+
   return children;
 }
 
@@ -99,6 +101,7 @@ export function useSecond(): number {
     () => forkEffect(onBoundaries(SECOND_MS, (now) => second.setState(() => now))),
     [second],
   );
+
   return useSelector(second) ?? Date.now();
 }
 

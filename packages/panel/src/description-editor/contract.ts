@@ -456,6 +456,7 @@ export function sameTrigger(
   b: ComposerTrigger | undefined,
 ): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return (
     a.start === b.start &&
     a.query === b.query &&
@@ -484,6 +485,7 @@ export function listAria(field: ComboboxFieldProps): EditorAria {
 /** Whether two sets of attributes say the same, so an editor handed what it holds already is not updated again. */
 export function sameAria(a: EditorAria, b: EditorAria): boolean {
   const names = new Set([...Object.keys(a), ...Object.keys(b)]);
+
   return [...names].every((name) => a[name] === b[name]);
 }
 
@@ -497,6 +499,7 @@ export function sameAria(a: EditorAria, b: EditorAria): boolean {
  */
 export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
   const open = aria["aria-expanded"] === "true";
+
   const named: EditorAria = open
     ? { ...aria, role: "combobox" }
     : {
@@ -507,6 +510,7 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
         "aria-controls": undefined,
         "aria-activedescendant": undefined,
       };
+
   return Object.fromEntries(
     Object.entries(named).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );

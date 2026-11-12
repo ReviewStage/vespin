@@ -147,6 +147,7 @@ function useCliInstall(): CliInstall {
   const cliInstall = useMutation(actMutation(ACT_KIND.CLI_INSTALL));
   // Note that the last answer stays drawn while a new install is out, so it is held here rather than read off the mutation, which forgets it as one starts.
   const [answer, setAnswer] = useState<CliInstallAnswer | undefined>(undefined);
+
   const install = {
     busy: cliInstall.isPending,
     onPress: () =>
@@ -156,6 +157,7 @@ function useCliInstall(): CliInstall {
           setAnswer({ outcome: CLI_INSTALL_OUTCOME.FAILED, reason: refused.message }),
       }),
   };
+
   return {
     ...install,
     installed: answer?.outcome === CLI_INSTALL_OUTCOME.INSTALLED ? answer : undefined,
@@ -209,6 +211,7 @@ function LoginCommand(): React.JSX.Element {
 function InstallRow({ installs }: { installs: boolean }): React.JSX.Element {
   const install = useCliInstall();
   const { installed, failed } = install;
+
   return (
     <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_INSTALL)}>
       <SettingsRow
@@ -240,6 +243,7 @@ function InstallRow({ installs }: { installs: boolean }): React.JSX.Element {
 function SetUpSteps({ installs }: { installs: boolean }): React.JSX.Element {
   const install = useCliInstall();
   const { installed, failed } = install;
+
   return (
     <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_INSTALL)}>
       <SettingsBlock>
@@ -312,39 +316,50 @@ function SignedInRow({
   const { mutateAsync: sendMcpClientsRevoke, ...revoking } = useMutation(
     actMutation(ACT_KIND.MCP_CLIENTS_REVOKE),
   );
+
   const [rejection, setRejection] = useState<string | undefined>(undefined);
+
   const refused: ActionResult = {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: PAGE_LINE.SIGN_OUT_REFUSED,
   };
+
   const signOut = (): Promise<ActionResult> => {
     setRejection(undefined);
+
     return sendMcpClientsRevoke({ clientId: grant.clientId }).then(
       (answer): ActionResult => {
         if ("failure" in answer) {
           setRejection(refused.reason);
+
           return refused;
         }
+
         onSignedOut();
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED };
       },
       () => {
         setRejection(refused.reason);
+
         return refused;
       },
     );
   };
+
   const confirmAct = useConfirmAct(revoking, {
     send: signOut,
     answered: (answer): ActionResult =>
       "failure" in answer ? refused : { status: ACTION_RESULT_STATUS.ACCEPTED },
     failed: () => refused,
   });
+
   const confirm = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.MCP_CLIENT_REVOKE),
   );
+
   return (
     <>
       <SettingsRow
@@ -388,6 +403,7 @@ export function CliSection(): React.JSX.Element {
   const installs =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.CLI_INSTALL) }).data ===
     true;
+
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const accountId = signedInAccountId(account);
   const read = useQuery(mcpClientsQuery(accountId));
@@ -395,6 +411,7 @@ export function CliSection(): React.JSX.Element {
   const rows = read.data;
   // The grant signed out while the page shows, by when it was allowed, which stands signed out until the read drops it or a new sign-in replaces it.
   const [signedOutAt, setSignedOutAt] = useState<number | null | undefined>(undefined);
+
   if (rows === undefined && !read.isError) {
     return (
       <SettingsSectionsSkeleton
@@ -403,12 +420,16 @@ export function CliSection(): React.JSX.Element {
       />
     );
   }
+
   const listed = rows === undefined ? undefined : cliGrant(rows.clients);
+
   const grant =
     listed === undefined || (signedOutAt !== undefined && listed.allowedAt === signedOutAt)
       ? undefined
       : listed;
+
   const email = account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
+
   return (
     <SettingsSection
       title={SECTION.TITLE}

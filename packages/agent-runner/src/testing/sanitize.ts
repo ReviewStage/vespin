@@ -106,33 +106,42 @@ export class Sanitizer {
   private placeholderOf(id: string): string {
     const key = id.toLowerCase();
     const known = this.ids.get(key);
+
     if (known !== undefined) return known;
     const placeholder = `00000000-0000-4000-8000-${String(this.ids.size + 1).padStart(12, "0")}`;
     this.ids.set(key, placeholder);
+
     return placeholder;
   }
 
   /** A string with every known secret, secret shape, home owner and id replaced. */
   text(value: string): string {
     let out = value;
+
     for (const secret of this.secrets) {
       out = out.replace(new RegExp(escapeRegExp(secret.value), "gu"), `<redacted:${secret.kind}>`);
     }
+
     for (const shape of SECRET_SHAPES) out = out.replace(shape.pattern, shape.replacement);
     out = out.replace(HOME_OWNER, "/$1/<user>");
+
     return out.replace(UUID, (id) => this.placeholderOf(id));
   }
 
   /** A JSON value with every string sanitized and every identifying field blanked. */
   value(value: WireValue): WireValue {
     if (isWireString(value)) return this.text(value);
+
     if (Array.isArray(value)) return value.map((one) => this.value(one));
+
     if (!isRecord(value)) return value;
     const out: { [key: string]: WireValue } = {};
+
     for (const [key, field] of Object.entries(value)) {
       const blank = IDENTIFYING_KEYS.has(key.toLowerCase()) && field !== null;
       out[this.text(key)] = blank ? "<redacted>" : this.value(field);
     }
+
     return out satisfies WireRecord;
   }
 }
@@ -145,10 +154,12 @@ export function findLeaks(text: string, secrets: readonly KnownSecret[]): readon
   const known = secrets
     .filter((secret) => secret.value.length >= 4 && text.includes(secret.value))
     .map((secret) => secret.kind);
+
   const shaped = SECRET_SHAPES.filter(
     (shape) =>
       shape.name !== "sha256" &&
       text.replaceAll("user@example.com", "").match(shape.pattern) !== null,
   ).map((shape) => shape.name);
+
   return [...known, ...shaped];
 }

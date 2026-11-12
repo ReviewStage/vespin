@@ -44,13 +44,16 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 /** The one button drawn in `container`. */
 function button(container: HTMLElement): HTMLButtonElement {
   const found = container.querySelector("button");
+
   if (found === null) throw new Error("no button drawn");
+
   return found;
 }
 
@@ -79,6 +82,7 @@ test("a count past 99 is drawn 99+ and still read whole", () => {
     const container = mount(
       createElement(NavItem, { count: { value, noun: "waiting on you" }, children: "Inbox" }),
     );
+
     return {
       read: button(container).textContent,
       seen: container.querySelector("[aria-hidden='true']")?.textContent ?? null,
@@ -106,6 +110,7 @@ test("the place shown is announced as the page, a search's find as the location"
     each.textContent,
     each.getAttribute("aria-current"),
   ]);
+
   expect(states).toEqual([
     ["Home", "page"],
     ["Theme", "location"],
@@ -116,12 +121,14 @@ test("the place shown is announced as the page, a search's find as the location"
 test("a menu's trigger says it drops a menu, and whether the menu stands", () => {
   function Account(): React.JSX.Element {
     const menu = useMenu(true);
+
     return createElement(NavItem, {
       variant: NAV_ITEM_VARIANT.IDENTITY,
       menu: menu.trigger(),
       children: "Ada Lovelace",
     });
   }
+
   const container = mount(createElement(Account));
   const trigger = button(container);
 
@@ -137,6 +144,7 @@ test("a menu's trigger says it drops a menu, and whether the menu stands", () =>
 
 test("a place's ⋯ is a button of its own beside the row's press, never inside it", () => {
   const presses: string[] = [];
+
   const container = mount(
     createElement(NavItem, {
       onClick: () => presses.push("row"),
@@ -148,6 +156,7 @@ test("a place's ⋯ is a button of its own beside the row's press, never inside 
       children: "launch",
     }),
   );
+
   const buttons = [...container.querySelectorAll("button")];
 
   expect(buttons.map((each) => each.getAttribute("aria-label") ?? each.textContent)).toEqual([
@@ -160,6 +169,7 @@ test("a place's ⋯ is a button of its own beside the row's press, never inside 
 
 test("an unavailable row refuses its press", () => {
   const presses: string[] = [];
+
   const container = mount(
     createElement(NavItem, {
       disabled: true,
@@ -181,6 +191,7 @@ test("a chord is named to a reader through the row, not read as its words", () =
       children: "New task",
     }),
   );
+
   const row = button(container);
 
   expect(row.getAttribute("aria-keyshortcuts")).toBe("Meta+N");
@@ -199,6 +210,7 @@ test("a hint's words describe the item they hang from", () => {
       }),
     ),
   );
+
   const described = button(container).getAttribute("aria-describedby");
 
   expect(document.getElementById(described ?? "")?.textContent).toBe("acme/web, 4 open tasks");
@@ -213,6 +225,7 @@ test("a row that keeps focus leaves it on the field that held it under a pointer
       createElement(NavItem, { keepFocus: true, children: "Theme" }),
     ),
   );
+
   const field = container.querySelector("input");
   field?.focus();
 
@@ -232,6 +245,7 @@ test("a link goes to its address, named by its words, and announced as the page 
       children: "Users",
     }),
   );
+
   const link = container.querySelector("a");
 
   expect(link?.getAttribute("href")).toBe("/admin/users");
@@ -241,6 +255,7 @@ test("a link goes to its address, named by its words, and announced as the page 
 
 test("a link's label names it where its words are not drawn whole, and its press reaches its caller", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(NavItemLink, {
       href: "/admin/animations",
@@ -252,6 +267,7 @@ test("a link's label names it where its words are not drawn whole, and its press
       children: null,
     }),
   );
+
   const link = container.querySelector("a");
   act(() => link?.click());
 
@@ -269,6 +285,7 @@ test("a link that leaves the page opens in a tab of its own, and one that does n
       createElement(NavItemLink, { href: "/admin/users", children: "Users" }),
     ),
   );
+
   const [leaves, stays] = [...container.querySelectorAll("a")];
 
   expect([leaves?.getAttribute("target"), leaves?.getAttribute("rel")]).toEqual([

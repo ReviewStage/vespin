@@ -276,6 +276,7 @@ function RevisionRow({
 }): React.JSX.Element {
   const { lastEdit } = line;
   const coarse = useCoarsePointer();
+
   const groups = [
     [
       ...links,
@@ -288,8 +289,10 @@ function RevisionRow({
       ? []
       : [{ label: "Restore this version", icon: <RotateCcwIcon />, onSelect: onRestore }],
   ].filter((group) => group.length > 0);
+
   // Note that the author's card hangs beside the row as the pointer rests on it, the app's its own; an agent or an automation the version names by name alone hangs nothing.
   const card = actorCard(author);
+
   return (
     <RowHintOptions card={card}>
       <ListRow
@@ -346,6 +349,7 @@ function SectionsHead({
       <LeftWords actor={author} />
     </OneLine>
   );
+
   return (
     <>
       {onBack === undefined ? null : (
@@ -395,6 +399,7 @@ function SectionRow({
   const word = SECTION_CHANGE_WORDS[section.change];
   const coarse = useCoarsePointer();
   const items = [...links, ...(source === undefined ? [] : [sourceItem(source)])];
+
   return (
     <ListRow
       ref={rowRef}
@@ -419,7 +424,9 @@ function readerOf(
     account.status === ACCOUNT_STATUS.SIGNED_IN
       ? { id: account.id, name: account.name ?? account.email, pictureUrl: account.pictureUrl }
       : { id: undefined, name: undefined, pictureUrl: undefined };
+
   const read = members === undefined ? reader : { ...reader, members };
+
   return former === undefined ? read : { ...read, former };
 }
 
@@ -487,11 +494,14 @@ function EarlierRow({
       if (!(await onRead())) throw new OlderVersionsUnread();
     },
   });
+
   const reading = older.isPending;
   const failed = older.isError;
+
   const read = () => {
     if (!reading) older.mutate();
   };
+
   return (
     <div className="version-earlier mx-0 mt-control-gap mb-0 px-row-inset py-row-inset text-caption text-muted-foreground">
       {failed ? (
@@ -517,6 +527,7 @@ function EarlierRow({
 /** The key of the row among `rows` that is `element`, where it is one. */
 function keyOfRow<K>(rows: Map<K, HTMLElement>, element: EventTarget | null): K | undefined {
   for (const [key, row] of rows) if (row === element) return key;
+
   return undefined;
 }
 
@@ -533,6 +544,7 @@ function chooseSteppedRow<K>(
   return (event) => {
     if (keyOfRow(rows, event.relatedTarget) === undefined) return;
     const key = keyOfRow(rows, event.target);
+
     if (key !== undefined) choose(key);
   };
 }
@@ -549,9 +561,12 @@ function goThroughRow<K>(
 ): (event: React.KeyboardEvent) => void {
   return (event) => {
     if (event.defaultPrevented) return;
+
     if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     const key = keyOfRow(rows, event.target);
+
     if (key === undefined) return;
+
     if (event.key === "ArrowRight" && keys.open?.(key) === true) event.preventDefault();
     else if (event.key === "ArrowLeft" && keys.back !== undefined) {
       event.preventDefault();
@@ -574,10 +589,13 @@ function useSectionsFocused(
   const focused = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (opened === undefined) focused.current = undefined;
+
     if (opened === undefined || unit === undefined || focused.current === opened) return;
     const row = sectionRows.get(unit);
+
     if (row === undefined) return;
     focused.current = opened;
+
     if (document.activeElement === null || document.activeElement === document.body) row.focus();
   }, [opened, unit, sectionRows]);
 }
@@ -598,13 +616,17 @@ function useOpenedRowShown(
   useEffect(() => {
     if (shown.current || selected === undefined || log.current === null) return;
     const row = rows.get(selected);
+
     if (row === undefined) {
       shown.current = run.current?.bringIn(String(selected)) === true;
+
       return;
     }
+
     shown.current = true;
     const box = log.current.getBoundingClientRect();
     const line = row.getBoundingClientRect();
+
     if (line.top < box.top || line.bottom > box.bottom) centerWithin(log.current, row);
   }, [selected, rows, log, run]);
 }
@@ -625,7 +647,9 @@ function openedSections(
 ): readonly ChangedSection[] | undefined {
   if (opened === undefined || viewing?.line.seq !== opened.seq) return undefined;
   const { read } = viewing;
+
   if (read.kind !== HISTORY_READ.READY) return undefined;
+
   return changedSections(versionDiff(read.previous, read.document), read.previous === null);
 }
 
@@ -659,6 +683,7 @@ function VersionPage({
   lead: React.ReactNode;
 }): React.JSX.Element {
   const { versions } = subject;
+
   if (versions.viewing !== undefined) {
     return (
       <VersionView
@@ -672,12 +697,15 @@ function VersionPage({
       />
     );
   }
+
   const { list } = versions;
   // A list read that holds versions is still finding the one the view opened on.
   const finding = list.kind === HISTORY_READ.READY && list.revisions.length > 0;
+
   if (list.kind === HISTORY_READ.READING || finding) {
     return <VersionPageSkeleton lead={lead} title={subject.title} section={section} />;
   }
+
   return (
     <>
       {lead === undefined ? (
@@ -713,6 +741,7 @@ export function taskVersionSubject(tasks: TasksControl): VersionSubject {
   const { region, boundFor } = tasks;
   const task = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
   const workspace = tasks.workspaces.find((each) => each.id === task?.workspaceId);
+
   return {
     workspace,
     // A version's mentions are read against the task as it stands, as its page reads them.
@@ -781,27 +810,34 @@ export function DesktopVersionHistory({
   const log = useRef<HTMLDivElement>(null);
   const run = useRef<VirtualRowsHandle>(null);
   const keys = useMemo(() => revisions.map((line) => String(line.seq)), [revisions]);
+
   // The rows are one Tab stop that ↑↓ walk; a key reaching past the rows drawn goes on to the row it reaches, brought in where it is not drawn.
   const roving = useRovingKeys<HTMLDivElement>({
     reach: (from, to) => {
       const inHand = from?.closest(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}]`);
+
       const key = reachedKey(
         keys,
         inHand?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? undefined,
         to,
       );
+
       if (key === undefined) return false;
       const press = run.current?.rowElement(key)?.querySelector<HTMLElement>(ROW_PRESS);
+
       if (press !== undefined && press !== null) {
         press.focus();
+
         return true;
       }
+
       return (
         run.current?.bringIn(key, (row) => row.querySelector<HTMLElement>(ROW_PRESS)?.focus()) ===
         true
       );
     },
   });
+
   const { opened } = versions.spot ?? {};
   const edge = useListEdge(sidebar);
   const people = useQuery(workspaceMembersQuery(subject.workspace?.id)).data;
@@ -811,6 +847,7 @@ export function DesktopVersionHistory({
   useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
   const numbered = useNumberedPlace();
   const linked = subject.task;
+
   const versionLink = (revision: number): string | undefined =>
     linked === undefined
       ? undefined
@@ -821,63 +858,88 @@ export function DesktopVersionHistory({
           ),
           linked.place.workspace,
         );
+
   const versionLinks = (revision: number): MenuAction[] => {
     const link = versionLink(revision);
+
     return link === undefined ? [] : linkItems(copy, link);
   };
+
   const versionInTab = (revision: number): (() => void) | undefined => {
     const link = versionLink(revision);
+
     return link === undefined ? undefined : openInTabOf(link);
   };
+
   const reader = readerOf(account, people?.members, people?.former);
   // A restore that lands leaves for the task it restored, which is not always the one Back returns to.
   const restore = useVersionRestore(versions, onRestored);
   const sections = openedSections(versions.viewing, opened);
   const failed = sectionsFailed(versions.viewing, opened);
+
   const sourceOf = (line: DescriptionRevisionLine, author: Actor): SourceDoor | undefined => {
     const source = revisionSource(line);
     const { onShowSource } = subject;
+
     if (source === undefined || onShowSource === undefined) return undefined;
+
     return { label: sourceLabel(source, author), onOpen: () => onShowSource(source) };
   };
+
   const openedLine = revisions.find((line) => line.seq === opened?.seq);
+
   const chosenSection =
     sections?.find((section) => section.heading === opened?.heading) ?? sections?.[0];
+
   const unit = chosenSection?.unit;
+
   const openedAuthor =
     openedLine === undefined ? undefined : revisionAuthorOf(openedLine, reader, agents);
+
   const openedSource =
     openedLine === undefined || openedAuthor === undefined
       ? undefined
       : sourceOf(openedLine, openedAuthor);
+
   const openSections = versions.onOpenSections;
+
   const restoreOf = (line: DescriptionRevisionLine): (() => void) | undefined => {
     const newest = revisions[0]?.seq;
+
     if (line.seq === newest) return undefined;
+
     return () => restore.onRestore(line.seq);
   };
+
   const closeSections = () => {
     if (opened === undefined) return;
     versions.onCloseSections();
     const row = rows.get(opened.seq);
+
     if (row !== undefined) row.focus();
     else
       run.current?.bringIn(String(opened.seq), (drawn) =>
         drawn.querySelector<HTMLElement>(ROW_PRESS)?.focus(),
       );
   };
+
   useAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY, opened === undefined ? onExit : closeSections);
+
   const chooseUnit = (at: number) => {
     versions.onChooseSection(sections?.find((section) => section.unit === at)?.heading);
   };
+
   const versionKeys = goThroughRow(rows, {
     open: (seq) => {
       const line = revisions.find((each) => each.seq === seq);
+
       if (line === undefined || !opensSections(line)) return false;
       openSections(seq);
+
       return true;
     },
   });
+
   const sectionKeys = goThroughRow(sectionRows, { back: closeSections });
   useSectionsFocused(opened?.seq, unit, sectionRows);
   useOpenedRowShown(versions.selected, rows, log, run);
@@ -958,6 +1020,7 @@ export function DesktopVersionHistory({
                   }}
                   onKeyDown={(event) => {
                     versionKeys(event);
+
                     if (!event.defaultPrevented) roving.onKeyDown(event);
                   }}
                 >
@@ -975,8 +1038,10 @@ export function DesktopVersionHistory({
                   >
                     {(index, place) => {
                       const line = revisions[index];
+
                       if (line === undefined) return null;
                       const author = revisionAuthorOf(line, reader, agents);
+
                       return (
                         <RevisionRow
                           line={line}

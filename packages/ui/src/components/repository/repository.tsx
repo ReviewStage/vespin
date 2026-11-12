@@ -72,7 +72,9 @@ export function RepositoryPicture({
 }): React.ReactNode {
   const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined);
   const url = pictures ? repositoryOwnerPictureUrl(repository) : undefined;
+
   if (url === undefined || url === failedUrl) return <GLYPH.REPOSITORY />;
+
   return (
     <Avatar
       name=""
@@ -111,6 +113,7 @@ export function RepositoryName({
   pictures: boolean;
 }): React.JSX.Element {
   const words = repository === null ? NO_REPOSITORY : (label ?? repositoryParts(repository).name);
+
   return (
     <span className="ui-repository-name inline-flex min-w-0 items-center gap-icon-gap">
       <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.MEDIUM}>
@@ -148,6 +151,7 @@ export function RepositoryCard({
   pictures: boolean;
 }): React.JSX.Element {
   const { owner, name } = repositoryParts(repository);
+
   return (
     <HoverCard data-repository-card="">
       <HoverCardHead
@@ -175,6 +179,7 @@ export function repositoryMenuRow(
 ): MenuRow {
   const { owner, name } = repositoryParts(repository);
   const badges = marks.token === true ? [TOKEN_LABEL] : [];
+
   return {
     id: repository,
     label: name,
@@ -252,6 +257,7 @@ export function RepositoryLines({
   const scroller = useRef<HTMLDivElement | null>(null);
   // Note that a line is keyed by its name as spelled, because two names that differ only in case are two lines.
   const keys = repositories.map(({ repository }) => repository);
+
   return (
     <div className="ui-repository-lines flex min-w-0 max-h-repository-lines flex-col">
       <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
@@ -266,6 +272,7 @@ export function RepositoryLines({
           >
             {(index, place) => {
               const entry = repositories[index];
+
               return entry === undefined ? null : (
                 <RepositoryLine entry={entry} pictures={pictures} place={place} />
               );

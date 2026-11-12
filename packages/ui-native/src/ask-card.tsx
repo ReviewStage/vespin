@@ -85,6 +85,7 @@ export type AskAct = {
 /** The bordered card on the surface the rows stand in, a hairline between each. */
 function Card({ children }: { readonly children: readonly ReactNode[] }) {
   const colors = useColors();
+
   return (
     <VStack
       alignment="leading"
@@ -116,6 +117,7 @@ export function AskNote({ words }: { readonly words: string }) {
   const colors = useColors();
   // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
   useAnnounced(words, true);
+
   return (
     <Text
       modifiers={[
@@ -156,6 +158,7 @@ function StepRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -228,6 +231,7 @@ function FieldWords({
   readonly ink: string;
 }) {
   const colors = useColors();
+
   return (
     <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
       <Text>{label}</Text>
@@ -252,6 +256,7 @@ function TypedFieldRow({
 }) {
   const colors = useColors();
   const text = useNativeState(typeof field.value === "string" ? field.value : "");
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
@@ -285,6 +290,7 @@ function SelectRow({
   readonly onChange: (value: string) => void;
 }) {
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
@@ -323,6 +329,7 @@ function BooleanRow({
   readonly onChange: (value: boolean) => void;
 }) {
   const colors = useColors();
+
   return (
     <Toggle
       isOn={field.value === true}
@@ -361,9 +368,11 @@ export function AnswerFields({
     <Card>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
+
         if (field.kind === ANSWER_FIELD.BOOLEAN) {
           return <BooleanRow key={field.label} field={field} onChange={change} />;
         }
+
         if (field.kind === ANSWER_FIELD.SELECT) {
           return (
             <SelectRow
@@ -374,6 +383,7 @@ export function AnswerFields({
             />
           );
         }
+
         return <TypedFieldRow key={field.label} field={field} onChange={change} />;
       })}
     </Card>

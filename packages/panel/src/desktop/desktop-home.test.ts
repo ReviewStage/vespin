@@ -169,6 +169,7 @@ function mount(
           }),
     },
   });
+
   const tasks = tasksControl({
     me: DEAN.userId,
     listRead: true,
@@ -179,12 +180,14 @@ function mount(
     onResume: (taskId) => opened.tasks.push(taskId),
     ...overrides,
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   // Note that Home stands at Acme's address, which names it by its id, as it has no slug.
   const router = windowRouter(createMemoryHistory({ initialEntries: [HOME_AT] }));
   act(() => root?.render(home(router, tasks, room, (link) => opened.settings.push(link))));
+
   return { page: container, opened, tasks, router };
 }
 
@@ -194,6 +197,7 @@ async function settle(): Promise<void> {
     act(async () => {
       for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
     });
+
   await ticks();
   await settleQueries(ticks);
 }
@@ -241,6 +245,7 @@ test("Home greets the reader by first name over New task's composer, the items w
 
 test("while the task list is read, Home greets the reader over the composer, asks for no repository, and says it is reading in place of its sections", async () => {
   const base = tasksControl();
+
   const newTask = {
     ...base.newTask,
     repositoriesIn: (scope: string | undefined) => ({
@@ -248,6 +253,7 @@ test("while the task list is read, Home greets the reader over the composer, ask
       reading: true,
     }),
   };
+
   const { page } = mount({ listRead: false, newTask });
   await settle();
 
@@ -280,6 +286,7 @@ test("a workspace that reaches no repository says so over Home's composer, telli
     },
   }));
   const base = tasksControl();
+
   const newTask = {
     ...base.newTask,
     repositoriesIn: (scope: string | undefined) => ({
@@ -288,21 +295,25 @@ test("a workspace that reaches no repository says so over Home's composer, telli
       manages: false,
     }),
   };
+
   const { page, opened } = mount({ newTask });
   const notice = () => page.querySelector(".new-task-notices")?.textContent ?? "";
 
   // Note that the owner is named by their person chip, whose disc's initial stands before the name.
   const chip = () =>
     page.querySelector('.new-task-notices [data-actor-ref][data-kind="person"]')?.textContent;
+
   await vi.waitFor(() => assert.equal(chip(), "AAda Lovelace"));
   assert.equal(
     notice(),
     "This workspace has no repositories yetAsk AAda Lovelace to connect GitHub, or add one with your own GitHub token.Add with your token",
   );
+
   // Note that the workspace's Add repository stands only once a token is known to be saved, so a member whose token read is still out saves one first.
   const add = [...page.querySelectorAll<HTMLButtonElement>(".new-task-notices button")].find(
     (each) => each.textContent === "Add with your token",
   );
+
   await vi.waitFor(() => {
     act(() => add?.click());
     assert.deepEqual(opened.settings.at(-1), {
@@ -342,6 +353,7 @@ test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no
   const words = [
     ...document.querySelectorAll('[role="menu"]:not([data-leaving]) [role="menuitem"]'),
   ].map((entry) => entry.textContent ?? "");
+
   // Note that the fixture's item is read, so its row offers to mark it unread.
   for (const offered of ["Copy link", "Mark as unread", "Remind me", "Resolve"]) {
     assert.ok(
@@ -349,6 +361,7 @@ test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no
       `the menu offers ${offered}: ${words.join(", ")}`,
     );
   }
+
   assert.equal(router.history.location.pathname, HOME_AT, "no item opens");
 });
 
@@ -367,9 +380,11 @@ test("nothing waiting draws no Inbox section, but an Inbox that could not be rea
   const refused = mount({ listRead: false, listFailed: true }, []);
   await settle();
   assert.match(refused.page.textContent ?? "", /Your tasks could not be read\./u);
+
   const head = refused.page.querySelector<HTMLButtonElement>(
     'section[aria-label="Recent"] button[aria-expanded]',
   );
+
   act(() => head?.click());
   await vi.waitFor(() => assert.equal(head?.getAttribute("aria-expanded"), "false"));
   await settle();
@@ -383,6 +398,7 @@ test("nothing waiting draws no Inbox section, but an Inbox that could not be rea
 /** A new account, its one model connected, over a workspace that reaches no repository. */
 function newAccount(): Partial<TasksControl> {
   const base = tasksControl();
+
   return {
     tasks: [],
     listed: { tasks: [] },

@@ -74,6 +74,7 @@ const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 20 },
   accountId: 90_000 + index,
   repositories: [RELAY],
 }));
+
 let installationsConnected = 0;
 
 const CATALOG: readonly OfferedModel[] = [
@@ -131,9 +132,11 @@ const USAGE = {
 /** A model that answers the chapters above, or refuses, and counts how often it was asked. */
 function scriptedModel(refuses = false) {
   let asked = 0;
+
   const model = new MockLanguageModelV4({
     doGenerate: async () => {
       asked += 1;
+
       return {
         content: refuses ? [] : [{ type: "text" as const, text: JSON.stringify(TOLD) }],
         finishReason: refuses
@@ -144,7 +147,9 @@ function scriptedModel(refuses = false) {
       };
     },
   });
+
   const chaptersModel: ChaptersModel = { id: "scripted", model };
+
   return { chaptersModel, asked: () => asked };
 }
 
@@ -155,7 +160,9 @@ const pullRequestOf =
     const repository = `/repos/${RELAY_FULL_NAME}`;
     const pull = `${repository}/pulls/${NUMBER}`;
     const path = new URL(sent.url).pathname;
+
     if (path === `${repository}/pulls`) return Response.json([{ number: NUMBER }]);
+
     if (path === pull) {
       return Response.json({
         number: NUMBER,
@@ -174,15 +181,21 @@ const pullRequestOf =
         user: null,
       });
     }
+
     if (path === `${pull}/files`) {
       filesRead();
+
       return Response.json([FILE]);
     }
+
     if (path === `${pull}/commits`) {
       return Response.json([{ sha: "1".repeat(40), commit: { message: "Expire invitations" } }]);
     }
+
     if (path.endsWith("/check-runs")) return Response.json({ check_runs: [] });
+
     if (path.endsWith("/status")) return Response.json({ statuses: [] });
+
     return undefined;
   };
 
@@ -212,15 +225,18 @@ const standing = (
     const stranger = yield* openGithubUser();
     const task = yield* startTask(owner, { name: "Invitations", repository: RELAY_FULL_NAME });
     yield* joinWorkspace(task.workspaceId, teammate);
+
     for (const member of [owner, teammate]) {
       yield* connectAgentApiKeys(
         member,
         options.keys === undefined ? {} : { providers: options.keys },
       );
     }
+
     const installation = INSTALLATIONS[installationsConnected++];
     assert.ok(installation !== undefined, "the suite ran out of installations");
     yield* connectWorkspaceGitHub(task.workspaceId, installation);
+
     const agent = Option.getOrThrow(
       yield* createAgent(owner, {
         taskId: task.id,
@@ -233,8 +249,10 @@ const standing = (
         runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       }),
     ).agent;
+
     yield* updateAgentBranch(owner, agent.id, BRANCH);
     let head = HEAD;
+
     const github = githubReaching(
       [installation],
       undefined,
@@ -246,8 +264,10 @@ const standing = (
         },
       ),
     );
+
     const model = scriptedModel(options.refuses);
     const analytics = recordingProductAnalytics();
+
     const services = yield* Effect.context<never>().pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -261,9 +281,11 @@ const standing = (
         ),
       ),
     );
+
     // SAFETY: the chapters procedures yield the database, the clock, the environment, GitHub, its HTTP client, the catalog, and the analytics alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
     const bearers = new Map([owner, teammate, stranger].map((id) => [`Bearer ${id}`, id]));
+
     const handle = hostedFetch({
       pullRequestChapters: pullRequestChaptersProcedures({
         resolveUserId: (incoming: Request) =>
@@ -271,6 +293,7 @@ const standing = (
             incoming,
             (input) => {
               const sub = bearers.get(input.headers.get("authorization") ?? "");
+
               return Effect.succeed(sub === undefined ? undefined : { sub });
             },
             () => Effect.succeed(Option.none()),
@@ -282,6 +305,7 @@ const standing = (
         }),
       }),
     });
+
     const ask = (
       as: string | undefined,
       init: {
@@ -294,10 +318,14 @@ const standing = (
     ) =>
       Effect.gen(function* () {
         const url = new URL(`/api/agents/${agent.id}/chapters`, ORIGIN);
+
         if (init.number !== undefined) url.searchParams.set("number", String(init.number));
+
         for (const more of init.numbers ?? []) url.searchParams.append("number", more);
         const headers = new Headers({ "content-type": "application/json" });
+
         if (as !== undefined) headers.set("authorization", `Bearer ${as}`);
+
         const response = yield* Effect.promise(() =>
           handle(
             new Request(url, {
@@ -308,11 +336,14 @@ const standing = (
             webServices,
           ),
         );
+
         const text = yield* Effect.promise(() => response.text());
         // SAFETY: the router answers JSON; the test reads it as the wire value it is.
         const body = (text.length === 0 ? text : JSON.parse(text)) as WireBoundaryInput;
+
         return { status: response.status, body } satisfies Answer;
       });
+
     return {
       owner,
       teammate,
@@ -332,7 +363,9 @@ const standing = (
 function chaptersOf(answer: Answer): PullRequestChaptersAnswer {
   assert.equal(answer.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(answer.body));
   const read = readEither(pullRequestChaptersAnswerSchema)(unparsedWire(answer.body));
+
   if (Result.isFailure(read)) assert.fail(`not the answer: ${JSON.stringify(answer.body)}`);
+
   return read.success;
 }
 
@@ -350,10 +383,12 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
     () =>
       Effect.gen(function* () {
         const { ask } = yield* standing();
+
         const unauthenticated = refused(
           HOSTED_HTTP_STATUS.UNAUTHORIZED,
           HOSTED_API_ERROR.INVALID_TOKEN,
         );
+
         assert.deepEqual(yield* ask(undefined), unauthenticated);
         assert.deepEqual(
           yield* ask(undefined, { method: "POST", body: '{"chapters":1}' }),
@@ -403,6 +438,7 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, organizationId, analytics, ask, moveHead } = yield* standing();
         const generated = chaptersOf(yield* ask(owner, { method: "POST", number: NUMBER }));
+
         const ready = {
           status: PULL_REQUEST_CHAPTERS_STATE.READY,
           headSha: HEAD,
@@ -410,6 +446,7 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
           model: CHAPTERS_MODEL.HAIKU,
           chapters: [{ kind: CHAPTER_KIND.STORY, ...TOLD.chapters[0] }],
         };
+
         assert.deepEqual(generated, {
           pullRequest: {
             number: NUMBER,
@@ -465,6 +502,7 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, organizationId, model, github, ask } = yield* standing();
         const now = new Date(yield* Clock.currentTimeMillis);
+
         const held = yield* claimChapterGeneration({
           organizationId,
           repository: RELAY_FULL_NAME,
@@ -474,6 +512,7 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
           requestedBy: teammate,
           now,
         });
+
         assert.equal(held.outcome, CHAPTER_CLAIM_OUTCOME.CLAIMED);
         const answer = chaptersOf(yield* ask(owner, { method: "POST", number: NUMBER }));
         assert.deepEqual(answer.pullRequest?.chapters, {
@@ -533,10 +572,12 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
       Effect.gen(function* () {
         const { owner, github, model, ask } = yield* standing();
         const invalid = refused(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
+
         for (const method of ["GET", "POST"]) {
           assert.deepEqual(yield* ask(owner, { method, numbers: ["7", "8"] }), invalid, method);
           assert.deepEqual(yield* ask(owner, { method, numbers: ["seven"] }), invalid, method);
         }
+
         assert.equal(
           github.sent.some((sent) => new URL(sent.url).pathname.includes("/pulls")),
           false,
@@ -578,9 +619,11 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
 
         const anthropicOnly = yield* standing({ keys: [PROVIDER_KEY_PROVIDER.ANTHROPIC] });
         yield* writeAccountPreferences(anthropicOnly.owner, { chaptersModel: "gpt-6-luna" });
+
         const fallen = chaptersOf(
           yield* anthropicOnly.ask(anthropicOnly.owner, { number: NUMBER }),
         );
+
         assert.deepEqual(fallen.pullRequest?.runsOn, {
           provider: MODEL_PROVIDER.ANTHROPIC,
           model: CHAPTERS_MODEL.HAIKU,

@@ -99,7 +99,9 @@ const workspaceEnvironment = (organizationId: string) =>
     const hosted = yield* Effect.serviceOption(HostedEnvironment);
     const keys = Option.isSome(hosted) ? hosted.value.providerKeyEncryptionKeys : undefined;
     const ring = keys === undefined ? undefined : parseKeyRing(keys);
+
     if (ring === undefined || Result.isFailure(ring)) return {};
+
     return yield* openWorkspaceEnvironment(ring.success, organizationId);
   });
 
@@ -115,13 +117,17 @@ export const archiveScriptOf = (
 ): Effect.Effect<ArchiveScript | undefined, never, DatabaseServices> =>
   Effect.gen(function* () {
     const { repository } = agent;
+
     if (agent.machine !== AGENT_MACHINE.VERCEL || repository === null) return undefined;
+
     const saved = yield* readRepositorySetup(
       agent.organizationId,
       repository,
       REPOSITORY_SCRIPT_KIND.ARCHIVE,
     );
+
     if (Option.isNone(saved)) return undefined;
+
     return {
       script: saved.value.script,
       environment: yield* workspaceEnvironment(agent.organizationId),
@@ -139,19 +145,25 @@ export const archiveScriptOf = (
 const runningOf = (api: SandboxService, sessionId: string) =>
   Effect.gen(function* () {
     const [newest] = yield* api.listTagged(SESSION_TAG, sessionId);
+
     if (newest === undefined) return undefined;
+
     if (UP_STATUSES.has(newest.status) && newest.running !== undefined) {
       return { name: newest.name, running: newest.running } satisfies SandboxRunning;
     }
+
     const resumed = yield* api
       .resume(newest.name)
       .pipe(Effect.timeoutOption(ARCHIVE_SCRIPT.RESUME_TIMEOUT));
+
     if (Option.isNone(resumed)) {
       yield* Effect.logWarning(
         "An archived agent's sandbox did not resume in time, so its archive script was skipped",
       );
+
       return undefined;
     }
+
     return { name: resumed.value.name, running: resumed.value.running } satisfies SandboxRunning;
   });
 
@@ -181,16 +193,20 @@ export const archiveScriptRun = (
 ): Effect.Effect<ArchiveScriptRan | undefined, SandboxError> =>
   Effect.gen(function* () {
     const place = yield* runningOf(api, sessionId);
+
     if (place === undefined) {
       yield* Effect.logInfo(
         "An archived agent's sandbox was already gone, so its archive script was skipped",
       );
+
       return undefined;
     }
+
     yield* api.writeFiles(place, [
       { path: ARCHIVE_FILE, contents: new TextEncoder().encode(archive.script), mode: 0o644 },
     ]);
     const ranAt = yield* DateTime.nowAsDate;
+
     const commandId = yield* api.start(place, {
       user: AGENT_USER,
       command: "bash",
@@ -203,23 +219,31 @@ export const archiveScriptRun = (
         ...archive.environment,
       },
     });
+
     const exit = yield* exitWithin(api, place, commandId);
+
     // Note that an exit still null is one the repeat stopped asking after, which ran past its bound too.
     if (Option.isNone(exit) || exit.value === null) {
       yield* Effect.ignore(api.kill(place, commandId));
       yield* Effect.logWarning(
         `An archive script ran past ${Duration.format(ARCHIVE_SCRIPT.RUN_TIMEOUT)} and was ended`,
       );
+
       return undefined;
     }
+
     if (exit.value === COMMAND_GONE) {
       yield* Effect.logWarning("An archive script's sandbox stopped before it exited");
+
       return undefined;
     }
+
     const stderr = yield* api
       .commandStderrTail(place, commandId, Object.values(archive.environment))
       .pipe(Effect.orElseSucceed(() => undefined));
+
     const said = `An archive script exited ${String(exit.value)}: ${stderr ?? "nothing printed"}`;
     yield* exit.value === 0 ? Effect.logInfo(said) : Effect.logWarning(said);
+
     return { ranAt, exitCode: exit.value };
   }).pipe(Effect.withSpan("web/archiveScript"));

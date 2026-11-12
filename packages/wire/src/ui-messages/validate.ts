@@ -111,6 +111,7 @@ function underMetadata<A>(
 function namesRetiredTool(part: UnparsedWireValue, tools: ToolSet): boolean {
   if (!isRecord(part) || !isWireString(part.type)) return false;
   const name = toolPartName(part.type);
+
   return name !== undefined && !Object.hasOwn(tools, name);
 }
 
@@ -126,6 +127,7 @@ function withoutRetiredToolParts(
   return messages.map((message) => {
     if (!isRecord(message) || !Array.isArray(message.parts)) return message;
     const parts = message.parts.filter((part) => !namesRetiredTool(part, tools));
+
     return parts.length === message.parts.length ? message : { ...message, parts };
   });
 }
@@ -137,15 +139,20 @@ function unregisteredToolPart(
 ): SchemaPath | undefined {
   for (const [messageIndex, message] of messages.entries()) {
     if (!isRecord(message) || !Array.isArray(message.parts)) continue;
+
     for (const [partIndex, part] of message.parts.entries()) {
       if (!isRecord(part) || !isWireString(part.type)) continue;
       const path: SchemaPath = [messageIndex, "parts", partIndex, "type"];
+
       if (part.type === DYNAMIC_TOOL_PART_TYPE) return path;
       const name = toolPartName(part.type);
+
       if (name === undefined) continue;
+
       if (!Object.hasOwn(tools, name)) return path;
     }
   }
+
   return undefined;
 }
 
@@ -155,10 +162,12 @@ function refusedPart(
 ): SchemaPath | undefined {
   for (const [partIndex, part] of parts.entries()) {
     if (part.type === DYNAMIC_TOOL_PART_TYPE) return ["parts", partIndex, "input"];
+
     if (toolPartName(part.type) !== undefined && !isStoredToolPart(part)) {
       return ["parts", partIndex, "state"];
     }
   }
+
   return undefined;
 }
 
@@ -167,12 +176,15 @@ function readStoredMessage(
   message: ValidatedMessage,
 ): Result.Result<StoredUIMessage, SchemaRefusalError> {
   const part = refusedPart(message.parts);
+
   if (part) return refuse(SCHEMA_REFUSAL.MALFORMED, part);
   const { id, parts } = message;
   const metadata = unparsedWire(message.metadata);
+
   switch (message.role) {
     case MESSAGE_ROLE.USER: {
       const role = message.role;
+
       return Result.map(underMetadata(readUserMetadata(metadata)), (value) => ({
         id,
         role,
@@ -180,8 +192,10 @@ function readStoredMessage(
         metadata: value,
       }));
     }
+
     case MESSAGE_ROLE.ASSISTANT: {
       const role = message.role;
+
       return Result.map(underMetadata(readAssistantMetadata(metadata)), (value) => ({
         id,
         role,
@@ -189,8 +203,10 @@ function readStoredMessage(
         metadata: value,
       }));
     }
+
     case MESSAGE_ROLE.SYSTEM:
       if (metadata !== undefined) return refuse(SCHEMA_REFUSAL.MALFORMED, ["metadata"]);
+
       return Result.succeed({ id, role: message.role, parts });
   }
 }
@@ -200,8 +216,10 @@ function readStoredMessages(
   messages: readonly ValidatedMessage[],
 ): Result.Result<StoredUIMessage[], SchemaRefusalError> {
   const stored: StoredUIMessage[] = [];
+
   for (const [messageIndex, message] of messages.entries()) {
     const read = readStoredMessage(message);
+
     if (Result.isFailure(read)) {
       return Result.fail(
         new SchemaRefusalError({
@@ -210,8 +228,10 @@ function readStoredMessages(
         }),
       );
     }
+
     stored.push(read.success);
   }
+
   return Result.succeed(stored);
 }
 
@@ -236,13 +256,16 @@ export function readStoredUIMessagesEither(
   unregistered: UnregisteredToolPart = UNREGISTERED_TOOL_PART.REFUSE,
 ): Effect.Effect<Result.Result<StoredUIMessage[], SchemaRefusalError>> {
   if (!Array.isArray(rows)) return Effect.succeed(refuse(SCHEMA_REFUSAL.MALFORMED, []));
+
   if (rows.length === 0) return Effect.succeed(Result.succeed([]));
   const storedRow = unregistered === UNREGISTERED_TOOL_PART.DROP;
   const messages = storedRow ? withoutRetiredToolParts(rows, tools) : rows;
   const unregisteredPart = unregisteredToolPart(messages, tools);
+
   if (unregisteredPart) {
     return Effect.succeed(refuse(SCHEMA_REFUSAL.NOT_REGISTERED, unregisteredPart));
   }
+
   // The SDK's validator answers its refusal as a value, so a rejection is a defect and not a refusal.
   // Note that a stored row is held to the SDK's structure alone, not to each tool's schemas, because
   // the write door admitted it under the same registry (`writer.ts`'s `admitted`), and walking every
@@ -260,6 +283,7 @@ export function readStoredUIMessagesEither(
           },
     ),
   );
+
   return Effect.map(validated, (result) =>
     result.success ? readStoredMessages(result.data) : refuse(SCHEMA_REFUSAL.MALFORMED, []),
   );

@@ -83,6 +83,7 @@ function drawn(Render: () => React.JSX.Element): HTMLElement[] {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Render)));
+
   return [...container.querySelectorAll<HTMLElement>(BUSY_BUTTON)];
 }
 
@@ -105,27 +106,37 @@ test(
     const odd: string[] = [];
     const found = busyButtons();
     const shownAt = new Map<HTMLElement, number>();
+
     for (const { example, button } of found) {
       const where = `${example}: ${kindOf(button)} "${nameOf(button)}"`;
+
       if (nameOf(button) === "") odd.push(`${where} has no name`);
+
       if (!button.matches(":disabled, [aria-disabled='true']")) odd.push(`${where} takes a press`);
+
       if (button.querySelector(RING) !== null) shownAt.set(button, 0);
     }
+
     // Note that the wait is read off the page a millisecond at a time rather than named here, so it is whatever the one shared delay is.
     for (let elapsed = 1; elapsed <= RING_WAIT_LIMIT_MS; elapsed += 1) {
       act(() => vi.advanceTimersByTime(1));
+
       for (const { button } of found) {
         if (!shownAt.has(button) && button.querySelector(RING) !== null)
           shownAt.set(button, elapsed);
       }
     }
+
     const waits = new Set(shownAt.values());
+
     for (const { example, button } of found) {
       const where = `${example}: ${kindOf(button)} "${nameOf(button)}"`;
+
       if (!shownAt.has(button)) odd.push(`${where} never shows a ring`);
       else if (button.querySelectorAll(RING).length !== 1)
         odd.push(`${where} shows more than one ring`);
     }
+
     assert.deepEqual(odd, [], "these busy buttons differ from the one busy shape");
     assert.equal(
       waits.size,

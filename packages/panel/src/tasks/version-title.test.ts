@@ -40,6 +40,7 @@ afterEach(() => {
 
 function Version(): ReactNode {
   const restore = { busy: false, onRestore: () => undefined };
+
   return createElement(VersionView, {
     onRetry: () => undefined,
     title: NAME,
@@ -71,6 +72,7 @@ test("a version names its task in the title role, as no heading, under the bar's
     title.textContent,
     title.getAttribute("data-variant"),
   ]);
+
   assert.deepEqual(name, [[NAME, "title"]]);
   assert.equal(container.querySelectorAll("h1").length, 1);
   assert.equal(container.querySelector('.ui-markdown-heading[data-level="1"]'), null);

@@ -66,8 +66,10 @@ function seams(asked: string[], viewer: AdminViewer | null = ADMIN): AdminProced
   const record = <Answer>(line: string, answer: Answer) =>
     Effect.sync(() => {
       asked.push(line);
+
       return answer;
     });
+
   return {
     resolveViewer: () => Effect.succeed(viewer ?? undefined),
     readMetrics: (_now, scope, windowDays) => record(`metrics ${scope} ${windowDays}`, METRICS),
@@ -133,14 +135,18 @@ const send = (handed: AdminProcedureSeams, request: Request, logged: string[] = 
     const capture = Logger.make((options) => {
       logged.push(JSON.stringify(options.message), String(options.cause));
     });
+
     const services = yield* Effect.context<DatabaseServices>().pipe(
       Effect.provide(Layer.merge(noDatabase, Logger.layer([capture]))),
     );
+
     // SAFETY: the admin procedures yield the database alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     const response = yield* Effect.promise(() =>
       hostedFetch({ admin: adminProcedures(handed) })(request, webServices),
     );
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -171,10 +177,12 @@ function read<Body>(body: Body): Bytes {
 it.effect("the gate answers 503, 401, and 403 as distinct refusals, each no-store", () =>
   Effect.gen(function* () {
     const asked: string[] = [];
+
     const outage = {
       ...seams(asked),
       resolveViewer: () => Effect.die(new Error("auth is down")),
     };
+
     assert.deepEqual(
       yield* send(outage, request("/api/admin/metrics")),
       refused(503, ADMIN_ERROR.UNAVAILABLE),
@@ -194,6 +202,7 @@ it.effect("the gate answers 503, 401, and 403 as distinct refusals, each no-stor
 it.effect("nothing behind the gate runs for a caller it refuses, a write included", () =>
   Effect.gen(function* () {
     const asked: string[] = [];
+
     for (const path of [
       "/api/admin/metrics",
       "/api/admin/cost",
@@ -205,13 +214,16 @@ it.effect("nothing behind the gate runs for a caller it refuses, a write include
     ]) {
       assert.equal((yield* send(seams(asked, MEMBER), request(path))).status, 403);
     }
+
     for (const method of ["PUT", "DELETE"]) {
       const answer = yield* send(
         seams(asked, MEMBER),
         request("/api/admin/favorite?id=user-2", method),
       );
+
       assert.equal(answer.status, 403);
     }
+
     assert.deepEqual(asked, []);
   }),
 );
@@ -236,17 +248,21 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const logged: string[] = [];
+
       const auth = yield* send(
         { ...seams([]), resolveViewer: () => Effect.die(new TypeError(SECRET)) },
         request("/api/admin/metrics"),
         logged,
       );
+
       assert.equal(auth.status, 503);
+
       const readFailed = yield* send(
         { ...seams([]), readMetrics: () => Effect.die(new RangeError(SECRET)) },
         request("/api/admin/metrics"),
         logged,
       );
+
       assert.deepEqual(readFailed, refused(503, ADMIN_ERROR.UNAVAILABLE));
 
       assert.ok(
@@ -257,6 +273,7 @@ it.effect(
         logged.some((line) => line.includes("RangeError")),
         logged.join("\n"),
       );
+
       for (const line of logged) assert.ok(!line.includes(SECRET), line);
     }),
 );
@@ -264,12 +281,14 @@ it.effect(
 it.effect("a method an address does not answer is a 405, before the gate", () =>
   Effect.gen(function* () {
     const asked: string[] = [];
+
     const methodNotAllowed: Bytes = {
       status: 405,
       contentType: JSON_TYPE,
       cacheControl: null,
       text: `{"error":"${ADMIN_ERROR.METHOD_NOT_ALLOWED}"}`,
     };
+
     assert.deepEqual(
       yield* send(seams(asked, SIGNED_OUT), request("/api/admin/metrics", "POST")),
       methodNotAllowed,
@@ -349,6 +368,7 @@ it.effect("each read refuses its own malformed query before its seam is touched"
     const asked: string[] = [];
     const handed = seams(asked);
     const tooLong = "w".repeat(ADMIN_USERS_SEARCH_MAX_LENGTH + 1);
+
     const cases: readonly [string, Bytes][] = [
       ["/api/admin/metrics?window=12", refused(400, ADMIN_ERROR.INVALID_WINDOW)],
       ["/api/admin/cost?window=12", refused(400, ADMIN_ERROR.INVALID_WINDOW)],
@@ -363,9 +383,11 @@ it.effect("each read refuses its own malformed query before its seam is touched"
       ["/api/admin/day", refused(400, ADMIN_ERROR.INVALID_DAY)],
       ["/api/admin/day?date=2026-02-30", refused(400, ADMIN_ERROR.INVALID_DAY)],
     ];
+
     for (const [path, expected] of cases) {
       assert.deepEqual(yield* send(handed, request(path)), expected, path);
     }
+
     assert.deepEqual(asked, []);
   }),
 );

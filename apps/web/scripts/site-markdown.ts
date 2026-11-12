@@ -66,9 +66,11 @@ export async function drawnBySite<Drawn>(draw: (site: SiteMarkdown) => Drawn): P
     optimizeDeps: { noDiscovery: true, include: [] },
     esbuild: { jsx: "automatic" },
   });
+
   try {
     // SAFETY: the module is `src/site-markdown.tsx`, whose exports this file's type names.
     const site = (await server.ssrLoadModule(DRAWING_MODULE)) as SiteMarkdown;
+
     return draw(site);
   } finally {
     await server.close();
@@ -78,6 +80,7 @@ export async function drawnBySite<Drawn>(draw: (site: SiteMarkdown) => Drawn): P
 /** One site document drawn through a server of its own. */
 async function drawnDocument(document: SiteDocument): Promise<unknown> {
   const words = await readFile(document.file, "utf8");
+
   return drawnBySite((site) => document.draw(site, words));
 }
 
@@ -90,6 +93,7 @@ async function drawnDocuments(): Promise<Map<string, unknown>> {
       words: await readFile(document.file, "utf8"),
     })),
   );
+
   return drawnBySite(
     (site) => new Map(documents.map(({ id, document, words }) => [id, document.draw(site, words)])),
   );
@@ -107,6 +111,7 @@ async function drawnDocuments(): Promise<Map<string, unknown>> {
 export function siteMarkdown(): Plugin {
   let building = false;
   let drawings: Map<string, unknown> | undefined;
+
   return {
     name: "site-markdown",
     configResolved(config) {
@@ -119,9 +124,11 @@ export function siteMarkdown(): Plugin {
     async load(id) {
       const name = id.startsWith(RESOLVED_PREFIX) ? id.slice(RESOLVED_PREFIX.length) : undefined;
       const document = name === undefined ? undefined : SITE_DOCUMENTS.get(name);
+
       if (name === undefined || document === undefined) return undefined;
       this.addWatchFile(document.file);
       const value = drawings?.has(name) ? drawings.get(name) : await drawnDocument(document);
+
       return `export default ${JSON.stringify(value)};`;
     },
   };

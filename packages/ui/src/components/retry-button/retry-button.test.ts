@@ -52,6 +52,7 @@ function draw(label?: string) {
     ),
   );
   const button = container.querySelector("button") ?? assert.fail("no button");
+
   return { button, presses: () => presses };
 }
 

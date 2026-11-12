@@ -26,6 +26,7 @@ const API_DEADLINE_MS = 120_000;
 function jsonBody(text: string, source: string): Effect.Effect<string, CommandFailed> {
   try {
     JSON.parse(text);
+
     return Effect.succeed(text);
   } catch {
     return Effect.fail(
@@ -61,23 +62,29 @@ export const apiCommand = Command.make(
   ({ method, path, input }) =>
     Effect.gen(function* () {
       const route = hostedRouteOf(method, path);
+
       if (route === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `No ${PRODUCT_NAME} procedure answers ${method.toUpperCase()} ${path}.`,
         });
       }
+
       const body = Option.isSome(input)
         ? yield* Effect.flatMap(readInput(input.value), (text) => jsonBody(text, input.value))
         : undefined;
+
       const { origin, credential } = yield* session;
+
       const sent = yield* accountCall({
         baseUrl: origin,
         credential,
         requestTimeoutMs: API_DEADLINE_MS,
       }).send({ method: route.method, path, body });
+
       if (!callAnswered(sent)) {
         const exit = cliExitOfFault(sent.fault);
+
         return yield* new CommandFailed({
           exit,
           message:
@@ -86,10 +93,12 @@ export const apiCommand = Command.make(
               : `Could not reach ${origin}.`,
         });
       }
+
       const text = yield* Effect.promise(() => sent.response.text());
       const found = readable(text);
       yield* answer({ json: found, lines: [JSON.stringify(found, null, 2)] });
       const exit = cliExitOfStatus(sent.response.status);
+
       if (exit !== CLI_EXIT.OK) {
         return yield* new CommandFailed({
           exit,

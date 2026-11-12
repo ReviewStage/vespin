@@ -40,6 +40,7 @@ export function localAgentClis(stateRoot: string, pins: AgentCliPins): LocalAgen
     { pin: pins.codex, failure: SETUP_FAILURE.CODEX },
     { pin: pins.gh, failure: SETUP_FAILURE.GH },
   ];
+
   return {
     paths: {
       claude: keptToolBinary(stateRoot, pins.claude),
@@ -50,6 +51,7 @@ export function localAgentClis(stateRoot: string, pins: AgentCliPins): LocalAgen
       Effect.gen(function* () {
         // Note that the device says it is getting ready once, whichever of the fetches begins first.
         const once = yield* Effect.cached(preparing);
+
         // Note that the tools are fetched side by side, and the first that could not be had says why.
         const had = yield* Effect.forEach(
           wanted,
@@ -59,7 +61,9 @@ export function localAgentClis(stateRoot: string, pins: AgentCliPins): LocalAgen
             ),
           { concurrency: "unbounded" },
         );
+
         const failed = had.find((failure) => failure !== undefined);
+
         if (failed !== undefined) return yield* new LocalAgentClisUnavailable({ detail: failed });
       }),
   };

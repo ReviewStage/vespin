@@ -38,17 +38,20 @@ async function mountMarked(marks: readonly FileMark[]) {
   const opened: string[] = [];
   const viewed: string[] = [];
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = fileTree.mount(host, {
     readFolder: () => Promise.resolve({ entries: [], truncated: false }),
     onStanding: () => undefined,
     onOpen: (path) => opened.push(path),
     onViewed: (path) => viewed.push(path),
   });
+
   mounted = { host, handle };
   await settle();
   handle.only(PATHS);
   handle.mark(marks);
   await settle();
+
   return { handle, opened, viewed };
 }
 
@@ -56,10 +59,12 @@ async function mountMarked(marks: readonly FileMark[]) {
 function row(path: string): HTMLElement {
   for (const container of mounted?.host.querySelectorAll("file-tree-container") ?? []) {
     const found = container.shadowRoot?.querySelector<HTMLElement>(`[data-item-path="${path}"]`);
+
     if (found !== null && found !== undefined && container.closest("[hidden]") === null) {
       return found;
     }
   }
+
   return assert.fail(`the tree draws ${path}`);
 }
 
@@ -70,12 +75,14 @@ function chosen(): string[] {
     .flatMap((container) => [
       ...(container.shadowRoot?.querySelectorAll<HTMLElement>('[data-item-selected="true"]') ?? []),
     ]);
+
   return rows.map((each) => each.dataset.itemPath ?? "");
 }
 
 /** The words at the end of a row, part by part. */
 function parts(path: string): string[] {
   const run = row(path).querySelector('[data-item-section="decoration"] > span');
+
   return [...(run?.children ?? [])].map((part) => part.textContent ?? "");
 }
 
@@ -83,6 +90,7 @@ function parts(path: string): string[] {
 function toggle(path: string): HTMLElement {
   const run = row(path).querySelector('[data-item-section="decoration"] > span');
   const part = run?.children[4];
+
   return part instanceof HTMLElement ? part : assert.fail(`${path} draws a Viewed toggle`);
 }
 
@@ -163,8 +171,10 @@ test("a row's Viewed toggle is a checkbox named Viewed, checked once its file is
 
   const named = (path: string) => {
     const each = toggle(path);
+
     return [each.getAttribute("role"), each.getAttribute("aria-label"), each.ariaChecked];
   };
+
   assert.deepEqual(named("src/seats.ts"), ["checkbox", "Viewed", "false"]);
   assert.deepEqual(named("src/plan.md"), ["checkbox", "Viewed", "true"]);
 

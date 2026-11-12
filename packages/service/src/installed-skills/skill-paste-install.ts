@@ -67,8 +67,10 @@ type SourceServices = GitHubApp | HttpClient.HttpClient | DatabaseServices;
 /** A GitHub source's skill folder as its `SKILL.md` names it: by its own folder's name, or the repository's for a skill at its root. */
 function foundSkill(repository: SkillRepository, folder: SkillFolder): FoundSkill {
   const main = folder.files.find((file) => file.path === INSTALLED_SKILL_MAIN_FILE);
+
   const fallback =
     folder.path === "" ? repository.name.toLowerCase() : folder.path.split("/").at(-1);
+
   return { folder, ...skillHead(main === undefined ? "" : fileText(main.bytes), fallback ?? "") };
 }
 
@@ -85,6 +87,7 @@ const readSource = /* @__PURE__ */ Effect.fnUntraced(function* (
   const found = skillFolders(archive, paste.path).map((folder) => foundSkill(repository, folder));
   // Note that a name stands once, its first folder's, since an install chooses skills by name.
   const skills = found.filter((one, at) => found.findIndex(({ name }) => name === one.name) === at);
+
   return { repository, ref, sha: archive.sha, skills };
 });
 
@@ -94,11 +97,13 @@ function madeFromFolder(
   found: FoundSkill,
 ): Effect.Effect<MadeSkill, HostedRefusal> {
   const refusal = skillRefusal(found, found.folder.files);
+
   if (refusal !== undefined) {
     return Effect.fail(
       installedSkillRefused(HOSTED_REFUSAL.SKILL_FILES_REFUSED, found.name, refusal),
     );
   }
+
   return Effect.succeed({
     name: found.name,
     description: found.description,
@@ -128,13 +133,17 @@ function withNameAndDescription(markdown: string, name: string, description: str
   const head = `name: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(description)}`;
   const unmarked = markdown.replace(/^\uFEFF/u, "");
   const fenced = SKILL_FRONTMATTER.exec(unmarked);
+
   if (fenced === null) return `---\n${head}\n---\n\n${unmarked}`;
   // Note that a key's value goes on over the indented and blank lines under it, up to the next key.
   let dropping = false;
+
   const kept = (fenced[1] ?? "").split(/\r?\n/u).filter((line) => {
     if (/^\S/u.test(line)) dropping = NAME_OR_DESCRIPTION.test(line);
+
     return !dropping;
   });
+
   return `---\n${[head, ...kept].join("\n")}\n---\n${unmarked.slice(fenced[0].length)}`;
 }
 
@@ -146,18 +155,22 @@ function madeFromText(
   const own = skillHead(markdown, "");
   const name = asked.name?.trim() ?? own.name;
   const description = asked.description?.trim() ?? own.description;
+
   // Note that text whose frontmatter already says both is kept as pasted.
   const written =
     name === own.name && description === own.description
       ? markdown
       : withNameAndDescription(markdown, name, description);
+
   const files = [{ path: INSTALLED_SKILL_MAIN_FILE, bytes: new TextEncoder().encode(written) }];
   const refusal = skillRefusal({ name, description }, files);
+
   if (refusal !== undefined) {
     return Effect.fail(
       installedSkillRefused(HOSTED_REFUSAL.SKILL_FILES_REFUSED, name || undefined, refusal),
     );
   }
+
   return Effect.succeed({
     name,
     description,
@@ -194,6 +207,7 @@ export const previewOfPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
     case SKILL_PASTE_KIND.SOURCE: {
       const source = yield* readSource(userId, workspaceId, paste, undefined);
       const only = source.skills.length === 1;
+
       return {
         kind: SKILL_PASTE_KIND.SOURCE,
         owner: source.repository.owner,
@@ -204,8 +218,10 @@ export const previewOfPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
         missing: [],
       };
     }
+
     case SKILL_PASTE_KIND.TEXT: {
       const { name, description } = skillHead(paste.markdown, "");
+
       return {
         kind: SKILL_PASTE_KIND.TEXT,
         ...(name === "" ? undefined : { name }),
@@ -214,6 +230,7 @@ export const previewOfPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
         problems: [],
       };
     }
+
     case SKILL_PASTE_KIND.UNSUPPORTED:
       return UNSUPPORTED_PREVIEW;
   }
@@ -230,9 +247,12 @@ export const madeFromPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
     case SKILL_PASTE_KIND.SOURCE: {
       const source = yield* readSource(userId, workspaceId, paste, asked.sha);
       const chosen = source.skills.filter((found) => asked.skills?.includes(found.name));
+
       if (chosen.length === 0) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       return yield* Effect.forEach(chosen, (found) => madeFromFolder(source, found));
     }
+
     case SKILL_PASTE_KIND.TEXT:
       return [yield* madeFromText(paste.markdown, asked)];
     case SKILL_PASTE_KIND.UNSUPPORTED:

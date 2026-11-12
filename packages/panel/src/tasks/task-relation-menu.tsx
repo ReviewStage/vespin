@@ -166,6 +166,7 @@ function kindSent(door: TaskRelationDoor, kind: TaskRelationKind): boolean {
   if (kind === TASK_RELATION_KIND.BLOCKED_BY || kind === TASK_RELATION_KIND.BLOCKS) {
     return door.onChange !== undefined;
   }
+
   return door.onSetParent !== undefined;
 }
 
@@ -181,10 +182,12 @@ function ancestors(
 ): Set<string> {
   const above = new Set<string>();
   let at = parentId;
+
   while (at !== undefined && !above.has(at)) {
     above.add(at);
     at = byId.get(at)?.parentTaskId;
   }
+
   return above;
 }
 
@@ -197,20 +200,27 @@ function whyNot(
 ): string | undefined {
   const blockedBy = task.blockedBy ?? [];
   const blocks = task.blocks ?? [];
+
   switch (kind) {
     case TASK_RELATION_KIND.BLOCKED_BY:
       if (blockedBy.includes(other.id)) return WHY[kind].already;
+
       return blocks.includes(other.id) ? WHY[kind].loop : undefined;
     case TASK_RELATION_KIND.BLOCKS:
       if (blocks.includes(other.id)) return WHY[kind].already;
+
       return blockedBy.includes(other.id) ? WHY[kind].loop : undefined;
     case TASK_RELATION_KIND.SUB_TASK:
       if (other.parentTaskId === task.id) return WHY[kind].already;
+
       if (ancestors(byId, task.parentTaskId).has(other.id)) return WHY[kind].loop;
+
       return sameRepository(task.repository, other.repository) ? undefined : OTHER_REPOSITORY;
     case TASK_RELATION_KIND.PARENT:
       if (task.parentTaskId === other.id) return WHY[kind].already;
+
       if (ancestors(byId, other.parentTaskId).has(task.id)) return WHY[kind].loop;
+
       return sameRepository(task.repository, other.repository) ? undefined : OTHER_REPOSITORY;
   }
 }
@@ -226,11 +236,13 @@ function relationRows(
   kind: TaskRelationKind,
 ): readonly MenuRow[] {
   const byId = new Map(door.tasks.map((each) => [each.id, each]));
+
   return door.tasks
     .filter((each) => each.id !== task.id)
     .map((each) => {
       const key = each.number === undefined ? undefined : taskKey(door.workspaceName, each.number);
       const disabled = whyNot(task, each, kind, byId);
+
       return {
         id: each.id,
         label: each.name,
@@ -253,12 +265,15 @@ function relate(
     case TASK_RELATION_KIND.BLOCKED_BY:
     case TASK_RELATION_KIND.BLOCKS:
       door.onChange?.({ change: TASK_BLOCK_CHANGE.ADD, relation: kind, taskId: otherId });
+
       return;
     case TASK_RELATION_KIND.SUB_TASK:
       door.onSetParent?.(otherId, task.id);
+
       return;
     case TASK_RELATION_KIND.PARENT:
       door.onSetParent?.(task.id, otherId);
+
       return;
   }
 }
@@ -318,6 +333,7 @@ export function TaskRelationMenu({
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(undefined);
   const kind = opened ?? chosen;
   const place = embedded ? { layer: SEARCHABLE_MENU_LAYER.EMBEDDED } : { align };
+
   if (kind === undefined) {
     return (
       <SearchableMenu
@@ -338,13 +354,17 @@ export function TaskRelationMenu({
       />
     );
   }
+
   // Note that a search chosen from the kinds goes back to them, by its head or Escape, rather than closing.
   const back = opened === undefined ? () => setChosen(undefined) : undefined;
+
   const head: MenuHead = {
     words: KIND_VERBS[kind].head,
     ...(back === undefined ? {} : { back: { label: TASK_RELATION_MENU, onBack: back } }),
   };
+
   const { onNewTask } = door;
+
   const foot: FootRow[] =
     onNewTask === undefined
       ? []
@@ -359,6 +379,7 @@ export function TaskRelationMenu({
             },
           },
         ];
+
   return (
     <SearchableMenu
       replayUnmasked
@@ -441,11 +462,13 @@ export function TaskRelationAsked({
   const answered = useRef<number | undefined>(undefined);
   // Another task closes the menu at once, so a menu asked on one never stands over the next.
   const [forTask, setForTask] = useState(task.id);
+
   if (forTask !== task.id) {
     setForTask(task.id);
     setOpen(undefined);
     setShown(undefined);
   }
+
   useEffect(() => {
     if (ask === undefined || ask.request === answered.current) return;
     answered.current = ask.request;
@@ -454,13 +477,16 @@ export function TaskRelationAsked({
     setShown(ask);
     onAsked?.(ask.request);
   }, [ask, onAsked]);
+
   // Note that we hand focus back to where the ask came from, as a native menu returns it to its button, because closing takes the focused field away.
   const close = () => {
     setOpen(undefined);
     opener.current?.focus();
   };
+
   // Nothing is drawn while the menu is closed, so the box adds nothing to the head until an ask opens it.
   if (!drawn.mounted || shown === undefined) return null;
+
   return (
     <span className="task-relation-asked relative inline-flex" ref={box}>
       <TaskRelationMenu

@@ -24,13 +24,17 @@ export function redirectSystemPath({
 }): string | null {
   try {
     const read = readShownLink(path);
+
     if (read === undefined) return path;
     const route = "workspace" in read ? iosAppRouteOf(read.place) : undefined;
+
     if (route !== undefined) return route;
     openURL(path).catch((error: unknown) => console.error("The link did not open.", error));
+
     return initial ? HOME : null;
   } catch (error) {
     console.error("The link could not be read.", error);
+
     return initial ? HOME : null;
   }
 }

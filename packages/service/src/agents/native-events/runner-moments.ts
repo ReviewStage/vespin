@@ -58,8 +58,11 @@ const NUL_KEPT_AS = "\uFFFD";
  */
 export function withoutNul(value: WireValue): WireValue {
   if (isWireString(value)) return value.replaceAll("\u0000", NUL_KEPT_AS);
+
   if (Array.isArray(value)) return value.map(withoutNul);
+
   if (!isRecord(value)) return value;
+
   return Object.fromEntries(
     Object.entries(value).map(([key, each]) => [
       key.replaceAll("\u0000", NUL_KEPT_AS),
@@ -72,11 +75,14 @@ export function withoutNul(value: WireValue): WireValue {
 export const PICTURE_STAND_IN = "[image]";
 
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
+
 const readAccepted = Schema.decodeUnknownOption(
   Schema.Struct({ uuid: Schema.String, snapshot: Schema.optionalKey(Schema.Unknown) }),
 );
+
 /** A commit as git names it, which the runner checked the snapshot's against before it posted them. */
 const CommitSchema = Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/u));
+
 /**
  * The checkout the runner recorded before the turn, as its ACCEPTED carries
  * it, read apart from the line so one spelled wrong is left out rather than
@@ -90,10 +96,13 @@ const readSnapshot = Schema.decodeUnknownOption(
     branch: Schema.optionalKey(Schema.String),
   }),
 );
+
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));
+
 const readConnectionRestored = Schema.decodeUnknownOption(
   Schema.Struct({ host: Schema.String, carryOn: Schema.Boolean }),
 );
+
 /**
  * The end a runner posted where it let a wait on wakeups go so its sandbox
  * could stop, read as a turn that ended, the wakeups it named dropped. A
@@ -129,10 +138,12 @@ const QUIET_ENDS: ReadonlySet<RunnerEnd> = new Set([
 
 function endMoments(message: WireValue): readonly NativeMoment[] {
   const read = readEnd(message);
+
   if (Option.isNone(read)) return [];
   const { detail } = read.value;
   const reason = read.value.reason === LEGACY_RELEASED ? RUNNER_END.TURN_ENDED : read.value.reason;
   const said = detail === undefined ? reason : `${reason} ${detail}`;
+
   return [
     {
       kind: NATIVE_MOMENT.ENDED,
@@ -167,7 +178,9 @@ export function redactKeepingPlanCodes(text: string): string {
  */
 export function runnerMoments(message: WireValue): Option.Option<readonly NativeMoment[]> {
   const type = Option.map(readType(message), (read) => read.type);
+
   if (Option.isNone(type)) return Option.none();
+
   switch (type.value) {
     case RUNNER_EVENT.ACCEPTED:
       return Option.some(
@@ -235,6 +248,7 @@ export function toolAnswerSettlement(
   const output: UnparsedWireValue = answer.workspaceTool
     ? withoutNul(valueFromJsonText(answer.text))
     : answer.output;
+
   if (isError) {
     return {
       state: TOOL_CALL_SETTLEMENT.OUTPUT_ERROR,
@@ -243,8 +257,10 @@ export function toolAnswerSettlement(
       status: ACTION_RESULT_STATUS.REJECTED,
     };
   }
+
   if (!answer.workspaceTool) return toolCallSettlementOf(JSON.stringify(answer.output), undefined);
   const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
+
   // Note that the settlement is handed the answer as read, since it reads its JSON again and would make its NUL anew.
   return toolCallSettlementOf(JSON.stringify(output), status);
 }
@@ -258,5 +274,6 @@ export function toolAnswerSettlement(
  */
 export function usageLimitSettlement(agent: UsageLimitAgent): ToolCallSettlement {
   const answer: UsageLimitAnswer = { usageLimit: { agent, resetsAt: null } };
+
   return toolCallSettlementOf(JSON.stringify(answer), undefined);
 }

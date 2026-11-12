@@ -98,6 +98,7 @@ const EMOJI_PART = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
 function isOneEmoji(text: string): boolean {
   if (!EMOJI_PART.test(text)) return false;
   const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
+
   return [...graphemes].length === 1;
 }
 
@@ -177,6 +178,7 @@ export type LooseTaskSectionIcon = typeof looseTaskSectionIconSchema.Type;
 export function knownTaskSectionIcon(icon: LooseTaskSectionIcon): TaskSectionIcon {
   if (icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return icon;
   const { color, ...glyph } = icon;
+
   return isIconColor(color) ? { ...glyph, color } : glyph;
 }
 

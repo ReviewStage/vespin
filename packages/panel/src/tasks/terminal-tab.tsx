@@ -138,6 +138,7 @@ function StateBar({
   // Note that a late bar is hidden until it has held a second, so its words are said once its reveal has run: a blip that mends first is never seen, so it is never said.
   const [revealed, setRevealed] = useState(false);
   useAnnounceShown(ANNOUNCE.POLITE, bar.late && !revealed ? "" : bar.words);
+
   return (
     <div
       className="terminal-bar flex min-h-7 flex-none flex-wrap items-center gap-x-control-gap gap-y-list-gap border-b border-border bg-muted py-tight-gap pr-list-inset pl-ui-16 font-mono text-caption text-muted-foreground"
@@ -198,19 +199,24 @@ export function TerminalTab({
   // Note that a Local tab says which step of the agent's mirror it waits on while it connects, where the host said.
   const mirrors = useQuery({ ...appStateQuery, select: selectMirrors }).data;
   const mirror = tab.kind === STRIP_TAB_KIND.LOCAL ? mirrors?.[agentId] : undefined;
+
   // A run action's tab is read-only, and its bar says where the action stands and offers to run or stop it.
   const runLook = useRunTabLooks(
     tab.kind === STRIP_TAB_KIND.TERMINAL ? [tab] : NO_CLOUD_TAB,
     shown,
   )(tab.kind === STRIP_TAB_KIND.TERMINAL ? tab : undefined);
+
   const look =
     runLook === undefined
       ? terminalLook(session.state, mirror)
       : readOnlyTerminalLook(session.state);
+
   const press = useRunActionPress(agentId);
+
   // A run action's tab whose shell went says it ended, and attaches again once its action runs again, from here or the Run button.
   const ranAgain =
     shown && runLook?.running === true && session.state.kind === TERMINAL_STATE.EXITED;
+
   const { onAction } = session;
   useEffect(() => {
     if (ranAgain) onAction(TERMINAL_ACTION.RETRY);
@@ -244,6 +250,7 @@ export function TerminalTab({
         ]
       : undefined,
   );
+
   return (
     <Fill className="terminal-tab file-view" data-state={session.state.kind}>
       {phone ? null : (
@@ -325,5 +332,6 @@ export function TerminalCount({
     kind,
     agentId,
   ).length;
+
   return <>{count === 0 ? null : `${count} ${count === 1 ? "terminal" : "terminals"}`}</>;
 }

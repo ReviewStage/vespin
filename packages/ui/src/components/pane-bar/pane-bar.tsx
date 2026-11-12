@@ -50,22 +50,29 @@ import { wholeWordsHint } from "../tooltip/hint.js";
  */
 const BAR =
   "ui-pane-bar box-border flex min-h-pane-bar min-w-0 flex-none items-center gap-control-gap border-b border-border bg-muted px-list-inset py-tight-gap font-sans text-caption text-muted-foreground";
+
 /** Words leading the bar start where a tab's glyph does, a row's inset in. */
 const LEAD =
   "ui-pane-bar-lead flex min-w-0 flex-initial items-center gap-item-gap pl-row-inset whitespace-nowrap [.ui-pane-bar-start+&]:pl-0";
+
 /** A pane's toggle at the bar's very start, the lead after it starting at the toggle rather than a row's inset. */
 const START = "ui-pane-bar-start flex flex-none items-center";
+
 /** A pane's toggle at the bar's very end, after the ⋯, its glyph as close as the actions'. */
 const END = "ui-pane-bar-end flex flex-none items-center";
 const MARK = "ui-pane-bar-mark flex flex-none items-center [&>svg]:size-control-icon";
 const MIDDLE = "ui-pane-bar-middle flex min-w-0 flex-auto items-center gap-control-gap";
+
 /** The actions at the end, their glyphs close. */
 const ACTIONS = "ui-pane-bar-actions ml-auto flex flex-none items-center gap-ui-2";
+
 /** A bar whose title has a row of its own lays its parts on two rows, the title's last. */
 const WRAPPED = "flex-wrap gap-y-0";
+
 /** The title's own row: the bar wide, a control high, its words where the lead's start. */
 const TITLE_ROW =
   "ui-pane-bar-title-row order-last flex min-h-control min-w-0 basis-full items-center pl-row-inset";
+
 /** Where the bar's title stands on one row: in its lead. */
 const TITLE_SEAT: TitleSeat = { room: ".ui-pane-bar-lead", words: ".ui-pane-bar-title" };
 
@@ -81,6 +88,7 @@ export interface PaneBarMenu {
 /** The ⋯ at the bar's end, which drops its menu under itself. */
 function BarMenu({ menu }: { menu: PaneBarMenu }): React.JSX.Element {
   const drop = useMenu(true);
+
   return (
     <>
       <MoreButton thing={menu.thing} {...drop.trigger()} />
@@ -133,6 +141,7 @@ export function PaneBar({
   const wrapped = useWrapWhenCut(frame, TITLE_SEAT, titled);
   const leads = said(mark) || (titled && !wrapped) || said(detail);
   const acts = said(actions) || menu !== undefined || said(end);
+
   const words = titled ? (
     <OneLine
       className="ui-pane-bar-title flex-initial text-foreground"
@@ -142,6 +151,7 @@ export function PaneBar({
       <ReplayWords unmasked={titleReplayUnmasked}>{title}</ReplayWords>
     </OneLine>
   ) : null;
+
   return (
     <header
       ref={frame}

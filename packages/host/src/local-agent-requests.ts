@@ -41,6 +41,7 @@ const decodeDiffArgs = Schema.decodeUnknownOption(deviceAgentDiffArgsSchema);
 
 /** The most a diff runs before it is given up on and answered as failed: as long as the service waits on it (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
 const DIFF_DEADLINE = Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS);
+
 /** How long a diff past its deadline is given to end before it is killed. */
 const DIFF_KILL_GRACE = Duration.seconds(3);
 
@@ -69,21 +70,26 @@ export const sharedFilesPrivate = (
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const owner = (yield* fileSystem.stat(layout.folder)).uid;
+
     if (Option.isNone(owner)) return false;
     const root = layout.sharedFiles.slice(0, layout.sharedFiles.lastIndexOf("/"));
+
     for (const place of [root, layout.sharedFiles]) {
       if (Option.isSome(yield* Effect.option(fileSystem.readLink(place)))) return false;
       const info = yield* fileSystem.stat(place);
+
       if (info.type !== "Directory" || Option.getOrUndefined(info.uid) !== owner.value) {
         return false;
       }
     }
+
     return true;
   }).pipe(Effect.orElseSucceed(() => false));
 
 /** Whether `path`, already real, stands at or under `root`, already real. */
 function within(root: string, path: string): boolean {
   const base = root.replace(/\/+$/u, "");
+
   return path === base || path.startsWith(`${base}/`);
 }
 
@@ -99,15 +105,20 @@ const confinedPath = (
 ): Effect.Effect<Option.Option<string>, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     if (!target.startsWith("/")) return Option.none();
     const resolved = yield* Effect.option(fileSystem.realPath(target));
+
     if (Option.isNone(resolved)) return Option.none();
     const sharedPrivate = yield* sharedFilesPrivate(layout);
+
     for (const place of agentPlaces(layout)) {
       if (place === layout.sharedFiles && !sharedPrivate) continue;
       const root = yield* Effect.option(fileSystem.realPath(place));
+
       if (Option.isSome(root) && within(root.value, resolved.value)) return resolved;
     }
+
     return Option.none();
   });
 
@@ -116,11 +127,15 @@ const readBounded = (path: string, bound: number) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const info = yield* fileSystem.stat(path);
+
     if (info.type !== "File") return null;
+
     if (bound === 0) return new Uint8Array();
+
     const read = yield* Effect.scoped(
       Effect.flatMap(fileSystem.open(path, { flag: "r" }), (file) => file.readAlloc(bound)),
     );
+
     return Option.getOrElse(read, () => new Uint8Array());
   }).pipe(Effect.orElseSucceed(() => null));
 
@@ -128,17 +143,22 @@ const readBounded = (path: string, bound: number) =>
 const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
   Effect.gen(function* () {
     const read = decodeReadArgs(args);
+
     const answer = (bytes: Uint8Array | null): DeviceAgentAnswer => ({
       kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
       bytes,
     });
+
     if (Option.isNone(read)) return answer(null);
     const path = yield* confinedPath(layout, read.value.path);
+
     if (Option.isNone(path)) return answer(null);
+
     const bound = Math.max(
       0,
       Math.min(read.value.maxBytes, DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
     );
+
     return answer(yield* readBounded(path.value, bound));
   });
 
@@ -158,8 +178,11 @@ const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args
       exit: 1,
       diff: "",
     };
+
     const range = decodeDiffArgs(args);
+
     if (Option.isNone(range)) return failed;
+
     const run = agentOnBox(
       {
         command: "/bin/bash",
@@ -168,6 +191,7 @@ const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args
       },
       box.gh,
     );
+
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const handle = yield* ChildProcess.make(run.command, [...run.args], {
@@ -178,15 +202,18 @@ const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args
           stderr: "ignore",
           forceKillAfter: DIFF_KILL_GRACE,
         });
+
         const [diff, exited] = yield* Effect.all(
           [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
           { concurrency: "unbounded" },
         );
+
         const answer: DeviceAgentAnswer = {
           kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
           exit: Number(exited),
           diff: diff.slice(0, DEVICE_AGENT_BOUNDS.MAX_DIFF_CHARS),
         };
+
         return answer;
       }),
     ).pipe(

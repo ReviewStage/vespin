@@ -45,6 +45,7 @@ import {
 
 /** What `app.config.ts` writes into `extra.sentry`: the project's DSN, empty where the build names none, and whether this is a TestFlight build. */
 const SentryBuildSchema = Schema.Struct({ dsn: Schema.String, released: Schema.Boolean });
+
 type SentryBuild = typeof SentryBuildSchema.Type;
 
 /** What a build whose config says nothing of Sentry reports under: nothing. */
@@ -69,6 +70,7 @@ const decodeSentryBuild = Schema.decodeUnknownOption(SentryBuildSchema);
 /** The environment a build's reports are filed under: a Debug build's, a TestFlight build's, or any other Release build's, a local or simulator one. */
 function environmentOf(build: SentryBuild): SentryEnvironment {
   if (__DEV__) return SENTRY_ENVIRONMENT.DEVELOPMENT;
+
   return build.released ? SENTRY_ENVIRONMENT.PRODUCTION : SENTRY_ENVIRONMENT.TEST;
 }
 
@@ -103,9 +105,12 @@ function startCrashReports(): void {
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
   });
+
   if (buildNumber !== undefined) setTag(BUILD_NUMBER_TAG, buildNumber);
   const test = launchSentryTest();
+
   if (test === LAUNCH_SENTRY_TEST.JS) captureException(new Error(TEST_REPORT_WORDS));
+
   if (test === LAUNCH_SENTRY_TEST.NATIVE) nativeCrash();
 }
 
@@ -118,6 +123,7 @@ export function useCrashReportAccount(): void {
     ...appStateQuery,
     select: (state) => signedInAccountId(state.account),
   });
+
   useEffect(() => setUser(sentryUser(accountId)), [accountId]);
 }
 

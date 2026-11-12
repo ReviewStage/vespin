@@ -229,7 +229,9 @@ const BAR_FADE = scrollFadeMarks(SCROLL_FADE.BOTH, SCROLL_AXIS.HORIZONTAL);
  */
 const WORDS_FRAME =
   "ui-choice-bar-frame relative flex min-w-0 max-w-full self-stretch items-center pe-control-icon [.ui-pane-bar-middle>&]:flex-1";
+
 const WORDS_BAR = "[.ui-choice-bar-frame>&]:flex-1";
+
 const WORDS_MORE =
   "ui-choice-bar-more absolute inset-y-0 end-0 flex items-center pointer-events-none text-muted-foreground [&>svg]:size-control-icon";
 
@@ -377,6 +379,7 @@ function setThumb(bar: HTMLElement, box: ThumbBox, scaleX: number, scaleY: numbe
 /** Whether the thumb already stands, unscaled, on `box`. */
 function thumbStands(bar: HTMLElement, box: ThumbBox): boolean {
   const style = bar.style;
+
   return (
     style.getPropertyValue("--ui-choice-bar-thumb-x") === `${box.x}px` &&
     style.getPropertyValue("--ui-choice-bar-thumb-y") === `${box.y}px` &&
@@ -404,32 +407,41 @@ function thumbStands(bar: HTMLElement, box: ThumbBox): boolean {
 function placeThumb(bar: HTMLElement, slide: boolean): void {
   const chosen = bar.querySelector<HTMLElement>(CHOSEN);
   const thumb = bar.querySelector<HTMLElement>(THUMB_ELEMENT);
+
   if (chosen === null || thumb === null || chosen.offsetWidth === 0) {
     bar.removeAttribute("data-thumb");
+
     return;
   }
+
   const box = {
     x: chosen.offsetLeft,
     y: chosen.offsetTop,
     width: chosen.offsetWidth,
     height: chosen.offsetHeight,
   };
+
   const shown = bar.hasAttribute("data-thumb");
+
   if (shown && thumbStands(bar, box)) return;
+
   if (slide && shown) {
     const drawn = thumb.getBoundingClientRect();
     const within = bar.getBoundingClientRect();
+
     const from = {
       x: drawn.left - within.left - bar.clientLeft + bar.scrollLeft,
       y: drawn.top - within.top - bar.clientTop + bar.scrollTop,
       width: box.width,
       height: box.height,
     };
+
     bar.setAttribute("data-thumb", THUMB.PLACED);
     setThumb(bar, from, drawn.width / box.width, drawn.height / box.height);
     // Note that measuring the thumb settles its step back before the slide starts.
     thumb.getBoundingClientRect();
   }
+
   bar.setAttribute("data-thumb", slide && shown ? THUMB.SLIDING : THUMB.PLACED);
   setThumb(bar, box, 1, 1);
 }
@@ -442,14 +454,17 @@ function placeThumb(bar: HTMLElement, slide: boolean): void {
  */
 function revealChosen(bar: HTMLElement): void {
   const chosen = bar.querySelector<HTMLElement>(CHOSEN);
+
   if (chosen === null || bar.scrollWidth <= bar.clientWidth) return;
   const style = getComputedStyle(bar);
   const start = chosen.offsetLeft - (Number.parseFloat(style.scrollPaddingInlineStart) || 0);
+
   const end =
     chosen.offsetLeft +
     chosen.offsetWidth +
     (Number.parseFloat(style.scrollPaddingInlineEnd) || 0) -
     bar.clientWidth;
+
   if (start < bar.scrollLeft) bar.scrollLeft = start;
   else if (end > bar.scrollLeft) bar.scrollLeft = end;
 }
@@ -474,18 +489,24 @@ function useThumb(chosen: string | undefined, placed: OptionsPlaced) {
     placeThumb(bar.current, true);
     revealChosen(bar.current);
   }, [chosen, placed]);
+
   const optionRef = useCallback((element: HTMLElement | null) => {
     if (element === null || !("ResizeObserver" in globalThis)) return undefined;
+
     const resized = new ResizeObserver(() => {
       if (bar.current !== null) placeThumb(bar.current, false);
     });
+
     resized.observe(element);
+
     return () => resized.disconnect();
   }, []);
+
   const barRef = useCallback(
     (element: HTMLDivElement | null) => {
       bar.current = element;
       const unwatch = optionRef(element);
+
       return () => {
         bar.current = null;
         unwatch?.();
@@ -493,6 +514,7 @@ function useThumb(chosen: string | undefined, placed: OptionsPlaced) {
     },
     [optionRef],
   );
+
   return { bar, barRef, optionRef };
 }
 
@@ -505,8 +527,10 @@ function useThumb(chosen: string | undefined, placed: OptionsPlaced) {
 function optionsWidth(bar: HTMLElement): number {
   const options = bar.querySelectorAll<HTMLElement>(".ui-choice-bar-option");
   const last = options[options.length - 1];
+
   if (last === undefined) return 0;
   const inset = Number.parseFloat(getComputedStyle(bar).paddingInlineEnd) || 0;
+
   return last.offsetLeft + last.offsetWidth + inset;
 }
 
@@ -514,11 +538,13 @@ function optionsWidth(bar: HTMLElement): number {
 function namesRoom(bar: HTMLElement, selector: string | undefined): number {
   if (selector === undefined) return 0;
   let room = 0;
+
   for (const folded of bar.querySelectorAll<HTMLElement>(selector)) {
     const row = folded.parentElement;
     const gap = row === null ? 0 : Number.parseFloat(getComputedStyle(row).columnGap) || 0;
     room += folded.scrollWidth + gap;
   }
+
   return room;
 }
 
@@ -551,8 +577,10 @@ function useMeasuredFold(
   named: OptionsNamed | undefined,
 ): FoldStep {
   const [step, setStep] = useState<FoldStep>(FOLD_STEP.NONE);
+
   const measure = useCallback(() => {
     const element = bar.current;
+
     if (!on || element === null) return;
     const width = element.clientWidth;
     const whole = optionsWidth(element) + namesRoom(element, FOLDED_AT[step]);
@@ -565,24 +593,31 @@ function useMeasuredFold(
           : FOLD_STEP.ALL,
     );
   }, [on, inSteps, bar, step]);
+
   useLayoutEffect(measure, [measure, named]);
   // Note that the options are found afresh as they change, so one that joined is watched too.
   useLayoutEffect(() => {
     const element = bar.current;
+
     if (!on || element === null || !("ResizeObserver" in globalThis)) return undefined;
     const resized = new ResizeObserver(measure);
     resized.observe(element);
+
     for (const option of element.children) resized.observe(option);
+
     return () => resized.disconnect();
   }, [on, bar, measure, named]);
+
   return on ? step : FOLD_STEP.NONE;
 }
 
 /** `folded` with `value` folded or not, `now`. */
 function foldedAs(folded: ReadonlySet<string>, value: string, now: boolean): ReadonlySet<string> {
   const next = new Set(folded);
+
   if (now) next.add(value);
   else next.delete(value);
+
   return next;
 }
 
@@ -600,23 +635,32 @@ function useOwnFold(on: boolean): {
   readonly folded: ReadonlySet<string>;
 } {
   const [folded, setFolded] = useState(NONE_FOLDED);
+
   const optionRef = useCallback(
     (option: HTMLElement | null) => {
       const value = option?.dataset.value;
+
       if (!on || option === null || value === undefined) return undefined;
+
       if (!("ResizeObserver" in globalThis)) return undefined;
+
       const resized = new ResizeObserver(() => {
         const name = option.querySelector<HTMLElement>(FOLDABLE_NAME);
+
         const now =
           name !== null &&
           getComputedStyle(name).getPropertyValue(NAME_FOLD).trim() === NAME_FOLDED;
+
         setFolded((was) => (was.has(value) === now ? was : foldedAs(was, value, now)));
       });
+
       resized.observe(option);
+
       return () => resized.disconnect();
     },
     [on],
   );
+
   return { optionRef, folded };
 }
 
@@ -746,6 +790,7 @@ function isParts(count: string | readonly CountPart[]): count is readonly CountP
 /** What an option counts, drawn: words as one quiet part, parts each in its tone. */
 function countOf(count: ChoiceItem<string>["count"]): ReactNode {
   if (count === undefined) return undefined;
+
   return <CountParts parts={isParts(count) ? count : [{ text: count }]} />;
 }
 
@@ -781,7 +826,9 @@ interface OptionsNamed {
 function useKept<Value>(next: Value): Value {
   const [held, setHeld] = useState(next);
   const kept = keepIdentity(held, next);
+
   if (kept !== held) setHeld(kept);
+
   return kept;
 }
 
@@ -803,14 +850,17 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
     onChange: __,
     ...appAttributes
   } = props;
+
   const placed = useKept<OptionsPlaced>({
     look,
     size,
     values: items.map((item) => item.value),
   });
+
   const thumb = useThumb(value, placed);
   const inSteps = fold === CHOICE_BAR_FOLD.CHOSEN_LAST;
   const measured = fold === CHOICE_BAR_FOLD.TOGETHER || inSteps;
+
   const named = useKept<OptionsNamed | undefined>(
     measured
       ? {
@@ -826,16 +876,20 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
         }
       : undefined,
   );
+
   const step = useMeasuredFold(measured, inSteps, thumb.bar, named);
   const ownFolds = fold === CHOICE_BAR_FOLD.OWN && look === CHOICE_BAR_LOOK.FILL;
   const ownFold = useOwnFold(ownFolds);
+
   const optionRef = useMemo(
     () => joinRefs(thumb.optionRef, ownFold.optionRef),
     [thumb.optionRef, ownFold.optionRef],
   );
+
   const role = panels === undefined ? CHOICE_ROLE.RADIO : CHOICE_ROLE.TAB;
   const roving = focus === CHOICE_BAR_FOCUS.ROVING;
   const choose = (chosen: Value) => props.onChange(chosen);
+
   // An arrow chooses the next option along and takes the keyboard there; Home and End go to either end.
   const keys = useRovingKeys<HTMLDivElement>({
     orientation: role === CHOICE_ROLE.TAB ? ROVING_ORIENTATION.HORIZONTAL : ROVING_ORIENTATION.BOTH,
@@ -843,18 +897,24 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
     moveTo: (option) => {
       option.focus();
       const landed = items.find((item) => item.value === option.dataset.value);
+
       if (landed !== undefined && landed.value !== value) choose(landed.value);
     },
   });
+
   const barRef = useMemo(() => joinRefs(thumb.barRef, keys.ref), [thumb.barRef, keys.ref]);
+
   // A press on another option chooses it; one on the chosen option lets it go, which a clearable bar takes as the choice taken back.
   const press = (pressed: readonly Value[]) => {
     const next = pressed[0];
+
     if (next !== undefined) choose(next);
     else if (props.clearable === true) props.onChange(undefined);
   };
+
   const segmented = look === CHOICE_BAR_LOOK.SEGMENTED;
   const tight = !segmented && fold !== CHOICE_BAR_FOLD.OWN;
+
   const optionClass = cn(
     OPTION,
     OPTION_LOOK[look][size],
@@ -862,7 +922,9 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
     segmented && stretch ? OPTION_FLEX.shared : OPTION_FLEX.own,
     tight && FILL_TIGHT_OPTION,
   );
+
   const words = fold === CHOICE_BAR_FOLD.WORDS;
+
   const bar = (
     <ToggleGroupPrimitive<Value>
       ref={barRef}
@@ -893,6 +955,7 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
       {items.map((item) => {
         const chosen = item.value === value;
         const count = countOf(item.count);
+
         const option = (
           <TogglePrimitive<Value>
             key={item.value}
@@ -918,13 +981,16 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
             {count === undefined ? null : <span className={COUNT}>{count}</span>}
           </TogglePrimitive>
         );
+
         // Note that an option a fold may draw by its glyph alone always stands in its hint, which raises nothing while its name is drawn, so folding never mounts it afresh and takes the keyboard off it.
         const foldable = item.icon !== undefined && (measured || ownFolds);
+
         const nameFolded =
           foldable &&
           (step === FOLD_STEP.ALL ||
             (step === FOLD_STEP.OTHERS && !chosen) ||
             ownFold.folded.has(item.value));
+
         return item.hint === undefined && !foldable ? (
           option
         ) : (
@@ -935,6 +1001,7 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
       })}
     </ToggleGroupPrimitive>
   );
+
   return words ? (
     <span className={WORDS_FRAME}>
       {bar}

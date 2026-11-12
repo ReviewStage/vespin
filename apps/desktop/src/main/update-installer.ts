@@ -39,6 +39,7 @@ export function createElectronUpdaterEngine(): UpdaterEngine {
       let lastProgressAt = 0;
       autoUpdater.on("download-progress", (progress) => {
         const now = Date.now();
+
         if (now - lastProgressAt < PROGRESS_EMIT_INTERVAL_MS) return;
         lastProgressAt = now;
         events.onProgress({

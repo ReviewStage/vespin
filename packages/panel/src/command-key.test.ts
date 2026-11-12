@@ -41,6 +41,7 @@ afterEach(() => {
 function PaletteWindow({ opened }: { opened: string[] }): ReactElement {
   useAppKeymap(true);
   useAppCommand(APP_COMMAND.COMMAND_PALETTE, () => opened.push("palette"));
+
   return createElement(Fragment, null, createElement(Shortcut, { chord: PALETTE }));
 }
 
@@ -51,6 +52,7 @@ function drawWindow(commandKey: CommandKey | undefined): string[] {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(PaletteWindow, { opened }))));
+
   return opened;
 }
 

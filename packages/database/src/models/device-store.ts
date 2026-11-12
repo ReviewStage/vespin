@@ -382,6 +382,7 @@ export function beatDevice(
   updating?: DeviceUpdating,
 ): DeviceEffect<boolean> {
   const update = updating?.update ?? null;
+
   const said =
     updating === undefined
       ? undefined
@@ -390,6 +391,7 @@ export function beatDevice(
           // Note that only a failed update keeps its words, as only a failed setup does.
           failure: update === HOST_UPDATE.FAILED ? (updating.updateFailure ?? null) : null,
         };
+
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(touchDevice({ userId, id, now, updating: said }), (rows) => rows.length > 0),
   );
@@ -423,6 +425,7 @@ export function devicesSeenSince(userId: string, since: Date): DeviceEffect<read
  */
 export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<string, Device>> {
   if (ids.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findNamed({ ids: [...new Set(ids)] }),
     (devices) => new Map(devices.map((device) => [device.id, device])),

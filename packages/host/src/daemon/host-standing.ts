@@ -82,6 +82,7 @@ function refusalReport(
   serviceOrigin: string,
 ): string {
   const script = `${serviceOrigin}${HOST_WIRE.INSTALL_SCRIPT_PATH}`;
+
   return refusal === HOST_STANDING.UPGRADE_NEEDED
     ? `${PRODUCT_NAME} host: upgrade needed: ${PRODUCT_NAME} no longer accepts this version. Rerun the install command to upgrade in place: ${hostUpgradeCommand(script)}`
     : `${PRODUCT_NAME} host: ${PRODUCT_NAME} refused this box's secret, so it was removed in Settings › Machines. Stopping its agents. Add it again with Add a machine, and rerun the install command it shows.`;
@@ -113,14 +114,17 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
     kind: HOST_STANDING.STANDING,
     until: 0,
   });
+
   /** Whether a 401 that settled nothing was said since the service last took a call. */
   const callsRefused = yield* Ref.make(false);
   const connected = yield* Ref.make(false);
   const refused = yield* Deferred.make<void>();
   const registerUrl = `${options.serviceOrigin}${HOSTED_SERVICE_PATH.DEVICE_AGENT_DEVICES}`;
   const beatUrl = `${options.serviceOrigin}${HOSTED_SERVICE_PATH.DEVICE_AGENT_PRESENCE}`;
+
   const ofService = (request: HttpClientRequest.HttpClientRequest) =>
     request.url === options.serviceOrigin || request.url.startsWith(`${options.serviceOrigin}/`);
+
   /** Whether a request is the device's own register or beat, the two calls whose refusal speaks for its secret. */
   const ownCall = (request: HttpClientRequest.HttpClientRequest) =>
     request.method === HTTP_METHOD.POST && (request.url === registerUrl || request.url === beatUrl);
@@ -130,17 +134,22 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const before = yield* SubscriptionRef.get(standing);
+
       if (before.kind === HOST_STANDING.SECRET_REFUSED) return;
+
       if (status === HTTP_STATUS.UPGRADE_REQUIRED) {
         yield* SubscriptionRef.set(standing, {
           kind: HOST_STANDING.UPGRADE_NEEDED,
           until: now + Duration.toMillis(QUIET),
         });
+
         if (before.kind !== HOST_STANDING.UPGRADE_NEEDED) {
           options.report(refusalReport(HOST_STANDING.UPGRADE_NEEDED, options.serviceOrigin));
         }
+
         return;
       }
+
       if (status === HTTP_STATUS.UNAUTHORIZED) {
         if (removedSaid) {
           yield* SubscriptionRef.set(standing, {
@@ -149,16 +158,22 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
           });
           yield* Deferred.succeed(refused, undefined);
           options.report(refusalReport(HOST_STANDING.SECRET_REFUSED, options.serviceOrigin));
+
           return;
         }
+
         if (!(yield* Ref.getAndSet(callsRefused, true))) options.report(CALLS_REFUSED_REPORT);
+
         return;
       }
+
       if (status < 200 || status >= 300) return;
       const callsTaken = yield* Ref.getAndSet(callsRefused, false);
+
       if (before.kind !== HOST_STANDING.STANDING) {
         yield* SubscriptionRef.set(standing, { kind: HOST_STANDING.STANDING, until: 0 });
       }
+
       if (before.kind !== HOST_STANDING.STANDING || callsTaken) {
         options.report(`${PRODUCT_NAME} host: ${PRODUCT_NAME} took this box's calls again.`);
       }
@@ -180,6 +195,7 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
     for (;;) {
       const now = yield* SubscriptionRef.get(standing);
       const left = now.until - (yield* Clock.currentTimeMillis);
+
       if (left <= 0) return true;
       yield* Effect.raceFirst(Effect.sleep(Duration.millis(left)), Effect.asVoid(movedFrom(now)));
     }
@@ -223,10 +239,13 @@ export const hostServiceStanding = Effect.fnUntraced(function* (options: HostSta
       if (!ownCall(request) || answer.status !== HTTP_STATUS.UNAUTHORIZED) {
         yield* heard(answer.status, false);
         yield* registered(request, answer.status);
+
         return answer;
       }
+
       const text = yield* Effect.orElseSucceed(answer.text, () => "");
       yield* heard(answer.status, Option.isSome(decodeHostRemoved(text)));
+
       return HttpClientResponse.fromWeb(
         request,
         new Response(text, { status: answer.status, headers: answer.headers }),

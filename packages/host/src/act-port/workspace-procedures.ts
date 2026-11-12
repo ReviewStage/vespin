@@ -36,6 +36,7 @@ export function workspaceProcedures(
   acts: ConnectActs,
 ) {
   const { openExternal } = dependencies;
+
   return {
     // Note that the address the service answered opens only where it is
     // GitHub's, because it is the one address here the panel did not name.
@@ -47,6 +48,7 @@ export function workspaceProcedures(
         acts.WORKSPACE_GITHUB_CONNECT,
         input,
       );
+
       if (!isGitHubAddress(url)) return yield* Effect.fail(errors.REFUSED());
       yield* Effect.promise(() => openExternal(url));
     }),
@@ -60,6 +62,7 @@ export function workspaceProcedures(
         acts.WORKSPACE_SENTRY_INSTALL,
         input,
       );
+
       if (!isSentryAddress(url)) return yield* Effect.fail(errors.REFUSED());
       yield* Effect.promise(() => openExternal(url));
     }),

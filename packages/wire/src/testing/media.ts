@@ -14,6 +14,7 @@ export function pngBytes(width: number, height: number, mark = 0): Uint8Array {
   new DataView(header.buffer).setUint32(16, width);
   new DataView(header.buffer).setUint32(20, height);
   header[32] = mark;
+
   return header;
 }
 
@@ -28,7 +29,9 @@ export function webmBytes(width: number, height: number, docType = "webm"): Uint
     [0xe0],
     [...ebml([0xb0], [width >> 8, width & 0xff]), ...ebml([0xba], [height >> 8, height & 0xff])],
   );
+
   const tracks = ebml([0x16, 0x54, 0xae, 0x6b], ebml([0xae], video));
+
   return new Uint8Array([
     ...ebml([0x1a, 0x45, 0xdf, 0xa3], ebml([0x42, 0x82], [...new TextEncoder().encode(docType)])),
     ...ebml([0x18, 0x53, 0x80, 0x67], tracks),
@@ -39,5 +42,6 @@ export function webmBytes(width: number, height: number, docType = "webm"): Uint
 export function paddedTo(bytes: Uint8Array, length: number): Uint8Array {
   const padded = new Uint8Array(length);
   padded.set(bytes);
+
   return padded;
 }

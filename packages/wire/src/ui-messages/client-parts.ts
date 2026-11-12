@@ -40,12 +40,15 @@ export function clientUIMessage(message: StoredUIMessage): ClientUIMessage {
 function clientPart(part: StoredPart): StoredPart {
   if (!("providerMetadata" in part) || part.providerMetadata === undefined) return part;
   const { [REPLAY_PROVIDER_KEY]: replay, ...kept } = part.providerMetadata;
+
   if (replay === undefined) return part;
   const cut = { ...part };
+
   if (Object.keys(kept).length === 0) {
     delete cut.providerMetadata;
   } else {
     cut.providerMetadata = kept;
   }
+
   return cut;
 }

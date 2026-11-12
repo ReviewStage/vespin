@@ -23,6 +23,7 @@ function emit(message) {
 const first = await lines.next();
 const config = JSON.parse(first.value);
 const env = { ...process.env, [config.tokenVariable]: config.token };
+
 config.token = undefined;
 
 // Note that stdin is read by a loop of its own rather than inside the prompt
@@ -43,18 +44,24 @@ async function* prompts() {
 }
 
 const options = { ...config.options, cwd: config.cwd, model: config.model, env };
+
 if (config.resume !== undefined) options.resume = config.resume;
+
 const session = query({ prompt: prompts(), options });
 
 async function readCommands() {
   for (;;) {
     const next = await lines.next();
+
     if (next.done) break;
     const line = JSON.parse(next.value);
+
     if (line.type === "end") break;
+
     if (line.type === "stop") await session.interrupt();
     else inbox.emit("message", line.text);
   }
+
   await messages.return();
 }
 
@@ -64,8 +71,10 @@ readCommands().catch((error) => {
 
 try {
   let askedAccount = false;
+
   for await (const message of session) {
     emit(message);
+
     if (!askedAccount && message.type === "system" && message.subtype === "init") {
       askedAccount = true;
       emit({ type: "agent_probe_account", ...(await session.accountInfo()) });
@@ -74,4 +83,5 @@ try {
 } catch (error) {
   emit({ type: "agent_probe_error", message: String(error?.message ?? error) });
 }
+
 emit({ type: "agent_probe_exit" });

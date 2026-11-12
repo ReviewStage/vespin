@@ -67,9 +67,12 @@ function spelledBySkill<Answer extends object>(
     // SAFETY: only a failure spelled as files refused is taken out, and this is none.
     return answer as Exclude<Answer, FilesRefused>;
   }
+
   // SAFETY: `hostedCall` carries files refused with the fields the refusal declares.
   const { skillName, skillRefusal } = answer as SkillRefusedData;
+
   if (skillRefusal === undefined) return UNANSWERED;
+
   return { failure: skillRefusal, ...(skillName === undefined ? undefined : { skillName }) };
 }
 

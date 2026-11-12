@@ -114,8 +114,10 @@ function InlineEditField({
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
+
           if (!isComposingKey(event)) end(false, true);
         }
+
         if (event.key === "Enter" && !isComposingKey(event)) {
           event.preventDefault();
           end(true, true);
@@ -153,6 +155,7 @@ export function InlineEdit({
   children?: ReactNode;
 }): React.JSX.Element {
   if (!editing) return <>{children ?? value}</>;
+
   return (
     <InlineEditField
       value={value}

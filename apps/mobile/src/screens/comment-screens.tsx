@@ -55,15 +55,20 @@ export function CommentThreadScreen() {
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
   const pictureOf = useMemberPictures();
+
   const agentNames = new Map(
     (overview?.agents ?? []).map(({ agent }) => [agent.id, agentName(agent)] as const),
   );
+
   const task = overview?.task;
+
   const key =
     task?.number === undefined || overview?.workspace === undefined
       ? undefined
       : taskKey(overview.workspace.name, task.number);
+
   const path = [task?.name, key].filter((step): step is string => step !== undefined);
+
   return (
     <>
       <Stack.Screen

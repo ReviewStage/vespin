@@ -35,8 +35,10 @@ export const TURN_DONE = { FIRST: "AGENT-PROBE-TURN-1-DONE" } as const;
 export const STOPPED_COMMAND = "sleep 600";
 
 let uuid = 0;
+
 function nextUuid(): string {
   uuid += 1;
+
   return `00000000-0000-4000-8000-${String(uuid).padStart(12, "0")}`;
 }
 
@@ -130,6 +132,7 @@ const BACKGROUND_SLEEP: BackgroundTaskSummary = {
   description: "sleep 45",
   command: `sleep 45 && echo agent-probe-background-${NONCE}`,
 };
+
 export const WAKEUP: SessionCronSummary = {
   id: "cron_1",
   schedule: "17 12 21 10 *",

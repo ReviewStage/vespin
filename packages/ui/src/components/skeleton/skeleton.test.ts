@@ -29,6 +29,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -43,12 +44,15 @@ test("a region says what it is reading, busy, and its blocks say nothing", () =>
       ],
     }),
   );
+
   const region = page.querySelector('[role="status"]') ?? assert.fail("no status region");
   assert.equal(region.textContent, "Reading your tasks");
   assert.equal(region.getAttribute("aria-busy"), "true");
+
   const spoken = [...region.children].filter(
     (child) => child.getAttribute("aria-hidden") !== "true",
   );
+
   assert.deepEqual(
     spoken.map((child) => child.textContent),
     ["Reading your tasks"],

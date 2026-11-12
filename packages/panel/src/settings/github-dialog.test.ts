@@ -55,16 +55,22 @@ const KEPT: GitHubTokenSummary = {
 
 /** The token the test's service holds. */
 let stored: GitHubTokenSummary | null = null;
+
 /** Every act the dialog sent, in order. */
 let sent: { kind: PortActKind; payload: unknown }[] = [];
+
 /** Why the service keeps nothing of the next save, where it refuses one. */
 let refuseSave: GitHubTokenRejection | undefined;
+
 /** How many of the next reads go unanswered. */
 let unansweredReads = 0;
+
 /** Whether the host holds no read of the token at all, as after a sign-out. */
 let cleared = false;
+
 /** Lays the token on the window's document, as the host lays its read and each write's answer. */
 let layToken: () => void = () => undefined;
+
 /** Every place in Settings the window was asked to open, in order. */
 let opened: SettingsLink[] = [];
 
@@ -82,23 +88,28 @@ beforeEach(() => {
   // Note that the token is laid as the host holds it, and a write's answer is laid before it answers.
   layToken = holdGitHubToken(() => {
     if (cleared) return undefined;
+
     if (unansweredReads === 0) return { rows: { token: stored } };
     unansweredReads -= 1;
+
     return { failed: true };
   }).lay;
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.GITHUB_TOKEN_SAVE]: (payload) => {
       sent.push({ kind: ACT_KIND.GITHUB_TOKEN_SAVE, payload });
+
       if (refuseSave !== undefined) return Promise.resolve({ token: stored, rejected: refuseSave });
       stored = KEPT;
       layToken();
+
       return Promise.resolve({ token: stored });
     },
     [ACT_KIND.GITHUB_TOKEN_REMOVE]: (payload) => {
       sent.push({ kind: ACT_KIND.GITHUB_TOKEN_REMOVE, payload });
       stored = null;
       layToken();
+
       return Promise.resolve({ token: null });
     },
   });
@@ -148,6 +159,7 @@ async function mountAndOpen(open = true): Promise<void> {
       true,
     ),
   );
+
   if (!open) return;
   act(() => button(stored === null ? "Add" : "Manage").click());
   await settle();
@@ -160,6 +172,7 @@ const tokenField = () => {
   const label = [...document.querySelectorAll("label")].find(
     (each) => each.textContent === "Paste the token",
   );
+
   return label?.control instanceof HTMLInputElement ? label.control : null;
 };
 
@@ -206,9 +219,11 @@ test("with no token the row offers Add, and a token pasted into the field is sen
 test("a token's expiry is one unbreakable unit and no fact on the row's line carries a dot at its edge", async () => {
   stored = KEPT;
   await mountAndOpen(false);
+
   const facts = [
     ...(document.querySelector(".ui-settings-row-description .ui-inline")?.children ?? []),
   ].map((each) => each.textContent ?? "");
+
   const expiry = facts.find((each) => each.startsWith("Expires"));
   assert.match(expiry ?? "", /^Expires\u00a0[A-Z][a-z]{2}\u00a0\d{1,2},\u00a0\d{4} $/u);
   assert.deepEqual(
@@ -249,9 +264,11 @@ test("a saved token's Manage opens it with Disconnect, which asks at the dialog'
   stored = KEPT;
   await mountAndOpen();
   assert.equal(tokenField() === null, true);
+
   // The dialog shows its own words in the screen recording, so the token's facts are masked again inside it.
   const drawnAt = (words: string) =>
     [...dialog().querySelectorAll("*")].findLast((node) => node.textContent === words);
+
   assert.equal(showsInReplay(drawnAt("ghp_…wxyz")), false, "the hint is masked");
   assert.equal(showsInReplay(drawnAt("octo-member")), false, "the login is masked");
   const asked = () => dialog().querySelector<HTMLElement>('[role="group"]');
@@ -291,6 +308,7 @@ test("a saved token's Manage opens it with Disconnect, which asks at the dialog'
 test("each refused save says why and what to do next, and keeps the field", async () => {
   await mountAndOpen();
   const said = new Map<string, string | undefined>();
+
   for (const rejection of Object.values(GITHUB_TOKEN_REJECTION)) {
     refuseSave = rejection;
     await paste(PASTED);
@@ -379,6 +397,7 @@ test("the row draws no other account's token when Profile is drawn for another a
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (id: string) =>
     act(() =>
       root.render(
@@ -396,6 +415,7 @@ test("the row draws no other account's token when Profile is drawn for another a
         ),
       ),
     );
+
   draw(ADA.id);
   await settle();
   await vi.waitFor(() => button("Manage"));
@@ -417,6 +437,7 @@ async function openedThenDone(): Promise<HTMLButtonElement> {
   act(() => opener.click());
   await settle();
   act(() => button("Done").click());
+
   return opener;
 }
 

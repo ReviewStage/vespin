@@ -42,8 +42,10 @@ function account(token: string | undefined) {
 function untraced(answer: unknown): unknown {
   if (typeof answer !== "object" || answer === null || !("cause" in answer)) return answer;
   const { cause } = answer;
+
   if (typeof cause !== "object" || cause === null || !("traceId" in cause)) return answer;
   const { traceId: _traceId, ...facts } = cause;
+
   return { ...answer, cause: facts };
 }
 
@@ -127,6 +129,7 @@ it.effect.each<Row>([
 ])("$behavior", ({ signedOut, status, body, call, expected }) =>
   Effect.gen(function* () {
     const recording = recordingHttpClient(() => jsonResponse(body, status));
+
     const hosted = hostedClient({
       baseUrl: BASE_URL,
       credential: account(signedOut === true ? undefined : "token-1"),
@@ -143,6 +146,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sealed = { capability: "cap-1", queryFingerprint: "fp-1", expiresAt: 1, digest: "d2" };
+
       const recording = recordingHttpClient(() =>
         jsonResponse({
           url: `${BASE_URL}/poll`,
@@ -150,6 +154,7 @@ it.effect(
           installScriptUrl: `${BASE_URL}/install.sh`,
         }),
       );
+
       const hosted = hostedClient({ baseUrl: BASE_URL, credential: account("token-1") });
 
       const answer = yield* Effect.provide(

@@ -52,7 +52,9 @@ type InboxSettledReason = (typeof INBOX_SETTLED_REASON)[keyof typeof INBOX_SETTL
 /** Why a task standing in `status` settles its items: Done's or Canceled's reason, none for a status its work is open in. */
 function taskSettledReason(status: TaskStatus): InboxSettledReason | undefined {
   if (status === TASK_STATUS.DONE) return INBOX_SETTLED_REASON.TASK_DONE;
+
   if (status === TASK_STATUS.CANCELED) return INBOX_SETTLED_REASON.TASK_CANCELED;
+
   return undefined;
 }
 
@@ -135,10 +137,13 @@ function settle(
   now: Date,
 ): SettleEffect<number> {
   if (ids.length === 0) return Effect.succeed(0);
+
   return Effect.gen(function* () {
     const closed = yield* closeOpenItems({ by, ids, reason, now });
+
     if (closed.length === 0) return 0;
     yield* withdrawOpenAsks({ itemIds: closed.map(({ id }) => id), reason, now });
+
     return closed.length;
   });
 }
@@ -150,6 +155,7 @@ export function settleTaskInboxItems(
   now: Date,
 ): SettleEffect<number> {
   const reason = taskSettledReason(status);
+
   return reason === undefined ? Effect.succeed(0) : settle(SETTLE_BY.TASK, [taskId], reason, now);
 }
 

@@ -91,6 +91,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -125,15 +126,18 @@ const openTask = Effect.gen(function* () {
     yield* openAccount,
     yield* openAccount,
   ];
+
   const workspace = yield* openWorkspace(starter);
   yield* joinWorkspace(workspace, teammate);
   yield* joinWorkspace(workspace, reader);
   yield* openWorkspace(outsider);
   yield* keepReadingToken(reader);
+
   const { id: taskId } = yield* createTask(starter, {
     organizationId: workspace,
     name: "Checkout",
   });
+
   const startAgent = (
     repository: string,
     githubAccess: typeof GITHUB_ACCESS.APP | typeof GITHUB_ACCESS.TOKEN,
@@ -152,8 +156,10 @@ const openTask = Effect.gen(function* () {
       }),
       (started) => Option.getOrThrow(started).agent,
     );
+
   const coder = yield* startAgent("acme/shop", GITHUB_ACCESS.APP);
   const tokenCoder = yield* startAgent(TOKEN_REPOSITORY, GITHUB_ACCESS.TOKEN);
+
   const open = (conversationId: string, address: string) =>
     upsertBrowserTab({
       conversationId,
@@ -162,14 +168,18 @@ const openTask = Effect.gen(function* () {
       title: address,
       openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
     });
+
   const coderTab = yield* open(coder.conversationId, "http://localhost:3000/");
   yield* TestClock.adjust("1 second");
   const tokenTab = yield* open(tokenCoder.conversationId, "https://side.test/");
+
   const bearers = new Map(
     [starter, teammate, reader, outsider].map((id) => [`Bearer ${id}`, id] as const),
   );
+
   const ask = (request: Request, agentBrowser: Layer.Layer<AgentBrowser> = noSandboxBrowserLayer) =>
     answer(bearers, request, agentBrowser);
+
   return {
     starter,
     teammate,
@@ -194,6 +204,7 @@ const toolsCounted = (userId: string, workspaceId: string) =>
     .filter((event) => event.userId === userId && event.name === SERVER_EVENT.AGENT_TOOL_OPEN)
     .map((event) => {
       assert.equal(event.workspaceId, workspaceId);
+
       return "tool" in event.properties ? event.properties.tool : undefined;
     });
 
@@ -207,6 +218,7 @@ const answer = (
     const services = (yield* Effect.context<never>().pipe(
       Effect.provide(ANALYTICS.layer),
     )) as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       agentBrowserTabs: agentBrowserTabsProcedures({
         resolveUserId: (incoming) =>
@@ -216,9 +228,11 @@ const answer = (
         agentBrowser,
       }),
     });
+
     const response = yield* Effect.promise(() => handle(request, services));
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -295,10 +309,13 @@ const liveTabsOf = (reader: string, place: BrowserTabsPlace) =>
         ? taskBrowserTabsRead.statements({ userId: reader, id: place.taskId })
         : agentBrowserTabsRead.statements({ userId: reader, id: place.agentId }),
     );
+
     const rows = yield* Schema.decodeUnknownEffect(TASK_BROWSER_TABS_READ.rows)({
       tabs: yield* runLive(tabs),
     });
+
     const now = (yield* DateTime.nowAsDate).getTime();
+
     return { tabs: browserTabsOfLiveRows(rows, now), lapse: nextBrowserTabLapse(rows, now) };
   });
 
@@ -309,14 +326,18 @@ const refusal = (status: number, error: string): Answer => ({ status, body: { er
 function tabsOf(answered: Answer): readonly AgentBrowserTab[] {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(agentBrowserTabsAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success.tabs;
 }
 
 function tabOf(answered: Answer): AgentBrowserTab {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(agentBrowserTabAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success.tab;
 }
 
@@ -327,6 +348,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
       Effect.gen(function* () {
         const { starter, teammate, reader, taskId, coder, tokenCoder, coderTab, tokenTab, ask } =
           yield* openTask;
+
         const listed = (member: string) =>
           Effect.map(ask(request(member, tabsPath(taskId))), (answered) =>
             tabsOf(answered).map((tab) => [tab.id, tab.agentId]),
@@ -336,6 +358,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           [coderTab.id, coder.id],
           [tokenTab.id, tokenCoder.id],
         ];
+
         assert.deepEqual(yield* listed(starter), all);
         assert.deepEqual(yield* listed(reader), all);
         assert.deepEqual(yield* listed(teammate), all.slice(0, 1));
@@ -358,6 +381,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
     () =>
       Effect.gen(function* () {
         const { starter, taskId, coder, coderTab, ask } = yield* openTask;
+
         const cursorOf = Effect.map(ask(request(starter, tabsPath(taskId))), (answered) =>
           tabsOf(answered).map((tab) => tab.cursor),
         );
@@ -365,6 +389,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
         const before = yield* cursorOf;
         yield* TestClock.adjust("1 second");
         const at = (yield* DateTime.nowAsDate).getTime();
+
         const pointed = yield* pointBrowserTab(coder.conversationId, {
           tab: coderTab.targetId,
           x: 412.5,
@@ -373,6 +398,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           viewport: { width: 1280, height: 800 },
           at,
         });
+
         const [tab] = tabsOf(yield* ask(request(starter, tabsPath(taskId))));
 
         assert.deepEqual(before, [undefined, undefined]);
@@ -395,11 +421,13 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
       Effect.gen(function* () {
         const { starter, teammate, reader, outsider, taskId, coder, coderTab, ask } =
           yield* openTask;
+
         const agrees = Effect.gen(function* () {
           for (const member of [starter, teammate, reader]) {
             const held = tabsOf(yield* ask(request(member, tabsPath(taskId))));
             assert.deepEqual((yield* liveTabsOf(member, { taskId })).tabs, held);
           }
+
           assert.deepEqual((yield* liveTabsOf(outsider, { taskId })).tabs, []);
         });
 
@@ -474,6 +502,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
       Effect.gen(function* () {
         const { starter, teammate, reader, outsider, taskId, coderTab, tokenTab, ask } =
           yield* openTask;
+
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
         assert.deepEqual(
@@ -601,6 +630,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
         );
       }
+
       assert.deepEqual(yield* openedAddresses(peer), []);
     }),
   );
@@ -610,6 +640,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
     () =>
       Effect.gen(function* () {
         const { starter, taskId, coder, ask } = yield* openTask;
+
         const open = (agentBrowser: Layer.Layer<AgentBrowser>) =>
           ask(openRequest(starter, taskId, coder.id, "https://accounts.test/"), agentBrowser);
 
@@ -621,6 +652,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
         );
         yield* runAgent(coder);
         const peer = yield* fakeCdpPeer();
+
         const unanswered = Layer.succeed(
           AgentBrowser,
           agentBrowserOver(
@@ -633,6 +665,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
             FAKE_IMAGE,
           ),
         );
+
         assert.deepEqual(
           yield* open(unanswered),
           refusal(HOSTED_HTTP_STATUS.BAD_GATEWAY, HOSTED_API_ERROR.UPSTREAM_ERROR),

@@ -86,6 +86,7 @@ export function WorkedFor({
 }): ReactNode {
   const now = useMinute();
   const text = workedForText(startedAt, endedAt, now);
+
   return (
     <Tooltip
       label={text}
@@ -121,6 +122,7 @@ export function WorkingLine({
   words?: string;
 }): ReactNode {
   useAnnounce(ANNOUNCE.POLITE, words);
+
   return (
     <NoteLine look={NOTE_LINE_LOOK.INSET} selectable data-working="">
       <Shimmer>{words}</Shimmer>

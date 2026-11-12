@@ -156,9 +156,12 @@ export interface KeptContent {
 /** How many characters the strings of an answer come to, which is what it weighs, so nothing is encoded again to weigh it. */
 function charactersOf(value: unknown): number {
   if (typeof value === "string") return value.length;
+
   if (typeof value !== "object" || value === null) return 0;
   let characters = 0;
+
   for (const each of Object.values(value)) characters += charactersOf(each);
+
   return characters;
 }
 
@@ -201,15 +204,18 @@ export function keptContent(budget: number): Effect.Effect<KeptContent> {
 
     const remove = (key: KeptKey) => {
       const found = MutableHashMap.get(kept, key);
+
       if (Option.isNone(found)) return;
       MutableHashMap.remove(kept, key);
       characters -= found.value.characters;
     };
+
     const empty = () => {
       MutableHashMap.clear(kept);
       characters = 0;
       account = undefined;
     };
+
     /** Lets go of everything kept where it is another account's, so a switch of account never answers the last one's content. */
     const keptFor = (userId: string) => {
       if (account === userId) return;
@@ -220,26 +226,32 @@ export function keptContent(budget: number): Effect.Effect<KeptContent> {
     const recall = (key: KeptKey, userId: string) => {
       keptFor(userId);
       const found = MutableHashMap.get(kept, key);
+
       if (Option.isNone(found)) return undefined;
       MutableHashMap.remove(kept, key);
       MutableHashMap.set(kept, key, found.value);
+
       return found.value.answer;
     };
+
     const keep = (key: KeptKey, userId: string, answer: Entry["answer"]) => {
       keptFor(userId);
       remove(key);
       const weight = charactersOf(answer);
+
       if (weight > budget / KEPT_SHARE) return;
       MutableHashMap.set(kept, key, { answer, characters: weight });
       characters += weight;
       // The least recently read are let go first, until what is kept fits the budget again.
       const oldest: KeptKey[] = [];
       let over = characters - budget;
+
       for (const [each, entry] of kept) {
         if (over <= 0) break;
         oldest.push(each);
         over -= entry.characters;
       }
+
       for (const each of oldest) remove(each);
     };
 
@@ -247,14 +259,18 @@ export function keptContent(budget: number): Effect.Effect<KeptContent> {
       answer: (key, accountId, ask, carries) =>
         Effect.gen(function* () {
           const userId = accountId();
+
           if (userId === undefined) return yield* ask;
           const found = recall(key, userId);
+
           // SAFETY: `keep` is the one writer, and the one call keeping under a key is typed by its kind, so what is kept under it is that kind's answer.
           if (found !== undefined) return found as KeptAnswer<typeof key>;
           const answer = yield* ask;
           const content = carries(answer);
+
           // Note that an answer that lands after its account signed out is not kept, so nothing outlives the sign-out.
           if (content !== undefined && accountId() === userId) keep(key, userId, content);
+
           return answer;
         }),
       forget: (which) =>

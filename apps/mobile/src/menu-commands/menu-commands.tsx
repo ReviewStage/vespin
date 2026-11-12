@@ -81,6 +81,7 @@ const REMIND_COMMANDS = [
 const REMIND_PRESETS: ReadonlyMap<MenuCommand, (typeof REMIND_TIMES)[number]> = new Map(
   REMIND_TIMES.flatMap((time, at) => {
     const command = REMIND_COMMANDS[at];
+
     return command === undefined ? [] : [[command, time] as const];
   }),
 );
@@ -111,24 +112,31 @@ function useSubject(signedIn: boolean): Subject {
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+
   const agent =
     focus.kind === MENU_SUBJECT.AGENT
       ? view?.taskAgents?.find(({ id }) => id === focus.id)
       : undefined;
+
   const taskNamed =
     focus.kind === MENU_SUBJECT.TASK
       ? (view?.tasks ?? []).find((each) => namesTask(each, focus.id))
       : undefined;
+
   const task =
     taskNamed ??
     (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
+
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspace = workspaces.find(({ id }) => id === workspaceId);
+
   const linked = (place: LinkDestination) =>
     linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+
   const enabled: MenuCommand[] = signedIn ? [...SIGNED_IN_COMMANDS, ...ALWAYS] : [...ALWAYS];
   const toggled: MenuCommand[] = [];
   let address: string | undefined;
+
   if (thread !== undefined) {
     address = linked({
       kind: LINK_DESTINATION.INBOX_ITEM,
@@ -136,7 +144,9 @@ function useSubject(signedIn: boolean): Subject {
       itemId: thread.item.id,
     });
     enabled.push(MENU_COMMAND.TOGGLE_READ, ...REMIND_PRESETS.keys());
+
     if (thread.item.remindAt !== undefined) enabled.push(MENU_COMMAND.REMIND_CLEAR);
+
     if (isUnread(thread.item)) toggled.push(MENU_COMMAND.TOGGLE_READ);
   } else if (agent !== undefined) {
     address = linked(
@@ -144,15 +154,21 @@ function useSubject(signedIn: boolean): Subject {
         ? { kind: LINK_DESTINATION.AGENT, agentId: agent.id }
         : { kind: LINK_DESTINATION.AGENT, planId: task.id, agentId: agent.id },
     );
+
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
   } else if (task !== undefined) {
     address = linked({ kind: LINK_DESTINATION.TASK, planId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
+
     if (task.status !== TASK_STATUS.DONE) enabled.push(MENU_COMMAND.MARK_DONE);
+
     if (taskRowLook(task, 0, undefined).unread) toggled.push(MENU_COMMAND.TOGGLE_READ);
+
     if (task.pinnedAt !== undefined) toggled.push(MENU_COMMAND.PIN);
   }
+
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
+
   return {
     focus,
     task,
@@ -177,6 +193,7 @@ function useAgentsWorking(taskId: string | undefined): boolean {
           agentStillWriting(agent.status),
       ),
   });
+
   return working;
 }
 
@@ -186,6 +203,7 @@ const ASK = {
   SIGN_OUT: "signOut",
   MARK_DONE: "markDone",
 } as const;
+
 type Ask = (typeof ASK)[keyof typeof ASK];
 
 /**
@@ -215,13 +233,16 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that Show or Hide Sidebar acts in any regular window, on the app sidebar where three columns stand and on the list beside its detail where two do.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
   ];
+
   const toggled =
     sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
+
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
@@ -234,6 +255,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       workspaceNames,
       chosenWorkspace,
     ]);
+
     if (told.current === now) return;
     told.current = now;
     menuCommandsModule?.setState(
@@ -252,6 +274,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
   const markDone = (stopAgents?: true) => {
     const taskId = subject.task?.id;
+
     if (taskId === undefined) return;
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
     write(
@@ -272,27 +295,36 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     if (!enabled.includes(command)) return;
     const { task, threadId } = subject;
     const preset = REMIND_PRESETS.get(command);
+
     if (preset !== undefined) {
       if (threadId !== undefined) inbox.remind(threadId, preset.at(Date.now()));
+
       return;
     }
+
     switch (command) {
       case MENU_COMMAND.SETTINGS:
         if (!standing(SHEET_ROUTE.SETTINGS)) openSettings();
+
         return;
       case MENU_COMMAND.SWITCH_WORKSPACE: {
         const picked = index === undefined ? undefined : workspaces[index];
+
         if (picked !== undefined) switcher?.onChoose(picked.id);
+
         return;
       }
+
       case MENU_COMMAND.SIGN_OUT:
         return setAsking(ASK.SIGN_OUT);
       case MENU_COMMAND.NEW_TASK:
         if (!standing(SHEET_ROUTE.NEW_TASK)) router.push(SHEET_ROUTE.NEW_TASK);
+
         return;
       case MENU_COMMAND.NEW_AGENT:
         if (task !== undefined && !standing(SHEET_ROUTE.NEW_AGENT))
           router.push({ pathname: SHEET_ROUTE.NEW_AGENT, params: { task: task.id } });
+
         return;
       case MENU_COMMAND.INBOX:
         return router.navigate("/inbox");
@@ -305,6 +337,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.MARK_DONE:
         if (working) setAsking(ASK.MARK_DONE);
         else markDone();
+
         return;
       case MENU_COMMAND.TOGGLE_READ:
         if (threadId !== undefined) inbox.mark(threadId, !subject.threadUnread);
@@ -316,6 +349,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
             subject: { kind: WRITE_SUBJECT.TASK_READ, id: task.id },
           });
         }
+
         return;
       case MENU_COMMAND.PIN:
         if (task === undefined) return;
@@ -329,12 +363,15 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
             went: BUZZ.SELECTION,
           });
         }
+
         return;
       case MENU_COMMAND.REMIND_CLEAR:
         if (threadId !== undefined) inbox.remind(threadId, null);
+
         return;
       case MENU_COMMAND.OPEN_IN_BROWSER:
         if (subject.address !== undefined) openInSafari(subject.address);
+
         return;
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
@@ -342,6 +379,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         openURL(CONTACT_MAILTO).catch((error: unknown) =>
           console.error("The feedback mail did not open.", error),
         );
+
         return;
       // Note that Remind Me's presets were set above, by the time each sets.
       case MENU_COMMAND.REMIND_HOUR:
@@ -365,11 +403,13 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     const listening = menuCommandsModule?.addListener("onCommand", ({ command, index }) =>
       latest.current(command, index),
     );
+
     return () => listening?.remove();
   }, []);
 
   const done = settleStopWords(TASK_STATUS.DONE);
   const dismiss = () => setAsking(ASK.NONE);
+
   return (
     <>
       <ConfirmAsk

@@ -98,12 +98,15 @@ export const syncListenerOverUrl = ({
     listen: Effect.gen(function* () {
       const connection = yield* PgConnection.make({ url, connectTimeout });
       const session = yield* connection.pin;
+
       if (idleSessionTimeout !== undefined) {
         yield* session.query("select set_config('idle_session_timeout', $1, false)", [
           `${Duration.toMillis(idleSessionTimeout)}ms`,
         ]);
       }
+
       const notifications = yield* session.listen(SYNC_CHANNEL);
+
       return {
         payloads: Stream.map(
           Stream.fromQueue(notifications),

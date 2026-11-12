@@ -69,10 +69,12 @@ export function scriptedSpawner(
   scriptFor: (program: string, args: readonly string[]) => Script | undefined,
 ): ScriptedSpawner {
   const spawned: Spawned[] = [];
+
   const spawn = (command: ChildProcess.Command) =>
     Effect.gen(function* () {
       if (command._tag !== "StandardCommand") return yield* Effect.die("a pipeline was spawned");
       const script = scriptFor(command.command, command.args);
+
       if (script === undefined) {
         return yield* Effect.fail(
           PlatformError.systemError({
@@ -84,6 +86,7 @@ export function scriptedSpawner(
           }),
         );
       }
+
       const record: Spawned = {
         program: command.command,
         args: command.args,
@@ -94,8 +97,10 @@ export function scriptedSpawner(
         ended: "running",
         killed: undefined,
       };
+
       spawned.push(record);
       const exit = yield* Deferred.make<ChildProcessSpawner.ExitCode>();
+
       if (script.exitCode !== undefined) {
         const code = ChildProcessSpawner.ExitCode(script.exitCode);
         yield* Effect.forkScoped(
@@ -105,6 +110,7 @@ export function scriptedSpawner(
           ),
         );
       }
+
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           if (record.ended !== "running") return;
@@ -114,6 +120,7 @@ export function scriptedSpawner(
           };
         }),
       );
+
       return ChildProcessSpawner.makeHandle({
         pid: ChildProcessSpawner.ProcessId(spawned.length),
         exitCode: Deferred.await(exit),
@@ -136,6 +143,7 @@ export function scriptedSpawner(
         unref: Effect.succeed(Effect.void),
       });
     });
+
   return {
     layer: Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, ChildProcessSpawner.make(spawn)),
     spawned,

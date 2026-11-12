@@ -117,23 +117,29 @@ export function runtimeModelRule(
   payer?: AgentPayer | null | undefined,
 ): RuntimeModelRule {
   if (runtime === AGENT_RUNTIME.CODEX && payer === AGENT_PAYER.API_KEY) return CODEX_ON_API_KEY;
+
   if (runtime === AGENT_RUNTIME.CODEX && payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION) {
     return CODEX_FAST;
   }
+
   return (runtime === undefined ? undefined : NATIVE_MODEL_RULE[runtime]) ?? ANY_MODEL;
 }
 
 /** The provider word a catalog id begins with: `anthropic` of `anthropic/claude-opus-5.5`. */
 function providerWord(modelId: string): string {
   const separator = modelId.indexOf(CATALOG_ID_SEPARATOR);
+
   return separator === -1 ? "" : modelId.slice(0, separator);
 }
 
 /** Whether the rule runs the version of its model a catalog id names, by its speed. */
 function runsSpeedOf(rule: RuntimeModelRule, modelId: string): boolean {
   const speed = modelSpeedOf(modelId);
+
   if (speed === MODEL_SPEED.FAST) return rule.fast;
+
   if (speed === MODEL_SPEED.ULTRAFAST) return rule.ultrafast;
+
   return true;
 }
 
@@ -156,12 +162,15 @@ export function runtimeModels<
   payer?: AgentPayer | null | undefined,
 ): readonly M[] {
   const rule = runtimeModelRule(runtime, payer);
+
   if (rule === ANY_MODEL) return models;
+
   return models
     .filter((model) => rule.provider === undefined || model.provider === rule.provider)
     .filter((model) => runsSpeedOf(rule, model.id))
     .map((model) => {
       const { contextWindows: _windows, fastNotEnabled: _fast, ...rest } = model;
+
       const kept = {
         ...rest,
         ...(rule.contextWindow && model.contextWindows !== undefined
@@ -171,6 +180,7 @@ export function runtimeModels<
           ? { fastNotEnabled: model.fastNotEnabled }
           : undefined),
       };
+
       // SAFETY: only the two optional keys are left out, which `M` holds as optional.
       return kept as unknown as M;
     });
@@ -187,17 +197,21 @@ export function runtimeChoiceRefusal(
   payer?: AgentPayer | null | undefined,
 ): RuntimeChoiceRefusal | undefined {
   const rule = runtimeModelRule(runtime, payer);
+
   if (rule.provider !== undefined && providerWord(choice.model) !== rule.provider) {
     return RUNTIME_CHOICE_REFUSAL.PROVIDER;
   }
+
   if (!runsSpeedOf(rule, choice.model)) {
     return modelSpeedOf(choice.model) === MODEL_SPEED.ULTRAFAST
       ? RUNTIME_CHOICE_REFUSAL.ULTRAFAST
       : RUNTIME_CHOICE_REFUSAL.FAST;
   }
+
   if (!rule.contextWindow && choice.contextWindow !== undefined) {
     return RUNTIME_CHOICE_REFUSAL.CONTEXT_WINDOW;
   }
+
   return undefined;
 }
 
@@ -207,6 +221,7 @@ export function runtimeChoiceRefusalWords(
   refusal: RuntimeChoiceRefusal,
 ): string {
   const rule = runtimeModelRule(runtime);
+
   switch (refusal) {
     case RUNTIME_CHOICE_REFUSAL.PROVIDER:
       return `that agent runs on ${rule.name}, which runs ${providerName(rule.provider)} models alone; choose one of those, or start a new agent on another model.`;
@@ -222,6 +237,8 @@ export function runtimeChoiceRefusalWords(
 /** A provider as a refusal names its models. */
 function providerName(provider: ModelProvider | undefined): string {
   if (provider === MODEL_PROVIDER.ANTHROPIC) return "Claude";
+
   if (provider === MODEL_PROVIDER.OPENAI) return "GPT";
+
   return "its provider's";
 }

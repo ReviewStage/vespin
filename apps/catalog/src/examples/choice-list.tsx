@@ -159,6 +159,7 @@ const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
 /** A made-up screenshot `width` by `height`, its ground `fill`, with a bar and a block on it. */
 function shot(width: number, height: number, fill: string): string {
   const bar = Math.max(6, Math.round(height * 0.08));
+
   return `data:image/svg+xml,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${fill}"/><rect x="6%" y="6%" width="50%" height="${bar}" rx="${bar / 2}" fill="#fff9"/><rect x="6%" y="24%" width="88%" height="60%" rx="8" fill="#fff5"/></svg>`,
   )}`;
@@ -178,6 +179,7 @@ function filed(
 ): OptionMediaPiece {
   const image = shot(width, height, `hsl(${(width * 7 + height) % 360} 60% 60%)`);
   const thumb = <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
+
   return { kind, caption, thumb, onOpen: OPEN };
 }
 
@@ -271,6 +273,7 @@ function Held({
   flow?: ChoiceFlow;
 }): React.JSX.Element {
   const [value, setValue] = useState(start);
+
   return (
     <ChoiceList
       legend={legend}

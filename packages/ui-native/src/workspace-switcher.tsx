@@ -108,6 +108,7 @@ type WorkspaceSwitcherProps = {
 function tilePicture(workspace: SwitcherWorkspace, size: number): string | undefined {
   if (workspace.photo !== undefined) return workspace.photo;
   const pinned = pinnedPictureUrl(workspace.picture);
+
   return pinned === undefined ? undefined : accountPictureAt(pinned, size * PixelRatio.get());
 }
 
@@ -134,6 +135,7 @@ export function WorkspaceTile({
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const pictureDrawn = picture !== undefined && picture === drawn && picture !== failed;
   const corner = size * TILE_ROUNDING;
+
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
       {pictureDrawn ? null : (
@@ -191,6 +193,7 @@ export function WorkspaceSwitcherMenu({
   tileSize = MARK_SIZE.BAR_FACE,
 }: WorkspaceSwitcherProps) {
   const colors = useColors();
+
   return (
     <Menu
       modifiers={[accessibilityLabel(heardAs(chosen)), accessibilityIdentifier(SWITCHER_ID)]}

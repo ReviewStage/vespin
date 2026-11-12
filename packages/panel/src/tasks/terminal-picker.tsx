@@ -54,6 +54,7 @@ export function TerminalPicker({
 }): React.JSX.Element {
   // Note that a task whose agents are not read yet offers nothing until they are.
   const read = agents.agents !== undefined;
+
   const groups: readonly CommandGroup[] = read
     ? [
         {
@@ -74,6 +75,7 @@ export function TerminalPicker({
         },
       ]
     : [];
+
   return (
     <CommandDialog
       open={open}

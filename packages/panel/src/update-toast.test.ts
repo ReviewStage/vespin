@@ -31,6 +31,7 @@ beforeEach(() => {
   fakeAppBridge({});
   fakeActPortAnswering((request) => {
     sent.push(request.kind);
+
     return Promise.resolve(undefined);
   });
 });
@@ -43,6 +44,7 @@ afterEach(() => {
 
 function Toasts(): null {
   useReadyToast();
+
   return null;
 }
 
@@ -81,9 +83,11 @@ function said(): string[] {
 /** The standing ready toast's button named `label`, by its words or its accessible name. */
 function button(label: string): HTMLButtonElement {
   const card = document.querySelector(`${STANDING_TOAST}`);
+
   const found = [...(card?.querySelectorAll("button") ?? [])].find(
     (each) => each.textContent === label || each.getAttribute("aria-label") === label,
   );
+
   return found ?? assert.fail(`the ready toast offers ${label}`);
 }
 

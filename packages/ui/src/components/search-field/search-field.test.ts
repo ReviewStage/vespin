@@ -51,6 +51,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -71,14 +72,17 @@ interface Pressed {
 /** Presses a key in `field`, answering whether the press was kept from what stands behind it. */
 function press(field: HTMLElement, init: KeyboardEventInit): Pressed {
   let reached = false;
+
   const behind = () => {
     reached = true;
   };
+
   document.body.addEventListener("keydown", behind);
   act(() => {
     field.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
   });
   document.body.removeEventListener("keydown", behind);
+
   return { stopped: !reached };
 }
 
@@ -93,6 +97,7 @@ function Held({
   const [query, setQuery] = useState("");
   const [heard, setHeard] = useState<string[]>([]);
   const hear = (key: string) => () => setHeard((now) => [...now, key]);
+
   return createElement(
     "div",
     null,
@@ -114,6 +119,7 @@ function Held({
 
 function fieldOf(page: HTMLElement): HTMLInputElement {
   const field = page.querySelector<HTMLInputElement>('input[aria-label="Search tools"]');
+
   return field ?? assert.fail("no field named Search tools");
 }
 
@@ -195,6 +201,7 @@ test("a tally says none found, how many, or which of how many", () => {
     const page = render(
       createElement(SearchField, { label: "Find", value: "x", onChange: () => undefined, tally }),
     );
+
     return page.querySelector(".ui-search-field-tally")?.textContent;
   };
 
@@ -226,6 +233,7 @@ test("Clear search empties the query and hands the caret back to the field", () 
 
 test("the clear leaves out of reach through its exit once the field is empty, and the chord comes back after", () => {
   const exits = holdExits();
+
   try {
     const page = render(createElement(Held, { clears: true }));
     const field = fieldOf(page);
@@ -250,6 +258,7 @@ function Steering({ chosen }: { chosen: string[] }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const rows = ["Opus", "Sonnet"].filter((name) => name.toLowerCase().includes(query));
+
   const keys = useComboboxField({
     open: true,
     active,
@@ -260,6 +269,7 @@ function Steering({ chosen }: { chosen: string[] }): React.JSX.Element {
     onChoose: (index) => chosen.push(rows[index] ?? ""),
     onEscape: () => chosen.push("closed"),
   });
+
   return createElement(
     "div",
     null,

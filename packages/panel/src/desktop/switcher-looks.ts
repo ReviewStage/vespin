@@ -42,12 +42,14 @@ export function useStripLooks(
 ): void {
   useEffect(() => {
     if (taskId === undefined) return;
+
     const looks = new Map(
       drawn.map(({ tab, look }) => [
         tabKey(tab),
         { icon: look.icon, label: look.label, endMark: look.endMark },
       ]),
     );
+
     const strips = held.get(taskId) ?? new Map<LookStrip, ReadonlyMap<string, HeldLook>>();
     strips.set(strip, looks);
     held.set(taskId, strips);

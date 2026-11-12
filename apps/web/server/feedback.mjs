@@ -82,12 +82,16 @@ function senderAddress(request) {
  */
 function rateLimited(sender, now) {
   const held = recentSenders.get(sender);
+
   if (!held || now - held.windowStart >= RATE_LIMIT.WINDOW_MS) {
     if (recentSenders.size >= RATE_LIMIT.MAX_TRACKED_SENDERS) recentSenders.clear();
     recentSenders.set(sender, { windowStart: now, count: 1 });
+
     return false;
   }
+
   held.count += 1;
+
   return held.count > RATE_LIMIT.MAX_PER_WINDOW;
 }
 
@@ -122,6 +126,7 @@ const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/
 /** @param {string} base64 */
 function decodedByteLength(base64) {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
   return (base64.length / 4) * 3 - padding;
 }
 
@@ -175,6 +180,7 @@ function isRecord(value) {
 /** @param {unknown} value @returns {string | undefined} */
 function readString(value) {
   if (Object.prototype.toString.call(value) !== "[object String]") return undefined;
+
   return /** @type {string} */ (value);
 }
 
@@ -184,7 +190,9 @@ function readString(value) {
  */
 function carriesImageSignature(base64, mediaType) {
   const check = IMAGE_SIGNATURE[mediaType];
+
   if (!check) return false;
+
   // The first sixteen encoded quartets decode to the leading bytes, which is
   // all any signature needs.
   return check(Buffer.from(base64.slice(0, 64), "base64"));
@@ -199,12 +207,19 @@ function feedbackImage(value) {
   const name = readString(value.name);
   const mediaType = readString(value.mediaType);
   const base64 = readString(value.base64);
+
   if (!name || name.trim().length === 0 || name.length > 255) return undefined;
+
   if (!mediaType || !FEEDBACK_IMAGE_TYPES.includes(mediaType)) return undefined;
+
   if (!base64 || base64.length === 0) return undefined;
+
   if (!BASE64_PATTERN.test(base64)) return undefined;
+
   if (decodedByteLength(base64) > FEEDBACK_LIMITS.IMAGE_MAX_BYTES) return undefined;
+
   if (!carriesImageSignature(base64, mediaType)) return undefined;
+
   return { name: name.trim(), mediaType, base64 };
 }
 
@@ -216,6 +231,7 @@ function feedbackImage(value) {
  */
 function isReplyableEmail(value) {
   const email = readString(value);
+
   return email !== undefined && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -229,10 +245,14 @@ function isReplyableEmail(value) {
 function optionalLine(value, maxLength) {
   if (value === undefined) return undefined;
   const text = readString(value);
+
   if (text === undefined) return null;
   const trimmed = text.trim();
+
   if (trimmed.length === 0) return undefined;
+
   if (trimmed.length > maxLength || /[\r\n]/.test(trimmed)) return null;
+
   return trimmed;
 }
 
@@ -245,36 +265,52 @@ function feedbackSubmission(value) {
   if (!isRecord(value)) return undefined;
   const kind = readString(value.kind);
   const message = readString(value.message);
+
   if (!kind || !FEEDBACK_KINDS.includes(kind)) return undefined;
+
   if (!message) return undefined;
   const messageText = message.trim();
+
   if (messageText.length === 0 || messageText.length > FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH) {
     return undefined;
   }
+
   const nameLine = optionalLine(value.name, FEEDBACK_LIMITS.NAME_MAX_LENGTH);
+
   if (nameLine === null) return undefined;
   const emailLine = optionalLine(value.email, FEEDBACK_LIMITS.EMAIL_MAX_LENGTH);
+
   if (emailLine === null) return undefined;
   const images = value.images;
+
   if (!Array.isArray(images) || images.length > FEEDBACK_LIMITS.MAX_IMAGES) return undefined;
   const experiment = value.experiment === undefined ? undefined : readString(value.experiment);
+
   if (value.experiment !== undefined && !(experiment && EXPERIMENT_KEY_PATTERN.test(experiment))) {
     return undefined;
   }
+
   const parsedImages = [];
+
   for (const candidate of images) {
     const image = feedbackImage(candidate);
+
     if (!image) return undefined;
     parsedImages.push(image);
   }
+
   const submission = {
     kind,
     message: messageText,
     images: parsedImages,
   };
+
   if (nameLine) submission.name = nameLine;
+
   if (emailLine) submission.email = emailLine;
+
   if (experiment) submission.experiment = experiment;
+
   return submission;
 }
 
@@ -284,6 +320,7 @@ function emailBody(submission) {
     submission.name || submission.email
       ? `From: ${[submission.name, submission.email].filter(Boolean).join(" — ")}`
       : "From: unsigned";
+
   return [submission.message, "", "—", credit, "Sent from the panel."].join("\n");
 }
 
@@ -297,6 +334,7 @@ function emailBody(submission) {
  */
 function surveyResponse(submission, apiKey) {
   const submissionId = crypto.randomUUID();
+
   return {
     api_key: apiKey,
     event: "survey sent",
@@ -337,8 +375,10 @@ function surveyResponse(submission, apiKey) {
  */
 async function recordSurveyResponse(submission) {
   const apiKey = process.env.POSTHOG_PROJECT_API_KEY?.trim();
+
   if (!apiKey) return;
   const host = process.env.POSTHOG_HOST?.trim() || POSTHOG_DEFAULT_HOST;
+
   try {
     const response = await fetch(new URL(POSTHOG_CAPTURE_PATH, host), {
       method: "POST",
@@ -346,6 +386,7 @@ async function recordSurveyResponse(submission) {
       body: JSON.stringify(surveyResponse(submission, apiKey)),
       signal: AbortSignal.timeout(POSTHOG_TIMEOUT_MS),
     });
+
     if (!response.ok)
       console.error(`Feedback survey response failed with status ${response.status}`);
   } catch {
@@ -369,30 +410,38 @@ export async function POST(request) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const destination = process.env.FEEDBACK_TO?.trim();
   const sender = process.env.FEEDBACK_FROM?.trim();
+
   if (!apiKey || !destination || !sender) {
     return json(503, { reason: "The feedback service is not configured." });
   }
+
   if (rateLimited(senderAddress(request), Date.now())) {
     return json(429, { reason: "Too many submissions from this address. Try again later." });
   }
 
   let payload;
+
   try {
     payload = await request.json();
   } catch {
     return json(400, { reason: "The submission was not JSON." });
   }
+
   const submission = feedbackSubmission(payload);
+
   if (!submission) return json(400, { reason: "Malformed submission." });
 
   const signature = submission.name ?? submission.email;
+
   // A note sent from an experiment's row says which experiment it is about.
   const topic = submission.experiment
     ? `${SUBJECT_LINE[submission.kind]} on the ${submission.experiment} experiment`
     : SUBJECT_LINE[submission.kind];
+
   const subject = signature ? `${topic} from ${signature}` : topic;
 
   let response;
+
   try {
     const mailBody = {
       from: sender,
@@ -400,15 +449,18 @@ export async function POST(request) {
       subject,
       text: emailBody(submission),
     };
+
     if (isReplyableEmail(submission.email)) {
       mailBody.reply_to = [submission.email];
     }
+
     if (submission.images.length > 0) {
       mailBody.attachments = submission.images.map((image, index) => ({
         filename: `screenshot-${index + 1}.${IMAGE_EXTENSION[image.mediaType]}`,
         content: image.base64,
       }));
     }
+
     response = await fetch(RESEND_URL, {
       method: "POST",
       headers: {
@@ -419,15 +471,19 @@ export async function POST(request) {
     });
   } catch {
     console.error("Feedback forwarding did not reach the mail service");
+
     return json(502, { reason: "The mail service could not be reached." });
   }
 
   if (!response.ok) {
     // The status is diagnosis enough; the submission itself is never logged.
     console.error(`Feedback forwarding failed with status ${response.status}`);
+
     return json(502, { reason: "The mail service refused this submission." });
   }
+
   // Only once the mail is taken, so a retry after a refused send is recorded once.
   await recordSurveyResponse(submission);
+
   return json(200, { delivered: true });
 }

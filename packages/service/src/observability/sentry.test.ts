@@ -28,8 +28,10 @@ function exceptionTypes(sent: ReturnType<typeof recordingSentry>["sent"]): strin
 it.effect("a route that dies answers 500 and is captured; one that answers is not", () =>
   Effect.gen(function* () {
     const sentry = recordingSentry();
+
     const statuses = yield* Effect.gen(function* () {
       const context = yield* Effect.context<never>();
+
       const { handler, dispose } = HttpRouter.toWebHandler(
         Layer.mergeAll(
           HttpRouter.add("GET", "/dies", Effect.die(new RangeError("no such row"))),
@@ -37,15 +39,20 @@ it.effect("a route that dies answers 500 and is captured; one that answers is no
         ),
         { disableLogger: true },
       );
+
       const died = yield* Effect.promise(() =>
         handler(new Request("https://app.test/dies"), context),
       );
+
       const answered = yield* Effect.promise(() =>
         handler(new Request("https://app.test/answers"), context),
       );
+
       yield* Effect.promise(() => dispose());
+
       return [died.status, answered.status];
     }).pipe(Effect.provide(sentry.layer));
+
     assert.deepEqual(statuses, [500, 200]);
     assert.deepEqual(exceptionTypes(sentry.sent), ["RangeError"]);
   }),
@@ -67,10 +74,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sentry = recordingSentry();
+
       const failure = Object.assign(new TypeError("refused"), {
         // Note that a BigInt is among them, which no JSON serializes, as a report's attributes may hold anything.
         [ErrorReporter.attributes]: { agentId: "a", turnId: "t", route: "/api/agents", rows: 2n },
       });
+
       yield* Effect.exit(Effect.withErrorReporting(Effect.fail(failure))).pipe(
         Effect.provide(sentry.layer),
       );
@@ -121,8 +130,10 @@ it.effect(
       const sentry = recordingSentry();
       yield* Effect.gen(function* () {
         const context = yield* Effect.context<never>();
+
         const run = (service: Effect.Effect<never, TypeError>) =>
           Effect.runPromiseWith(context)(service);
+
         yield* Effect.promise(() => standReported(run, Effect.fail(new TypeError("refused"))));
         yield* Effect.promise(() => standReported(run, Effect.interrupt));
         // Note that this runner rejects as one whose runtime could not be built does, running nothing.
@@ -139,16 +150,19 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sentry = recordingSentry();
+
       const span = yield* Effect.gen(function* () {
         yield* Effect.logWarning("a title could not be generated").pipe(
           Effect.annotateLogs({ agentId: "a" }),
         );
+
         return yield* Effect.currentSpan;
       }).pipe(
         Effect.withSpan("web/title"),
         Effect.provide(Logger.layer([sentryLogger])),
         Effect.provide(sentry.layer),
       );
+
       const [log] = sentOfType(sentry.sent, "log").flatMap((item) => JSON.parse(item.text).items);
       assert.deepEqual(
         {
@@ -209,8 +223,10 @@ it.effect("a database statement's span leaves named by its statement, not by its
       Effect.provide(sentry.layer),
     );
     const spans = sentOfType(sentry.sent, "span").map((item) => item.text);
+
     const namedAs = (name: string) =>
       spans.some((text) => text.includes(JSON.stringify({ name }).slice(1, -1)));
+
     assert.deepEqual([namedAs(statement), namedAs("postgres")], [true, false]);
   }),
 );
@@ -224,6 +240,7 @@ it("an agent's start is traced whole even where its caller sampled it out; any o
       attributes: {},
       transactionContext: { name },
     });
+
   assert.deepEqual([sampled("agents.start"), sampled("tasks.list")], [1, 0]);
 });
 
@@ -231,10 +248,13 @@ it.effect("a monitored run returns only once its closing check-in has left", () 
   Effect.gen(function* () {
     // Note that the network is held by hand, because a function frozen once it answers drops whatever is still in flight.
     let release = () => {};
+
     const network = new Promise<void>((resolve) => {
       release = resolve;
     });
+
     const sentry = recordingSentry(() => network);
+
     const monitor = sentryCronCheckIns({
       slug: "a-job",
       crontab: "* * * * *",
@@ -242,8 +262,10 @@ it.effect("a monitored run returns only once its closing check-in has left", () 
       checkInMarginMinutes: 1,
       failuresBeforeIssue: 1,
     });
+
     yield* Effect.gen(function* () {
       const run = yield* Effect.forkChild(monitor.run(Effect.void));
+
       for (let turn = 0; turn < 10; turn++) yield* Effect.yieldNow;
       assert.equal(run.pollUnsafe(), undefined);
       release();
@@ -271,10 +293,12 @@ it.effect("an exception and a rejection nothing in the process caught are each c
 it.effect("a web function that throws is captured, and throws the same failure on", () =>
   Effect.gen(function* () {
     const sentry = recordingSentry();
+
     const fetch = sentryReportedFetch(
       () => Promise.reject(new SyntaxError("DATABASE_URL is not set")),
       () => {},
     );
+
     yield* Effect.promise(() =>
       assert.rejects(fetch(new Request("https://app.test/api/plans")), {
         name: "SyntaxError",
@@ -289,26 +313,33 @@ it.effect("a web function answers before its report has left, and keeps awake un
   Effect.gen(function* () {
     // Note that the network is held by hand, because a function frozen once it answers drops whatever is still in flight.
     let release = () => {};
+
     const network = new Promise<void>((resolve) => {
       release = resolve;
     });
+
     const sentry = recordingSentry(() => network);
     const awake: Promise<boolean>[] = [];
     yield* Effect.gen(function* () {
       const context = yield* Effect.context<never>();
+
       const { handler, dispose } = HttpRouter.toWebHandler(
         HttpRouter.add("GET", "/dies", Effect.die(new RangeError("no such row"))),
         { disableLogger: true },
       );
+
       const fetch = sentryReportedFetch(
         (request) => handler(request, context),
         (sending) => awake.push(sending),
       );
+
       const answer = yield* Effect.promise(() => fetch(new Request("https://app.test/dies")));
       let delivered = false;
+
       const keptAwake = Promise.all(awake).then(() => {
         delivered = true;
       });
+
       for (let turn = 0; turn < 10; turn++) yield* Effect.yieldNow;
       assert.equal(answer.status, 500);
       assert.equal(delivered, false);
@@ -333,6 +364,7 @@ it.effect(
       const invite = "fixture".repeat(6);
       yield* Effect.gen(function* () {
         const context = yield* Effect.context<never>();
+
         const { handler, dispose } = HttpRouter.toWebHandler(
           Layer.mergeAll(
             HttpRouter.add("GET", "/api/auth/callback/:provider", HttpServerResponse.text("in")),
@@ -344,12 +376,14 @@ it.effect(
           ),
           { disableLogger: true },
         );
+
         for (const address of [
           `https://app.test/api/auth/callback/github?code=fixture-oauth-code&state=fixture-oauth-state&${invite}=1`,
           `https://app.test/api/workspaces/${workspace}/invites/${invite}`,
         ]) {
           yield* Effect.promise(() => handler(new Request(address), context));
         }
+
         yield* Effect.promise(() => dispose());
       }).pipe(Effect.provide(sentry.layer));
       const spans = sentOfType(sentry.sent, "span").map((item) => item.text);

@@ -103,10 +103,12 @@ const OPEN_PALETTE: Step = { kind: STEP.PRESS, keys: "ControlOrMeta+K" };
 
 // A phone opens on the task's panel: back to the task, then back to the Tasks list.
 const MAIN = { role: "main" } as const;
+
 const PHONE_TO_LIST: readonly Step[] = [
   { kind: STEP.CLICK, role: "button", name: "Activity", within: MAIN },
   { kind: STEP.CLICK, role: "button", name: "Tasks", within: MAIN },
 ];
+
 const PHONE_PLACES = { role: "navigation", name: "Places" } as const;
 
 // The Inbox, by the sidebar's row or a phone's places bar, and back from the item it opens on to its
@@ -114,17 +116,21 @@ const PHONE_PLACES = { role: "navigation", name: "Places" } as const;
 // A phone's places bar opens it on its list already.
 const OPEN_INBOX: Step = { kind: STEP.CLICK, role: "button", name: "Inbox" };
 const TO_INBOX_LIST: Step = { kind: STEP.PRESS, keys: "Escape" };
+
 const PHONE_TO_INBOX: readonly Step[] = [
   TO_INBOX_LIST,
   { kind: STEP.CLICK, role: "button", name: "Inbox", within: PHONE_PLACES },
 ];
+
 const LONG_THREAD: Step = {
   kind: STEP.CLICK,
   role: "button",
   name: "What the expired invite page says",
 };
+
 const FORM_ITEM: Step = { kind: STEP.CLICK, role: "button", name: "Invite limits" };
 const NEW_THREAD: Step = { kind: STEP.CLICK, role: "button", name: "New thread" };
+
 // A phone's Inbox head has no compose button: New thread is the first row of its ⋯ menu.
 const PHONE_NEW_THREAD: readonly Step[] = [
   { kind: STEP.CLICK, role: "button", name: "Inbox actions", within: MAIN },
@@ -145,6 +151,7 @@ const ANSWERED_THREAD: Step = { kind: STEP.CLICK, role: "button", name: "3 comme
 // The task's Comments tab, from the side panel's own "Open a tab" (a phone's Activity), on its resolved threads.
 const SIDE_PANEL = { role: "complementary", name: "Panel" } as const;
 const RESOLVED: Step = { kind: STEP.CLICK, role: "button", name: "Resolved", exact: true };
+
 const TO_RESOLVED: readonly Step[] = [
   { kind: STEP.CLICK, role: "option", name: "Comments" },
   RESOLVED,

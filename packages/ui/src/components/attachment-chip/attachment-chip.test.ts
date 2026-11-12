@@ -49,6 +49,7 @@ function drawn(props: Parameters<typeof AttachmentChip>[0]): HTMLElement {
   const root = createRoot(list);
   roots.push(root);
   act(() => root.render(createElement(AttachmentChip, props)));
+
   return list;
 }
 
@@ -62,6 +63,7 @@ function redrawn(props: Parameters<typeof AttachmentChip>[0]): {
   const root = createRoot(list);
   roots.push(root);
   act(() => root.render(createElement(AttachmentChip, props)));
+
   return { list, to: (next) => act(() => root.render(createElement(AttachmentChip, next))) };
 }
 
@@ -70,6 +72,7 @@ function button(list: HTMLElement, name: string): HTMLButtonElement {
   const found = [...list.querySelectorAll("button")].find(
     (each) => each.getAttribute("aria-label") === name,
   );
+
   return found ?? assert.fail(`a button named ${name}`);
 }
 
@@ -81,6 +84,7 @@ function buttonNames(list: HTMLElement): (string | null)[] {
 /** Rests the pointer on `target` for as long as a hint waits before it shows. */
 function hover(target: Element): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -124,6 +128,7 @@ test("a file that is here hangs its card while the pointer rests: its icon, whol
     icon: createElement("i", { "data-file-icon": "" }),
     detail: "3 KB",
   });
+
   hover(list.querySelector("li") ?? assert.fail("a chip"));
   const card = document.querySelector("[data-attachment-card]");
   assert.equal(card?.textContent, "a-very-long-file-name-that-will-be-cut.yml3 KB");
@@ -136,6 +141,7 @@ test("a text file's card shows the head of its words under its name", () => {
     detail: "48 lines",
     peek: "TypeError: x is undefined",
   });
+
   hover(list.querySelector("li") ?? assert.fail("a chip"));
   const card = document.querySelector("[data-attachment-card]");
   assert.equal(card?.textContent?.includes("TypeError: x is undefined"), true);
@@ -156,12 +162,14 @@ test("a picture is its thumbnail, named by the file", () => {
 test("the way off takes the file off by pointer and by keyboard, without opening it", () => {
   let opened = 0;
   let removed = 0;
+
   const list = drawn({
     name: "shot.png",
     image: PICTURE,
     onOpen: () => (opened += 1),
     onRemove: () => (removed += 1),
   });
+
   assert.deepEqual(buttonNames(list), ["Open shot.png", "Remove shot.png"]);
   act(() => button(list, "Remove shot.png").click());
   pressByKeyboard(button(list, "Remove shot.png"));
@@ -171,12 +179,14 @@ test("the way off takes the file off by pointer and by keyboard, without opening
 
 test("an unavailable way off refuses its press", () => {
   let removed = 0;
+
   const list = drawn({
     name: "shot.png",
     image: PICTURE,
     onRemove: () => (removed += 1),
     removeDisabled: true,
   });
+
   const remove = button(list, "Remove shot.png");
   assert.equal(remove.disabled, true);
   act(() => remove.click());
@@ -189,6 +199,7 @@ test("a file still read says so to a reader and opens nothing", () => {
     state: ATTACHMENT_CHIP_STATE.LOADING,
     onOpen: () => assert.fail("a chip still read opens nothing"),
   });
+
   assert.deepEqual(buttonNames(list), []);
   assert.equal(list.querySelector('[role="status"]')?.textContent, "Reading shot.png");
   assert.equal(list.querySelector("img"), null);
@@ -203,6 +214,7 @@ test("a file that failed to come says why and its size, and opens nothing", () =
     detail: "2.4 MB",
     onOpen: () => assert.fail("a failed chip opens nothing"),
   });
+
   assert.deepEqual(buttonNames(list), []);
   assert.equal(list.textContent, "Not kept2.4 MB");
   assert.equal(list.querySelector("img"), null, "no picture stands for a file that failed");
@@ -222,6 +234,7 @@ test("a file going up is heard as uploading at its share, and opens nothing unti
     progress: 62.6,
     onOpen: () => assert.fail("a chip on its way up opens nothing"),
   });
+
   const meter = list.querySelector('[role="progressbar"]') ?? assert.fail("a progress bar");
   assert.equal(meter.getAttribute("aria-label"), "Uploading spec.pdf");
   assert.equal(meter.getAttribute("aria-valuenow"), "63");

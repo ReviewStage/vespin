@@ -163,7 +163,9 @@ const DROP_TARGET_CLASS =
 /** A card's corner: a menu's where asked, else a raised card's smaller one, else the corner asked for. */
 function cornerClass(look: CardLook, corner: CardCorner): string {
   if (corner === CARD_CORNER.MENU) return "rounded-menu";
+
   if (look === CARD_LOOK.RAISED) return "rounded-card-raised";
+
   return corner === CARD_CORNER.CONTROL ? "rounded-control" : "rounded-card";
 }
 
@@ -178,13 +180,16 @@ function cornerClass(look: CardLook, corner: CardCorner): string {
  */
 function overflowClass(look: CardLook, padding: CardPadding): string {
   if (look === CARD_LOOK.RAISED) return "overflow-visible";
+
   if (padding !== CARD_PADDING.FLUSH) return "";
+
   return "overflow-clip [--ui-focus-ring-offset:var(--ui-focus-ring-inset)]";
 }
 
 /** The edge's fade, a well's alone, since a card that lifts rides its own (`card.css`). */
 function transitionClass(look: CardLook, hover: CardHover): string {
   if (look !== CARD_LOOK.WELL || hover === CARD_HOVER.LIFT) return "";
+
   return "transition-[border-color] duration-(--ui-duration-hover) ease-plain";
 }
 

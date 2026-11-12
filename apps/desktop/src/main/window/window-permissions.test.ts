@@ -10,6 +10,7 @@ import { grantWindowPermissions } from "./window-permissions";
  */
 
 type CheckHandler = Parameters<Session["setPermissionCheckHandler"]>[0];
+
 type RequestHandler = Parameters<Session["setPermissionRequestHandler"]>[0];
 
 // SAFETY: the pages are only identities the handlers compare, which nothing here reads further.
@@ -31,6 +32,7 @@ function grantedSession() {
     },
     (webContents) => webContents === own,
   );
+
   /** What a request is answered, as Electron hands it the details it does. */
   const asked = (
     webContents: WebContents,
@@ -45,8 +47,10 @@ function grantedSession() {
       ...details,
     } as Electron.MediaAccessPermissionRequest);
     assert.notEqual(granted, undefined, "every request is answered");
+
     return granted === true;
   };
+
   /** What a check is answered. */
   const checked = (
     webContents: WebContents | null,
@@ -57,6 +61,7 @@ function grantedSession() {
       isMainFrame: true,
       ...(mediaType === undefined ? undefined : { mediaType }),
     } as Electron.PermissionCheckHandlerHandlerDetails) === true;
+
   return { asked, checked };
 }
 

@@ -100,7 +100,9 @@ export function UnloadedComposerField(): React.JSX.Element {
 /** Whether the developer is typing somewhere the box must not take focus from: a field or an editor elsewhere. */
 function typingElsewhere(): boolean {
   const active = document.activeElement;
+
   if (!(active instanceof HTMLElement) || active === document.body) return false;
+
   return (
     active instanceof HTMLInputElement ||
     active instanceof HTMLTextAreaElement ||
@@ -205,6 +207,7 @@ export function ComposerField({
   // A link in the draft opens, from its right-click, where the box stands.
   const editedLinks = useEditedLinksHost();
   const keystrokes = useKeystrokeSpans(keystrokeSpan);
+
   const roomHost = useCallback(
     (element: HTMLDivElement | null) => {
       room.current = element;
@@ -213,16 +216,20 @@ export function ComposerField({
     },
     [room, editedLinks, keystrokes],
   );
+
   const [chips, setChips] = useState<readonly DrawnChip[]>([]);
+
   const toolbar = useSelectionToolbar({
     editor,
     room,
     blocks: false,
     held: aria["aria-expanded"] === "true",
   });
+
   // The last words the editor handed back, which a draft from outside is told against.
   const emitted = useRef(draft);
   const drawn = useRef(0);
+
   const latest = useRef({
     draft,
     setDraft,
@@ -239,6 +246,7 @@ export function ComposerField({
     focus,
     format: toolbar.doors,
   });
+
   latest.current = {
     draft,
     setDraft,
@@ -261,12 +269,15 @@ export function ComposerField({
     drawn.current += 1;
     const key = drawn.current;
     setChips((was) => [...was, { element, chip: drawnChip, key }]);
+
     return () => setChips((was) => was.filter((each) => each.key !== key));
   };
+
   useLayoutEffect(() => {
     if (module === undefined || host.current === null) return;
     const now = latest.current;
     emitted.current = now.draft;
+
     const mounted = module.mountComposer(host.current, {
       text: now.draft,
       skills: now.skills,
@@ -302,7 +313,9 @@ export function ComposerField({
         onLink: () => latest.current.format.onLink(),
       },
     });
+
     editor.current = mounted;
+
     return () => {
       editor.current = undefined;
       mounted.destroy();
@@ -312,8 +325,10 @@ export function ComposerField({
   // A draft that moved from outside is told to the editor once; its own words handed back are not.
   useLayoutEffect(() => {
     const mounted = editor.current;
+
     if (mounted === undefined || draft === emitted.current) return;
     emitted.current = draft;
+
     if (draft === "") mounted.clear();
     else mounted.replace(draft);
   }, [draft, editor]);

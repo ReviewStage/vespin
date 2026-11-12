@@ -245,15 +245,19 @@ function landingOf(address: string): Landing {
     createMemoryHistory({ initialEntries: [address] }),
     new QueryClient(),
   );
+
   const { pathname, search } = router.latestLocation;
   const leaf = router.matchRoutes(pathname, search).at(-1);
+
   if (leaf === undefined) throw new Error(`No route matched ${address}`);
+
   return { routeId: leaf.routeId, params: leaf.params, search: leaf.search };
 }
 
 /** A link's address as a window holds it: its path, query, and fragment. */
 function addressOf(link: string): string {
   const url = new URL(link);
+
   return `${url.pathname}${url.search}${url.hash}`;
 }
 

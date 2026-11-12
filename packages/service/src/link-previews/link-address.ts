@@ -19,8 +19,12 @@ export function webPageAddressOf(href: string): URL | undefined {
   if (!URL.canParse(href)) return undefined;
   const url = new URL(href);
   const port = WEB_PORT[url.protocol as keyof typeof WEB_PORT];
+
   if (port === undefined) return undefined;
+
   if (url.username !== "" || url.password !== "") return undefined;
+
   if (url.port !== "" && url.port !== port) return undefined;
+
   return url;
 }

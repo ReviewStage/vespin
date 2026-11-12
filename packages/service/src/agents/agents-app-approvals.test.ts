@@ -71,6 +71,7 @@ const asked = (started: Effect.Success<ReturnType<typeof messagedAgent>>, reques
     const pending = yield* listPendingApprovals(started.owner, started.agent.id);
     const ask = pending.find((each) => each.requestId === requestId);
     assert.ok(ask !== undefined);
+
     return ask.id;
   });
 
@@ -87,6 +88,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
       Effect.gen(function* () {
         const started = yield* messagedAgent(fakeAgentSessions(), undefined);
         const { agent, ask, other, owner, task } = started;
+
         const changed = (as: string, permissionMode: string) =>
           ask(request(AGENT, as, { method: "PATCH", id: agent.id, body: { permissionMode } }));
 
@@ -95,6 +97,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* changed(owner, AGENT_PERMISSION_MODE.ASK),
         );
+
         yield* joinWorkspace(task.workspaceId, other);
         yield* keptToStarter(agent.id);
         const teammate = yield* changed(other, AGENT_PERMISSION_MODE.AUTO);
@@ -104,11 +107,13 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             .set({ runtime: CONVERSATION_RUNTIME.CODEX })
             .where(eq(conversations.id, started.target.conversationId)),
         );
+
         const onCodex = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* changed(owner, AGENT_PERMISSION_MODE.AUTO),
         );
+
         const backToFull = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -133,15 +138,18 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
     () =>
       Effect.gen(function* () {
         const opened = yield* openTask({ agentSessions: fakeAgentSessions() });
+
         const start = (body: { readonly permissionMode?: string } = {}) =>
           opened.ask(
             startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID(), ...body }),
           );
+
         const before = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
         yield* writeAccountPreferences(opened.owner, {
           agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
         });
         const after = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+
         const named = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -165,6 +173,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
         const { agent, ask, owner } = started;
         const denied = yield* asked(started, "request-1");
         const left = yield* asked(started, "request-2");
+
         const answer = (approvalId: string) =>
           ask(
             request(approvalPath(approvalId), owner, {
@@ -179,6 +188,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* answer(denied),
         );
+
         const again = yield* answer(denied);
         // The turn ends with the second ask still pending, which expires with it.
         yield* started.writer.consume(started.target, {
@@ -231,7 +241,9 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             const started = yield* messagedAgent(fakeAgentSessions({ answers }), {
               running: true,
             });
+
             const approvalId = yield* asked(started, "request-1");
+
             const answered = yield* started.ask(
               request(approvalPath(approvalId), started.owner, {
                 method: "POST",
@@ -239,7 +251,9 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
                 body: { answer: APPROVAL_ANSWER.ALLOW },
               }),
             );
+
             const standing = yield* listPendingApprovals(started.owner, started.agent.id);
+
             return { answered, pending: standing.map((each) => each.decidedByUserId) };
           });
 
@@ -271,6 +285,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
         const started = yield* messagedAgent(agentSessions, { running: true });
         const { agent, ask, other, owner, task } = started;
         const approvalId = yield* asked(started, "request-1");
+
         const answer = () =>
           ask(
             request(approvalPath(approvalId), other, {

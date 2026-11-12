@@ -24,6 +24,7 @@ const CHANGELOG_ROUTES = changelogRoutes(RELEASES);
 function changelogAt(path: string): FunctionComponent {
   const route = CHANGELOG_ROUTES.find((candidate) => candidate.path === path);
   assert.ok(route !== undefined);
+
   return () => createElement(ChangelogPage, { view: route.view });
 }
 
@@ -40,12 +41,14 @@ const PAGES: readonly { path: string; page: FunctionComponent; marked: readonly 
 function drawn(page: FunctionComponent): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML = renderToString(createElement(page));
+
   return root;
 }
 
 /** What each link is named, its words or else its label, with where it goes. */
 function links(region: Element | null): string[] {
   assert.ok(region !== null);
+
   return Array.from(region.querySelectorAll("a")).map(
     (link) =>
       `${link.getAttribute("aria-label") ?? link.textContent} -> ${link.getAttribute("href")}`,
@@ -79,16 +82,19 @@ for (const { path, page, marked } of PAGES) {
       current.map((link) => link.textContent),
       marked,
     );
+
     for (const link of current) assert.equal(link.getAttribute("href"), path);
   });
 }
 
 test("the landing offers the web app beside the download, and nothing in its scenes to press", () => {
   const body = drawn(App).querySelector("main");
+
   // A scene's controls are a picture of the app: none of them may take the keyboard.
   const pressable = Array.from(body?.querySelectorAll("button, [tabindex]") ?? []).filter(
     (control) => control.closest("[inert]") === null,
   );
+
   assert.deepEqual(
     pressable.map((control) => control.textContent),
     [],

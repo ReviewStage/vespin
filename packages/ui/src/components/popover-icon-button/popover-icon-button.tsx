@@ -49,6 +49,7 @@ function pressOnButton(
   button: HTMLElement | null,
 ): boolean {
   const target = details.event?.target;
+
   return (
     details.reason === OUTSIDE_PRESS && target instanceof Node && button?.contains(target) === true
   );
@@ -92,6 +93,7 @@ export function PopoverIconButton({
 }): React.JSX.Element {
   const own = useRef<HTMLButtonElement | null>(null);
   const button = ref ?? own;
+
   const opener = (
     <IconButton
       ref={button}
@@ -106,6 +108,7 @@ export function PopoverIconButton({
       onClick={() => onOpenChange(!open, false)}
     />
   );
+
   return (
     <>
       {hint === undefined ? opener : <Tooltip label={hint}>{opener}</Tooltip>}

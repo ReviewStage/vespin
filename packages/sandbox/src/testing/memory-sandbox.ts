@@ -147,8 +147,10 @@ export interface MemorySandbox {
 /** A run's id or a snapshot's, minted in order. */
 function counter(prefix: string): () => string {
   let next = 0;
+
   return () => {
     next += 1;
+
     return `${prefix}${next}`;
   };
 }
@@ -191,6 +193,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     interactive: [],
     touched: [],
   };
+
   const nextRun = counter("run_");
   const nextSnapshot = counter("snap_");
   const nextCommand = counter("cmd_");
@@ -203,7 +206,9 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
   ): Effect.Effect<A, SandboxError> =>
     Effect.suspend(() => {
       const failure = hooks.fail?.(call, name);
+
       if (failure === undefined) return work;
+
       return Effect.isEffect(failure) ? failure : Effect.fail(failure);
     });
 
@@ -212,10 +217,13 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     Effect.suspend(() => {
       const name = typeof target === "string" ? target : target.name;
       const record = state.sandboxes.get(name);
+
       if (record === undefined) return Effect.fail(new SandboxGone({ call }));
+
       if (typeof target !== "string" && target.running !== record.running) {
         return Effect.fail(new SandboxGone({ call }));
       }
+
       return Effect.succeed(record);
     });
 
@@ -234,15 +242,21 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         if (!state.drives.has(asked.fill)) {
           state.drives.set(asked.fill, { name: asked.fill, forkedFrom: undefined });
         }
+
         return Effect.succeed({ name: asked.fill, at: asked.at });
       }
+
       const own = ownDriveName(name);
+
       if (state.drives.has(own)) return Effect.succeed({ name: own, at: asked.at });
+
       if ("own" in asked) return Effect.succeed(undefined);
       const origin = "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy);
+
       if (!state.drives.has(origin))
         return Effect.fail(new SandboxGone({ call: SANDBOX_CALL.CREATE }));
       state.drives.set(own, { name: own, forkedFrom: origin });
+
       return Effect.succeed({ name: own, at: asked.at });
     });
 
@@ -251,7 +265,9 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       if ("snapshotId" in ask.from && state.goneSnapshots.has(ask.from.snapshotId)) {
         return yield* new SnapshotGone({ call: SANDBOX_CALL.CREATE });
       }
+
       const drive = ask.drive === undefined ? undefined : yield* driveFor(ask.name, ask.drive);
+
       const record: MemorySandboxRecord = {
         name: ask.name,
         status: SANDBOX_STATUS.RUNNING,
@@ -267,19 +283,24 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         expiresAt: undefined,
         routes: [],
       };
+
       state.sandboxes.set(ask.name, record);
+
       return record;
     });
 
   const resumed = (record: MemorySandboxRecord) =>
     Effect.suspend(() => {
       if (record.status === SANDBOX_STATUS.RUNNING) return Effect.succeed(record);
+
       if (record.snapshotId !== undefined && state.goneSnapshots.has(record.snapshotId)) {
         return Effect.fail(new SnapshotGone({ call: SANDBOX_CALL.GET }));
       }
+
       record.status = SANDBOX_STATUS.RUNNING;
       record.running = nextRun();
       state.resumed.push({ name: record.name, running: record.running });
+
       return Effect.succeed(record);
     });
 
@@ -298,7 +319,9 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       exit: null,
       stderr: "",
     };
+
     state.commands.push(made);
+
     return made;
   };
 
@@ -308,6 +331,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       const found = state.commands.find(
         (each) => each.id === commandId && each.running === record.running,
       );
+
       return found === undefined || record.status !== SANDBOX_STATUS.RUNNING
         ? Effect.fail(new SandboxGone({ call }))
         : Effect.succeed(found);
@@ -316,6 +340,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
   const stop = (record: MemorySandboxRecord) => {
     record.status = SANDBOX_STATUS.STOPPED;
     state.stopped.push({ name: record.name, running: record.running });
+
     for (const each of state.commands) {
       if (each.running === record.running && each.exit === null) each.exit = 143;
     }
@@ -341,6 +366,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.sync(() => {
           const record = state.sandboxes.get(name);
+
           return record === undefined ? undefined : listedOf(record);
         }),
       ),
@@ -356,6 +382,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.suspend((): Effect.Effect<OpenedSandbox, SandboxError> => {
           const record = state.sandboxes.get(name);
+
           return record === undefined
             ? Effect.fail(new SandboxGone({ call: SANDBOX_CALL.GET }))
             : Effect.map(resumed(record), listedOf);
@@ -378,20 +405,26 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         ask.name,
         Effect.gen(function* () {
           const standing = state.sandboxes.get(ask.name);
+
           if (standing !== undefined) {
             const woken = yield* Effect.result(resumed(standing));
+
             if (woken._tag === "Success") return listedOf(woken.success);
+
             if (woken.failure._tag !== "SnapshotGone") return yield* woken.failure;
             state.sandboxes.delete(ask.name);
             state.deleted.push(ask.name);
           }
+
           const created = listedOf(yield* opened(ask));
+
           if (onCreate !== undefined) {
             yield* Effect.tryPromise({
               try: () => onCreate(created),
               catch: () => new SandboxUnavailable({ call: SANDBOX_CALL.GET_OR_CREATE }),
             });
           }
+
           return created;
         }),
       ),
@@ -401,6 +434,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.sync(() => {
           if (state.sandboxes.delete(name)) state.deleted.push(name);
+
           if (state.drives.delete(ownDriveName(name))) state.deletedDrives.push(ownDriveName(name));
         }),
       ),
@@ -412,8 +446,11 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           const mounted = [...state.sandboxes.values()].some(
             (record) => record.drive?.name === name && record.status === SANDBOX_STATUS.RUNNING,
           );
+
           if (mounted) return Effect.fail(new SandboxUnavailable({ call: SANDBOX_CALL.DRIVE }));
+
           if (state.drives.delete(name)) state.deletedDrives.push(name);
+
           return Effect.void;
         }),
       ),
@@ -444,6 +481,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.map(reached(SANDBOX_CALL.PORTS, name), (record) => {
           record.routes = ports.map((port) => ({ port, url: `https://${name}-${port}.memory` }));
+
           return record.routes;
         }),
       ),
@@ -455,14 +493,17 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           const record = yield* up(SANDBOX_CALL.CMD, target);
           const ran = command(record, ask, false);
           const answer = hooks.run?.(ran, record);
+
           const finished =
             answer === undefined
               ? { exitCode: 0, stdout: "", stderr: "" }
               : Effect.isEffect(answer)
                 ? yield* answer
                 : answer;
+
           ran.exit = finished.exitCode;
           ran.stderr = finished.stderr;
+
           return finished;
         }),
       ),
@@ -473,6 +514,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         Effect.map(up(SANDBOX_CALL.CMD, target), (record) => {
           const started = command(record, ask, true);
           hooks.start?.(started, record);
+
           return started.id;
         }),
       ),
@@ -484,6 +526,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           if (found.exit !== null)
             return Effect.fail(new SandboxGone({ call: SANDBOX_CALL.STDIN }));
           found.stdin += text;
+
           return Effect.void;
         }),
       ),
@@ -533,6 +576,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         nameOf(target),
         Effect.map(up(SANDBOX_CALL.INTERACTIVE, target), (record) => {
           state.interactive.push({ name: record.name, running: record.running });
+
           return {
             url: `wss://${record.name}.memory/pty`,
             token: Redacted.make(`token-${record.running}`),
@@ -559,6 +603,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           state.snapshots.push({ id, name: record.name, running: record.running, lapseMs });
           stop(record);
           record.snapshotId = id;
+
           return id;
         }),
       ),
@@ -568,6 +613,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.gen(function* () {
           const record = state.sandboxes.get(name);
+
           if (record?.status !== SANDBOX_STATUS.RUNNING) return;
           record.expiresAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(SANDBOX_IDLE);
           state.touched.push({ name, running: record.running });
@@ -595,11 +641,14 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         routes: [],
         ...sandbox,
       };
+
       state.sandboxes.set(record.name, record);
+
       return record;
     },
     exited: (commandId, code) => {
       const found = state.commands.find((each) => each.id === commandId);
+
       if (found !== undefined) found.exit = code;
     },
   };

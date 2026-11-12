@@ -281,6 +281,7 @@ export function claimChapterGeneration(
   request: ChapterGenerationRequest,
 ): PullRequestChaptersEffect<ChapterClaimAnswer> {
   const staleBefore = new Date(request.now.getTime() - CHAPTER_GENERATION_STALE_MS);
+
   return Effect.map(
     upsertClaim({ ...request, staleBefore }),
     ([claimed]): ChapterClaimAnswer =>

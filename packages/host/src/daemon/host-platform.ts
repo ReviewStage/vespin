@@ -66,6 +66,7 @@ interface HostPlatformOptions {
 export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSeam {
   const clis =
     options.clis ?? localAgentClis(options.stateRoot, options.os.agentClis(options.arch));
+
   return {
     launch: (runner) =>
       agentOnBox(

@@ -26,6 +26,7 @@ const openOwnedWorkspace = Effect.gen(function* () {
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const workspace = yield* openWorkspace(userId);
   const agentId = yield* openAgentOnOwnTask(userId, workspace);
+
   return { workspace, agentId };
 });
 

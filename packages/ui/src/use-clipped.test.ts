@@ -52,6 +52,7 @@ afterEach(() => {
 /** A label drawing `words`, handing them to the hook, or as a tree it cannot compare where `tree` says so. */
 function Label({ words, tree }: { words: string; tree: boolean }): React.JSX.Element {
   const [measured, clipped] = useClipped(tree ? undefined : words);
+
   return createElement(
     "span",
     { ref: measured, "data-overflow": String(clipped) },
@@ -64,9 +65,12 @@ function mount(words: string, tree: boolean) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (next: string) =>
     act(() => root.render(createElement(Label, { words: next, tree })));
+
   draw(words);
+
   return {
     overflow: () => container.querySelector("span")?.getAttribute("data-overflow") ?? null,
     draw,

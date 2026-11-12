@@ -90,6 +90,7 @@ function sentAnew(subject: WriteSubject): number {
   const ofKind = newestWrite.get(subject.kind) ?? new Map<string, number>();
   const sent = (ofKind.get(subject.id) ?? 0) + 1;
   newestWrite.set(subject.kind, ofKind.set(subject.id, sent));
+
   return sent;
 }
 
@@ -116,10 +117,12 @@ export function useOfflineNotice(): void {
   const notices = useFailureNotices();
   const acts = useHostActs();
   const { data: mark } = useQuery({ ...appStateQuery, select: selectLiveMark });
+
   const { data: refused = 0 } = useQuery({
     ...appStateQuery,
     select: (state) => state.network.offlineRefused ?? 0,
   });
+
   const offline = OFFLINE_MARKS.has(mark);
   useEffect(() => {
     if (!offline) notices.online();
@@ -144,21 +147,26 @@ export function useWrite(): Write {
   useLayoutEffect(() => {
     markNow.current = mark;
   }, [mark]);
+
   const write: Write = useCallback(
     <Answer>(act: () => PromiseLike<Answer>, saying: WriteSaying<Answer> = {}) => {
       const send = (): Promise<boolean> => {
         const { subject } = saying;
         const sent = subject === undefined ? 0 : sentAnew(subject);
+
         // Note that Try again sends nothing once a newer write of the same subject was sent.
         const again = () => {
           if (subject === undefined || stillNewest(subject, sent)) void send();
         };
+
         const failed = (words: string, unreached: boolean, retry: boolean): false => {
           buzz(BUZZ.ERROR);
           const now = markNow.current;
           const offline = unreached && now !== undefined && OFFLINE_MARKS.has(now);
           const said = offline ? LIVE_MARK_WORDS[now].hint : words;
+
           if (offline) notices.say({ kind: NOTICE_KIND.OFFLINE, words: said });
+
           if (saying.inPlace !== undefined) saying.inPlace(said);
           else if (!offline) {
             notices.say({
@@ -167,36 +175,48 @@ export function useWrite(): Write {
               retry: retry ? again : undefined,
             });
           }
+
           return false;
         };
+
         let started: PromiseLike<Answer>;
+
         try {
           started = act();
         } catch (thrown) {
           started = Promise.reject(thrown);
         }
+
         return Promise.resolve(started).then(
           (answer) => {
             const words = saying.refused?.(answer);
+
             const retry =
               typeof saying.retry === "function" ? saying.retry(answer) : saying.retry === true;
+
             if (words !== undefined) return failed(words, false, retry);
+
             if (saying.went !== undefined) buzz(saying.went);
+
             return true;
           },
           (cause: unknown) => {
             const sentence = actRefusalSentence(cause);
             const retry = saying.retry !== undefined && saying.retry !== false;
+
             if (sentence !== undefined) return failed(sentence, false, retry);
             console.error("A write did not go.", cause);
+
             return failed(saying.unanswered ?? ACT_UNREACHED_WORDS, true, retry);
           },
         );
       };
+
       return send();
     },
     [notices],
   );
+
   return write;
 }
 
@@ -210,6 +230,7 @@ export function refusalOf(
   act: () => PromiseLike<unknown>,
 ): Promise<string | undefined> {
   const said: { words?: string } = {};
+
   return write(act, {
     inPlace: (words) => {
       said.words = words;

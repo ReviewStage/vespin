@@ -74,6 +74,7 @@ beforeEach(() => {
     ...fakeActPortCalls(),
     [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: ({ agentId }) => {
       reads.push(agentId);
+
       return quietHold();
     },
   });
@@ -110,6 +111,7 @@ function drawPin(
       ),
     ),
   );
+
   return list.querySelector<HTMLElement>("button.ui-list-row-main") ?? assert.fail("the row");
 }
 
@@ -162,10 +164,12 @@ test("a pointer crossing a pinned agent's row asks the service nothing", async (
 
 test("a pinned Changes tab wears its pull request's mark and current label where its task's pull requests hold it, and the gray icon and pinned label where they do not", () => {
   const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
+
   const held: TaskSummary = {
     ...TASK,
     agents: { total: 1, working: 0, pullRequestTotal: 1 },
   };
+
   holdPullRequests([
     {
       number: 42,
@@ -197,6 +201,7 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
     ...TASK,
     agents: { total: 1, working: 0, pullRequestTotal: 0 },
   };
+
   const followed = listedAgent({
     id: AGENT,
     planId: TASK.id,
@@ -207,6 +212,7 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
     createdAt: 1,
     turnId: null,
   });
+
   const live = drawPin(PIN, renamed, tasksControl({ tasks: [renamed], liveAgents: [followed] }));
   assert.equal(live.textContent, "Expire stale invitations");
 
@@ -219,10 +225,12 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
 test("a pinned Changes tab of an agent that shares its pull request with a newer one wears the open task's read of its own", () => {
   const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
   const newer = "9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
   const held: TaskSummary = {
     ...TASK,
     agents: { total: 2, working: 0, pullRequestTotal: 1 },
   };
+
   holdPullRequests([
     {
       number: 42,
@@ -235,6 +243,7 @@ test("a pinned Changes tab of an agent that shares its pull request with a newer
     },
   ]);
   const base = tasksControl({ tasks: [held] });
+
   const control: TasksControl = {
     ...base,
     activeTaskId: TASK.id,
@@ -258,6 +267,7 @@ test("a pinned Changes tab of an agent that shares its pull request with a newer
       ]),
     },
   };
+
   const row = drawPin(pin, held, control);
   assert.equal(row.textContent, "#42 Newer title");
   assert.equal(
@@ -273,6 +283,7 @@ test("a pinned Changes tab naming a pull request by number keeps its pinned labe
     label: "#42 Old title",
     at: 1,
   };
+
   const line = (repository: string) => ({
     number: 42,
     title: `Title in ${repository}`,
@@ -282,10 +293,12 @@ test("a pinned Changes tab naming a pull request by number keeps its pinned labe
     additions: 4,
     deletions: 1,
   });
+
   const held: TaskSummary = {
     ...TASK,
     agents: { total: 2, working: 0, pullRequestTotal: 2 },
   };
+
   holdPullRequests([line("old"), line("new")]);
   const row = drawPin(pin, held);
   assert.equal(row.textContent, "#42 Old title");
@@ -294,6 +307,7 @@ test("a pinned Changes tab naming a pull request by number keeps its pinned labe
 
 describe("a pinned Changes tab's card", () => {
   const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
+
   const summary: AgentSummary = {
     id: AGENT,
     planId: TASK.id,
@@ -304,6 +318,7 @@ describe("a pinned Changes tab's card", () => {
     status: AGENT_STATUS.COMPLETED,
     turnId: null,
   };
+
   const read = {
     number: 42,
     title: "Newer title",
@@ -314,9 +329,11 @@ describe("a pinned Changes tab's card", () => {
     deletions: 1,
     changedFiles: 3,
   };
+
   /** The open task, which has read its agent's pull request. */
   const openTask = (agents: readonly AgentSummary[]): TasksControl => {
     const base = tasksControl({ tasks: [TASK] });
+
     return {
       ...base,
       activeTaskId: TASK.id,
@@ -338,6 +355,7 @@ describe("a pinned Changes tab's card", () => {
 
   test("is the pin's own card, naming the pull request the task list holds without asking the service, where the task is not open", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+
     const listed = {
       tasks: {
         ...IDLE_TASKS_VIEW,
@@ -345,6 +363,7 @@ describe("a pinned Changes tab's card", () => {
         agentPullRequests: [{ agentId: AGENT, taskId: TASK.id, pullRequest: read }],
       },
     };
+
     handState({}, listed);
     // Note that the test's Query client is handed the document at once, since its timers are held still.
     writeAppState(stateWith({}, listed));
@@ -369,10 +388,12 @@ test("a pinned tab's ⋯ and its right-click open the same menu, the ⋯ a Tab s
   const more = document.querySelector<HTMLButtonElement>('button[aria-label="Pinned tab actions"]');
   assert.ok(more, "the row draws a ⋯");
   assert.equal(more.tabIndex, 0);
+
   const offered = () =>
     [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map(
       (each) => each.textContent,
     );
+
   act(() => more.click());
   const fromMore = offered();
   assert.ok(fromMore.includes("Unpin"));

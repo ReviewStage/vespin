@@ -33,6 +33,7 @@ import { CatalogSection } from "../section";
 function ArrivingStep(): React.JSX.Element {
   const [done, setDone] = useState(false);
   const [moved, setMoved] = useState(false);
+
   return (
     <Stack gap={GAP.CONTROL}>
       <span className="catalog-glyph-line">

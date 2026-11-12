@@ -28,6 +28,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 /** GitHub's rendering of a one-line image, its address spelled with entities as GitHub spells it. */
 function rendered(address: string): Response {
   const spelled = address.replaceAll("&", "&amp;");
+
   return new Response(`<p><a href="${spelled}"><img src="${spelled}" alt=""></a></p>`, {
     headers: { "content-type": "text/html;charset=utf-8" },
   });
@@ -47,6 +48,7 @@ const read = (address: string, answer: (sent: SentToGitHub) => Response) =>
     assert.ok(named !== undefined, "the address names an image the window draws");
     const github = fakeGitHub(answer);
     const result = yield* githubImage(TOKEN, REPOSITORY, named).pipe(Effect.provide(github.layer));
+
     return { result, sent: github.sent };
   });
 
@@ -104,6 +106,7 @@ it.effect(
             ? rendered(SIGNED.replace(ASSET, OTHER_ASSET))
             : image("image/png"),
       );
+
       assert.ok(Option.isNone(elsewhere.result));
       assert.equal(
         elsewhere.sent.length,
@@ -117,6 +120,7 @@ it.effect(
       const large = yield* read(CAMO, () =>
         image("image/png", new Uint8Array(GITHUB_IMAGE_BOUNDS.MAX_BYTES + 1)),
       );
+
       assert.ok(Option.isNone(large.result));
     }),
 );
@@ -157,9 +161,11 @@ it.effect(
       const licensed = new TextEncoder().encode(
         `<?xml version="1.0"?><!-- ${"license ".repeat(1_000)}--><svg xmlns="http://www.w3.org/2000/svg"/>`,
       );
+
       const svg = yield* read("https://raw.githubusercontent.com/acme/relay/main/logo.svg", () =>
         raw(licensed),
       );
+
       assert.ok(Option.isSome(svg.result), "an SVG with a long comment before its root is read");
       assert.equal(svg.result.value.contentType, GITHUB_IMAGE_TYPE.SVG);
     }),
@@ -173,24 +179,29 @@ it.effect(
         "https://raw.githubusercontent.com/acme/vault/main/secret.png",
         () => raw(),
       );
+
       assert.ok(Option.isNone(elsewhere.result));
       assert.deepEqual(elsewhere.sent, [], "GitHub is asked nothing for another repository");
 
       const listing = yield* read("https://github.com/acme/relay/raw/main/shots.png", () =>
         Response.json([{ name: "a.png" }]),
       );
+
       assert.ok(Option.isNone(listing.result));
 
       const large = yield* read("https://github.com/acme/relay/raw/main/shot.png", () =>
         raw(new Uint8Array(GITHUB_IMAGE_BOUNDS.MAX_BYTES + 1)),
       );
+
       assert.ok(Option.isNone(large.result));
 
       const page = new TextEncoder().encode("<html><script>alert(1)</script></html>");
+
       for (const name of ["shot.png", "shot.svg", "shot.webp"]) {
         const disguised = yield* read(`https://github.com/acme/relay/raw/main/${name}`, () =>
           raw(page),
         );
+
         assert.ok(Option.isNone(disguised.result), name);
       }
     }),

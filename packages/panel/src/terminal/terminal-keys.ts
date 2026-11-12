@@ -59,12 +59,18 @@ export function terminalKey(event: KeyboardEvent): TerminalKey {
   if (event.key === "Enter" && holdsOnly(event, { shift: true })) {
     return { kind: TERMINAL_KEY.SEND, data: LINE_FEED };
   }
+
   const line = LINE_KEYS.get(event.key);
+
   if (line !== undefined && holdsOnly(event, { meta: true })) {
     return { kind: TERMINAL_KEY.SEND, data: line };
   }
+
   if (surfaceKeepsPress(event)) return { kind: TERMINAL_KEY.SHELL };
+
   if (event.metaKey) return { kind: TERMINAL_KEY.WINDOW };
+
   if (event.key === "Tab" && event.ctrlKey && !event.altKey) return { kind: TERMINAL_KEY.WINDOW };
+
   return { kind: TERMINAL_KEY.SHELL };
 }

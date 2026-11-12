@@ -144,6 +144,7 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+
   if (empty && onStop !== undefined && stopping) {
     return (
       <ProgressView
@@ -156,6 +157,7 @@ function SendButton({
       />
     );
   }
+
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
@@ -163,6 +165,7 @@ function SendButton({
       </Button>
     );
   }
+
   if (empty && onDictate !== undefined) {
     return (
       <Button
@@ -178,6 +181,7 @@ function SendButton({
       </Button>
     );
   }
+
   return (
     <Button
       onPress={() => onSend?.()}
@@ -197,6 +201,7 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
   const colors = useColors();
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
+
   return (
     <Menu
       label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
@@ -244,6 +249,7 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
   } = props;
+
   const colors = useColors();
   const text = useNativeState(held ?? "");
   const [typed, setTyped] = useState(held ?? "");
@@ -255,21 +261,26 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
   const type = (next: string) => {
     shown.current = next;
     setTyped(next);
     onWords?.(next);
   };
+
   const empty = words.trim() === "" && !sendable;
+
   const send =
     onSend === undefined
       ? undefined
       : () => {
           onSend(words.trim());
+
           if (held !== undefined) return;
           text.set("");
           setTyped("");
         };
+
   return (
     <>
       {addMenu !== undefined ? (
@@ -326,6 +337,7 @@ function ComposerPieces(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
+
   return (
     <GlassBar
       head={props.head}
@@ -351,6 +363,7 @@ export function ComposerFoot(props: ComposerProps) {
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
   ];
+
   if (props.head === undefined) {
     return (
       <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
@@ -358,6 +371,7 @@ export function ComposerFoot(props: ComposerProps) {
       </HStack>
     );
   }
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
       <BarHead>{props.head}</BarHead>

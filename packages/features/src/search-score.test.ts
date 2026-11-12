@@ -123,6 +123,7 @@ function covered(text: string, ranges: readonly { start: number; end: number }[]
 test.each(CASES)("$name", ({ subject, query, tier, marks }) => {
   const hit = searchHit(subject, query);
   expect(hit?.tier).toBe(tier);
+
   if (hit === undefined || marks === undefined) return;
   expect(covered(subject.label, hit.label)).toEqual(marks.label);
   const lines = subject.lines ?? [];
@@ -141,11 +142,13 @@ test("every row a tier finds ranks above every row the next tier finds, a label 
     { label: "Set" },
     { label: "Open a set", loose: true },
   ];
+
   const ranked = rows
     .map((row) => ({ row, score: searchHit(row, "set")?.score ?? 0 }))
     .filter((each) => each.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((each) => each.row.label);
+
   expect(ranked).toEqual([
     "Set",
     "Settings sync",

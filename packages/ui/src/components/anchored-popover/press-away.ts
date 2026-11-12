@@ -38,16 +38,23 @@ export function usePressAway(
   const hearing = onPressAway !== undefined;
   useEffect(() => {
     if (!hearing) return undefined;
+
     const pressed = (event: PointerEvent) => {
       const { target } = event;
+
       if (!(target instanceof Node)) return;
       const own = latest.current;
+
       if (layer.current?.contains(target) === true) return;
+
       if (own.anchor()?.contains(target) === true) return;
+
       if (own.holds?.(target) === true) return;
       own.onPressAway?.();
     };
+
     document.addEventListener("pointerdown", pressed, true);
+
     return () => document.removeEventListener("pointerdown", pressed, true);
   }, [hearing, layer]);
 }

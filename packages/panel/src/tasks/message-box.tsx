@@ -243,10 +243,12 @@ function hiddenPresses(
   offers: readonly OverflowOffer[],
 ): readonly OverflowPress[] {
   if (card === null) return [];
+
   return offers
     .map((offer) => offer.press)
     .filter((press) => {
       const element = card.querySelector(`.${press}`);
+
       return element !== null && getComputedStyle(element).display === "none";
     });
 }
@@ -262,20 +264,27 @@ function useFootFold(card: RefObject<HTMLElement | null>): FoldWidth | undefined
   const [under, setUnder] = useState<FoldWidth | undefined>(undefined);
   useEffect(() => {
     const form = card.current;
+
     if (form === null) return undefined;
+
     const measure = () => {
       const style = getComputedStyle(form);
+
       const inner =
         form.clientWidth -
         Number.parseFloat(style.paddingLeft) -
         Number.parseFloat(style.paddingRight);
+
       setUnder(inner > 0 ? FOLD_LINES.find((line) => inner < line) : undefined);
     };
+
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(form);
+
     return () => observer.disconnect();
   }, [card]);
+
   return under;
 }
 
@@ -302,7 +311,9 @@ function ownNote(
       },
     };
   }
+
   if (!unloaded) return undefined;
+
   return {
     cut: false,
     note: {
@@ -334,17 +345,23 @@ function BoxMore({
   const { close } = menu;
   useEffect(() => {
     const box = card.current;
+
     if (!standing || box === null) return undefined;
     const width = box.getBoundingClientRect().width;
+
     const observer = new ResizeObserver(() => {
       if (box.getBoundingClientRect().width !== width) close(false);
     });
+
     observer.observe(box);
+
     return () => observer.disconnect();
   }, [standing, close, card]);
+
   const actions = offers
     .filter((offer) => taken.includes(offer.press))
     .flatMap((each) => each.entries);
+
   return (
     <>
       <span className="message-box-more hidden">
@@ -408,7 +425,9 @@ function useBoxFiles(
   const chips = attachmentChips(attachments);
   const shown = useWordFiles(chips, takes ? draft : "");
   const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
+
   if (!takes) return { beside: attachments, field: undefined, viewer: null };
+
   return {
     beside: attachments.filter((_, at) => shown.beside.some((chip) => chip === chips[at])),
     // Note that every file the box holds is chipped, so a marker undo brings back is its chip at once.
@@ -429,6 +448,7 @@ function BoxField({
   const { files } = box;
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
+
   return (
     <ComposerField
       keystrokeSpan={options.keystrokeSpan}
@@ -472,15 +492,19 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   const editor = useRef<ComposerEditorHandle | undefined>(undefined);
   const room = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLElement>(null);
+
   const [said, setSaid] = useState<{ readonly said: Said; readonly words: string } | undefined>(
     undefined,
   );
+
   const say = (kind: Said, words: string | undefined) =>
     setSaid(words === undefined ? undefined : { said: kind, words });
+
   const bundle = useQuery(useSideBundles().descriptionEditor);
   // Whether the editor stood as the box first drew, which an owner that focuses the field focuses.
   const [mountedFirst] = useState(bundle.data !== undefined);
   const takesFiles = options.takesFiles !== false;
+
   const files = useAttachedFiles({
     holder: options.holder,
     held: options.held === true || !takesFiles,
@@ -490,13 +514,16 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
       ? {
           place: () => {
             const mark = editor.current?.mark();
+
             return mark === undefined ? undefined : (names) => mark.insertFiles(names);
           },
         }
       : undefined,
   });
+
   const inWords = useBoxFiles(takesFiles, options.draft, files.attachments);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
+
   const pickers = useComposerPickers({
     ...picked,
     editor,
@@ -506,20 +533,26 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     keywords,
     onNote: (words) => say(SAID.DICTATION, words),
   });
+
   const fold = useFootFold(frame);
+
   // Note that a popover closed by key while the ⋯ stands hands focus to the
   // ⋯, after its own close has handed it to its hidden press, because a
   // hidden press can hold no keyboard; with the press drawn, the ⋯ is not.
   const handBack = (set: (open: boolean) => void) => (open: boolean) => {
     const more = frame.current?.querySelector<HTMLElement>(".message-box-more") ?? null;
     const press = more?.querySelector<HTMLElement>("button") ?? null;
+
     const returning =
       !open && (document.activeElement?.closest(".ui-anchored-popover") ?? null) !== null;
+
     set(open);
+
     if (returning && more !== null && press !== null && getComputedStyle(more).display !== "none") {
       queueMicrotask(() => press.focus());
     }
   };
+
   return {
     editor,
     room,
@@ -587,6 +620,7 @@ export function MessageBox({
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
   const openPicker = () => picker.current?.open();
+
   // Note that a + folded away hands the ⋯ its menu's rows, or its own press where it opens the picker itself.
   const offers: readonly OverflowOffer[] = [
     ...(takesFiles
@@ -620,6 +654,7 @@ export function MessageBox({
       ],
     },
   ];
+
   return (
     <PromptInput
       {...frame}
@@ -642,6 +677,7 @@ export function MessageBox({
                     ? undefined
                     : (index) => {
                         const file = inWords.beside[index];
+
                         if (file !== undefined) files.remove(files.attachments.indexOf(file));
                       }
                 }
@@ -709,6 +745,7 @@ export function MessageField({
   invalid?: boolean | undefined;
 }): React.JSX.Element {
   const { options } = box[DRAWN];
+
   // Note that a field has no foot to say its note in, a paste cut to its room or an editor that did not load with its Retry, so the note stands under the field.
   return (
     <>

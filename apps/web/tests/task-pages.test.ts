@@ -25,12 +25,14 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
 const openTask = Effect.gen(function* () {
   const userId = yield* openAccount;
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   return { userId, taskId: task.id, workspaceId: task.workspaceId };
 });
 

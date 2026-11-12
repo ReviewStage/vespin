@@ -251,6 +251,7 @@ function keepPlace(dataUrl: string, place: Place): void {
   places.delete(dataUrl);
   places.set(dataUrl, place);
   const oldest = places.keys().next().value;
+
   if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
 }
 
@@ -278,11 +279,14 @@ export function useBlobUrl(dataUrl: string): string | undefined {
   useEffect(() => {
     const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
     const bytes = new Uint8Array(binary.length);
+
     for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
     const made = URL.createObjectURL(new Blob([bytes], { type: dataUrlMediaType(dataUrl) }));
     setUrl(made);
+
     return () => URL.revokeObjectURL(made);
   }, [dataUrl]);
+
   return url;
 }
 
@@ -304,17 +308,22 @@ function idAt(head: string, at: number, id: readonly number[]): boolean {
 function frameSecondsOf(dataUrl: string): number {
   const start = dataUrl.indexOf(",") + 1;
   const head = atob(dataUrl.slice(start, start + HEADER_BASE64_CHARS));
+
   for (let at = 0; at < head.length && !idAt(head, at, WEBM_ID.CLUSTER); at += 1) {
     if (!idAt(head, at, WEBM_ID.DEFAULT_DURATION)) continue;
     const marker = head.charCodeAt(at + WEBM_ID.DEFAULT_DURATION.length);
     const size = marker & 0x7f;
     const from = at + WEBM_ID.DEFAULT_DURATION.length + 1;
+
     if ((marker & 0x80) === 0 || size === 0 || size > 8 || from + size > head.length) continue;
     let ns = 0;
+
     for (let byte = 0; byte < size; byte += 1) ns = ns * 256 + head.charCodeAt(from + byte);
     const seconds = ns / NS_PER_SECOND;
+
     if (seconds >= FRAME_S_BOUNDS.MIN && seconds <= FRAME_S_BOUNDS.MAX) return seconds;
   }
+
   return FALLBACK_FRAME_S;
 }
 
@@ -337,19 +346,26 @@ function useFullScreen(
   useEffect(() => {
     const follow = () => setFull(document.fullscreenElement === frame.current);
     document.addEventListener("fullscreenchange", follow);
+
     return () => document.removeEventListener("fullscreenchange", follow);
   }, [frame]);
+
   const toggle = () => {
     if (document.fullscreenElement === frame.current) {
       document.exitFullscreen().catch(() => undefined);
+
       return;
     }
+
     if (!document.fullscreenEnabled) {
       video.current?.webkitEnterFullscreen?.();
+
       return;
     }
+
     frame.current?.requestFullscreen().catch(() => undefined);
   };
+
   return [full, toggle];
 }
 
@@ -367,6 +383,7 @@ function probeLength(video: HTMLVideoElement): void {
 /** Plays a paused video, or pauses a playing one. */
 function toggleOf(video: HTMLVideoElement | null): void {
   if (video === null) return;
+
   if (video.paused) video.play().catch(() => undefined);
   else video.pause();
 }
@@ -394,6 +411,7 @@ function stepFrame(video: HTMLVideoElement, frame: number, by: number): void {
 function speedBy(speed: number, by: number): number {
   const at = SPEEDS.indexOf(speed);
   const from = at === -1 ? SPEEDS.indexOf(NORMAL_SPEED) : at;
+
   return SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, from + by))] ?? NORMAL_SPEED;
 }
 
@@ -434,12 +452,14 @@ function playerKey(
   const seek = SEEK_KEYS.get(event.key);
   const step = FRAME_KEYS.get(event.key);
   const speed = SPEED_KEYS.get(event.key);
+
   if (TOGGLE_KEYS.has(event.key) && !(onButton && event.key === " ")) {
     // A held key plays or pauses once, not again with each repeat; a held arrow or frame key goes on.
     if (!event.repeat) toggleOf(video);
   } else if (seek !== undefined) {
     const from = video.currentTime;
     video.currentTime = Math.min(endOf(video), Math.max(0, from + seek));
+
     // A jump at an end that moves nothing flashes nothing; one cut short by an end still says the key's step, as the video sites do.
     if (video.currentTime !== from) onFlash({ kind: FLASH_KIND.JUMP, seconds: seek });
   } else if (step !== undefined) {
@@ -448,12 +468,14 @@ function playerKey(
     video.currentTime = event.key === END_KEYS.START ? 0 : endOf(video);
   } else if (speed !== undefined) {
     const next = speedBy(video.playbackRate, speed);
+
     // A speed key at the slowest or the fastest changes nothing and flashes nothing.
     if (next !== video.playbackRate) onFlash({ kind: FLASH_KIND.SPEED, speed: next });
     setSpeed(video, next);
   } else {
     return;
   }
+
   event.preventDefault();
   event.stopPropagation();
 }
@@ -484,9 +506,12 @@ function BarButton({
  */
 function flashOn(was: Flash | undefined, ask: FlashAsk): Flash {
   const press = (was?.press ?? 0) + 1;
+
   if (was === undefined || was.ask.kind !== ask.kind)
     return { ask, run: (was?.run ?? 0) + 1, press };
+
   if (ask.kind === FLASH_KIND.SPEED) return { ask, run: was.run, press };
+
   if (was.ask.kind === FLASH_KIND.JUMP && Math.sign(was.ask.seconds) === Math.sign(ask.seconds)) {
     return {
       ask: { kind: FLASH_KIND.JUMP, seconds: was.ask.seconds + ask.seconds },
@@ -494,6 +519,7 @@ function flashOn(was: Flash | undefined, ask: FlashAsk): Flash {
       press,
     };
   }
+
   return { ask, run: was.run + 1, press };
 }
 
@@ -513,8 +539,10 @@ const FLASH_PILL =
 function KeyFlash({ flash, onGone }: { flash: Flash; onGone: () => void }): React.JSX.Element {
   const { ask } = flash;
   const back = ask.kind === FLASH_KIND.JUMP && ask.seconds < 0;
+
   const side =
     ask.kind === FLASH_KIND.SPEED ? "justify-center" : back ? "justify-start" : "justify-end";
+
   return (
     <span
       className={`ui-video-player-flashes pointer-events-none absolute inset-0 flex items-center px-ui-24 ${side}`}
@@ -640,6 +668,7 @@ function VideoBar({
   onFullScreen: () => void;
 }): React.JSX.Element {
   const time = `${playheadText(playback.at * MS_PER_SECOND)} / ${playheadText(playback.duration * MS_PER_SECOND)}`;
+
   return (
     <span className={BAR}>
       <BarButton
@@ -708,12 +737,14 @@ export function VideoPlayer({
   const video = useRef<HTMLVideoElement>(null);
   const frame = useRef<HTMLSpanElement>(null);
   const [full, toggleFullScreen] = useFullScreen(frame, video);
+
   const [playback, setPlayback] = useState<Playback>({
     playing: false,
     at: 0,
     duration: 0,
     speed: NORMAL_SPEED,
   });
+
   const frameSeconds = useMemo(() => frameSecondsOf(dataUrl), [dataUrl]);
   const [flash, setFlash] = useState<Flash>();
   // The video's own pixels once its size is read, which the viewer fits it by.
@@ -722,6 +753,7 @@ export function VideoPlayer({
   const [readUrl, setReadUrl] = useState<string>();
   const loaded = url !== undefined && readUrl === url;
   const viewer = place === VIDEO_PLAYER_PLACE.VIEWER;
+
   // Note that the wait's size is a style, because the video's own `w-auto` outweighs a `width` attribute; the viewer's width is its place's.
   const waiting =
     loaded || size !== undefined
@@ -730,12 +762,14 @@ export function VideoPlayer({
           width: viewer ? undefined : LOADING_SIZE.width,
           aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
         };
+
   // This player, named in the places it keeps, so it can tell another's from its own.
   const [self] = useState(() => Symbol(VIDEO_LABEL.PLAYER));
   // The recording whose place this player keeps, once it has taken up where that one was left.
   const keeps = useRef<string>(undefined);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
+
   // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
   const read = (shown: HTMLVideoElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
@@ -746,10 +780,12 @@ export function VideoPlayer({
       duration,
       speed: shown.playbackRate,
     });
+
     if (moved && keeps.current !== undefined) {
       keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
     }
   };
+
   // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
   const resume = (shown: HTMLVideoElement) => {
     if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
@@ -757,20 +793,25 @@ export function VideoPlayer({
     const left = places.get(dataUrl)?.at ?? 0;
     shown.currentTime = left < shown.duration ? left : 0;
   };
+
   const expand =
     onExpand === undefined
       ? undefined
       : () => {
           const shown = video.current;
+
           if (shown !== null) {
             shown.pause();
             notePictureOrigin(shown);
           }
+
           onExpand();
         };
+
   const seek = (at: number) => {
     if (video.current !== null) video.current.currentTime = at;
   };
+
   const player = (
     // biome-ignore lint/a11y/useSemanticElements: a player holds a video and its bar, not a form's controls, so it is no `<fieldset>`.
     <span
@@ -808,6 +849,7 @@ export function VideoPlayer({
         }}
         onLoadedMetadata={(event) => {
           const shown = event.currentTarget;
+
           if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
           setReadUrl(url);
           // A new address is a new recording, whose place is taken up afresh.
@@ -824,10 +866,12 @@ export function VideoPlayer({
         onPlay={(event) => {
           const shown = event.currentTarget;
           const left = keeps.current === undefined ? undefined : places.get(keeps.current);
+
           // Played again after another player moved the same recording, it goes on from there.
           if (left !== undefined && left.by !== self) {
             shown.currentTime = left.at < shown.duration ? left.at : 0;
           }
+
           read(shown);
         }}
         onPause={(event) => read(event.currentTarget)}
@@ -864,6 +908,7 @@ export function VideoPlayer({
       )}
     </span>
   );
+
   // In the viewer the card around it is the viewer's own.
   if (viewer) {
     return (
@@ -883,6 +928,7 @@ export function VideoPlayer({
       </span>
     );
   }
+
   return (
     <Card
       as={CARD_ELEMENT.SPAN}

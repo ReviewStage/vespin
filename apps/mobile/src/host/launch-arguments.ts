@@ -39,12 +39,14 @@ const STUB_AUTH_SERVER = "stub";
 export function launchFixtureProfile(): RunProfile | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.FIXTURE);
+
   return Object.values(RUN_PROFILE).find((profile) => profile === named);
 }
 
 /** Whether this launch signs in against the stubbed account service (`stub-auth-server.ts`) rather than the real one; never on any other platform. */
 export function launchStubsAuthServer(): boolean {
   if (Platform.OS !== "ios") return false;
+
   return Settings.get(LAUNCH_ARGUMENT.AUTH_SERVER) === STUB_AUTH_SERVER;
 }
 
@@ -52,6 +54,7 @@ export function launchStubsAuthServer(): boolean {
 export function launchAgent(): string | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.AGENT);
+
   return typeof named === "string" && named !== "" ? named : undefined;
 }
 
@@ -60,6 +63,7 @@ export function launchPullRequest(): number | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.PULL_REQUEST);
   const number = typeof named === "number" ? named : Number(named);
+
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
@@ -67,6 +71,7 @@ export function launchPullRequest(): number | undefined {
 function launchSaysTrue(key: string): boolean {
   if (Platform.OS !== "ios") return false;
   const named: unknown = Settings.get(key);
+
   return named === true || named === "true" || named === 1;
 }
 
@@ -89,5 +94,6 @@ export function launchRefusesWrites(): boolean {
 export function launchSentryTest(): LaunchSentryTest | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.SENTRY_TEST);
+
   return Object.values(LAUNCH_SENTRY_TEST).find((test) => test === named);
 }

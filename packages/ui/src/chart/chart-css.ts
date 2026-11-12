@@ -32,6 +32,7 @@ export function isSafeChartCssKey(key: string): boolean {
 
 export function isSafeChartCssColor(color: string): boolean {
   const trimmed = color.trim();
+
   return (
     trimmed.length > 0 &&
     !FORBIDDEN_COLOR_FRAGMENT.test(trimmed) &&

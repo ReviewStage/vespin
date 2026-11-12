@@ -118,6 +118,7 @@ function pressedContext(): AudioContext | undefined {
   try {
     const context = new AudioContext();
     context.resume().catch(() => undefined);
+
     return context;
   } catch {
     return undefined;
@@ -155,6 +156,7 @@ export function useDictation(input: {
   const deadline = useWait();
   const passed = useCreateStore(false);
   const deadlinePassed = useSelector(passed);
+
   /** Calls off the deadline standing, none passed. */
   const clearDeadline = () => {
     deadline.stop();
@@ -166,7 +168,9 @@ export function useDictation(input: {
     generation.current += 1;
     const standing = recording.current;
     recording.current = undefined;
+
     if (standing === undefined) return;
+
     if (standing.recorder.state !== "inactive") standing.recorder.stop();
     release(standing);
   };
@@ -198,15 +202,19 @@ export function useDictation(input: {
   const transcribe = async (clip: Recording, durationMs: number) => {
     setPhase(DICTATION_PHASE.TRANSCRIBING);
     setAnalyzer(undefined);
+
     const bytes = new Uint8Array(
       await new Blob(clip.chunks, { type: DICTATION_AUDIO_TYPE }).arrayBuffer(),
     );
+
     const answer = await sendClip({
       audio: base64Of(bytes),
       durationMs,
       keywords: latest.current.keywords,
     }).catch(() => undefined);
+
     if (generation.current !== clip.generation) return;
+
     // A clip refused for want of the key says to add one, rather than that it failed.
     if (
       answer !== undefined &&
@@ -215,8 +223,10 @@ export function useDictation(input: {
     ) {
       return settle(DICTATION_NOTE.OPENAI_KEY_MISSING);
     }
+
     if (answer === undefined || "failure" in answer) return settle(DICTATION_NOTE.FAILED);
     const words = answer.text.trim();
+
     if (words === "") return settle(DICTATION_NOTE.NO_WORDS);
     land(words);
   };
@@ -224,15 +234,18 @@ export function useDictation(input: {
   const finish = () => {
     // Note that ✓ before the microphone opens does nothing, because there is no clip yet and ✕ is the way out.
     const standing = recording.current;
+
     if (standing === undefined || standing.recorder.state === "inactive") return;
     const durationMs = performance.now() - standing.startedAt;
     standing.recorder.onstop = () => {
       release(standing);
+
       if (generation.current !== standing.generation) return;
       transcribe(standing, durationMs).catch(() =>
         fail(standing.generation, DICTATION_NOTE.FAILED),
       );
     };
+
     standing.recorder.stop();
   };
 
@@ -249,16 +262,20 @@ export function useDictation(input: {
     const routed = state !== undefined && selectCapability(HOST_CAPABILITY.MICROPHONE)(state);
     // Note that macOS is asked only where it has not answered, because the ask is counted and a granted microphone needs none.
     const known = state?.audio.microphoneStatus ?? MICROPHONE_STATUS.NOT_DETERMINED;
+
     const status =
       routed && known === MICROPHONE_STATUS.NOT_DETERMINED
         ? await askMicrophone().catch(() => MICROPHONE_STATUS.UNKNOWN)
         : known;
+
     if (status === MICROPHONE_STATUS.DENIED || status === MICROPHONE_STATUS.RESTRICTED) {
       return fail(asked, DICTATION_NOTE.MICROPHONE_DENIED);
     }
+
     const stream = await openPreferredMicrophone({
       route: () => {
         const stored = queryClient.getQueryData(appStateQuery.queryKey)?.settings;
+
         return routed && (stored === undefined || appSettingsView(stored).preferBuiltInMicrophone)
           ? routeMicrophone()
           : Promise.resolve(undefined);
@@ -266,27 +283,36 @@ export function useDictation(input: {
       enumerate: () => navigator.mediaDevices.enumerateDevices(),
       open: (audio) => navigator.mediaDevices.getUserMedia({ audio, video: false }),
     }).catch(() => undefined);
+
     if (stream === undefined) return fail(asked, DICTATION_NOTE.MICROPHONE_FAILED);
+
     if (generation.current !== asked) {
       for (const track of stream.getTracks()) track.stop();
+
       return;
     }
+
     if (context === undefined) {
       for (const track of stream.getTracks()) track.stop();
+
       return fail(asked, DICTATION_NOTE.MICROPHONE_FAILED);
     }
+
     // Note that what follows the open can still throw, a recorder refusing the
     // format, so the microphone is let go there too rather than left lit.
     try {
       const measured = context.createAnalyser();
       measured.fftSize = ANALYZER_FFT_SIZE;
       context.createMediaStreamSource(stream).connect(measured);
+
       // Safari on iOS may suspend the context as the microphone takes the audio session.
       if (context.state !== "running") context.resume().catch(() => undefined);
+
       const recorder = new MediaRecorder(stream, {
         mimeType: RECORDING_TYPE,
         audioBitsPerSecond: DICTATION_BOUNDS.AUDIO_BITS_PER_SECOND,
       });
+
       const standing: Recording = {
         generation: asked,
         stream,
@@ -295,9 +321,11 @@ export function useDictation(input: {
         chunks: [],
         startedAt: performance.now(),
       };
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) standing.chunks.push(event.data);
       };
+
       recorder.start(RECORDER_SLICE_MS);
       recording.current = standing;
       clearDeadline();
@@ -323,6 +351,7 @@ export function useDictation(input: {
   const start = () => {
     if (keyMissing) return openApiKeys();
     const box = input.editor.current;
+
     if (phase !== DICTATION_PHASE.IDLE || box === undefined) return;
     marked.current = box.mark();
     generation.current += 1;
@@ -344,17 +373,23 @@ export function useDictation(input: {
 
   const onFieldKey = (event: KeyboardEvent): boolean => {
     if (phase === DICTATION_PHASE.IDLE) return false;
+
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       cancel();
+
       return true;
     }
+
     if (event.key === "Enter" && !event.isComposing) {
       event.preventDefault();
+
       if (phase === DICTATION_PHASE.RECORDING) finish();
+
       return true;
     }
+
     return false;
   };
 

@@ -37,14 +37,17 @@ function statusFromAddress(): GitHubInstallStatus {
  */
 function GitHubInstalled(): React.JSX.Element {
   const [status] = useState(statusFromAddress);
+
   const words = landingWords(
     GITHUB_INSTALL_OUTCOME[status],
     INTEGRATION_NAME[INTEGRATION_PROVIDER.GITHUB],
   );
+
   const { back, open } = useConnectReturn({
     landed: true,
     settled: words.tone === LANDING_TONE.COMPLETE,
   });
+
   return (
     <AuthPage
       mark={<AuthMark provider={MARK_PROVIDER.GITHUB} tone={words.tone} />}

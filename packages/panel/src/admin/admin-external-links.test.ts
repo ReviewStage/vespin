@@ -64,6 +64,7 @@ function press(mounted: AdminDoors): boolean {
     { once: true },
   );
   act(() => container.querySelector("a")?.click());
+
   return followed;
 }
 

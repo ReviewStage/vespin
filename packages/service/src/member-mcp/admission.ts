@@ -102,9 +102,11 @@ export function admitMember(
   return Effect.tryPromise(() => verify(request)).pipe(
     Effect.map((payload) => {
       const claims = readAdmittedClaims(payload);
+
       if (Option.isNone(claims) || claims.value.sub === claims.value.client_id) {
         return Result.fail(NO_MEMBER);
       }
+
       return Result.succeed({ userId: claims.value.sub, clientId: claims.value.client_id });
     }),
     Effect.catch(({ cause }) =>

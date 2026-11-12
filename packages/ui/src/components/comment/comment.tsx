@@ -65,18 +65,23 @@ const FRAME = "ui-comment grid grid-cols-[auto_minmax(0,1fr)] gap-x-icon-gap gap
 /** How wide a skeleton's face stands: a row's disc, as `Comment` draws the face. */
 const SKELETON_FACE = "var(--spacing-avatar-row)";
 const FACE = "ui-comment-face col-start-1 row-start-1 inline-flex self-center";
+
 const HEAD =
   "ui-comment-head col-start-2 row-start-1 flex min-w-0 items-baseline gap-icon-gap text-label";
+
 const NAME = "ui-comment-name min-w-0";
+
 // Note that a name followed by what its writer did is cut on its own, because a long name, as an agent's often is, would otherwise cut what they did off the line.
 const NAME_SAYING = "ui-comment-name flex min-w-0 items-baseline";
 const WHO = "ui-comment-who";
 const SAID = "ui-comment-said flex-none whitespace-pre font-ui-regular text-muted-foreground";
 const STATUS = "ui-comment-status inline-flex flex-none items-baseline";
 const TIME = "ui-comment-time flex-none";
+
 // Note that the trailing slot is the head's line tall, its controls centered on it and standing over its edges, because a control's height would push every comment's words down by a different amount.
 const TRAILING =
   "ui-comment-trailing ms-auto inline-flex h-lh flex-none items-center gap-control-gap self-start";
+
 const BODY = "ui-comment-body col-start-2 row-start-2 min-w-0 text-body";
 
 /**
@@ -147,6 +152,7 @@ export function Comment({
 } & Omit<HTMLAttributes<HTMLElement>, "children" | "className" | "style">): React.JSX.Element {
   // Note that a glyph drawn conditionally may arrive as nothing to draw, which is no glyph, so the letter still stands.
   const glyph = drawsSomething(author.glyph) ? author.glyph : undefined;
+
   return (
     <Frame as={Element} ref={ref} {...attributes}>
       <FaceCell>

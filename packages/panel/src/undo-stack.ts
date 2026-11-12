@@ -187,10 +187,13 @@ function lineNow(): UndoLine {
  */
 function stacked(entries: readonly UndoEntry[], entry: UndoEntry): readonly UndoEntry[] {
   const next = [...entries, entry];
+
   for (const off of next.slice(0, -MAX_ENTRIES)) {
     const subject = undoToastSubjects.get(off);
+
     if (subject !== undefined) withdrawToast(subject);
   }
+
   return next.slice(-MAX_ENTRIES);
 }
 
@@ -223,13 +226,18 @@ function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): voi
       failure: run.failure,
       replayUnmasked: run.words !== undefined,
     } as const;
+
     showToast(run.action === undefined ? saying : { ...saying, action: run.action });
+
     return;
   }
+
   if (run.ran === UNDO_RAN.CHANGED) {
     showToast({ words: CHANGED_WORDS[way], tone: STATUS_TONE.ATTENTION });
+
     return;
   }
+
   if (!keyed) return;
   showToast({
     words: `${DONE_WORDS[way]}: ${entry.words}`,
@@ -247,31 +255,41 @@ function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): voi
 function ran(entry: UndoEntry, way: UndoWay, keyed: boolean): Promise<UndoRan | undefined> {
   const line = lineNow();
   const go = entry[way];
+
   if (go === undefined || !line[way].includes(entry)) return Promise.resolve(undefined);
+
   if (way === UNDO_WAY.UNDO) entry.claim?.();
   undoLine.setState(() => ({ ...line, [way]: line[way].filter((each) => each !== entry) }));
   const asked = generation;
+
   // Note that a run still waiting its turn as the account changes sends nothing, because it would send the last account's write on the next one's session.
   const run = turn.then(() => {
     if (asked !== generation) return undefined;
+
     return go().then((answered) => {
       if (asked !== generation) return answered.ran;
       const back = BACK_WAY[way];
+
       if (answered.ran === UNDO_RAN.APPLIED && entry[back] !== undefined) {
         const now = lineNow();
         undoLine.setState(() => ({ ...now, [back]: stacked(now[back], entry) }));
       }
+
       said(entry, way, answered, keyed);
+
       return answered.ran;
     });
   });
+
   turn = run.catch(() => undefined);
+
   return run;
 }
 
 /** The newest entry waiting on `way`'s list, run; nothing where none waits. */
 function ranNewest(way: UndoWay): Promise<UndoRan | undefined> {
   const newest = lineNow()[way].at(-1);
+
   return newest === undefined ? Promise.resolve(undefined) : ran(newest, way, true);
 }
 
@@ -287,6 +305,7 @@ function undoable(entry: UndoEntry): ToastNotice {
   undoToastSubjects.set(entry, subject);
   const { undo } = lineNow();
   undoLine.setState(() => ({ undo: stacked(undo, entry), redo: [] }));
+
   return { ...undoToast(entry.words, press), subject };
 }
 
@@ -310,6 +329,7 @@ export interface UndoWaits {
 export function useUndoWaits(): UndoWaits {
   const undoes = useSelector(undoLine, (line) => line.undo.length > 0);
   const redoes = useSelector(undoLine, (line) => line.redo.length > 0);
+
   return { undoes, redoes };
 }
 
@@ -425,9 +445,11 @@ export interface PressedRows {
 /** Of `whole`, the fields `like` names. */
 function fieldsLike<Fields extends object>(whole: Fields, like: Fields): Fields {
   const kept: Partial<Fields> = {};
+
   for (const key in like) {
     if (Object.hasOwn(like, key)) kept[key] = whole[key];
   }
+
   // SAFETY: each key is one of `like`'s own, so the fields kept are of `Fields`, as `like` is.
   return kept as Fields;
 }
@@ -437,6 +459,7 @@ function holdsEach<Fields extends object>(now: Fields, wanted: Fields): boolean 
   for (const key in wanted) {
     if (Object.hasOwn(wanted, key) && !Object.is(now[key], wanted[key])) return false;
   }
+
   return true;
 }
 
@@ -451,7 +474,9 @@ function dueRun<Change>(
   send: (change: Change) => Promise<UndoRun>,
 ): Promise<UndoRun> {
   const sent = changes.filter(due);
+
   if (sent.length === 0) return Promise.resolve(CHANGED_RUN);
+
   return Promise.all(sent.map(send)).then(
     (runs) => runs.find((run) => run.ran === UNDO_RAN.REFUSED) ?? APPLIED_RUN,
   );
@@ -471,19 +496,25 @@ function rowsRun<Rows, Fields extends object, Kind extends PortActKind>(
   to: (change: RowChange<Fields>) => Fields,
 ): Promise<UndoRun> {
   const rows = doors.rows();
+
   const sent = changes.filter((change) => {
     const now = write.read(rows, change.id);
+
     return now !== undefined && write.holds(now, from(change));
   });
+
   if (sent.length === 0) return Promise.resolve(CHANGED_RUN);
+
   return Promise.all(sent.map((change) => write.send(doors.send, change.id, to(change)))).then(
     (answers): UndoRun => {
       const at = answers.findIndex((answer) => !answer.kept);
       const first = answers[at];
       const change = sent[at];
+
       if (first === undefined || first.kept || change === undefined) return APPLIED_RUN;
       const refused = answers.filter((answer) => !answer.kept).length;
       const said = write.refused?.(change.id, to(change), answers.length - refused, refused);
+
       return {
         ran: UNDO_RAN.REFUSED,
         failure: { surface: write.surface, cause: first.cause, about: said?.about },
@@ -508,16 +539,21 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
 ): PressedRows {
   const since = generation;
   const rows = doors.rows();
+
   const changes = asked.flatMap(({ id, after }): readonly RowChange<Fields>[] => {
     const now = write.read(rows, id);
+
     return now === undefined ? [] : [{ id, before: fieldsLike(now, after), after }];
   });
+
   return {
     drawn: changes.length > 0,
     keep: (words, kept = () => true) => {
       if (since !== generation) return undefined;
       const landed = changes.filter((change) => kept(change.id));
+
       if (landed.length === 0) return { ...doneToast(words), replayUnmasked: write.unmasked };
+
       const toast = undoable({
         words,
         undo: () =>
@@ -537,6 +573,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
             (each) => each.after,
           ),
       });
+
       return { ...toast, replayUnmasked: write.unmasked };
     },
   };
@@ -583,6 +620,7 @@ function writeFailure<Rows, Asked, Change, Kind extends PortActKind, Answer>(
   answer: Answer,
 ): ShownFailure {
   const cause = write.cause === undefined ? answer : write.cause(answer);
+
   return { surface: write.surface, cause, about: write.about?.(change) };
 }
 
@@ -593,6 +631,7 @@ function answeredRun<Rows, Asked, Change, Kind extends PortActKind, Answer>(
   answer: Answer,
 ): UndoRun {
   const words = write.refused(answer);
+
   return words === undefined
     ? APPLIED_RUN
     : { ran: UNDO_RAN.REFUSED, words, failure: writeFailure(write, change, answer) };
@@ -617,10 +656,13 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
   say: (notice: ToastNotice) => void = showToast,
 ): Promise<boolean> {
   const change = write.read(doors.rows(), asked);
+
   if (change === undefined) return Promise.resolve(false);
   const keep = keepWrite(write, doors, say);
+
   return write.act(doors.send, change, doors.rows()).then((answer) => {
     const refusal = write.refused(answer);
+
     if (refusal !== undefined) {
       say({
         replayUnmasked: true,
@@ -628,9 +670,12 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
         tone: STATUS_TONE.DANGER,
         failure: writeFailure(write, change, answer),
       });
+
       return false;
     }
+
     keep(change);
+
     return true;
   });
 }
@@ -652,6 +697,7 @@ export function keepWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>
   say: (notice: ToastNotice) => void = showToast,
 ): (change: Change) => void {
   const since = generation;
+
   return (change) => {
     if (since === generation) keptWrite(write, doors, change, say);
   };
@@ -674,12 +720,15 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
       (each) =>
         send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
     );
+
   const words = typeof write.words === "string" ? write.words : write.words(change);
+
   const toast = undoable({
     words,
     undo: () => run(write.holds, write.undo),
     redo: () => run(write.undone, write.act),
   });
+
   say({ ...toast, replayUnmasked: write.unmasked(change) });
 }
 
@@ -741,6 +790,7 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
 ): Promise<void> {
   let taken = false;
   const answered = write.act(doors, change);
+
   const entry: UndoEntry = {
     words: write.words(change),
     claim: () => {
@@ -748,14 +798,19 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
     },
     undo: () => takeBack(change),
   };
+
   const takeBack = (among: Change): Promise<UndoRun> =>
     write.undo(doors, among).then((takenBack): UndoRun => {
       const refusal = write.unheld(among, takenBack);
+
       if (refusal === undefined) return APPLIED_RUN;
       const { words, failure, retry } = refusal;
+
       if (retry === undefined) return { ran: UNDO_RAN.REFUSED, words, failure };
+
       const again = () =>
         void takeBack(retry.change).then((run) => said(entry, UNDO_WAY.UNDO, run, false));
+
       return {
         ran: UNDO_RAN.REFUSED,
         words,
@@ -763,19 +818,24 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
         action: { label: retry.label, replayUnmasked: true, onPress: again },
       };
     });
+
   showToast({
     ...undoable(entry),
     glyph: write.glyph,
     replayUnmasked: write.unmasked(change),
   });
+
   return answered.then((answer) => {
     // Note that a write taken back answers nothing worth saying, since the reader undid it.
     const refusal = taken ? undefined : write.refused(change, answer);
+
     if (refusal === undefined) return;
+
     // Note that a write the service took none of leaves the list, so ⌘Z takes back the one before it rather than saying it was not taken back.
     if (refusal.whole) {
       undoLine.setState((now) => ({ ...now, undo: now.undo.filter((each) => each !== entry) }));
     }
+
     showToast({
       replayUnmasked: true,
       words: refusal.words,
@@ -822,6 +882,7 @@ export function pressLocal<Doors, Change>(
   subject?: string,
 ): void {
   write.act(doors(), change);
+
   const run = (
     due: (doors: Doors, change: Change) => boolean,
     make: (doors: Doors, change: Change) => void,
@@ -831,15 +892,18 @@ export function pressLocal<Doors, Change>(
       (each) => due(doors(), each),
       (each) => {
         make(doors(), each);
+
         return Promise.resolve(APPLIED_RUN);
       },
     );
+
   const toast = undoable({
     words: write.words,
     undo: () => run(write.holds, write.undo),
     redo: () => run(write.undone, write.act),
     subject,
   });
+
   showToast({
     ...toast,
     replayUnmasked: write.unmasked(change),
@@ -860,6 +924,7 @@ export interface TaskRows {
 /** A task as the host holds its plan for the window, with what the list leaves out, its blocks among it; none where it holds none. */
 export function heldTask({ held }: TaskRows, taskId: string): Task | undefined {
   const rows = held?.[taskId]?.rows;
+
   return rows !== undefined && "task" in rows ? rows.task : undefined;
 }
 
@@ -893,8 +958,10 @@ function agentKept(asked: Promise<AgentAgentAnswer>): Promise<Kept> {
 /** An agent's pin as the tasks drawn show it, among its plan's pins; none where they show no such agent. */
 function agentPin(tasks: TasksView, agentId: string): PinFields | undefined {
   const { taskAgents = [], taskAgentPins = [] } = tasks;
+
   if (!taskAgents.some((agent) => agent.id === agentId)) return undefined;
   const pin = taskAgentPins.find((each) => each.agentId === agentId);
+
   return { pinned: pin !== undefined, position: pin?.pinPosition ?? null };
 }
 
@@ -914,6 +981,7 @@ export const ROW_WRITE = {
   TASK_RENAME: {
     read: (tasks, taskId) => {
       const task = drawnTask(tasks, taskId);
+
       return task === undefined ? undefined : { name: task.name };
     },
     holds: holdsEach,
@@ -925,7 +993,9 @@ export const ROW_WRITE = {
   TASK_STANDING: {
     read: (tasks, taskId) => {
       const task = drawnTask(tasks, taskId);
+
       if (task === undefined) return undefined;
+
       return {
         status: statusOf(task),
         priority: priorityOf(task),
@@ -955,7 +1025,9 @@ export const ROW_WRITE = {
   TASK_PIN: {
     read: (tasks, taskId) => {
       const task = drawnTask(tasks, taskId);
+
       if (task === undefined) return undefined;
+
       return { pinned: task.pinnedAt !== undefined, position: task.pinPosition ?? null };
     },
     holds: holdsEach,
@@ -975,6 +1047,7 @@ export const ROW_WRITE = {
   AGENT_ARCHIVE: {
     read: (agents, agentId) => {
       const agent = agents.find((each) => each.id === agentId);
+
       return agent === undefined ? undefined : { archived: agent.archivedAt !== undefined };
     },
     holds: holdsEach,

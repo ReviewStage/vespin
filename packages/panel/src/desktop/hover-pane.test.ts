@@ -18,11 +18,14 @@ function Floating({ opensOn }: { opensOn: PaneFloat }): React.JSX.Element {
   const [state, onState] = useState<PaneFloat>(opensOn);
   const float = { state, onState };
   const keep = useFloatDismiss(float);
+
   const pane = useHoverPane(float, {
     focusAt: (held) => held.querySelector("button"),
     stays: ".toggle",
   });
+
   const choose = pane.chosen(() => undefined);
+
   return createElement(
     "div",
     { "data-state": state },
@@ -69,12 +72,14 @@ function mount(opensOn: PaneFloat = PANE_FLOAT.CLOSED): HTMLElement {
   const host = document.body.appendChild(document.createElement("div"));
   root = createRoot(host);
   act(() => root?.render(createElement(Floating, { opensOn })));
+
   return host;
 }
 
 function part(page: HTMLElement, selector: string): HTMLElement {
   const found = page.querySelector<HTMLElement>(selector);
   assert.ok(found, `${selector} is drawn`);
+
   return found;
 }
 
@@ -93,6 +98,7 @@ function pressEscape(target: Element): KeyboardEvent {
   act(() => {
     target.dispatchEvent(press);
   });
+
   return press;
 }
 

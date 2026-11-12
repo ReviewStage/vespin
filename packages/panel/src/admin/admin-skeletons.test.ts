@@ -66,12 +66,14 @@ async function draw(
       onSearchMoved: () => () => undefined,
     },
   };
+
   const page = document.body.appendChild(document.createElement("div"));
   const root = createRoot(page);
   roots.push(root);
   await act(async () =>
     root.render(withQueryClient(createElement(AdminDoorsProvider, { value: doors }, screen))),
   );
+
   return page;
 }
 
@@ -91,7 +93,9 @@ const QUIET = {
 /** The region a loading page stands its skeleton in. */
 function loadingRegion(page: HTMLElement): HTMLElement {
   const region = page.querySelector<HTMLElement>('[role="status"][aria-busy="true"]');
+
   if (region === null) throw new Error("the page stands no loading region");
+
   return region;
 }
 
@@ -106,10 +110,13 @@ function costScreen(): React.ReactElement {
 
 test("the Cost chart's skeleton stands its own heading and legend, with no caption across from it", async () => {
   const region = loadingRegion(await draw(costScreen()));
+
   const heading = [...region.querySelectorAll("h3")].find(
     (title) => title.textContent === "Daily list-price equivalent by source, USD",
   );
+
   const card = heading?.closest(".ui-card");
+
   for (const source of ["Agents", "Vespin's own turns", "Dictation"]) {
     expect(card?.textContent).toContain(source);
   }
@@ -143,6 +150,7 @@ test("an account's skeleton stands every section the account page states, its ac
       createElement(AccountScreen, { ...QUIET, id: "account-ada", onBack: () => undefined }),
     ),
   );
+
   expect(sectionHeadings(region)).toEqual([
     "Activity",
     "Work",

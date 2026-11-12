@@ -22,15 +22,19 @@ export function useLinkOpener<Link>(
   latestOpen.current = open;
   useEffect(() => {
     const waiting = held.current;
+
     if (gated || waiting === undefined) return;
     held.current = undefined;
     latestOpen.current(waiting);
   }, [gated]);
+
   return useCallback((link: Link) => {
     if (latestGated.current) {
       held.current = link;
+
       return;
     }
+
     // Note that a link opened at once supersedes one still held, because the gate's giving way opens the held one only once its effect runs.
     held.current = undefined;
     latestOpen.current(link);

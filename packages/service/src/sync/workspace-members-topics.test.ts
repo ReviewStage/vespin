@@ -55,6 +55,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -80,6 +81,7 @@ const wakesTheWorkspace = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
+
     for (const read of WORKSPACE_READS) {
       const woken = read.topics(params);
       assert.ok(
@@ -87,6 +89,7 @@ const wakesTheWorkspace = <A, E, R>(
         `the ${read.name} read is woken by a topic the write notifies`,
       );
     }
+
     return fired;
   });
 
@@ -100,6 +103,7 @@ it.effect(
         const teammate = yield* openAccount("Grace Hopper");
         const workspaceId = yield* openTeam(plugin, owner);
         const reader = { userId: owner, workspaceId };
+
         const moved: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, workspaceId],
           [TOPIC.ACCOUNT, teammate],
@@ -158,6 +162,7 @@ it.effect("an invitation made and canceled notifies the workspace", () =>
         workspace,
         reader,
       );
+
       yield* wakesTheWorkspace(
         cancelWorkspaceInvitation(workspaceId, invited.value.id),
         workspace,
@@ -182,6 +187,7 @@ it.effect(
           }),
         );
         const task = yield* createTask(teammate, { organizationId: workspaceId, name: "Invites" });
+
         const started = yield* createAgent(teammate, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -192,6 +198,7 @@ it.effect(
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const agentId = Option.getOrThrow(started).agent.id;
         const reader = { userId: owner, workspaceId };
         const workspace: SyncTopic = [TOPIC.WORKSPACE, workspaceId];

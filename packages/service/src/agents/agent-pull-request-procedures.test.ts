@@ -57,6 +57,7 @@ const bytes = (request: Request) =>
         ),
       ),
     );
+
     const handle = hostedFetch({
       agentPullRequests: agentPullRequestProcedures({
         resolveUserId: (incoming) =>
@@ -67,10 +68,12 @@ const bytes = (request: Request) =>
           ),
       }),
     });
+
     // SAFETY: a refused request yields the database alone, which is all a test provides of the web runtime's services.
     const response = yield* Effect.promise(() =>
       handle(request, services as Context.Context<WebServices>),
     );
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -84,9 +87,13 @@ function request(
   init: { method?: string; signedIn?: boolean; body?: string; contentLength?: number } = {},
 ): Request {
   const headers = new Headers();
+
   if (init.signedIn !== false) headers.set("authorization", `Bearer ${USER_ID}`);
+
   if (init.body !== undefined) headers.set("content-type", JSON_TYPE);
+
   if (init.contentLength !== undefined) headers.set("content-length", String(init.contentLength));
+
   return new Request(new URL(path, ORIGIN), {
     method: init.method ?? HTTP_METHOD.GET,
     headers,
@@ -121,6 +128,7 @@ it.layer(getTestDB())("an agent's Pull request tab's refusals", (it) => {
           ),
           unsigned,
         );
+
         for (const read of READS) {
           assert.deepEqual(
             yield* bytes(
@@ -139,10 +147,12 @@ it.layer(getTestDB())("an agent's Pull request tab's refusals", (it) => {
     () =>
       Effect.gen(function* () {
         const notFound = refused(HOSTED_HTTP_STATUS.NOT_FOUND, "not-found");
+
         for (const id of [randomUUID(), "not-an-id"]) {
           for (const read of READS) {
             assert.deepEqual(yield* bytes(request(`/api/agents/${id}/${read}`)), notFound);
           }
+
           assert.deepEqual(
             yield* bytes(
               request(actionPath(id), {
@@ -173,6 +183,7 @@ it.layer(getTestDB())("an agent's Pull request tab's refusals", (it) => {
           refused(HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE, "request-too-large"),
         );
         const invalid = refused(HOSTED_HTTP_STATUS.BAD_REQUEST, "invalid-request");
+
         for (const body of [
           { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW, draft: false },
           { action: "no-such-change" },

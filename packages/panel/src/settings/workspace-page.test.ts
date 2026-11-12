@@ -109,6 +109,7 @@ const OWNER: WorkspaceMember = {
   email: "dana@example.com",
   role: WORKSPACE_ROLE.OWNER,
 };
+
 const MEMBER: WorkspaceMember = {
   userId: "user-sam",
   name: "Sam",
@@ -127,6 +128,7 @@ const ACME: Workspace = {
   role: WORKSPACE_ROLE.MEMBER,
   github: null,
 };
+
 const FIRST: Workspace = {
   id: "workspace-personal",
   name: "Dana",
@@ -138,62 +140,89 @@ const FIRST: Workspace = {
 
 /** The members the test's service holds. */
 let stored: WorkspaceMember[] = [];
+
 /** Every act the section sent, in order. */
 let sent: Asked[] = [];
+
 /** Whether the service refuses to read the invitations. */
 let refuseInvitationsRead = false;
+
 /** Whether the service refuses to read the members. */
 let refuseMembersRead = false;
+
 /** Lays each workspace's people on the window's document, as the host does once the page holds them. */
 let deliverPeople: HostReadsHanded["deliverMembers"] = () => undefined;
+
 /** Each workspace's people the host holds for the window, as last laid. */
 let people: AppWorkspaceMembers = NO_KEYS_HELD;
+
 /** Lays each workspace's pending invitations on the window's document, as the host does once the page holds them. */
 let deliverInvitations: HostReadsHanded["deliverInvitations"] = () => undefined;
+
 /** Each workspace's pending invitations the host holds for the window, as last laid. */
 let heldInvitations: AppWorkspaceInvitations = NO_KEYS_HELD;
+
 /** Whether the service refuses the next removal for the account's role. */
 let refuseRemoval = false;
+
 /** The invitations the test's service holds pending. */
 let invitations: WorkspaceInvitation[] = [];
+
 /** The addresses the service refuses as already invited. */
 let alreadyInvited: string[] = [];
+
 /** Whether the browser could not be opened on GitHub's page. */
 let refuseGitHubOpen = false;
+
 /** The workspace's Sentry on a deployment that holds no Sentry integration, which every test reads unless it says otherwise. */
 const SENTRY_NOT_SET_UP: WorkspaceSentry = { configured: false, installations: [] };
+
 /** The workspace's Sentry as the service holds it; none where the host's read of it fails. */
 let sentry: WorkspaceSentry | undefined = SENTRY_NOT_SET_UP;
+
 /** The workspace's Slack bot as the fake service holds it; unset, it holds none. */
 let slackBot: WorkspaceSlackBot = { configured: false };
+
 /** Lays each workspace's integrations on the window's document, as the host does once the page holds them. */
 let deliverIntegrations: HostReadsHanded["deliverIntegrations"] = () => undefined;
+
 /** Each workspace's integrations the host holds for the window, as last laid. */
 let integrations: AppWorkspaceIntegrations = NO_KEYS_HELD;
+
 /** Whether the service refuses a rename for the account's role. */
 let refuseRename = false;
+
 /** Whether the service refuses a photo for the account's role. */
 let refusePhoto = false;
+
 /** Whether the service refuses a role change for the account's role. */
 let refuseRole = false;
+
 /** The repositories the workspace reaches on GitHub, by full name. */
 let githubRepositories: string[] = [];
+
 /** What the listing says each installation was given; absent, as from a service older than it. */
 let listedInstallations: GitHubRepositoriesAnswer["installations"];
+
 /** Whether the workspace's repositories' read never answers, as one still out on the wire. */
 let repositoriesReadHeld = false;
+
 /** Whether the workspace's repositories' read is refused rather than answered. */
 let repositoriesReadFails = false;
+
 /** A repository as the picker's listing answers it, by its full name and what reaches it. */
 function listedRepository(fullName: string, access: GitHubAccess) {
   const [owner = "", name = ""] = fullName.split("/");
+
   return { owner, name, fullName, defaultBranch: "main", private: true, updatedAt: 1, access };
 }
 
 /** The repositories the workspace's picker lists, as the service answers them: the App's, and the reader's token's as addable, or among them from a service older than `addable`. */
 function listing(): RepositoriesRead | undefined {
   if (repositoriesReadHeld) return undefined;
+
   if (repositoriesReadFails) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
   return {
     repositories: {
       installed: true,
@@ -230,19 +259,26 @@ const SAVED_TOKEN = {
 
 /** The repositories the reader's own token may push to that the picker's listing answers as addable, by full name. */
 let tokenReach: string[] = [];
+
 /** Whether the listing answers as a service older than `addable`, the token's repositories among its own. */
 let beforeAddable = false;
+
 /** The repositories members added to the workspace on their tokens, as the service lists them to the reader. */
 let tokenRepositories: WorkspaceTokenRepository[] = [];
+
 /** While set, the token repositories' read waits on it before answering what it read. */
 let tokenReadHeld: Promise<void> | undefined;
+
 /** Whether the token repositories' read is refused rather than answered. */
 let tokenReadFails = false;
+
 /** Whether the reader has a GitHub token saved, as the host holds it. */
 let tokenSaved = true;
+
 /** Each workspace's token repositories as the host holds them for the window. */
 let heldTokenRepositories: AppTokenRepositories = NO_KEYS_HELD;
 let deliverTokenRepositories: HostReadsHanded["deliverTokenRepositories"] = () => undefined;
+
 /** The automations the workspace holds, as the list answers them; absent, the list is not answered. */
 let automations: { name: string; mine?: boolean }[] | undefined;
 
@@ -266,6 +302,7 @@ function automationOf(
     lastRun: null,
     createdAt: 1,
   };
+
   return mine === undefined ? summary : { ...summary, mine };
 }
 
@@ -292,6 +329,7 @@ function layPeople(workspaceId: string): void {
 /** The Slack bot as the workspace's held read carries it: its team, its default repository, and each channel's. */
 function slackOf(bot: WorkspaceSlackBot): WorkspaceSlack {
   const { configured, team, defaultRepository, channels = [] } = bot;
+
   return {
     configured,
     ...(team === undefined ? undefined : { team }),
@@ -335,9 +373,11 @@ function layTokenRepositories(workspaceId: string, refused = tokenReadFails): vo
 /** The bridge, answering the section's acts the way the host would, a member or invitation write drawn on the document from its answer. */
 function answer(request: Asked): Promise<Answered> {
   sent.push(request);
+
   switch (request.kind) {
     case ACT_KIND.WORKSPACE_MEMBERS_RETRY:
       layPeople(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_MEMBER_REMOVE:
       if (refuseRemoval) {
@@ -346,11 +386,14 @@ function answer(request: Asked): Promise<Answered> {
           reason: WORKSPACE_NOT_PERMITTED_REFUSAL,
         });
       }
+
       stored = stored.filter((member) => member.userId !== request.payload.userId);
       layPeople(request.payload.workspaceId);
+
       return Promise.resolve(done(stored));
     case ACT_KIND.WORKSPACE_INVITATIONS_RETRY:
       layInvitations(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_INVITE: {
       if (alreadyInvited.includes(request.payload.email)) {
@@ -359,6 +402,7 @@ function answer(request: Asked): Promise<Answered> {
           reason: ALREADY_INVITED_REFUSAL,
         });
       }
+
       const made: WorkspaceInvitation = {
         id: `inv-${request.payload.email}`,
         email: request.payload.email,
@@ -366,16 +410,21 @@ function answer(request: Asked): Promise<Answered> {
         expiresAt: "2026-10-16T12:00:00.000Z",
         acceptUrl: `https://vespin.dev/accept-invitation.html?id=inv-${request.payload.email}`,
       };
+
       invitations = [...invitations, made];
       layInvitations(request.payload.workspaceId);
+
       return Promise.resolve(done(made));
     }
+
     case ACT_KIND.WORKSPACE_INVITATION_CANCEL:
       invitations = invitations.filter((one) => one.id !== request.payload.invitationId);
       layInvitations(request.payload.workspaceId);
+
       return Promise.resolve(done(invitations));
     case ACT_KIND.WORKSPACE_INTEGRATIONS_RETRY:
       layIntegrations(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_SENTRY_INSTALL:
       return Promise.resolve(done(undefined));
@@ -383,10 +432,12 @@ function answer(request: Asked): Promise<Answered> {
     case ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT:
       slackBot = { configured: true, team: SLACK_TEAM, notifications: true };
       layIntegrations(request.payload.workspaceId);
+
       return Promise.resolve(done(slackBot));
     case ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT:
       slackBot = { configured: true };
       layIntegrations(request.payload.workspaceId);
+
       return Promise.resolve(done(slackBot));
     case ACT_KIND.WORKSPACE_SENTRY_DISCONNECT: {
       const { installationId } = request.payload;
@@ -396,8 +447,10 @@ function answer(request: Asked): Promise<Answered> {
         installations: was.installations.filter((one) => one.installationId !== installationId),
       };
       layIntegrations(request.payload.workspaceId);
+
       return Promise.resolve(done(sentry));
     }
+
     case ACT_KIND.WORKSPACE_GITHUB_CONNECT:
       if (refuseGitHubOpen) {
         return Promise.resolve({
@@ -405,6 +458,7 @@ function answer(request: Asked): Promise<Answered> {
           reason: "Vespin could not open your browser.",
         });
       }
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_GITHUB_DISCONNECT:
       return Promise.resolve(done(undefined));
@@ -415,6 +469,7 @@ function answer(request: Asked): Promise<Answered> {
           reason: WORKSPACE_NOT_PERMITTED_REFUSAL,
         });
       }
+
       return Promise.resolve(done({ ...ACME, name: request.payload.name }));
     case ACT_KIND.WORKSPACE_SLUG_SET:
       return Promise.resolve(done({ ...ACME, slug: request.payload.slug }));
@@ -425,6 +480,7 @@ function answer(request: Asked): Promise<Answered> {
           reason: WORKSPACE_NOT_PERMITTED_REFUSAL,
         });
       }
+
       return Promise.resolve(
         done(request.payload.photo === null ? ACME : { ...ACME, photoVersion: "v2" }),
       );
@@ -435,11 +491,14 @@ function answer(request: Asked): Promise<Answered> {
           reason: WORKSPACE_NOT_PERMITTED_REFUSAL,
         });
       }
+
       const { userId, role } = request.payload;
       stored = stored.map((member) => (member.userId === userId ? { ...member, role } : member));
       layPeople(request.payload.workspaceId);
+
       return Promise.resolve(done(stored));
     }
+
     case ACT_KIND.WORKSPACE_TRANSFER: {
       const { userId } = request.payload;
       stored = stored.map((member) =>
@@ -450,13 +509,16 @@ function answer(request: Asked): Promise<Answered> {
             : member,
       );
       layPeople(request.payload.workspaceId);
+
       return Promise.resolve(done(stored));
     }
+
     case ACT_KIND.WORKSPACE_LEAVE:
     case ACT_KIND.WORKSPACE_DELETE:
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_RETRY:
       layTokenRepositories(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_TOKEN_REPOSITORY_SET: {
       const { workspaceId, repository, added } = request.payload;
@@ -467,8 +529,10 @@ function answer(request: Asked): Promise<Answered> {
           ]
         : tokenRepositories.filter((one) => one.fullName !== repository);
       layTokenRepositories(workspaceId, false);
+
       return Promise.resolve(done(tokenRepositories));
     }
+
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -479,6 +543,7 @@ function onPort(kind: PortActKind) {
   return async (payload: PortActPayload<PortActKind>) => {
     // SAFETY: the port hands each procedure the payload its own kind takes.
     const outcome = await answer({ kind, payload } as Asked);
+
     if (outcome.status === FAKE_ANSWER.DONE) return outcome.value;
     throw refusedOnPort(
       outcome.status === FAKE_ANSWER.REFUSED ? outcome.reason : "Not in this test.",
@@ -492,7 +557,9 @@ function workspacePort(): Parameters<typeof fakeActPort>[0] {
     ...Object.values(TASKS_ACT_KIND),
     ...Object.values(WORKSPACE_ACT_KIND),
   ];
+
   const procedures = kinds.map((kind) => [kind, onPort(kind)]);
+
   // SAFETY: each kind's procedure answers that kind's own result, as `answer` gives it.
   return Object.fromEntries(procedures) as Parameters<typeof fakeActPort>[0];
 }
@@ -534,15 +601,18 @@ beforeEach(() => {
     [ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]: (input) => {
       sent.push({ kind: ACT_KIND.WORKSPACE_MEMBERS_FOLLOW, payload: input });
       void Promise.resolve().then(() => layPeople(input.workspaceId));
+
       return quietHold();
     },
     [ACT_KIND.WORKSPACE_INTEGRATIONS_FOLLOW]: (input) => {
       void Promise.resolve().then(() => layIntegrations(input.workspaceId));
+
       return quietHold();
     },
     [ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW]: (input) => {
       sent.push({ kind: ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW, payload: input });
       void Promise.resolve().then(() => layInvitations(input.workspaceId));
+
       return quietHold();
     },
     // Note that the token repositories' read waits where the test holds it, as one still out on the wire.
@@ -551,6 +621,7 @@ beforeEach(() => {
       const held = tokenReadHeld;
       tokenReadHeld = undefined;
       void (held ?? Promise.resolve()).then(() => layTokenRepositories(input.workspaceId));
+
       return quietHold();
     },
   });
@@ -593,13 +664,16 @@ async function mount(
 ) {
   const pressed = { left: 0 };
   const first = workspace.id === FIRST.id ? workspace : FIRST;
+
   const workspaces = [first, workspace, ...others].filter(
     (each, at, all) => all.findIndex((other) => other.id === each.id) === at,
   );
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const render = (workspaceId: string) => {
     const control: WorkspaceSettingsControl = {
       workspaces,
@@ -610,6 +684,7 @@ async function mount(
         pressed.left += 1;
       },
     };
+
     act(() =>
       root.render(
         withQueryClient(
@@ -633,9 +708,11 @@ async function mount(
       ),
     );
   };
+
   render(workspace.id);
   await settle();
   await peopleLanded(container);
+
   /** Stands the page again over another workspace, as the sidebar listing it does. */
   const relist = async (next: Workspace) => {
     workspaces.push(next);
@@ -643,6 +720,7 @@ async function mount(
     await settle();
     await peopleLanded(container);
   };
+
   /** Stands the page again over the workspace as the window's list now says it, as a list read after a change elsewhere does. */
   const restand = async (next: Workspace) => {
     workspaces.splice(
@@ -654,6 +732,7 @@ async function mount(
     await settle();
     await peopleLanded(container);
   };
+
   return { page: container, pressed, relist, restand };
 }
 
@@ -700,31 +779,41 @@ const addressOf = (row: HTMLElement) => row.querySelector('[id$="label"] .ui-one
 /** The items of the ⋯ on `row`, or none where it draws no ⋯. */
 function rowActions(row: HTMLElement): string[] {
   const ellipsis = row.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+
   if (ellipsis === null) return [];
   act(() => ellipsis.click());
+
   const items = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].map(
     (item) => item.textContent ?? "",
   );
+
   act(() => ellipsis.click());
+
   return items;
 }
 
 /** Chooses `label` from the ⋯ on `row`, or presses its button of that name where the row's one act stands alone. */
 async function chooseAction(row: HTMLElement, label: string): Promise<void> {
   const lone = row.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
   if (lone !== null) {
     act(() => lone.click());
     await settle();
+
     return;
   }
+
   const ellipsis =
     row.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("the row draws no ⋯");
+
   act(() => ellipsis.click());
+
   const item =
     [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find(
       (each) => each.textContent === label,
     ) ?? assert.fail(`no ${label} in the row's menu`);
+
   act(() => item.click());
   await settle();
 }
@@ -778,12 +867,14 @@ const peopleLanded = (page: HTMLElement) =>
     const members = page.querySelector(
       `[${SETTINGS_SEARCH_ANCHOR_ATTRIBUTE}="${SETTINGS_SECTION.MEMBERS}"]`,
     );
+
     assert.equal(members === null || placeholderOf(members) === undefined, true);
   });
 
 /** The placeholder standing for a read still out, what it says it reads, and how many rows it stands. */
 const placeholderOf = (within: Element) => {
   const status = within.querySelector('[role="status"][aria-busy="true"]');
+
   return status === null
     ? undefined
     : [status.textContent, status.querySelectorAll(".ui-settings-row").length];
@@ -809,9 +900,11 @@ const renames = () =>
 /** Opens the name's field by pressing the name, types `typed` over it, and ends the edit with `key`. */
 async function renameTo(page: HTMLElement, typed: string, key: string): Promise<void> {
   act(() => (renamePresses(page)[0] ?? assert.fail("no rename press")).click());
+
   const field =
     page.querySelector<HTMLInputElement>('input[aria-label="Workspace name"]') ??
     assert.fail("no name field");
+
   act(() => {
     field.value = typed;
     field.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
@@ -878,6 +971,7 @@ test("a personal workspace shows its owner's name with no Rename to its owner an
     assert.deepEqual(rowActions(identity(page)), acts);
     assert.ok(photoTile(page), "the photo is still offered, on its tile");
   }
+
   const team = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   assert.equal(renamePresses(team.page).length, 1);
 });
@@ -894,11 +988,13 @@ test("the owner's Change URL opens on the slug as it stands, says what is wrong 
   const card = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no dialog");
   const field = card.querySelector<HTMLInputElement>("input") ?? assert.fail("no slug field");
   const opened = field.value;
+
   const typeSlug = (words: string) =>
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
+
   typeSlug("Acme Labs");
   const malformed = [refusalOf(card), button(card, "Save").disabled];
   typeSlug("acme-labs");
@@ -926,6 +1022,7 @@ async function drain(): Promise<void> {
       await new Promise((resolve) => setImmediate(resolve));
     });
   }
+
   await settle();
 }
 
@@ -937,6 +1034,7 @@ function photoTile(page: HTMLElement): HTMLButtonElement | null {
 /** The items the tile's menu offers once pressed, by their words. */
 function tileMenu(page: HTMLElement): HTMLElement[] {
   act(() => photoTile(page)?.click());
+
   return [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
 }
 
@@ -945,6 +1043,7 @@ async function pickPhoto(page: HTMLElement, file: File): Promise<void> {
   const picker =
     identity(page).querySelector<HTMLInputElement>('input[type="file"]') ??
     assert.fail("no photo picker");
+
   Object.defineProperty(picker, "files", { configurable: true, value: [file] });
   act(() => {
     picker.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1069,6 +1168,7 @@ function pillOver(words: Element): string | undefined {
   restOn(words);
   const pill = document.querySelector('[role="tooltip"]:not([inert])')?.textContent ?? undefined;
   act(() => words.dispatchEvent(new MouseEvent("pointerout", { bubbles: true })));
+
   return pill;
 }
 
@@ -1077,16 +1177,19 @@ test("a member's address and an invited one, where the row cuts them short, are 
   stored = [OWNER, { ...MEMBER, email: LONG }];
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   await invite(page, LONG, WORKSPACE_ROLE.MEMBER);
+
   // Note that the invitation is listed once the invitations the host lays reach their query.
   const invited = await vi.waitFor(
     () => invitationRows(page)[0] ?? assert.fail("no pending invitation"),
   );
+
   const addresses = [
     memberNamed(page, "Sam").querySelector("p .ui-one-line"),
     addressOf(invited),
   ].map((words) => words ?? assert.fail("an address is not drawn"));
 
   assert.deepEqual(addresses.map(pillOver), [undefined, undefined], "drawn whole, no pill");
+
   for (const words of addresses) cutShort(words);
   assert.deepEqual(addresses.map(pillOver), [LONG, LONG]);
 });
@@ -1117,6 +1220,7 @@ test("while the members are being read the rest of the page stands, a placeholde
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const control: WorkspaceSettingsControl = {
     workspaces: [FIRST, { ...ACME, memberCount: 3 }],
     workspaceId: ACME.id,
@@ -1124,6 +1228,7 @@ test("while the members are being read the rest of the page stands, a placeholde
     listFailed: false,
     onRetryList: () => undefined,
   };
+
   act(() =>
     root.render(
       withQueryClient(
@@ -1135,10 +1240,12 @@ test("while the members are being read the rest of the page stands, a placeholde
     ),
   );
   const members = section(container, SETTINGS_SECTION.MEMBERS);
+
   const whileReading = {
     members: placeholderOf(members),
     identityHeld: identity(container).closest('[aria-busy="true"]') !== null,
   };
+
   const placeholderBoxes = rowBoxes(members);
   await settle();
 
@@ -1163,6 +1270,7 @@ test("before the workspaces are read, placeholder sections stand in the page's s
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const control: WorkspaceSettingsControl = {
     workspaces: [],
     workspaceId: undefined,
@@ -1170,6 +1278,7 @@ test("before the workspaces are read, placeholder sections stand in the page's s
     listFailed: false,
     onRetryList: () => undefined,
   };
+
   act(() =>
     root.render(
       createElement(SettingsPage, {
@@ -1186,6 +1295,7 @@ test("before the workspaces are read, placeholder sections stand in the page's s
       group.querySelectorAll(".ui-settings-row").length,
     ],
   );
+
   assert.deepEqual(placeholderOf(container)?.[0], "Reading your workspaces");
   assert.deepEqual(sections, [
     [false, 1],
@@ -1238,6 +1348,7 @@ test("an admin is offered no Remove on another admin, and the owner is, as the s
     email: "ola@example.com",
     role: WORKSPACE_ROLE.ADMIN,
   };
+
   stored = [OWNER, admin, MEMBER];
   const asAdmin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const adminSees = rowActions(memberNamed(asAdmin.page, "Ola"));
@@ -1354,21 +1465,26 @@ test("the owner cannot leave until the workspace is handed over: its row says so
     name: "Kim",
     email: "kim@example.com",
   };
+
   stored = [OWNER, ADMIN_OLA, other, MEMBER];
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   const group = leaveGroup(page) ?? assert.fail("no leave");
   const line = leaveLine(group);
   act(() => button(group, "Transfer ownership").click());
+
   const chip =
     dialog().querySelector<HTMLButtonElement>('button[aria-label^="New owner"]') ??
     assert.fail("no new owner");
+
   const first = chip.getAttribute("aria-label");
   act(() => chip.click());
   const offered = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]')];
   const names = offered.map((item) => item.textContent);
+
   const besides = offered.map((item) =>
     item.querySelector(".ui-menu-item-copy")?.getAttribute("data-place"),
   );
+
   act(() => offered.find((item) => item.textContent?.includes("ola@example.com"))?.click());
   assert.equal((dialog().textContent ?? "").includes(`Transfer ownership of ${ACME.name}?`), true);
   await confirm("Transfer ownership");
@@ -1409,6 +1525,7 @@ test("the owner with no admin is told to make one first and offered no handover,
 
 test("the leave names the automations the reader made where the service says whose they are, and leaves them out where none is the reader's", async () => {
   const UNSAID = "Automations you created stop running.";
+
   /** The leave dialog's lines for the automations the workspace holds, once `read` says the automations the host laid reached them. */
   const linesFor = async (
     held: { name: string; mine?: boolean }[],
@@ -1420,11 +1537,14 @@ test("the leave names the automations the reader made where the service says who
     const { page } = await mount(ACME);
     act(() => button(leaveGroup(page) ?? assert.fail("no leave"), "Leave").click());
     await settle();
+
     const said = () =>
       [...dialog().querySelectorAll(".confirm-consequences li")].map((li) => li.textContent);
+
     await vi.waitFor(() => assert.equal(read(said()), true));
     const lines = said();
     act(() => button(dialog(), "Cancel").click());
+
     return lines;
   };
 
@@ -1436,14 +1556,17 @@ test("the leave names the automations the reader made where the service says who
     ],
     (lines) => lines[2] !== UNSAID,
   );
+
   const one = await linesFor(
     [{ name: "Nightly triage", mine: true }],
     (lines) => lines[2] !== UNSAID,
   );
+
   const none = await linesFor(
     [{ name: "Sam's sweep", mine: false }],
     (lines) => !lines.some((line) => line?.includes("automation")),
   );
+
   const unsaid = await linesFor([{ name: "Nightly triage" }], () => true);
 
   assert.equal(named[2], "2 automations you created stop running: Nightly triage, Weekly digest.");
@@ -1457,16 +1580,20 @@ test("the leave names the automations the reader made where the service says who
 
 test("the members the host lays on the document are drawn with nothing asked again, so an admin who joined meanwhile may be handed the workspace", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER, memberCount: 2 });
+
   const offeredBefore = buttons(
     leaveGroup(page) ?? assert.fail("no leave"),
     "Transfer ownership",
   ).length;
+
   act(() => deliverPeople({ [ACME.id]: { rows: { members: [OWNER, ADMIN_OLA, MEMBER] } } }));
   await settle();
+
   // Note that Transfer ownership is offered once the members laid reach their query.
   const transfer = await vi.waitFor(() =>
     button(leaveGroup(page) ?? assert.fail("no leave"), "Transfer ownership"),
   );
+
   act(() => transfer.click());
   await settle();
 
@@ -1489,10 +1616,13 @@ test("an admin's leave says the invitations they sent stay valid, and a member's
     const { page } = await mount({ ...ACME, role });
     act(() => button(leaveGroup(page) ?? assert.fail("no leave"), "Leave").click());
     await settle();
+
     const lines = [...dialog().querySelectorAll(".confirm-consequences li")].map(
       (li) => li.textContent,
     );
+
     act(() => button(dialog(), "Cancel").click());
+
     return lines;
   };
 
@@ -1521,9 +1651,11 @@ test("a member leaves after confirming, which names what stays and what stops, a
   const leaveRow = leaveGroup(member.page) ?? assert.fail("no leave");
   const line = leaveLine(leaveRow);
   act(() => button(leaveRow, "Leave").click());
+
   const named = [...dialog().querySelectorAll(".confirm-consequences li")].map(
     (li) => li.textContent,
   );
+
   await confirm("Leave acme");
 
   assert.equal(line, "You lose its tasks, agents, and inbox until someone invites you again.");
@@ -1550,9 +1682,11 @@ test("the owner deletes a team workspace once its name is typed, told what goes 
   const owner = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   const group = leaveGroup(owner.page) ?? assert.fail("no leave");
   act(() => button(group, "Delete").click());
+
   const named = [...dialog().querySelectorAll(".confirm-consequences li")].map(
     (li) => li.textContent,
   );
+
   await confirm("Delete workspace");
   const deletes = () => sent.filter((request) => request.kind === ACT_KIND.WORKSPACE_DELETE);
   const unsentBeforeTyped = deletes().length;
@@ -1644,6 +1778,7 @@ function unfold(page: HTMLElement, label: string): void {
   const chevron =
     page.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ??
     assert.fail(`no ${label} fold`);
+
   assert.equal(chevron.getAttribute("aria-expanded"), "false", `${label} starts folded`);
   act(() => chevron.click());
 }
@@ -1684,6 +1819,7 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
       ["GitHub", "Connected"],
       ["acme-org", "0 repositories"],
     ]);
+
     for (const name of ["acme-org"]) {
       const account = rowNamed(group, name);
       assert.equal(
@@ -1698,6 +1834,7 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
       );
       assert.deepEqual(rowButtons(account), [], `${name} offers nothing to press`);
     }
+
     for (const root of roots.splice(0)) act(() => root.unmount());
   }
 });
@@ -1737,6 +1874,7 @@ test("an account given every repository says All N and folds every one open, and
       repositorySelection: GITHUB_REPOSITORY_SELECTION.SELECTED,
     },
   ];
+
   const { page } = await mount({
     ...CONNECTED,
     githubInstallations: [
@@ -1745,6 +1883,7 @@ test("an account given every repository says All N and folds every one open, and
       { installationId: 13, login: "acme-tools", active: true },
     ],
   });
+
   unfold(page, FOLD.GITHUB);
   const org = rowNamed(githubGroup(page), "acme-org");
 
@@ -1762,6 +1901,7 @@ test("while the repositories are read each account's line says so, and a read th
   const reading = await mount(SEVERAL);
   unfold(reading.page, FOLD.GITHUB);
   assert.deepEqual(integrationRows(reading.page).slice(1), [["acme-org", "Reading repositories"]]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   repositoriesReadHeld = false;
@@ -1841,6 +1981,7 @@ test("a GitHub page the browser could not open is said under the row, from Manag
 test("an owner or an admin of a workspace with no GitHub, or none still active, is offered Connect beside Add repository, which opens the same connect", async () => {
   // Note that the admin's workspace holds one installation GitHub suspended or removed, which counts as none.
   const inactive = [{ installationId: 12, login: "acme-labs", active: false }];
+
   for (const role of [WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]) {
     const installations = role === WORKSPACE_ROLE.ADMIN ? inactive : [];
     const { page } = await mount({ ...ACME, role, githubInstallations: installations });
@@ -1872,9 +2013,11 @@ test("a member reads every account connected, or is told to ask an owner or admi
   assert.deepEqual(integrationRows(unconnected.page), [
     ["GitHub", "Not connected. Ask an owner or admin."],
   ]);
+
   for (const { page } of [connected, unconnected]) {
     const group = githubGroup(page);
     assert.deepEqual(rowButtons(group), ["Add repository"]);
+
     for (const row of group.querySelectorAll<HTMLElement>(ROWS)) {
       act(() => {
         row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
@@ -1974,6 +2117,7 @@ test("Add repository offers the token's repositories from a service older than a
 
 test("with no token saved, GitHub's row offers no Add repository, to an owner, an admin, or a member", async () => {
   tokenSaved = false;
+
   for (const role of Object.values(WORKSPACE_ROLE)) {
     const { page } = await mount({ ...SEVERAL, role });
 
@@ -2007,10 +2151,12 @@ test("Add repository draws each repository as the repository chip's menu does, b
 
   act(() => button(rowNamed(page, "GitHub"), "Add repository").click());
   await settle();
+
   const zed = () =>
     [...document.querySelectorAll('[role="option"]')].find(
       (one) => optionWords(one)[0] === "zed",
     ) ?? assert.fail("zed is not offered");
+
   const field = document.querySelector<HTMLInputElement>("input") ?? assert.fail("no search field");
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
@@ -2067,10 +2213,13 @@ test("the page has no workspace picker of its own, and shows another workspace, 
     slug: "beta",
     role: WORKSPACE_ROLE.ADMIN,
   };
+
   const { page, relist } = await mount(ACME, [beta]);
+
   const rowNames = [...page.querySelectorAll(".settings-row strong")].map(
     (name) => name.textContent,
   );
+
   const listed = [nameShown(page), renamePresses(page).length];
 
   await relist(beta);
@@ -2125,6 +2274,7 @@ async function invite(
     act(() => button(page, "Invite").click());
     await settle();
   }
+
   const field = addressField();
   act(() => {
     // React reads a typed value off the element's own setter, as a keystroke sets it.
@@ -2134,9 +2284,11 @@ async function invite(
     );
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+
   const admin = [...inviteDialog().querySelectorAll<HTMLElement>('[role="radio"]')].find((each) =>
     each.textContent?.startsWith("Admin"),
   );
+
   if (role === WORKSPACE_ROLE.ADMIN) act(() => admin?.click());
   act(() => {
     for (let press = 0; press < presses; press += 1) inviteAct().click();
@@ -2236,9 +2388,11 @@ test("the owner invites an address as a role, sees it pending with its link to c
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
 
   await invite(page, "alan@example.com", WORKSPACE_ROLE.ADMIN);
+
   const row = await vi.waitFor(
     () => invitationRows(page)[0] ?? assert.fail("no pending invitation"),
   );
+
   const face = row.querySelector<HTMLElement>(".actor-mark")?.dataset.kind;
   const listed = [addressOf(row)?.textContent, row.querySelector("p")?.textContent];
   act(() => button(row, "Copy link").click());
@@ -2327,9 +2481,11 @@ test("an admin's Invite card shows the role, Admin unavailable since only the ow
 test("Canceling an invitation asks first, in the accent rather than red, and sends nothing until it is answered", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   await invite(page, "alan@example.com", WORKSPACE_ROLE.MEMBER);
+
   const row = await vi.waitFor(
     () => invitationRows(page)[0] ?? assert.fail("no pending invitation"),
   );
+
   const cancels = () =>
     sent.filter((request) => request.kind === ACT_KIND.WORKSPACE_INVITATION_CANCEL).length;
 
@@ -2359,8 +2515,10 @@ test("each pending invitation's Cancel invitation stands in a group named by its
     ...page.querySelectorAll<HTMLButtonElement>('button[aria-label="Cancel invitation"]'),
   ].map((cancel) => {
     const group = cancel.closest('[role="group"]');
+
     return document.getElementById(group?.getAttribute("aria-labelledby") ?? "")?.textContent;
   });
+
   assert.deepEqual(named, ["sam@example.com", "ada@example.com"]);
 });
 
@@ -2383,10 +2541,13 @@ test("an address already invited is said in the Invite card, and a member is off
   await settle();
   assert.equal(said, ALREADY_INVITED_REFUSAL);
   assert.deepEqual(invitationRows(admin.page), []);
+
   // Note that the admin's page goes before the member's is drawn, since a second page's subscription would follow the admin's invitations again.
   for (const root of roots.splice(0)) act(() => root.unmount());
+
   const follows = () =>
     sent.filter((request) => request.kind === ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW).length;
+
   const held = follows();
   const member = await mount(ACME);
   await settle();
@@ -2418,6 +2579,7 @@ test("a workspaces read that failed says so with Retry, which asks for them agai
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const control: WorkspaceSettingsControl = {
     workspaces: [],
     workspaceId: undefined,
@@ -2427,6 +2589,7 @@ test("a workspaces read that failed says so with Retry, which asks for them agai
       retried += 1;
     },
   };
+
   act(() =>
     root.render(
       createElement(SettingsPage, {
@@ -2571,6 +2734,7 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
     ]),
   );
   const after = rowWords(rowNamed(githubGroup(admin.page), "Sentry"));
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the member's page reads its own world, never the integrations the admin's page left cached.
   startQueriesAfresh();
@@ -2609,6 +2773,7 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
   await confirm("Disconnect Slack bot");
   await vi.waitFor(() => assert.deepEqual(rowWords(slackRow()), before));
   const after = rowWords(slackRow());
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the member's page reads its own world, never the integrations the admin's page left cached.
   startQueriesAfresh();
@@ -2626,6 +2791,7 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
 
 test("in the window, each member's ⋯ opens their profile in the workspace the page shows, whose page holds their Copy link", async () => {
   const opened: [string, string | undefined, string | undefined][] = [];
+
   const { page } = await mount(ACME, [], (userId, name, workspaceId) =>
     opened.push([userId, name, workspaceId]),
   );

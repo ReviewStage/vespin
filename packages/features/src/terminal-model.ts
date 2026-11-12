@@ -116,6 +116,7 @@ const UNREACHED_WORDS = {
 /** The bar a shell that ended leaves, its status where the host said it. */
 function exitedBar(code: number | undefined): TerminalBar {
   const status = code === undefined ? "" : ` with code ${code}`;
+
   return {
     words: `Process exited${status}. Press any key for a new shell.`,
     busy: false,
@@ -139,8 +140,10 @@ const MIRROR_FAILURE_WORDS = {
 function mirrorLook(standing: MirrorStanding): TerminalLook {
   const look = (words: string, sentence: string): TerminalLook => {
     const bar = { words: sentence, busy: true, late: true };
+
     return { words, bar, phoneBar: bar, dim: false };
   };
+
   switch (standing.kind) {
     case MIRROR_STANDING.WAITING:
       return look("waiting for sandbox", "Waiting for the agent’s sandbox…");
@@ -150,6 +153,7 @@ function mirrorLook(standing: MirrorStanding): TerminalLook {
       return look("preparing files", "Preparing the agent’s files on this Mac…");
     case MIRROR_STANDING.FAILED: {
       const code = standing.code === undefined ? "" : ` (code ${standing.code})`;
+
       return look("retrying", `${MIRROR_FAILURE_WORDS[standing.failure]}${code}. Trying again…`);
     }
   }
@@ -160,6 +164,7 @@ export function terminalLook(state: TerminalState, mirror?: MirrorStanding): Ter
   switch (state.kind) {
     case TERMINAL_STATE.CONNECTING:
       if (mirror !== undefined) return mirrorLook(mirror);
+
       return {
         words: "connecting…",
         bar: undefined,
@@ -234,5 +239,6 @@ const READ_ONLY_ENDED_BAR: TerminalBar = {
 /** What a run action's read-only tab says of the state: as any tab says it, but a key never starts a shell where its shell ended. */
 export function readOnlyTerminalLook(state: TerminalState): TerminalLook {
   const look = terminalLook(state);
+
   return state.kind === TERMINAL_STATE.EXITED ? { ...look, bar: READ_ONLY_ENDED_BAR } : look;
 }

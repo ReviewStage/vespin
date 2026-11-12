@@ -164,12 +164,14 @@ function keeperOf(
 ): MemorySummary["keptBy"] {
   if (userId === null) return null;
   const name = names.get(userId);
+
   return name === undefined ? null : { userId, name };
 }
 
 /** Whether words look like they hold a credential, so they are never kept. */
 function looksLikeCredential(text: string): boolean {
   if (CREDENTIAL_SHAPES.some((shape) => shape.test(text))) return true;
+
   return (text.match(OPAQUE_RUN) ?? []).some(
     (run) => /[a-z]/u.test(run) && /[A-Z]/u.test(run) && /[0-9]/u.test(run),
   );
@@ -201,6 +203,7 @@ function matchingMemories(
     .map((memory, recency) => {
       const own = wordsOf(memory.text);
       const score = asked.filter((word) => own.some((held) => held.startsWith(word))).length;
+
       return { memory, score, recency };
     })
     .filter((scored) => scored.score > 0)
@@ -218,7 +221,9 @@ function rankMemories(
   query: string | undefined,
 ): readonly StoredMemory[] {
   const asked = askedWords(query ?? "", MEMORY_SEARCH_BOUNDS.QUERY_WORDS);
+
   if (asked.length === 0) return memories.slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
+
   return matchingMemories(memories, asked, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
 }
 
@@ -237,6 +242,7 @@ function readingsOf(
 ): WorkspaceStoreEffect<MemoryReadings> {
   const members = stored.flatMap((kept) => (kept.userId === null ? [] : [kept.userId]));
   const ids = stored.map((kept) => kept.id);
+
   return Effect.all(
     {
       names: readAccountNames(members),
@@ -267,6 +273,7 @@ function summaryOf(
   kept: StoredMemory,
 ): MemorySummary {
   const tally = readings.tallies.get(kept.id);
+
   return {
     id: kept.id,
     text: kept.text,
@@ -287,14 +294,17 @@ export function readWorkspaceMemories(
 ): WorkspaceStoreEffect<WorkspaceMemoryAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
+
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const stored = yield* listMemories(workspaceId);
+
     const memories = yield* summariesFor(
       userId,
       workspaceId,
       MANAGING_ROLES.has(role.value),
       stored,
     );
+
     return { kind: WORKSPACE_MEMORY.READ, memories } as const;
   });
 }
@@ -312,17 +322,21 @@ export function forgetWorkspaceMemory(
 ): WorkspaceStoreEffect<WorkspaceMemoryAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
+
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const manages = MANAGING_ROLES.has(role.value);
     const forgot = yield* forgetMemory(workspaceId, id, { userId, manages });
+
     if (forgot.outcome === MEMORY_FORGET.NOT_PERMITTED)
       return { kind: WORKSPACE_MEMORY.NOT_PERMITTED } as const;
+
     const memories = yield* summariesFor(
       userId,
       workspaceId,
       manages,
       yield* listMemories(workspaceId),
     );
+
     return {
       kind: WORKSPACE_MEMORY.READ,
       memories,
@@ -388,9 +402,12 @@ export function saveWorkspaceMemory(
 ): WorkspaceStoreEffect<WorkspaceMemorySaveAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
+
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY_SAVE.NOT_MEMBER } as const;
+
     if (looksLikeCredential(text)) return { kind: WORKSPACE_MEMORY_SAVE.CREDENTIAL } as const;
     const outcome = yield* rememberMemory(workspaceId, userId, text, replaces, source);
+
     switch (outcome.kind) {
       case MEMORY_OUTCOME.NOT_FOUND:
         return { kind: WORKSPACE_MEMORY_SAVE.NOT_FOUND } as const;
@@ -408,6 +425,7 @@ export function saveWorkspaceMemory(
             by: source === undefined ? SERVER_MEMORY_KEEPER.MEMBER : SERVER_MEMORY_KEEPER.AGENT,
           },
         );
+
         return { kind: WORKSPACE_MEMORY_SAVE.SAVED, outcome: outcome.kind, memory } as const;
       }
     }
@@ -422,15 +440,18 @@ export function searchWorkspaceMemories(
 ): WorkspaceStoreEffect<WorkspaceMemorySearchAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
+
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const stored = yield* listMemories(workspaceId);
     const found = rankMemories(stored, query);
+
     const memories = yield* summariesFor(
       userId,
       workspaceId,
       MANAGING_ROLES.has(role.value),
       found,
     );
+
     return { kind: WORKSPACE_MEMORY.READ, memories, total: stored.length } as const;
   });
 }
@@ -455,8 +476,11 @@ export function matchWorkspaceMemories(
       MEMORY_SEARCH_BOUNDS.TURN_QUERY_WORDS,
       MEMORY_SEARCH_BOUNDS.TURN_SHORTEST_WORD,
     );
+
     if (asked.length === 0) return [];
+
     if (Option.isNone(yield* roleIn(userId, workspaceId))) return [];
+
     return matchingMemories(
       yield* listMemories(workspaceId),
       asked,
@@ -480,14 +504,17 @@ export function listWorkspaceMemoriesSince(
 ): WorkspaceStoreEffect<WorkspaceMemoryPageAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
+
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const recent = (yield* listMemories(workspaceId)).filter((kept) => kept.updatedAt >= since);
+
     const memories = yield* summariesFor(
       userId,
       workspaceId,
       MANAGING_ROLES.has(role.value),
       recent.slice(page.offset, page.offset + page.limit),
     );
+
     return { kind: WORKSPACE_MEMORY.READ, memories, total: recent.length } as const;
   });
 }

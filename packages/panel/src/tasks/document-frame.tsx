@@ -25,6 +25,7 @@ const DOCUMENT_BODY_CLASS = "description-document-body";
 /** The scrolling column a part of a document stands in; none outside one. */
 export function documentScrollerOf(element: Element): HTMLElement | undefined {
   const body = element.closest(`.${DOCUMENT_BODY_CLASS}`);
+
   return body?.parentElement ?? undefined;
 }
 

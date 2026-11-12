@@ -36,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
   delete document.documentElement.dataset.keyboard;
@@ -67,7 +68,9 @@ function wayBack(
     }),
   );
   const button = document.querySelector("button");
+
   if (button === null) throw new Error("No way back");
+
   return { button, backs: () => backs };
 }
 

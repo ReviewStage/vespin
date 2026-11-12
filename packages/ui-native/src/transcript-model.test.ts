@@ -33,6 +33,7 @@ describe("transcriptItems", () => {
       ],
       { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
     );
+
     expect(items.map((item) => item.kind)).toEqual([
       TRANSCRIPT_ITEM.SAID,
       TRANSCRIPT_ITEM.MEDIA,
@@ -57,6 +58,7 @@ describe("transcriptItems", () => {
     ],
     finishedAt: 1,
   } as const;
+
   const HELD = {
     number: 128,
     title: "Invite a teammate by email",
@@ -97,6 +99,7 @@ describe("transcriptItems", () => {
         now: 2,
         pullRequests: held,
       });
+
       expect(items.find((item) => item.kind === TRANSCRIPT_ITEM.PULL_REQUEST)).toMatchObject({
         number: 128,
         url: "https://github.com/ada/relay/pull/128",

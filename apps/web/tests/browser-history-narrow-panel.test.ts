@@ -30,6 +30,7 @@ const PHONE_WIDTH = 390;
 /** Whether a tab of the side panel stands pushed over the task's column, as it does once the panel opens on a phone. */
 async function panelPushed(): Promise<boolean> {
   await act(async () => undefined);
+
   return document.querySelector("aside.side-panel") !== null;
 }
 
@@ -37,6 +38,7 @@ async function panelPushed(): Promise<boolean> {
 function pullRequestCard(): HTMLElement {
   const found = document.querySelector<HTMLElement>(".agent-published .ui-list-row-main");
   assert.ok(found, "the agent's pull request stands over its composer");
+
   return found;
 }
 
@@ -44,6 +46,7 @@ function pullRequestCard(): HTMLElement {
 function back(): HTMLButtonElement {
   const found = document.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button");
   assert.ok(found, "the task's header leads with its way back");
+
   return found;
 }
 

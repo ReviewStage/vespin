@@ -90,12 +90,14 @@ export function startedLines(agent: AgentSummary): string[] {
 /** What a continue says once its agent is started: the agent it continued or forked, and the new one. */
 function continuedLines(sourceId: string, forked: boolean, agent: AgentSummary): string[] {
   const how = forked ? "Forked" : "Continued";
+
   return [`${how} agent ${sourceId} as agent ${agent.id} on ${agent.model} (${agent.effort}).`];
 }
 
 /** A Start request under a key of its own, as it travels, or a usage refusal in `words` where it reads as none. */
 function admittedStart(choice: AgentStartChoice | AgentContinueChoice, words: string) {
   const admitted = agentStartRequestOnWire({ idempotencyKey: crypto.randomUUID(), ...choice });
+
   return Result.isFailure(admitted)
     ? Effect.fail(new CommandFailed({ exit: CLI_EXIT.USAGE, message: words }))
     : Effect.succeed(admitted.success);
@@ -108,12 +110,15 @@ export function startAgent(taskId: string, choice: AgentStartChoice) {
       choice,
       "The prompt is empty or too long, the model and effort do not read, or the branch is no name git takes.",
     );
+
     const { hosted } = yield* session;
+
     const started = yield* askService(
       hosted.agents.start,
       { params: { id: taskId }, body },
       HOSTED_DEADLINE.START,
     );
+
     return started.body.agent;
   });
 }
@@ -131,12 +136,15 @@ function continueAgent(choice: AgentContinueChoice) {
       choice,
       "The agent or message id is no id, the note is empty or too long, or the model and effort do not read.",
     );
+
     const { hosted } = yield* session;
+
     const started = yield* askService(
       hosted.agents.startFrom,
       { params: { id: choice.from.agentId }, body },
       HOSTED_DEADLINE.START,
     );
+
     return started.body.agent;
   });
 }
@@ -150,18 +158,24 @@ function runsOnOf(cloud: boolean, on: Option.Option<string>) {
         message: "Name one place to run: --cloud or --on <device>.",
       });
     }
+
     if (cloud) return { machine: AGENT_MACHINE.VERCEL } satisfies AgentRunsOnRequest;
+
     if (Option.isNone(on)) return undefined;
     const named = on.value;
+
     if (isWireUuid(named)) {
       return { machine: AGENT_MACHINE.DEVICE, deviceId: named } satisfies AgentRunsOnRequest;
     }
+
     const { hosted } = yield* session;
     const { hosts } = yield* askService(hosted.hosts.list, undefined);
     const host = hosts.find((each) => each.name.toLowerCase() === named.toLowerCase());
+
     if (host !== undefined) {
       return { machine: AGENT_MACHINE.DEVICE, deviceId: host.id } satisfies AgentRunsOnRequest;
     }
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
@@ -176,24 +190,30 @@ function runsOnOf(cloud: boolean, on: Option.Option<string>) {
 function wholeTranscript(agentId: string, worker?: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const page = (before: string | undefined) => {
       const below = before === undefined ? undefined : { before };
+
       return worker === undefined
         ? askService(hosted.messages.agentNewest, { id: agentId, ...below })
         : askService(hosted.messages.agentWorkerNewest, { id: agentId, call: worker, ...below });
     };
+
     const newest = yield* page(undefined);
     // Note that the pages are gathered newest first and laid oldest first once, rather than each prepended.
     const pages = [newest.messages];
     let before = newest.before;
+
     while (before !== undefined) {
       const older = yield* page(before);
       pages.push(older.messages);
       before = older.before;
     }
+
     const messages = pages.toReversed().flat();
     const cursor = "cursor" in newest ? newest.cursor : AGENT_CURSOR_START;
     const status = "status" in newest ? newest.status : undefined;
+
     return { messages, cursor, status };
   });
 }
@@ -204,16 +224,20 @@ function printWholeCall(agentId: string, worker: string | undefined, callId: str
     const { hosted } = yield* session;
     const { messages } = yield* wholeTranscript(agentId, worker);
     const place = transcriptCallPlace(messages, callId);
+
     if (place === undefined) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.USAGE,
         message: `No call ${callId} in that transcript; agent logs --json names each call's toolCallId.`,
       });
     }
+
     const at = { id: agentId, message: place.messageId, index: String(place.index) };
+
     const { part } = yield* worker === undefined
       ? askService(hosted.messages.agentPart, at)
       : askService(hosted.messages.agentWorkerPart, { ...at, call: worker });
+
     yield* answer({
       json: { id: agentId, callId, part },
       lines: wholeCallLines(part),
@@ -239,15 +263,19 @@ function pageLines(
 ) {
   const next = new Map(printed);
   const lines: string[] = [];
+
   for (const message of page) {
     const before = next.get(message.id);
     const added = transcriptPartLines(message, before ?? 0, ended);
+
     if (added.lines.length > 0) {
       if (before === undefined || before === 0) lines.push("", `${transcriptSpeaker(message)}:`);
       lines.push(...added.lines);
     }
+
     next.set(message.id, added.printed);
   }
+
   return { lines, printed: next };
 }
 
@@ -261,7 +289,9 @@ function followTurn(agentId: string, print: boolean) {
     const { hosted } = yield* session;
     const start = yield* wholeTranscript(agentId);
     const first = pageLines(start.messages, new Map(), false);
+
     if (print) yield* streamLines(first.lines);
+
     const state = yield* Ref.make<Following>({
       cursor: start.cursor,
       printed: first.printed,
@@ -269,18 +299,24 @@ function followTurn(agentId: string, print: boolean) {
       status: start.status ?? AGENT_STATUS.RUNNING,
       failureReason: undefined,
     });
+
     const step = Effect.gen(function* () {
       const held = yield* Ref.get(state);
+
       const read = yield* askService(
         hosted.messages.agent,
         { id: agentId, after: held.cursor },
         HOSTED_DEADLINE.HELD,
       );
+
       const ended = cliExitOfAgentStatus(read.status) !== undefined;
       const added = pageLines(read.messages, held.printed, ended);
+
       if (print) yield* streamLines(added.lines);
       const messages = new Map(held.messages);
+
       for (const message of read.messages) messages.set(message.id, message);
+
       const next: Following = {
         cursor: read.cursor,
         printed: added.printed,
@@ -288,18 +324,23 @@ function followTurn(agentId: string, print: boolean) {
         status: read.status,
         failureReason: read.failureReason,
       };
+
       yield* Ref.set(state, next);
+
       return next;
     });
+
     const settled = yield* Effect.repeat(step, {
       schedule: Schedule.spaced(FOLLOW_SPACING),
       until: (following) => cliExitOfAgentStatus(following.status) !== undefined,
     });
+
     // Note that a turn that had ended before the first read leaves parts the first page held back as still written, which are printed whole now.
     if (print) {
       const rest = pageLines([...settled.messages.values()], settled.printed, true);
       yield* streamLines(rest.lines);
     }
+
     return settled;
   });
 }
@@ -307,8 +348,10 @@ function followTurn(agentId: string, print: boolean) {
 /** How a turn ended, in words for a person. */
 function endedWords(following: Following): string {
   if (following.status === AGENT_STATUS.COMPLETED) return "The agent's turn completed.";
+
   if (following.status === AGENT_STATUS.CANCELED) return "The agent's turn was stopped.";
   const reason = following.failureReason === undefined ? "" : ` (${following.failureReason})`;
+
   return `The agent's turn failed${reason}.`;
 }
 
@@ -316,21 +359,25 @@ function endedWords(following: Following): string {
 function waitOn(agentId: string, options: { readonly print: boolean; readonly timeout?: number }) {
   return Effect.gen(function* () {
     const followed = followTurn(agentId, options.print);
+
     const settled =
       options.timeout === undefined
         ? Option.some(yield* followed)
         : yield* Effect.timeoutOption(followed, Duration.seconds(options.timeout));
+
     if (Option.isNone(settled)) {
       yield* answer({
         json: { id: agentId, status: AGENT_STATUS.RUNNING, timedOut: true },
         lines: [`The agent is still working after ${options.timeout} seconds.`],
         ids: [agentId],
       });
+
       return yield* new CommandFailed({
         exit: CLI_EXIT.TIMED_OUT,
         message: "Timed out waiting on the agent's turn.",
       });
     }
+
     const following = settled.value;
     yield* answer({
       json: {
@@ -342,6 +389,7 @@ function waitOn(agentId: string, options: { readonly print: boolean; readonly ti
       lines: options.print ? ["", endedWords(following)] : [endedWords(following)],
       ids: [agentId],
     });
+
     return cliExitOfAgentStatus(following.status) ?? CLI_EXIT.OK;
   });
 }
@@ -413,13 +461,16 @@ function startFlagsOf(flags: {
         message: "Name one of --follow and --wait.",
       });
     }
+
     if (Option.isSome(flags.model) !== Option.isSome(flags.effort)) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.USAGE,
         message: "Name --model and --effort together (vespin models lists them).",
       });
     }
+
     const runsOn = yield* runsOnOf(flags.cloud, flags.on);
+
     return {
       ...(Option.isSome(flags.model) ? { model: flags.model.value } : undefined),
       ...(Option.isSome(flags.effort) ? { effort: flags.effort.value } : undefined),
@@ -437,10 +488,13 @@ function afterStart(
   return Effect.gen(function* () {
     if (!flags.follow && !flags.wait) {
       yield* answer({ json: agent, lines, ids: [agent.id] });
+
       return;
     }
+
     yield* note(lines.join("\n"));
     const exit = yield* waitOn(agent.id, { print: flags.follow });
+
     if (flags.wait) yield* endedWith(exit);
   });
 }
@@ -468,11 +522,13 @@ const startCommand = Command.make(
       const chosen = yield* startFlagsOf(flags);
       const prompt = Option.isSome(file) ? yield* readInput(file.value) : undefined;
       const taskId = yield* resolveTaskId(task);
+
       const agent = yield* startAgent(taskId, {
         ...(prompt === undefined ? undefined : { prompt }),
         ...chosen,
         ...(Option.isSome(branch) ? { branch: branch.value } : undefined),
       });
+
       yield* afterStart(agent, startedLines(agent), flags);
     }),
 ).pipe(
@@ -532,6 +588,7 @@ const continueCommand = Command.make(
     Effect.gen(function* () {
       const chosen = yield* startFlagsOf(flags);
       const note = Option.isSome(file) ? yield* readInput(file.value) : undefined;
+
       const agent = yield* continueAgent({
         from: {
           agentId: sourceId,
@@ -540,6 +597,7 @@ const continueCommand = Command.make(
         ...(note === undefined ? undefined : { note }),
         ...chosen,
       });
+
       yield* afterStart(agent, continuedLines(sourceId, Option.isSome(at), agent), flags);
     }),
 ).pipe(
@@ -585,8 +643,10 @@ const listCommand = Command.make(
           message: "A task's agents come on one page; --offset pages the workspace's.",
         });
       }
+
       const { hosted } = yield* session;
       const workspace = Option.isSome(task) ? undefined : (yield* resolveWorkspace).workspace;
+
       const listed: { agents: readonly AgentSummary[]; nextOffset?: number } =
         workspace === undefined
           ? yield* askService(hosted.agents.listOfTask, {
@@ -596,6 +656,7 @@ const listCommand = Command.make(
               workspaceId: workspace.id,
               ...(Option.isSome(offset) ? { offset: String(offset.value) } : undefined),
             });
+
       const { agents } = listed;
       // A task's list, and a service before paging, name no next page.
       const nextOffset = listed.nextOffset ?? null;
@@ -631,6 +692,7 @@ const listCommand = Command.make(
 const viewCommand = Command.make("view", { agent: agentArgument }, ({ agent: id }) =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const [{ agent }, published] = yield* Effect.all(
       [
         askService(hosted.agents.read, { id }),
@@ -638,12 +700,15 @@ const viewCommand = Command.make("view", { agent: agentArgument }, ({ agent: id 
       ],
       { concurrency: "unbounded" },
     );
+
     const { pullRequest, branch: pushedBranch } = published;
+
     const checks =
       pullRequest === null
         ? []
         : ((yield* askService(hosted.agentPullRequests.overviewChecks, { id })).pullRequest
             ?.checks ?? []);
+
     yield* answer({
       json: { ...agent, branch: agent.branch ?? null, pushedBranch, pullRequest, checks },
       lines: [
@@ -705,16 +770,20 @@ const logsCommand = Command.make(
     Effect.gen(function* () {
       const worker = Option.getOrUndefined(workerFlag);
       const callId = Option.getOrUndefined(callFlag);
+
       if (follow && (worker !== undefined || callId !== undefined)) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "--follow streams the agent's own turn; leave out --worker and --call.",
         });
       }
+
       if (callId !== undefined) {
         yield* printWholeCall(id, worker, callId);
+
         return;
       }
+
       if (follow) {
         const following = yield* followTurn(id, true);
         yield* answer({
@@ -727,8 +796,10 @@ const logsCommand = Command.make(
           lines: ["", endedWords(following)],
           ids: [id],
         });
+
         return;
       }
+
       const { messages, status } = yield* wholeTranscript(id, worker);
       yield* answer({
         json: {
@@ -795,19 +866,24 @@ const sendCommand = Command.make(
       if (Option.isSome(namedId) && !queue) {
         return yield* usage("--message-id names a queued message, so it goes with --queue.");
       }
+
       if (Option.isSome(namedId) && !isWireUuid(namedId.value)) {
         return yield* usage("--message-id is a UUID, such as one `uuidgen` prints.");
       }
+
       const text = yield* readInput(file);
       const { hosted } = yield* session;
+
       if (queue) {
         const messageId = Option.getOrElse(namedId, () => crypto.randomUUID());
+
         const answered = yield* askService(
           hosted.messages.queue,
           { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: messageId, text } },
           HOSTED_DEADLINE.USUAL,
           QUEUE_REFUSAL_WORDS,
         );
+
         // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
         const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
         const queued = ahead !== -1;
@@ -831,13 +907,16 @@ const sendCommand = Command.make(
           ],
           ids: [id],
         });
+
         return;
       }
+
       const { agent } = yield* askService(
         hosted.messages.send,
         { params: { id }, body: { text, clientKey: crypto.randomUUID() } },
         HOSTED_DEADLINE.STEER,
       );
+
       yield* answer({ json: agent, lines: [`Sent to agent ${agent.id}.`], ids: [agent.id] });
     }),
 ).pipe(
@@ -858,6 +937,7 @@ const sendCommand = Command.make(
 function queuedRow(message: QueuedMessage): string[] {
   const [first = ""] = message.text.split("\n");
   const files = message.files === undefined ? "" : ` (+${message.files.length} files)`;
+
   return [message.id, message.editing ? "held" : "queued", `${first}${files}`];
 }
 
@@ -891,12 +971,14 @@ const QUEUE_CHANGE_REFUSAL_WORDS = {
 const changeQueue = (id: string, body: AgentQueueChange) =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const answered = yield* askService(
       hosted.messages.queue,
       { params: { id }, body },
       HOSTED_DEADLINE.STEER,
       QUEUE_CHANGE_REFUSAL_WORDS,
     );
+
     yield* queueAnswer(id, answered.queue);
   });
 
@@ -1071,6 +1153,7 @@ const waitCommand = Command.make(
         print: false,
         ...(Option.isSome(timeout) ? { timeout: timeout.value } : undefined),
       });
+
       yield* endedWith(exit);
     }),
 ).pipe(
@@ -1089,6 +1172,7 @@ const waitCommand = Command.make(
 const checkoutCommand = Command.make("checkout", { agent: agentArgument }, ({ agent: id }) =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const [{ agent }, published] = yield* Effect.all(
       [
         askService(hosted.agents.read, { id }),
@@ -1096,33 +1180,40 @@ const checkoutCommand = Command.make("checkout", { agent: agentArgument }, ({ ag
       ],
       { concurrency: "unbounded" },
     );
+
     const repository = agent.repository ?? published.repository;
     const branch = agent.branch ?? published.branch;
+
     if (repository === null || branch === null) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: "The agent has no branch yet.",
       });
     }
+
     const here = yield* originRepository;
+
     if (here.toLowerCase() !== repository.toLowerCase()) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: `This folder is ${here}, and the agent works in ${repository}. Run this in a checkout of ${repository}.`,
       });
     }
+
     if (!(yield* originHasBranch(branch))) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: `The agent hasn't pushed ${branch} yet.`,
       });
     }
+
     if (!(yield* treeIsClean)) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: "This checkout has changes. Commit or stash them, then run this again.",
       });
     }
+
     yield* checkoutFromOrigin(branch);
     yield* answer({
       json: { id, repository, branch },
@@ -1143,11 +1234,14 @@ const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: i
   Effect.gen(function* () {
     const { hosted } = yield* session;
     const listed = yield* askService(hosted.agentPorts.list, { id });
+
     // Note that a sandbox not running shares nothing, so its share is not read.
     const { shared } = listed.running
       ? yield* askService(hosted.agentPorts.shared, { id })
       : { shared: null };
+
     const labels = new Map((listed.labels ?? []).map(({ port, label }) => [port, label]));
+
     const portLines = columns(
       listed.ports.map((port) => [
         String(port),
@@ -1155,6 +1249,7 @@ const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: i
         port === shared?.port ? shared.url : "",
       ]),
     );
+
     yield* answer({
       json: { ...listed, shared },
       lines: !listed.running
@@ -1210,21 +1305,28 @@ const shareCommand = Command.make(
           message: "Name a port to share, or --stop, not both.",
         });
       }
+
       const { hosted } = yield* session;
+
       if (stop) {
         const stopped = yield* askService(hosted.agentPorts.unshare, { id });
         yield* answer({ json: stopped, lines: ["Stopped sharing."], ids: [] });
+
         return;
       }
+
       if (Option.isSome(port)) {
         const { url } = yield* askService(hosted.agentPorts.share, {
           params: { id },
           body: { port: port.value },
         });
+
         const shared = { port: port.value, url };
         yield* answer({ json: { shared }, lines: sharedLines(shared), ids: [url] });
+
         return;
       }
+
       const { shared } = yield* askService(hosted.agentPorts.shared, { id });
       yield* answer({
         json: { shared },
@@ -1246,6 +1348,7 @@ const shareCommand = Command.make(
 /** Who drives a tab, in a column's words: its agent, or a member until their takeover lapses. */
 function driverWords(tab: AgentBrowserTab): string {
   if (tab.driver === null) return "agent";
+
   return `member until ${new Date(tab.driver.heldUntil).toLocaleTimeString()}`;
 }
 
@@ -1273,10 +1376,12 @@ const tabsOpenCommand = Command.make(
   ({ agent: id, address }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       const { tab } = yield* askService(hosted.agentBrowserTabs.agentOpen, {
         params: { id },
         body: { address },
       });
+
       yield* tabAnswer(tab);
     }),
 ).pipe(
@@ -1398,27 +1503,38 @@ function agentChangeOf(flags: AgentUpdateFlags) {
       [AGENT_CHANGE.ARCHIVE]: flags.archive || flags.unarchive,
       [AGENT_CHANGE.SERVERS]: Option.isSome(flags.disabledServers),
     };
+
     const changes = Object.values(AGENT_CHANGE).filter((change) => named[change]);
     const [change, ...others] = changes;
+
     if (change === undefined || others.length > 0) {
       const listed = Object.values(AGENT_CHANGE_FLAGS).join(", ");
+
       return yield* usage(`Name one change: ${listed}.`);
     }
+
     if (flags.pin && flags.unpin) return yield* usage("Name one of --pin and --unpin.");
+
     if (flags.archive && flags.unarchive) {
       return yield* usage("Name one of --archive and --unarchive.");
     }
+
     if (Option.isSome(flags.reason) && !flags.archive) {
       return yield* usage("--reason goes with --archive.");
     }
+
     if (Option.isSome(flags.title)) return { change, body: { title: flags.title.value } };
+
     if (Option.isSome(flags.model) && Option.isSome(flags.effort)) {
       return { change, body: { model: flags.model.value, effort: flags.effort.value } };
     }
+
     if (change === AGENT_CHANGE.CHOICE) {
       return yield* usage("Name --model and --effort together (vespin models lists them).");
     }
+
     if (change === AGENT_CHANGE.PIN) return { change, body: { pinned: flags.pin } };
+
     if (change === AGENT_CHANGE.ARCHIVE) {
       return {
         change,
@@ -1428,10 +1544,12 @@ function agentChangeOf(flags: AgentUpdateFlags) {
         },
       };
     }
+
     // Note that an empty list switches every server back on.
     const names = Option.getOrThrow(flags.disabledServers)
       .split(",")
       .map((name) => name.trim());
+
     return { change, body: { disabledServers: names.filter((name) => name !== "") } };
   });
 }
@@ -1439,16 +1557,23 @@ function agentChangeOf(flags: AgentUpdateFlags) {
 /** What `update` says of the agent once its change landed. */
 function updatedLines(change: AgentChange, agent: AgentSummary): string[] {
   const name = agent.title ?? agent.model;
+
   if (change === AGENT_CHANGE.TITLE) return [`Renamed agent ${agent.id} to ${name}.`];
+
   if (change === AGENT_CHANGE.CHOICE) {
     return [`Agent ${agent.id} runs on ${agent.model} (${agent.effort}) from its next step.`];
   }
+
   if (change === AGENT_CHANGE.PIN) return [`Changed the pin of agent ${agent.id}.`];
+
   if (change === AGENT_CHANGE.ARCHIVE) {
     const how = agent.archivedAt === undefined ? "Brought back" : "Archived";
+
     return [`${how} agent ${agent.id}.`];
   }
+
   const off = agent.disabledServers ?? [];
+
   return [
     off.length === 0
       ? `Every MCP server is on for agent ${agent.id}.`

@@ -29,6 +29,7 @@ function DrawerSwipes(): React.JSX.Element {
     onOpen: () => setOpen(true),
     onClose: () => setOpen(false),
   });
+
   return (
     <CatalogSection id="drawer-swipe" title="Swiped in from the edge">
       <Stack gap={GAP.FIELD}>

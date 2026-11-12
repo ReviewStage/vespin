@@ -276,6 +276,7 @@ describe("verdict", () => {
 
   it("fails the push when the workflow turn said its closing words but ended in an error", () => {
     const launch = firstLaunch();
+
     const closing = launch.findIndex((message) =>
       JSON.stringify(message).includes(TURN_DONE.FIRST),
     );

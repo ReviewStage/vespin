@@ -211,8 +211,10 @@ async function sendHeld(
 ): Promise<boolean> {
   if (comment.reply === undefined) {
     const answer = await control.start({ ...startOf(comment), ...review });
+
     return !("note" in answer);
   }
+
   return control.act(comment.reply.threadId, {
     action: DESCRIPTION_COMMENT_ACTION.REPLY,
     clientKey: comment.clientKey,
@@ -234,16 +236,21 @@ async function sendReview(
   onLanded: (clientKey: string) => void,
 ): Promise<boolean> {
   const last = comments.at(-1);
+
   if (last === undefined) return true;
   const earlier = comments.slice(0, -1);
+
   for (const comment of earlier) {
     if (comment.landed === true) continue;
+
     // Note that each waits on the one before, so the threads stand in the order they were held.
     if (!(await sendHeld(control, comment, { held: true }))) return false;
     onLanded(comment.clientKey);
   }
+
   // Note that a thread holding several of the review's replies, or the last comment's own, is named once or not at all.
   const along = [...new Set(earlier.map(threadOfHeld))].filter((id) => id !== threadOfHeld(last));
+
   return sendHeld(control, last, along.length === 0 ? {} : { along });
 }
 
@@ -289,23 +296,29 @@ export function usePageReview(
   const sends = useAsyncAction<true>(() => true);
   // How many edits stand open on each held comment, by its key: a held reply is drawn in its thread and in the panel, and each may edit it.
   const [edits, setEdits] = useState<ReadonlyMap<string, number>>(new Map());
+
   const markEditing = useCallback((clientKey: string, open: boolean) => {
     setEdits((was) => {
       const count = (was.get(clientKey) ?? 0) + (open ? 1 : -1);
       const next = new Map(was);
+
       if (count > 0) next.set(clientKey, count);
       else next.delete(clientKey);
+
       return next;
     });
   }, []);
+
   const held = useMemo(
     () => all.filter((comment) => heldOn(comment, planId, pageId)),
     [all, planId, pageId],
   );
+
   const send = async (summary: string): Promise<boolean> => {
     // Note that an edit standing open would land after the words it changes went, so it is saved or canceled first.
     if (control === undefined || planId === undefined || edits.size > 0) return false;
     const words = summary.trim();
+
     // Note that the summary is held before it goes, so a send that stops part way keeps it, under its key, for the next.
     const last: HeldComment[] =
       words === ""
@@ -321,10 +334,14 @@ export function usePageReview(
               attachments: [],
             },
           ];
+
     const comments = [...held, ...last];
+
     if (comments.length === 0) return false;
+
     return sends.run(async () => {
       if (last.length > 0) setAll((now) => [...now, ...last]);
+
       // Note that a comment posted held is marked so, so a send that stops after it neither sends it again nor lets it change under the service's copy.
       const sent = await sendReview(control, comments, (clientKey) =>
         setAll((now) =>
@@ -333,19 +350,25 @@ export function usePageReview(
           ),
         ),
       );
+
       if (!sent) return true;
       const keys = new Set(comments.map((comment) => comment.clientKey));
       setAll((now) => now.filter((comment) => !keys.has(comment.clientKey)));
+
       return undefined;
     });
   };
+
   const drop = (keep: (comment: HeldComment) => boolean) => setAll((now) => now.filter(keep));
+
   const remove = (clientKey: string) => {
     const at = all.findIndex((comment) => comment.clientKey === clientKey);
     const gone = all[at];
+
     if (gone === undefined || gone.landed === true) return;
     pressLocal(COMMENT_REMOVAL, () => reviewLines, { clientKey, at, gone });
   };
+
   return {
     held,
     landed: held.some((comment) => comment.landed === true),
@@ -391,6 +414,7 @@ export function PageReviewPress({
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
   const count = review.held.length;
+
   const discarding = useConfirmDialog(
     { subject: count > 0, surfaceOpen: open },
     neverBusyAct(() => {
@@ -398,7 +422,9 @@ export function PageReviewPress({
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DISCARD),
   );
+
   const nothing = count === 0 && body.trim() === "";
+
   return (
     <>
       <ReviewPress

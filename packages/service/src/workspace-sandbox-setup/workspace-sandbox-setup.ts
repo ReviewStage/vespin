@@ -64,6 +64,7 @@ function removes(script: string): boolean {
 /** Every repository's run actions as the wire lists them: one entry per repository, its actions in their order, stamped with its latest save. */
 function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActions[] {
   const lists: RepositoryRunActions[] = [];
+
   for (const row of rows) {
     const action = {
       id: row.id,
@@ -72,7 +73,9 @@ function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActio
       ...(row.icon === null ? undefined : { icon: row.icon }),
       ...(row.isDefault ? { isDefault: true } : undefined),
     };
+
     const last = lists.at(-1);
+
     if (last !== undefined && last.repository.toLowerCase() === row.repository.toLowerCase()) {
       lists[lists.length - 1] = {
         ...last,
@@ -87,6 +90,7 @@ function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActio
       });
     }
   }
+
   return lists;
 }
 
@@ -118,23 +122,30 @@ function editedRunActions(
     icon: row.icon ?? undefined,
     isDefault: row.isDefault,
   }));
+
   let edited: RunActionWrite;
   let next: RunActionWrite[];
+
   if (edit.actionId === undefined) {
     const { label, command } = edit;
+
     if (edit.remove === true || label === undefined || command === undefined) {
       return Result.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     if (list.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS) {
       return Result.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     edited = { label, command, icon: edit.icon ?? undefined, isDefault: edit.isDefault === true };
     next = placed(list, edited, edit.position ?? list.length);
   } else {
     const at = list.findIndex((action) => action.id === edit.actionId);
     const found = list[at];
+
     if (found === undefined) return Result.fail(HOSTED_REFUSAL.NOT_FOUND);
     const rest = list.filter((_, index) => index !== at);
+
     if (edit.remove === true) return Result.succeed(rest);
     edited = {
       ...found,
@@ -145,7 +156,9 @@ function editedRunActions(
     };
     next = placed(rest, edited, edit.position ?? at);
   }
+
   if (edited.isDefault !== true) return Result.succeed(next);
+
   return Result.succeed(
     next.map((action) => (action === edited ? action : { ...action, isDefault: false })),
   );
@@ -160,8 +173,10 @@ function lastRunOf(
   const run = runs.find(
     (each) => each.script === script && each.repository === (repository?.toLowerCase() ?? null),
   );
+
   if (run === undefined) return {};
   const { agent } = run;
+
   return {
     lastRun: {
       ranAt: run.ranAt.getTime(),
@@ -183,6 +198,7 @@ const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
       listScriptRuns(workspaceId),
     ]),
   );
+
   const ofKind = (kind: RepositoryScriptKind) =>
     scripts
       .filter((row) => row.kind === kind)
@@ -192,6 +208,7 @@ const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
         updatedAt: row.updatedAt.getTime(),
         ...lastRunOf(runs, kind, row.repository),
       }));
+
   return {
     install: Option.match(install, {
       onNone: () => null,
@@ -213,6 +230,7 @@ export const readSandboxSetup = Effect.fn("web/readSandboxSetup")(function* (
   workspaceId: string,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
+
   return yield* setupAnswer(workspace.id);
 });
 
@@ -229,6 +247,7 @@ export const saveInstallScript = Effect.fn("web/saveInstallScript")(function* (
       ? Effect.asVoid(removeInstallScript(workspace.id))
       : setInstallScript(workspace.id, script, now),
   );
+
   return yield* setupAnswer(workspace.id);
 });
 
@@ -247,6 +266,7 @@ export const saveRepositorySetup = Effect.fn("web/saveRepositorySetup")(function
       ? Effect.asVoid(removeRepositorySetup(workspace.id, repository, kind))
       : setRepositorySetup(workspace.id, repository, kind, script, now),
   );
+
   return yield* setupAnswer(workspace.id);
 });
 
@@ -266,6 +286,7 @@ export const saveRunActions = Effect.fn("web/saveRunActions")(function* (
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(setRunActions(workspace.id, repository, actions, now));
+
   return yield* setupAnswer(workspace.id);
 });
 
@@ -283,6 +304,7 @@ export const editRunAction = Effect.fn("web/editRunAction")(function* (
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
+
   const refused = yield* hostedStoreOrUnavailable(
     editRunActions(
       workspace.id,
@@ -300,6 +322,8 @@ export const editRunAction = Effect.fn("web/editRunAction")(function* (
       ),
     ),
   );
+
   if (Option.isSome(refused)) return yield* Effect.fail(refused.value);
+
   return yield* setupAnswer(workspace.id);
 });

@@ -77,6 +77,7 @@ const stagedViewsStore = createStore<StoredViews>({});
 /** A view as kept, Me where no Assigned to is, and the finished sub-tasks hidden where nothing says. */
 function viewOf(kept: StoredViews[string] | undefined): TaskListView {
   if (kept === undefined) return DEFAULT_TASK_LIST_VIEW;
+
   return {
     grouping:
       kept.grouping === RETIRED_GROUPING.PROGRESS ? DEFAULT_TASK_LIST_VIEW.grouping : kept.grouping,
@@ -95,8 +96,10 @@ export function useTaskListView(
   const stagedViews = useSelector(stagedViewsStore);
   const views = staged ? stagedViews : kept;
   const view = viewOf(workspaceId === undefined ? undefined : views[workspaceId]);
+
   const choose = (next: TaskListView) => {
     if (workspaceId === undefined) return;
+
     const all = {
       ...views,
       [workspaceId]: {
@@ -105,12 +108,16 @@ export function useTaskListView(
         finished: next.finishedSubTasks,
       },
     };
+
     if (staged) {
       stagedViewsStore.setState(() => all);
+
       return;
     }
+
     keep(all);
   };
+
   return {
     view,
     onGrouping: (grouping) => choose({ ...view, grouping }),

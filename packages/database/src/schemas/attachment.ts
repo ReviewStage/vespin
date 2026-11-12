@@ -212,6 +212,7 @@ export function servedColumns(playable: PlayableVideoType) {
   if (playable === PLAYABLE_VIDEO_TYPE.WEBM) {
     return { contentType: attachment.contentType, bytes: attachment.bytes };
   }
+
   return {
     contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} else ${literal(MP4_TYPE)} end`,
     bytes: sql<Uint8Array>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(

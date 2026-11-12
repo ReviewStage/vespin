@@ -22,6 +22,7 @@ function drawn(markup: string): HTMLElement {
   const host = document.createElement("div");
   host.innerHTML = markup;
   document.body.append(host);
+
   return host;
 }
 
@@ -29,6 +30,7 @@ function drawn(markup: string): HTMLElement {
 function wordsOf(scope: ParentNode, line: number): Text {
   const text = scope.querySelector(`[data-line="${line}"] span`)?.firstChild;
   assert.ok(text instanceof Text, `row ${line} has words`);
+
   return text;
 }
 
@@ -40,6 +42,7 @@ test("a unified diff's selection runs from a removed row on the old side to an a
   const host = drawn(
     `<div data-code>${row(11, "context", "four")}${row(12, "change-deletion", "twice")}${row(12, "change-addition", "once")}${row(13, "change-addition", "done")}</div>`,
   );
+
   const removed = host.querySelector('[data-line-type="change-deletion"] span')?.firstChild;
   assert.ok(removed instanceof Text);
 
@@ -136,6 +139,7 @@ test("only a press on a file's code begins a drag over it; one on its header or 
   const host = drawn(
     `<div class="head"><button>Fold</button></div><div data-code>${row(4, "context", "a")}</div>`,
   );
+
   const words = wordsOf(host, 4);
   const button = host.querySelector("button");
   assert.ok(button !== null);

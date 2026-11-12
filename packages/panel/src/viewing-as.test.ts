@@ -56,6 +56,7 @@ async function mount(
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -66,8 +67,10 @@ function stopButton(view: HTMLElement): HTMLButtonElement | undefined {
 
 test("a maintainer signed in as the member reads whom they view as, and Stop ends it for that member", async () => {
   const stopped: string[] = [];
+
   const view = await mount(true, (memberId) => {
     stopped.push(memberId);
+
     return new Promise(() => undefined);
   });
 

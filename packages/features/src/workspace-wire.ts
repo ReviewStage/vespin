@@ -77,6 +77,7 @@ const WORKSPACE_ROLES: readonly WorkspaceRole[] = Object.values(WORKSPACE_ROLE);
 /** The highest role the plugin's role text names, which may list several comma-separated, read as a member where it names none we know. */
 export function roleOf(text: string): WorkspaceRole {
   const named = text.split(",").map((part) => part.trim());
+
   return WORKSPACE_ROLES.find((role) => named.includes(role)) ?? WORKSPACE_ROLE.MEMBER;
 }
 
@@ -128,8 +129,10 @@ export function workspaceSlugProblemOf(slug: string): WorkspaceSlugProblem | und
   if (slug.length > WORKSPACE_BOUNDS.MAX_SLUG_CHARS || !WORKSPACE_SLUG_PATTERN.test(slug)) {
     return WORKSPACE_SLUG_PROBLEM.MALFORMED;
   }
+
   const reserved =
     RESERVED_WORKSPACE_SLUGS.has(slug) || slug.startsWith(PERSONAL_WORKSPACE_SLUG_PREFIX);
+
   return reserved ? WORKSPACE_SLUG_PROBLEM.RESERVED : undefined;
 }
 
@@ -166,6 +169,7 @@ export type WorkspacePhoto = Picture;
  */
 export function workspacePhotoOfDataUrl(text: string): WorkspacePhoto | undefined {
   const picture = pictureOfDataUrl(text);
+
   return picture === undefined || isVideoPicture(picture) ? undefined : picture;
 }
 
@@ -173,6 +177,7 @@ export function workspacePhotoOfDataUrl(text: string): WorkspacePhoto | undefine
 const workspacePhotoUrlSchema = EffectSchema.String.check(
   EffectSchema.makeFilter((text: string) => {
     const photo = workspacePhotoOfDataUrl(text);
+
     return photo !== undefined && photo.bytes.length <= WORKSPACE_PHOTO_BOUNDS.MAX_BYTES;
   }),
 );
@@ -285,6 +290,7 @@ export function workspaceOfSlug<Listed extends Pick<Workspace, "id" | "slug" | "
   step: string,
 ): Listed | undefined {
   const asked = step.toLowerCase();
+
   return (
     workspaces.find((one) => one.id === step) ??
     workspaces.find((one) => one.slug?.toLowerCase() === asked) ??
@@ -295,6 +301,7 @@ export function workspaceOfSlug<Listed extends Pick<Workspace, "id" | "slug" | "
 /** The slugs a workspace stood under before, as `formerSlugs` carries them: the text a row spells them in, a space between each, read as a list, and absent for none. */
 export function formerSlugsOf(spelled: string): Pick<Workspace, "formerSlugs"> {
   const formerSlugs = spelled.split(" ").filter((slug) => slug !== "");
+
   return formerSlugs.length === 0 ? {} : { formerSlugs };
 }
 

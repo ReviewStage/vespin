@@ -40,11 +40,14 @@ afterEach(() => {
 /** `top` over `under`, as a canvas composites a drawn pixel over what it covers. */
 function over(top: Pixel, under: Pixel): Pixel {
   const alpha = top[3] / 255 + (under[3] / 255) * (1 - top[3] / 255);
+
   if (alpha === 0) return CLEAR;
+
   const channel = (index: 0 | 1 | 2) =>
     Math.round(
       (top[index] * (top[3] / 255) + under[index] * (under[3] / 255) * (1 - top[3] / 255)) / alpha,
     );
+
   return [channel(0), channel(1), channel(2), Math.round(alpha * 255)];
 }
 
@@ -65,10 +68,12 @@ function stubPlatform(picture: Omit<Bitmap, "close">): void {
     const pixels = Array.from({ length: this.width * this.height }, () => ground);
     buffers.set(this, pixels);
     const width = this.width;
+
     // SAFETY: the stand-in answers drawImage alone, its nine-argument form the encoder uses.
     return {
       drawImage: (bitmap: Bitmap, ...at: number[]) => {
         const [sx = 0, sy = 0, sw = 0, sh = 0, dx = 0, dy = 0, dw = 0, dh = 0] = at;
+
         for (let y = 0; y < dh; y += 1) {
           for (let x = 0; x < dw; x += 1) {
             const from = Math.floor(sy + ((y + 0.5) * sh) / dh) * bitmap.width;
@@ -94,9 +99,11 @@ function stubPlatform(picture: Omit<Bitmap, "close">): void {
 function pixelsOf(base64: string): Pixel[] {
   const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
   const pixels: Pixel[] = [];
+
   for (let at = 0; at < bytes.length; at += 4) {
     pixels.push([bytes[at] ?? 0, bytes[at + 1] ?? 0, bytes[at + 2] ?? 0, bytes[at + 3] ?? 0]);
   }
+
   return pixels;
 }
 
@@ -122,6 +129,7 @@ test("a HEIC photo comes as the JPEG the Mac wrote of it, never handed to a deco
   fakeActPort({
     [ACT_KIND.MAC_PHOTO_TO_JPEG]: ({ base64 }) => {
       asked.push(base64);
+
       return Promise.resolve({ base64: "/9j/2wBD" });
     },
   });

@@ -32,12 +32,14 @@ type AppGroupFile = (typeof APP_GROUP_FILE)[keyof typeof APP_GROUP_FILE] | Share
 /** The file named, in the container of the one group the app is entitled to, or none where the build reaches no container. */
 function groupFile(name: AppGroupFile): File | undefined {
   const container = Object.values(Paths.appleSharedContainers)[0];
+
   return container === undefined ? undefined : new File(container, name);
 }
 
 /** The address of the file named, where it stands, for a reader that takes a file's address. */
 export function appGroupFileUri(name: AppGroupFile): string | undefined {
   const file = groupFile(name);
+
   return file?.exists === true ? file.uri : undefined;
 }
 
@@ -49,11 +51,13 @@ export function writeAppGroupFile(name: AppGroupFile, json: string): void {
 /** The text the file named holds, or none where it was never written or was removed. */
 export function readAppGroupFile(name: AppGroupFile): string | undefined {
   const file = groupFile(name);
+
   return file?.exists === true ? file.textSync() : undefined;
 }
 
 /** Removes the file named, where it stands. */
 export function removeAppGroupFile(name: AppGroupFile): void {
   const file = groupFile(name);
+
   if (file?.exists === true) file.delete();
 }

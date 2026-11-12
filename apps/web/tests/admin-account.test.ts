@@ -44,6 +44,7 @@ const ID = "account-ada";
 const ACTIONS_YEAR: AdminActionDay[] = Array.from({ length: 371 }, (_, index) => {
   const day = new Date(Date.UTC(2026, 9, 14 - 370 + index)).toISOString().slice(0, 10);
   const streak = index >= 362;
+
   return {
     day,
     tasksCreated: streak || day === "2026-01-07" ? 1 : 0,
@@ -234,6 +235,7 @@ function WithImpersonate({
   children?: ReactNode;
 }): ReactElement {
   const { impersonate: _page, ...doors } = useAdminDoors();
+
   return createElement(
     AdminDoorsProvider,
     { value: impersonate === undefined ? doors : { ...doors, impersonate } },
@@ -269,6 +271,7 @@ async function openAccount(
       onOpenWorkspace: () => undefined,
       frame: (content) => content,
     });
+
     root?.render(
       underWebAdminDoors(
         doors === undefined
@@ -277,7 +280,9 @@ async function openAccount(
       ),
     );
   });
+
   if (response !== undefined) await readLanded(page);
+
   return { page, backs };
 }
 
@@ -295,7 +300,9 @@ function headings(page: HTMLElement, level: string): string[] {
 /** Each body row of the table `label` names, its cells' words joined by a bar. */
 function rows(page: HTMLElement, label: string): string[] {
   const table = page.querySelector(`table[aria-label="${label}"]`);
+
   if (table === null) throw new Error(`no table named ${label}`);
+
   return Array.from(table.querySelectorAll("tbody tr"), (row) =>
     Array.from(row.querySelectorAll("td"), (cell) => cell.textContent ?? "").join("|"),
   );
@@ -304,7 +311,9 @@ function rows(page: HTMLElement, label: string): string[] {
 /** The toolbar's way back, the button its path leads with. */
 function wayBack(page: HTMLElement): HTMLButtonElement {
   const found = page.querySelector<HTMLButtonElement>('header nav[aria-label="Path"] button');
+
   if (found === null) throw new Error("no way back");
+
   return found;
 }
 
@@ -360,15 +369,18 @@ test.each([
 
 test("the masthead says until when a member's grant stands, and a refused Impersonate says why in the service's words", async () => {
   const asked: string[] = [];
+
   const { page } = await openAccount(
     answer(detail({ admin: false, supportAccessUntil: GRANT_STANDS })),
     {
       impersonate: (userId) => {
         asked.push(userId);
+
         return Promise.resolve("The member has not granted support access.");
       },
     },
   );
+
   expect(page.textContent).toContain("support access until Oct 20, 12:00 PM UTC");
 
   await act(async () => impersonateButton(page)?.click());
@@ -390,7 +402,9 @@ function section(page: HTMLElement, title: string): HTMLElement {
   const found = Array.from(page.querySelectorAll("section")).find(
     (candidate) => candidate.querySelector("h2")?.textContent === title,
   );
+
   if (found === undefined) throw new Error(`no section headed ${title}`);
+
   return found;
 }
 
@@ -404,9 +418,11 @@ test("the account's activity by meaningful actions leads the page", async () => 
   expect(activity.textContent).toContain("Active days · 7 days72 the week before");
   expect(activity.textContent).toContain("Last activeOct 14first active Jan 7");
   expect(activity.textContent).toContain("14 in the last 7 days, against 4 before");
+
   for (const kind of ["Tasks created", "Description revisions", "Agents started"]) {
     expect(activity.textContent).toContain(kind);
   }
+
   expect(
     activity.querySelector('[aria-label="Oct 14 (so far today) — 2 meaningful actions"]'),
   ).not.toBeNull();

@@ -44,19 +44,24 @@ export function useAgentRoute(): AgentRoute {
   const open = here.place === ROUTED_PLACE.AGENT;
   const agentId = open ? here.params.agentId : undefined;
   const workspace = open ? here.params.workspace : undefined;
+
   const onOpen = (to: string, toWorkspace: string) => {
     const matches = router.matchRoutes(router.history.location.pathname);
     const params = placeParamsOf(matches);
     const standing = routedPlaceOf(matches, access) === ROUTED_PLACE.AGENT;
+
     // Opening the page standing moves nothing, and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
     if (standing && params.agentId === to && params.workspace === toWorkspace) {
       exits.stay();
+
       return;
     }
+
     void navigate({
       to: "/$workspace/agent/$agentId",
       params: { workspace: toWorkspace, agentId: to },
     });
   };
+
   return { agentId, workspace, onOpen, onClose: () => exits.leave() };
 }

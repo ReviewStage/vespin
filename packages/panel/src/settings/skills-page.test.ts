@@ -88,6 +88,7 @@ const RELEASE_NOTES = skill("release-notes", INSTALLED_SKILL_SCOPE.WORKSPACE, {
     sha: SHA,
   },
 });
+
 const PR_STYLE = skill("pr-style", INSTALLED_SKILL_SCOPE.PERSONAL, {
   id: "22222222-2222-4222-8222-222222222222",
 });
@@ -132,11 +133,14 @@ const SOURCE = sourceOf([
 
 /** The skills the test's service holds, which its host lays on the document for every workspace held. */
 let stored: InstalledSkillSummary[] = [];
+
 /** The workspaces whose skills the window holds. */
 let held = new Set<string>();
+
 /** Each held workspace's skills as the test's host lays them on the document, under the version it last delivered. */
 let laid: AppInstalledSkills = NO_KEYS_HELD;
 let version = 1;
+
 /** The window's listeners to the document's deliveries. */
 const listeners = new Set<(delivery: AppStateDelivery) => void>();
 
@@ -160,16 +164,21 @@ const MEMBERS: AppWorkspaceMembers = {
 function laySkills(): void {
   laid = Object.fromEntries([...held].map((workspaceId) => [workspaceId, { rows: stored }]));
   version += 1;
+
   for (const listener of [...listeners]) {
     listener({ version, entries: { [LIVE_READ.INSTALLED_SKILLS]: laid } });
   }
 }
+
 /** Every act the page sent, in order. */
 let sent: { kind: PortActKind; payload: unknown }[] = [];
+
 /** Whether the next install is refused, for a credential in the named skill. */
 let refuseInstall = false;
+
 /** What the next source preview answers. */
 let sourcePreview: InstalledSkillPreview = SOURCE;
+
 /** How many of the next previews the service never answers, which the port refuses. */
 let unreachedPreviews = 0;
 
@@ -186,6 +195,7 @@ function previewOf(text: string): InstalledSkillPreview {
       problems: [],
     };
   }
+
   return text.includes("gitlab") ? UNSUPPORTED_PREVIEW : sourcePreview;
 }
 
@@ -210,6 +220,7 @@ beforeEach(() => {
       ),
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
@@ -223,10 +234,12 @@ beforeEach(() => {
       held.add(payload.workspaceId);
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(laySkills);
+
       return quietHold();
     },
     [ACT_KIND.INSTALLED_SKILLS_READ]: (payload) => {
       sent.push({ kind: ACT_KIND.INSTALLED_SKILLS_READ, payload });
+
       return Promise.resolve({
         id: payload.skillId,
         skillFile: "---\nname: pr-style\n---\n# PR style",
@@ -240,30 +253,38 @@ beforeEach(() => {
       sent.push({ kind: ACT_KIND.INSTALLED_SKILLS_REMOVE, payload });
       stored = stored.filter((each) => each.id !== payload.skillId);
       laySkills();
+
       return Promise.resolve({ id: payload.skillId });
     },
     [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: (payload) => {
       sent.push({ kind: ACT_KIND.INSTALLED_SKILLS_PREVIEW, payload });
+
       if (unreachedPreviews > 0) {
         unreachedPreviews -= 1;
+
         return Promise.reject(new Error("offline"));
       }
+
       return Promise.resolve(previewOf(payload.text));
     },
     [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (payload) => {
       sent.push({ kind: ACT_KIND.INSTALLED_SKILLS_INSTALL, payload });
+
       if (refuseInstall) {
         return Promise.resolve({
           failure: INSTALLED_SKILL_CALL_FAILURE.CREDENTIAL,
           skillName: "web-design-guidelines",
         });
       }
+
       const made = (payload.skills ?? [payload.name ?? "pr-style"]).map((name, at) =>
         skill(name, payload.scope, { id: `33333333-3333-4333-8333-33333333333${at}` }),
       );
+
       // The host draws an install's skills as it answers.
       stored = [...stored, ...made];
       laySkills();
+
       return Promise.resolve({ skills: made });
     },
   });
@@ -339,6 +360,7 @@ async function mountDialog(
     }),
   );
   await settle();
+
   return installed;
 }
 
@@ -358,6 +380,7 @@ function typeInto(field: HTMLInputElement | HTMLTextAreaElement, text: string): 
     field instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
       : HTMLInputElement.prototype;
+
   act(() => {
     // Note that the value goes through the element's own setter, as typing does, so React hears it.
     Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(field, text);
@@ -402,6 +425,7 @@ function menuOf(name: string): (string | null)[] {
   act(() => more.click());
   const items = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
   act(() => more.click());
+
   return items;
 }
 
@@ -461,6 +485,7 @@ test("a skill's row leads with the book in the settings mark slot, and hangs the
   const row = [...document.querySelectorAll<HTMLElement>(".ui-settings-row")].find((each) =>
     each.textContent?.startsWith("release-notes"),
   );
+
   assert.ok(row, "the skill has its row");
 
   restOn(row);
@@ -522,6 +547,7 @@ test("Add skill opens with its box focused, not the card", async () => {
 
 test("Add skill on a group's heading installs for that group's people", async () => {
   await mountPage();
+
   const addIn = (title: string) =>
     button(
       "Add skill",
@@ -536,6 +562,7 @@ test("Add skill on a group's heading installs for that group's people", async ()
     act(() => primary().click());
     await settle();
   }
+
   assert.deepEqual(
     sentOf(ACT_KIND.INSTALLED_SKILLS_INSTALL).map((each) => (each as { scope: string }).scope),
     [INSTALLED_SKILL_SCOPE.WORKSPACE, INSTALLED_SKILL_SCOPE.PERSONAL],
@@ -564,6 +591,7 @@ test("an install lights its own rows once", async () => {
   const lit = [...document.querySelectorAll(".ui-settings-row[data-landed]")].map(
     (each) => each.querySelector(".ui-settings-row-label")?.textContent,
   );
+
   assert.deepEqual(lit, ["react-best-practices", "web-design-guidelines"]);
 });
 
@@ -620,9 +648,11 @@ test("a long list is searched by name and description", async () => {
     "changelog",
   );
   await settle();
+
   const listed = [...document.querySelectorAll('input[type="checkbox"]')].map(
     (each) => each.closest("label")?.textContent,
   );
+
   assert.deepEqual(listed, ["releaseWrite the changelog.skills/release · 900 B"]);
 });
 

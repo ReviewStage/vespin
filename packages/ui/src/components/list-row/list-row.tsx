@@ -49,6 +49,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 import type { ListRowHint } from "./list-row-hint.js";
 
 export type { ListRowMenu } from "../row-menu/row-menu.js";
+
 export type { ListSelection } from "../selection/list-selection.js";
 
 /**
@@ -303,6 +304,7 @@ export function nestedItem(
   nest: ListRowNest | undefined,
 ): { "aria-level"?: number; "aria-posinset"?: number; "aria-setsize"?: number } {
   if (nest === undefined) return depth === 0 ? {} : { "aria-level": depth + 1 };
+
   return { "aria-level": depth + 1, "aria-posinset": nest.position, "aria-setsize": nest.size };
 }
 
@@ -533,19 +535,24 @@ export function List({
   const own = useRef<VirtualRowsHandle>(null);
   const handle = run?.handle ?? own;
   const keys = run?.keys;
+
   const bringIn = useCallback(
     (key: string, then: () => void) => handle.current?.bringIn(key, then) ?? false,
     [handle],
   );
+
   // Note that a key reaching past the rows drawn goes on to the row it reaches, brought in where it is not drawn.
   const roving = useRovingKeys<HTMLElement>({
     reach: keys === undefined ? undefined : reachInRun(handle),
   });
+
   const order = useMemo(() => (keys === undefined ? undefined : [keys]), [keys]);
   const chooser = useListSelection(selection, order, keys === undefined ? undefined : bringIn);
+
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!chooser.onKeyDown(event) && !joinsWalk) roving.onKeyDown(event);
   };
+
   const contexts = (rows: ReactNode) => (
     <ListVariantContext.Provider value={variant}>
       <ListDensityContext.Provider value={density}>
@@ -555,6 +562,7 @@ export function List({
       </ListDensityContext.Provider>
     </ListVariantContext.Provider>
   );
+
   if (run !== undefined) {
     return contexts(
       <VirtualRows
@@ -587,6 +595,7 @@ export function List({
       </VirtualRows>,
     );
   }
+
   return (
     <ul
       {...(joinsWalk ? {} : roving)}
@@ -764,16 +773,19 @@ export function ListRow({
   const pointed = useRef(false);
   const steadyPoint = useRef(onPoint);
   steadyPoint.current = onPoint;
+
   const point = (over: boolean) => {
     pointed.current = over;
     onPoint?.(over);
   };
+
   useEffect(
     () => () => {
       if (pointed.current) steadyPoint.current?.(false);
     },
     [],
   );
+
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
       pressElement.current = element;
@@ -783,29 +795,36 @@ export function ListRow({
     },
     [ref, linkAddress],
   );
+
   const titleId = useId();
   const leadId = useId();
   const metaId = useId();
   const describedId = useId();
+
   // Note that → and ← are the row's only while they would move its fold, so a list walking its rows along them still hears the rest.
   const foldKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (fold === undefined) return;
     const asked = FOLD_KEY_OPENS[event.key];
+
     if (asked === undefined || asked === fold.open) return;
     event.preventDefault();
     fold.onOpenChange(asked);
   };
+
   // Note that a row's menu is headed, as a phone's sheet, by the row's own mark and words, where its owner names no subject and its title is plain: its description under it, else what it belongs to.
   const named = plainWords(title);
+
   const subject =
     menu?.subject ??
     (named === undefined
       ? undefined
       : { mark: leading, name: named, detail: plainWords(description) ?? plainWords(lead?.label) });
+
   const rowMenu = useRowMenu(menu === undefined ? undefined : { ...menu, subject }, {
     disabled,
     opener: onPress ? pressElement : undefined,
   });
+
   const offered = rowMenu.offered;
   // Note that a row that opens nothing keeps its ⋯, because it is the one control its menu hands focus back to.
   const moreDrawn = offered && (more || onPress === undefined);
@@ -815,14 +834,17 @@ export function ListRow({
   }, [onTitleClipped, titleClipped]);
   const [descriptionMeasured, descriptionClipped] = useClipped(plainWords(description));
   const listDensity = useContext(ListDensityContext);
+
   const pressPulse =
     useContext(ListVariantContext) === LIST_VARIANT.CARD ? PRESS_PULSE.FLUSH : PRESS_PULSE.QUIET;
+
   const selecting = useContext(ListSelectionContext);
   const choosable = selecting !== undefined && selectKey !== undefined;
   const chosen = choosable && selecting.selected.has(selectKey);
   // Note that the box is the pointer's way into a selection, so a row that refuses its press draws none.
   const boxed = choosable && selectBox && !disabled ? selecting : undefined;
   const [leadMeasured, leadClipped] = useClipped(plainWords(lead?.label));
+
   const heading = (
     <span
       ref={titleMeasured}
@@ -837,6 +859,7 @@ export function ListRow({
       <ReplayWords masked={titleReplayMasked}>{title}</ReplayWords>
     </span>
   );
+
   // Note that the metadata and the chevron stand together at the row's end,
   // the place a hover row's acts step into.
   const end =
@@ -854,6 +877,7 @@ export function ListRow({
         ) : null}
       </span>
     ) : null;
+
   const leadMark =
     lead === undefined ? null : (
       <span className={LEAD_CLASS[leadAt]} data-at={leadAt}>
@@ -873,9 +897,11 @@ export function ListRow({
         </span>
       </span>
     );
+
   // Note that a lead over the title takes the first line, the one the metadata ends.
   const above = leadAt === LIST_ROW_LEAD.ABOVE && lead !== undefined;
   const firstLine = above ? leadMark : heading;
+
   // Note that a row of one line keeps its metadata at its middle, its first line, because a dense row centers its title in its height.
   const metaPlace =
     metaAt === LIST_ROW_META.TITLE &&
@@ -885,6 +911,7 @@ export function ListRow({
     !said(attachments)
       ? LIST_ROW_META.MIDDLE
       : metaAt;
+
   // Note that a row described apart is named by its words but the description, the time last, as a mail app's row is read.
   const namedBy =
     describedAs === undefined
@@ -897,6 +924,7 @@ export function ListRow({
         ]
           .filter((each) => each !== undefined)
           .join(" ");
+
   // Note that a row that ticks a box draws it where its mark would stand, the press around it doing the ticking, so the box takes no press or focus of its own.
   const mark =
     checked === undefined ? (
@@ -909,6 +937,7 @@ export function ListRow({
         onMouseDown={(event) => event.preventDefault()}
       />
     );
+
   const face = (
     <>
       {said(mark) ? (
@@ -952,6 +981,7 @@ export function ListRow({
       {metaPlace === LIST_ROW_META.MIDDLE ? end : null}
     </>
   );
+
   const press = onPress ? (
     <button
       ref={pressRef}
@@ -977,9 +1007,12 @@ export function ListRow({
         // Note that the row around the press is what is pressed, its fill and its actions with it.
         const row = event.currentTarget.closest<HTMLElement>(".ui-list-row");
         pulsePress(row ?? event.currentTarget, pressPulse);
+
         // Note that a right-click's menu holds the press as its opener, which its outside press leaves alone, so the press closes it.
         if (rowMenu.open) rowMenu.close(false);
+
         if (choosable && selecting.press(selectKey, event)) return;
+
         if (!choosable) selecting?.passOver(event);
         onPress(event);
       }}
@@ -991,6 +1024,7 @@ export function ListRow({
       {face}
     </button>
   ) : undefined;
+
   const row = (
     <>
       {fold === undefined ? null : (
@@ -1046,9 +1080,11 @@ export function ListRow({
       ) : null}
     </>
   );
+
   // Note that a row in a run is measured through its item, which hands its element to the row's own ref too where the row opens nothing.
   const { ref: placeRef, ...placed } = place ?? {};
   const opens = onPress !== undefined;
+
   const itemRef = useCallback(
     (element: HTMLLIElement | null) => {
       if (!opens) ref?.(element);
@@ -1056,8 +1092,10 @@ export function ListRow({
     },
     [opens, ref, placeRef],
   );
+
   // Note that a row whose only act is its ⋯ offers it as a hover row offers its acts, so no row keeps an empty ⋯ track at rest.
   const actsOnHover = actionsAt === LIST_ROW_ACTIONS.HOVER || (moreDrawn && !said(actions));
+
   return (
     <>
       <li

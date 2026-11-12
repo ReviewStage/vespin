@@ -140,6 +140,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   HostAssemblyRequirements | PlatformConcernRequirements[Chosen]
 > {
   const platform = new Set<HostPlatformConcern>(chosen);
+
   const build = Effect.gen(function* () {
     const kernel = yield* HostKernelTag;
     const identity = yield* AppIdentity;
@@ -151,18 +152,22 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     const settings = yield* composeSettings();
     const account = yield* composeAccount({ settings });
+
     // Note that the socket a live read goes over is opened as a terminal's
     // is, so it stands where the assembly has the terminals concern's seam.
     const openSocket = platform.has(HOST_PLATFORM_CONCERN.TERMINALS)
       ? yield* TerminalSocket
       : undefined;
+
     // Every call to the service names this build (`client-identity.ts`), the socket's upgrade among them.
     const client: ClientIdentity = { platform: identity.platform, version: identity.appVersion };
+
     const named = clientNamedOnService(
       yield* HttpClient.HttpClient,
       client,
       kernel.hostedServiceBaseUrl,
     );
+
     const http =
       openSocket === undefined
         ? named
@@ -173,41 +178,52 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             serviceBaseUrl: kernel.hostedServiceBaseUrl,
             client,
           });
+
     /** A composer built over the client with each live read on one socket (`live-socket.ts`), which it captures for every call it makes. */
     const served = <A, E, R>(composing: Effect.Effect<A, E, R>) =>
       Effect.provideService(composing, HttpClient.HttpClient, http);
+
     const workspaceClient = new HostedWorkspaceClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
     });
+
     const agentClient = new HostedAgentClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
     });
+
     const agentPortsClient = new HostedAgentPortsClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
     });
+
     /** The account signed in now, by its id, which every live read names. */
     const accountId = () => {
       const signedIn = account.session.snapshot();
+
       return signedIn.status === ACCOUNT_STATUS.SIGNED_IN ? signedIn.id : undefined;
     };
+
     /** The account signed in now as a member is named, by its id and its name, or its email where it names itself none. */
     const member = () => {
       const signedIn = account.session.snapshot();
+
       return signedIn.status === ACCOUNT_STATUS.SIGNED_IN && signedIn.id !== undefined
         ? { userId: signedIn.id, name: signedIn.name ?? signedIn.email }
         : undefined;
     };
+
     /** Content read under a key it never changes under, kept in this process for the account signed in until the agents' reset lets it go at a sign-out. */
     const kept = yield* keptContent(KEPT_CONTENT_CHARACTERS);
     /** A window coming forward, raised by the workspaces' refresh it already sends and heard by every read the host asks again on focus. */
     const focus = yield* windowFocus;
+
     /** The changes made offline the service refused as they were sent again, told to the windows each time the count moves. */
     const offlineRefused = offlineRefusedCount((count) =>
       kernel.emit(GATEWAY_EVENT.OFFLINE_REFUSED_CHANGED, carried({ count })),
     );
+
     /**
      * Every row the composers' reads hold, once, and the writes drawn over
      * them (`@repo/sync`). Where the run needs an account, a row write
@@ -226,11 +242,13 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           }
         : undefined,
     );
+
     /** The signed-in account's lists kept on disk (`entity-store.ts`), from the account gate opening until it closes; none where nothing seals them. */
     let entities: { readonly store: EntityStore; readonly scope: Scope.Closeable } | undefined;
     yield* Effect.addFinalizer(() =>
       entities === undefined ? Effect.void : Scope.close(entities.scope, Exit.void),
     );
+
     // Note that the integrations stand before the tasks, which ask GitHub's standing of them again once a GitHub connect or disconnect answers.
     const integrations = yield* served(
       composeIntegrations({
@@ -255,6 +273,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           ),
       }),
     );
+
     const tasks = yield* served(
       composeTasks({
         kernel,
@@ -272,6 +291,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       }),
     );
+
     const workspaces = yield* served(
       composeWorkspaces({
         kernel,
@@ -299,9 +319,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         },
       }),
     );
+
     /** An agent as the task list holds it now; none where it lists no such agent. */
     const agentListed = (agentId: string) =>
       (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
+
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
       Effect.scoped(
@@ -309,11 +331,14 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           // Note that each drawing of the list is listened to before the list is read, so one drawn between the two is not missed.
           const drawings = yield* tasks.pullRequestListings;
           const closed = () => agentListed(agentId)?.sandboxOpen === false;
+
           if (!closed()) return false;
           yield* Stream.runHead(Stream.filter(drawings, () => !closed()));
+
           return true;
         }),
       );
+
     const agents = yield* served(
       composeAgents({
         kernel,
@@ -323,6 +348,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         focus,
         reader: () => {
           const signedIn = account.session.snapshot();
+
           return signedIn.status === ACCOUNT_STATUS.SIGNED_IN && signedIn.id !== undefined
             ? { userId: signedIn.id, name: signedIn.name ?? signedIn.email }
             : undefined;
@@ -335,6 +361,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         agentListed,
       }),
     );
+
     const accountAsks = yield* served(
       composeAccountAsks({
         kernel,
@@ -347,6 +374,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         repositoriesMoved: tasks.repositoriesMoved,
       }),
     );
+
     const automations = yield* served(
       composeAutomations({
         kernel,
@@ -360,6 +388,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       }),
     );
+
     const installedSkills = yield* served(
       composeInstalledSkills({
         kernel,
@@ -372,6 +401,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       }),
     );
+
     const macCommands = platform.has(HOST_PLATFORM_CONCERN.MAC_COMMANDS)
       ? yield* served(
           composeMacCommands({
@@ -406,6 +436,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           // Note that a host without the Mac commands holds no ask, so an answer finds none waiting and is answered all the same, as the Gateway's refusal of its method was.
           acts: { MAC_COMMAND_ANSWER: () => Effect.void },
         };
+
     const thisMacHost = platform.has(HOST_PLATFORM_CONCERN.THIS_MAC_HOST)
       ? yield* served(
           composeThisMacHost({
@@ -441,6 +472,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           // Note that a host without This Mac refuses its set, which the act draws as unanswered, as the Gateway's refusal of its method was.
           acts: { HOSTS_THIS_MAC_SET: () => Effect.fail(new Error(NOT_ON_THIS_PLATFORM)) },
         };
+
     const terminals: TerminalsComposer =
       openSocket !== undefined
         ? yield* served(
@@ -456,6 +488,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             }),
           )
         : { ...unavailableConcern(HOST_PLATFORM_CONCERN.TERMINALS), reset: Effect.void };
+
     const mirrors = platform.has(HOST_PLATFORM_CONCERN.MIRRORS)
       ? yield* composeMirrors({
           kernel,
@@ -467,6 +500,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           recordProductEvent: settings.recordProductEvent,
         })
       : unavailableConcern(HOST_PLATFORM_CONCERN.MIRRORS);
+
     const portForwards: PortForwardsComposer = platform.has(HOST_PLATFORM_CONCERN.PORT_FORWARDS)
       ? yield* served(
           composePortForwards({
@@ -496,10 +530,14 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      */
     const openEntities = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
+
       if (entities !== undefined || signedInId === undefined) return;
+
       if (tokenCipher === undefined || !tokenCipher.isAvailable()) return;
+
       if (!kernel.runMode.requiresAccount) return;
       const scope = yield* Scope.make();
+
       const store = yield* openEntityStore({
         directory: kernel.stateRoot,
         cipher: tokenCipher,
@@ -507,6 +545,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         queued: pool.queued,
         queueMoves: pool.queueMoves,
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
+
       entities = { store, scope };
       // Note that the writes kept waiting are laid back before any read draws, so the first answer draws under them.
       yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
@@ -518,10 +557,12 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       entities = undefined;
       yield* pool.letGoQueued;
       offlineRefused.clear();
+
       if (standing !== undefined) {
         yield* standing.store.forget;
         yield* Scope.close(standing.scope, Exit.void);
       }
+
       yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
     });
 
@@ -543,6 +584,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* integrations.open;
         yield* installedSkills.open;
       }
+
       yield* settings.emitSettings();
     });
 
@@ -577,6 +619,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       startCapabilities: openCapabilities,
       stopCapabilities: closeCapabilities,
     });
+
     const concerns = {
       [HOST_CONCERN.SETTINGS]: settings,
       [HOST_CONCERN.ACCOUNT]: account,
@@ -593,6 +636,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       [HOST_CONCERN.PORT_FORWARDS]: portForwards,
       [HOST_CONCERN.MIRRORS]: mirrors,
     } satisfies Readonly<Record<HostConcern, Composer>>;
+
     // Note that the platform concerns are the only ones a host may leave out.
     const running = (name: HostConcern) => !isPlatformConcern(name) || platform.has(name);
 
@@ -605,6 +649,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       [GATEWAY_METHOD.SHUTDOWN]: () =>
         Effect.sync(() => {
           shutdownSignal.notify?.();
+
           return { accepted: true };
         }),
       [GATEWAY_METHOD.CLIENT_BOOTSTRAP]: () =>
@@ -612,6 +657,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           const snapshot = yield* Effect.orDie(settings.store.snapshot());
           const replay = yield* account.sessionReplayState;
           const access = yield* account.accessState;
+
           return {
             settings: carried(snapshot),
             account: carried(account.snapshot()),
@@ -626,6 +672,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       ...Object.values(concerns).map((concern) => concern.methods),
       bootstrapMethods,
     ]);
+
     // Note that a platform concern left out stands in its composer's place, so its refusing acts are that composer's one claim, never a second.
     const acts: HostActTable = yield* mergedActs([
       account.acts,
@@ -641,6 +688,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       tasks.acts,
       workspaces.acts,
     ]);
+
     const service = createGatewayService({ nodes: kernel.nodes, methods });
     yield* hostService.set(service);
 
@@ -660,6 +708,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       },
       settings.flushProductEvents,
     );
+
     const drain = yield* hostDrain(drainSteps, report);
 
     const assembly: HostAssembly = {
@@ -678,8 +727,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       }),
       drain,
     };
+
     return assembly;
   });
+
   // Note that the build is checked against every platform concern's seam
   // first, so a requirement a composer gains is never dropped from `R`.
   const checked: Layer.Layer<
@@ -687,6 +738,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     DuplicateGatewayMethod | DuplicateHostAct,
     HostAssemblyRequirements | PlatformConcernRequirements[HostPlatformConcern]
   > = Layer.effect(HostAssemblyTag, build);
+
   // SAFETY: the build asks for a platform concern's own seam only on the
   // branch that composes that concern, so a concern left out of `chosen`
   // never reads what `PlatformConcernRequirements` would have added for it.

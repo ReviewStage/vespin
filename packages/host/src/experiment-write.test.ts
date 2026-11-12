@@ -45,13 +45,16 @@ const CIPHER: SecretCipher = {
 /** A store over a directory of its own, the test's account signed in. */
 const signedInStore = Effect.gen(function* () {
   const directory = yield* temporaryDirectoryScoped("experiments-");
+
   const store = new SettingsStore({
     directory: () => directory,
     cipher: CIPHER,
     fileSystem: yield* FileSystem.FileSystem,
     path: yield* Path.Path,
   });
+
   yield* store.setAccount(ACCOUNT);
+
   return store;
 });
 
@@ -64,9 +67,11 @@ const until = (holds: () => boolean) =>
 /** A gate the fake service waits at, opened from the test. */
 function gate() {
   let open = () => {};
+
   const opened = new Promise<void>((resolve) => {
     open = resolve;
   });
+
   return { opened, open };
 }
 
@@ -82,15 +87,18 @@ function serviceAnswering(
   answer: (body: { experiments: ExperimentChoices }, at: number) => Promise<Response>,
 ) {
   const bodies: { experiments: ExperimentChoices }[] = [];
+
   const client = new AccountPreferencesClient({
     serviceBaseUrl: "https://vespin.dev",
     credential: fixedBearer("token"),
     httpClient: fakeHttpClientLayer(async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
+
       return answer(body, bodies.length);
     }),
   });
+
   return { client, bodies };
 }
 
@@ -137,19 +145,24 @@ it.effect(
       const store = yield* signedInStore;
       const firstAnswered = gate();
       let held: ExperimentChoices = NO_EXPERIMENTS;
+
       const { client, bodies } = serviceAnswering(async (body, at) => {
         if (at === 1) await firstAnswered.opened;
         held = { ...held, ...body.experiments };
+
         return holding(held);
       });
+
       const writer = writerOver(client, store);
 
       const turnedOn = yield* Effect.forkChild(
         writer.write(ACCOUNT.email, EXPERIMENT.MEMORY, true),
       );
+
       const turnedOff = yield* Effect.forkChild(
         writer.write(ACCOUNT.email, EXPERIMENT.MEMORY, false),
       );
+
       yield* until(() => bodies.length > 0);
       yield* until(() => bodies.length > 1);
       assert.equal(bodies.length, 1, "the second press waits for the first to be answered");
@@ -184,14 +197,17 @@ it.effect(
     Effect.gen(function* () {
       const store = yield* signedInStore;
       const signedOut = gate();
+
       const { client, bodies } = serviceAnswering(async () => {
         await signedOut.opened;
+
         return holding({ [EXPERIMENT.MEMORY]: true });
       });
 
       const writing = yield* Effect.forkChild(
         writerOver(client, store).write(ACCOUNT.email, EXPERIMENT.MEMORY, true),
       );
+
       yield* until(() => bodies.length > 0);
       yield* store.clearAccount();
       signedOut.open();

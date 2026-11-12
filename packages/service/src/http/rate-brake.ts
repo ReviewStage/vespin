@@ -49,13 +49,17 @@ export function createRateBrake(config: RateBrakeConfig): RateBrake {
     check: (userId, weight = 1) =>
       Effect.map(Clock.currentTimeMillis, (now) => {
         const held = tracked.get(userId);
+
         if (!held || now - held.windowStart >= config.windowMs) {
           if (tracked.size >= config.maxTrackedUsers) tracked.clear();
           tracked.set(userId, { windowStart: now, count: weight });
+
           return weight <= config.maxRequestsPerWindow;
         }
+
         const count = held.count + weight;
         tracked.set(userId, { windowStart: held.windowStart, count });
+
         return count <= config.maxRequestsPerWindow;
       }),
   };

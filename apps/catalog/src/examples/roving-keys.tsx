@@ -26,6 +26,7 @@ const PLACES = [
 
 function Places(): React.JSX.Element {
   const [open, setOpen] = useState<string>("inbox");
+
   return (
     <Stack gap={GAP.TIGHT}>
       <List label="Places">

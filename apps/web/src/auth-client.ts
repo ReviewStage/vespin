@@ -31,15 +31,19 @@ function refusalWords(error: { message?: string | undefined }, fallback: string)
 /** Signs the maintainer in as the member for an hour and opens the app as them; why not, where refused. */
 export async function impersonate(userId: string): Promise<string | undefined> {
   const { error } = await authClient.admin.impersonateUser({ userId });
+
   if (error) return refusalWords(error, REFUSED_WORDS.IMPERSONATE);
   window.location.assign(PANEL_PATH);
+
   return undefined;
 }
 
 /** Ends the sign-in as the member and opens their page of the dashboard as the maintainer; why not, where refused. */
 export async function stopImpersonating(memberId: string): Promise<string | undefined> {
   const { error } = await authClient.admin.stopImpersonating();
+
   if (error) return refusalWords(error, REFUSED_WORDS.STOP);
   window.location.assign(accountPageHref(memberId));
+
   return undefined;
 }

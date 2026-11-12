@@ -51,20 +51,25 @@ export function sizeLabel(base64: string): string {
 /** How the viewer shows a file that carries bytes. */
 export function attachmentView(file: FileChip): AttachmentView {
   if (file.mediaType.startsWith("image/")) return ATTACHMENT_VIEW.IMAGE;
+
   if (PLAYED_VIDEO_TYPES.has(file.mediaType)) return ATTACHMENT_VIEW.VIDEO;
+
   if (!file.mediaType.startsWith("text/")) return ATTACHMENT_VIEW.OTHER;
+
   return DIAGRAM_EXTENSION.test(file.name) ? ATTACHMENT_VIEW.DIAGRAM : ATTACHMENT_VIEW.TEXT;
 }
 
 /** A text file's words, read from its base64 as UTF-8, which is all a text attachment may spell. */
 export function attachmentText(base64: string): string {
   const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+
   return new TextDecoder().decode(bytes);
 }
 
 /** What a chip says of a text file: how many lines it runs to, a last line's newline closing it rather than opening another. */
 export function linesLabel(text: string): string {
   const breaks = text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+
   return countWords(Math.max(1, breaks), { one: "line", many: "lines" });
 }
 

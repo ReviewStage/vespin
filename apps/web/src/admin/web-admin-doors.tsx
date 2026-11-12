@@ -69,6 +69,7 @@ async function asked<T>(read: () => Promise<unknown>): Promise<T> {
     if (cause instanceof BrowserRedirected) throw new AdminReadRefused(ADMIN_REFUSED.INTERCEPTED);
     const status = browserRefusal(cause)?.status;
     const refused = status === undefined ? undefined : REFUSED_BY_STATUS.get(status);
+
     if (refused !== undefined) throw new AdminReadRefused(refused);
     throw cause;
   }
@@ -93,6 +94,7 @@ const WEB_ADMIN_READS: AdminReads = {
   favorite: (id, favorite) => {
     const input = { query: { [ADMIN_USER_ID_PARAM]: id } };
     const write = favorite ? browserClient.admin.favorite : browserClient.admin.unfavorite;
+
     return write(input).then(
       () => true,
       () => false,
@@ -116,6 +118,7 @@ const WEB_ADMIN_DOORS: AdminDoors = {
     keepSearch: (query) => window.history.replaceState(null, "", searchHref(query)),
     onSearchMoved: (listener) => {
       window.addEventListener("popstate", listener);
+
       return () => window.removeEventListener("popstate", listener);
     },
   },

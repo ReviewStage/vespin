@@ -29,6 +29,7 @@ import type { hostedContract } from "@repo/features/contract";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "./tools.js";
 
 type HostedContract = typeof hostedContract;
+
 type HostedResource = keyof HostedContract;
 
 /** Some procedures of the hosted contract, by resource and then by name: at least one under each resource named. */

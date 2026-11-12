@@ -38,6 +38,7 @@ export function withoutFinishedRunTasks(
   held: RunTasksHeld,
 ): readonly TaskSummary[] {
   const waiting = new Set(held.inbox.map((item) => item.taskId));
+
   return tasks.filter(
     (task) =>
       task.madeByRun !== true ||

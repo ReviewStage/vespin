@@ -53,7 +53,9 @@ const KEK = {
 
 function ring(value: string): KeyRing {
   const parsed = parseKeyRing(Redacted.make(value));
+
   if (Result.isFailure(parsed)) return assert.fail(`not a ring: ${parsed.failure}`);
+
   return parsed.success;
 }
 
@@ -83,6 +85,7 @@ const openedUnder = (
   Effect.map(listProviderKeyRows(userId, kind), (rows) =>
     rows.map((row) => {
       const opened = openProviderKey(keys, { userId, provider: row.provider, kind }, row);
+
       return [
         row.provider,
         row.keyVersion,
@@ -100,14 +103,17 @@ it.layer(getTestDB())("the provider key rewrap", (it) => {
         // A pass walks every account's rows, so each case starts from none.
         yield* db.delete(accountProviderKey);
         yield* db.delete(githubPersonalToken);
+
         const [first, second, subscriber] = [
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
         ];
+
         for (const id of [first, second, subscriber]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         yield* storeKey(
           ring(KEK.ONE),
           first,
@@ -199,6 +205,7 @@ it.layer(getTestDB())("the provider key rewrap", (it) => {
         );
         const secret = Redacted.make("cron-secret-for-this-test");
         const keys = Redacted.make(`${KEK.TWO},${KEK.ONE}`);
+
         const ask = (
           init: { method?: string; bearer?: string },
           held: Pick<ProviderKeyRewrapOptions, "cronSecret" | "keys"> = {
@@ -215,28 +222,33 @@ it.layer(getTestDB())("the provider key rewrap", (it) => {
               }),
               ...held,
             });
+
             return { status: response.status, body: yield* Effect.promise(() => response.json()) };
           });
 
         const wrongMethod = yield* ask({ method: "GET", bearer: "cron-secret-for-this-test" });
         const noBearer = yield* ask({});
         const wrongBearer = yield* ask({ bearer: "not-the-secret" });
+
         const noRing = yield* ask(
           { bearer: "cron-secret-for-this-test" },
           { cronSecret: secret, keys: undefined },
         );
+
         const moved = yield* ask({ bearer: "cron-secret-for-this-test" });
 
         assert.deepEqual(wrongMethod, {
           status: HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
           body: { error: HOSTED_API_ERROR.METHOD_NOT_ALLOWED },
         });
+
         for (const refused of [noBearer, wrongBearer]) {
           assert.deepEqual(refused, {
             status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
             body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
           });
         }
+
         assert.deepEqual(noRing, {
           status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
           body: { error: HOSTED_API_ERROR.UNAVAILABLE },

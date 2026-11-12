@@ -97,7 +97,9 @@ function answerFor(
     onFailure: () => Effect.succeed(undefined),
     onSuccess: (message) => {
       const answer = Schema.decodeUnknownOption(taskCodeAnswerSchema)(message);
+
       if (Option.isNone(answer)) return Effect.succeed(undefined);
+
       // Note that an answer for an earlier id is one a stalled block gave too late, and is passed over.
       return answer.value.id === id ? Effect.succeed(answer.value.lines) : answerFor(answers, id);
     },
@@ -110,6 +112,7 @@ function spawnInto(parent: Scope.Scope, spawn: SpawnTaskCodeProcess): Effect.Eff
     const scope = yield* Scope.fork(parent);
     const answers = yield* Queue.unbounded<unknown, Cause.Done>();
     let exited = false;
+
     const child = yield* Effect.acquireRelease(
       Effect.sync(() =>
         spawn({
@@ -124,6 +127,7 @@ function spawnInto(parent: Scope.Scope, spawn: SpawnTaskCodeProcess): Effect.Eff
       ),
       (spawned) => Effect.sync(() => spawned.kill()),
     ).pipe(Scope.provide(scope));
+
     return { child, answers, scope, exited: () => exited };
   });
 }
@@ -149,6 +153,7 @@ export function taskCodeProcessColoring(
     const retire = (spawned: Spawned) =>
       Effect.suspend(() => {
         if (standing === spawned) standing = undefined;
+
         return Scope.close(spawned.scope, Exit.void);
       });
 
@@ -160,38 +165,47 @@ export function taskCodeProcessColoring(
         standing = spawned;
         lastId += 1;
         const id = lastId;
+
         // Note that a send the process refuses, as one already gone may, is answered as its death is.
         const sent = yield* Effect.exit(
           Effect.try(() =>
             spawned.child.send(Schema.encodeSync(taskCodeRequestSchema)({ id, language, code })),
           ),
         );
+
         const lines = Exit.isSuccess(sent)
           ? yield* Effect.timeoutOption(answerFor(spawned.answers, id), COLOR_DEADLINE)
           : Option.none();
+
         if (Option.isSome(lines) && lines.value !== undefined) return lines.value;
         yield* Effect.logWarning("Code is drawn plain: the coloring process ended or stalled");
         yield* retire(spawned);
+
         return plainCodeLines(code);
       });
 
     // Note that a block whose caller went away is passed over, and a process that could not be spawned draws its block plain.
     const answerNext = Effect.gen(function* () {
       const next = yield* Queue.take(asked);
+
       if (yield* Deferred.isDone(next.answer)) return;
+
       const lines = yield* catchAllButInterrupt(colorInProcess(next), (cause) =>
         Effect.as(
           Effect.logWarning("Code is drawn plain: the coloring process could not be asked", cause),
           plainCodeLines(next.code),
         ),
       );
+
       yield* Deferred.succeed(next.answer, lines);
     });
+
     yield* Effect.forkScoped(Effect.forever(answerNext));
 
     return (language, code) =>
       Effect.suspend(() => {
         const answer = Deferred.makeUnsafe<CodeLines>();
+
         return Queue.offer(asked, { language, code, answer }).pipe(
           Effect.andThen(Deferred.await(answer)),
           Effect.onInterrupt(() => Deferred.interrupt(answer)),

@@ -104,6 +104,7 @@ import { useWindowTitle } from "./window-title.js";
 /** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks, and its own way out, so Escape closes the page rather than reaching the plan behind it. */
 function TasksLoading({ onExit }: { onExit: () => void }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_BOARD, onExit);
+
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -135,6 +136,7 @@ function AdminLoading({
   onExit: () => void;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_ADMIN, onExit);
+
   return (
     <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen)}>
       <AdminCollectionPage
@@ -157,6 +159,7 @@ function PersonLoading({
   onExit: () => void;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, onExit);
+
   return <PersonPageSkeleton name={name} />;
 }
 
@@ -196,6 +199,7 @@ function VersionHistoryLoading({
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY, onExit);
   const narrow = hidden.list || hidden.item;
+
   const exit = (
     <BackButton
       look={narrow ? BACK_BUTTON_LOOK.HEADER : BACK_BUTTON_LOOK.COLUMN}
@@ -205,6 +209,7 @@ function VersionHistoryLoading({
       onBack={onExit}
     />
   );
+
   return (
     <div className={`desktop-version-history ${PLACE_SPLIT}`}>
       <nav className={`version-log ${PLACE_LIST}`} aria-label="Versions" hidden={hidden.list}>
@@ -256,6 +261,7 @@ function AutomationsLoading({
   room: ShellRoom;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onExit);
+
   return (
     <CollectionPage
       frame={PAGE_FRAME.TOOLBAR}
@@ -321,6 +327,7 @@ function SettingsLoading({
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_SETTINGS, onExit);
   const narrow = hidden.list || hidden.item;
+
   return (
     <div className={`desktop-settings ${PLACE_SPLIT}`}>
       <nav
@@ -396,6 +403,7 @@ function SidebarToggle({ sidebar }: { sidebar: SidebarCollapse }): React.JSX.Ele
   const label = shown ? "Hide sidebar" : "Show sidebar";
   const away = sidebar.collapsed && sidebar.overlay === SIDEBAR_OVERLAY.CLOSED;
   useAppCommand(APP_COMMAND.TOGGLE_SIDEBAR, sidebar.onToggle);
+
   return (
     <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDEBAR}>
       <IconButton
@@ -425,24 +433,29 @@ function leaveTitleBar(sidebar: SidebarCollapse, event: React.PointerEvent<HTMLE
   if (sidebar.overlay !== SIDEBAR_OVERLAY.PEEK) return;
   const pane = event.currentTarget.parentElement?.querySelector(".desktop-sidebar");
   const to = event.relatedTarget;
+
   if (to instanceof Element) {
     if (pane?.contains(to) || to.closest(KEY_LAYERS) !== null) return;
   } else {
     const box = pane?.getBoundingClientRect();
+
     const over =
       box !== undefined &&
       event.clientX >= box.left &&
       event.clientX <= box.right &&
       event.clientY >= box.top &&
       event.clientY <= box.bottom;
+
     if (over) return;
   }
+
   sidebar.onOverlay(SIDEBAR_OVERLAY.CLOSED);
 }
 
 /** The sidebar's chord alone, where its toggle is not drawn, as on a phone's task, whose header stands in its place, though the drawer is still there to open. */
 function SidebarChord({ sidebar }: { sidebar: SidebarCollapse }): null {
   useAppCommand(APP_COMMAND.TOGGLE_SIDEBAR, sidebar.onToggle);
+
   return null;
 }
 
@@ -477,10 +490,13 @@ function calledSo(tag: string, label: string): HTMLElement[] {
 /** The control holding the keyboard now, named; none where it stands nowhere or on a control with no name. */
 function holder(): Holder | undefined {
   const element = document.activeElement;
+
   if (!(element instanceof HTMLElement) || element === document.body) return undefined;
   const tag = element.localName;
   const label = labelOf(element);
+
   if (label === "") return undefined;
+
   return { element, tag, label, alone: calledSo(tag, label).length === 1 };
 }
 
@@ -493,6 +509,7 @@ function holder(): Holder | undefined {
 function found({ element, tag, label, alone }: Holder): HTMLElement | undefined {
   if (element.isConnected) return element;
   const called = calledSo(tag, label);
+
   return alone && called.length === 1 ? called[0] : undefined;
 }
 
@@ -505,8 +522,10 @@ function found({ element, tag, label, alone }: Holder): HTMLElement | undefined 
 function useSettingsFocusHolder(inSettings: boolean): RefObject<Holder | undefined> {
   const before = useRef<Holder | undefined>(undefined);
   const was = useRef(false);
+
   if (inSettings && !was.current) before.current = holder();
   was.current = inSettings;
+
   return before;
 }
 
@@ -523,6 +542,7 @@ function useFocusHandedBack(held: RefObject<Holder | undefined>): void {
     const back = held.current === undefined ? undefined : found(held.current);
     held.current = undefined;
     const now = document.activeElement;
+
     if (now === null || now === document.body) back?.focus({ preventScroll: true });
   }, [held]);
 }
@@ -545,11 +565,13 @@ function usePlaceCommands(
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
   const inbox = useInboxDoor(tasks);
+
   // A chord's door moves the window first and the Tasks tab is brought forward once it lands, so the one move a page's
   // leave ask holds is the door's, and a door that moved the window or kept the place standing is where the chord goes
   // (`app.tsx`'s `changeTab`).
   const overTasks = (door: () => void) =>
     tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
+
   useAppCommand(APP_COMMAND.BACK, pastGate && history.canGoBack ? history.onBack : undefined);
   useAppCommand(
     APP_COMMAND.FORWARD,
@@ -619,30 +641,40 @@ function titleSubject(
   inAutomations: boolean,
 ): Parameters<typeof useWindowTitle>[0] {
   const { signedIn } = tasks;
+
   if (tab === PANEL_TAB.SETTINGS) return { signedIn, subject: "Settings", workspace: undefined };
+
   if (place === ROUTED_PLACE.INBOX) {
     return { signedIn, subject: "Inbox", workspace: tasks.workspace };
   }
+
   if (tasks.agentView.agentId !== undefined) {
     return { signedIn, subject: "Agent", workspace: tasks.workspace };
   }
+
   if (place === ROUTED_PLACE.PERSON) {
     return { signedIn, subject: "Profile", workspace: tasks.workspace };
   }
+
   // The Admin place reads every workspace's accounts, so it is no one workspace's.
   if (place === ROUTED_PLACE.ADMIN) return { signedIn, subject: "Admin", workspace: undefined };
+
   if (inAutomations) {
     return { signedIn, subject: "Automations", workspace: tasks.workspace };
   }
+
   if (place === ROUTED_PLACE.BOARD) {
     return { signedIn, subject: "Tasks", workspace: tasks.workspace };
   }
+
   // A workspace not there for the reader names none, the listed one least of all.
   if (place === ROUTED_PLACE.UNKNOWN_WORKSPACE)
     return { signedIn, subject: NOT_FOUND_TITLE, workspace: undefined };
+
   if (shownTask === undefined) return { signedIn, subject: undefined, workspace: tasks.workspace };
   // Note that a task whose workspace is not read yet is named alone, because the listed one may not be its.
   const workspace = tasks.workspaces.find((each) => each.id === shownTask.workspaceId);
+
   return { signedIn, subject: shownTask.name, workspace };
 }
 
@@ -656,8 +688,10 @@ function titleSubject(
  */
 function usePageKept(open: boolean, workspaceId: string | undefined, standing: boolean): boolean {
   const keptFor = useRef<string | undefined>(undefined);
+
   if (!standing) keptFor.current = undefined;
   else if (open) keptFor.current = workspaceId;
+
   return standing && keptFor.current !== undefined && keptFor.current === workspaceId;
 }
 
@@ -690,8 +724,11 @@ function KeptPage({
       <ChipCards value={chipCards}>{children}</ChipCards>
     </MentionedAgents>
   );
+
   const held = useRef(page);
+
   if (shown) held.current = page;
+
   return <Activity mode={shown ? "visible" : "hidden"}>{held.current}</Activity>;
 }
 
@@ -735,8 +772,10 @@ const ShellPlacesContext = createContext<ShellPlacesInput | undefined>(undefined
 /** What the shell handed the places; a place is drawn under the shell alone. */
 export function useShellPlaces(): ShellPlacesInput {
   const places = useContext(ShellPlacesContext);
+
   if (places === undefined)
     throw new Error("A place of the window is drawn under its shell alone.");
+
   return places;
 }
 
@@ -797,8 +836,10 @@ export function DesktopShell({
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
   const setup = useSetupGate(tasks, signedInId, finishedHere === signedInId);
+
   const keptStanding =
     !gated && tasks.signedIn && tab !== PANEL_TAB.SETTINGS && !tasks.history.open;
+
   // Where the window stands: the routed place, the Board, a person's page, or a workspace the router finds not there for the reader (`panel-router.tsx`) among them, and the Inbox, the Automations page, and Admin's view.
   const bar = useBarStanding(tasks);
   const inboxKept = usePageKept(bar.inbox.open, tasks.workspace?.id, keptStanding);
@@ -834,9 +875,12 @@ export function DesktopShell({
   // The Admin place is an admin's alone: its route gives way for an account known to be no admin (`route-gates.ts`),
   // while one whose access is still being read, as a reloaded Admin address's is, has the place wait on it.
   const adminAccess = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
+
   const adminPending =
     useQuery({ ...appStateQuery, select: selectAdminAccessPending }).data ?? true;
+
   const { region } = tasks;
+
   // The window's title names what stands in it, the plan only while it is on screen, and its workspace;
   // the Inbox, an agent's or a person's page, the Automations page, or the Board standing in its place is not the plan.
   const standingIn =
@@ -847,17 +891,21 @@ export function DesktopShell({
     place === ROUTED_PLACE.BOARD ||
     place === ROUTED_PLACE.ADMIN ||
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
+
   const shownTask =
     tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
       ? region.task
       : undefined;
+
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
   const namedTask =
     shownTask ??
     (tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READING
       ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
       : undefined);
+
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
+
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
   const looks = useTaskLooks(
@@ -867,10 +915,12 @@ export function DesktopShell({
       ? undefined
       : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
   );
+
   const mentionedAgents = useMemo(
     () => ({ models: tasks.agents.models, me: tasks.me }),
     [tasks.agents.models, tasks.me],
   );
+
   // A chip naming a task hangs the task's card, as its sidebar row does.
   // Note that what the columns are handed is held across draws over the same
   // tasks, because each column holds while what it is handed does
@@ -879,15 +929,18 @@ export function DesktopShell({
     () => ({
       taskCard: (taskId: string, now: number, focus: TaskFocus | undefined) => {
         const task = tasks.tasks.find((each) => each.id === taskId);
+
         return task === undefined ? undefined : homeTaskCardOf(tasks, task, now, focus);
       },
     }),
     [tasks],
   );
+
   // New task asks over whatever stands, the tasks or a version history.
   const newTaskDialog = useMemo(() => <NewTaskDialog newTask={tasks.newTask} />, [tasks.newTask]);
   // A phone's places lead their heads with the reader's face, their workspaces and account behind it (`phone-account.tsx`).
   const { onSignOut } = settings;
+
   const phoneAccount = useMemo(
     () =>
       room === SHELL_ROOM.NARROW && tasks.signedIn ? (
@@ -900,6 +953,7 @@ export function DesktopShell({
       ) : null,
     [room, tasks, account, onTabChange, onSignOut],
   );
+
   // Note that the shell says whether the panel's toggle stands, because the
   // toolbar beneath it leaves the toggle room then and only then. The
   // Automations page stands in the plan's place, so it draws
@@ -910,6 +964,7 @@ export function DesktopShell({
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;
   const away = useMemo(() => ({ label: awayLabel, onPress: onLeave }), [awayLabel, onLeave]);
+
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
   // and a strip above it would overflow the window by the strip's height.
@@ -934,8 +989,10 @@ export function DesktopShell({
       </ScrollArea>
     );
   }
+
   if (gated) {
     const macAppLink = appPlatform().macAppLink?.();
+
     return (
       <ScrollArea>
         <div className="desktop-onboarding relative">
@@ -961,6 +1018,7 @@ export function DesktopShell({
       </ScrollArea>
     );
   }
+
   // New workspace takes the whole window on setup's own ground, its cards being setup's.
   if (founding) {
     return (
@@ -972,6 +1030,7 @@ export function DesktopShell({
       </ScrollArea>
     );
   }
+
   // What stands past the gates is the route's: Settings over the whole window, or a place beside the sidebar (`ShellPlaces`).
   const places: ShellPlacesInput = {
     tab,
@@ -999,6 +1058,7 @@ export function DesktopShell({
     setToggleRoom,
     focusHolder,
   };
+
   return (
     <NewWorkspaceOpener value={newWorkspace.onOpen}>
       <ShellPlacesContext value={places}>
@@ -1034,15 +1094,18 @@ export function ShellPlaces(): React.JSX.Element {
     inboxKept,
     phoneAccount,
   } = useShellPlaces();
+
   const { account } = settings;
   useFocusHandedBack(focusHolder);
   const bar = useBarStanding(tasks);
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
+
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
     (descriptionToggle && room !== SHELL_ROOM.NARROW) || (inboxOpen && inboxItemShown);
+
   // A phone's drawer is modal, as a phone's own drawers are: while it stands
   // over the work, the work is inert, so neither a screen reader nor a
   // keyboard reaches what the drawer covers, and a press there only puts it
@@ -1052,9 +1115,11 @@ export function ShellPlaces(): React.JSX.Element {
   const barShown = mobileBarShown(room, tasks, bar);
   // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`).
   const phoneTasks = barShown && boardOpen;
+
   const placed = phoneTasks
     ? { ...sidebar, collapsed: false, overlay: SIDEBAR_OVERLAY.CLOSED }
     : sidebar;
+
   return (
     <div
       ref={shell}
@@ -1186,7 +1251,9 @@ export function InboxPlace(): null {
 export function AgentPlace(): React.JSX.Element {
   const { tasks, room, away } = useShellPlaces();
   const ownPage = useMatch({ from: "/places/$workspace/agent/$agentId/", shouldThrow: false });
+
   if (ownPage === undefined) return <StatePlace />;
+
   return <AgentRoutePage tasks={tasks} away={room === SHELL_ROOM.NARROW ? away : undefined} />;
 }
 
@@ -1198,6 +1265,7 @@ export function AgentPlace(): React.JSX.Element {
  */
 export function UnknownWorkspacePlace(): React.JSX.Element {
   const { room, tasks } = useShellPlaces();
+
   return (
     <ReplayUnmask>
       <NotFound
@@ -1222,6 +1290,7 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
  */
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
+
   return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
 }
 
@@ -1236,9 +1305,11 @@ export function StatePlace(): React.JSX.Element {
 export function HomePlace(): React.JSX.Element {
   const { tasks, room, sidebar, settings, looks, away } = useShellPlaces();
   const { account } = settings;
+
   if (tasks.boundFor !== undefined) {
     return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
   }
+
   return (
     <DesktopHomePage
       tasks={tasks}
@@ -1256,7 +1327,9 @@ export function BoardRouteLoading(): React.JSX.Element | null {
   const { tasks, room } = useShellPlaces();
   const bar = useBarStanding(tasks);
   const board = useBoardDoor(tasks);
+
   if (mobileBarShown(room, tasks, bar)) return null;
+
   return <TasksLoading onExit={board.close} />;
 }
 
@@ -1264,6 +1337,7 @@ export function BoardRouteLoading(): React.JSX.Element | null {
 export function AutomationsRouteLoading(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
   const automations = useAutomationsDoor(tasks);
+
   return <AutomationsLoading onExit={automations.close} room={room} />;
 }
 
@@ -1272,6 +1346,7 @@ export function PersonRouteLoading(): React.JSX.Element {
   const { tasks } = useShellPlaces();
   const { name } = usePersonRoute();
   const person = usePersonDoor(tasks);
+
   return <PersonLoading name={name} onExit={person.close} />;
 }
 
@@ -1280,6 +1355,7 @@ export function AdminRouteLoading(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
   const admin = useAdminDoor(tasks);
   const view = useAdminView();
+
   return <AdminLoading room={room} view={view} onOpen={admin.open} onExit={admin.close} />;
 }
 
@@ -1297,6 +1373,7 @@ export function SettingsFrame({
   const { tasks, history, room, onTabChange } = useShellPlaces();
   const exitSettings = history.canGoBack ? history.onBack : () => onTabChange(PANEL_TAB.TASKS);
   const settingsBar = room === SHELL_ROOM.NARROW && tasks.signedIn;
+
   return (
     <div className="desktop-shell" data-room={room} data-mobile-bar={String(settingsBar)}>
       {children(exitSettings)}
@@ -1321,6 +1398,7 @@ export function VersionHistoryFrame({
   const { tasks, history, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
   const historyDoor = useVersionHistoryDoor(tasks);
   const exitHistory = history.canGoBack ? history.onBack : historyDoor.close;
+
   return (
     <div className="desktop-shell" data-room={room}>
       <MentionedAgents value={mentionedAgents}>
@@ -1334,6 +1412,7 @@ export function VersionHistoryFrame({
 /** A version history's frame while its chunk loads, and while the task it is of opens under it. */
 export function VersionHistoryRouteLoading(): React.JSX.Element {
   const { tasks, history, room } = useShellPlaces();
+
   return (
     <VersionHistoryFrame>
       {(exit) => (
@@ -1351,6 +1430,7 @@ export function VersionHistoryRouteLoading(): React.JSX.Element {
 /** Settings' frame while its chunk loads. */
 export function SettingsRouteLoading(): React.JSX.Element {
   const { history, room, settingsStep } = useShellPlaces();
+
   return (
     <SettingsFrame>
       {(exit) => (

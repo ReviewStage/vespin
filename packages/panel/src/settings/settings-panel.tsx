@@ -85,6 +85,7 @@ export function SettingsPanel({
   // The experiments on where Settings shows: the account's own, and the shown workspace's.
   const experiments = panelView?.settings.experiments ?? NO_EXPERIMENTS;
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
+
   // The shared settings page frames these, spacing them as sections. Note
   // that every page's words show in a screen recording, because they are
   // the app's own, but for a person's, which each page masks where it draws them.

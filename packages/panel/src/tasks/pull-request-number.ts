@@ -54,11 +54,14 @@ export function withPullRequestTab<V>(
   value: V | undefined,
 ): ByPullRequestTab<V> {
   const ofAgent = new Map(kept.get(tab.changes));
+
   if (value === undefined) ofAgent.delete(tab.number);
   else ofAgent.set(tab.number, value);
   const next = new Map(kept);
+
   if (ofAgent.size === 0) next.delete(tab.changes);
   else next.set(tab.changes, ofAgent);
+
   return next;
 }
 

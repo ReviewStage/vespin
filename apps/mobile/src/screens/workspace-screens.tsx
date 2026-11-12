@@ -67,10 +67,12 @@ export function NewWorkspaceScreen() {
     if (listed) router.back();
   }, [listed, router]);
   const waiting = create.running || made !== undefined;
+
   const make = () => {
     // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
     void create.run(() => {
       const said: { words?: string } = {};
+
       return write(
         () =>
           acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
@@ -85,6 +87,7 @@ export function NewWorkspaceScreen() {
       ).then(() => said.words);
     });
   };
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}

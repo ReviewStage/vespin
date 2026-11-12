@@ -27,6 +27,7 @@ export const wokenOnHub = <A, E, R, W, WE, WR>(
   Effect.gen(function* () {
     const hub = Context.get(yield* Layer.build(syncHub), Sync);
     const looking = yield* Queue.unbounded<void>();
+
     const announcing: SyncShape = {
       watch: (topics, fallback) =>
         Effect.map(hub.watch(topics, fallback), (watch) => ({
@@ -34,15 +35,19 @@ export const wokenOnHub = <A, E, R, W, WE, WR>(
           next: Effect.andThen(Queue.offer(looking, undefined), watch.next),
         })),
     };
+
     const { clock, asleep } = yield* announcingClock;
+
     const fiber = yield* Effect.forkChild(
       wait.pipe(Effect.provideService(Clock.Clock, clock), Effect.provideService(Sync, announcing)),
       { startImmediately: true },
     );
+
     const held = yield* Effect.raceFirst(
       Effect.as(Queue.take(looking), true),
       Effect.as(Fiber.await(fiber), false),
     );
+
     assert.ok(held, "the wait held, rather than answering at its first look");
     yield* Queue.clear(asleep);
     const from = yield* Clock.currentTimeMillis;
@@ -52,5 +57,6 @@ export const wokenOnHub = <A, E, R, W, WE, WR>(
       (yield* Clock.currentTimeMillis) - from <= Duration.toMillis(COALESCE),
       "the wait answered within a coalesce window of the write",
     );
+
     return { written, answered };
   });

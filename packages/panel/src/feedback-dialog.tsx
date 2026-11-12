@@ -162,6 +162,7 @@ interface FeedbackSignature {
 
 function accountSignature(account: AccountSnapshot | undefined): FeedbackSignature | undefined {
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
+
   return { ...(account.name ? { name: account.name } : undefined), email: account.email };
 }
 
@@ -177,6 +178,7 @@ function draftSubmission(
   about: Experiment | undefined,
 ): FeedbackSubmission {
   const credit = draft.signed ? signature : undefined;
+
   return {
     kind,
     message: draft.message.trim(),
@@ -190,6 +192,7 @@ function draftSubmission(
 /** The dialog's title: Send feedback, or which experiment a note is about where it was opened from that experiment's row. */
 function dialogTitle(about: Experiment | undefined): string {
   const experiment = EXPERIMENTS.find((entry) => entry.key === about);
+
   return experiment ? `Feedback on ${experiment.name}` : DIALOG_TITLE;
 }
 
@@ -211,16 +214,22 @@ function FeedbackImageRow({
 }): React.JSX.Element | null {
   const [ids] = useState(() => new WeakMap<FeedbackImage, string>());
   const minted = useRef(0);
+
   const idOf = (image: FeedbackImage): string => {
     const known = ids.get(image);
+
     if (known !== undefined) return known;
     minted.current += 1;
     const id = String(minted.current);
     ids.set(image, id);
+
     return id;
   };
+
   const drawn = useLeaving(images, idOf);
+
   if (drawn.length === 0) return null;
+
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}
@@ -256,6 +265,7 @@ function FeedbackImages({
   onRemove: (image: FeedbackImage) => void;
 }): React.JSX.Element {
   const row = useRef<HTMLUListElement | null>(null);
+
   return (
     <ListMotion root={row} way={LIST_MOTION_WAY.SCALE} scene={kind}>
       <FeedbackImageRow row={row} {...props} />
@@ -274,13 +284,18 @@ async function takenImages(
 ): Promise<{ images: FeedbackImage[]; refusal?: string }> {
   const images: FeedbackImage[] = [];
   let unreadable: string | undefined;
+
   for (const file of files.slice(0, Math.max(0, room))) {
     const read = await encodeImage(file);
+
     if ("image" in read) images.push(read.image);
     else unreadable ??= read.unreadable ?? IMAGE_REFUSAL.UNREADABLE;
   }
+
   if (unreadable !== undefined) return { images, refusal: unreadable };
+
   if (files.length > room) return { images, refusal: IMAGE_REFUSAL.FULL };
+
   return { images };
 }
 
@@ -302,6 +317,7 @@ function composerNote(rejection: Rejection | undefined, cut: boolean): ComposerN
           }),
     };
   }
+
   return cut
     ? { words: pasteCutWords(FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH), failure: UNREPORTED.INPUT }
     : undefined;
@@ -330,6 +346,7 @@ export function FeedbackDialog({
 }): React.JSX.Element | null {
   const { mutateAsync: sendFeedback } = useMutation(actMutation(ACT_KIND.FEEDBACK_SEND));
   const [drafts, setDrafts, latestDrafts] = useStateWithRef<FeedbackDrafts>(FRESH_DRAFTS);
+
   /**
    * Counts each kind's discards, so a screenshot still being read when its
    * draft was discarded or sent lands in no draft at all.
@@ -338,6 +355,7 @@ export function FeedbackDialog({
     [FEEDBACK_KIND.FEEDBACK]: 0,
     [FEEDBACK_KIND.PROMPT]: 0,
   });
+
   /** The kind on screen now, for work that finishes renders after it began. */
   const shownKind = useRef(kind);
   shownKind.current = kind;
@@ -345,9 +363,11 @@ export function FeedbackDialog({
   const [rejection, setRejection] = useState<Rejection>();
   // The words a paste past the cap left once it was cut to fit; the note stands while they do.
   const [cutWords, setCutWords] = useState<string>();
+
   const fileDrop = useFileDrop((files) => void attach(imageFiles(files)), {
     leave: DROP_LEAVE.WINDOW,
   });
+
   const open = kind !== undefined;
   const field = useRef<HTMLTextAreaElement | null>(null);
   const signatureId = useId();
@@ -363,6 +383,7 @@ export function FeedbackDialog({
     [FEEDBACK_KIND.FEEDBACK]: undefined,
     [FEEDBACK_KIND.PROMPT]: undefined,
   });
+
   useLayoutEffect(() => {
     if (kind === undefined || draftAbout.current[kind] === about) return;
     draftAbout.current[kind] = about;
@@ -397,6 +418,7 @@ export function FeedbackDialog({
     const kept = box.value.slice(0, box.selectionStart) + box.value.slice(box.selectionEnd);
     const room = FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH - kept.length;
     const text = pasted.replaceAll("\r\n", "\n");
+
     if (text.length <= room) return;
     setCutWords(
       box.value.slice(0, box.selectionStart) +
@@ -407,6 +429,7 @@ export function FeedbackDialog({
 
   const close = () => {
     if (kind === undefined || latestBusy()) return;
+
     if (!hasWords(latestDrafts()[kind])) discardDraft(kind);
     setRejection(undefined);
     onClose();
@@ -416,10 +439,12 @@ export function FeedbackDialog({
     if (kind === undefined || files.length === 0 || latestBusy()) return;
     const of = kind;
     const discarded = discards.current[of];
+
     const taken = await takenImages(
       files,
       FEEDBACK_LIMITS.MAX_IMAGES - latestDrafts()[of].images.length,
     );
+
     // Note that a draft discarded or sent while its screenshots were read
     // takes none of them, and neither does one now being sent, because
     // either would carry a picture into a note nobody attached it to.
@@ -430,6 +455,7 @@ export function FeedbackDialog({
       ...current,
       images: [...current.images, ...taken.images].slice(0, FEEDBACK_LIMITS.MAX_IMAGES),
     });
+
     if (shownKind.current === of) {
       setRejection(taken.refusal === undefined ? undefined : { words: taken.refusal, input: true });
     }
@@ -438,20 +464,26 @@ export function FeedbackDialog({
   const send = async () => {
     if (kind === undefined) return;
     const current = latestDrafts()[kind];
+
     if (latestBusy() || !hasWords(current)) return;
     setBusy(true);
     setRejection(undefined);
+
     const refusal = await sendFeedback({
       submission: draftSubmission(kind, current, signature, about),
     }).then(
       (result) => (result.delivered ? undefined : (result.reason ?? SEND_REFUSAL)),
       () => SEND_REFUSAL,
     );
+
     setBusy(false);
+
     if (refusal !== undefined) {
       setRejection({ words: refusal, input: false });
+
       return;
     }
+
     discardDraft(kind);
     onClose();
   };
@@ -462,6 +494,7 @@ export function FeedbackDialog({
   const standing = useRef<
     { kind: FeedbackKind; about: Experiment | undefined; draft: FeedbackDraft } | undefined
   >(undefined);
+
   if (kind !== undefined) standing.current = { kind, about, draft };
   const shown = standing.current;
 
@@ -531,10 +564,13 @@ export function FeedbackDialog({
                   // A screenshot on the clipboard is an attachment, not text
                   // that failed to paste; text pastes as it always does.
                   const pasted = imageFiles(event.clipboardData.files);
+
                   if (pasted.length === 0) {
                     noteCutPaste(event.currentTarget, event.clipboardData.getData("text"));
+
                     return;
                   }
+
                   event.preventDefault();
                   void attach(pasted);
                 }}

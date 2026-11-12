@@ -51,6 +51,7 @@ const OPUS: CatalogModel = {
   efforts: ["low", "medium", "high"],
   contextWindows: { standardTokens: 200_000, longTokens: 1_000_000 },
 };
+
 const OPUS_FAST: CatalogModel = {
   ...OPUS,
   id: "anthropic/claude-opus-5.5-fast",
@@ -76,12 +77,16 @@ const OWN_ANTHROPIC: ProviderKeySummary = {
 /** The models the test's service offers, and the keys it holds for the account. */
 let models: readonly CatalogModel[] = [OPUS, OPUS_FAST];
 let keys: readonly ProviderKeySummary[] = [];
+
 /** The default the test's service holds. */
 let stored: ModelChoice = { model: OPUS.id, effort: "high" };
+
 /** Every act the page sent, in order. */
 let sent: AnyAct[] = [];
+
 /** Whether the service refuses the next write. */
 let refuseWrite = false;
+
 /** Whether the service answers that it could not read the models. */
 let refuseModels = false;
 
@@ -93,9 +98,11 @@ const done = (value: PortActResult<PortActKind>): FakeActAnswer => ({
 /** The bridge, answering the page's acts the way the host would. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   sent.push(request);
+
   switch (request.kind) {
     case ACT_KIND.AGENTS_MODELS_RETRY:
       deliverModels(modelsHeld());
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.WEB_OPEN:
       return Promise.resolve(done(undefined));
@@ -107,13 +114,16 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       // The host lays the save's own answer where it holds the keys before it answers, and asks the models again as the keys moved.
       deliverKeys({ rows: { keys } });
       deliverModels(modelsHeld());
+
       return Promise.resolve(done({ keys }));
     case ACT_KIND.AGENTS_DEFAULT_WRITE:
       if (refuseWrite) {
         return Promise.resolve(done({ failure: AGENT_CALL_FAILURE.UNANSWERED }));
       }
+
       stored = request.payload;
       deliverPreferences(preferencesHeld());
+
       return Promise.resolve(done({ choice: stored }));
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
@@ -207,6 +217,7 @@ async function mount(): Promise<HTMLElement> {
   );
   await settle();
   await vi.waitFor(() => assert.equal(placeholders(container).length, 0));
+
   return container;
 }
 
@@ -361,11 +372,13 @@ test("a refused Effort or Context says so under its own row until that row's nex
 test("the model, Effort and Context rows each tick Saved once their write lands, and a refusal ticks nothing", async () => {
   models = [OPUS, OPUS_FAST, SONNET];
   const page = await mount();
+
   const marks = () => [
     marksIn(rowOf(page, "Model")),
     marksIn(rowOf(page, "Effort")),
     marksIn(rowOf(page, "Context")),
   ];
+
   assert.deepEqual(marks(), [[], [], []]);
 
   refuseWrite = true;
@@ -391,9 +404,11 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
     ).click(),
   );
   const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
+
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );
+
   act(() => option?.click());
   await settle();
   await vi.waitFor(() => assert.deepEqual(marksIn(rowOf(page, "Model")), ["Saved"]));
@@ -445,6 +460,7 @@ test("a GPT model with an Ultrafast version draws a Speed choice in Fast's place
     provider: MODEL_PROVIDER.OPENAI,
     efforts: ["low", "high"],
   };
+
   models = [
     sol,
     { ...sol, id: "openai/gpt-6.1-sol-fast", name: "GPT-6.1 Sol (Fast)" },
@@ -488,9 +504,11 @@ test("replacing the account's own Anthropic key moves the models the host holds,
     ).click(),
   );
   await settle();
+
   const label =
     [...document.querySelectorAll("label")].find((each) => each.textContent === "Paste the key") ??
     assert.fail("no key field");
+
   const field = label.control instanceof HTMLInputElement ? label.control : assert.fail();
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
@@ -509,12 +527,14 @@ test("replacing the account's own Anthropic key moves the models the host holds,
 test("a catalog that could not be read says so in the Model menu with Retry, and Retry reads it again", async () => {
   refuseModels = true;
   const page = await mount();
+
   // Note that the Model row stands once the failed read reaches its query.
   const control = await vi.waitFor(
     () =>
       page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ??
       assert.fail("no Model control"),
   );
+
   assert.equal(placeholders(page).length, 0, "the page does not read for ever");
 
   act(() => control.click());
@@ -547,6 +567,7 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
     provider: MODEL_PROVIDER.OPENAI,
     efforts: ["low", "high"],
   };
+
   const sonnet: CatalogModel = {
     id: "anthropic/claude-sonnet-5.5",
     name: "Claude Sonnet 5.5",
@@ -554,8 +575,10 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
     efforts: ["low", "high"],
     credentialMissing: true,
   };
+
   models = [{ ...OPUS, credentialMissing: true }, sonnet, gpt];
   const page = await mount();
+
   const claudeRow: SettingsLink = {
     page: SETTINGS_VIEW.AGENTS,
     section: SETTINGS_SECTION.CLAUDE,
@@ -563,23 +586,28 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
 
   const picker =
     page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ?? assert.fail();
+
   const row = picker.closest(".ui-settings-row") ?? assert.fail("no Model row");
   assert.match(
     row.textContent ?? "",
     /Opus 5\.5 cannot run until you connect a Claude plan or an Anthropic API key\./u,
   );
+
   const connect =
     [...row.querySelectorAll<HTMLButtonElement>("button")].find(
       (each) => each.textContent === "Connect Claude",
     ) ?? assert.fail("no Connect Claude under Model");
+
   act(() => connect.click());
   assert.deepEqual(opened, [claudeRow]);
 
   act(() => picker.click());
   const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
+
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );
+
   assert.match(option?.textContent ?? "", /Connect Claude/u);
   act(() => option?.click());
   await settle();

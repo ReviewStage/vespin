@@ -5,7 +5,7 @@ import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { afterEach, beforeEach, test } from "vitest";
 import { installEditorLayout } from "../testing/composer.js";
-import type { EditorAnchors, DescriptionEditorHandle } from "./contract.js";
+import type { DescriptionEditorHandle, EditorAnchors } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
 /**
@@ -45,6 +45,7 @@ function mounted(text = TEXT, marked = true) {
   const host = document.createElement("div");
   document.body.append(host);
   const from = text.indexOf(WORDS);
+
   const handle = mountDescriptionEditor(host, {
     markdown: text,
     placement: undefined,
@@ -56,10 +57,12 @@ function mounted(text = TEXT, marked = true) {
     onLeaveUp: () => undefined,
     anchors: from < 0 || !marked ? [] : [{ thread: THREAD, from, to: from + WORDS.length }],
   });
+
   editors.push(handle);
   const element = host.querySelector<TiptapEditorHTMLElement>(".description-document-text");
   const editor = element?.editor;
   assert.ok(editor, "the editor is running");
+
   /** Where the words stand in the editor's document. */
   const spanOf = (words: string) => {
     let at: number | undefined;
@@ -69,23 +72,30 @@ function mounted(text = TEXT, marked = true) {
       }
     });
     assert.ok(at !== undefined, `"${words}" is in the editor`);
+
     return { from: at, to: at + words.length };
   };
+
   const select = (span: { from: number; to: number }) =>
     editor.view.dispatch(
       editor.state.tr.setSelection(TextSelection.create(editor.state.doc, span.from, span.to)),
     );
+
   const last = () => {
     const draft = drafts.at(-1);
     assert.ok(draft, "a draft was handed over");
+
     return draft;
   };
+
   /** The words the last draft reports the thread on, or nothing where it reports none. */
   const anchored = () => {
     const { markdown, anchors } = last();
     const anchor = anchors?.anchors.find((each) => each.thread === THREAD);
+
     return anchor === undefined ? undefined : markdown.slice(anchor.from, anchor.to);
   };
+
   return { editor, handle, drafts, spanOf, select, last, anchored, host };
 }
 

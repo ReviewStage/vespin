@@ -60,6 +60,7 @@ export interface ReasoningTriggerProps {
 /** The one line a folded reasoning shows. */
 export function ReasoningTrigger({ preview = "" }: ReasoningTriggerProps): ReactNode {
   const previewed = useDisclosurePreviewShown(true);
+
   return (
     <LineSummary brightens>
       <GlyphSlot ink={GLYPH_INK.INHERIT}>

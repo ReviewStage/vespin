@@ -157,13 +157,17 @@ const MAX_FILE_BYTES = PAGE_BOUNDS.MAX_HTML_CHARS * 4;
 const readBoundedText = Effect.fnUntraced(function* (stream: ReadableStream<Uint8Array>) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
+
   return yield* Effect.gen(function* () {
     let text = "";
     let bytes = 0;
+
     while (true) {
       const next = yield* Effect.tryPromise(() => reader.read());
+
       if (next.done) return Option.some(text + decoder.decode());
       bytes += next.value.byteLength;
+
       if (bytes > MAX_FILE_BYTES) return Option.none<string>();
       text += decoder.decode(next.value, { stream: true });
     }
@@ -181,12 +185,16 @@ function readPageFile(
 ): Effect.Effect<Result.Result<string, string>> {
   // Note that the rule reads the path as resolved, because `x/.env/.` names the `.env` it spells around.
   const resolved = posix.resolve(sandbox.checkout, path);
+
   if (isSecretFile(resolved)) return Effect.succeed(Result.fail(SHOW_PAGE_REFUSAL.SECRET));
+
   return Effect.gen(function* () {
     const opened = yield* Effect.tryPromise(() => sandbox.door());
     const stream = yield* Effect.tryPromise(() => opened.readFile({ path: resolved }));
+
     if (stream === null) return Result.fail(`${SHOW_PAGE_REFUSAL.NO_FILE} ${path}`);
     const text = yield* readBoundedText(stream);
+
     return Option.match(text, {
       onNone: () => Result.fail(SHOW_PAGE_REFUSAL.TOO_LARGE),
       onSome: (html) => Result.succeed(html),
@@ -201,12 +209,14 @@ function htmlOf(
 ): Effect.Effect<Result.Result<string, string>> {
   if (binding.sandbox === undefined)
     return Effect.succeed(Result.fail(SHOW_PAGE_REFUSAL.NO_SANDBOX));
+
   return readPageFile(binding.sandbox, path);
 }
 
 /** Why HTML read from a file cannot be a page's: empty, or past the bound in characters. */
 function htmlRefusal(html: string): string | undefined {
   if (html.trim() === "") return SHOW_PAGE_REFUSAL.EMPTY;
+
   return html.length > PAGE_BOUNDS.MAX_HTML_CHARS ? SHOW_PAGE_REFUSAL.TOO_LARGE : undefined;
 }
 
@@ -218,31 +228,41 @@ export function runShowPage(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return Effect.gen(function* () {
     const read = readCoderInput(input);
+
     if (Result.isFailure(read)) return showPageRejected(SHOW_PAGE_REFUSAL.UNREADABLE_PATH);
     const { title, page } = read.success;
     const html = yield* htmlOf(binding, read.success.path);
+
     if (Result.isFailure(html)) return showPageRejected(html.failure);
     const refusal = htmlRefusal(html.success);
+
     if (refusal !== undefined) return showPageRejected(refusal);
+
     const write: PageWrite =
       page === undefined
         ? { title, html: html.success }
         : { title, html: html.success, pageId: page };
+
     const { userId, taskId } = binding;
+
     const written = yield* writePage(
       userId,
       { kind: PAGE_OWNER.TASK, taskId },
       write,
       shownBy,
     ).pipe(Effect.tapError(logStoreFailure), Effect.option);
+
     if (Option.isNone(written)) return showPageRejected(SHOW_PAGE_REFUSAL.UNAVAILABLE);
+
     if (Option.isNone(written.value)) {
       // Note that a write that finds nothing names no such page where it named one, else no task.
       return showPageRejected(
         page === undefined ? SHOW_PAGE_REFUSAL.NO_TASK : SHOW_PAGE_REFUSAL.NO_PAGE,
       );
     }
+
     const { id, version } = written.value.value;
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       page: { id, version, taskId },

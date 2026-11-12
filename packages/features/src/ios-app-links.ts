@@ -127,13 +127,18 @@ export function iosAppRouteOfAddress(
   pullRequests: readonly AgentPullRequestLink[],
 ): string | undefined {
   const read = readLink(address);
+
   if (read !== undefined) return iosAppRouteOf(read.place);
   const named = pullRequestAddressOf(address);
+
   if (named === undefined) return undefined;
   const own = gitHubPageLink({ kind: GITHUB_PAGE.PULL_REQUEST, ...named });
+
   if (addressPath(address).toLowerCase() !== own.toLowerCase()) return undefined;
+
   const opened = pullRequests.find(({ pullRequest }) =>
     samePullRequest(named, pullRequestAddressOf(pullRequest.url)),
   );
+
   return opened === undefined ? undefined : iosPullRequestRoute(opened.agentId, named.number);
 }

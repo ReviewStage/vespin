@@ -57,10 +57,13 @@ async function mountRefusingInstall(sentence: string): Promise<() => SettingsPan
     [ACT_KIND.UPDATE_INSTALL]: () => Promise.reject(refusedOnPort(sentence)),
   });
   let panel: SettingsPanelProps | undefined;
+
   function Probe(): null {
     panel = useSettingsPanel(DOORS);
+
     return null;
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -75,6 +78,7 @@ async function mountRefusingInstall(sentence: string): Promise<() => SettingsPan
     ),
   );
   await vi.waitFor(() => assert.equal(panel?.updates !== undefined, true));
+
   return () => panel ?? assert.fail("Settings drew nothing");
 }
 

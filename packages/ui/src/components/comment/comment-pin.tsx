@@ -87,9 +87,11 @@ function PinFaceOf({ face }: { face: PinFace }): React.JSX.Element {
       </span>
     );
   }
+
   const { author, count } = face;
   // Note that a glyph drawn conditionally may arrive as nothing to draw, which is no glyph, so the letter still stands.
   const glyph = drawsSomething(author.glyph) ? author.glyph : undefined;
+
   return (
     <>
       <Avatar
@@ -137,6 +139,7 @@ export function CommentPin({
   cardAt?: (() => CardBox | undefined) | undefined;
 }): React.JSX.Element {
   const look = face.look ?? COMMENT_PIN_LOOK.POSTED;
+
   return (
     // Note that its comments open tell the pointer nothing more, so no card stands over them.
     <Tooltip label={open ? undefined : label} card={open ? undefined : preview} cardAt={cardAt}>

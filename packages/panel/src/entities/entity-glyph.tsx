@@ -57,5 +57,6 @@ const ENTITY_GLYPH: { readonly [K in EntityKind]: () => React.JSX.Element } = {
 /** The glyph of an entity of `kind` where nothing more of it is known. */
 export function EntityGlyph({ kind }: { kind: EntityKind }): React.JSX.Element {
   const Glyph = ENTITY_GLYPH[kind];
+
   return <Glyph />;
 }

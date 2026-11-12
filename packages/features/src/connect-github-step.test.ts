@@ -59,6 +59,7 @@ test("a link GitHub refused or the developer canceled comes back with its intent
     `${failedLinkAddress("opaque/1")}&error=access_denied`,
     "https://app.test",
   );
+
   const step = connectStepFromSearch(returned.search);
   assert.equal(step.kind, CONNECT_STEP.FAILED);
   assert.equal(step.kind === CONNECT_STEP.FAILED ? step.code : undefined, "access_denied");

@@ -25,5 +25,6 @@ export function procedureOutputWire(
   procedure: AnyProcedureContract,
 ): Schema.Codec<unknown> | undefined {
   const [declared] = procedure["~orpc"].outputSchemas ?? [];
+
   return isWireSchema(declared) ? Schema.flip(declared) : undefined;
 }

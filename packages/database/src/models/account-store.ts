@@ -355,6 +355,7 @@ const upsertPreference = SqlSchema.findOne({
   Result: Schema.Struct({ ...PreferenceRowSchema.fields, txid: Schema.String }),
   execute: (write) => {
     const columns = writtenColumns(write);
+
     // The experiments are the one part merged rather than replaced: the patch's keys over what stood.
     const merged =
       write.experiments === undefined
@@ -363,6 +364,7 @@ const upsertPreference = SqlSchema.findOne({
             ...columns,
             experiments: sql`coalesce(${accountPreference.experiments}, '{}'::jsonb) || ${JSON.stringify(write.experiments)}::jsonb`,
           };
+
     return Database.use((db) =>
       db
         .insert(accountPreference)
@@ -386,6 +388,7 @@ export function writeAccountPreferences(
 ): Effect.Effect<AccountPreferencesWritten, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const updatedAt = yield* DateTime.nowAsDate;
+
     // Note that the shared part holds no preference since the voice went, so its write moves the instant alone.
     const stored: PreferenceWrite = {
       userId,
@@ -416,10 +419,12 @@ export function writeAccountPreferences(
       ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
       ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),
     };
+
     const row = yield* upsertPreference(stored).pipe(
       // An upsert that returned no row is the database breaking its own contract, not an outcome.
       Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
     );
+
     return { ...snapshotOf(row), txid: row.txid };
   });
 }

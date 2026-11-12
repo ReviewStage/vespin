@@ -43,8 +43,11 @@ const REFUSAL_WORDS: Readonly<Record<string, string>> = {
 /** What the queue says over its messages while it stands paused, naming why where the service said and there are words for it. */
 export function pausedWords(paused: QueuePaused): string {
   if (paused.because === QUEUE_PAUSE.STOPPED) return QUEUE_WORDS.STOPPED;
+
   if (paused.because === QUEUE_PAUSE.TURN_FAILED) return QUEUE_WORDS.TURN_FAILED;
+
   if (paused.because === QUEUE_PAUSE.BOOT_FAILED) return QUEUE_WORDS.BOOT_FAILED;
   const why = paused.refusal === undefined ? undefined : REFUSAL_WORDS[paused.refusal];
+
   return why === undefined ? QUEUE_WORDS.REFUSED : `${QUEUE_WORDS.PAUSED}: ${why}`;
 }

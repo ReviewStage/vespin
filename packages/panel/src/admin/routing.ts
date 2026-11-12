@@ -91,22 +91,29 @@ export function adminSectionView(tab: AdminTab): AdminView {
 /** The section a view stands under: an account's page under Users, a workspace's under Workspaces, a day's under the Overview. */
 export function adminSectionOf(view: AdminView): AdminTab {
   if (view.kind === ADMIN_PAGE.ACCOUNT) return ADMIN_TAB.USERS;
+
   if (view.kind === ADMIN_PAGE.WORKSPACE) return ADMIN_TAB.WORKSPACES;
+
   if (view.kind === ADMIN_PAGE.DAY) return ADMIN_TAB.DASHBOARD;
+
   return view.kind;
 }
 
 export function viewFromLocation(): AdminView {
   const params = new URLSearchParams(window.location.search);
   const id = params.get(ACCOUNT_VIEW_PARAM);
+
   if (id) return { kind: ADMIN_PAGE.ACCOUNT, id };
   const workspaceId = params.get(WORKSPACE_VIEW_PARAM);
+
   if (workspaceId) return { kind: ADMIN_PAGE.WORKSPACE, id: workspaceId };
   // An address naming no real UTC day is the plain dashboard rather than a
   // broken page, the same reading an out-of-set window gets.
   const day = params.get(DAY_VIEW_PARAM);
+
   if (day !== null && isUtcDayKey(day)) return { kind: ADMIN_PAGE.DAY, day };
   const tab = params.get(TAB_PARAM);
+
   return { kind: Object.values(ADMIN_TAB).find((each) => each === tab) ?? ADMIN_TAB.DASHBOARD };
 }
 
@@ -118,6 +125,7 @@ export function viewFromLocation(): AdminView {
  */
 export function windowFromLocation(): AdminMetricsWindow {
   const value = new URLSearchParams(window.location.search).get(WINDOW_VIEW_PARAM);
+
   return (
     Object.values(ADMIN_METRICS_WINDOW).find((candidate) => String(candidate) === value) ??
     ADMIN_METRICS_WINDOW_DEFAULT
@@ -143,6 +151,7 @@ export function reliabilityWindow(windowDays: AdminMetricsWindow): AdminMetricsW
  */
 export function searchFromLocation(): string {
   const value = new URLSearchParams(window.location.search).get(SEARCH_VIEW_PARAM) ?? "";
+
   return value.slice(0, ADMIN_USERS_SEARCH_MAX_LENGTH);
 }
 
@@ -153,15 +162,18 @@ export function searchFromLocation(): string {
  */
 export function searchHref(query: string): string {
   const params = new URLSearchParams(window.location.search);
+
   if (query) params.set(SEARCH_VIEW_PARAM, query);
   else params.delete(SEARCH_VIEW_PARAM);
   const queryString = params.toString();
+
   return queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
 }
 
 /** The term a typed query asks the service to search for: none when blank. */
 export function searchTerm(query: string): string | undefined {
   const term = query.trim();
+
   return term.length === 0 ? undefined : term;
 }
 
@@ -172,10 +184,13 @@ export function searchTerm(query: string): string | undefined {
  */
 function hrefWithWindow(params: URLSearchParams): string {
   const windowDays = windowFromLocation();
+
   if (windowDays !== ADMIN_METRICS_WINDOW_DEFAULT) {
     params.set(WINDOW_VIEW_PARAM, String(windowDays));
   }
+
   const query = params.toString();
+
   return query ? `${window.location.pathname}?${query}` : window.location.pathname;
 }
 
@@ -186,38 +201,46 @@ function hrefWithWindow(params: URLSearchParams): string {
 export function accountPageHref(id: string): string {
   const params = new URLSearchParams();
   params.set(ACCOUNT_VIEW_PARAM, id);
+
   return `${ADMIN_PAGE_PATH}?${params.toString()}`;
 }
 
 export function accountHref(id: string): string {
   const params = new URLSearchParams();
   params.set(ACCOUNT_VIEW_PARAM, id);
+
   return hrefWithWindow(params);
 }
 
 export function workspaceHref(id: string): string {
   const params = new URLSearchParams();
   params.set(WORKSPACE_VIEW_PARAM, id);
+
   return hrefWithWindow(params);
 }
 
 export function dayHref(day: string): string {
   const params = new URLSearchParams();
   params.set(DAY_VIEW_PARAM, day);
+
   return hrefWithWindow(params);
 }
 
 export function tabHref(tab: AdminTab): string {
   const params = new URLSearchParams();
+
   if (tab !== ADMIN_TAB.DASHBOARD) params.set(TAB_PARAM, tab);
+
   return hrefWithWindow(params);
 }
 
 export function windowHref(windowDays: AdminMetricsWindow): string {
   const params = new URLSearchParams(window.location.search);
+
   if (windowDays === ADMIN_METRICS_WINDOW_DEFAULT) params.delete(WINDOW_VIEW_PARAM);
   else params.set(WINDOW_VIEW_PARAM, String(windowDays));
   const query = params.toString();
+
   return query ? `${window.location.pathname}?${query}` : window.location.pathname;
 }
 
@@ -330,8 +353,11 @@ export function adminViewOfLink(fields: {
   readonly day?: string | undefined;
 }): AdminView | undefined {
   if (fields.userId !== undefined) return { kind: ADMIN_PAGE.ACCOUNT, id: fields.userId };
+
   if (fields.workspaceId !== undefined)
     return { kind: ADMIN_PAGE.WORKSPACE, id: fields.workspaceId };
+
   if (fields.day !== undefined) return { kind: ADMIN_PAGE.DAY, day: fields.day };
+
   return fields.section === undefined ? undefined : { kind: fields.section };
 }

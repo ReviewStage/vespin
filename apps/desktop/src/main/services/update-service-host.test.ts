@@ -31,6 +31,7 @@ const restartFixture = (answer: boolean) =>
   Effect.gen(function* () {
     const happened: string[] = [];
     let heard: UpdaterEngineEvents | undefined;
+
     const engine: UpdaterEngine = {
       wire: (events) => {
         heard = events;
@@ -39,6 +40,7 @@ const restartFixture = (answer: boolean) =>
       quitAndInstall: () => happened.push("squirrel quit and install"),
       clearCachedUpdate: async () => undefined,
     };
+
     const updates = yield* createUpdateServiceHost({
       // SAFETY: the updater reads only the fields `CONFIG` names.
       config: CONFIG as unknown as DesktopConfig,
@@ -49,6 +51,7 @@ const restartFixture = (answer: boolean) =>
       },
       askBeforeRestart: async () => {
         happened.push("asked");
+
         return answer;
       },
       // SAFETY: the updater only writes where it stands, which no assertion reads.
@@ -56,7 +59,9 @@ const restartFixture = (answer: boolean) =>
       showSettings: () => undefined,
       moveToApplications: () => undefined,
     });
+
     heard?.onDownloaded("2.0.0");
+
     return { updates, happened };
   });
 

@@ -29,12 +29,15 @@ const foldersBefore = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-stranded-lines-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(MIGRATION) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -46,12 +49,15 @@ it.effect(
         const sql = yield* SqlClient.SqlClient;
         yield* runWebMigrations(yield* foldersBefore);
         yield* sql`insert into "user" (id, name, email) values ('dean', 'dean', 'dean@app.test')`;
+
         const conversation = () =>
           Effect.gen(function* () {
             const id = randomUUID();
             yield* sql`insert into conversations (id, user_id, kind) values (${id}, 'dean', 'agent')`;
+
             return id;
           });
+
         const turn = (
           conversationId: string,
           status: string,
@@ -62,9 +68,12 @@ it.effect(
             const id = randomUUID();
             yield* sql`insert into turns (id, user_id, conversation_id, origin, status, failure, queued_at, settled_at, cancel_requested_at)
               values (${id}, 'dean', ${conversationId}, 'typed', ${status}, ${failure}, '2026-11-07T09:00:00Z', '2026-11-07T09:01:00Z', ${stoppedAt})`;
+
             return id;
           });
+
         let seq = 0;
+
         const line = (
           conversationId: string,
           at: string,
@@ -80,6 +89,7 @@ it.effect(
             yield* sql`insert into messages (id, user_id, conversation_id, seq, client_id, role, parts, metadata, created_at, placed_at, turn_id, withdrawn_at)
               values (${id}, 'dean', ${conversationId}, ${seq}, ${randomUUID()}, 'user', '[{"type":"text","text":"Rebase on main"}]'::jsonb,
                 ${kept.metadata ?? null}::jsonb, ${at}, ${at}, ${kept.turnId ?? null}, ${kept.withdrawnAt ?? null})`;
+
             return id;
           });
 
@@ -88,14 +98,18 @@ it.effect(
         const ended = yield* turn(settled, "settled", null);
         const before = yield* line(settled, "2026-11-07T08:59:00Z");
         const taken = yield* line(settled, "2026-11-07T09:00:30Z", { turnId: ended });
+
         const withdrawn = yield* line(settled, "2026-11-07T09:05:00Z", {
           withdrawnAt: "2026-11-07T09:06:00Z",
         });
+
         const first = yield* line(settled, "2026-11-07T09:10:00Z");
+
         // A line a call spoke, which the call answers with no turn of the agent's.
         const spoken = yield* line(settled, "2026-11-07T09:11:00Z", {
           metadata: '{"channel":"voice"}',
         });
+
         const second = yield* line(settled, "2026-11-07T09:12:00Z");
         // An agent whose session ended for good, which reads failed as it stands.
         const sessionEnded = yield* conversation();
@@ -123,10 +137,12 @@ it.effect(
           }>`select id, status, failure, queued_at::text as "queuedAt", settled_at::text as "settledAt",
             (lease_until is not null or started_at is not null) as open
             from turns where conversation_id = ${conversationId} order by queued_at desc, id desc`;
+
         const awaited = sql<{
           readonly id: string;
           readonly awaits: string | null;
         }>`select id, awaits_turn_id as awaits from messages order by seq`;
+
         const [minted, ...rest] = yield* turnsOf(settled);
         assert.deepEqual(
           rest.map((each) => each.id),
@@ -161,9 +177,11 @@ it.effect(
         // A second run of the migration, as a deploy that ran it before recording it would, writes nothing.
         const fileSystem = yield* FileSystem;
         const path = yield* Path;
+
         const statement = yield* fileSystem.readFileString(
           path.join(MIGRATIONS_FOLDER, MIGRATION, "migration.sql"),
         );
+
         const linked = yield* awaited;
         yield* sql.unsafe(statement);
         assert.equal((yield* turnsOf(settled)).length, 2);

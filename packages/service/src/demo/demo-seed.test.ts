@@ -62,8 +62,10 @@ const seededThen = <A, E, R>(
     const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
       Effect.promise(() => opened.close()),
     );
+
     yield* TestClock.setTime(SEEDED_AT);
     const database = Layer.provideMerge(syncListenerOverPglite, sqlClientOverPglite(client));
+
     return yield* Effect.flatMap(
       seedDemoWorld(demoAuth(drizzle({ client })), credential, host),
       read,
@@ -93,12 +95,15 @@ it.effect("Dean reads back acme, its tasks, his Inbox, and his agents' credentia
         const pick = yield* readRunsOnPick(DEMO_DEAN.id);
         const ownHosts = yield* accountExperimentOn(DEMO_DEAN.id, EXPERIMENT.BRING_YOUR_OWN_HOST);
         const agents = yield* listWorkspaceAgents(DEMO_DEAN.id, seeded.workspaceId, { limit: 10 });
+
         const payers = yield* Effect.forEach(agents, (agent) =>
           Effect.map(readAgentRouting(DEMO_DEAN.id, agent.id), (routing) =>
             Option.getOrUndefined(Option.map(routing, (row) => row.payer)),
           ),
         );
+
         const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+
         const owner = {
           userId: DEMO_DEAN.id,
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,

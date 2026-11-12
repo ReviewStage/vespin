@@ -13,6 +13,7 @@ const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };
@@ -20,6 +21,7 @@ function subscribe(listener: () => void): () => void {
 
 function choose(choice: Choice): void {
   held = choice;
+
   for (const listener of listeners) listener();
 }
 
@@ -40,5 +42,6 @@ export function useSidebarShown(): {
   const choice = useSyncExternalStore(subscribe, () => held);
   const shown = choice?.threeColumns === threeColumns ? choice.shown : true;
   const setShown = (next: boolean) => choose({ threeColumns, shown: next });
+
   return { shown, setShown, toggle: () => setShown(!shown) };
 }
