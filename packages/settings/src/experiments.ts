@@ -79,8 +79,8 @@ export interface ExperimentEntry {
 }
 
 /**
- * The experiments standing now, newest first: the order the Experimental page
- * lists them. An entry exists only while its feature is experimental, so
+ * The experiments standing now, newest first, so a release's review reads
+ * the latest at the top; the Experimental page lists each group by name. An entry exists only while its feature is experimental, so
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [

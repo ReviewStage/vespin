@@ -49,9 +49,13 @@ import { SwitchRow } from "./switch-row.js";
 /**
  * experimental-page.tsx -- Settings › Experimental: the features not yet finished, in two groups that each say whom a switch reaches and who may flip it, or the empty state between them.
  *
- * The first group is the workspace Settings shows: Task descriptions and
- * Memory, which its owners and admins choose for every member and agent
- * in it (Dean, 2026-11-06). Each row says, under what the experiment
+ * Each group lists its experiments by name, A to Z, so a reader looking for
+ * one finds it where they expect; the registry's own order is newest first,
+ * by a date the page never shows.
+ *
+ * The first group is the workspace Settings shows: the experiments its
+ * owners and admins choose for every member and agent in it (Dean,
+ * 2026-11-06). Each row says, under what the experiment
  * brings, who last turned it on or off and when, the person as their chip;
  * the switch says whether it is on, so no word or dot says it again. A
  * member who is no owner or admin sees the same switches locked, the reason
@@ -61,8 +65,8 @@ import { SwitchRow } from "./switch-row.js";
  * choice is drawn as the act is sent (`ACT_KIND.WORKSPACE_EXPERIMENT_SET`)
  * and stands once the workspace's live row agrees.
  *
- * The second group is the account's own, Skills,
- * which change the app only for the reader, in every workspace: a row's
+ * The second group is the account's own experiments, which change the app
+ * only for the reader, in every workspace: a row's
  * switch writes the account's choice at once, as every Settings switch
  * writes, and a write the service refused puts it back and is said in a
  * toast.
@@ -293,6 +297,11 @@ function AccountExperimentRow({
   );
 }
 
+/** Two entries by name, A to Z: the order each group lists them in. */
+function byName(one: ExperimentEntry, other: ExperimentEntry): number {
+  return one.name.localeCompare(other.name, "en");
+}
+
 /** Whether an entry is a workspace experiment's, which narrows its key to one. */
 function isWorkspaceEntry(
   entry: ExperimentEntry,
@@ -308,7 +317,7 @@ export function ExperimentalPage({
   workspace,
   readerId,
 }: {
-  /** The experiments standing, newest first: `EXPERIMENTS`, as the registry lists them. */
+  /** The experiments standing, in any order: `EXPERIMENTS`, which each group lists by name. */
   entries: readonly ExperimentEntry[];
   /** The account's own choices, as the settings carry them. */
   experiments: ExperimentChoices;
@@ -334,8 +343,10 @@ export function ExperimentalPage({
     );
   }
 
-  const workspaceEntries = entries.filter(isWorkspaceEntry);
-  const accountEntries = entries.filter((entry) => !isWorkspaceExperiment(entry.key));
+  const workspaceEntries = entries.filter(isWorkspaceEntry).toSorted(byName);
+  const accountEntries = entries
+    .filter((entry) => !isWorkspaceExperiment(entry.key))
+    .toSorted(byName);
 
   return (
     <>

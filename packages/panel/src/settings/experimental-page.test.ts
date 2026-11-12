@@ -128,7 +128,7 @@ function answer(words: string): HTMLButtonElement {
   );
 }
 
-test("the workspace's experiments and the account's own stand in two groups, each named for whom it reaches", () => {
+test("the workspace's experiments and the account's own stand in two groups, each named for whom it reaches and listed by name", () => {
   const page = draw({});
 
   assert.deepEqual(groups(page), [
@@ -139,16 +139,16 @@ test("the workspace's experiments and the account's own stand in two groups, eac
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
     [
       "Following",
-      "Suggestions",
-      "Run actions",
-      "Task descriptions",
       "Memory",
-      "Voice",
-      "Turn changes",
-      "Rewind restores files",
-      "Done and follow-ups",
+      "Run actions",
+      "Suggestions",
+      "Task descriptions",
       "Computer use",
+      "Done and follow-ups",
+      "Rewind restores files",
       "Skills",
+      "Turn changes",
+      "Voice",
     ],
   );
 });
@@ -224,16 +224,16 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   });
   assert.deepEqual(feedbackAbout, [
     EXPERIMENT.FOLLOWING,
-    EXPERIMENT.REPLY_BUTTONS,
-    EXPERIMENT.RUN_ACTIONS,
-    EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.MEMORY,
-    EXPERIMENT.VOICE,
-    EXPERIMENT.TURN_CHANGES,
-    EXPERIMENT.REWIND_FILES,
-    EXPERIMENT.TURN_END,
+    EXPERIMENT.RUN_ACTIONS,
+    EXPERIMENT.REPLY_BUTTONS,
+    EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.COMPUTER_USE,
+    EXPERIMENT.TURN_END,
+    EXPERIMENT.REWIND_FILES,
     EXPERIMENT.SKILLS,
+    EXPERIMENT.TURN_CHANGES,
+    EXPERIMENT.VOICE,
   ]);
 });
 
