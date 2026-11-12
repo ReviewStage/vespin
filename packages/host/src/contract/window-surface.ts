@@ -205,12 +205,7 @@ export const windowSurfaceActsContract = {
     .input(
       exactInput(
         EffectSchema.Struct({
-          activity: EffectSchema.NullOr(
-            EffectSchema.Struct({
-              webpageUrl: EffectSchema.String,
-              pullRequest: EffectSchema.optionalKey(EffectSchema.Int),
-            }),
-          ),
+          activity: EffectSchema.NullOr(EffectSchema.Struct({ webpageUrl: EffectSchema.String })),
         }),
       ),
     )

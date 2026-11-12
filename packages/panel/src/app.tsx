@@ -571,10 +571,9 @@ function AppWindow(): React.JSX.Element {
   );
 
   // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
-  useHandoff(accountGated ? undefined : copyLink.linksAt(false)[0]?.link, {
+  useHandoff(() => (accountGated ? [] : copyLink.linksAt(false).map(({ link }) => link)), {
     tasks: tasks.tasks,
     workspaces: tasks.workspaces,
-    pullRequests: planning?.taskPullRequests ?? [],
   });
 
   // A fixture run's profile opens the window on its place once, as a link to it would; an Automations page once its workspace is listed, whose address it stands under.

@@ -1,20 +1,25 @@
-import {
-  HANDOFF_ACTIVITY_TYPE,
-  HANDOFF_PULL_REQUEST_KEY,
-  type HandoffActivity,
-} from "@repo/features/ios-system-activity";
+// handoff.ts -- what each panel shows, as it tells it, and the focused panel's handed off to the member's iPhone.
+//
+// A panel tells the vespin.dev page of the thread, task, agent, or pull
+// request it shows whenever that changes, or none (`ACT_KIND.WINDOW_HANDOFF`).
+// The Mac advertises one activity at a time, so it is the focused panel's,
+// advertised again whenever the focus moves between windows. While no panel
+// is focused the last one stands, since macOS hands off only the frontmost
+// app's activity and the window the member left is still what they were
+// looking at; once that window is gone, its page goes with it.
+//
+// It is advertised as a browser advertises its page
+// (`NSUserActivityTypeBrowsingWeb`), never as an activity of the app's own
+// type, because Handoff passes an app's own type only between apps signed by
+// one team, and this app and the iPhone's are not; the iPhone app takes a
+// browsing activity on vespin.dev by its `activitycontinuation` domain, and
+// Safari opens it where that app is not installed.
+
+import type { HandoffActivity } from "@repo/features/ios-system-activity";
 import { app, BrowserWindow, type WebContents } from "electron";
 
-/**
- * handoff.ts -- what each panel shows, as it tells it, and the focused panel's handed off to the member's iPhone.
- *
- * A panel tells the thread, task, agent, or pull request it shows whenever
- * that changes, or none (`ACT_KIND.WINDOW_HANDOFF`). The Mac advertises one
- * activity at a time, so it is the focused panel's, advertised again
- * whenever the focus moves between windows. While no panel is focused the
- * last one stands, since macOS hands off only the frontmost app's activity
- * and the window the member left is still what they were looking at.
- */
+/** The activity type a browser hands its page off under, which macOS names this way. */
+const BROWSING_WEB = "NSUserActivityTypeBrowsingWeb";
 
 /** The panels' activities, and the one advertised from the focused panel's. */
 export interface Handoff {
@@ -31,15 +36,10 @@ function focusedPage(): WebContents | undefined {
 
 /** Whether two activities name the same thing, so the same one is not advertised again. */
 function sameActivity(one: HandoffActivity | null, other: HandoffActivity | null): boolean {
-  return one?.webpageUrl === other?.webpageUrl && one?.pullRequest === other?.pullRequest;
+  return one?.webpageUrl === other?.webpageUrl;
 }
 
-/**
- * Makes `activity` the Mac's current one, of the type the iPhone app takes,
- * with its page and a pull request's number, or lets the current one go.
- * Note that macOS hands off only between apps of the same team, so it
- * reaches the phone from a build signed as the iPhone app is.
- */
+/** Makes `activity`'s page the Mac's current browsing activity, or lets the current one go. */
 export function advertiseHandoff(activity: HandoffActivity | null): void {
   if (activity === null) {
     app.invalidateCurrentActivity();
@@ -47,19 +47,16 @@ export function advertiseHandoff(activity: HandoffActivity | null): void {
     return;
   }
 
-  const { webpageUrl, pullRequest } = activity;
-  const userInfo = pullRequest === undefined ? {} : { [HANDOFF_PULL_REQUEST_KEY]: pullRequest };
-
-  app.setUserActivity(HANDOFF_ACTIVITY_TYPE, userInfo, webpageUrl);
+  app.setUserActivity(BROWSING_WEB, {}, activity.webpageUrl);
 }
 
 export function handoff(advertise: (activity: HandoffActivity | null) => void): Handoff {
   const held = new Map<WebContents, HandoffActivity | null>();
-  let advertised: HandoffActivity | null = null;
+  let advertised: { readonly from: WebContents; readonly activity: HandoffActivity } | undefined;
 
-  const show = (activity: HandoffActivity | null) => {
-    if (sameActivity(activity, advertised)) return;
-    advertised = activity;
+  const show = (from: WebContents, activity: HandoffActivity | null) => {
+    if (sameActivity(activity, advertised?.activity ?? null)) return;
+    advertised = activity === null ? undefined : { from, activity };
     advertise(activity);
   };
 
@@ -67,13 +64,14 @@ export function handoff(advertise: (activity: HandoffActivity | null) => void): 
     tell: (sender, activity) => {
       held.set(sender, activity);
 
-      if (focusedPage() === sender) show(activity);
+      if (focusedPage() === sender) show(sender, activity);
     },
     focusMoved: () => {
       for (const sender of held.keys()) if (sender.isDestroyed()) held.delete(sender);
       const focused = focusedPage();
 
-      if (focused !== undefined) show(held.get(focused) ?? null);
+      if (focused !== undefined) show(focused, held.get(focused) ?? null);
+      else if (advertised?.from.isDestroyed() === true) show(advertised.from, null);
     },
   };
 }
