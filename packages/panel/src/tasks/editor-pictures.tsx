@@ -409,7 +409,7 @@ function KeptPicture({
   );
 
   const [describing, setDescribing] = useState(false);
-  // Whether an empty caption stands open under the picture, as Caption opens one.
+  // Whether the caption stands open under the picture though empty, as Caption opens one and typing keeps one.
   const [captioning, setCaptioning] = useState(false);
   // How many times Caption has asked for the caret, which each ask puts at the caption's end.
   const [asked, setAsked] = useState(0);
@@ -471,7 +471,11 @@ function KeptPicture({
               label={TOOL.CAPTION}
               placeholder={CAPTION_PLACEHOLDER}
               value={picture.title}
-              onChange={(words) => doors.describe({ title: words })}
+              onChange={(words) => {
+                // Note that a caption being typed stays open, cleared or not, until the caret leaves it.
+                setCaptioning(true);
+                doors.describe({ title: words });
+              }}
               onLeave={(way) => doors.leave(CAPTION_LEFT_TO[way])}
               onEscape={() => doors.leave(PICTURE_LEAVE.UP)}
               onBlur={() => {
