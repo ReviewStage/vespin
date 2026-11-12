@@ -85,7 +85,9 @@ const TOOL_STATS: readonly StatSpec<AdminCatalog>[] = [
     key: "first-turn",
     label: () => "Loaded on the first turn",
     value: (catalog) => formatCount(firstTurn(catalog.tools).length),
-    hint: (catalog) => `${characters(definitionChars(firstTurn(catalog.tools)))} on every turn`,
+    // Note that we say "up to", because a gated tool among them is offered only where its gate opens.
+    hint: (catalog) =>
+      `up to ${characters(definitionChars(firstTurn(catalog.tools)))} on every turn`,
   },
 ];
 
