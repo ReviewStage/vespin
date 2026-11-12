@@ -33,13 +33,7 @@ import {
   liftEmptyBlock,
   splitBlock,
 } from "@tiptap/pm/commands";
-import {
-  type Fragment,
-  type Mark,
-  type Node as PmNode,
-  type Schema,
-  Slice,
-} from "@tiptap/pm/model";
+import { Fragment, type Mark, type Node as PmNode, type Schema, Slice } from "@tiptap/pm/model";
 import {
   type EditorState,
   Plugin,
@@ -58,12 +52,14 @@ import {
   type ComposerInput,
   type ComposerMark,
   type ComposerTrigger,
+  type CopiedFile,
   type EditorAria,
   type MentionNode,
   rootAria,
   sameAria,
   sameTrigger,
 } from "./contract.js";
+import { copiedFileOf, dataAddress, fileOfCopy, sameFile } from "./copied-files.js";
 import {
   MENTION_NODE,
   type MentionToken,
@@ -113,6 +109,9 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * `[File: spec.pdf]` (`@repo/features/file-marker`), laid in where the owner
  * marked the caret as the file was handed (`ComposerMark.insertFiles`), and
  * made of a marker naming a file the box holds wherever the words are laid in.
+ * A copy carries each chip's file in the clipboard's HTML (`./copied-files.ts`),
+ * so a chip pasted into a box that does not hold its file comes with it, taken
+ * by the box as a file handed to it is (`ComposerFileCopies`).
  *
  * A `/name` naming one of the repository's skills becomes its chip once the
  * caret has left it, typed or pasted, and at once in words laid in whole;
@@ -718,10 +717,29 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
  * A file's chip: an atom read out as its marker, `[Picture 1]` or
  * `[File: spec.pdf]`, its look the panel's (`drawFile`), its name in the
  * node and never in the DOM's attributes, as a skill's is; where the panel
- * draws none, its marker as words. A chip copied out and pasted back is read
- * by its words, and stays words where the box holds no file of that name.
+ * draws none, its marker as words. A chip copied out carries its file where
+ * the box hands it (`copied`): a picture as an image, which another app
+ * pastes as one, and any other file in its chip. Pasted back, a chip that
+ * carried its file comes with it (`adoptedSlice`); one that carried none is
+ * read by its words, and stays words where the box holds no file of that
+ * name. Note that the file a pasted chip carried waits in its `copied`
+ * attribute only until the paste is taken in.
  */
-function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string) => boolean) {
+function fileNode(
+  drawFile: ComposerEditorProps["drawFile"],
+  held: (name: string) => boolean,
+  copied: (name: string) => CopiedFile | undefined,
+) {
+  /** The chip's attributes as its marker's words name its file, and the data address of the file it carried; none where it names none, or carried none and names no file the box holds. */
+  const chipAttrs = (words: string, address: string | null) => {
+    const name = fileMarkers(words)[0]?.name;
+    const carries = copiedFileOf(address) !== undefined;
+
+    if (name === undefined || (!carries && !held(name))) return false;
+
+    return { name, copied: carries ? address : null };
+  };
+
   return Node.create({
     name: FILE_NODE,
     group: "inline",
@@ -729,22 +747,36 @@ function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string
     atom: true,
     selectable: false,
     addAttributes() {
-      return { name: { default: "", rendered: false } };
+      return {
+        name: { default: "", rendered: false },
+        copied: { default: null, rendered: false },
+      };
     },
     parseHTML() {
       return [
         {
+          tag: `img[data-chip="${FILE_NODE}"]`,
+          getAttrs: (element) =>
+            chipAttrs(element.getAttribute("alt") ?? "", element.getAttribute("src")),
+        },
+        {
           tag: `span[data-chip="${FILE_NODE}"]`,
-          getAttrs: (element) => {
-            const name = fileMarkers(element.textContent)[0]?.name;
-
-            return name !== undefined && held(name) ? { name } : false;
-          },
+          getAttrs: (element) => chipAttrs(element.textContent, element.getAttribute("data-file")),
         },
       ];
     },
+    // Note that this is what a copy writes, never the editor's own DOM, which the node view draws.
     renderHTML({ node }) {
-      return ["span", { "data-chip": FILE_NODE }, fileMarker(String(node.attrs.name))];
+      const marker = fileMarker(String(node.attrs.name));
+      const file = copied(String(node.attrs.name));
+
+      if (file === undefined) return ["span", { "data-chip": FILE_NODE }, marker];
+
+      if (file.mediaType.startsWith("image/")) {
+        return ["img", { "data-chip": FILE_NODE, alt: marker, src: dataAddress(file) }];
+      }
+
+      return ["span", { "data-chip": FILE_NODE, "data-file": dataAddress(file) }, marker];
     },
     renderText({ node }) {
       return fileMarker(String(node.attrs.name));
@@ -800,7 +832,7 @@ function composerExtensions(
     writingKeys.configure({ actions: WRITING_ACTIONS }),
     ...formatReports(props.format),
     skillNode(props.drawChip, known),
-    fileNode(props.drawFile, held),
+    fileNode(props.drawFile, held, (name) => props.fileCopies?.copied(name)),
     mentionNode(props.mentions?.drawMention),
     quoteNode(true),
   ];
@@ -920,6 +952,88 @@ function caretInCode(text: string, caret: number): boolean {
   return caret > 0 && text[caret - 1] !== NEWLINE && insideCode(text, caret - 1);
 }
 
+/** Every inline node of a fragment, in order, its blocks' included. */
+function inlineNodes(fragment: Fragment): PmNode[] {
+  const nodes: PmNode[] = [];
+  fragment.descendants((node) => {
+    if (node.isInline) nodes.push(node);
+
+    return !node.isInline;
+  });
+
+  return nodes;
+}
+
+/** The fragment with each file's chip made what `chip` makes of it, its blocks' included. */
+function withChips(fragment: Fragment, chip: (node: PmNode) => PmNode): Fragment {
+  const nodes: PmNode[] = [];
+  fragment.forEach((node) => {
+    if (node.type.name === FILE_NODE) nodes.push(chip(node));
+    else nodes.push(node.isLeaf ? node : node.copy(withChips(node.content, chip)));
+  });
+
+  return Fragment.fromArray(nodes);
+}
+
+/** The file a chip carried in from the clipboard, which it holds until the paste is taken in. */
+function carriedFile(node: PmNode): CopiedFile | undefined {
+  const { copied } = node.attrs;
+
+  return node.type.name === FILE_NODE && copied !== null ? copiedFileOf(String(copied)) : undefined;
+}
+
+/**
+ * A pasted or dropped slice whose chips carried their files in, each made a
+ * chip of the box's own: of the file the box already knows by its name
+ * where it carried that same file, as a chip copied and pasted within one
+ * box does; of the file the box takes it in as otherwise, under the name the
+ * box gives it; and its marker as words where the box takes no file now.
+ */
+function adoptedSlice(slice: Slice, state: ComposerState, props: ComposerEditorProps): Slice {
+  const carried = inlineNodes(slice.content).flatMap((node) => {
+    const file = carriedFile(node);
+
+    return file === undefined ? [] : [{ node, file, name: String(node.attrs.name) }];
+  });
+
+  if (carried.length === 0) return slice;
+  const copies = state.input === COMPOSER_INPUT.EDITABLE ? props.fileCopies : undefined;
+
+  const fresh = carried.filter((each) => {
+    const known = copies?.copied(each.name);
+
+    return known === undefined || !sameFile(known, each.file);
+  });
+
+  const taken =
+    fresh.length === 0 ? [] : copies?.pasted(fresh.map((each) => fileOfCopy(each.file, each.name)));
+
+  // Each carried chip's name in the box: its own where the box knows its file, the one the box took it in under, or none where it took none.
+  const names = new Map(
+    carried.map((each) => {
+      const at = fresh.indexOf(each);
+
+      return [each.node, at === -1 ? each.name : taken?.[at]];
+    }),
+  );
+
+  state.files = new Set([
+    ...state.files,
+    ...[...names.values()].filter((name) => name !== undefined),
+  ]);
+
+  const content = withChips(slice.content, (node) => {
+    if (!names.has(node)) return node;
+    const name = names.get(node);
+
+    return name === undefined
+      ? node.type.schema.text(fileMarker(String(node.attrs.name)), node.marks)
+      : node.type.schema.node(FILE_NODE, { name });
+  });
+
+  return new Slice(content, slice.openStart, slice.openEnd);
+}
+
 /** A paste taken: files the owner takes kept out of the words, words it takes as a file kept out too, and words past the bound cut to the room left, which the owner is told. */
 function pasted(
   view: EditorView,
@@ -1034,6 +1148,8 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
         return false;
       },
     },
+    // Note that a slice is taken in here, so a chip dropped from another box comes with its file as a pasted one does.
+    transformPasted: (slice) => adoptedSlice(slice, state, props),
     handlePaste: (view, event, slice) => pasted(view, event, slice, state, props),
     // Note that a drop of files is left to the card around the box, which takes them as a "+" does.
     handleDrop: (_view, event) => event.dataTransfer?.types.includes("Files") === true,

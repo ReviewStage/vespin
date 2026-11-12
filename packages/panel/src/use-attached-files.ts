@@ -56,7 +56,10 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * and a file that does not come takes its chip back out. A file whose
  * marker was in the words goes with it: deleting its chip takes the file
  * off, and undo bringing the chip back brings the file back (`follow`),
- * until the message goes (`settle`). A file the words could not take, the
+ * until the message goes (`settle`). A chip copied out of a box carries its
+ * file (`known`), and pasted into a box that does not hold that file brings
+ * it, taken under a name of this box's as a file handed to it is (`adopt`).
+ * A file the words could not take, the
  * box's editor not loaded or its bound reached, stays attached beside the
  * words, as every file stood before markers.
  */
@@ -268,6 +271,10 @@ export interface AttachedFiles {
   readonly attach: (files: readonly File[]) => void;
   /** Takes pasted files as a drop takes them, answering whether there were any, so text pastes as it always does. */
   readonly paste: (files: readonly File[]) => boolean;
+  /** Takes files the chips pasted into its words carried in, their chips already there, answering the name each is taken under, in order, or nothing where the box takes none into its words now. */
+  readonly adopt: (files: readonly File[]) => readonly string[] | undefined;
+  /** The file the box knows by the name, held or taken off with its chip, which a copy of its chip carries. */
+  readonly known: (name: string) => AgentAttachment | undefined;
   /** Takes pasted words as a text file where they run long and the box has room for them as one, answering whether it did. */
   readonly pasteText: (words: string) => boolean;
   readonly remove: (index: number) => void;
@@ -362,18 +369,25 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
     if (gone.length > 0) latest.current.inWords?.remove(gone);
   };
 
+  /** Files read under the names given, and taken; `chipped` the names whose chips are in the words. */
+  const read = (
+    files: readonly File[],
+    names: readonly string[] | undefined,
+    chipped: readonly string[],
+  ) => {
+    for (const name of chipped) placed.current.add(name);
+    setReading((count) => count + 1);
+    void readFiles(files, names)
+      .then((done) => take(done, chipped))
+      .finally(() => setReading((count) => count - 1));
+  };
+
   const attach = (files: readonly File[]) => {
     if (files.length === 0 || latest.current.held === true) return;
     // Note that the chips go in as the files are handed, before they are read, so words typed while a picture is read follow its chip.
     const place = latest.current.inWords?.place();
     const names = place === undefined ? undefined : named(files);
-    const chipped = names !== undefined && place?.(names) === true ? names : [];
-
-    for (const name of chipped) placed.current.add(name);
-    setReading((count) => count + 1);
-    void readFiles(files, names)
-      .then((read) => take(read, chipped))
-      .finally(() => setReading((count) => count - 1));
+    read(files, names, names !== undefined && place?.(names) === true ? names : []);
   };
 
   const drop = useFileDrop((files) => attach(Array.from(files)), { over: options.held !== true });
@@ -388,6 +402,17 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
 
       return true;
     },
+    adopt: (files) => {
+      const { held, inWords } = latest.current;
+
+      if (files.length === 0 || held === true || inWords === undefined) return undefined;
+      // Note that the names are minted before the chips land, so the words name them as they are read, as a file handed to the box is.
+      const names = named(files);
+      read(files, names, names);
+
+      return names;
+    },
+    known: (name) => heldNow().find((file) => file.name === name) ?? stashed.current.get(name),
     pasteText: (words) => {
       const { most = AGENT_BOUNDS.MAX_ATTACHMENTS, held } = latest.current;
 

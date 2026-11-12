@@ -415,11 +415,8 @@ interface BoxFiles {
  * editor not loaded or its bound reached, or whose chip was copied into
  * code. Where the box takes none into its words, every file beside them.
  */
-function useBoxFiles(
-  takes: boolean,
-  draft: string,
-  attachments: readonly AgentAttachment[],
-): BoxFiles {
+function useBoxFiles(takes: boolean, draft: string, files: AttachedFiles): BoxFiles {
+  const { attachments } = files;
   const chips = attachmentChips(attachments);
   const shown = useWordFiles(chips, takes ? draft : "");
   const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
@@ -429,7 +426,7 @@ function useBoxFiles(
   return {
     beside: attachments.filter((_, at) => shown.beside.some((chip) => chip === chips[at])),
     // Note that every file the box holds is chipped, so a marker undo brings back is its chip at once.
-    field: { names, chip: shown.chip },
+    field: { names, chip: shown.chip, copies: { copied: files.known, pasted: files.adopt } },
     viewer: shown.viewer,
   };
 }
@@ -520,7 +517,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
       : undefined,
   });
 
-  const inWords = useBoxFiles(takesFiles, options.draft, files.attachments);
+  const inWords = useBoxFiles(takesFiles, options.draft, files);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
 
   const pickers = useComposerPickers({

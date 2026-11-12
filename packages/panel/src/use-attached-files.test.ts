@@ -39,9 +39,9 @@ import { installScrollIntoView } from "./testing/scroll-into-view.js";
 const ignore = () => undefined;
 
 /** The agent's box on its own control, whose sends never answer. */
-function AgentBox(): ReactNode {
+function AgentBox({ agentId = "agent-1" }: { agentId?: string }): ReactNode {
   const composer = useAgentComposer({
-    agentId: "agent-1",
+    agentId,
     taskId: "plan-1",
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
@@ -177,16 +177,21 @@ async function read(): Promise<void> {
   for (let round = 0; round < 16; round += 1) await settle();
 }
 
-/** The box drawn, its editor landed. */
-async function mounted(box: keyof typeof BOXES): Promise<HTMLElement> {
+/** A box drawn, its editor landed. */
+async function drawn(box: ReactNode): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(BOXES[box]())));
+  await act(async () => root.render(withQueryClient(box)));
   await settle();
 
   return container;
+}
+
+/** The box drawn, its editor landed. */
+function mounted(box: keyof typeof BOXES): Promise<HTMLElement> {
+  return drawn(BOXES[box]());
 }
 
 /** Files dropped on the box's card, and read off the disk before they land. */
@@ -310,6 +315,56 @@ test("a file laid in as its chip before closing punctuation takes no space befor
   await drop(container, [png("image.png")]);
   typeInComposer(container, ",");
   assert.equal(editor.getText(), "See [Picture 1],.");
+});
+
+/** The box's words selected from the first to the last and copied, as a drag over them and ⌘C do: what the copy wrote to the clipboard, by type. */
+function copyAll(container: HTMLElement): Map<string, string> {
+  const written = new Map<string, string>();
+  const event = new Event("copy", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      clearData: () => written.clear(),
+      setData: (type: string, data: string) => written.set(type, data),
+    },
+  });
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  act(() => {
+    editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 });
+    composerEditor(container).dispatchEvent(event);
+  });
+
+  return written;
+}
+
+test("a picture's chip copied out of one box and pasted into another comes with its picture, numbered after the pictures that box holds", async () => {
+  const from = await mounted("agent");
+  typeInComposer(from, "Look at ");
+  await drop(from, [png("image.png")]);
+  const copied = copyAll(from);
+
+  const to = await drawn(createElement(AgentBox, { agentId: "agent-2" }));
+  // Note that this box's own picture is another picture, of other bytes, under the same name.
+  await drop(to, [png("image.png", 16)]);
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      files: [],
+      types: [...copied.keys()],
+      getData: (type: string) => copied.get(type) ?? "",
+    },
+  });
+  act(() => {
+    composerEditor(to).dispatchEvent(event);
+  });
+  await read();
+
+  const editor = composerEditor(to).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] Look at [Picture 2] ");
+  assert.deepEqual(held(to), {
+    chips: [],
+    pictures: ["Open Picture 1", "Open Picture 2"],
+    note: null,
+  });
 });
 
 /** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */

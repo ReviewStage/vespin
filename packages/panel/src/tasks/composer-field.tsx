@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import type {
   ComposerChip,
   ComposerEditorHandle,
+  ComposerFileCopies,
   ComposerInput,
   ComposerTrigger,
   DescriptionEditorModule,
@@ -133,6 +134,8 @@ export interface ComposerFieldMentions {
 export interface ComposerFieldFiles {
   readonly names: ReadonlySet<string>;
   readonly chip: (name: string) => ReactNode;
+  /** How a chip copied out carries its file, and a chip pasted in comes with the file it carried. */
+  readonly copies: ComposerFileCopies;
 }
 
 export function ComposerField({
@@ -300,6 +303,13 @@ export function ComposerField({
       files: now.files?.names,
       drawFile:
         now.files === undefined ? undefined : (element, name) => draw(element, { file: name }),
+      fileCopies:
+        now.files === undefined
+          ? undefined
+          : {
+              copied: (name) => latest.current.files?.copies.copied(name),
+              pasted: (files) => latest.current.files?.copies.pasted(files),
+            },
       mentions:
         now.mentions === undefined
           ? undefined
