@@ -53,5 +53,19 @@ tester.run("settings-section-declared", settingsSectionDeclaredRule, {
       ...settings("function A() { return <SettingsSection {...head}>{C}</SettingsSection>; }"),
       errors: [{ messageId: "otherSpread" }],
     },
+    // An anchor beside the declared head overrides the one the search lands on.
+    {
+      ...settings(
+        "function A() { return <SettingsSection {...settingsSectionHead(SECTION.MEMBERS)} anchor={ROW.OTHER}>{C}</SettingsSection>; }",
+      ),
+      errors: [{ messageId: "ownAnchor" }],
+    },
+    // The section imported under another name is still the section.
+    {
+      ...settings(
+        'import { SettingsSection as Section } from "@repo/ui"; function A() { return <Section title="Run actions">{C}</Section>; }',
+      ),
+      errors: [{ messageId: "ownHead" }],
+    },
   ],
 });

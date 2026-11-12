@@ -20,6 +20,9 @@ export const SECTION_HEAD = "settingsSectionHead";
 /** The section's prop its head names it by, which comes only from its declaration; an untitled section may still wear an anchor, for a row the search finds that is no section. */
 export const HEAD_PROP = "title";
 
+/** The prop a declared head carries its anchor in, which a page beside the head's spread would override. */
+export const ANCHOR_PROP = "anchor";
+
 /** Whether a file draws a Settings page. */
 export function isSettingsPage(filename: string): boolean {
   return repositoryPathOf(filename).startsWith(SETTINGS_PAGES);

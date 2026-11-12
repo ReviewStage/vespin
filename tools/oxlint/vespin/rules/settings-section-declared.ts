@@ -6,6 +6,7 @@ import { attributeName } from "../shared/jsx.ts";
 import { JSX_SOURCE } from "../shared/press-guard.ts";
 import { repositoryPathOf } from "../shared/repository-path.ts";
 import {
+  ANCHOR_PROP,
   HEAD_PROP,
   isSettingsPage,
   SECTION_HEAD,
@@ -46,16 +47,34 @@ export const settingsSectionDeclaredRule = defineRule({
         "`<SettingsSection title>` writes its own head, which the settings search never reads. Declare the section in settings/settings-sections.tsx and spread `settingsSectionHead(SECTION.…)` instead.",
       otherSpread:
         "A spread onto `<SettingsSection>` may carry a head the settings search never reads. Spread `settingsSectionHead(SECTION.…)` alone.",
+      ownAnchor:
+        "`<SettingsSection anchor>` beside `settingsSectionHead` overrides the anchor the settings search lands on. Leave the anchor to the section's declaration in settings/settings-sections.tsx.",
     },
   },
   createOnce(context) {
+    // Note that the section is known by every name the file imports it under, so an alias draws no section the rule skips.
+    const names = new Set<string>();
+
     return {
       before() {
         const file = repositoryPathOf(context.filename);
+        names.clear();
+        names.add(SETTINGS_SECTION);
         return JSX_SOURCE.test(file) && !isTestFile(file) && isSettingsPage(context.filename);
       },
+      ImportSpecifier(node) {
+        const imported =
+          node.imported.type === "Identifier" ? node.imported.name : node.imported.value;
+
+        if (imported === SETTINGS_SECTION) names.add(node.local.name);
+      },
       JSXOpeningElement(node) {
-        if (node.name.type !== "JSXIdentifier" || node.name.name !== SETTINGS_SECTION) return;
+        if (node.name.type !== "JSXIdentifier" || !names.has(node.name.name)) return;
+
+        const headed = node.attributes.some(
+          (attribute) => attribute.type === "JSXSpreadAttribute" && isHeadCall(attribute.argument),
+        );
+
         for (const attribute of node.attributes) {
           if (attribute.type === "JSXSpreadAttribute") {
             if (!isHeadCall(attribute.argument)) {
@@ -63,8 +82,11 @@ export const settingsSectionDeclaredRule = defineRule({
             }
             continue;
           }
-          if (attributeName(attribute) === HEAD_PROP) {
-            context.report({ node: attribute, messageId: "ownHead" });
+          const name = attributeName(attribute);
+
+          if (name === HEAD_PROP) context.report({ node: attribute, messageId: "ownHead" });
+          if (headed && name === ANCHOR_PROP) {
+            context.report({ node: attribute, messageId: "ownAnchor" });
           }
         }
       },
