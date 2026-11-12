@@ -31,8 +31,6 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
-import { EXPERIMENT } from "@repo/settings";
-import { experimentsOn } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
@@ -41,7 +39,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { DRAFT_PLACE, type DraftWriter, EMPTY_DRAFT, useDraftWriter } from "../composer-drafts.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handHostReads, handState } from "../testing/app-state.js";
+import { handHostReads } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -227,14 +225,10 @@ async function drawnTab(input: {
   onMessage?: (text: string) => Promise<AgentAgentAnswer>;
   /** Takes each Try again the tab asks of the service, by the words it carries, answering whether the service took it; none answers it refused. */
   onRetry?: (words: string) => Promise<boolean>;
-  /** Whether Bring your own host is on, which Move to stands behind. */
-  ownHost?: boolean;
   /** Takes each copy the tab makes, by its words. */
   copied?: string[];
 }) {
   fakeAppBridge({});
-
-  if (input.ownHost === true) handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
 
   if (input.copied !== undefined) fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(input.copied) });
   const turn = turnOf(input.status, input.failure);
@@ -516,8 +510,8 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
   assert.equal(retry.disabled, true, "a Retry the service took is not offered again");
 });
 
-test("the sign-in card's Move to cloud continues the agent in the cloud while Bring your own host is on, and is left out with it off, where an unknown Mac and repository are named as such", async () => {
-  const on = await drawnTab({ ...SIGN_IN_REFUSED, ownHost: true });
+test("the sign-in card's Move to cloud continues the agent in the cloud, and an unknown Mac and repository are named as such", async () => {
+  const on = await drawnTab(SIGN_IN_REFUSED);
   const card = signInCard(on.container) ?? assert.fail("the transcript ends on the card");
   act(() =>
     (on.named(card, "Move to cloud") ?? assert.fail("the card offers Move to cloud")).click(),
@@ -534,19 +528,20 @@ test("the sign-in card's Move to cloud continues the agent in the cloud while Br
 
   for (const root of roots.splice(0)) act(() => root.unmount());
 
-  const off = await drawnTab({ ...SIGN_IN_REFUSED, source: { machine: AGENT_MACHINE.DEVICE } });
-  const offCard = signInCard(off.container) ?? assert.fail("the transcript ends on the card");
-  assert.match(offCard.textContent ?? "", /^This Mac can't reach the repository on GitHub\./);
-  assert.equal(off.named(offCard, "Move to cloud"), undefined);
+  const unnamed = await drawnTab({ ...SIGN_IN_REFUSED, source: { machine: AGENT_MACHINE.DEVICE } });
+
+  const unnamedCard =
+    signInCard(unnamed.container) ?? assert.fail("the transcript ends on the card");
+
+  assert.match(unnamedCard.textContent ?? "", /^This Mac can't reach the repository on GitHub\./);
 });
 
-test("a turn its Mac went offline during ends on Continue in the cloud while Bring your own host is on, which continues the agent in the cloud", async () => {
+test("a turn its Mac went offline during ends on Continue in the cloud, which continues the agent in the cloud", async () => {
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.OTHER,
     hostLost: { host: "Studio" },
     source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
-    ownHost: true,
   });
 
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
@@ -572,7 +567,6 @@ test("a message its agent's Mac was offline for says so under the box, whose Con
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
-    ownHost: true,
     seed: {
       words: "Review 2112 for production readiness",
       files: [NOTES],

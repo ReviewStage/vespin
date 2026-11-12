@@ -96,13 +96,6 @@ const DEVICE_WAKE = {
   [DEVICE_PLATFORM.LINUX]: "Check that it's on, connected, and running vespin-host",
 } as const satisfies Record<DevicePlatform, string>;
 
-/** How a device whose setup failed tries it again, by its platform: Bring your own machine turned off and on in Settings › Machines on a Mac, whose desktop app keeps its host running, or a Linux server's own `vespin-host` restarted. */
-const SETUP_RETRY = {
-  [DEVICE_PLATFORM.DARWIN]:
-    "Open Settings › Machines on that Mac and turn Bring your own machine off and on",
-  [DEVICE_PLATFORM.LINUX]: "Run systemctl --user restart vespin-host on that server",
-} as const satisfies Record<DevicePlatform, string>;
-
 /**
  * Why the device a Start would run its agent on would not take it, as New
  * task and an agent's Start alike say it, naming the device where the
@@ -125,7 +118,7 @@ export function localAgentRefusalWords(
     case LOCAL_AGENT_REFUSAL.PREPARING:
       return `${name} is still getting ready for local agents. Try again in a few minutes.`;
     case LOCAL_AGENT_REFUSAL.SETUP_FAILED:
-      return `${name} couldn't set up local agents. ${SETUP_RETRY[devicePlatformOf(device ?? {})]} to try again, ${RUN_IN_CLOUD}.`;
+      return `${name} couldn't set up local agents. Try again in a few minutes, ${RUN_IN_CLOUD}.`;
     // Note that no way out is offered, because the cloud is the owner's to set and a teammate can change nothing here.
     case LOCAL_AGENT_REFUSAL.NOT_OWNER:
       return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;

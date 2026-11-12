@@ -10,7 +10,6 @@ import {
 } from "@repo/features/agent-wire";
 import { DEVICE_SETUP } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
-import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -24,7 +23,7 @@ import { agentsControl } from "../testing/tasks-control.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
- * move-agent.test.ts -- an agent's menu offers Move to › while Bring your own host is on and a Continue of the agent is offered: Cloud and each of the member's devices but the one it runs on, a device not ready dimmed and saying why, and from a device each place saying only pushed work comes along; a pick continues the agent at that place, stopping it first while it writes, and moving nothing where the Stop did not take. It is offered nowhere where no Continue is, or with the experiment off.
+ * move-agent.test.ts -- an agent's menu offers Move to › where a Continue of the agent is offered: Cloud and each of the member's devices but the one it runs on, a device not ready dimmed and saying why, and from a device each place saying only pushed work comes along; a pick continues the agent at that place, stopping it first while it writes, and moving nothing where the Stop did not take. It is offered nowhere where no Continue is.
  *
  * Synthetic agents and devices throughout.
  */
@@ -88,13 +87,9 @@ function controlOf(agent: AgentSummary, overrides: Partial<AgentsControl> = {}):
   });
 }
 
-/** The agent's menu as its tab offers it once the window's state landed, with Bring your own host on unless `experimentOn` is false. */
-async function menuOf(
-  agent: AgentSummary,
-  control: AgentsControl,
-  experimentOn = true,
-): Promise<MenuEntry[]> {
-  const experiments = experimentOn ? experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST) : {};
+/** The agent's menu as its tab offers it once the window's state landed. */
+async function menuOf(agent: AgentSummary, control: AgentsControl): Promise<MenuEntry[]> {
+  const experiments = experimentsOn();
   handState(experiments);
   // Note that Attic reads setting up as the hosts read says it, every surface's one source.
   handBeats(
@@ -219,7 +214,7 @@ test("an agent still writing is stopped before it moves, each place saying so, a
   assert.deepEqual(continued, []);
 });
 
-test("Move to is offered nowhere where no Continue is offered, or with Bring your own host off", async () => {
+test("Move to is offered nowhere where no Continue is offered", async () => {
   const otherTasks = controlOf(AT_REST, { agents: [] });
   const noStart = controlOf(AT_REST, { continueAgent: undefined });
   const archived = { ...AT_REST, archivedAt: 2 };
@@ -229,8 +224,7 @@ test("Move to is offered nowhere where no Continue is offered, or with Bring you
       moveTo(await menuOf(AT_REST, otherTasks)),
       moveTo(await menuOf(AT_REST, noStart)),
       moveTo(await menuOf(archived, controlOf(archived))),
-      moveTo(await menuOf(AT_REST, controlOf(AT_REST), false)),
     ],
-    [undefined, undefined, undefined, undefined],
+    [undefined, undefined, undefined],
   );
 });

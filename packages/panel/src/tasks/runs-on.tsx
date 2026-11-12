@@ -38,7 +38,7 @@ import { keptKey, useKept } from "../use-kept.js";
  *
  * Each agent runs where its Start put it, for its life (`agent-wire.ts`'s
  * `agentStartRequestFields`). New task's chip names it for the task and its
- * first agent, and while the Bring your own host experiment is on a draft
+ * first agent, and a draft
  * agent's box wears the same chip (`draft-agent-tab.tsx`), a fork's and a
  * continue's among them (`useStartRunsOn`). The chip, a toolbar chip ending
  * in its chevron as the model chip beside it is, drops a menu: Cloud first, then
@@ -62,8 +62,7 @@ import { keptKey, useKept } from "../use-kept.js";
  * still getting ready or not set up, stays picked and says so, so its start
  * is refused by name rather than sent quietly to the cloud. It stands on
  * every New task but an automation's or a child's, and lists Cloud alone
- * where the member has no device, or while the Bring your own host
- * experiment is off, which lists no device (`new-task-composer.tsx`). On
+ * where the member has no device (`new-task-composer.tsx`). On
  * the task, each agent's row in its plan's head says Cloud, or the device
  * that agent runs on, named the same way, or that the device was removed
  * (`plan-agents.tsx`).

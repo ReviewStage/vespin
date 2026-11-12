@@ -6,14 +6,11 @@ import {
 } from "@repo/features/agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
-import { EXPERIMENT } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
-import { useQuery } from "@tanstack/react-query";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -32,7 +29,7 @@ import type { AgentsControl } from "./use-agents.js";
  * wearing its standing's dot (`runs-on.tsx`), less the place the agent runs
  * now, or the cloud alone for an agent on a device the service did not name;
  * a device that takes no agent now is listed dimmed, saying why. It
- * stands only while Bring your own host is on, and only where a Continue is
+ * stands only where a Continue is
  * offered: where a Start from the agent could run (`continueAgent`), under
  * nothing archived, on an agent not archived. On an agent still writing, a
  * move stops it first as Stop does, and continues it only once the Stop took,
@@ -78,8 +75,6 @@ type MoveDoors = Pick<
 /** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
 function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boolean {
   return (
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
-      .data === true &&
     agent !== undefined &&
     agents.onUnarchive === undefined &&
     agents.agents?.some((each) => each.id === agent.id) === true &&

@@ -1,5 +1,5 @@
 /**
- * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account's experiments say: nothing enrolled until This Mac is turned on, then enrolled under a new id, its record written and its agent registered; turned off by unregistering its agent and removing the host; a record of the account's kept under its id, never enrolled again while it stands, registered again after an app update; a build that does not register running the install script and the install's own uninstall in their place; an agent macOS holds for approval left for the member and told the windows; a refused record removed; the agent unregistered with its files kept where Bring your own host is off or its account signs out, and left alone by a run never signed in; how the member keeps this Mac awake handed to the host; a record that is not the account's left alone; and This Mac told the windows as its record moves.
+ * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account say: nothing enrolled until This Mac is turned on, then enrolled under a new id, its record written and its agent registered; turned off by unregistering its agent and removing the host; a record of the account's kept under its id, never enrolled again while it stands, registered again after an app update; a build that does not register running the install script and the install's own uninstall in their place; an agent macOS holds for approval left for the member and told the windows; a refused record removed; the agent unregistered with its files kept where its account signs out, and left alone by a run never signed in; how the member keeps this Mac awake handed to the host; a record that is not the account's left alone; and This Mac told the windows as its record moves.
  *
  * The composer runs over a real state folder of its own, a fake service
  * that enrolls the Mac, lists the account's hosts, serves the install
@@ -19,7 +19,7 @@ import { HOST_RELEASE } from "@repo/features/host-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { GATEWAY_EVENT } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { EXPERIMENT, type Experiment, KEEP_AWAKE, type KeepAwake } from "@repo/settings";
+import { KEEP_AWAKE, type KeepAwake } from "@repo/settings";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Duration, Effect, Layer, Option, PubSub, Result, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
@@ -58,15 +58,9 @@ const INSTALL_SCRIPT = "echo install fixture";
 const FILES = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 /** The desktop's own window, as the Gateway hands a method its caller. */
 
-const BRING_YOUR_OWN_HOST_ON = {
-  [EXPERIMENT.BRING_YOUR_OWN_HOST]: true,
-};
-
 interface MacOptions {
   /** Whether an account is signed in as the composer starts; one is by default. */
   readonly signedIn?: boolean;
-  /** The experiments the account has on; Bring your own host by default. */
-  readonly experiments?: Partial<Record<Experiment, boolean>>;
   /** The devices the service lists among the account's hosts, beside each it enrolls. */
   readonly listed?: readonly string[];
   /** Where macOS stands on the agent as the app launches; not registered by default. */
@@ -123,11 +117,6 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     let registeredHere = options.registeredHere ?? true;
     let loaded = false;
     const scripts: string[] = [];
-
-    const experiments: Partial<Record<Experiment, boolean>> = {
-      ...(options.experiments ?? BRING_YOUR_OWN_HOST_ON),
-    };
-
     const settingsTold = yield* PubSub.unbounded<void>();
     const listed = new Set(options.listed ?? []);
     let version: string | null = null;
@@ -182,7 +171,6 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       },
       account: { capabilitiesActive: () => true },
       accountId: () => userId,
-      experimentOn: (experiment) => Effect.succeed(experiments[experiment] === true),
       settingsTold: Effect.map(PubSub.subscribe(settingsTold), Stream.fromSubscription),
       keepAwake: Effect.sync(() => keepAwake),
       hostListed: (deviceId) => Effect.succeed(Option.some(listed.has(deviceId))),
@@ -277,16 +265,8 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       composer.acts.HOSTS_THIS_MAC_SET(
         deleteFolders === undefined ? { on } : { on, deleteFolders },
       );
-
-    /** The experiment given turned on or off, and the settings told again, as a switch in Settings does. */
-    const flip = (experiment: Experiment, on: boolean) =>
-      Effect.suspend(() => {
-        experiments[experiment] = on;
-
-        return PubSub.publish(settingsTold, undefined);
-      });
-
     /** The member allowing the agent in Login Items, which tells the app nothing. */
+
     const allow = () => {
       status = THIS_MAC_AGENT_STATUS.ENABLED;
     };
@@ -313,7 +293,6 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       scripts,
       held,
       turn,
-      flip,
       allow,
       keepAwakeChosen,
       signOut,
@@ -407,7 +386,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(STANDING);
-        const mac = yield* thisMac(stateRoot, { experiments: {} });
+        const mac = yield* thisMac(stateRoot);
         yield* until(() => mac.held() !== undefined);
 
         yield* mac.keepAwakeChosen(KEEP_AWAKE.PLUGGED_IN);
@@ -429,7 +408,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* freshState;
-        const mac = yield* thisMac(stateRoot, { experiments: {} });
+        const mac = yield* thisMac(stateRoot);
         yield* until(() => mac.held() !== undefined);
         assert.deepEqual(mac.held(), UNENROLLED);
 
@@ -438,37 +417,6 @@ it.effect(
         yield* until(() => mac.held()?.deviceId !== undefined);
 
         assert.deepEqual(mac.held(), { ...UNENROLLED, deviceId: KEPT_ID, enrolled: true });
-        assert.equal(
-          mac.asked.length,
-          0,
-          "nothing of the host is kept with Bring your own host off",
-        );
-      }).pipe(Effect.provide(FILES)),
-    ),
-);
-
-it.effect(
-  "Bring your own host turned off unregisters the account's agent, and turned on registers it again as the settings are told, its record kept",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const stateRoot = yield* recorded(STANDING);
-
-        const mac = yield* thisMac(stateRoot, {
-          experiments: {},
-          listed: [KEPT_ID],
-          status: THIS_MAC_AGENT_STATUS.ENABLED,
-        });
-
-        yield* until(() => mac.asked.length > 0);
-        yield* nudged(Duration.minutes(1));
-        assert.deepEqual(mac.asked, ["unregister"]);
-        assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), STANDING);
-
-        yield* mac.flip(EXPERIMENT.BRING_YOUR_OWN_HOST, true);
-        yield* until(() => mac.asked.length > 1);
-
-        assert.deepEqual(mac.asked, ["unregister", "register"]);
       }).pipe(Effect.provide(FILES)),
     ),
 );
@@ -779,17 +727,11 @@ it.effect.each([
       Effect.gen(function* () {
         const stateRoot = yield* recorded(record);
         const on = yield* thisMac(stateRoot);
-
-        const off = yield* thisMac(stateRoot, {
-          experiments: { [EXPERIMENT.BRING_YOUR_OWN_HOST]: false },
-          status: THIS_MAC_AGENT_STATUS.ENABLED,
-        });
-
         yield* nudged(Duration.minutes(1));
         assert.deepEqual(yield* on.turn(false), answer);
 
         // Note that the length is asserted rather than the list, which an assertion would narrow to an empty one.
-        assert.equal(on.asked.length + off.asked.length, 0);
+        assert.equal(on.asked.length, 0);
         assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), record);
       }).pipe(Effect.provide(FILES)),
     ),

@@ -70,7 +70,6 @@ export const SETTINGS_SEARCH_ROW = {
 export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.MEMORY]: "experiment-memory",
   [EXPERIMENT.SKILLS]: "experiment-skills",
-  [EXPERIMENT.BRING_YOUR_OWN_HOST]: "experiment-bring-your-own-host",
   [EXPERIMENT.DESCRIPTIONS]: "experiment-descriptions",
   [EXPERIMENT.REWIND_FILES]: "experiment-rewind-files",
   [EXPERIMENT.TURN_END]: "experiment-turn-end",

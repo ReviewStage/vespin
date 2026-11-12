@@ -49,12 +49,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   selectAccount,
   selectAgentDefault,
-  selectExperiment,
   selectModels,
   selectRepositoryList,
   selectTasks,
 } from "@repo/host/app-state-reads";
-import { EXPERIMENT } from "@repo/settings";
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
@@ -142,12 +140,6 @@ export function useModelCatalog(): ModelsAnswer | undefined {
 export function useModelPick(): ModelPick {
   const read = useModelCatalog();
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
-
-  const { data: ownHosts = false } = useQuery({
-    ...appStateQuery,
-    select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST),
-  });
-
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
   const catalog = read?.models ?? NO_MODELS;
   const shown = picked ?? fallback;
@@ -167,9 +159,7 @@ export function useModelPick(): ModelPick {
       if (shown !== undefined) setPicked({ model: shown.model, effort });
     },
     // Note that a device still setting itself up takes no agent, so it is not offered.
-    devices: ownHosts
-      ? (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined)
-      : NO_DEVICES,
+    devices: (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined),
   };
 }
 

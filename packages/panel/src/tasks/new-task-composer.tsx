@@ -89,12 +89,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * phone the row wraps, each chip cut short rather than overflowing.
  * The Runs on chip stands after the box's "+", as an agent's box draws where its
  * agent runs, its glyph alone where the card is too narrow for its words:
- * Cloud, and while Bring your own host is on the member's
+ * Cloud and the member's
  * devices, which the agent it starts runs on (`runs-on.tsx`); an automation's
- * card draws none. While the experiment is off the chip offers
- * Cloud alone, the card reads no devices, and every agent it starts runs in
- * the cloud, a device kept as the last pick among them. Note that while it
- * is on the card reads the member's devices as it opens and, where the last
+ * card draws none. Note that the card reads the member's devices as it opens and, where the last
  * pick is a device, holds Start, saying so, until that read lands, a list read before it opened not
  * counting, and says a read that failed, or one still out past its bound,
  * with Retry, because a start sent before the list is read names no device, and
@@ -245,7 +242,7 @@ const NONE_OFF: readonly string[] = [];
 /** The repositories a card's default passes over as it opens: none, until a read leaves one out. */
 const NONE_DROPPED: readonly string[] = [];
 
-/** The devices Runs on offers before a read lists any, or while Bring your own host is off: none, so it offers Cloud alone. */
+/** The devices Runs on offers before a read lists any: none, so it offers Cloud alone. */
 const NO_DEVICES: readonly MacOffer[] = [];
 
 /**
@@ -477,20 +474,14 @@ export function NewTaskComposer({
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;
-
-  // It offers the member's devices only while Bring your own host is on, and Cloud alone otherwise.
-  const asksDevices =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
-      .data === true && runsOnStands;
-
   // Note that the devices are read as the card opens rather than when the
   // model chip first draws, which waits on the default's read, so Start is held for as short as can be.
   const readModels = useRef(newTask.readModels);
   readModels.current = newTask.readModels;
   useEffect(() => {
-    if (asksDevices) readModels.current();
-  }, [asksDevices]);
-  const devices = (asksDevices ? newTask.devices : undefined) ?? NO_DEVICES;
+    if (runsOnStands) readModels.current();
+  }, [runsOnStands]);
+  const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
   const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
   // Start is held until a read made since the card opened lands, where the member's last pick is a
   // device, since a start before then would name none. Note that a pick of the cloud, every member's
@@ -508,10 +499,9 @@ export function NewTaskComposer({
     setDevicesLanded(true);
   }
 
-  const devicesUnread = asksDevices && keptDevice && !devicesLanded;
+  const devicesUnread = runsOnStands && keptDevice && !devicesLanded;
   const devicesFailed = devicesUnread && readSinceOpened && modelsRead.state === MODELS_READ.FAILED;
-  // Note that a card whose chip says Cloud names the cloud, a device kept while Bring your own host is off
-  // among them, because the service keeps the pick as where the tasks an agent makes for the member run.
+  // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
   const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   // The repositories the chip's last read listed, an App's and a member's token's alike.
   const [listed, setListed] = useState<readonly string[] | undefined>(undefined);

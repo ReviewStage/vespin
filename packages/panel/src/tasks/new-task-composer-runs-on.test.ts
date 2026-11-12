@@ -10,15 +10,13 @@ import {
   type TaskRunsOnRequest,
 } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useSteadyDoors } from "../steady-door.js";
-import { fakeActPort, quietHold } from "../testing/app-bridge.js";
+import { fakeActPort } from "../testing/app-bridge.js";
 import { handBeats, handState } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
@@ -31,17 +29,15 @@ import { MODELS_READ, type ModelsRead } from "./use-agents.js";
 import type { NewTaskStart } from "./use-new-task.js";
 
 /**
- * new-task-composer-runs-on.test.ts -- New task's Runs on, with Bring your own
- * host on and two of the member's devices offered, one offline: the task starts on the device picked,
+ * new-task-composer-runs-on.test.ts -- New task's Runs on, with two of the
+ * member's devices offered, one offline: the task starts on the device picked,
  * by its id, and the offline one cannot be picked, nor one online but getting
  * ready or not set up, which says so; a last pick that is offline or getting
  * ready as the card opens stays picked and says so, never Cloud; a card takes
  * a device picked in another card; and nothing starts on a last pick of a
  * device before the card's own read of the devices lands, a read that failed
  * saying so with a Retry that reads them again, while a member whose last pick
- * is the cloud is not held, the chip standing on Cloud alone. With the
- * experiment off the card reads no devices, offers Cloud alone, and starts in
- * the cloud at once, a last pick of a device unheld. A card opened as a sub-task
+ * is the cloud is not held, the chip standing on Cloud alone. A card opened as a sub-task
  * of another names no repository, which it takes from its parent, but draws
  * Runs on as any card does, since a task holds no place to run.
  * Synthetic throughout.
@@ -79,7 +75,7 @@ beforeAll(() => Effect.runPromise(editorBundleLanded));
 beforeEach(() => {
   installScrollIntoView();
   installEditorLayout();
-  handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
+  handState(experimentsOn());
   fakeActPort({});
 });
 
@@ -386,32 +382,6 @@ test("a member whose last pick is the cloud, as every member's with no device is
   await settle();
 
   assert.deepEqual(starts, [{ machine: AGENT_MACHINE.VERCEL }]);
-});
-
-test("while Bring your own host is off the card reads no devices, offers Cloud alone, and starts in the cloud at once, though the last pick is a device", async () => {
-  handState(experimentsOn());
-  let beats = 0;
-  fakeActPort({
-    [ACT_KIND.HOSTS_PRESENCE_FOLLOW]: () => {
-      beats += 1;
-
-      return quietHold();
-    },
-  });
-  window.localStorage.setItem("app.newTaskRunsOn", STUDIO);
-  const { container, starts, reads } = await mount({ devices: devicesWith(), reads: READS.HOLD });
-  pressInComposer(container, "Enter", { metaKey: true });
-  await settle();
-  act(() => runsOnChip(container).click());
-  await settle();
-
-  assert.deepEqual(starts, [{ machine: AGENT_MACHINE.VERCEL }]);
-  assert.deepEqual(
-    [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent),
-    ["Cloud"],
-  );
-  assert.equal(reads(), 0);
-  assert.equal(beats, 0);
 });
 
 test("a sub-task's card names no repository and starts on the device Runs on picked, as any card does", async () => {

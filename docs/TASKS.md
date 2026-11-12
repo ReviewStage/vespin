@@ -718,7 +718,7 @@ it, draws the Runs on chip for the agent it starts like any other start. A
 device that is not the starter's, was removed, or is away refuses the start
 by name, and nothing moves it to the cloud on its own.
 
-While Bring your own machine is on, an agent's ⋯ menu offers Move to ›: Cloud
+An agent's ⋯ menu offers Move to ›: Cloud
 and each of the member's own devices, but not the place the agent runs now,
 a device that takes no agent now dimmed and saying why. It stands only
 where Continue in new agent could run: on an agent at rest, not archived,

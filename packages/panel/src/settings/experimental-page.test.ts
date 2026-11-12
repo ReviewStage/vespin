@@ -143,7 +143,6 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Run actions",
       "Task descriptions",
       "Memory",
-      "Bring your own machine",
       "Skills",
     ],
   );
@@ -224,7 +223,6 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.MEMORY,
-    EXPERIMENT.BRING_YOUR_OWN_HOST,
     EXPERIMENT.SKILLS,
   ]);
 });

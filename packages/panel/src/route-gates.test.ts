@@ -34,7 +34,7 @@ test("a page a workspace experiment holds stands while the reader's workspaces a
   };
 
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, unread, "acme"), true);
-  assert.equal(settingsPageRouteStands(SETTINGS_VIEW.HOSTS, unread, "acme"), false);
+  assert.equal(settingsPageRouteStands(SETTINGS_VIEW.SKILLS, unread, "acme"), false);
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, read, "acme"), false);
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, read, "stage"), true);
 });

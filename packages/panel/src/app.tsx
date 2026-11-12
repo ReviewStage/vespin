@@ -6,15 +6,9 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE } from "@repo/host/app-state";
-import {
-  APP_SETTING_SCHEMA,
-  EXPERIMENT,
-  type Experiment,
-  type HostCapability,
-} from "@repo/settings";
+import { APP_SETTING_SCHEMA, type Experiment, type HostCapability } from "@repo/settings";
 import {
   agentKeyLink,
-  SETTINGS_SECTION,
   SETTINGS_VIEW,
   type SettingsLink,
   type SettingsView,
@@ -116,7 +110,6 @@ import {
   selectAdminAccess,
   selectAdminAccessPending,
   selectAppSettingsView,
-  selectExperiment,
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
@@ -419,22 +412,10 @@ function AppWindow(): React.JSX.Element {
    */
   // Note that the link is one move, so its page, workspace, and section all wait on the ask it makes.
   const openSettings = useCallback((link: SettingsLink) => goSettings(link), [goSettings]);
-  // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself; while
-  // Bring your own host is off, which stands nowhere then, it lands on that experiment's row alone.
+  // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself.
   const openHostConnect = useOpenHostConnect();
 
   const openAccountLink = useSteadyDoor(({ place }: AccountLink) => {
-    const state = queryClient.getQueryData(appStateQuery.queryKey);
-
-    if (state === undefined || !selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST)(state)) {
-      openSettings({
-        page: SETTINGS_VIEW.EXPERIMENTAL,
-        section: SETTINGS_SECTION.BRING_YOUR_OWN_HOST,
-      });
-
-      return;
-    }
-
     // Note that the code is handed only once the move lands, so a page kept for a draft is not asked over later.
     goSettings({ page: SETTINGS_VIEW.HOSTS }, () => openHostConnect(place.code));
   });

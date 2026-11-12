@@ -42,8 +42,7 @@ import { DeviceGlyph } from "../tasks/runs-on.js";
  *
  * A box that pairs prints a link, `<origin>/connect/<code>`, and the code
  * itself. The link opened in a window hands its code here
- * (`useOpenHostConnect`), and Settings › Hosts, which only stands while
- * Bring your own host is on, draws this dialog over itself. It reads the
+ * (`useOpenHostConnect`), and Settings › Hosts draws this dialog over itself. It reads the
  * pairing, then asks "Connect <name>?" over a row of the box as it named
  * itself, its platform's glyph, and what it is, its architecture, and the
  * address its start came from, since those are what tell a member their own

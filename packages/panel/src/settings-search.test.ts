@@ -205,18 +205,11 @@ test("an experiment is found by its name, what it brings, and what other apps ca
     assert.deepEqual(experimentalFound(query, true), ["Memory"], query);
   }
 
-  assert.deepEqual(
-    experimentalFound("machines", true),
-    ["Bring your own machine"],
-    "the page it holds",
-  );
-
   const experiments = [
     "Rewind restores files",
     "Done and follow-ups",
     "Run actions",
     "Task descriptions",
-    "Bring your own machine",
     "Skills",
     "Memory",
   ];
@@ -291,11 +284,9 @@ test("Escape and the keys that answer in place are found on the Keyboard shortcu
   assert.ok(shortcutsFound("link").includes("Link selected words"));
 });
 
-/** Every page's rows as a signed-in desktop reader of a workspace they administer sees them, Skills' and Hosts' among them. */
+/** Every page's rows as a signed-in desktop reader of a workspace they administer sees them, Skills' among them. */
 const FULL_INPUT: SettingsSearchInput = {
-  settings: settingsView({
-    experiments: experimentsOn(EXPERIMENT.SKILLS, EXPERIMENT.BRING_YOUR_OWN_HOST),
-  }),
+  settings: settingsView({ experiments: experimentsOn(EXPERIMENT.SKILLS) }),
   accountDrawn: true,
   capabilities: DESKTOP_CAPABILITIES,
   workspace: { ...TEAM, role: WORKSPACE_ROLE.ADMIN },
@@ -426,8 +417,11 @@ test("a page is found by its own name and leads its rows, the best page first, e
       [SETTINGS_VIEW.HOSTS, "Add a machine"],
     ],
   );
+  const throughRow = searchSettings(settingsSearchCorpus(FULL_INPUT), "how your team works");
   assert.ok(
-    stops.some((stop) => stop.page === SETTINGS_VIEW.EXPERIMENTAL && stop.entry === undefined),
+    (throughRow === undefined ? [] : settingsSearchStops(throughRow)).some(
+      (stop) => stop.page === SETTINGS_VIEW.EXPERIMENTAL && stop.entry === undefined,
+    ),
     "a page found only through a row it holds still leads that row",
   );
   // Note that the page's old name still finds its row, for readers who learned it as Hosts.

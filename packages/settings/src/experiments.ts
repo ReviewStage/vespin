@@ -1,6 +1,5 @@
 // experiments.ts -- the features a developer can turn on before they are finished, and how a choice of them is read.
 
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Option, Schema } from "effect";
 
@@ -14,8 +13,6 @@ export const EXPERIMENT = {
   MEMORY: "memory",
   /** Skills: the skills a member installs into the app for their agents, managed in Settings › Skills, and the `/` list of skills in a box written to an agent. */
   SKILLS: "skills",
-  /** Bring your own machine: agents that run on the member's own Macs and Linux machines, This Mac among them, set up in Settings › Machines, rather than only in our cloud. */
-  BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
@@ -116,15 +113,6 @@ export const EXPERIMENTS = [
     detail: "Tasks get a description their agents keep up to date, with comments and history.",
     owner: "Dean",
     since: "2026-11-05",
-  },
-  {
-    key: EXPERIMENT.BRING_YOUR_OWN_HOST,
-    name: "Bring your own machine",
-    detail:
-      "Run agents on your own Macs and Linux machines. " +
-      `Their transcripts and the files they read are still sent to ${PRODUCT_NAME}.`,
-    owner: "Charles",
-    since: "2026-10-30",
   },
   {
     key: EXPERIMENT.SKILLS,

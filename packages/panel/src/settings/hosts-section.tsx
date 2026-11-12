@@ -125,9 +125,7 @@ import { MenuRow } from "./menu-row.js";
  * approved, since the service lists no box before its approve. A pairing's
  * link opened in this window stands its dialog over the page
  * (`host-connect-dialog.tsx`), and once Connect makes the host the list
- * carries it. The page stands only while the Bring your own host
- * experiment is on (`settings-rows.ts`'s `PAGE_EXPERIMENT`), so while it is
- * off nothing here is drawn, read, or turned on.
+ * carries it.
  */
 
 const SECTION_TITLE = {
