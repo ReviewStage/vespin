@@ -70,3 +70,14 @@ export function hostStanding(host: HostLine, now: number): HostStanding {
     (host.away === true ? DEVICE_STANDING.OFFLINE : DEVICE_STANDING.ONLINE)
   );
 }
+
+/** When the first of `hosts` still to call in reads failed, past its wait since joining; none where none waits. */
+export function nextCallInLapse(hosts: readonly HostLine[]): number | undefined {
+  const lapses = hosts.flatMap((host) =>
+    host.calledIn === false && host.joinedAt !== undefined
+      ? [host.joinedAt + CALL_IN_CEILING_MS]
+      : [],
+  );
+
+  return lapses.length === 0 ? undefined : Math.min(...lapses);
+}

@@ -12,6 +12,7 @@ import {
   hostStanding,
   MACHINE_STANDING_WORDS,
   MACHINES_WORDS,
+  nextCallInLapse,
   removeMachineQuestion,
 } from "@repo/features/machines-settings-words";
 import { readFailedWords, readingWords, VERB } from "@repo/features/words";
@@ -28,7 +29,7 @@ import {
   type SfSymbol,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
@@ -109,6 +110,15 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
   const hosts = held?.rows?.hosts;
   const listed = (hosts ?? []).map(machineOf);
   const now = Date.now();
+  // Note that a machine that has not called in reads failed once its wait runs out, which no read moves, so the page draws again then.
+  const [, setLapsed] = useState(0);
+  const lapse = hosts === undefined ? undefined : nextCallInLapse(hosts);
+  useEffect(() => {
+    if (lapse === undefined) return;
+    const wait = setTimeout(() => setLapsed((each) => each + 1), Math.max(0, lapse - Date.now()));
+
+    return () => clearTimeout(wait);
+  }, [lapse]);
   const question = removeMachineQuestion(asked?.label ?? "");
 
   const body =
@@ -177,6 +187,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
           setAsked(undefined);
           void write(() => acts[ACT_KIND.HOSTS_REMOVE]({ id }), {
             refused: (answer) => ("failure" in answer ? MACHINES_WORDS.REMOVE_FAILED : undefined),
+            retry: true,
           });
         }}
       />

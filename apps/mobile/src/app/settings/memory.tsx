@@ -104,6 +104,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
   const forget = (memory: MemorySummary) =>
     void write(() => acts[ACT_KIND.MEMORIES_FORGET]({ workspaceId, id: memory.id }), {
       refused: (answer) => ("failure" in answer ? MEMORY_PAGE_WORDS.FORGET_FAILED : undefined),
+      retry: true,
     });
 
   const body =
