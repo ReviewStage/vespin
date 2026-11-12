@@ -20,14 +20,7 @@ import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
 import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
-import {
-  ToastHost,
-  type ToastNotice,
-  useHoldToasts,
-  useToast,
-  useToastsOwner,
-  useWorkingToast,
-} from "./toast.js";
+import { ToastHost, type ToastNotice, useToast, useToastsOwner, useWorkingToast } from "./toast.js";
 import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
 import { appStateIn } from "./use-app-state.js";
 
@@ -38,9 +31,7 @@ import { appStateIn } from "./use-app-state.js";
  * toast takes the act back and stands for the Undo hold, a row write's
  * taken back once, as ⌘Z's entry, which the key then finds gone, and
  * leaving once its entry is pushed off the undo list; another account
- * signing in sends the last one's toasts away; a surface holding the toasts
- * back, as setup does, draws none until it goes, then those still standing;
- * and a failure toast reports
+ * signing in sends the last one's toasts away; and a failure toast reports
  * what failed to Sentry, which a recording SDK stands in for, and copies
  * the details of that report, but is not shown where the connection already
  * says why. Synthetic throughout.
@@ -496,43 +487,6 @@ test("another account signing in sends the last one's toasts away", () => {
   signIn("grace");
 
   assert.deepEqual(standing(), []);
-});
-
-/** Holds the window's toasts back while it stands, as setup does. */
-function Holder(): null {
-  useHoldToasts();
-
-  return null;
-}
-
-test("a surface holding the toasts back draws none, and those still standing stand once it goes", () => {
-  const container = document.body.appendChild(document.createElement("div"));
-  root = createRoot(container);
-
-  const render = (holding: boolean) =>
-    act(() =>
-      root?.render(
-        withQueryClient(
-          createElement(
-            Fragment,
-            null,
-            createElement(Shower, { account: "ada" }),
-            holding ? createElement(Holder) : null,
-            createElement(ToastHost),
-          ),
-        ),
-      ),
-    );
-
-  render(false);
-  act(() => show?.(persisting("Retry the webhook finished")));
-  render(true);
-  act(() => show?.(persisting("Sentry's sign-in expired")));
-  const held = standing();
-  render(false);
-
-  assert.deepEqual(held, []);
-  assert.deepEqual(standing(), ["Retry the webhook finished", "Sentry's sign-in expired"]);
 });
 
 test("an Undo toast's Undo takes a row write back once and sends the toast away, leaving ⌘Z nothing to take back again", async () => {

@@ -35,10 +35,6 @@
  * The stack always stands in the window's bottom-right corner, over whatever
  * docks at its foot, a plan's call bar or an agent's composer; a toast there
  * can be dismissed to reach End call or Send under it.
- * While a surface that fills the window holds the stack (`useHoldToasts`),
- * as setup does, no toast is drawn or said: each one shown meanwhile is kept
- * as any other, and those still standing once nothing holds the stack are
- * shown then, so none covers the surface's own presses.
  *
  * A toast saying a failure carries the failure, which is reported as it is
  * shown (`failure-report.ts`), so no failure the panel says in a toast goes
@@ -69,7 +65,6 @@ import {
   ToastStack,
   type ToastTone,
 } from "@repo/ui";
-import { Store, useSelector } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";
 import { appPlatform } from "./app-platform.js";
 import { failureOfConnection, reportShownFailure, type ShownFailure } from "./failure-report.js";
@@ -169,9 +164,6 @@ const toastManager = createToastManager<ToastData>();
  * not what stands, outside the stack.
  */
 const kept = new Map<string, Kept>();
-
-/** How many surfaces hold the stack now, which draws no toast while any does. */
-const holds = new Store(0);
 
 /** The toasts the host itself is closing, withdrawn or forgotten, whose close is told to no one as a dismissal. */
 const closingByHost = new Set<string>();
@@ -398,29 +390,19 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
 }
 
 /**
- * Holds the window's toasts back while the caller stands, as setup does,
- * so none stands over its presses; those still standing are shown once
- * nothing holds them.
+ * The toasts standing, in the window's bottom-right corner. Mounted once,
+ * by the window's root, showing what was asked for before it stood. Note
+ * that the toasts it kept go with it, so a window that mounts it again
+ * never draws a stale one.
  */
-export function useHoldToasts(): void {
+export function ToastHost(): React.JSX.Element {
   useEffect(() => {
-    holds.setState((count) => count + 1);
-
-    return () => holds.setState((count) => count - 1);
-  }, []);
-}
-
-/**
- * The stack, drawing every toast kept as it stands. Note that the manager
- * reaches the stack only once it stands, which is after its children's
- * effects, and reaches none while it is held back, so every toast kept and
- * not on its way out is shown again as it stands.
- */
-function ToastStanding(): React.JSX.Element {
-  useEffect(() => {
+    // Note that the manager reaches the stack only once it stands, which is after its children's effects, so a toast a sibling showed as the window first drew is shown again here.
     for (const [id, standing] of kept) {
       if (!standing.leaving) toastManager.add({ id, ...toastOptions(id, standing.notice) });
     }
+
+    return forgetToasts;
   }, []);
 
   return (
@@ -428,17 +410,4 @@ function ToastStanding(): React.JSX.Element {
       {(toast) => <ToastCard key={toast.id} toast={toast} />}
     </ToastStack>
   );
-}
-
-/**
- * The toasts standing, in the window's bottom-right corner, unless a
- * surface holds them back (`useHoldToasts`). Mounted once, by the window's
- * root, showing what was asked for before it stood. Note that the toasts it
- * kept go with it, so a window that mounts it again never draws a stale one.
- */
-export function ToastHost(): React.JSX.Element | null {
-  const held = useSelector(holds, (count) => count > 0);
-  useEffect(() => forgetToasts, []);
-
-  return held ? null : <ToastStanding />;
 }

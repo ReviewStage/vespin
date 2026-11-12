@@ -27,13 +27,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { welcomed } from "../desktop/desktop-welcome.js";
+import { useHoldExpiredServerToasts } from "../expired-server-toasts.js";
 import { confirmFailure } from "../failure-report.js";
 import { workspaceMembersQuery } from "../live-reads.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { AgentConnectSection } from "../settings/agent-auth-section.js";
 import { DELETE_WORDS } from "../settings/workspace-page.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useHoldToasts } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
@@ -170,12 +170,12 @@ const AUDIENCES: readonly ChoiceOption<SetupAudience>[] = [
 /**
  * Setup, step by step; `onFinish` lets the app in. Note that its words show
  * in a screen recording, because they are the app's own, but for a person's,
- * which each step masks where it draws them. The window's toasts wait until
- * it finishes, because on a phone they stand over each step's foot, and a
- * connection whose sign-in lapsed is reconnected in place on its steps.
+ * which each step masks where it draws them. A connection whose sign-in
+ * lapsed says so in no toast until it finishes, because on a phone those
+ * stand over each step's foot, and its steps reconnect one in place.
  */
 export function SetupSteps(props: SetupStepsProps): React.JSX.Element {
-  useHoldToasts();
+  useHoldExpiredServerToasts();
 
   return (
     <ReplayUnmask>
