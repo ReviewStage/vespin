@@ -20,8 +20,8 @@ import { AlwaysAllowedSection } from "./always-allowed-section.js";
 
 /**
  * always-allowed-section.test.ts -- Settings › Agents' Always allowed: Add
- * command's card sends a typed command's first words, a trailing `*`
- * dropped, and refuses shell syntax under the field without sending it;
+ * command's new row sends a typed command's first words, a trailing `*`
+ * dropped, and refuses shell syntax under the row without sending it;
  * Edit command sends one write putting the new words in place; and Remove
  * takes a command off at once, its toast's Undo adding it again. Synthetic
  * ids.
@@ -142,10 +142,11 @@ async function pressInMenu(item: string): Promise<void> {
   await settle();
 }
 
-/** Types `words` into the card's field, replacing what it held, and presses Enter. */
-async function typeAndEnter(words: string): Promise<void> {
+/** Types `words` into the field named `label`, replacing what it held, and presses Enter. */
+async function typeAndEnter(label: string, words: string): Promise<void> {
   const field =
-    document.querySelector<HTMLInputElement>('[role="dialog"] input') ?? assert.fail("no field");
+    document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`) ??
+    assert.fail(`no ${label} field`);
 
   act(() => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -171,25 +172,26 @@ test("Add sends a typed command's first words, its trailing * dropped, and refus
 
   act(() => pressable("button", "Add command").click());
   await settle();
-  await typeAndEnter("pnpm lint | tee out");
+  await typeAndEnter("New command", "pnpm lint | tee out");
   assert.deepEqual(sent, [], "shell syntax is not sent");
   assert.match(document.body.textContent ?? "", /no quotes, pipes, globs, or other shell syntax/u);
 
-  await typeAndEnter("  pnpm   lint *");
+  await typeAndEnter("New command", "  pnpm   lint *");
   assert.deepEqual(sent, [{ add: ["pnpm", "lint"] }]);
   assert.deepEqual(listed(), ["pnpm lint *"]);
 });
 
-test("Edit command opens the card filled in and sends one write putting the new words in place", async () => {
+test("Edit command opens the words as a field and sends one write putting the new words in place", async () => {
   const sent = serveWrites([GIT_STATUS]);
   await mount([GIT_STATUS]);
 
   await pressInMenu("Edit command");
   const field =
-    document.querySelector<HTMLInputElement>('[role="dialog"] input') ?? assert.fail("no field");
+    document.querySelector<HTMLInputElement>('input[aria-label="Command"]') ??
+    assert.fail("no field");
   assert.equal(field.value, "git status");
 
-  await typeAndEnter("git diff");
+  await typeAndEnter("Command", "git diff");
   assert.deepEqual(sent, [{ edit: ["git", "status"], to: ["git", "diff"] }]);
   assert.deepEqual(listed(), ["git diff *"]);
 });
