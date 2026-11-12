@@ -11,7 +11,7 @@ import {
   type TerminalPortOutbound,
   type TerminalRefusal,
 } from "@repo/features/terminal-acts";
-import { SANDBOX_STATE } from "@repo/features/terminal-wire";
+import { SANDBOX_STATE, type TerminalSummary } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ACT_ERROR,
@@ -135,6 +135,8 @@ interface Main {
   resumeRefused: TerminalRefusal | undefined;
   /** Whether a sandbox the service said it resumed still refuses a shell as stopped. */
   staysStopped: boolean;
+  /** The shells `terminal.list` answers, none where unset. */
+  listed: readonly TerminalSummary[];
   /** Posts a shell's port to the tab, as main does after an attach, answering the host's half. */
   readonly post: (terminalId: string) => HostPort;
 }
@@ -161,6 +163,8 @@ beforeEach(() => {
         return { terminal: shell(made === 1 ? MADE : crypto.randomUUID()) };
       case ACT_KIND.TERMINAL_KILL:
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [] };
+      case ACT_KIND.TERMINAL_LIST:
+        return { sandbox: SANDBOX_STATE.RUNNING, terminals: main.listed };
       case ACT_KIND.TERMINAL_RESUME:
         if (main.resumeRefused !== undefined) return { failure: main.resumeRefused };
         // A resumed sandbox runs, so a shell is made in it.
@@ -178,6 +182,7 @@ beforeEach(() => {
     createRefused: undefined,
     resumeRefused: undefined,
     staysStopped: false,
+    listed: [],
     post: (terminalId) => {
       const { port1: port } = new MessageChannel();
       const posted: TerminalPortInbound[] = [];
@@ -231,6 +236,10 @@ beforeEach(() => {
     [ACT_KIND.TERMINAL_ATTACH]: (payload) =>
       respond({ kind: ACT_KIND.TERMINAL_ATTACH, payload }) as Promise<
         PortActResult<typeof ACT_KIND.TERMINAL_ATTACH>
+      >,
+    [ACT_KIND.TERMINAL_LIST]: (payload) =>
+      respond({ kind: ACT_KIND.TERMINAL_LIST, payload }) as Promise<
+        PortActResult<typeof ACT_KIND.TERMINAL_LIST>
       >,
   });
   // jsdom has neither constructed sheets nor media queries; the window has both.
@@ -798,6 +807,28 @@ test("a run action's tab takes nothing typed, and a key after its shell ended st
   );
   assert.deepEqual(tab.kinds(before), []);
   assert.equal(tab.bar(), "This run action’s terminal ended. Run the action to start it again.");
+});
+
+test("a run action's tab whose shell went attaches again once its action runs again, starting no shell of its own", async () => {
+  const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+  keep([{ shell: TAB.shell, title: TAB.title, terminal: RUNNING_ON, action: { id: action } }]);
+  // The action runs again in its own pane, under the same shell, as a press on its Run starts it.
+  main.listed = [{ ...shell(RUNNING_ON), running: true, runAction: action }];
+  const tab = await mount();
+  const port = main.post(RUNNING_ON);
+  port.say({ type: "state", state: "attached" });
+  const before = main.sent.length;
+  port.say({ type: "state", state: "exited", code: 0 });
+  await settle();
+
+  assert.deepEqual(
+    tab.kinds(before).filter((kind) => kind !== ACT_KIND.TERMINAL_LIST),
+    ["terminal.attach"],
+  );
+  assert.equal(
+    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
+    RUNNING_ON,
+  );
 });
 
 test("a service it cannot reach shows a bar that says so, whose action asks again", async () => {

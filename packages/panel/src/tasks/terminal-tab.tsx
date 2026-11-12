@@ -1,6 +1,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   readOnlyTerminalLook,
+  TERMINAL_ACTION,
   TERMINAL_STATE,
   type TerminalAction,
   type TerminalBar,
@@ -28,7 +29,7 @@ import {
 import { GLYPH } from "@repo/ui/icons";
 import { STRIP_TAB_KIND, type TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { TERMINAL_LOAD_FAILED } from "../bundle-loader.js";
 import { useTabActions } from "../desktop/strip-tabs.js";
 import { unreadShown } from "../failure-report.js";
@@ -207,6 +208,13 @@ export function TerminalTab({
       ? terminalLook(session.state, mirror)
       : readOnlyTerminalLook(session.state);
   const press = useRunActionPress(agentId);
+  // A run action's tab whose shell went says it ended, and attaches again once its action runs again, from here or the Run button.
+  const ranAgain =
+    shown && runLook?.running === true && session.state.kind === TERMINAL_STATE.EXITED;
+  const { onAction } = session;
+  useEffect(() => {
+    if (ranAgain) onAction(TERMINAL_ACTION.RETRY);
+  }, [ranAgain, onAction]);
   const runControl = runLook === undefined ? undefined : runControlOf(runLook, tab.title, press);
   // A phone draws no bar over the screen: its header's ⋯ opens the agent.
   const phone = usePhoneRoom();

@@ -403,7 +403,7 @@ function agentSandboxOver(
           if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
           const shell = listed.find((each) => each.runAction === actionId);
           if (shell === undefined) return Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
-          // An action whose process ended has nothing to stop, and its pane's leader may be another's by now.
+          // An action none of whose group runs, its own process or one it left behind, has nothing to stop.
           if (!shell.running) return Result.succeed(undefined);
           // Whether any of the group runs after the signal: NO_SESSION where the shell went meanwhile.
           const signal = (sent: RunActionSignal) =>

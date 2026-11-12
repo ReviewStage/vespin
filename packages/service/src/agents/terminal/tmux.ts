@@ -31,6 +31,7 @@
  * own and travels in base64, which no name, title, or path can break.
  */
 
+import { constants } from "node:os";
 import type { ShellExit, TerminalSummary } from "@repo/features/terminal-wire";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
@@ -57,6 +58,9 @@ export const TMUX = {
   SOCKET: "terminal",
 } as const;
 
+/** What the list prints where a pane's process group still has a process. */
+const RUNNING_GROUP = "1";
+
 /** The foreground commands that are a shell at its prompt, so nothing else runs there. */
 const SHELLS: ReadonlySet<string> = new Set(["bash", "zsh", "sh", "dash", "fish"]);
 
@@ -77,7 +81,8 @@ export type RunActionSignal = (typeof RUN_ACTION_SIGNAL)[keyof typeof RUN_ACTION
  * Lists the tab's sessions, one line each: the session's name, when it was
  * created, then its title, foreground command, folder, run action, and how
  * its pane stands (dead or not, then the status or signal it exited on),
- * each in base64.
+ * each in base64, then whether any process of the pane's process group still
+ * lives (1 or 0), which a run action whose own process ended may leave behind.
  * A tmux with no server holds no session, which is an empty list; any other
  * failure exits nonzero.
  */
@@ -88,9 +93,10 @@ const LIST_SCRIPT = [
   "  exit 1",
   "}",
   `field() { tmux display-message -p -t "=$1:" "$2" | base64 | tr -d '\\n'; }`,
+  `group() { kill -0 "-$(tmux display-message -p -t "=$1:" '#{pane_pid}')" 2>/dev/null && echo 1 || echo 0; }`,
   `printf '%s\\n' "$listed" | while read -r name created; do`,
   `  case "$name" in ${TMUX.SESSION_PREFIX}*) ;; *) continue ;; esac`,
-  `  printf '%s %s %s %s %s %s %s\\n' "$name" "$created" "$(field "$name" '#{${TMUX.TITLE_OPTION}}')" "$(field "$name" '#{pane_current_command}')" "$(field "$name" '#{pane_current_path}')" "$(field "$name" '#{${TMUX.RUN_ACTION_OPTION}}')" "$(field "$name" '#{pane_dead} #{pane_dead_status} #{pane_dead_signal}')"`,
+  `  printf '%s %s %s %s %s %s %s %s\\n' "$name" "$created" "$(field "$name" '#{${TMUX.TITLE_OPTION}}')" "$(field "$name" '#{pane_current_command}')" "$(field "$name" '#{pane_current_path}')" "$(field "$name" '#{${TMUX.RUN_ACTION_OPTION}}')" "$(field "$name" '#{pane_dead} #{pane_dead_status} #{pane_dead_signal}')" "$(group "$name")"`,
   "done",
 ].join("\n");
 
@@ -102,6 +108,9 @@ function fieldOf(encoded: string | undefined): string {
 }
 
 const readId = readEither(wireUuidSchema);
+
+/** The platform's signals by name, which a signal tmux printed by name is read through. */
+const { signals } = constants;
 
 /** The session a shell is, by its id. */
 function sessionOf(terminalId: string): string {
@@ -285,11 +294,25 @@ export function killTerminal(terminalId: string): CommandAsk {
   return tmux(["kill-session", "-t", targetOf(terminalId)]);
 }
 
+/**
+ * A signal as tmux prints it, by its number. Note that tmux names it through
+ * the platform's `sig2name`, a number where the C library keeps no names, as
+ * glibc's, and a name (`TERM`) where it does, so both are read.
+ */
+function signalOf(printed: string): number | undefined {
+  if (/^\d+$/.test(printed)) return Number(printed);
+  const named: number | undefined = (signals as Record<string, number | undefined>)[
+    `SIG${printed}`
+  ];
+  return named;
+}
+
 /** How a run action's pane stands, from its dead flag, status, and signal: none while its process runs, or how it ended. */
 function exitOf(pane: string): ShellExit | undefined {
   const [dead, status, signal] = pane.split(" ");
   if (dead !== "1") return undefined;
-  if (signal !== undefined && signal !== "") return { signal: Number(signal) };
+  const signaled = signal === undefined || signal === "" ? undefined : signalOf(signal);
+  if (signaled !== undefined) return { signal: signaled };
   return { code: Number(status === undefined || status === "" ? 0 : status) };
 }
 
@@ -297,21 +320,22 @@ function exitOf(pane: string): ShellExit | undefined {
  * The shells a list printed, oldest first: only the sessions a Terminal tab
  * started, each named as the developer named it or as its foreground
  * command is. A shell a developer opened runs where that command is not the
- * shell at its prompt; a run action's runs while its own process does, and
- * says how it exited once it has. A list that failed is none at all, never
- * an empty one.
+ * shell at its prompt; a run action's runs while its own process or any
+ * process of its group does, so one that left a process behind is still
+ * stopped rather than started beside it, and says how it exited once none
+ * does. A list that failed is none at all, never an empty one.
  */
 export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undefined {
   if (run.exitCode !== 0) return undefined;
   const listed = run.stdout.split("\n").flatMap((line) => {
-    const [name, created, title, command, cwd, runAction, pane] = line.split(" ");
+    const [name, created, title, command, cwd, runAction, pane, group] = line.split(" ");
     if (name === undefined || !name.startsWith(TMUX.SESSION_PREFIX)) return [];
     const id = readId(unparsedWire(name.slice(TMUX.SESSION_PREFIX.length)));
     if (Result.isFailure(id)) return [];
     const foreground = fieldOf(command);
     const named = fieldOf(title);
     const action = fieldOf(runAction);
-    const exited = action === "" ? undefined : exitOf(fieldOf(pane));
+    const exited = action === "" || group === RUNNING_GROUP ? undefined : exitOf(fieldOf(pane));
     return [
       {
         created: Number(created ?? 0),

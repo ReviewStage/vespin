@@ -224,20 +224,27 @@ function holdShellId(
  * attached through the service's relay; one that ended or went is replaced
  * by a new one in the same tab, and the tab's close ends it. A run action's
  * shell is read-only: nothing typed reaches it, and one that went is never
- * replaced by a shell of the developer's. `onGone` closes the tab, as for an
- * agent archived.
+ * replaced by a shell of the developer's. Note that whether it is a run
+ * action's is read from the window's list each time it is asked, because a
+ * tab kept from before it held its action learns it only once the action is
+ * pressed again, after its session was made. `onGone` closes the tab, as for
+ * an agent archived.
  */
 function cloudLink(
   held: TerminalsHeld,
   account: string | undefined,
   agentId: string,
   shell: string,
-  readOnly: boolean,
   onGone: () => void,
 ): ShellLink {
   return {
     agentId,
-    readOnly,
+    get readOnly() {
+      const found = held
+        .of(account, TERMINAL_KIND.CLOUD, agentId)
+        .find((each) => each.shell === shell);
+      return found?.action !== undefined;
+    },
     open: async () => {
       const made = await askAct(ACT_KIND.TERMINAL_CREATE, { agentId });
       if ("failure" in made) return { state: refusedOrGone(made.failure, onGone) };
@@ -259,7 +266,7 @@ function cloudLink(
   };
 }
 
-/** A cloud tab's session, on the shell the window holds for it where it holds one, read-only where that shell is a run action's. */
+/** A cloud tab's session, on the shell the window holds for it where it holds one. */
 function cloudSession(
   held: TerminalsHeld,
   account: string | undefined,
@@ -268,8 +275,7 @@ function cloudSession(
   onGone: () => void,
 ): TerminalSession {
   const found = held.of(account, TERMINAL_KIND.CLOUD, agentId).find((each) => each.shell === shell);
-  const link = cloudLink(held, account, agentId, shell, found?.action !== undefined, onGone);
-  return new TerminalSession(link, found?.terminal);
+  return new TerminalSession(cloudLink(held, account, agentId, shell, onGone), found?.terminal);
 }
 
 /** How a Local tab reaches its shell on this Mac, its open a span from its ask for the mirror to its shell open. */

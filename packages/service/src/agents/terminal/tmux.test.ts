@@ -47,12 +47,12 @@ function listed(
   title: string,
   command: string,
   cwd: string,
-  action?: { readonly id: string; readonly pane: string },
+  action?: { readonly id: string; readonly pane: string; readonly group: "0" | "1" },
 ): string {
   const fields = [name, String(created), field(title), field(command), field(cwd)];
-  return (action === undefined ? fields : [...fields, field(action.id), field(action.pane)]).join(
-    " ",
-  );
+  return (
+    action === undefined ? fields : [...fields, field(action.id), field(action.pane), action.group]
+  ).join(" ");
 }
 
 test("starting, naming, and ending a shell target its session exactly and carry a name as one argument", () => {
@@ -159,32 +159,27 @@ test("a title or folder with spaces is read back whole, and a list that failed i
   assert.equal(terminalsOf({ exitCode: 1, stdout: "", stderr: "" }), undefined);
 });
 
-test("a run action reads as running while its process runs, whatever its foreground command, and says how it exited once it has", () => {
-  const dev = { id: "dev-action", pane: "0  " };
+test("a run action reads as running while its process or any process it left behind runs, whatever its foreground command, and says how it exited once none does", () => {
+  const at = (n: number) => `terminal-${n}b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d`;
   const stdout = [
-    listed(`terminal-${SHELL_A}`, 100, "Dev", "vim", "/workspace/repository", dev),
-    listed(`terminal-${SHELL_B}`, 200, "Check", "bash", "/workspace/repository", {
-      id: "check-action",
-      pane: "1 1 ",
-    }),
-    listed("terminal-11111111-2f4d-4c6b-9e0a-1d2f3a4b5c6d", 300, "Serve", "bash", "/", {
-      id: "serve-action",
-      pane: "1  15",
-    }),
+    listed(at(1), 100, "Dev", "vim", "/", { id: "dev", pane: "0  ", group: "1" }),
+    listed(at(2), 200, "Check", "bash", "/", { id: "check", pane: "1 1 ", group: "0" }),
+    // Note that tmux prints a signal by number on glibc and by name where the C library names it.
+    listed(at(3), 300, "Serve", "bash", "/", { id: "serve", pane: "1  15", group: "0" }),
+    listed(at(4), 400, "Watch", "bash", "/", { id: "watch", pane: "1  TERM", group: "0" }),
+    listed(at(5), 500, "Leaver", "bash", "/", { id: "leaver", pane: "1 0 ", group: "1" }),
   ].join("\n");
 
   const read = terminalsOf({ exitCode: 0, stdout, stderr: "" }) ?? [];
 
   assert.deepEqual(
-    read.map(({ running, exited }) => ({ running, exited })),
+    read.map(({ runAction, running, exited }) => ({ runAction, running, exited })),
     [
-      { running: true, exited: undefined },
-      { running: false, exited: { code: 1 } },
-      { running: false, exited: { signal: 15 } },
+      { runAction: "dev", running: true, exited: undefined },
+      { runAction: "check", running: false, exited: { code: 1 } },
+      { runAction: "serve", running: false, exited: { signal: 15 } },
+      { runAction: "watch", running: false, exited: { signal: 15 } },
+      { runAction: "leaver", running: true, exited: undefined },
     ],
-  );
-  assert.deepEqual(
-    read.map((shell) => shell.runAction),
-    ["dev-action", "check-action", "serve-action"],
   );
 });

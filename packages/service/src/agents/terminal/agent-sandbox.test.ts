@@ -127,7 +127,8 @@ function actionTmux(probesLived?: number) {
     run: ({ ask }) => {
       const scriptAt = ask.args.indexOf("-c") + 1;
       const rest = ask.args.slice(scriptAt + 2);
-      if (ask.args[scriptAt]?.includes("kill -")) {
+      // Note that the list has no arguments, and a signal names its shell and the signal.
+      if (rest.length === 2 && ask.args[scriptAt]?.includes("kill -")) {
         if (started === undefined) return ran(RUN_ACTION_EXIT.NO_SESSION);
         sent.push(rest[1] ?? "");
         if (rest[1] === RUN_ACTION_SIGNAL.KILL) return ran(RUN_ACTION_EXIT.ENDED);
