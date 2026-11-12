@@ -267,3 +267,37 @@ test("a dropped picture undone while its upload is out, then redone after it set
   assert.deepEqual([...drawn.values()], [""]);
   assert.equal(handle.markdown(), `${TEXT}\n![members](${KEPT})\n`);
 });
+
+test.each([
+  {
+    where: "before the text's first block",
+    markdown: TEXT,
+    words: "Single use.",
+    section: 1,
+    landing: { first: true } as const,
+    landed: `![members](${KEPT})\n\n${TEXT}`,
+  },
+  {
+    where: "after the list, at the top level, from an item's line",
+    markdown: "## Beats\n\n- Open on the inbox.\n- End on the logo.\n\n## Next\n\nShip.\n",
+    words: "Open on the inbox.",
+    section: 0,
+    landing: { depth: 0 },
+    landed: `## Beats\n\n- Open on the inbox.\n- End on the logo.\n\n![members](${KEPT})\n\n## Next\n\nShip.\n`,
+  },
+  {
+    where: "at the end of the outer item, from a nested item's line",
+    markdown: "## Beats\n\n- Open on the inbox.\n  - Zoom in.\n- End on the logo.\n",
+    words: "Zoom in.",
+    section: 0,
+    landing: { depth: 1 },
+    landed: `## Beats\n\n- Open on the inbox.\n  - Zoom in.\n\n  ![members](${KEPT})\n- End on the logo.\n`,
+  },
+])("a picture dropped $where lands there", ({ markdown, words, section, landing, landed }) => {
+  const caret = { section, text: words, occurrence: 0, offset: 2, code: false, top: 0 };
+  const placement = { x: 0, y: 0, words: caret, pictures: [PNG()], landing };
+  const { handle, taken } = opened(markdown, placement);
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+
+  assert.equal(handle.markdown(), landed);
+});

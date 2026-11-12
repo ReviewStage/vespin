@@ -1,11 +1,30 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
-import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
-import { type EditorState, Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import {
+  Fragment,
+  type NodeType,
+  type Node as PmNode,
+  type ResolvedPos,
+  Slice,
+} from "@tiptap/pm/model";
+import {
+  type EditorState,
+  NodeSelection,
+  Plugin,
+  PluginKey,
+  Selection,
+  TextSelection,
+  type Transaction,
+} from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { imageFiles } from "../picture-files.js";
-import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
+import type {
+  DescriptionEditorPictures,
+  PictureLanding,
+  PictureNode,
+  PictureTaken,
+} from "./contract.js";
 import { inTableCell } from "./writing-keys.js";
 
 /**
@@ -93,6 +112,53 @@ function settledPictures(): Plugin<ReadonlyMap<string, string>> {
   });
 }
 
+/** The position of the picture a caret stands just before, at the start of the picture's own line; none elsewhere. */
+function pictureAfterCaret(selection: Selection): number | undefined {
+  const { $head, empty } = selection;
+
+  if (!(selection instanceof TextSelection) || !empty || $head.parentOffset !== 0) return undefined;
+
+  return $head.parent.firstChild?.type.name === PICTURE_NODE ? $head.pos : undefined;
+}
+
+/**
+ * The caret kept off the spot just before a picture, whose caret box the
+ * browser and ProseMirror draw the picture's height: a move onto it, by the
+ * arrows or a press, selects the picture instead, as a document editor
+ * selects an image block, and a move back off a selected picture onto it
+ * goes on to the end of the line before. Note that a change to the text,
+ * and a caret already standing there, are left as they are, so the editor
+ * opening on a text that starts with a picture never selects it, where a
+ * key typed would replace it.
+ */
+function pictureCaret(): Plugin {
+  return new Plugin({
+    appendTransaction: (trs, old, state) => {
+      const at = pictureAfterCaret(state.selection);
+
+      if (
+        at === undefined ||
+        trs.some((tr) => tr.docChanged) ||
+        old.selection.eq(state.selection)
+      ) {
+        return null;
+      }
+
+      if (!(old.selection instanceof NodeSelection && old.selection.from === at)) {
+        return state.tr.setSelection(NodeSelection.create(state.doc, at));
+      }
+
+      const before = Selection.findFrom(
+        state.doc.resolve(state.selection.$head.before()),
+        -1,
+        true,
+      );
+
+      return before === null ? null : state.tr.setSelection(before);
+    },
+  });
+}
+
 /** The node's picture as the panel draws it. */
 function pictureOf(node: PmNode): PictureNode {
   return {
@@ -132,7 +198,7 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
 
   return node.extend({
     addProseMirrorPlugins() {
-      return [...(this.parent?.() ?? []), settledPictures()];
+      return [...(this.parent?.() ?? []), settledPictures(), pictureCaret()];
     },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
@@ -196,18 +262,43 @@ function removedAt(view: EditorView, pos: number): void {
   view.dispatch(view.state.tr.delete(from, to));
 }
 
+/** The nodes a list's items are, whose depth a picture dropped below one of their lines lands at. */
+export const LIST_ITEMS: ReadonlySet<string> = new Set(["listItem", "taskItem"]);
+
+/** The depths of the list items `$at` stands in, outermost first. */
+function itemDepths($at: ResolvedPos): number[] {
+  const depths: number[] = [];
+
+  for (let depth = 1; depth <= $at.depth; depth += 1) {
+    if (LIST_ITEMS.has($at.node(depth).type.name)) depths.push(depth);
+  }
+
+  return depths;
+}
+
 /**
  * Where pictures laid in at `pos` stand, as the stretch they take the place
  * of: the empty line `pos` stands on, else just below the line it stands on,
  * which they never split, inside a list item where the line is one's, else
  * after the top-level block `pos` stands in, as from a table's cell, whose
- * Markdown holds no block.
+ * Markdown holds no block. A drop's `landing` puts them before the text's
+ * first block, or at a shallower list depth than the line's: after the
+ * outermost list at `0`, else at the end of the item that many in.
  */
-function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType) {
+function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType, landing?: PictureLanding) {
+  if (landing !== undefined && "first" in landing) return { from: 0, to: 0 };
   const $at = doc.resolve(pos);
   const top = $at.depth === 0 ? pos : $at.after(1);
 
   if (inTableCell($at)) return { from: top, to: top };
+  const items = itemDepths($at);
+  const outer = landing === undefined ? undefined : items[landing.depth - 1];
+
+  if (landing !== undefined && landing.depth < items.length) {
+    const at = outer === undefined ? $at.after((items[0] ?? 1) - 1) : $at.end(outer);
+
+    return { from: at, to: at };
+  }
 
   const { parent } = $at;
 
@@ -222,7 +313,7 @@ function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType) {
 
 /**
  * Pictures laid in, each in a paragraph of its own, where `pos` stands, or
- * where the caret does where none is given; each waits on a new upload,
+ * where the caret does where none is given, as a drop's `landing` says; each waits on a new upload,
  * which is handed to the panel with its file. Note that the upload finds
  * its picture by name when it settles, so words typed meanwhile never move it.
  */
@@ -231,6 +322,7 @@ export function laidInPictures(
   files: readonly File[],
   pictures: DescriptionEditorPictures,
   pos?: number,
+  landing?: PictureLanding,
 ): void {
   const { state } = view;
   const paragraph = state.schema.nodes.paragraph;
@@ -246,7 +338,7 @@ export function laidInPictures(
     return paragraph.create(null, [picture]);
   });
 
-  const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph);
+  const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph, landing);
   view.dispatch(state.tr.replaceWith(from, to, paragraphs).scrollIntoView());
   pictures.take(taken);
 }

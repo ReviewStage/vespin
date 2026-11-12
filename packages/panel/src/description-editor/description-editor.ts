@@ -58,6 +58,7 @@ import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
   droppedPictures,
+  LIST_ITEMS,
   laidInPictures,
   pastedPictures,
   pictureNode,
@@ -775,10 +776,10 @@ export function mountDescriptionEditor(
 
   // Files dropped on the text are laid in at the caret the drop put, whether it opened the editor or moved its caret.
   const laidInDropped = (at: DescriptionEditorPlacement | undefined) => {
-    const dropped = at !== undefined && "pictures" in at ? at.pictures : undefined;
+    const dropped = at !== undefined && "pictures" in at ? at : undefined;
 
-    if (dropped !== undefined && pictures !== undefined) {
-      laidInPictures(editor.view, dropped, pictures);
+    if (dropped?.pictures !== undefined && pictures !== undefined) {
+      laidInPictures(editor.view, dropped.pictures, pictures, undefined, dropped.landing);
     }
   };
 
@@ -873,9 +874,6 @@ export function mountDescriptionEditor(
     destroy: () => editor.destroy(),
   };
 }
-
-/** The nodes a list's bullets are, each commented on alone. */
-const LIST_ITEMS: ReadonlySet<string> = new Set(["listItem", "taskItem"]);
 
 /** The document's stretch from `from` to `to` as a thread started on it anchors it, in `text`, the Markdown the editor would hand over now; nothing where it holds no word the text keeps. */
 function editorSpan(

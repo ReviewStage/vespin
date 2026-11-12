@@ -28,6 +28,7 @@ import {
   type DescriptionEditorPlacement,
   type EditorAnchor,
   type EditorAnchors,
+  type PictureLanding,
   PLACEMENT_END,
   type PlacedWords,
 } from "../description-editor/contract.js";
@@ -53,7 +54,7 @@ import {
  * the caret where the click landed, or the words its press selected selected
  * again, the format toolbar over them as over words selected in the editor
  * (`clickPlacement`), and so do pictures dropped anywhere over the text,
- * laid in below the line they landed nearest, which a line marks while they
+ * laid in at the boundary they landed nearest, which a line marks while they
  * are carried (`useFileDrop`), and so does a press on the empty room
  * around the text (`useTextRoom`); the editor is TipTap, from the editor
  * bundle the panel starts loading as it first paints, and again the first
@@ -265,11 +266,12 @@ export function clickPlacement(
   return from === undefined || words === undefined ? undefined : { x, y, words, from };
 }
 
-/** Files dropped on the text, at the point on the line they land below (`fileDropSpot`). */
+/** Files dropped on the text, at the point on the line they land beside, and where around it they land (`fileDropSpot`). */
 interface FileDrop {
   readonly files: readonly File[];
   readonly x: number;
   readonly y: number;
+  readonly landing: PictureLanding;
 }
 
 /**
@@ -278,7 +280,7 @@ interface FileDrop {
  * dropped, which the editor lays in there; none where none is a picture.
  */
 function dropPlacement(
-  { files, x, y }: FileDrop,
+  { files, x, y, landing }: FileDrop,
   place: (range: Range) => PlacedWords | undefined,
 ): DescriptionEditorPlacement | undefined {
   const pictures = imageFiles(files);
@@ -286,7 +288,7 @@ function dropPlacement(
   if (pictures.length === 0) return undefined;
   const range = rangeAt(x, y);
 
-  return { x, y, words: range === null ? undefined : place(range), pictures };
+  return { x, y, words: range === null ? undefined : place(range), pictures, landing };
 }
 
 /** Where the words a closing editor's caret stood on stand in the drawn text now; none where the drawn text holds no such words. */
@@ -492,7 +494,7 @@ export function useTextRoom({
 /** What a block of the text is, as a file drag finds the line its files land below: a line of words, a code block, a table whole, or a rule. */
 const LINE_BLOCKS = "p, h1, h2, h3, h4, h5, h6, pre, table, hr, li";
 
-/** Where a line of the text stands in the window. */
+/** Where a box of the text stands in the window. */
 interface LineBox {
   readonly top: number;
   readonly bottom: number;
@@ -500,11 +502,18 @@ interface LineBox {
   readonly right: number;
 }
 
-/** Where a file drag lands: the line marking the boundary its files go in at, and the point on the last words above it, where the caret is put for them. */
+/** A line of the text: its block and where the block's own line stands. */
+interface TextLine {
+  readonly block: Element;
+  readonly box: LineBox;
+}
+
+/** Where a file drag lands: the line marking the boundary its files go in at, the point on the words beside it where the caret is put for them, and where around that line they land. */
 interface FileDropSpot {
   readonly line: DropLineAt;
   readonly x: number;
   readonly y: number;
+  readonly landing: PictureLanding;
 }
 
 /** Whether a drag carries files, which is all the text takes from one. */
@@ -512,12 +521,19 @@ function carriesFiles(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes("Files") ?? false;
 }
 
+/** Where an element stands in the window. */
+function boxOf(element: Element): LineBox {
+  const { top, bottom, left, right } = element.getBoundingClientRect();
+
+  return { top, bottom, left, right };
+}
+
 /** Where a block's own line stands: a list item's above the list nested in it, which pictures laid in on its line stand above. */
 function lineBoxOf(block: Element): LineBox {
-  const { top, bottom, left, right } = block.getBoundingClientRect();
+  const box = boxOf(block);
   const nested = block.tagName === "LI" ? block.querySelector(":scope > ul, :scope > ol") : null;
 
-  return { top, left, right, bottom: nested?.getBoundingClientRect().top ?? bottom };
+  return { ...box, bottom: nested?.getBoundingClientRect().top ?? box.bottom };
 }
 
 /**
@@ -526,7 +542,7 @@ function lineBoxOf(block: Element): LineBox {
  * table, a list item's words as their item, and nothing drawn inside a
  * picture or a code block's header counts.
  */
-function textLines(root: HTMLElement, within: string): LineBox[] {
+function textLines(root: HTMLElement, within: string): TextLine[] {
   const blocks = [...root.querySelectorAll(`:is(${within}) :is(${LINE_BLOCKS})`)].filter(
     (block) =>
       (block.tagName === "TABLE" || block.parentElement?.closest("table") == null) &&
@@ -537,35 +553,92 @@ function textLines(root: HTMLElement, within: string): LineBox[] {
   return blocks.flatMap((block) => {
     const box = lineBoxOf(block);
 
-    return box.bottom > box.top ? [box] : [];
+    return box.bottom > box.top ? [{ block, box }] : [];
   });
 }
 
-/**
- * Where files carried to `y` land: below the line the point stands on, or
- * the line above the gap it stands in, or the first line where it stands
- * above them all; the line drawn midway to the next, as at the boundary
- * between them, across the line's own width. None over no line.
- */
-function fileDropSpot(lines: readonly LineBox[], x: number, y: number): FileDropSpot | undefined {
-  const index = Math.max(
-    0,
-    lines.findLastIndex((line) => line.top <= y),
-  );
+/** The list items a block stands in, outermost first, each drawn from where its words start. */
+function itemsAround(block: Element): Element[] {
+  const items: Element[] = [];
 
+  for (
+    let item = block.closest("li");
+    item !== null;
+    item = item.parentElement?.closest("li") ?? null
+  ) {
+    items.unshift(item);
+  }
+
+  return items;
+}
+
+/**
+ * How deep in its lists a drop below `block` lands, by where the pointer
+ * stands across, as a document editor's drag nests a block: as deep as the
+ * items whose words start left of the pointer, so at or left of the list's
+ * words it lands after the list, at the top level.
+ */
+function dropDepth(items: readonly Element[], x: number): number {
+  const deeper = items.findIndex((item) => x <= item.getBoundingClientRect().left);
+
+  return deeper === -1 ? items.length : deeper;
+}
+
+/** Where the boundary a drop at `depth` lands at stands: below the line itself at its own depth, else below the list or the item that depth holds it in, from where that depth's words start. */
+function boundaryAt(line: TextLine, items: readonly Element[], depth: number): LineBox {
+  if (depth >= items.length) return line.box;
+  const holder = depth === 0 ? items[0]?.parentElement : items[depth - 1];
+
+  return holder == null ? line.box : boxOf(holder);
+}
+
+/**
+ * Where files carried to (`x`, `y`) land: before the first line where `y`
+ * stands above it; else below the line `y` stands on, or the line above the
+ * gap it stands in, as deep in its lists as `x` says (`dropDepth`). The
+ * line is drawn at that boundary, midway to the next line below it, from
+ * where that depth's words start; the caret goes on the words of the line
+ * the drop is below, or the first line's. None over no line.
+ */
+function fileDropSpot(lines: readonly TextLine[], x: number, y: number): FileDropSpot | undefined {
+  const [first] = lines;
+  const index = lines.findLastIndex((line) => line.box.top <= y);
   const line = lines[index];
 
-  if (line === undefined) return undefined;
-  const next = lines[index + 1];
+  if (first === undefined) return undefined;
 
-  const top =
-    next !== undefined && next.top > line.bottom ? (line.bottom + next.top) / 2 : line.bottom;
+  if (line === undefined) {
+    const { top, left, right } = first.box;
+
+    return {
+      line: { top: top - 1, left, width: right - left },
+      x: left + 1,
+      y: top + 1,
+      landing: { first: true },
+    };
+  }
+
+  const items = itemsAround(line.block);
+  const depth = dropDepth(items, x);
+  const edge = boundaryAt(line, items, depth);
+  const next = lines.find((each) => each.box.top >= edge.bottom)?.box;
+  const top = next === undefined ? edge.bottom : (edge.bottom + next.top) / 2;
+  const { box } = line;
 
   return {
-    line: { top, left: line.left, width: line.right - line.left },
-    x: Math.min(Math.max(x, line.left + 1), line.right - 1),
-    y: line.bottom - 1,
+    line: { top, left: edge.left, width: edge.right - edge.left },
+    x: Math.min(Math.max(x, box.left + 1), box.right - 1),
+    y: box.bottom - 1,
+    landing: { depth },
   };
+}
+
+/** Where the text's room starts down the window: under the hairline parting the head from the text, else at the text's top; none while no text is drawn. */
+function textFloor(root: HTMLElement, within: string): number | undefined {
+  const text = root.querySelector(within)?.getBoundingClientRect().top;
+  const rule = root.querySelector(".document-rule")?.getBoundingClientRect().bottom;
+
+  return text === undefined ? undefined : Math.min(text, rule ?? text);
 }
 
 /** What holds the text's lines: the open editor's text, since the drawn sections stand only while it loads, or the drawn sections. */
@@ -592,14 +665,15 @@ function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined 
 
 /**
  * The text as a place to drop files, drawn or open in the editor: a drag
- * of files anywhere over the column at or below the text's first line, its
- * gaps between blocks and its margins included, is the text's, so the
- * window never opens a file and the system shows a copy, and it lands
- * below the line it stands on or the line above the gap it stands in
- * (`fileDropSpot`), which the line answered marks while the files are
- * carried. A drop puts the caret on that line's last words, opening the
+ * of files anywhere over the column below the hairline parting the head
+ * from the text, its gaps between blocks and its margins included, is the
+ * text's, so the window never opens a file and the system shows a copy,
+ * and it lands before the first line, or below the line it stands on or the
+ * line above the gap it stands in, as deep in its lists as the pointer
+ * stands across (`fileDropSpot`), which the line answered marks while the
+ * files are carried. A drop puts the caret on that line's words, opening the
  * editor there while it is closed (`dropPlacement`), and the editor lays
- * its pictures in below that line. Note that the drag is taken before the
+ * its pictures in where the line marked (`PictureLanding`). Note that the drag is taken before the
  * editor's own handling, so the editor's text caret for a drop never draws
  * beside the line. None while `editable` is false.
  */
@@ -630,9 +704,9 @@ function useFileDrop({
     const spotOf = (event: DragEvent) => {
       const text = body.current;
       const within = linesWithin(latest.current.editor !== undefined);
-      const first = text?.querySelector(within)?.getBoundingClientRect().top;
+      const floor = text === null ? undefined : textFloor(text, within);
 
-      if (text == null || first === undefined || event.clientY < first) return undefined;
+      if (text === null || floor === undefined || event.clientY < floor) return undefined;
 
       return fileDropSpot(textLines(text, within), event.clientX, event.clientY);
     };
@@ -667,7 +741,7 @@ function useFileDrop({
       const files = Array.from(event.dataTransfer?.files ?? []);
       const open = latest.current.editor !== undefined;
       const place = (range: Range) => (open ? undefined : drawnWordsAt(text, range));
-      const placement = dropPlacement({ files, x: spot.x, y: spot.y }, place);
+      const placement = dropPlacement({ files, ...spot }, place);
 
       if (placement === undefined) return;
 
