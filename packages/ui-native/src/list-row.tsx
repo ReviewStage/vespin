@@ -289,13 +289,13 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
 /**
  * Where a row stands in its list: on the list's own ground, inset so the
  * unread dot stands in the margin, its hairline starting under the words.
- * Note that a selected row stands on the hairline's gray, as iOS's own
+ * Note that a selected row stands on the `SELECTED` gray, as iOS's own
  * selection does, since a clear row ground leaves the system no fill to draw,
  * so an iPad's selected row showed only the keyboard focus's black outline.
  */
 export function rowPlacement(colors: BrandColors, selected = false) {
   return [
-    listRowBackground(selected ? colors.CHIP_EDGE : "clear"),
+    listRowBackground(selected ? colors.SELECTED : "clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
       trailing: SPACE.EDGE,
