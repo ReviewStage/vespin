@@ -77,6 +77,9 @@ const RUN_REASON_WORDS = {
     "Started a fresh agent: the one its runs went to was gone or archived.",
 } as const satisfies Record<AutomationRunReason, string>;
 
+/** How a trigger kept to its repository's default branch says it, whatever the branch is called. */
+const DEFAULT_BRANCH_WORDS = "the default branch";
+
 /** Each GitHub event as a trigger's sentence says what happens, after "When". */
 const GITHUB_EVENT_WORDS = {
   [GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED]: { what: "a pull request", happens: "is opened" },
@@ -267,7 +270,7 @@ export function automationGroups(
 /**
  * A trigger as one sentence, as a row and the editor say what fires it: a
  * schedule in words, a GitHub event with the repositories it is heard in and
- * the labels and branches it keeps to, a webhook's call, and an
+ * the labels and branches it keeps to, the default branch named first, a webhook's call, and an
  * integration's event with the provider it comes from.
  */
 export function automationTriggerText(
@@ -308,7 +311,12 @@ export function automationTriggerText(
       const also = included.length === 0 ? "" : `, ${andList(included)} included`;
       const where = repositories.length === 0 ? "" : ` in ${orList(repositories)}`;
       const labels = trigger.labels ?? [];
-      const branches = trigger.branches ?? [];
+
+      const branches = [
+        ...(trigger.defaultBranch === true ? [DEFAULT_BRANCH_WORDS] : []),
+        ...(trigger.branches ?? []),
+      ];
+
       const labeled = labels.length === 0 ? "" : ` labeled ${orList(labels)}`;
       const on = branches.length === 0 ? "" : ` on ${orList(branches)}`;
 

@@ -86,6 +86,9 @@
               },
               "maxItems": 10
             },
+            "defaultBranch": {
+              "type": "boolean"
+            },
             "senders": {
               "type": "array",
               "items": {

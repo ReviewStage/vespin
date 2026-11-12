@@ -156,6 +156,18 @@ test("a GitHub event is said as what happens, by whom, where, and the labels, br
     "When a check fails in acme/ledger",
   );
   assert.equal(
+    automationTriggerText(
+      {
+        kind: AUTOMATION_TRIGGER.GITHUB,
+        event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+        defaultBranch: true,
+        branches: ["release"],
+      },
+      ["acme/ledger"],
+    ),
+    "When a check fails in acme/ledger on the default branch or release",
+  );
+  assert.equal(
     automationTriggerText({ kind: AUTOMATION_TRIGGER.WEBHOOK }, ["acme/ledger"]),
     "When its webhook is called",
   );
