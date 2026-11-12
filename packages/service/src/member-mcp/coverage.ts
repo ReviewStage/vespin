@@ -413,6 +413,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceSentry: { install: NEEDS_BROWSER },
+  // A call's session and its seconds are the panel's own, which holds the microphone and the WebRTC peer.
+  voice: { open: SCREEN_ONLY, ended: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
     setExperiment: INTERNAL,

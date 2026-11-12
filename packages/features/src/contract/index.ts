@@ -39,6 +39,7 @@ import { taskFilesContract } from "./task-files.js";
 import { taskFollowersContract } from "./task-followers.js";
 import { taskSectionsContract } from "./task-sections.js";
 import { tasksContract } from "./tasks.js";
+import { voiceContract } from "./voice.js";
 import { workspaceEnvironmentContract } from "./workspace-environment.js";
 import { workspaceGithubContract } from "./workspace-github.js";
 import { workspaceInvitationsContract } from "./workspace-invitations.js";
@@ -99,6 +100,7 @@ export const hostedContract = {
   taskFiles: taskFilesContract,
   taskFollowers: taskFollowersContract,
   taskSections: taskSectionsContract,
+  voice: voiceContract,
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
   workspaceGithub: workspaceGithubContract,

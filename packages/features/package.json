@@ -210,6 +210,8 @@
     "./live-activity-wire": "./src/live-activity-wire.js",
     "./push-device-model": "./src/push-device-model.js",
     "./presence-wire": "./src/presence-wire.js",
+    "./voice-wire": "./src/voice-wire.js",
+    "./voices": "./src/voices.js",
     "./github-token-wire": "./src/github-token-wire.js",
     "./workspace-environment-wire": "./src/workspace-environment-wire.js",
     "./workspace-sandbox-setup-wire": "./src/workspace-sandbox-setup-wire.js",
