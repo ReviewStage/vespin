@@ -17,7 +17,9 @@ import {
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { Clock, Effect, Layer, Option, Predicate, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Redacted, Result } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { TestClock } from "effect/testing";
 import { afterEach, beforeEach, vi } from "vitest";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
@@ -46,6 +48,7 @@ import {
   mendInstallationStatus,
   setInstallationStatus,
 } from "./github-installations.js";
+import { GitHubBackground, githubRateGate } from "./github-rate-gate.js";
 
 /**
  * Our GitHub App's server client with GitHub a fake behind the
@@ -905,6 +908,67 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.ok(Option.isNone(unreached));
         assert.ok(Option.isSome(reached));
         assert.equal(repositoryMints(fake.sent).length, 4);
+      }).pipe(Effect.provide(GitHubApp.layer(GITHUB_APP_SETTINGS))),
+  );
+
+  it.effect(
+    "a member's token is minted while background work holds the background lane, though a background ask reached the repository first",
+    () =>
+      Effect.gen(function* () {
+        const relay = relayInstallation(214);
+        const busyOut = Promise.withResolvers<void>();
+        const busyAnswered = Promise.withResolvers<void>();
+
+        // The one background request that holds the background lane until the member's token is in hand.
+        const fake = githubReaching([relay], undefined, {}, async (sent) => {
+          if (!sent.url.endsWith("/pulls/1")) return undefined;
+          busyOut.resolve();
+          await busyAnswered.promise;
+
+          return Response.json({});
+        });
+
+        const gated = Layer.provide(Layer.fresh(githubRateGate), fake.layer);
+        const workspace = yield* openWorkspace(yield* openGithubUser());
+        yield* connectWorkspaceGitHub(workspace, relay);
+        const app = yield* GitHubApp;
+        const inBackground = Effect.provideService(GitHubBackground, true);
+
+        const minted = yield* Effect.gen(function* () {
+          const client = yield* HttpClient.HttpClient;
+
+          const busy = yield* client
+            .execute(
+              HttpClientRequest.get("https://api.github.com/repos/octo-org/relay/pulls/1").pipe(
+                HttpClientRequest.bearerToken(GITHUB_FIXTURE_INSTALLATION_TOKEN),
+              ),
+            )
+            .pipe(inBackground, Effect.forkChild);
+
+          yield* Effect.promise(() => busyOut.promise);
+
+          yield* app
+            .repositoryReadToken(workspace, "octo-org/relay", undefined)
+            .pipe(inBackground, Effect.forkChild);
+
+          // Note that the background ask is let reach the repository's kept reach before the member asks.
+          for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
+
+          // Note that the clock is moved on so the gate's second between mints passes; the busy request waits on no clock.
+          const ticking = yield* Effect.forkChild(
+            Effect.forever(Effect.andThen(TestClock.adjust(Duration.seconds(1)), Effect.yieldNow)),
+          );
+
+          // Note that this never settles while the reach waits behind the busy request, so the case fails on its timeout.
+          const token = yield* app.repositoryWriteToken(workspace, "octo-org/relay", undefined);
+          yield* Fiber.interrupt(ticking);
+          busyAnswered.resolve();
+          yield* Fiber.join(busy);
+
+          return token;
+        }).pipe(Effect.provide(gated));
+
+        assert.ok(Option.isSome(minted));
       }).pipe(Effect.provide(GitHubApp.layer(GITHUB_APP_SETTINGS))),
   );
 });
