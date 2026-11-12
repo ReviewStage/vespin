@@ -130,8 +130,8 @@ export interface DeviceSeams {
   readonly fileSystem: Layer.Layer<FileSystem.FileSystem>;
   /** The ids the host mints for its own records. */
   readonly createId: () => string;
-  /** Opens an address outside the app. */
-  readonly openExternal: (url: string) => Promise<void>;
+  /** Opens an address outside the app; a sign-in's in the system's authentication sheet, which closes on the page it names as its landing. */
+  readonly openExternal: (url: string, landing?: string) => Promise<void>;
   /** Opens a relay socket, which the terminals and the live reads ride. */
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */

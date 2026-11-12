@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, and a row whose press opens a menu of acts.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   ContextMenu,
@@ -33,6 +33,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, Button } from "./button.js";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -669,6 +670,114 @@ export function NoteRow({ symbol, words, detail, line, badge, onPress, remove }:
       </ContextMenu>
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
         {act}
+      </SwipeActions.Actions>
+    </SwipeActions>
+  );
+}
+
+/** A line under a connection's name: its words, and whether they say something went wrong, drawn in danger's ink. */
+export interface ConnectionLine {
+  readonly text: string;
+  readonly problem?: boolean | undefined;
+}
+
+type ConnectionRowProps = {
+  /** The connection's name, such as "Notion · Acme". */
+  readonly name: string;
+  /** Its lines under the name: where it stands, what it is for, or why it did not go. */
+  readonly lines: readonly ConnectionLine[];
+  /** The one act it offers at its end, such as Connect or Cancel, as a bordered button; none where it offers none there. */
+  readonly act?:
+    | {
+        readonly label: string;
+        /** Whether it takes no press now, such as while the last one is out. */
+        readonly disabled?: boolean | undefined;
+        readonly onPress: () => void;
+      }
+    | undefined;
+  /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
+  readonly menu?: readonly MemberRowAct[] | undefined;
+};
+
+/**
+ * A connection of the account's, such as an integration or an app given
+ * access: its name in the ink, its lines in the muted ink or a problem's in
+ * danger's, and its one act at its end as the system's bordered button, in
+ * the ink as a quiet act stands; the rest in the menu a long press opens, and
+ * a destructive one, such as Disconnect, behind a swipe too, which a full
+ * swipe never runs, since it asks first.
+ */
+export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProps) {
+  const colors = useColors();
+  const said = lines.map((line) => line.text).join(", ");
+
+  const drawn = (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+    >
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+        {lines.map((line) => (
+          <Text
+            key={line.text}
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(line.problem === true ? colors.DANGER_TEXT : colors.TEXT_MUTED),
+            ]}
+          >
+            {line.text}
+          </Text>
+        ))}
+      </VStack>
+      <Spacer />
+      {act === undefined ? null : (
+        <Button
+          label={act.label}
+          look={BUTTON_LOOK.BORDERED}
+          disabled={act.disabled}
+          onPress={act.onPress}
+        />
+      )}
+    </HStack>
+  );
+
+  const placed = [listRowBackground(colors.SURFACE), ...spokenValue(said)];
+
+  if (menu.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
+
+  const items = menu.map((each) => (
+    <SwiftUIButton
+      key={each.label}
+      label={each.label}
+      role={each.destructive === true ? "destructive" : "default"}
+      onPress={each.onPress}
+    />
+  ));
+
+  const swiped = menu.filter((each) => each.destructive === true);
+
+  const held = (
+    <ContextMenu>
+      <ContextMenu.Items>{items}</ContextMenu.Items>
+      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
+    </ContextMenu>
+  );
+
+  if (swiped.length === 0) return <HStack modifiers={placed}>{held}</HStack>;
+
+  return (
+    <SwipeActions modifiers={placed}>
+      {held}
+      <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
+        {swiped.map((each) => (
+          <SwiftUIButton
+            key={each.label}
+            label={each.label}
+            role={NOTE_REMOVE.ROLE}
+            onPress={each.onPress}
+          />
+        ))}
       </SwipeActions.Actions>
     </SwipeActions>
   );

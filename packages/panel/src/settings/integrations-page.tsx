@@ -6,6 +6,7 @@ import {
   serverRows,
 } from "@repo/features/agent-servers-model";
 import { connectionHealth } from "@repo/features/integration-health";
+import { INTEGRATIONS_PAGE_WORDS } from "@repo/features/integration-settings-words";
 import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
@@ -114,12 +115,12 @@ export interface IntegrationsFilter {
 const FILTER_INPUT_ID = "integrations-filter-input";
 
 /** What the page's search field asks for. */
-const FILTER_PLACEHOLDER = "Search integrations";
+const FILTER_PLACEHOLDER = INTEGRATIONS_PAGE_WORDS.SEARCH;
 
 const PAGE_LINE = {
   SIGNED_OUT: SIGNED_OUT_WORDS,
-  READ_FAILED: "Your integrations could not be read.",
-  NONE_OFFERED: "No integrations available",
+  READ_FAILED: INTEGRATIONS_PAGE_WORDS.READ_FAILED,
+  NONE_OFFERED: INTEGRATIONS_PAGE_WORDS.NONE_OFFERED,
 } as const;
 
 /** How many of the offered providers' rows stand as connected while the statuses are read; the rest stand as not. */
@@ -189,7 +190,7 @@ function FilterField({ filter }: { filter: IntegrationsFilter }): React.JSX.Elem
 
 /** What stands where the search finds nothing, said politely as it lands and as the query changes. */
 function NoMatchNote({ query }: { query: string }): React.JSX.Element {
-  const words = `No integrations match “${query.trim()}”`;
+  const words = INTEGRATIONS_PAGE_WORDS.NO_MATCH(query);
   useAnnounceShown(ANNOUNCE.POLITE, words);
 
   // Note that the note quotes the query, so it stays masked in a screen recording.
