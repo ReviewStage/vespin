@@ -14,11 +14,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import type { ComponentProps } from "react";
+import { useWindowDimensions } from "react-native";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
+import { WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
 
 /** What the switcher is drawn from, which a tab's root bar draws it by. */
 export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
@@ -65,8 +65,8 @@ export function switcherWorkspace(
  * its main list, as Notion's one workspace button does, so the bar holds no
  * photo of its own beside it; New workspace opens its sheet, and the
  * Settings… under the chosen workspace's name opens Settings on its page.
- * The list opens over its button in a regular window and from the screen's
- * foot in a compact one. None before the account's workspaces are read.
+ * The list opens over its button in a window regular in both width and
+ * height, an iPad's, and from the screen's foot in any other. None before the account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const router = useRouter();
@@ -75,7 +75,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
-  const sizeClass = useWindowSizeClass();
+  const { width, height } = useWindowDimensions();
 
   if (chosen === undefined) return undefined;
   const first = workspaces[0]?.id;
@@ -94,8 +94,10 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
         : { name: account.name, picture: account.picture, onPress: account.onPress },
     actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
     onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
+    // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
     presentation:
-      sizeClass === WINDOW_SIZE_CLASS.REGULAR
+      windowSizeClass(width) === WINDOW_SIZE_CLASS.REGULAR &&
+      windowSizeClass(height) === WINDOW_SIZE_CLASS.REGULAR
         ? SWITCHER_PRESENTATION.POPOVER
         : SWITCHER_PRESENTATION.SHEET,
   };

@@ -31,8 +31,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { type ReactNode, useState } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { Avatar } from "./marks.js";
-import { SettingsForm } from "./settings-form.js";
+import { ActionRow, SettingsForm } from "./settings-form.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -179,6 +180,7 @@ function SwitcherRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const checkSize = useScaledSize(CHECK_SIZE);
 
   return (
     <SwiftUIButton
@@ -213,37 +215,13 @@ function SwitcherRow({
         {checked ? (
           <Image
             systemName="checkmark"
-            size={CHECK_SIZE}
+            size={checkSize}
             color={colors.ACCENT}
             modifiers={[accessibilityHidden()]}
           />
         ) : null}
       </HStack>
     </SwiftUIButton>
-  );
-}
-
-/** A plain act of the list, such as New workspace: its glyph and its words, in the ink. */
-function ActRow({
-  label,
-  symbol,
-  heard = label,
-  onPress,
-}: {
-  readonly label: string;
-  readonly symbol: SfSymbol;
-  readonly heard?: string | undefined;
-  readonly onPress: () => void;
-}) {
-  const colors = useColors();
-
-  return (
-    <SwiftUIButton
-      label={label}
-      systemImage={symbol}
-      onPress={onPress}
-      modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE)]}
-    />
   );
 }
 
@@ -264,6 +242,7 @@ function SwitcherList({
   readonly closed: (then: () => void, presents: boolean) => void;
 }) {
   const { workspaces, chosen, onChoose, account, actions, onWorkspaceSettings } = props;
+  const markSize = useScaledSize(ROW_MARK_SIZE);
 
   return (
     <SettingsForm>
@@ -271,7 +250,7 @@ function SwitcherList({
         {workspaces.map((workspace) => (
           <SwitcherRow
             key={workspace.id}
-            mark={<WorkspaceTile workspace={workspace} size={ROW_MARK_SIZE} />}
+            mark={<WorkspaceTile workspace={workspace} size={markSize} />}
             name={workspace.name}
             line={workspace.line}
             checked={workspace.id === chosen.id}
@@ -283,14 +262,14 @@ function SwitcherList({
         <Section>
           {account === undefined ? null : (
             <SwitcherRow
-              mark={<Avatar name={account.name} picture={account.picture} size={ROW_MARK_SIZE} />}
+              mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
               name={account.name}
               line={SETTINGS}
               onPress={() => closed(account.onPress, true)}
             />
           )}
           {actions.map((action) => (
-            <ActRow
+            <ActionRow
               key={action.label}
               label={action.label}
               symbol={action.symbol}
@@ -301,7 +280,7 @@ function SwitcherList({
       )}
       {onWorkspaceSettings === undefined ? null : (
         <Section title={chosen.name}>
-          <ActRow
+          <ActionRow
             label={WORKSPACE_SETTINGS}
             symbol="building.2"
             heard={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
