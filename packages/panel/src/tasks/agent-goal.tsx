@@ -4,8 +4,8 @@
  * The row is a card of one row, as the pull request's is over it
  * (`agent-published.tsx`): the goal's condition on one line, where it stands
  * at the row's end, the goal whole and how far it has run in the card its
- * hint hangs, a press bringing in its newest notice, and its ⋯ and
- * right-click offering Copy goal and Clear goal. A goal that wants the
+ * hint hangs, a press bringing in its newest notice, and its acts at its end
+ * as a queued message's are: Pause, Resume and Clear. A goal that wants the
  * developer says so on its own row, in its tone (`goalTone`): paused or out
  * of budget in the attention tone, a paused one's Resume standing on it, and
  * a blocked one in the danger tone. The notices are what the goal
@@ -34,6 +34,8 @@ import {
   HoverCardHead,
   HoverCardNote,
   HoverCardRule,
+  IconButton,
+  LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
   ListRow,
@@ -48,14 +50,12 @@ import {
   type StatusTone,
   TIME_LOOK,
   Time,
+  VisuallyHidden,
 } from "@repo/ui";
 import { CircleCheckIcon, CircleSlashIcon, GLYPH } from "@repo/ui/icons";
 import { GOAL_EVENT, type GoalNotice } from "@repo/wire/ui-messages";
 import { type ReactNode, useMemo } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
-import { useCoarsePointer } from "../coarse-pointer.js";
-import { useCopyToast } from "../copy-feedback.js";
-import { rowMenu } from "../desktop/action-menu.js";
 import { centerWithin } from "../scroll-within.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 
@@ -111,23 +111,41 @@ function goalTone(goal: AgentGoal): StatusTone | undefined {
   }
 }
 
+/** The words a row's end stands in, its parts apart by the gap a pull request's row keeps between its state and its lines (`agent-published.tsx`). */
+const STANDING_CLASS = "inline-flex items-center gap-icon-gap whitespace-nowrap tabular-nums";
+
+/** A count of turns, as the row and its card say it: "1 turn", "3 turns". */
+function turnWords(turns: number): string {
+  return turns === 1 ? "1 turn" : `${turns} turns`;
+}
+
 /** Where the goal stands, in the few words a row's end holds, as a pull request's row says its state and lines; while it runs, how far it has gone and for how long. */
 function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   switch (goal.state) {
     case AGENT_GOAL_STATE.PAUSED:
       return (
-        <span className="inline-flex items-center gap-tight-gap font-label text-attention">
+        <span className={`${STANDING_CLASS} font-label text-attention`}>
           <AttentionMark />
           Paused
         </span>
       );
     case AGENT_GOAL_STATE.MET:
-      return <span className="text-muted-foreground">{`Met · ${goal.turns} turns`}</span>;
+      // Note that the tick says the goal was met, in the ink a passed check wears, and its words say what it took.
+      return (
+        <span className={`${STANDING_CLASS} text-muted-foreground`}>
+          <CircleCheckIcon
+            className="size-attention-mark flex-none text-complete"
+            aria-hidden="true"
+          />
+          <VisuallyHidden>Met in</VisuallyHidden>
+          {goal.tokens === null ? turnWords(goal.turns) : `${TOKENS.format(goal.tokens)} tokens`}
+        </span>
+      );
     case AGENT_GOAL_STATE.IMPOSSIBLE:
-      return <span className="font-label text-danger">Blocked</span>;
+      return <span className={`${STANDING_CLASS} font-label text-danger`}>Blocked</span>;
     case AGENT_GOAL_STATE.BUDGET_LIMITED:
       return (
-        <span className="inline-flex items-center gap-tight-gap font-label text-attention">
+        <span className={`${STANDING_CLASS} font-label text-attention`}>
           <AttentionMark />
           Budget reached
         </span>
@@ -135,12 +153,12 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
     default:
       // Note that a goal whose agent stopped working is still set, and the harness picks it up again on the next message.
       return working ? (
-        <span className="whitespace-nowrap text-muted-foreground tabular-nums">
-          {`${spentWords(goal)} · `}
+        <span className={`${STANDING_CLASS} text-muted-foreground`}>
+          <span>{spentWords(goal)}</span>
           {goal.setAt === undefined ? null : <Time at={goal.setAt} look={TIME_LOOK.DURATION} />}
         </span>
       ) : (
-        <span className="text-muted-foreground">Stopped</span>
+        <span className={`${STANDING_CLASS} text-muted-foreground`}>Stopped</span>
       );
   }
 }
@@ -172,17 +190,21 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
 
 /**
  * The goal over the message box, while one stands: nothing where the agent
- * has none. `onClear` and `onResume` send the harness its command, and are
- * none where the reader may not write to the agent or the harness takes no
- * such command.
+ * has none. `onPause`, `onResume` and `onClear` send the harness its
+ * command, and are none where the reader may not write to the agent or the
+ * harness takes no such command (only Codex pauses a goal). Its acts stand
+ * at its end as a queued message's do (`agent-queue-dock.tsx`), on hover:
+ * Pause while it runs and Clear until it settles; a paused goal's Resume
+ * stands at rest, since the agent waits on it.
  */
 export function GoalDock({
   messages,
   older,
   working,
   onBringIn,
-  onClear,
+  onPause,
   onResume,
+  onClear,
 }: {
   /** The transcript as the service stored it: a line still on its way, or refused, says nothing of the goal. */
   messages: readonly AgentTranscriptMessage[];
@@ -192,46 +214,49 @@ export function GoalDock({
   working: boolean;
   /** Takes the transcript to the end of a turn, by its id, where the goal's newest notice stands. */
   onBringIn: (messageId: string) => void;
-  onClear: (() => void) | undefined;
+  onPause: (() => void) | undefined;
   onResume: (() => void) | undefined;
+  onClear: (() => void) | undefined;
 }): ReactNode {
   const goal = useMemo(() => agentGoal(messages, older), [messages, older]);
-  const coarse = useCoarsePointer();
-  const copy = useCopyToast();
 
   if (goal === undefined) return null;
-  const settled = goalSettled(goal);
   const paused = goal.state === AGENT_GOAL_STATE.PAUSED;
+  const resume = paused ? onResume : undefined;
+  const pause = goal.state === AGENT_GOAL_STATE.ACTIVE ? onPause : undefined;
+  const clear = goalSettled(goal) ? undefined : onClear;
 
-  const menu = rowMenu(
-    GOAL_THING,
-    [
-      [
-        {
-          label: "Copy goal",
-          icon: <GLYPH.COPY />,
-          onSelect: () => copy(goal.condition, "Goal copied"),
-        },
-      ],
-      ...(onClear === undefined || settled
-        ? []
-        : [[{ label: "Clear goal", icon: <GLYPH.CLOSE />, onSelect: onClear }]]),
-    ],
-    undefined,
-    true,
-  );
-
-  const resume =
-    paused && onResume !== undefined ? (
-      <Button
-        size={BUTTON_SIZE.COMPACT}
-        variant={BUTTON_VARIANT.OUTLINE}
-        icon={<PlayIcon />}
-        onClick={onResume}
-      >
-        Resume
-      </Button>
-    ) : undefined;
+  const acts =
+    resume === undefined && pause === undefined && clear === undefined ? undefined : (
+      <>
+        {resume === undefined ? null : (
+          <Button
+            size={BUTTON_SIZE.COMPACT}
+            variant={BUTTON_VARIANT.OUTLINE}
+            icon={<PlayIcon />}
+            onClick={resume}
+          >
+            Resume
+          </Button>
+        )}
+        {pause === undefined ? null : (
+          <IconButton
+            size={BUTTON_SIZE.COMPACT}
+            label="Pause goal"
+            icon={<PauseIcon />}
+            onClick={pause}
+          />
+        )}
+        {clear === undefined ? null : (
+          <IconButton
+            size={BUTTON_SIZE.COMPACT}
+            label="Clear goal"
+            icon={<GLYPH.CLOSE />}
+            onClick={clear}
+          />
+        )}
+      </>
+    );
 
   return (
     <div className={`agent-goal-dock ${COMPOSER_DOCK_CLASS}`}>
@@ -244,13 +269,9 @@ export function GoalDock({
             meta={<GoalStanding goal={goal} working={working} />}
             hint={{ Hint: RowHint, label: goal.condition }}
             onPress={() => onBringIn(goal.messageId)}
-            menu={menu}
-            // Note that a row whose Resume stands draws no ⋯, whose room beside it would hold Resume off the row's end; its menu stays on a right-click.
-            more={!coarse && resume === undefined}
-            muted={goal.state === AGENT_GOAL_STATE.MET}
             tone={goalTone(goal)}
-            // Note that a paused goal holds its Resume on its row at rest, since the agent waits on the developer's press.
-            {...(resume === undefined ? undefined : { actions: resume })}
+            actions={acts}
+            actionsAt={resume === undefined ? LIST_ROW_ACTIONS.HOVER : LIST_ROW_ACTIONS.ALWAYS}
           />
         </RowHintOptions>
       </List>
