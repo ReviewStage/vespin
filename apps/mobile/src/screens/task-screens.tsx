@@ -133,6 +133,7 @@ import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
@@ -782,6 +783,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 export function useSidebarTasks(): SidebarTasks {
   const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
+
   const groups = [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
     ...(tree.following === undefined ? [] : [tree.following]),
@@ -922,10 +924,11 @@ function agentState(status: AgentStatus): AgentRowState {
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
-/** The task's head: its name, its chips, and who created it and when. */
+/** The task's head: its name, its chips, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
+  const following = useFollowingChip(task.id);
 
   return (
     <TaskHead
@@ -941,6 +944,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
               nobody: false,
             }
       }
+      following={following}
       createdBy={
         task.createdBy === undefined
           ? undefined
