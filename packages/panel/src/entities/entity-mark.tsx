@@ -7,6 +7,7 @@ import {
   type EntityOf,
   type KnownNames,
 } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
@@ -26,7 +27,6 @@ import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
-import type { LinkStanding } from "../tasks/use-link-standing.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
 

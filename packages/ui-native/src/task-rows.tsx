@@ -30,6 +30,7 @@ import {
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -473,6 +474,8 @@ type WordsRowProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -517,6 +520,7 @@ export function WordsRow({
   last = true,
   pictureSource,
   videoAt,
+  linkStanding,
 }: WordsRowProps) {
   const colors = useColors();
 
@@ -529,6 +533,7 @@ export function WordsRow({
           onOpenLink={onOpenLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          linkStanding={linkStanding}
           headings
         />
       </View>
