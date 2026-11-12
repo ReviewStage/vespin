@@ -1419,7 +1419,12 @@ test("a new automation started from Triage a red main or Investigate Sentry aler
       preset: made.preset,
       trigger:
         made.trigger.kind === AUTOMATION_TRIGGER.GITHUB
-          ? { kind: made.trigger.kind, event: made.trigger.event, branches: made.trigger.branches }
+          ? {
+              kind: made.trigger.kind,
+              event: made.trigger.event,
+              branches: made.trigger.branches,
+              defaultBranch: made.trigger.defaultBranch,
+            }
           : made.trigger,
       scope: made.scope,
       target: made.target,
@@ -1431,7 +1436,8 @@ test("a new automation started from Triage a red main or Investigate Sentry aler
         trigger: {
           kind: AUTOMATION_TRIGGER.GITHUB,
           event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-          branches: ["main", "master"],
+          branches: undefined,
+          defaultBranch: true,
         },
         scope: AUTOMATION_SCOPE.WORKSPACE,
         target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: null },
