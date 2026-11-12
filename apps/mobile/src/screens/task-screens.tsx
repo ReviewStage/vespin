@@ -1104,7 +1104,9 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
 
   return {
     archive: (agentId) =>
-      void readAfresh(agentId).then(() => setAsked({ agentId, presented: true })),
+      void readAfresh(agentId).then((stands) => {
+        if (stands) setAsked({ agentId, presented: true });
+      }),
     ask: (
       <ConfirmAsk
         title={question.title}

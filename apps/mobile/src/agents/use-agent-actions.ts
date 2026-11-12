@@ -35,7 +35,7 @@ import { selectAgentPinned } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -73,8 +73,8 @@ function archiveQuestion(working: boolean): ArchiveQuestion {
 export interface ArchiveAsk {
   /** What Archive asks, by where the agent stood when it was raised. */
   readonly question: ArchiveQuestion;
-  /** Reads the agent `agentId` names afresh, and answers once the question is ready to stand. */
-  readonly ask: (agentId: string) => Promise<void>;
+  /** Reads the agent `agentId` names afresh, and answers whether the question may stand: false where a later ask overtook this one. */
+  readonly ask: (agentId: string) => Promise<boolean>;
 }
 
 /**
@@ -84,20 +84,30 @@ export interface ArchiveAsk {
  * or the fresh read finds the agent at work, or where the read failed,
  * because one that started a turn since would otherwise be stopped without
  * a word of it, while a needless Stop and archive costs only its words.
+ * Only the latest ask answers, so a slow read for one agent never stands
+ * its question over another's.
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const agent = useFollowedAgent(agentId);
   const readAgent = useReadAgent();
   const [freshWorking, setFreshWorking] = useState(false);
+  const latest = useRef(0);
 
   const working = freshWorking || (agent !== undefined && agentStillWriting(agent.status));
 
   return {
     question: archiveQuestion(working),
-    ask: (asked) =>
-      readAgent(asked).then((fresh) =>
-        setFreshWorking(fresh === undefined || agentStillWriting(fresh.status)),
-      ),
+    ask: (asked) => {
+      latest.current += 1;
+      const mine = latest.current;
+
+      return readAgent(asked).then((fresh) => {
+        if (latest.current !== mine) return false;
+        setFreshWorking(fresh === undefined || agentStillWriting(fresh.status));
+
+        return true;
+      });
+    },
   };
 }
 

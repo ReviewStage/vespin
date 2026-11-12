@@ -11,6 +11,7 @@
  * fold reads it (`ACT_KIND.AGENTS_PART`).
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
 import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { type AgentPageAnswerView, TRANSCRIPT_KIND } from "@repo/features/agent-view";
@@ -56,10 +57,21 @@ function selectTasksRead(state: AppStateSnapshot): boolean {
   return state.tasks.listStatus === TASKS_READ.READY;
 }
 
-/** One agent's own read (`AGENTS_PAGE`), as the panel's `agentPageQueryOptions` asks it: every ask reads afresh, and a failure is never tried again on its own. */
-function agentPageQuery(acts: ReturnType<typeof useHostActs>, agentId: string) {
+/** The account signed in, whose reads an agent's own read is kept under; none while signed out. */
+function selectAccountId(state: AppStateSnapshot): string | undefined {
+  return signedInAccountId(state.account);
+}
+
+/**
+ * One agent's own read (`AGENTS_PAGE`), as the panel's `agentPageQueryOptions`
+ * asks it: every ask reads afresh, and a failure is never tried again on its
+ * own. Note that it's kept under the account that read it, because the
+ * session's one query client outlives a sign-out, and another account must
+ * never be shown a page read for the last.
+ */
+function agentPageQuery(acts: ReturnType<typeof useHostActs>, accountId: string, agentId: string) {
   return {
-    queryKey: [AGENT_PAGE_QUERY, agentId],
+    queryKey: [AGENT_PAGE_QUERY, accountId, agentId],
     queryFn: () => acts[ACT_KIND.AGENTS_PAGE]({ agentId }),
     retry: false,
   } as const;
@@ -90,10 +102,11 @@ export function useShownAgent(agentId: string): FollowedAgent | undefined {
   const acts = useHostActs();
   const listed = useFollowedAgent(agentId);
   const { data: read = false } = useQuery({ ...appStateQuery, select: selectTasksRead });
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
   const page = useQuery({
-    ...agentPageQuery(acts, agentId),
-    enabled: read && listed === undefined && agentId !== "",
+    ...agentPageQuery(acts, accountId ?? "", agentId),
+    enabled: read && listed === undefined && agentId !== "" && accountId !== undefined,
     select: agentOfAnswer,
   }).data;
 
@@ -104,11 +117,16 @@ export function useShownAgent(agentId: string): FollowedAgent | undefined {
 export function useReadAgent(): (agentId: string) => Promise<ListedAgent | undefined> {
   const acts = useHostActs();
   const queryClient = useQueryClient();
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
   return useCallback(
     (agentId: string) =>
-      queryClient.fetchQuery(agentPageQuery(acts, agentId)).then(agentOfAnswer, () => undefined),
-    [acts, queryClient],
+      accountId === undefined
+        ? Promise.resolve(undefined)
+        : queryClient
+            .fetchQuery(agentPageQuery(acts, accountId, agentId))
+            .then(agentOfAnswer, () => undefined),
+    [acts, accountId, queryClient],
   );
 }
 

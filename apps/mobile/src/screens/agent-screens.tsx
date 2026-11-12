@@ -534,7 +534,11 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction
                 icon="archivebox"
                 destructive
-                onPress={() => void actions.archiveAsk.ask(id).then(() => setArchiving(true))}
+                onPress={() =>
+                  void actions.archiveAsk.ask(id).then((stands) => {
+                    if (stands) setArchiving(true);
+                  })
+                }
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
