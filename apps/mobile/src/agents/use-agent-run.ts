@@ -6,7 +6,9 @@
  * the Run actions experiment on, the agent runs in the cloud, never on a
  * member's own Mac, whose actions run only there, and its repository keeps
  * any (`WORKSPACE_SANDBOX_SETUP_READ`). Which run is read off the agent's
- * shells (`TERMINAL_LIST`) every few seconds while the page is in focus. A
+ * shells (`TERMINAL_LIST`) every few seconds while the page is in focus, and
+ * none is offered until they are read, so a running one is never offered as
+ * idle. A press under way holds its action until it settles. A
  * press resumes a stopped sandbox first (`TERMINAL_RESUME`), as the panel's
  * does, then runs the action (`AGENTS_RUN_ACTION`) or stops it
  * (`AGENTS_RUN_ACTION_STOP`); the phone draws no Terminal tab, so what runs
@@ -29,7 +31,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -78,6 +80,7 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const actions = asks ? repositoryRunActions(setup?.runActions, agent?.repository) : [];
   const offered = actions.length > 0;
   const shellsKey = [QUERY_ROOT.SHELLS, agentId];
+  const pressing = useRef(new Set<string>());
 
   const { data: shellsRead } = useQuery({
     queryKey: shellsKey,
@@ -126,11 +129,19 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
       },
     );
 
+  // Note that a press under way holds its action, so a second press before it settles sends nothing.
   const offer = (action: RunAction): OfferedRunAction => {
     const runs = running.has(action.id);
 
-    return { action, runs, onPress: () => void (runs ? stop(action) : run(action)) };
+    const onPress = () => {
+      if (pressing.current.has(action.id)) return;
+      pressing.current.add(action.id);
+      void (runs ? stop(action) : run(action)).finally(() => pressing.current.delete(action.id));
+    };
+
+    return { action, runs, onPress };
   };
 
-  return actions.map(offer);
+  // Note that nothing is offered until the shells are read, since an action read as idle before then would run again rather than stop; the read every few seconds is its Try again.
+  return shells === undefined ? [] : actions.map(offer);
 }

@@ -11,6 +11,7 @@ describe("portRows", () => {
     {
       when: "none is shared",
       shared: undefined,
+      linkRead: true,
       rows: [
         { port: 3000, url: undefined, acts: [PORT_ACT.SHARE] },
         { port: 5173, url: undefined, acts: [PORT_ACT.SHARE] },
@@ -19,6 +20,7 @@ describe("portRows", () => {
     {
       when: "one is shared",
       shared: { port: 3000, url: "https://one.vespin.page" },
+      linkRead: true,
       rows: [
         {
           port: 3000,
@@ -31,6 +33,7 @@ describe("portRows", () => {
     {
       when: "the shared one is no longer listed",
       shared: { port: 8080, url: "https://gone.vespin.page" },
+      linkRead: true,
       rows: [
         { port: 3000, url: undefined, acts: [] },
         { port: 5173, url: undefined, acts: [] },
@@ -41,7 +44,19 @@ describe("portRows", () => {
         },
       ],
     },
-  ])("offers Share on every port only while none is shared ($when)", ({ shared, rows }) => {
-    expect(portRows({ ports: PORTS, shared })).toMatchObject(rows);
-  });
+    {
+      when: "the link is not read, so one may be live",
+      shared: undefined,
+      linkRead: false,
+      rows: [
+        { port: 3000, url: undefined, acts: [] },
+        { port: 5173, url: undefined, acts: [] },
+      ],
+    },
+  ])(
+    "offers Share on every port only while none is known shared ($when)",
+    ({ shared, linkRead, rows }) => {
+      expect(portRows({ ports: PORTS, shared, linkRead })).toMatchObject(rows);
+    },
+  );
 });

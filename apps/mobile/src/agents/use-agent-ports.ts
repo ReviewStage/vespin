@@ -48,6 +48,8 @@ export interface AgentPorts {
   readonly rows: readonly PortRow[];
   /** What stands where no port is listed. */
   readonly none: string;
+  /** Why the shared link could not be read, where it could not; none otherwise. */
+  readonly linkNote: string | undefined;
   /** Shares `port` by a public link, or closes the shared one with `null`. */
   readonly share: (port: number | null) => void;
   /** Copies a shared port's link. */
@@ -134,5 +136,12 @@ export function useAgentPorts(agentId: string): AgentPorts {
       });
   };
 
-  return { rows: portRows(view), none: view.none, share, copy, note };
+  return {
+    rows: portRows(view),
+    none: view.none,
+    linkNote: view.linkFailed ? AGENT_PORTS_WORDS.LINK_NOT_READ : undefined,
+    share,
+    copy,
+    note,
+  };
 }

@@ -831,7 +831,9 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={ports.note ?? (ports.rows.length === 0 ? ports.none : undefined)}>
+          <ListSection
+            footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+          >
             {ports.rows.map((row) => (
               <MenuRow
                 key={row.port}

@@ -20,6 +20,7 @@ export const AGENT_PORTS_WORDS = {
   WAITING: "Waiting for a port to listen",
   READING: "Looking for ports",
   NOT_READ: "Couldn't read the ports",
+  LINK_NOT_READ: "Couldn't read the shared link",
   STOPPED: "Sandbox not running",
   SHARE: "Share",
   OPEN_LINK: "Open link",
@@ -47,7 +48,12 @@ export interface SharedPort {
 /** The ports as the service answers them: each port, the one shared by link, and the line standing where none is listed. */
 export interface HostedPorts {
   readonly ports: readonly ListedPort[];
+  /** The port shared by link; none where none is, or where the link is not read. */
   readonly shared: SharedPort | undefined;
+  /** Whether the shared link is read, so none shared means none; until it is, a port offers no Share, since a link may be live. */
+  readonly linkRead: boolean;
+  /** Whether the shared link's read failed, which the next read every few seconds tries again. */
+  readonly linkFailed: boolean;
   readonly none: string;
 }
 
@@ -67,6 +73,8 @@ export function hostedPorts(
   return {
     ports: (read?.ports ?? []).map((port) => ({ port, label: labels.get(port) })),
     shared: linked === undefined || "failure" in linked ? undefined : (linked.shared ?? undefined),
+    linkRead: linked !== undefined && !("failure" in linked),
+    linkFailed: linked !== undefined && "failure" in linked,
     none:
       listed === undefined
         ? AGENT_PORTS_WORDS.READING
@@ -104,16 +112,20 @@ const SHARED_ACTS: readonly PortAct[] = [
 /**
  * One row per port, in the sandbox's order: the shared one offering its
  * link, Copy link, and Stop sharing; each other offering Share while none
- * is shared and nothing while one is; and the shared port last where the
- * sandbox no longer lists it, so its link can still be stopped.
+ * is shared and nothing while one is, or while the link is not read; and
+ * the shared port last where the sandbox no longer lists it, so its link
+ * can still be stopped.
  */
-export function portRows(view: Pick<HostedPorts, "ports" | "shared">): readonly PortRow[] {
+export function portRows(
+  view: Pick<HostedPorts, "ports" | "shared" | "linkRead">,
+): readonly PortRow[] {
   const { shared } = view;
+  const shareable = shared === undefined && view.linkRead;
 
   const rows = view.ports.map(({ port, label }): PortRow => {
     if (shared?.port === port) return { port, label, url: shared.url, acts: SHARED_ACTS };
 
-    return { port, label, url: undefined, acts: shared === undefined ? [PORT_ACT.SHARE] : [] };
+    return { port, label, url: undefined, acts: shareable ? [PORT_ACT.SHARE] : [] };
   });
 
   if (shared === undefined || view.ports.some(({ port }) => port === shared.port)) return rows;
