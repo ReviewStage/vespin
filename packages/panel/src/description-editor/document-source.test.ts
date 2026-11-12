@@ -402,6 +402,15 @@ test("a tight list switching between bullets and task items is handed over untou
   assert.equal(handedOver(), text.replace("two", "two again"));
 });
 
+test("blocks written with no blank line between them stay so when another block is edited", () => {
+  const text = "## Steps\nDo these in order:\n- Install\n- Run\n\n```sh\npnpm dev\n```\nThe end.\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " Fixed.");
+
+  assert.equal(handedOver(), text.replace("The end.", "The end. Fixed."));
+});
+
 test("a code block after a second paragraph in a numbered item keeps its lines when the list is edited", () => {
   const text = "1. Install:\n\n   Then:\n   ```sh\n   pnpm install\n   ```\n2. Run.\n";
   const { editor, handedOver } = opened(text);
