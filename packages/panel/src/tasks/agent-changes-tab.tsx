@@ -12,6 +12,7 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { imageTypeOfPath } from "@repo/features/github-image";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
 import { REFRESH_FAILED_WORDS } from "@repo/features/words";
@@ -1418,28 +1419,17 @@ function imagesOf(
   pullRequest: { readonly url: string; readonly headSha?: string; readonly baseSha?: string },
   read: number,
 ): ImageSides | undefined {
-  const [owner, name] = URL.canParse(pullRequest.url)
-    ? new URL(pullRequest.url).pathname.split("/").filter((segment) => segment !== "")
-    : [];
+  const repository = pullRequestAddressOf(pullRequest.url)?.repository;
 
-  if (owner === undefined || name === undefined) return undefined;
+  if (repository === undefined) return undefined;
 
   return {
     agentId,
-    repository: `${owner}/${name}`,
+    repository,
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
     read,
   };
-}
-
-/** The repository a pull request's page on GitHub names, as `owner/name`; none where it names none. */
-function repositoryOf(url: string): string | undefined {
-  const [owner, name] = URL.canParse(url)
-    ? new URL(url).pathname.split("/").filter((segment) => segment !== "")
-    : [];
-
-  return owner === undefined || name === undefined ? undefined : `${owner}/${name}`;
 }
 
 /** What a refusal of the service's read says of a file's gaps: not text, and anything else that it could not be read just now. */
@@ -1516,7 +1506,9 @@ function useFileTexts(
 
   const read = useMemo(() => {
     const headSha = pullRequest?.headSha;
-    const own = pullRequest === null ? undefined : repositoryOf(pullRequest.url);
+
+    const own =
+      pullRequest === null ? undefined : pullRequestAddressOf(pullRequest.url)?.repository;
 
     if (taskId === null || headSha === undefined || repository === null || own === undefined) {
       return undefined;

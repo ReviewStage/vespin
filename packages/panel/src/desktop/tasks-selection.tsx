@@ -21,7 +21,7 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";
 import { Predicate } from "effect";
-import { createContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
@@ -237,6 +237,11 @@ export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): 
   };
 }
 
+/** Whether two sets hold the same members. */
+function sameMembers(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((member) => b.has(member));
+}
+
 /**
  * The selection a row keyed `key` stands in, where it is one of several
  * chosen, offering `acts` on them all under how many `noun`s; none
@@ -255,7 +260,16 @@ export function useChosenOf(
     [count, noun, actsNow],
   );
 
-  return (key) => (several !== undefined && selected.has(key) ? several : undefined);
+  // Note that the answer stands until the choice changes, because the rows read it through context, and a new one draws every row again.
+  const chosen = useRef(selected);
+
+  if (!sameMembers(chosen.current, selected)) chosen.current = selected;
+  const members = chosen.current;
+
+  return useCallback(
+    (key: string) => (several !== undefined && members.has(key) ? several : undefined),
+    [several, members],
+  );
 }
 
 /** A page's selection of its tasks, as `useTasksSelection` keeps it. */

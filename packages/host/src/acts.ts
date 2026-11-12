@@ -196,6 +196,3 @@ export const isMailAddress: (address: string) => boolean = EffectSchema.is(mailA
 
 /** What `web.open` lets out of the window: a web address, to the browser, or a mail address, to the mail app. */
 export const openableAddress = EffectSchema.Union([webAddress, mailAddress]);
-
-/** Whether `web.open` takes an address, so a link drawn as a press is one the act will open. */
-export const isOpenableAddress: (address: string) => boolean = EffectSchema.is(openableAddress);

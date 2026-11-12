@@ -1,6 +1,8 @@
 // start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its relation to another task, its repository, its model and effort, and where its agent runs, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -28,7 +30,7 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, usePreventRemove, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -45,6 +47,7 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
@@ -65,8 +68,6 @@ const WORDS = {
   TASK: "Task",
   NO_RELATION: "None",
   CANCEL: "Cancel",
-  DISCARD_QUESTION: "Discard draft?",
-  DISCARD: "Discard draft",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
 } as const;
 
@@ -77,44 +78,6 @@ const TEST_IDS = {
 } as const;
 
 type SheetTestIds = (typeof TEST_IDS)[keyof typeof TEST_IDS];
-
-/** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
-interface KeptWords {
-  /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */
-  readonly asking: boolean;
-  /** Lets the sheet go, its draft with it, as the ask's Discard draft does. */
-  readonly discard: () => void;
-  /** Keeps the sheet and its draft, as the ask's Cancel does. */
-  readonly stay: () => void;
-  /** Lets the sheet go without asking, as a start taken does. */
-  readonly release: () => void;
-}
-
-/**
- * Keeps a sheet's draft while it holds one, words typed or a picture
- * attached, as Mail keeps a draft: the swipe down is held, and Cancel or a
- * swipe asks first whether to discard it. Note that a swipe the system held
- * comes back as a removal the stack prevented, so one ask answers both.
- */
-function useKeptWords(drafted: boolean): KeptWords {
-  const [letGo, setLetGo] = useState(false);
-  const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
-  const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
-
-  return {
-    asking: leave !== undefined,
-    discard: () => {
-      setLetGo(true);
-      setLeave(undefined);
-      leave?.();
-    },
-    stay: () => setLeave(undefined),
-    release: () => {
-      setLetGo(true);
-      disable();
-    },
-  };
-}
 
 /** File for later, as New task's bar offers it before Start: whether it is lit, and its press. */
 interface FileForLater {
@@ -174,8 +137,8 @@ function SheetBar({
         />
       </Stack.Toolbar>
       <ConfirmAsk
-        title={WORDS.DISCARD_QUESTION}
-        act={WORDS.DISCARD}
+        title={DISCARD_WORDS.QUESTION}
+        act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
         onAct={kept.discard}
@@ -316,11 +279,9 @@ function useSheetStart(
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
+        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
 
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
+        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
       })
       .finally(() => setStarting(false));
   };

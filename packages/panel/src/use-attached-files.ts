@@ -14,7 +14,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
 import { reportShownFailure } from "./failure-report.js";
 import { encodeImage } from "./feedback-images.js";
-import { imageFiles, isPictureFile } from "./picture-files.js";
+import { isPictureFile } from "./picture-files.js";
 import { base64Of } from "./tasks/attached-files.js";
 import { type FileDrop, useFileDrop } from "./use-file-drop.js";
 
@@ -25,7 +25,8 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * drop come the same way in each: read on this machine, held to the box's
  * count and to the bytes a message carries together, and taken after
  * whatever the box holds as the read lands, so neither a read that landed first nor a chip taken off
- * meanwhile is undone. A paste takes the pictures on the clipboard, and
+ * meanwhile is undone. A paste takes the files on the clipboard as a drop
+ * takes them, a screenshot, a PDF, or a file copied in the Finder, and
  * words long enough to bury the message (`LONG_PASTE`) as a text file of
  * their own, "Pasted text 1.txt", so the box keeps the words written
  * around them; shorter words paste as they always did, and so do long
@@ -265,7 +266,7 @@ export interface AttachedFiles {
   readonly reading: boolean;
   /** Takes files picked or handed to the box, in order. */
   readonly attach: (files: readonly File[]) => void;
-  /** Takes the pictures among pasted files, answering whether there were any, so text pastes as it always does. */
+  /** Takes pasted files as a drop takes them, answering whether there were any, so text pastes as it always does. */
   readonly paste: (files: readonly File[]) => boolean;
   /** Takes pasted words as a text file where they run long and the box has room for them as one, answering whether it did. */
   readonly pasteText: (words: string) => boolean;
@@ -382,10 +383,8 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
     reading: reading > 0,
     attach,
     paste: (files) => {
-      const pasted = imageFiles(files);
-
-      if (pasted.length === 0) return false;
-      attach(pasted);
+      if (files.length === 0) return false;
+      attach(files);
 
       return true;
     },

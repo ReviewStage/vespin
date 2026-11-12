@@ -1,5 +1,11 @@
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
-import { CLEAR_FAILED, STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
+import {
+  ARCHIVE_NOT_READY,
+  CLEAR_FAILED,
+  DELETE_FAILED,
+  STOP_FAILED,
+  STOP_NOTHING_YET,
+} from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
@@ -83,12 +89,10 @@ import {
 } from "../use-app-state.js";
 import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
-  ARCHIVE_NOT_READY,
   archivedManyWords,
   archiveWords,
   choiceRequest,
   continueFailureNote,
-  DELETE_WORDS,
   RENAME_FAILED,
   RETRY_FAILED,
   SERVERS_FAILED,
@@ -151,7 +155,7 @@ function deleteAnswered(answer: AgentDeleteAnswer): ActedResult {
 
   return {
     status: ACTION_RESULT_STATUS.REJECTED,
-    reason: notReady ? ARCHIVE_NOT_READY : DELETE_WORDS.refused,
+    reason: notReady ? ARCHIVE_NOT_READY : DELETE_FAILED,
     cause: answer,
   };
 }

@@ -46,6 +46,7 @@ import {
 } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   selectAccount,
   selectAgentDefault,
@@ -187,6 +188,41 @@ export interface RepositoryPick {
   readonly pick: (repository: string) => void;
 }
 
+/** The repositories a workspace's GitHub reaches, by full name, and whether their list has been read. */
+export interface WorkspaceRepositories {
+  readonly listed: readonly string[];
+  readonly read: boolean;
+}
+
+/** No repositories read yet. */
+const NO_REPOSITORIES: readonly string[] = [];
+
+/**
+ * The repositories the workspace's GitHub reaches, followed while the
+ * screen that reads them stands, as the panel's chooser follows them
+ * (`TASKS_REPOSITORIES_FOLLOW`); none before a workspace is named.
+ */
+export function useWorkspaceRepositories(workspaceId: string | undefined): WorkspaceRepositories {
+  const acts = useHostActs();
+  useLiveFollow(workspaceId, (id) => acts[ACT_KIND.TASKS_REPOSITORIES_FOLLOW]({ workspaceId: id }));
+
+  const select = useMemo(() => {
+    const list = selectRepositoryList(workspaceId ?? "");
+
+    return (state: AppStateSnapshot) => list(state)?.rows;
+  }, [workspaceId]);
+
+  const { data: rows } = useQuery({ ...appStateQuery, select });
+
+  return useMemo(
+    () => ({
+      listed: rows?.repositories.map(({ fullName }) => fullName) ?? NO_REPOSITORIES,
+      read: rows !== undefined,
+    }),
+    [rows],
+  );
+}
+
 /**
  * The repositories the workspace's GitHub reaches, followed while the sheet
  * stands, and the one a task starts in: the pick, else the newest the
@@ -198,25 +234,15 @@ export function useRepositoryPick(
   workspace: Workspace | undefined,
   drafted?: string | undefined,
 ): RepositoryPick {
-  const acts = useHostActs();
-  const workspaceId = workspace?.id;
-  useLiveFollow(workspaceId, (id) => acts[ACT_KIND.TASKS_REPOSITORIES_FOLLOW]({ workspaceId: id }));
-  const select = useMemo(() => selectRepositoryList(workspaceId ?? ""), [workspaceId]);
-  const { data: read } = useQuery({ ...appStateQuery, select });
+  const { listed, read } = useWorkspaceRepositories(workspace?.id);
   const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
   const [picked, setPicked] = useState<string | undefined>(drafted);
-
-  const listed = useMemo(
-    () => (read?.rows?.repositories ?? []).map(({ fullName }) => fullName),
-    [read],
-  );
-
   const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
 
   const reached = (repository: string) =>
     workspace !== undefined &&
     workspaceReaches(workspace, repository) &&
-    (read?.rows === undefined || listed.includes(repository));
+    (!read || listed.includes(repository));
 
   const starting = recent.find(reached) ?? listed[0];
   // Note that a draft's repository may be one the workspace it opens in no longer reaches, so it stands only while it does.

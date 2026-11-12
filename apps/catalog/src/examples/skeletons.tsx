@@ -1,6 +1,7 @@
 import {
   GAP,
   Inline,
+  PdfPagesSkeleton,
   SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
@@ -14,8 +15,10 @@ import { CatalogSection } from "../section";
 
 /**
  * skeletons.tsx -- each shape, lines set in a heading's and the body's type
- * so they stand where those lines will, and a list's rows while it is read,
- * each drawn by a `*Skeleton` component, as every skeleton is.
+ * so they stand where those lines will, a list's rows while it is read, and
+ * a PDF while pdf.js opens it in the file viewer, one blank page in the
+ * column its pages scroll in, each drawn by a `*Skeleton` component, as
+ * every skeleton is.
  */
 
 /** How wide each placeholder member's name stands. */
@@ -92,6 +95,11 @@ function Skeletons(): React.JSX.Element {
       <CatalogSection id="skeleton-rows" title="A list's rows">
         <div className="catalog-narrow">
           <MembersSkeleton />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="skeleton-pdf" title="A PDF opening">
+        <div className="catalog-pdf-room">
+          <PdfPagesSkeleton label="plan.pdf" />
         </div>
       </CatalogSection>
     </>

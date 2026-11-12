@@ -1,3 +1,4 @@
+import { encodedPath, GITHUB_ORIGIN } from "./link-grammar.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import {
   TASK_BOUNDS,
@@ -165,12 +166,12 @@ export function strandedTaskHome(
 
 /** The page of a repository on GitHub, which Open on GitHub opens. */
 export function repositoryPageUrl(repository: string): string {
-  return `https://github.com/${repository}`;
+  return `${GITHUB_ORIGIN}/${encodedPath(repository)}`;
 }
 
 /** The page of a GitHub account by its login, a person's profile or an organization's. */
 export function githubAccountPageUrl(login: string): string {
-  return `https://github.com/${encodeURIComponent(login)}`;
+  return `${GITHUB_ORIGIN}/${encodeURIComponent(login)}`;
 }
 
 /**
@@ -347,6 +348,21 @@ export function deleteTaskWords(
     title: "Permanently delete task?",
     body: settled ? lost : `${lost} To keep it out of the way instead, mark it done.`,
     verb: "Permanently delete task",
+  };
+}
+
+/**
+ * What Permanently delete asks of an agent named `name`: what goes, and, on
+ * an agent not archived, that archiving it keeps it out of the way instead.
+ * Every client's confirm asks it in these words.
+ */
+export function deleteAgentWords(name: string, archived: boolean): StopAgentsWords {
+  const lost = `“${name}” and its transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+
+  return {
+    title: "Permanently delete agent?",
+    body: archived ? lost : `${lost} To keep it out of the way instead, archive it.`,
+    verb: "Permanently delete agent",
   };
 }
 

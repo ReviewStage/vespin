@@ -8,6 +8,7 @@ import {
 } from "./link-grammar.js";
 import { MENTION_KIND, type Mention } from "./mention-link.js";
 import { PRODUCT_NAME } from "./product-name.js";
+import { titlesNothing } from "./task-wire.js";
 import { TERM } from "./words.js";
 
 /**
@@ -150,6 +151,8 @@ interface EntityName<T> {
    */
   readonly live: boolean;
   readonly held: (entity: T, known: KnownNames, said: EntitySaid) => string | undefined;
+  /** Whether a name held is a placeholder that names nothing, which gives way to the words as a name not live does. */
+  readonly blank?: (held: string) => boolean;
 }
 
 /** The live names, one entry per kind. */
@@ -220,7 +223,12 @@ function byAgent(words: string, agentId: string, known: KnownNames): string | un
 
 /** What each kind is called now. */
 const ENTITY_NAME: EntityNames = {
-  [ENTITY_KIND.PLAN]: { live: true, held: (plan, known) => known.tasks.get(plan.taskId) },
+  // Note that a plan the window still holds as Untitled gives way to the words it was written with, which say more.
+  [ENTITY_KIND.PLAN]: {
+    live: true,
+    blank: titlesNothing,
+    held: (plan, known) => known.tasks.get(plan.taskId),
+  },
   [ENTITY_KIND.SECTION]: { live: true, held: (_section, _known, { heading }) => heading },
   [ENTITY_KIND.VERSION]: {
     live: false,
@@ -342,6 +350,17 @@ export function entityWordHeard(kind: EntityKind, name: string): string | undefi
   return said && whole ? undefined : word;
 }
 
+/**
+ * What an entity is called where nothing names it, neither the window nor
+ * its words: its kind's word (`ENTITY_WORD`) as a name, "Automation run", so
+ * a screen reader hears its kind once (`entityWordHeard`).
+ */
+export function entityKindName(kind: EntityKind): string {
+  const word = ENTITY_WORD[kind];
+
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+}
+
 /** A destination the entity it names already is. */
 function asEntity<P extends Entity>(place: P): Entity {
   return place;
@@ -398,9 +417,11 @@ function nameOf<K extends EntityKind>(
   known: KnownNames,
   said: EntitySaid,
 ): EntityNameHeld {
-  const { live, held } = ENTITY_NAME[kind];
+  const { live, held, blank } = ENTITY_NAME[kind];
+  const name = held(entity, known, said);
+  const placeholder = name !== undefined && blank !== undefined && blank(name);
 
-  return { live, held: held(entity, known, said) };
+  return { live: live && !placeholder, held: name };
 }
 
 /** The entity a mention names: a link to a pull request's or a GitHub issue's page that one, and any other mention the entity it is. */

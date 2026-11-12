@@ -739,10 +739,16 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       deploymentTarget: "26.0",
       supportsTablet: true,
       icon: ICON.BUNDLE,
-      // The app's universal links, and the sign-in's HTTPS callback, which
+      // The app's universal links, the sign-in's HTTPS callback, which
       // `ASWebAuthenticationSession` catches only on a host the app shares
-      // web credentials with.
-      associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`, `webcredentials:${ASSOCIATED_DOMAIN}`],
+      // web credentials with, and a page of the host another device hands
+      // off as its browser would, such as the Mac app's, which another team
+      // signs and so can't hand off the app's own activity type.
+      associatedDomains: [
+        `applinks:${ASSOCIATED_DOMAIN}`,
+        `webcredentials:${ASSOCIATED_DOMAIN}`,
+        `activitycontinuation:${ASSOCIATED_DOMAIN}`,
+      ],
       // The TestFlight build takes its pushes from production APNs, which
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
@@ -774,6 +780,11 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // `@repo/features/ios-system-activity`'s header, since this file
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
+        // Save to Photos on a picture's or a recording's menu asks for
+        // add-only access the first time (`src/keeping.ts`), which reads
+        // nothing of the library.
+        NSPhotoLibraryAddUsageDescription:
+          "Vespin saves the pictures and recordings you choose to your library.",
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
         [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },

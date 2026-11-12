@@ -1,4 +1,4 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note or replies, and Remind me and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note or replies, and Remind me and Resolve.
 
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
@@ -33,6 +33,7 @@ import {
   type AnswerField,
   type AnswerFieldKind,
   AnswerFields,
+  AskActs,
   AskNote,
   type BarMenu,
   CHOICE_MEDIA,
@@ -161,8 +162,10 @@ function controlsStand(item: InboxItem): boolean {
  * The open ask's card under the thread, as the panel's box draws its
  * controls: a decide's options to pick, the recommended tagged; a do's steps
  * to tick, with Mark done and Couldn't do it, each sending at once with the
- * note typed; an answer's fields to fill. What the last send said where it did
- * not go stands under it. None where nothing is asked and nothing was said.
+ * note typed; an answer's fields to fill. A notice asking nothing offers Got
+ * it while the box is empty, as the panel's Send reads then, which settles it
+ * without messaging its agent. What the last send said where it did not go
+ * stands under it. None where nothing is asked and nothing was said.
  */
 export function OpenAskCard({
   item,
@@ -173,9 +176,20 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, note, send } = answer;
+  const { draft, onDraft, note, send, nods, acknowledge } = answer;
   const ask = openAsk(item);
   const said = note === undefined ? null : <AskNote words={note} />;
+
+  if (ask === undefined && nods) {
+    return (
+      <>
+        <AskActs
+          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: "checkmark", onPress: acknowledge }]}
+        />
+        {said}
+      </>
+    );
+  }
 
   if (ask === undefined) return said;
 

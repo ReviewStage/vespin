@@ -1,6 +1,7 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, and an act.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, and a note such as a memory.
 
 import {
+  ContextMenu,
   Form,
   HStack,
   Image,
@@ -8,6 +9,7 @@ import {
   Menu,
   Spacer,
   Button as SwiftUIButton,
+  SwipeActions,
   Text,
   Toggle,
   VStack,
@@ -15,6 +17,7 @@ import {
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
+  accessibilityElement,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
@@ -489,5 +492,77 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
         />
       ))}
     </Menu>
+  );
+}
+
+/** The act that takes a note away, as the system draws one: its glyph, and its role, in red. */
+const NOTE_REMOVE = { SYMBOL: "trash", ROLE: "destructive" } as const;
+
+type NoteRowProps = {
+  /** The note's own words, such as a memory's, drawn whole however many lines they take. */
+  readonly words: string;
+  /** A quiet line under them, such as who kept it and when. */
+  readonly line: string;
+  /** A word beside the line, such as New, in the muted ink. */
+  readonly badge?: string | undefined;
+  /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
+  readonly remove?: { readonly label: string; readonly onPress: () => void } | undefined;
+};
+
+/**
+ * A note of Settings, such as a memory: its words whole in the ink, then a
+ * quiet line of whose they are, and, where the reader may, the act that
+ * takes it away behind a swipe from the trailing edge, as Notes' rows carry
+ * Delete, and in the menu a long press opens. Note that a full swipe never
+ * runs it, since it asks first. VoiceOver hears the row as one element, its
+ * words then its line, and offers the act among its actions.
+ */
+export function NoteRow({ words, line, badge, remove }: NoteRowProps) {
+  const colors = useColors();
+  const said = badge === undefined ? line : `${badge} · ${line}`;
+
+  const drawn = (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+    >
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{words}</Text>
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {said}
+      </Text>
+    </VStack>
+  );
+
+  const placed = [
+    listRowBackground(colors.SURFACE),
+    accessibilityElement("combine"),
+    accessibilityLabel(words),
+    accessibilityValue(said),
+  ];
+
+  if (remove === undefined) return <HStack modifiers={placed}>{drawn}</HStack>;
+
+  const act = (
+    <SwiftUIButton
+      label={remove.label}
+      systemImage={NOTE_REMOVE.SYMBOL}
+      role={NOTE_REMOVE.ROLE}
+      onPress={remove.onPress}
+    />
+  );
+
+  return (
+    <SwipeActions modifiers={placed}>
+      <ContextMenu>
+        <ContextMenu.Items>{act}</ContextMenu.Items>
+        <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
+      </ContextMenu>
+      <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
+        {act}
+      </SwipeActions.Actions>
+    </SwipeActions>
   );
 }

@@ -1,10 +1,11 @@
-// failure-notice-model.test.ts -- the offline notice said once a stretch however many writes fail under it, and a refusal always said anew.
+// failure-notice-model.test.ts -- the offline notice said once a stretch however many writes fail under it, a refusal always said anew, and nothing left standing for an account that is gone.
 
 import { describe, expect, it } from "vitest";
 import {
   NO_NOTICE,
   NOTICE_KIND,
   noticeAsked,
+  noticeCleared,
   noticeGone,
   noticeOnline,
 } from "./failure-notice-model.js";
@@ -30,5 +31,12 @@ describe("the failure notice", () => {
     const again = noticeAsked(first, REFUSED);
     expect(again.shown).not.toBe(first.shown);
     expect(again.shown?.words).toBe(REFUSED.words);
+  });
+
+  it("lets a refusal and its Try again go once the account is gone, and says the next one", () => {
+    const said = noticeAsked(NO_NOTICE, { ...REFUSED, retry: () => undefined });
+    const cleared = noticeCleared(said);
+    expect(cleared.shown).toBeUndefined();
+    expect(noticeAsked(cleared, REFUSED).shown?.serial).toBeGreaterThan(said.serial);
   });
 });

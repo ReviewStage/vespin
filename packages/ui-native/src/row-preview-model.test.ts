@@ -58,6 +58,7 @@ describe("latestStep", () => {
         standing: CALL_STANDING.DONE,
         open: false,
         body: [],
+        cut: undefined,
       },
       {
         place: PLACE,

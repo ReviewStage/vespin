@@ -1,7 +1,8 @@
-import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { WHOLE_PART } from "@repo/features/agent-parts";
+import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { describe, expect, it } from "vitest";
-import { NO_TOGGLES, TRANSCRIPT_ITEM, transcriptItems } from "./transcript-model.js";
+import { NO_TOGGLES, openCuts, TRANSCRIPT_ITEM, transcriptItems } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
 
@@ -105,6 +106,59 @@ describe("transcriptItems", () => {
         url: "https://github.com/ada/relay/pull/128",
         ...card,
       });
+    },
+  );
+});
+
+describe("a call whose answer its page carried cut", () => {
+  const CUT = { messageId: "work", index: 0, bytes: 2048, head: "first lines", tail: "last lines" };
+
+  const WORK = {
+    id: "work",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "tool-lookup", toolCallId: "look", state: "output-available", input: { q: "x" } },
+    ],
+    cutParts: [{ ...CUT, field: PART_CUT_FIELD.OUTPUT }],
+    finishedAt: 1,
+  } as const;
+
+  const WHOLE = {
+    type: "tool-lookup",
+    toolCallId: "look",
+    state: "output-available",
+    input: { q: "x" },
+    output: "every line",
+  };
+
+  it.each([
+    { read: undefined, output: "Reading the whole output…", asks: true },
+    { read: { state: WHOLE_PART.READING }, output: "Reading the whole output…", asks: true },
+    { read: { state: WHOLE_PART.WHOLE, part: WHOLE }, output: "every line", asks: false },
+    {
+      read: { state: WHOLE_PART.FAILED },
+      output:
+        "first lines\n\n… 2.0 kB in all; only its start and end could be read …\n\nlast lines",
+      asks: false,
+    },
+  ] as const)(
+    "opened, draws its answer as its whole read stands ($read.state)",
+    ({ read, output, asks }) => {
+      const items = transcriptItems([WORK], {
+        writing: false,
+        readerId: undefined,
+        toggles: { ...NO_TOGGLES, calls: new Set(["look"]) },
+        now: 2,
+        pullRequests: [],
+        wholePart: (cut) => (cut.messageId === "work" && cut.index === 0 ? read : undefined),
+      });
+
+      const call = items.find((item) => item.kind === TRANSCRIPT_ITEM.CALL);
+
+      expect(call).toMatchObject({
+        body: expect.arrayContaining([{ title: "Output", text: output }]),
+      });
+      expect(openCuts(items)).toEqual(asks ? [CUT] : []);
     },
   );
 });

@@ -72,7 +72,19 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
+export { type Keeping, KeepingProvider } from "./held-menu.js";
+
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+
+export {
+  type HeldPicture,
+  heldPicture,
+  KEEP_ACT,
+  KEPT_KIND,
+  type KeepAct,
+  type Kept,
+  type KeptKind,
+} from "./keep-model.js";
 
 export {
   ListRow,
@@ -81,6 +93,7 @@ export {
   type RowActionTone,
   type RowSubmenu,
   type RowSwipe,
+  type TaskFold,
   TaskRow,
 } from "./list-row.js";
 
@@ -135,7 +148,7 @@ export {
 
 export { RemindSheet } from "./remind-sheet.js";
 
-export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
+export { LIST_LOOK, type ListLook, ListSection, RowForEach, RowList } from "./row-list.js";
 
 export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
 
@@ -152,6 +165,7 @@ export {
   ActionRow,
   MemberRow,
   type MemberRowAct,
+  NoteRow,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
@@ -219,6 +233,7 @@ export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
 
 export {
   NO_TOGGLES,
+  openCuts,
   shownMediaIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,

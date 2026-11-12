@@ -1,0 +1,99 @@
+/* pdf-pages.css -- a PDF's page drawn in its sheet (`PdfPages`): the canvas
+   filling the sheet, and pdf.js's text layer over it, its words invisible
+   where the page prints them so a reader selects them as on the page. The
+   text layer's rules are pdf.js's own (`pdfjs-dist/web/pdf_viewer.css`'s
+   `.textLayer`), kept to what a page without its highlights and editors
+   reads: pdf.js sets each word's place, size, and stretch as custom
+   properties, and the window's policy admits no stylesheet of its own. */
+
+@layer components {
+  .ui-pdf-pixels,
+  .ui-pdf-words {
+    position: absolute;
+    inset: 0;
+  }
+
+  .ui-pdf-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ui-pdf-words {
+    --user-unit: 1;
+    --scale-round-x: 1px;
+    --scale-round-y: 1px;
+  }
+
+  .ui-pdf-text {
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    line-height: 1;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-align: initial;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    z-index: 0;
+  }
+
+  .ui-pdf-text :is(span, br) {
+    position: absolute;
+    color: transparent;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    user-select: text;
+  }
+
+  .ui-pdf-text > :not(.markedContent),
+  .ui-pdf-text .markedContent span:not(.markedContent) {
+    --font-height: 0;
+    --scale-x: 1;
+    --rotate: 0deg;
+
+    z-index: 1;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  }
+
+  .ui-pdf-text .markedContent {
+    display: contents;
+  }
+
+  .ui-pdf-text span[role="img"] {
+    cursor: default;
+    user-select: none;
+  }
+
+  .ui-pdf-text ::selection {
+    background: color-mix(in srgb, Highlight, transparent 50%);
+    color: transparent;
+  }
+
+  .ui-pdf-text br::selection {
+    background: transparent;
+  }
+
+  /* Under the words, which stand a layer over it, and kept from the scale a word is drawn at. */
+  .ui-pdf-text > .ui-pdf-text-end {
+    position: absolute;
+    inset: 100% 0 0;
+    display: block;
+    z-index: 0;
+    transform: none;
+    cursor: default;
+    user-select: none;
+  }
+
+  .ui-pdf-words[data-selecting="true"] .ui-pdf-text > .ui-pdf-text-end {
+    top: 0;
+  }
+}

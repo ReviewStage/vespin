@@ -10,7 +10,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { REVIEW_WORDS } from "@repo/features/pull-request-model";
+import { CHECK_SUMMARY_WORDS, REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { countWords, TERM } from "@repo/features/words";
 import {
   ALIGN,
@@ -74,14 +74,6 @@ import {
  * known, are listed under a rule, each row a face and a name with where
  * they stand at its end, every one of them, scrolling past a few rows.
  */
-
-/** What a pull request's card says of its checks; nothing where it has none, or where the place knows nothing of them. */
-const CHECKS_WORDS = {
-  [CHECK_SUMMARY.PASSING]: "Checks passing",
-  [CHECK_SUMMARY.PENDING]: "Checks running",
-  [CHECK_SUMMARY.FAILING]: "Checks failing",
-  [CHECK_SUMMARY.NONE]: undefined,
-} as const satisfies Record<CheckSummary, string | undefined>;
 
 /** The moment a pull request's state names: merged once merged, closed once closed, and opened while open or a draft. */
 const MOMENT_OF_STATE = {
@@ -188,7 +180,9 @@ function SizeNote({
 
   const pieces: ReactNode[] = [
     size,
-    checks === undefined ? undefined : CHECKS_WORDS[checks],
+    checks === undefined || checks === CHECK_SUMMARY.NONE
+      ? undefined
+      : `Checks ${CHECK_SUMMARY_WORDS[checks]}`,
     comments === undefined ? undefined : countWords(comments, TERM.COMMENT),
     commits === undefined ? undefined : countWords(commits, TERM.COMMIT),
   ].filter((piece) => piece !== undefined);

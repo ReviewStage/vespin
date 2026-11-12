@@ -3,7 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider } from "@repo/ui-native";
+import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -12,6 +12,7 @@ import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
+import { useKeeping } from "../keeping.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -19,7 +20,7 @@ import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
-import { useOfflineNotice } from "../use-write.js";
+import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -45,7 +46,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * enabled while one is signed in (`menu-commands/`), and the share sheet's
  * snapshot is kept current and its draft opens New task (`share-sheet.ts`).
  * Over every screen stands the one notice of a write that did not go
- * (`use-write.ts`), which lets its offline word go once the service answers.
+ * (`use-write.ts`), which lets its offline word go once the service answers,
+ * and every word with its Try again once the account it was said for is gone.
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -65,6 +67,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
+  useNoticeForAccount();
   useShareSheet(updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
@@ -111,6 +114,15 @@ function GuardedScreens() {
   );
 }
 
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+function KeptScreens() {
+  return (
+    <KeepingProvider keeping={useKeeping()}>
+      <GuardedScreens />
+    </KeepingProvider>
+  );
+}
+
 /**
  * The root, with the splash taken down once it first draws. Note that
  * expo-router takes the splash down once a launch, a frame after its
@@ -125,7 +137,7 @@ export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider>
-        <GuardedScreens />
+        <KeptScreens />
       </FailureNoticeProvider>
     </HostProvider>
   );

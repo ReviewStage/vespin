@@ -121,7 +121,10 @@ root layout stands the tabs and Settings behind the account and the
 sign-in screen in front of them otherwise. A `vespin.dev` link the app
 draws is routed by `src/app/+native-intent.tsx` through
 `@repo/features/ios-app-links`, the same list the host's association file
-claims for the app; any other opens in Safari.
+claims for the app; any other opens in Safari. A page another device hands
+off as its browser would, such as the Mac app's, reaches the app for any
+page of the host, since `activitycontinuation` claims the whole domain, and
+the same routing sends one the app doesn't draw on to Safari.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the

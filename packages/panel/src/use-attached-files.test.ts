@@ -28,7 +28,8 @@ import { installScrollIntoView } from "./testing/scroll-into-view.js";
 /**
  * The agent's box takes files: a picture dropped on the card is held under
  * its own name, and a screenshot pasted into the field, which the clipboard
- * calls "image.png", as "Picture 1", each one's chip written into the words where
+ * calls "image.png", as "Picture 1", a pasted PDF under its own name, each
+ * one's chip written into the words where
  * the caret stood, and goes with its chip when one Backspace takes it out;
  * pictures past the bytes a message carries together are left out, the box saying why in its note while the
  * ones that fit still come; the note goes once the box's message goes,
@@ -255,12 +256,20 @@ test("two files of one name, and one whose name holds brackets, each stand in th
   });
 });
 
-test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
+test("a picture and a PDF pasted into the agent's box are held as their chips in the words, the paste writing no words of its own", async () => {
   // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
-    assert.equal(await paste(container, [png("image.png")]), false, `${box} takes the paste`);
-    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
+    assert.equal(
+      await paste(container, [png("image.png"), pdf("spec.pdf")]),
+      false,
+      `${box} takes the paste`,
+    );
+    assert.deepEqual(
+      held(container),
+      { chips: [], pictures: ["Open Picture 1", "Open spec.pdf"], note: null },
+      box,
+    );
   }
 });
 

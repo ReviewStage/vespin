@@ -194,7 +194,7 @@ import {
   type SidePanelTab,
   sameHolder,
 } from "../tasks/use-side-panel.js";
-import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
+import { type ShellTab, useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useFileTreeWidth } from "./folded-groups.js";
@@ -1151,7 +1151,7 @@ function stripTabs(input: {
   /** The account signed in, whose cloud Browser draft a closed draft's tab lets go. */
   account: string | undefined;
   /** How a run action's Terminal tab looks (`useRunTabLooks`); none for a developer's own shell. */
-  runLookOf: (tab: TerminalStripTab) => RunTabLook | undefined;
+  runLookOf: (tab: ShellTab) => RunTabLook | undefined;
 }): DrawnTab[] {
   const { panel, unread, agents, subagents, files, changes, pages, terminals, locals, held } =
     input;
@@ -1286,15 +1286,17 @@ function stripTabs(input: {
     };
   });
 
-  // A Local tab is named by its terminal, wears the terminal glyph and its agent's name, and hangs its agent's card.
+  // A Local tab is named by its terminal, wears the terminal glyph and its agent's name, and hangs its agent's card; a local agent's run action's wears the action's icon, and a spinner at its end while it runs.
   const localTabs = locals.map((tab) => {
     const subject = agentSubject(agentsOf(tab.local), tab.local, held, false);
+    const run = input.runLookOf(tab);
 
     return {
       tab,
       look: look(tab, {
-        ...tabLook({ kind: TAB_KIND.LOCAL, title: tab.title }),
+        ...tabLook({ kind: TAB_KIND.LOCAL, title: tab.title, action: run }),
         detail: subject.name,
+        endMark: runEndMark(run),
         card: hungCard({ kind: TAB_KIND.LOCAL, subject, models }),
       }),
       close: () => panel.onClose(tab),
@@ -1488,7 +1490,8 @@ function PanelTabs({
   const copied = useTranscriptCopier();
   const people = useChangesPeopleOf(useMemo(() => changes.map((tab) => tab.changes), [changes]));
   const account = useWindowAccount();
-  const runLookOf = useRunTabLooks(terminals, shown);
+  const shellTabs = useMemo(() => [...terminals, ...locals], [terminals, locals]);
+  const runLookOf = useRunTabLooks(shellTabs, shown);
 
   const kinds = stripTabs({
     account,

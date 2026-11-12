@@ -142,6 +142,7 @@ import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/w
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
+import { useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -1735,7 +1736,9 @@ function SidebarColumn({
   onPressWithin,
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
-  const tasks: SidebarTasks = { ...control, ...usePins(control.drawnTasks) };
+  // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
+  const pins = useSteadyDoors(usePins(control.drawnTasks));
+  const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
   const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;

@@ -38,6 +38,7 @@ import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceRunActionEdit,
@@ -73,6 +74,9 @@ function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActio
       command: row.command,
       ...(row.icon === null ? undefined : { icon: row.icon }),
       ...(row.isDefault ? { isDefault: true } : undefined),
+      ...(row.availableIn === RUN_ACTION_AVAILABILITY.BOTH
+        ? undefined
+        : { availableIn: row.availableIn }),
     };
 
     const last = lists.at(-1);
@@ -128,6 +132,8 @@ function editedRunActions(
     command: row.command,
     icon: row.icon ?? undefined,
     isDefault: row.isDefault,
+    // Note that each action keeps where it may run, because the list is written whole, and one written without it may run in both.
+    availableIn: row.availableIn,
   }));
 
   let edited: RunActionWrite;

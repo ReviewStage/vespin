@@ -1,7 +1,7 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { agentFailureSchema, agentStatusSchema, disabledServersSchema } from "./agent-wire.js";
-import { AUTOMATION_PRESET } from "./automation-presets.js";
+import { AUTOMATION_PRESET } from "./automation-preset-name.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
 import { chosenIdSchema, countedNumber, wireUuidSchema } from "./service-wire.js";

@@ -22,7 +22,7 @@ import {
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
-import { type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
@@ -108,6 +108,33 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
     >
       <RowOpenContext value={onSelect}>{children}</RowOpenContext>
     </List>
+  );
+}
+
+type RowForEachProps<Item> = {
+  /** The rows' items, in the order they stand: the same array until they change, since a new one resets every row the list holds. */
+  readonly data: readonly Item[];
+  /** Each item's row id, the one its row is picked by and tagged with, unique in the list. */
+  readonly keyOf: (item: Item) => string;
+  /** Draws one item's row. */
+  readonly children: (item: Item) => ReactElement;
+};
+
+/**
+ * A run of rows inside a `RowList` or a `ListSection`, of any length, as
+ * `UITableView` draws one: only the rows near the screen are mounted, each
+ * reused for another item as the list scrolls (`List.ForEach`'s recycling).
+ * Note that every list whose length the reader's data sets goes through
+ * this, because mounting every row at once blocks the main thread past the
+ * watchdog on a long Inbox: each Expo view pays its own reflection as it is
+ * made. A recycled row keeps a `useState` of the item it drew before, so a
+ * row drawn here holds no state of its own; its caller holds it by id.
+ */
+export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+  return (
+    <List.ForEach data={data} keyExtractor={keyOf}>
+      {({ item }) => children(item)}
+    </List.ForEach>
   );
 }
 

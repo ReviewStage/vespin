@@ -1,7 +1,8 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, About, and the pages still kept on vespin.dev.
+// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents and the workspace's Memory, About with Send feedback, and the pages still kept on vespin.dev.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_HOME, LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -54,6 +55,9 @@ import { useSurfaceOpen } from "../../surface-open.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
+/** What the row that writes the team a mail is called, as the panel's Help menu names it. */
+const CONTACT_WORDS = { EMAIL: "Email" } as const;
+
 /** What Notifications reads once the phone lets the app notify, until the service says how its pushes fare. */
 const NOTIFICATIONS_ON = "On";
 
@@ -72,7 +76,6 @@ const NOTIFICATION_STEP = {
  */
 const WEB_PAGES = [
   SETTINGS_VIEW.ENVIRONMENT,
-  SETTINGS_VIEW.MEMORY,
   SETTINGS_VIEW.HOSTS,
   SETTINGS_VIEW.INTEGRATIONS,
   SETTINGS_VIEW.MCP,
@@ -186,6 +189,14 @@ export default function SettingsScreen() {
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
+            {chosen === undefined ? null : (
+              <PushRow
+                label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
+                symbol="brain"
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
+              />
+            )}
           </ListSection>
           <ListSection title="About">
             <ValueRow label="Version" value={buildWords()} />
@@ -200,7 +211,12 @@ export default function SettingsScreen() {
               onPress={() => openInSheet(LINK_PAGE.DOCS, colors.TEXT)}
             />
             <PushRow
-              label="Send feedback"
+              label={FEEDBACK_WORDS.TITLE}
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.FEEDBACK)}
+            />
+            <PushRow
+              label={CONTACT_WORDS.EMAIL}
               goes={PUSH_ROW_GOES.OUT}
               onPress={() => openInSafari(CONTACT_MAILTO)}
             />

@@ -58,7 +58,11 @@ builds a control of its own.
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
   `expo-video`, which says so in its place where the player cannot read the
-  file. An agent's transcript is `AgentTranscript`, the app's one React
+  file. A long press on a picture, a recording, a file's chip, or a message
+  opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
+  it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
+  the picture viewer's share button holding the same, and Copy message on a
+  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (a lazy `FlatList`, drawn newest last and anchored there, with
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they

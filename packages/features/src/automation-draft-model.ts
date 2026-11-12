@@ -729,23 +729,45 @@ export function withGithubEvent(
 }
 
 /**
- * A new draft filled in from a preset: its name, schedule, task, and
- * archiving, its runs each on a new agent, where it runs and who owns it
- * kept as they were chosen, and its zone the member's own. One whose runs
- * need no repository starts with none chosen.
+ * A new draft filled in from a preset: its name, trigger, task, where its
+ * runs land, and archiving, its zone the member's own. One whose runs need
+ * no repository starts with none chosen, and one that needs one keeps the
+ * one chosen. One for the workspace is the workspace's only where `shared`
+ * says the workspace is, since everything in the account's own workspace is
+ * its own; who owns any other stays as it was chosen. A GitHub event keeps
+ * to the preset's branches under the settings a new trigger has.
  */
-export function presetDraft(draft: AutomationDraft, preset: AutomationPreset): AutomationDraft {
-  return {
+export function presetDraft(
+  draft: AutomationDraft,
+  preset: AutomationPreset,
+  shared: boolean,
+): AutomationDraft {
+  const { trigger } = preset;
+
+  const filled: AutomationDraft = {
     ...draft,
     name: preset.name,
     prompt: preset.prompt,
-    triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
-    schedule: scheduleDraftOf(preset.cron),
-    target: AUTOMATION_TARGET.NEW_AGENT,
+    triggerKind: trigger.kind,
+    target: preset.target,
     agentId: null,
     archiveSuccessful: preset.archiveSuccessful,
     ...(preset.inRepository ? undefined : { repository: null, alsoRepositories: [] }),
+    ...(preset.forWorkspace && shared ? { owner: AUTOMATION_SCOPE.WORKSPACE } : undefined),
   };
+
+  switch (trigger.kind) {
+    case AUTOMATION_TRIGGER.SCHEDULE:
+      return { ...filled, schedule: scheduleDraftOf(trigger.cron) };
+    case AUTOMATION_TRIGGER.GITHUB:
+      return {
+        ...filled,
+        githubEvent: trigger.event,
+        githubFilters: { branches: trigger.branches },
+      };
+    case AUTOMATION_TRIGGER.INTEGRATION:
+      return { ...filled, integrationTrigger: trigger };
+  }
 }
 
 /**

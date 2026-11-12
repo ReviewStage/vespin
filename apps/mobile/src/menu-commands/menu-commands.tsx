@@ -9,7 +9,12 @@ import {
   type MenuFocus,
   menuFocusOf,
 } from "@repo/features/ios-menu-commands";
-import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  linkWorkspaceStep,
+} from "@repo/features/link-grammar";
 import { LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { READ_MARK } from "@repo/features/read-mark";
@@ -35,7 +40,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
-import { useOpenSettings } from "../settings-button.js";
+import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
@@ -128,10 +133,10 @@ function useSubject(signedIn: boolean): Subject {
     (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   const linked = (place: LinkDestination) =>
-    linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+    workspaceStep === undefined ? undefined : linkOf(place, workspaceStep);
 
   const enabled: MenuCommand[] = signedIn ? [...SIGNED_IN_COMMANDS, ...ALWAYS] : [...ALWAYS];
   const toggled: MenuCommand[] = [];
@@ -375,10 +380,17 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return;
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
+      // Note that the form needs an account, so a signed-out app, or one the service refuses as too old, writes the contact mail as it always did.
       case MENU_COMMAND.FEEDBACK:
-        openURL(CONTACT_MAILTO).catch((cause: unknown) =>
-          console.error("The feedback mail did not open.", cause),
-        );
+        if (!signedIn) {
+          openURL(CONTACT_MAILTO).catch((cause: unknown) =>
+            console.error("The feedback mail did not open.", cause),
+          );
+
+          return;
+        }
+
+        if (!standing(SETTINGS_ROUTE.FEEDBACK)) openSettings(SETTINGS_ROUTE.FEEDBACK);
 
         return;
       // Note that Remind Me's presets were set above, by the time each sets.

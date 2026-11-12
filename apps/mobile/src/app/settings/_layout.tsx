@@ -1,5 +1,6 @@
 // _layout.tsx -- Settings' own stack inside its sheet: the main list, and the pages it pushes, under the system's inline headers in the brand's tint on the sidebar's ground.
 
+import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { BAR_TITLE, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
@@ -38,6 +39,8 @@ export default function SettingsLayout() {
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
       />
       <Stack.Screen name="agents" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS] }} />
+      <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
+      <Stack.Screen name="feedback" options={{ title: FEEDBACK_WORDS.TITLE }} />
     </Stack>
   );
 }

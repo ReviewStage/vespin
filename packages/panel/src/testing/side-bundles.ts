@@ -69,6 +69,7 @@ export function unlandedBundles(): SideBundles {
     terminal: unlanded,
     diagram: unlanded,
     diffView: unlanded,
+    pdf: unlanded,
   });
 }
 

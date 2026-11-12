@@ -7,6 +7,7 @@ import {
   EDITABLE_HEADING_LEAVE,
   EDITABLE_TEXT_BLOCK_SELECTOR,
   EditableBlock,
+  type EditableBlockDrop,
   EditableHeading,
   headingCaretAtEnd,
   PageHeader,
@@ -29,6 +30,7 @@ import {
   PLACEMENT_END,
   type PlacedWords,
 } from "../description-editor/contract.js";
+import { imageFiles } from "../picture-files.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { UNIT_ATTRIBUTED_CLASS } from "./description-unit-look.js";
 import { useEditorPictures } from "./editor-pictures.js";
@@ -49,7 +51,8 @@ import {
  * editable. A click into a section's words opens the whole text in place,
  * the caret where the click landed, or the words its press selected selected
  * again, the format toolbar over them as over words selected in the editor
- * (`clickPlacement`), and so does a press on the empty room
+ * (`clickPlacement`), and so do pictures dropped on them, laid in where
+ * they landed (`dropPlacement`), and so does a press on the empty room
  * around the text (`useTextRoom`); the editor is TipTap, from the editor
  * bundle the panel starts loading as it first paints, and again the first
  * time a section is hovered or selected (`../bundle-loader.ts`), and draws the words exactly as the
@@ -258,6 +261,23 @@ export function clickPlacement(
   const words = focusNode === null ? undefined : place(pointAt(focusNode, focusOffset));
 
   return from === undefined || words === undefined ? undefined : { x, y, words, from };
+}
+
+/**
+ * Where pictures dropped on the drawn text open the editor: at the words they
+ * landed on, as a click's caret is, with the image files among those
+ * dropped, which the editor lays in there; none where none is a picture.
+ */
+function dropPlacement(
+  { files, x, y }: EditableBlockDrop,
+  place: (range: Range) => PlacedWords | undefined,
+): DescriptionEditorPlacement | undefined {
+  const pictures = imageFiles(files);
+
+  if (pictures.length === 0) return undefined;
+  const range = rangeAt(x, y);
+
+  return { x, y, words: range === null ? undefined : place(range), pictures };
 }
 
 /** Where the words a closing editor's caret stood on stand in the drawn text now; none where the drawn text holds no such words. */
@@ -512,6 +532,13 @@ export function DocumentBlock({
 
         if (placement !== undefined) editing.open(placement);
       }}
+      onDropFiles={(drop) => {
+        const placement = dropPlacement(drop, (range) =>
+          sectionWordsAt(drop.block, section, range),
+        );
+
+        if (placement !== undefined) editing.open(placement);
+      }}
       onOpen={() => editing.open({ section })}
     >
       {children}
@@ -552,6 +579,11 @@ export function EmptyDocumentBlock({
         editing.select(EDITOR_PLACE.EMPTY);
       }}
       onPress={() => editing.open(PLACEMENT_END)}
+      onDropFiles={(drop) => {
+        const placement = dropPlacement(drop, () => undefined);
+
+        if (placement !== undefined) editing.open(placement);
+      }}
       onOpen={() => editing.open(PLACEMENT_END)}
     >
       {children}

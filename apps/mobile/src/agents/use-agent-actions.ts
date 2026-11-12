@@ -1,5 +1,5 @@
 /**
- * use-agent-actions.ts -- what an agent's ⋯ menu does on its page: Copy link, Rename, Pin or Unpin, and Archive, asked first, and why the last of them did not take.
+ * use-agent-actions.ts -- what an agent's ⋯ menu does on its page: Copy link, Rename, Pin or Unpin, Archive, asked first, and Permanently delete, asked always, and why the last of them did not take.
  *
  * The panel's agent menu (`@repo/panel`'s `agent-actions.tsx`) on the phone,
  * Rewind and Fork left to the desktop and the web. Each act is sent as the
@@ -12,11 +12,24 @@
  * middle of; note that the phone asks of an agent at rest too, as it has no
  * Undo to offer after, and once the agent is archived the page goes back to
  * where it was opened from, since the agent leaves its task's list.
+ * Permanently delete (`AGENTS_DELETE`) always asks, in the panel's words
+ * (`deleteAgentWords`), since nothing brings the agent back, and goes back
+ * the same way once the service took it; a refusal is said over the
+ * composer, in the panel's words for why.
  */
 
-import { ARCHIVE_FAILED } from "@repo/features/agent-refusal-words";
+import {
+  ARCHIVE_FAILED,
+  ARCHIVE_NOT_READY,
+  DELETE_FAILED,
+} from "@repo/features/agent-refusal-words";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import { archiveStopWords } from "@repo/features/tasks-model";
+import {
+  archiveStopWords,
+  deleteAgentWords,
+  type StopAgentsWords,
+} from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAgentPinned } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
@@ -68,13 +81,17 @@ export interface AgentActions {
   readonly archiveQuestion: ArchiveQuestion;
   /** Archives the agent, the question answered, and calls `onArchived` once the service took it. */
   readonly archive: (onArchived: () => void) => void;
+  /** What Permanently delete asks first of the agent, named as its page names it `name`. */
+  readonly deleteQuestion: (name: string) => StopAgentsWords;
+  /** Deletes the agent for good, the question answered, and calls `onDeleted` once the service took it. */
+  readonly remove: (onDeleted: () => void) => void;
   /** Why the last act did not take; none while none failed. */
   readonly note: string | undefined;
   readonly clearNote: () => void;
 }
 
-/** The menu of the agent `agentId` names, whose address on vespin.dev is `address`. */
-export function useAgentActions(agentId: string, address: string): AgentActions {
+/** The menu of the agent `agentId` names, whose address on vespin.dev is `address`, none before its workspace is known. */
+export function useAgentActions(agentId: string, address: string | undefined): AgentActions {
   const acts = useHostActs();
   const write = useWrite();
   const agent = useFollowedAgent(agentId);
@@ -88,10 +105,11 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
     sent: () => Promise<{ readonly failure: string } | object>,
     failed: string,
     onTaken?: () => void,
+    refusedAs: (failure: string) => string = () => failed,
   ) => {
     setNote(undefined);
     write(sent, {
-      refused: (answer) => ("failure" in answer ? failed : undefined),
+      refused: (answer) => ("failure" in answer ? refusedAs(answer.failure) : undefined),
       unanswered: failed,
       inPlace: setNote,
       went: BUZZ.SUCCESS,
@@ -105,6 +123,8 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
     pinned,
     copyLink: () => {
       setNote(undefined);
+
+      if (address === undefined) return;
       setStringAsync(address)
         .then(() => buzz(BUZZ.SUCCESS))
         .catch((cause: unknown) => {
@@ -127,6 +147,16 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
         () => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
         ACT_FAILED.ARCHIVE,
         onArchived,
+      ),
+    deleteQuestion: (name) => deleteAgentWords(name, agent?.archivedAt !== undefined),
+    remove: (onDeleted) =>
+      send(
+        () => acts[ACT_KIND.AGENTS_DELETE]({ agentId }),
+        DELETE_FAILED,
+        onDeleted,
+        // Note that an agent still starting its turn cannot be deleted yet, which the panel says in its own words.
+        (failure) =>
+          failure === AGENT_CALL_FAILURE.AGENT_NOT_READY ? ARCHIVE_NOT_READY : DELETE_FAILED,
       ),
     note,
     clearNote: () => setNote(undefined),

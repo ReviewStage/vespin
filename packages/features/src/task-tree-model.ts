@@ -242,27 +242,27 @@ export function taskRowLook(
   };
 }
 
-/** One task of a group with the sub-tasks standing under it, each a node of its own. */
-export interface TaskTreeNode {
-  readonly task: TaskSummary;
-  readonly children: readonly TaskTreeNode[];
-}
+/**
+ * A group's rows as the phone draws them under its folds: each parent row
+ * open where `opened` says so and shut otherwise, and every row under a
+ * shut one, however deep, left out, so a list draws each row it keeps as a
+ * row of its own and can recycle them.
+ */
+export function foldedTaskRows(
+  rows: readonly DrawnTaskRow[],
+  opened: (taskId: string) => boolean,
+): readonly DrawnTaskRow[] {
+  const shown: DrawnTaskRow[] = [];
+  let shutAt: number | undefined;
 
-/** A group's rows as the nodes they nest into: each row under the nearest row above it standing one less deep. */
-export function taskTreeNodes(rows: readonly DrawnTaskRow[]): readonly TaskTreeNode[] {
-  const tops: { task: TaskSummary; children: TaskTreeNode[] }[] = [];
-  const open: { depth: number; node: { task: TaskSummary; children: TaskTreeNode[] } }[] = [];
+  for (const row of rows) {
+    // Note that a row under a shut parent stands deeper than it, and the first row back at its depth or above ends the fold.
+    if (shutAt !== undefined && row.depth > shutAt) continue;
 
-  for (const { task, depth } of rows) {
-    const node = { task, children: [] };
-
-    while ((open.at(-1)?.depth ?? -1) >= depth) open.pop();
-    const parent = open.at(-1);
-
-    if (parent === undefined) tops.push(node);
-    else parent.node.children.push(node);
-    open.push({ depth, node });
+    const open = row.open === undefined ? undefined : opened(row.task.id);
+    shown.push({ ...row, open });
+    shutAt = open === false ? row.depth : undefined;
   }
 
-  return tops;
+  return shown;
 }

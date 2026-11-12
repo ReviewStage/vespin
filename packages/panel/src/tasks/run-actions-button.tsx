@@ -1,7 +1,11 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  RUN_ACTION_PLACE,
+  type RunAction,
+  runActionsIn,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
@@ -15,6 +19,7 @@ import { askAct } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
 import type { ShownShell } from "../desktop/agent-actions.js";
+import { useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import {
@@ -26,16 +31,20 @@ import {
 import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
-import { runActionGlyph, shellsQuery } from "./run-action-shells.js";
+import { localRunsQuery, runActionGlyph, shellsQuery } from "./run-action-shells.js";
 import type { HeldAction } from "./terminal-held.js";
+import { TERMINAL_KIND } from "./terminal-session.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
- * run-actions-button.tsx -- a cloud agent's run actions: its repository's commands, kept in Settings › Cloud environment, each run in a Terminal tab of the agent's sandbox when pressed.
+ * run-actions-button.tsx -- an agent's run actions: its repository's commands, kept in Settings › Cloud environment, each run when pressed, in a Terminal tab of a cloud agent's sandbox or a Local tab on the Mac a local agent runs on.
  *
  * Offered only where the agent's workspace has the Run actions experiment
- * on, the agent runs in the cloud, and its repository has run actions
- * (`useRunActions`). Three places offer them, each from that one reading:
+ * on, its repository has run actions that may run where the agent does
+ * (`runActionsIn`), and the panel can reach where it runs: any panel for a
+ * cloud agent, and for a local agent only the desktop app on the Mac it
+ * runs on, whose host runs the action in the agent's worktree, as the
+ * agent's Terminal opens only there (`useRunActions`). Three places offer them, each from that one reading:
  * the Run button at the end of the agents' tab row, beside the panel's
  * own buttons and over the side panel its Terminal tab opens in
  * (`RunActionsButton`); ⌘K, whose open task lists each as Run or Stop
@@ -46,9 +55,11 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * each with its icon, a run or, while it runs, a stop, under the agent it
  * runs in, and the way to edit them. A press is the only thing that runs one: a stopped sandbox is
  * resumed by the press, as opening its Terminal tab resumes it, and the
- * action's shell is then shown in the side panel's Terminal tab. Which
- * actions run is read off the agent's shells, each marked with the action
- * it was started for, while the agent is shown.
+ * action's shell is then shown in the side panel's Terminal tab; a local
+ * agent's runs through this Mac's host (`macShell.runAction`) and is shown
+ * in a Local tab, read-only as a cloud one's is, a Stop ending it on the
+ * same terms. Which actions run is read off the agent's shells, each marked
+ * with the action it was started for, while the agent is shown.
  */
 
 /** What the button says, in the app's own words. */
@@ -78,6 +89,28 @@ function sandboxSetupQuery(workspaceId: string, enabled: boolean) {
   });
 }
 
+/**
+ * The run actions of the agent's repository, as the workspace keeps them,
+ * where the experiment is on and `reached` says the panel reaches where the
+ * agent runs; none otherwise, and while they are read, which `read` says
+ * has ended.
+ */
+function useRepositoryRunActions(agentId: string, reached: boolean) {
+  const place = useRunPlace(agentId);
+  const on = useWorkspaceExperiment(place?.workspaceId, EXPERIMENT.RUN_ACTIONS);
+  const repository = place?.repository ?? null;
+  const asks = on && reached && repository !== null && place !== undefined;
+  const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
+
+  const actions = asks
+    ? (setup?.runActions?.find(
+        (each) => each.repository.toLowerCase() === (repository ?? "").toLowerCase(),
+      )?.actions ?? [])
+    : [];
+
+  return { place, actions, read: setup !== undefined };
+}
+
 /** The agent's workspace and repository as the task list carries them; none where it carries no such agent. */
 function useRunPlace(agentId: string) {
   const select = useCallback(
@@ -96,7 +129,11 @@ function useRunPlace(agentId: string) {
 
 /** Says a press that did not go through, reporting it beside the act and the agent. */
 function pressFailed(
-  kind: typeof ACT_KIND.AGENTS_RUN_ACTION | typeof ACT_KIND.AGENTS_RUN_ACTION_STOP,
+  kind:
+    | typeof ACT_KIND.AGENTS_RUN_ACTION
+    | typeof ACT_KIND.AGENTS_RUN_ACTION_STOP
+    | typeof ACT_KIND.MAC_SHELL_RUN_ACTION
+    | typeof ACT_KIND.MAC_SHELL_STOP_ACTION,
   agentId: string,
   cause: unknown,
   words: string,
@@ -126,11 +163,60 @@ async function runAction(
   );
 
   await queries.invalidateQueries({ queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId] });
-  // The tab is held on the action, with the icon it wears as pressed, so it takes nothing typed and wears both.
-  const held = { id: action.id, ...(action.icon !== undefined && { icon: action.icon }) };
 
-  if ("terminal" in answer) onShowShell?.({ ...answer.terminal, action: held });
+  if ("terminal" in answer) onShowShell?.({ ...answer.terminal, action: heldOf(action) });
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION, agentId, answer, WORDS.NOT_RUN);
+}
+
+/** The action a run's tab is held on, with the icon it wears as pressed, so it takes nothing typed and wears both. */
+function heldOf(action: HeldAction): HeldAction {
+  return { id: action.id, ...(action.icon !== undefined && { icon: action.icon }) };
+}
+
+/**
+ * Runs one of a local agent's actions on this Mac, in the agent's worktree,
+ * and shows its process in a Local tab; the runs read again either way.
+ */
+async function runLocalAction(
+  queries: QueryClient,
+  agentId: string,
+  action: RunAction,
+  onShowShell: ((terminal: ShownShell) => void) | undefined,
+): Promise<void> {
+  const answer = await askAct(ACT_KIND.MAC_SHELL_RUN_ACTION, {
+    agentId,
+    actionId: action.id,
+    title: action.label,
+    command: action.command,
+  }).catch((cause: unknown) => ({ failure: cause }));
+
+  await queries.invalidateQueries({ queryKey: [QUERY_ROOT.MAC_RUN_ACTIONS, agentId] });
+
+  if ("terminal" in answer) {
+    const { id, title } = answer.terminal;
+    onShowShell?.({ id, title, action: heldOf(action), kind: TERMINAL_KIND.LOCAL });
+  } else pressFailed(ACT_KIND.MAC_SHELL_RUN_ACTION, agentId, answer.failure, WORDS.NOT_RUN);
+}
+
+/** Stops one of a local agent's actions on this Mac, the runs read again after. */
+async function stopLocalAction(
+  queries: QueryClient,
+  agentId: string,
+  action: HeldAction,
+): Promise<void> {
+  const failure = await askAct(ACT_KIND.MAC_SHELL_STOP_ACTION, {
+    agentId,
+    actionId: action.id,
+  }).then(
+    () => undefined,
+    (cause: unknown) => ({ cause }),
+  );
+
+  await queries.invalidateQueries({ queryKey: [QUERY_ROOT.MAC_RUN_ACTIONS, agentId] });
+
+  if (failure !== undefined) {
+    pressFailed(ACT_KIND.MAC_SHELL_STOP_ACTION, agentId, failure.cause, WORDS.NOT_STOPPED);
+  }
 }
 
 /** Stops one action's shell, its answer laid over the shells read. */
@@ -150,28 +236,55 @@ async function stopAction(
 
 type UseRunActionPressResult = {
   readonly busy: boolean;
+  readonly runnable: boolean;
   readonly run: (action: HeldAction) => void;
   readonly stop: (action: HeldAction) => void;
 };
 
 /**
  * Runs or stops one of an agent's run actions from the tab that shows it,
- * through the presses the Run button makes, the tab already shown; and
- * whether a press is under way, which holds the tab's button.
+ * through the presses the Run button makes, the tab already shown, a local
+ * agent's (`local`) on this Mac with its label and command as the workspace
+ * keeps them now; whether a press is under way, which holds the tab's
+ * button; and whether a Run can be pressed, which a local agent's waits on
+ * its actions being read, while its Stop, which needs only the action's id,
+ * never does.
  */
-export function useRunActionPress(agentId: string): UseRunActionPressResult {
+export function useRunActionPress(agentId: string, local: boolean): UseRunActionPressResult {
   const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const { actions, read } = useRepositoryRunActions(agentId, local);
 
   const pressed = (press: Promise<void>) => {
     setBusy(true);
     void press.finally(() => setBusy(false));
   };
 
+  const runLocal = (held: HeldAction) => {
+    // An action since removed, or kept to the cloud since, is no longer run here.
+    const action = runActionsIn(actions, RUN_ACTION_PLACE.LOCAL).find(
+      (each) => each.id === held.id,
+    );
+
+    if (action === undefined) {
+      pressFailed(ACT_KIND.MAC_SHELL_RUN_ACTION, agentId, undefined, WORDS.NOT_RUN);
+
+      return;
+    }
+
+    pressed(runLocalAction(queries, agentId, action, undefined));
+  };
+
   return {
     busy,
-    run: (action) => pressed(runAction(queries, agentId, action, false, undefined)),
-    stop: (action) => pressed(stopAction(queries, agentId, action)),
+    // Note that a local agent's Run waits on its actions being read, so a press never says an action it has yet to read is gone.
+    runnable: !local || read,
+    run: (action) =>
+      local ? runLocal(action) : pressed(runAction(queries, agentId, action, false, undefined)),
+    stop: (action) =>
+      pressed(
+        local ? stopLocalAction(queries, agentId, action) : stopAction(queries, agentId, action),
+      ),
   };
 }
 
@@ -205,7 +318,7 @@ export interface RunOffer {
  * and none while no agent is given. Its shells are read while it is shown.
  */
 export function useRunActions(
-  agent: Pick<AgentSummary, "id" | "machine"> | undefined,
+  agent: Pick<AgentSummary, "id" | "machine" | "mac"> | undefined,
   shown: boolean,
   onShowShell: ((terminal: ShownShell) => void) | undefined,
 ): RunOffer | undefined {
@@ -213,20 +326,24 @@ export function useRunActions(
   const [busy, setBusy] = useState(false);
   const openSettings = useOpenSettings();
   const agentId = agent?.id ?? "";
-  const place = useRunPlace(agentId);
-  const on = useWorkspaceExperiment(place?.workspaceId, EXPERIMENT.RUN_ACTIONS);
-  const cloud = agent !== undefined && agent.machine !== AGENT_MACHINE.DEVICE;
-  const repository = place?.repository ?? null;
-  const asks = on && cloud && repository !== null && place !== undefined;
-  const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
+  const local = agent?.machine === AGENT_MACHINE.DEVICE;
 
-  const actions =
-    setup?.runActions?.find(
-      (each) => each.repository.toLowerCase() === (repository ?? "").toLowerCase(),
-    )?.actions ?? [];
+  // Note that a local agent's actions run through the host of the Mac it runs on, so only the desktop app there offers them, as it alone offers the agent's Terminal.
+  const macShells =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.LOCAL_TERMINALS) })
+      .data === true;
 
-  const offered = asks && actions.length > 0;
-  const shells = useQuery(shellsQuery(agentId, shown, offered)).data;
+  const thisMac = useThisMac()?.deviceId;
+
+  const reached =
+    agent !== undefined &&
+    (!local || (macShells && thisMac !== undefined && agent.mac?.deviceId === thisMac));
+
+  const { place, actions: kept } = useRepositoryRunActions(agentId, reached);
+  const actions = runActionsIn(kept, local ? RUN_ACTION_PLACE.LOCAL : RUN_ACTION_PLACE.CLOUD);
+  const offered = actions.length > 0;
+  const shells = useQuery(shellsQuery(agentId, shown, offered && !local)).data;
+  const localRuns = useQuery(localRunsQuery(agentId, shown, offered && local)).data;
 
   // ⌥⌘R is the desktop's alone (`APP_SHORTCUTS`), so it is offered, and printed, only where the keymap answers it.
   const desktop =
@@ -237,24 +354,31 @@ export function useRunActions(
   const listed = shells !== undefined && "terminals" in shells ? shells : undefined;
 
   const running = new Set(
-    (listed?.terminals ?? []).flatMap((shell) =>
+    [...(local ? (localRuns?.terminals ?? []) : (listed?.terminals ?? []))].flatMap((shell) =>
       shell.running && shell.runAction !== undefined ? [shell.runAction] : [],
     ),
   );
 
   const stopped = listed !== undefined && listed.sandbox !== SANDBOX_STATE.RUNNING;
 
+  const press = (action: RunAction, runs: boolean): Promise<void> => {
+    if (local) {
+      return runs
+        ? stopLocalAction(queries, agentId, action)
+        : runLocalAction(queries, agentId, action, onShowShell);
+    }
+
+    return runs
+      ? stopAction(queries, agentId, action)
+      : runAction(queries, agentId, action, stopped, onShowShell);
+  };
+
   const offer = (action: RunAction): OfferedAction => {
     const runs = running.has(action.id);
 
     const onPress = () => {
       setBusy(true);
-
-      const pressed = runs
-        ? stopAction(queries, agentId, action)
-        : runAction(queries, agentId, action, stopped, onShowShell);
-
-      void pressed.finally(() => setBusy(false));
+      void press(action, runs).finally(() => setBusy(false));
     };
 
     return { action, runs, onPress };

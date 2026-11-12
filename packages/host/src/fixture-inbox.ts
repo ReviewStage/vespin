@@ -63,11 +63,18 @@ import {
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import {
+  acknowledgedNow,
+  closedNow,
+  INBOX_SENDING,
+  inboxSendingDrawn,
+  takenBackNow,
+} from "@repo/features/inbox-writes";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -76,6 +83,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -967,6 +975,48 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/**
+ * The fixture workspace's memories, as Settings › Memory lists them: one an
+ * agent of the account kept and agents recall often, one Grace kept this
+ * week, which reads as New and the account may delete as its owner, and one
+ * no agent was handed in the recall window.
+ */
+const MEMORIES: readonly MemorySummary[] = [
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a61",
+    text: "The web server's tests run on PGlite through `test:store`.",
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: LANDED - 20 * DAY,
+    updatedAt: LANDED - 20 * DAY,
+    source: null,
+    recalls30d: 14,
+    lastRecalledAt: LANDED - 2 * HOUR,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a62",
+    text: "Release dates are written in Eastern time, never UTC.",
+    keptBy: { userId: "user-grace", name: "Grace Hopper" },
+    forgettable: true,
+    createdAt: LANDED - 2 * DAY,
+    updatedAt: LANDED - 2 * DAY,
+    source: null,
+    recalls30d: 3,
+    lastRecalledAt: LANDED - DAY,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a63",
+    text: "The staging database is reset every Sunday night.",
+    keptBy: { userId: "user-alan", name: "Alan Turing" },
+    forgettable: true,
+    createdAt: LANDED - 60 * DAY,
+    updatedAt: LANDED - 60 * DAY,
+    source: null,
+    recalls30d: 0,
+    lastRecalledAt: null,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1571,6 +1621,7 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
@@ -1835,6 +1886,8 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
+  [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
@@ -1859,6 +1912,21 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { item: closedNow(held, ADA, Date.now()), taken: true };
+  },
+  // Note that a Got it and an Undo's take-back are taken as the service takes them, though nothing here moves, so the window draws its own.
+  [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: acknowledgedNow(held, ADA, Date.now()), taken: true };
+  },
+  [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: takenBackNow(held, Date.now()), outcome: INBOX_TAKE_BACK.TAKEN };
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),

@@ -402,6 +402,15 @@ test("a tight list switching between bullets and task items is handed over untou
   assert.equal(handedOver(), text.replace("two", "two again"));
 });
 
+test("a task item wrapped onto a second line stays one item when the checklist is edited", () => {
+  const text = "- [ ] Write the migration\n  and its rollback\n- [ ] Ship it\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " today");
+
+  assert.equal(handedOver(), text.replace("Ship it", "Ship it today"));
+});
+
 test("a checklist laid in after a list that ends the text without a line break starts on a line of its own", () => {
   const { editor, handedOver } = opened("- one");
 
