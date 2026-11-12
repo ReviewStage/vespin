@@ -35,7 +35,8 @@ import { selectAgentPinned } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import { useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -75,7 +76,7 @@ export interface ArchiveAsk {
   readonly question: ArchiveQuestion;
   /** Reads the agent `agentId` names afresh, and answers whether the question may stand: false where a later ask overtook this one. */
   readonly ask: (agentId: string) => Promise<boolean>;
-  /** The question's act pressed: runs `archive` where the agent was asked about at work; where it was asked about at rest, reads it afresh and runs `archive` where it still rests, or asks again as Stop and archive (`present`) where it works or the read failed. */
+  /** The question's act pressed: runs `archive` where the agent was asked about at work; where it was asked about at rest, reads it afresh and runs `archive` where it still rests, or asks again as Stop and archive (`present`) where it works or the read failed, unless a later ask began or the screen was left since. */
   readonly answered: (archive: () => void, present: () => void) => void;
 }
 
@@ -90,21 +91,38 @@ export interface ArchiveAsk {
  * about at rest is read again as the act is pressed and asked about again,
  * as Stop and archive, where it started a turn since, for the same reason.
  * Only the latest ask answers, so a slow read for one agent never stands
- * its question over another's.
+ * its question over another's, and leaving the screen lets go of an ask
+ * still reading, so its question never comes up over another screen. Note
+ * that a pressed act's own read is not an ask: a later ask, or leaving,
+ * never drops an archive already confirmed, and only stops it being asked
+ * about again.
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const readAgent = useReadAgent();
   const [askedWorking, setAskedWorking] = useState(false);
   const latest = useRef(0);
 
+  // Note that leaving the screen overtakes every ask still reading, as a later ask would.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        latest.current += 1;
+      },
+      [],
+    ),
+  );
+
+  /** Whether the agent a fresh read found works: at work, or unread, where the read failed. */
+  const works = (asked: string): Promise<boolean> =>
+    readAgent(asked).then((fresh) => fresh === undefined || agentStillWriting(fresh.status));
+
   /** Reads the agent `asked` names afresh and keeps where it stands for the question: whether it works, or none where a later ask overtook this one. */
   const read = (asked: string): Promise<boolean | undefined> => {
     latest.current += 1;
     const mine = latest.current;
 
-    return readAgent(asked).then((fresh) => {
+    return works(asked).then((working) => {
       if (latest.current !== mine) return undefined;
-      const working = fresh === undefined || agentStillWriting(fresh.status);
       setAskedWorking(working);
 
       return working;
@@ -122,11 +140,18 @@ export function useArchiveAsk(agentId: string): ArchiveAsk {
       }
 
       // Note that an agent asked about at rest is read again as the act is pressed, since a turn begun since may not have reached the list yet.
-      void read(agentId).then((working) => {
-        if (working === undefined) return;
+      const pressed = latest.current;
 
-        if (working) present();
-        else archive();
+      void works(agentId).then((working) => {
+        if (!working) {
+          archive();
+
+          return;
+        }
+
+        if (latest.current !== pressed) return;
+        setAskedWorking(true);
+        present();
       });
     },
   };
