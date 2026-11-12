@@ -4,7 +4,9 @@
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app. It is optional here all the same, so a build
  * without it, such as Expo Go, runs with no Handoff or Spotlight rather than
- * failing to start.
+ * failing to start. Its Spotlight calls reach the system in the order they
+ * are made, each answered alone (`@repo/features/ios-system-activity`'s
+ * `SpotlightIndexPort`).
  */
 
 import type {
@@ -25,6 +27,8 @@ declare class SystemActivityModule extends NativeModule<SystemActivityEvents> {
   setCurrent(activity: IosActivity): Promise<void>;
   /** Takes back the activity of this page, unless another screen's stands by now. */
   clearCurrent(webpageUrl: string): Promise<void>;
+  /** Empties the app's Spotlight index and adds the items, answered once they are added. */
+  replaceAll(items: readonly SpotlightItem[]): Promise<void>;
   /** Adds the items to the app's Spotlight index, or updates those it holds by their ids. */
   index(items: readonly SpotlightItem[]): Promise<void>;
   /** Removes the items of these ids from the index. */

@@ -15,7 +15,7 @@
  * A Spotlight item is named by its vespin.dev link, which is also what the
  * app is handed when the item is tapped, so one string both finds the item
  * to update or remove and opens it. The app holds the index in step with the
- * lists the document holds (`spotlightChanges`), each change sent alone.
+ * lists the document holds (`spotlightIndexKeeper`), each change sent alone.
  */
 
 import { Schema as EffectSchema } from "effect";
@@ -277,6 +277,74 @@ export function spotlightChanges(
   const remove = [...indexed.keys()].filter((id) => !listed.has(id));
 
   return { index, remove };
+}
+
+/**
+ * The app's Spotlight index as its native module writes it. Note that the
+ * module sends each call to the system in the order it is made, without
+ * waiting on the answer to the one before, so a call never waits on another
+ * the system has not answered.
+ */
+export interface SpotlightIndexPort {
+  /** Empties the index and adds the items, answered once the items are added. */
+  readonly replaceAll: (items: readonly SpotlightItem[]) => Promise<void>;
+  /** Adds the items, or updates those it holds by their ids. */
+  readonly index: (items: readonly SpotlightItem[]) => Promise<void>;
+  /** Removes the items of these ids. */
+  readonly remove: (ids: readonly string[]) => Promise<void>;
+  /** Empties the index. */
+  readonly removeAll: () => Promise<void>;
+}
+
+/**
+ * Holds `port` to the lists each call names while an account is signed in,
+ * and empties it once none is: the whole index made anew at the first
+ * lists, each change sent alone after them. Note that each call is sent
+ * without waiting on the last, because the system was seen never to answer
+ * emptying an index it holds nothing of, and every change waiting behind
+ * that answer left the index empty for the whole launch; and that a call
+ * the system refuses has the next lists make the index anew, since what it
+ * holds is no longer known.
+ */
+export function spotlightIndexKeeper(
+  port: SpotlightIndexPort,
+  refused: (cause: unknown) => void,
+): (signedIn: boolean, items: readonly SpotlightItem[]) => void {
+  // What the index holds as far as this launch knows: unknown until it is first made anew, and null once emptied for no account.
+  let indexed: Map<string, SpotlightItem> | null | undefined;
+
+  const send = (change: Promise<void>) => {
+    change.catch((cause: unknown) => {
+      indexed = undefined;
+      refused(cause);
+    });
+  };
+
+  return (signedIn, items) => {
+    // Note that a launch with no account empties the index too, since one signed out while the app was closed left its items.
+    if (!signedIn) {
+      if (indexed === null) return;
+      indexed = null;
+      send(port.removeAll());
+
+      return;
+    }
+
+    const held = indexed;
+    indexed = new Map(items.map((item) => [item.id, item]));
+
+    if (held === undefined || held === null) {
+      send(port.replaceAll(items));
+
+      return;
+    }
+
+    const { index, remove } = spotlightChanges(held, items);
+
+    if (remove.length > 0) send(port.remove(remove));
+
+    if (index.length > 0) send(port.index(index));
+  };
 }
 
 /**

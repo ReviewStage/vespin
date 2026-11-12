@@ -20,6 +20,7 @@
 import CoreSpotlight
 import ExpoModulesCore
 import Foundation
+import OSLog
 import UIKit
 import UniformTypeIdentifiers
 
@@ -75,6 +76,8 @@ public final class SystemActivityModule: Module {
   static let pullRequestKey = "pullRequest"
   /// The app's own index, apart from the default one so its protection is its own.
   private static let indexName = "dev.vespin.spotlight"
+  /// Where the index's answers are said in the device log.
+  private static let log = Logger(subsystem: "dev.vespin.ios", category: "spotlight")
 
   private lazy var index = CSSearchableIndex(name: Self.indexName, protectionClass: .complete)
   // Note that the activity is read and written on the main thread alone.
@@ -110,16 +113,25 @@ public final class SystemActivityModule: Module {
       self.withdraw(webpageUrl)
     }.runOnQueue(.main)
 
-    AsyncFunction("index") { (items: [SpotlightRecord]) async throws in
-      try await self.index.indexSearchableItems(items.map(Self.searchableItem))
+    // Note that each Spotlight call is handed to the index on Expo's async queue, which is serial, so the system takes them in the order JavaScript made them, and each is answered by its own completion alone. No call waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
+    AsyncFunction("replaceAll") { (items: [SpotlightRecord], promise: Promise) in
+      self.index.deleteAllSearchableItems { error in
+        guard let error else { return Self.log.notice("Spotlight's delete-all was answered") }
+        Self.log.error("Spotlight's delete-all was refused: \(error.localizedDescription, privacy: .public)")
+      }
+      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: Self.answer(promise))
     }
 
-    AsyncFunction("remove") { (ids: [String]) async throws in
-      try await self.index.deleteSearchableItems(withIdentifiers: ids)
+    AsyncFunction("index") { (items: [SpotlightRecord], promise: Promise) in
+      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: Self.answer(promise))
     }
 
-    AsyncFunction("removeAll") { () async throws in
-      try await self.index.deleteAllSearchableItems()
+    AsyncFunction("remove") { (ids: [String], promise: Promise) in
+      self.index.deleteSearchableItems(withIdentifiers: ids, completionHandler: Self.answer(promise))
+    }
+
+    AsyncFunction("removeAll") { (promise: Promise) in
+      self.index.deleteAllSearchableItems(completionHandler: Self.answer(promise))
     }
   }
 
@@ -135,6 +147,15 @@ public final class SystemActivityModule: Module {
       return ["link": link]
     default:
       return nil
+    }
+  }
+
+  /// Settles `promise` with what the index answered, said in the device log too, since JavaScript's console does not reach it in a Release build.
+  private static func answer(_ promise: Promise) -> @Sendable (Error?) -> Void {
+    return { error in
+      guard let error else { return promise.resolve() }
+      log.error("A Spotlight call was refused: \(error.localizedDescription, privacy: .public)")
+      promise.reject(error)
     }
   }
 
