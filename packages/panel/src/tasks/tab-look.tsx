@@ -18,6 +18,7 @@ import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
+import { type RunTabLook, runActionGlyph } from "./run-action-shells.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { SIDE_PANEL_TAB_KIND } from "./use-side-panel.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -109,8 +110,10 @@ export type TabSubject =
     }
   | {
       readonly kind: typeof TAB_KIND.TERMINAL;
-      /** The terminal's name ("Cloud 1"), which names the tab. */
+      /** The terminal's name ("Cloud 1"), or its run action's label, which names the tab. */
       readonly title: string;
+      /** Where the terminal is a run action's, whose icon the tab wears; none for a developer's own shell. */
+      readonly action?: RunTabLook | undefined;
     }
   | {
       readonly kind: typeof TAB_KIND.LOCAL;
@@ -270,7 +273,20 @@ export function tabLook(subject: TabSubject): KindLook {
       };
     // Note that a terminal wears the terminal's own still glyph rather than its agent's, which
     // moves while the agent works, and is named by its terminal; each place drawing it names the agent beside it.
+    // A run action's wears the action's icon, giving way to a spinner while its process runs.
     case TAB_KIND.TERMINAL:
+      return {
+        icon:
+          subject.action === undefined ? (
+            <GLYPH.TERMINAL />
+          ) : (
+            <StateGlyph
+              glyph={runActionGlyph(subject.action.action.icon)}
+              state={subject.action.running === true ? GLYPH_STATE.WORKING : GLYPH_STATE.REST}
+            />
+          ),
+        label: subject.title,
+      };
     case TAB_KIND.LOCAL:
       return { icon: <GLYPH.TERMINAL />, label: subject.title };
     case TAB_KIND.FILE: {

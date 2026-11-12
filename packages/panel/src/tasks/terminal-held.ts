@@ -1,3 +1,4 @@
+import { looseTaskSectionIconSchema } from "@repo/features/task-section-wire";
 import { Store, useSelector } from "@tanstack/react-store";
 import { Option, Schema } from "effect";
 import { TERMINAL_KIND, type TerminalKind } from "./terminal-session.js";
@@ -30,11 +31,24 @@ const TITLE_WORDS = {
   [TERMINAL_KIND.LOCAL]: "Local",
 } as const;
 
-/** One terminal the window holds: the id it minted the terminal under, its name, and its shell's id where its host keeps it past a reload. */
+/** The run action a cloud terminal's shell was started for: its id, and the icon it wore when pressed, which the tab wears. */
+const heldActionSchema = Schema.Struct({
+  id: Schema.String,
+  icon: Schema.optional(looseTaskSectionIconSchema),
+});
+
+export type HeldAction = typeof heldActionSchema.Type;
+
+/**
+ * One terminal the window holds: the id it minted the terminal under, its
+ * name, its shell's id where its host keeps it past a reload, and the run
+ * action it shows where it is one's, whose tab takes nothing typed.
+ */
 const heldShellSchema = Schema.Struct({
   shell: Schema.String,
   title: Schema.String,
   terminal: Schema.optional(Schema.String),
+  action: Schema.optional(heldActionSchema),
 });
 
 export type HeldShell = typeof heldShellSchema.Type;

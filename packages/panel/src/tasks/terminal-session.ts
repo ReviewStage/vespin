@@ -71,6 +71,8 @@ type ShellAttached = { readonly asked: true } | { readonly state: TerminalState 
 export interface ShellLink {
   /** The agent the shell's port is ticketed under. */
   readonly agentId: string;
+  /** Whether the shell takes nothing typed, as a run action's does: its screen still scrolls and copies, and one that went is said to have exited rather than replaced. */
+  readonly readOnly?: boolean;
   /** A new shell at the size given, where the session holds none; a link with none leaves that to the tab. */
   readonly open?: (size: TerminalSize) => Promise<ShellOpened>;
   /** The shell's port asked for at the size given. */
@@ -360,10 +362,12 @@ export class TerminalSession {
 
   // What is typed goes to the shell's port, or waits for one; after the
   // shell ended or the connection closed, any key is the state's own, and
-  // Return runs the bar's action.
+  // Return runs the bar's action. A read-only shell takes nothing typed,
+  // and a key after it ended starts no shell in its place.
   #input(data: string): void {
     const state = this.state;
     const action = returnAction(state);
+    if (this.link.readOnly === true && state.kind === TERMINAL_STATE.EXITED) return;
     if (state.kind === TERMINAL_STATE.EXITED) {
       this.link.ended(this);
     } else if (state.kind === TERMINAL_STATE.IDLE) {
@@ -371,7 +375,7 @@ export class TerminalSession {
       this.connect();
     } else if (action !== undefined && this.#port === undefined) {
       if (data === RETURN) this.act(action);
-    } else {
+    } else if (this.link.readOnly !== true) {
       this.#send(data);
     }
   }
@@ -401,7 +405,10 @@ export class TerminalSession {
     }
     const next = this.link.stateOf(message.state, message.code);
     if (next === undefined || message.state === TERMINAL_CONNECTION.IDLE) this.#letGo();
-    if (next === undefined) this.link.ended(this);
+    // Note that a read-only shell that went is said to have exited, because no shell of the developer's stands in for a run action's.
+    if (next === undefined && this.link.readOnly === true) {
+      this.#enter({ kind: TERMINAL_STATE.EXITED, code: undefined });
+    } else if (next === undefined) this.link.ended(this);
     else this.#enter(next);
   }
 }

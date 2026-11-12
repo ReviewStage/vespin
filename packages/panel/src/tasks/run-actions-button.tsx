@@ -1,7 +1,6 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
-import { knownTaskSectionIcon } from "@repo/features/task-section-wire";
-import { SANDBOX_STATE, type TerminalSummary } from "@repo/features/terminal-wire";
+import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -13,7 +12,6 @@ import {
   INLINE_REF_LOOK,
   Inline,
   InlineRef,
-  PlayIcon,
   SplitButton,
   STATUS_TONE,
   useMenu,
@@ -24,7 +22,7 @@ import { useCallback, useState } from "react";
 import { askAct } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
-import { sectionGlyph } from "../desktop/section-icon-picker.js";
+import type { ShownShell } from "../desktop/agent-actions.js";
 import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import {
@@ -36,6 +34,8 @@ import {
 import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
+import { runActionGlyph, shellsQuery } from "./run-action-shells.js";
+import type { HeldAction } from "./terminal-held.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
@@ -59,9 +59,6 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * it was started for, while the agent is shown.
  */
 
-/** How often the shown button reads which of its actions run, as the Terminal tab's own list goes. */
-const SHELLS_EVERY_MS = 5_000;
-
 /** What the button says, in the app's own words. */
 const WORDS = {
   MENU: "Run actions",
@@ -79,17 +76,6 @@ const WORDS = {
 
 /** The keys the button offers on the agent shown, which its menu prints. */
 const RUN_KEYS = [APP_COMMAND.RUN_ACTION] as const;
-
-/** An agent's shells and where its sandbox stands, read as its Run button shows which actions run. */
-function shellsQuery(agentId: string, shown: boolean, enabled: boolean) {
-  return queryOptions({
-    queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId],
-    queryFn: () => askAct(ACT_KIND.TERMINAL_LIST, { agentId }),
-    enabled,
-    refetchInterval: shown ? SHELLS_EVERY_MS : false,
-    retry: false,
-  });
-}
 
 /** The workspace's sandbox setup, as Settings › Cloud environment reads it, its run actions among it. */
 function sandboxSetupQuery(workspaceId: string, enabled: boolean) {
@@ -135,27 +121,56 @@ function pressFailed(
 async function runAction(
   queries: QueryClient,
   agentId: string,
-  action: RunAction,
+  action: HeldAction,
   stopped: boolean,
-  onShowShell: ((terminal: TerminalSummary) => void) | undefined,
+  onShowShell: ((terminal: ShownShell) => void) | undefined,
 ): Promise<void> {
   if (stopped) await askAct(ACT_KIND.TERMINAL_RESUME, { agentId }).catch(() => undefined);
   const answer = await askAct(ACT_KIND.AGENTS_RUN_ACTION, { agentId, actionId: action.id }).catch(
     (cause: unknown) => ({ failure: cause }),
   );
   await queries.invalidateQueries({ queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId] });
-  if ("terminal" in answer) onShowShell?.(answer.terminal);
+  // The tab is held on the action, with the icon it wears as pressed, so it takes nothing typed and wears both.
+  const held = { id: action.id, ...(action.icon === undefined ? {} : { icon: action.icon }) };
+  if ("terminal" in answer) onShowShell?.({ ...answer.terminal, action: held });
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION, agentId, answer, WORDS.NOT_RUN);
 }
 
 /** Stops one action's shell, its answer laid over the shells read. */
-async function stopAction(queries: QueryClient, agentId: string, action: RunAction): Promise<void> {
+async function stopAction(
+  queries: QueryClient,
+  agentId: string,
+  action: HeldAction,
+): Promise<void> {
   const answer = await askAct(ACT_KIND.AGENTS_RUN_ACTION_STOP, {
     agentId,
     actionId: action.id,
   }).catch((cause: unknown) => ({ failure: cause }));
   if ("terminals" in answer) queries.setQueryData([QUERY_ROOT.AGENT_SHELLS, agentId], answer);
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION_STOP, agentId, answer, WORDS.NOT_STOPPED);
+}
+
+/**
+ * Runs or stops one of an agent's run actions from the tab that shows it,
+ * through the presses the Run button makes, the tab already shown; and
+ * whether a press is under way, which holds the tab's button.
+ */
+export function useRunActionPress(agentId: string): {
+  readonly busy: boolean;
+  readonly run: (action: HeldAction) => void;
+  readonly stop: (action: HeldAction) => void;
+} {
+  const queries = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const pressed = (press: Promise<void>) => {
+    setBusy(true);
+    void press.finally(() => setBusy(false));
+  };
+  return {
+    busy,
+    run: (action) => pressed(runAction(queries, agentId, action, false, undefined)),
+    stop: (action) => pressed(stopAction(queries, agentId, action)),
+  };
 }
 
 /** One of the agent's run actions as a place offers it: the action, whether it runs now, and the press that runs or stops it. */
@@ -190,7 +205,7 @@ export interface RunOffer {
 export function useRunActions(
   agent: Pick<AgentSummary, "id" | "machine"> | undefined,
   shown: boolean,
-  onShowShell: ((terminal: TerminalSummary) => void) | undefined,
+  onShowShell: ((terminal: ShownShell) => void) | undefined,
 ): RunOffer | undefined {
   const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -253,14 +268,9 @@ function actionLabel({ action, runs }: OfferedAction): string {
   return runs ? WORDS.STOP(action.label) : action.label;
 }
 
-/** An action's glyph: Stop while it runs, otherwise its own icon, or the play triangle where it wears none. */
-function actionGlyph({ action, runs }: OfferedAction): React.JSX.Element {
-  if (runs) return <GLYPH.STOP />;
-  return (
-    (action.icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(action.icon))) ?? (
-      <PlayIcon />
-    )
-  );
+/** An action's glyph, its own icon whether or not it runs, so a reader keeps track of which action a Stop ends. */
+function actionGlyph({ action }: OfferedAction): React.JSX.Element {
+  return runActionGlyph(action.icon);
 }
 
 /** The actions as a menu lists them, the primary printing ⌥⌘R where it acts on the agent, then the way to edit them. */
@@ -269,7 +279,8 @@ function runItems(offer: RunOffer): MenuAction[][] {
     const item: MenuAction = {
       key: offered.action.id,
       label: actionLabel(offered),
-      detail: offered.action.command,
+      // While it runs its row says so under "Stop" and its name, rather than its command.
+      detail: offered.runs ? WORDS.RUNNING : offered.action.command,
       icon: actionGlyph(offered),
       replayMasked: true,
       onSelect: offered.onPress,
@@ -284,7 +295,7 @@ function runItems(offer: RunOffer): MenuAction[][] {
 /** Run ›, the actions as a phone's ⋯ lists them, where no button stands. */
 export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined {
   if (offer === undefined) return undefined;
-  return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
+  return { label: WORDS.SUBMENU, icon: <GLYPH.RUN_ACTION />, items: runItems(offer).flat() };
 }
 
 /** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the primary where the key acts. */
@@ -335,7 +346,7 @@ export function RunActionsButton({
   return (
     <>
       <SplitButton
-        icon={first.runs ? <GLYPH.STOP /> : <PlayIcon />}
+        icon={first.runs ? <GLYPH.STOP /> : <GLYPH.RUN_ACTION />}
         label={WORDS.IN(said, agentName)}
         hintLabel={WORDS.IN(said, agentName)}
         busy={offer.busy}
