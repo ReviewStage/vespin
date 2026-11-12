@@ -61,6 +61,7 @@ import {
 import { GLYPH, StarIcon, StarOffIcon } from "@repo/ui/icons";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
   type QueryClient,
@@ -77,6 +78,7 @@ import { SectionIconWell, sectionGlyph } from "../desktop/section-icon-picker.js
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
@@ -200,8 +202,9 @@ type SetupWrite = { readonly runActionsOf?: undefined } | { readonly runActionsO
 /**
  * Every repository's run actions as the page holds them with an answer laid
  * over them: each repository's list taken from whichever of the two was saved
- * later, by its `updatedAt`, and the repository a save of run actions wrote
- * taken from its answer whatever it says, gone where the answer holds none.
+ * later, by its `updatedAt`, so a late answer never draws back an older list,
+ * and the repository a save of run actions wrote gone where its answer holds
+ * none.
  */
 function newerRunActions(
   held: RunActionLists,
@@ -212,8 +215,7 @@ function newerRunActions(
   for (const list of answered) {
     const name = list.repository.toLowerCase();
     const standing = byName.get(name);
-    const ours = saved !== undefined && sameRepository(saved, list.repository);
-    if (standing === undefined || ours || list.updatedAt >= standing.updatedAt) {
+    if (standing === undefined || list.updatedAt >= standing.updatedAt) {
       byName.set(name, list);
     }
   }
@@ -740,6 +742,8 @@ function useSaveRunActions(workspaceId: string) {
     }: {
       repository: string;
       actions: readonly RunActionWritten[];
+      /** The action a rename's save renamed and the name it asked for, which the row's rename reads back (`renameWrite`); none for any other save. */
+      renamed?: { readonly id: string; readonly name: string } | undefined;
     }) =>
       sendAct(ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT, {
         workspaceId,
@@ -839,7 +843,20 @@ function RunActionRow({
   const savedLabel = action?.label ?? "";
   const savedCommand = action?.command ?? "";
   const savedIcon = action?.icon === undefined ? undefined : knownTaskSectionIcon(action.icon);
+  // A new action's name is held here until its first save; a saved one's rename is the app's shared one (`useInlineRename`) over the section's save, so a refused name reopens the field over what was asked.
   const [renaming, setRenaming] = useState(added !== undefined);
+  const renames = renameWrite(saving, {
+    ask: (id: string, name: string) => ({
+      repository,
+      actions: actions.map((each) =>
+        each.id === id ? { ...writtenOf(each), label: name } : writtenOf(each),
+      ),
+      renamed: { id, name },
+    }),
+    asked: ({ renamed }) => ({ subjectId: renamed?.id ?? "", name: renamed?.name ?? "" }),
+    refused: () => false,
+  });
+  const rename = useInlineRename(action?.id, renames);
   const [picking, setPicking] = useState(false);
   // A new action's label and icon, held until its first save; a saved one's are saved as they change.
   const [newLabel, setNewLabel] = useState("");
@@ -923,7 +940,7 @@ function RunActionRow({
               label: "Rename",
               icon: <GLYPH.RENAME />,
               disabled: busy,
-              onSelect: () => setRenaming(true),
+              onSelect: rename.begin,
             },
           ],
           [
@@ -964,11 +981,14 @@ function RunActionRow({
           ],
         ];
   const endRename = (value: string | undefined) => {
-    setRenaming(false);
     const named = value?.trim();
-    if (named === undefined || named === "" || named === label) return;
-    if (action === undefined) setNewLabel(named);
-    else saveChange({ label: named });
+    const changed = named === undefined || named === "" || named === label ? undefined : named;
+    if (action !== undefined) {
+      rename.end(changed);
+      return;
+    }
+    setRenaming(false);
+    if (changed !== undefined) setNewLabel(changed);
   };
   const pickIcon = (next: TaskSectionIcon | undefined) => {
     if (action === undefined) setNewIcon(next);
@@ -1002,10 +1022,16 @@ function RunActionRow({
           label: (
             <ReplayMask>
               <RenamableName
-                value={label}
+                value={action === undefined ? label : (rename.asked ?? label)}
                 label="Run action name"
-                editing={renaming}
-                onBegin={manages && !busy ? () => setRenaming(true) : undefined}
+                editing={action === undefined ? renaming : rename.editing}
+                onBegin={
+                  manages && !busy
+                    ? action === undefined
+                      ? () => setRenaming(true)
+                      : rename.begin
+                    : undefined
+                }
                 onEnd={({ value }) => endRename(value)}
                 placeholder="Dev server"
                 maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
