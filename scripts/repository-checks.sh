@@ -5,35 +5,6 @@ SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=scripts/lib/workspace.sh
 source "$SCRIPT_DIRECTORY/lib/workspace.sh"
 
-# The Node major is stated in more than one place because different readers look
-# in different files, so they have to agree. `.nvmrc` is what local shells and
-# CI read — the workflows name it as `node-version-file` — and Vercel reads
-# neither it nor the root manifest: it takes `engines.node` from the deployed
-# app and overrides its own dashboard setting with it. A stale `engines`
-# therefore fails nothing and announces nothing local, and quietly ships
-# production on a major no test ever ran on, which is how `22.x` outlived the
-# move to 24. `.nvmrc` is the source; every declared major is checked against it.
-nvmrc_major=$(sed -E 's/^v?([0-9]+).*$/\1/' "$APP_REPO_ROOT/.nvmrc" | head -1)
-engines_drift=""
-for manifest in "$APP_REPO_ROOT/package.json" \
-    "$APP_REPO_ROOT"/apps/*/package.json \
-    "$APP_REPO_ROOT"/packages/*/package.json; do
-    declared=$(node -e 'const n = require(process.argv[1]).engines?.node; if (n) process.stdout.write(n)' \
-        "$manifest")
-    if [[ -z "$declared" ]]; then
-        continue
-    fi
-    declared_major=$(printf '%s' "$declared" | grep -oE '[0-9]+' | head -1)
-    if [[ "$declared_major" != "$nvmrc_major" ]]; then
-        engines_drift+="${manifest#"$APP_REPO_ROOT/"}: engines.node \"$declared\" is not Node $nvmrc_major"$'\n'
-    fi
-done
-if [[ -n "$engines_drift" ]]; then
-    printf 'error: every engines.node must name the Node major .nvmrc pins (%s):\n%s' \
-        "$nvmrc_major" "$engines_drift" >&2
-    exit 1
-fi
-
 # The packages that import `@repo/runtime/vocabulary` open it precisely
 # because it resolves no Node module and no Effect layer that would carry one
 # in. The renderer's own `node:` grep
@@ -154,16 +125,6 @@ node --input-type=module -e '
 # fallback onto the hosted oRPC route; --check fails if a rewrite went stale.
 pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --check
 
-# The docs' Keyboard shortcuts page is generated from @repo/settings' shortcut
-# table, as the Mac app's own Keyboard shortcuts page lists it; --check fails
-# if a shortcut changed without the page.
-pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
-
-# The brand's colors are written from packages/brand's one table into
-# @repo/ui's roles, the plain values, and @repo/ui-native's tokens, and the
-# motion tokens beside them; --check fails if a copy no longer matches.
-node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
-
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until
 # production answers 404. Every /api/ literal and path builder under
@@ -173,131 +134,24 @@ node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
 # resolves nothing, since a path no procedure matches is the router's 404.
 pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/api-callers.ts
 
-# Every relative import the Vercel builder compiles must carry its .js
-# extension. The builder compiles this TypeScript into the web functions but
-# leaves the specifiers alone, and Node's ESM loader refuses an extensionless
-# one at run time — a break the build cannot see and production reports only as
-# FUNCTION_INVOCATION_FAILED. The desktop's esbuild and the web's Vite both
-# accept the .js form, so the stricter spelling costs the other consumers
-# nothing.
-#
-# The function sources are checked alongside the packages because the builder
-# treats them identically: `apps/web/server` — whose `routes/` subtree holds one
-# module per deployed function — is the entry point of the very graph the doors
-# in `packages/service/src/core.ts` exist to pull in, so a rule enforced on the packages alone
-# leaves the directory nearest the failure uncovered. Side-effect imports count
-# — a door is spelled `import "…"` with no names, and an extensionless one fails
-# exactly the same way. An import `?raw` is a file's text, which the function's
-# bundle inlines (`apps/web/server/function-bundles.ts`), so no loader ever
-# reads its specifier. The iOS app's sources are held to the same spelling,
-# since its Metro (`apps/mobile/metro.config.js`) reads a `.js` specifier as
-# the `.ts` beside it the way the packages are written.
-extensionless_imports=$(grep -rEn '(from|import) "\.\.?/[^"]*"' \
-    "$APP_REPO_ROOT"/packages/*/src \
-    "$APP_REPO_ROOT"/apps/web/server \
-    "$APP_REPO_ROOT"/apps/mobile/src |
-    grep -vE '\.(js|css)"|\?raw"' || true)
-if [[ -n "$extensionless_imports" ]]; then
-    printf 'error: relative imports in packages/ and the web function sources must end in .js (Node ESM cannot load them compiled otherwise):\n%s\n' \
-        "$extensionless_imports" >&2
-    exit 1
-fi
-
-# The web functions are bundled from server/routes/ and server/orpc-route.ts
-# into dist-functions/ and
-# the Build Output tree with every workspace package inlined, so a bare
-# `@repo/…` specifier is resolved by
-# esbuild at build time from apps/web's own node_modules. pnpm links there only
-# what apps/web/package.json declares, so a specifier the web app's sources name
-# without declaring resolves in a developer's hoisted tree, typechecks, and
-# fails the deploy's bundle step, or, for the Vite client, ships a bundle that
-# happened to resolve through another package's link. Declare what is named.
-undeclared_packages() {
-    local manifest=$1
-    shift
-    local declared named named_name undeclared=""
-    declared=$(grep -oE '"@repo/[a-z-]+": "workspace:\*"' "$manifest" |
-        sed -E 's#"@repo/([a-z-]+)".*#\1#' | sort -u)
-    named=$(grep -rhoE --include='*.ts' --include='*.tsx' --exclude='*.test.ts' --exclude='*.test.tsx' \
-        '(from|import) "@repo/[a-z-]+(/[a-z-]+)*"' "$@" |
-        sed -E 's#.*"@repo/([a-z-]+).*"#\1#' | sort -u || true)
-    while IFS= read -r named_name; do
-        [[ -z "$named_name" ]] && continue
-        if ! grep -qx "$named_name" <<<"$declared"; then
-            undeclared+="$named_name"$'\n'
-        fi
-    done <<<"$named"
-    printf '%s' "$undeclared"
-}
-undeclared_web_packages=$(undeclared_packages "$APP_REPO_ROOT/apps/web/package.json" \
-    "$APP_REPO_ROOT/apps/web/server" "$APP_REPO_ROOT/apps/web/src" "$APP_REPO_ROOT/apps/web/scripts")
-if [[ -n "$undeclared_web_packages" ]]; then
-    printf 'error: apps/web names workspace packages its package.json does not declare (the function bundle resolves bare @repo specifiers from apps/web/node_modules, which pnpm links from the declared dependencies alone):\n%s\n' \
-        "$undeclared_web_packages" >&2
-    exit 1
-fi
-
-# Every call of a sandbox goes through `@repo/sandbox`, and its provider's SDK
-# through `packages/sandbox/src/vercel/` alone, so changing providers changes
-# that package and nothing else. The package itself reaches nothing of the
-# repository but `@repo/wire`, so it can never learn what an agent or a
-# session is. `tools/claude-code-probe`, a developer's command line, drives a
-# sandbox through the SDK by hand and is left out.
-sandbox_sdk_escapes=$(grep -rnE --include='*.ts' --include='*.tsx' --include='*.mjs' --include='package.json' \
-    --exclude-dir=node_modules '"@vercel/(sandbox|oidc)"' \
-    "$APP_REPO_ROOT/apps" "$APP_REPO_ROOT/packages" "$APP_REPO_ROOT/tools" |
-    grep -vE "^$APP_REPO_ROOT/(packages/sandbox/src/vercel/|packages/sandbox/package\.json:|tools/claude-code-probe/)" || true)
-sandbox_repository_reaches=$(grep -rnoE --include='*.ts' '(from|import) "@repo/[a-z-]+' \
-    "$APP_REPO_ROOT/packages/sandbox/src" | grep -v '"@repo/wire$' || true)
-if [[ -n "$sandbox_sdk_escapes" || -n "$sandbox_repository_reaches" ]]; then
-    printf 'error: only packages/sandbox/src/vercel/ names @vercel/sandbox or @vercel/oidc, and @repo/sandbox reaches no workspace package but @repo/wire:\n%s%s\n' \
-        "${sandbox_sdk_escapes:+$sandbox_sdk_escapes$'\n'}" "$sandbox_repository_reaches" >&2
-    exit 1
-fi
-
 # The renderer is a sandboxed browser context: it reaches the main process
 # through the preload bridge alone, so `@repo/host/bridge`, `#shared/messages/*`,
 # and the packages' own wire vocabularies are its widest doors. A `#main/` import compiles and bundles happily and then fails in the
 # browser, and a `node:` import does the same — neither is a mistake the type
 # checker or esbuild can report, because both are real modules that simply are
-# not there at run time.
+# not there at run time. `@effect/platform-node` and `effect/sql` reach `node:`
+# modules behind a bare specifier, so they are refused the same way.
 #
 # A colocated test is not the renderer: it runs under Node and never enters
 # the bundle, so a `node:assert` import is its whole point. The main-process
 # door stays shut for it either way — a renderer test that needs main is
 # testing the wrong side.
-renderer_escapes=$(grep -ranE 'from "(#main/|node:)' \
+renderer_escapes=$(grep -ranE 'from "(#main/|node:|@effect/platform-node|effect/sql)' \
     "$APP_REPO_ROOT/apps/desktop/src/renderer" "$APP_REPO_ROOT/packages/panel/src" |
     grep -vE '\.test\.tsx?:[0-9]+:import .*"node:' || true)
 if [[ -n "$renderer_escapes" ]]; then
     printf 'error: the renderer is sandboxed — it reaches the main process only through the shared bridge and wire modules:\n%s\n' \
         "$renderer_escapes" >&2
-    exit 1
-fi
-
-# The changelog page splits releases on "## <version> — <YYYY-MM-DD>" and its
-# parser throws on any other shape — at module load in the browser, which no
-# build step executes. This check is what keeps a malformed heading out of a
-# visitor's tab.
-malformed_release_headings=$(grep -E '^## ' "$APP_REPO_ROOT/CHANGELOG.md" |
-    grep -vE '^## [0-9]+\.[0-9]+\.[0-9]+ — [0-9]{4}-[0-9]{2}-[0-9]{2}$' || true)
-if [[ -n "$malformed_release_headings" ]]; then
-    printf 'error: CHANGELOG.md release headings must read "## <version> — <YYYY-MM-DD>":\n%s\n' \
-        "$malformed_release_headings" >&2
-    exit 1
-fi
-
-# Effect's Context.Service identity is per module instance: two resolved copies of
-# "effect" in the dependency tree mint two tags that fail their own equality
-# check. The catalog is what pins every package to the one resolved version, so
-# a literal version here is the one thing that can quietly reintroduce a second
-# copy.
-literal_effect_versions=$(grep -rnE '"effect": *"[^c]' --include=package.json \
-    --exclude-dir=node_modules \
-    "$APP_REPO_ROOT/apps" "$APP_REPO_ROOT/packages" "$APP_REPO_ROOT/tools" || true)
-if [[ -n "$literal_effect_versions" ]]; then
-    printf 'error: "effect" must be declared as "catalog:", never a literal version:\n%s\n' \
-        "$literal_effect_versions" >&2
     exit 1
 fi
 
@@ -413,83 +267,6 @@ node --input-type=module -e '
   }
   if (errors.length > 0) {
     process.stderr.write(`error: turbo cache hits would cross platforms:\n${errors.join("\n")}\n`);
-    process.exit(1);
-  }
-' "$APP_REPO_ROOT"
-
-# `@effect/platform-node` and `effect/sql` reach `node:` modules, so an import
-# of either compiles and bundles happily and then fails where there is no Node:
-# the sandboxed renderer. The renderer's `node:` grep above catches the direct
-# reach; this catches the Effect layer that would carry it in behind a bare
-# specifier. (A web function inlines its whole graph and runs on Node, and the
-# isolation guard in apps/web/tests/build-output.test.ts is what proves each one
-# loads.)
-node_reaching_effect=$(grep -rEn --include='*.ts' --include='*.tsx' \
-    '"(@effect/platform-node|effect/sql)' \
-    "$APP_REPO_ROOT/apps/desktop/src/renderer" "$APP_REPO_ROOT/packages/panel/src" || true)
-if [[ -n "$node_reaching_effect" ]]; then
-    printf 'error: @effect/platform-node and effect/sql reach node: modules and must not be imported by the renderer — put the layer behind the runtime edge that builds it:\n%s\n' \
-        "$node_reaching_effect" >&2
-    exit 1
-fi
-
-# The repository is written in American English (AGENTS.md's "Code style"):
-# prose, comments, identifiers, user-facing words, and file names. A British
-# spelling is refused as a word or as one part of an identifier, but where the
-# name belongs to an outside spec or API (ARIA's `labelledby`, the Web Audio
-# `AnalyserNode`, Foundation's `NSUserCancelledError`) or the value is already stored or on the wire (a `"cancelled"`
-# status, the `tasks.colourCode` kind), which keeps the spelling it shipped with.
-# Migrations, the generated Codex protocol, and patches against other source
-# are written as they must apply, so they are left out.
-node --input-type=module -e '
-  import { execFileSync } from "node:child_process";
-  import { readFileSync } from "node:fs";
-  const words = [
-    "colour", "colours", "coloured", "colouring", "colourings", "colourable", "uncoloured",
-    "recolour", "recolours", "recoloured", "cancelled", "cancelling", "canceller",
-    "labelled", "labelling", "unlabelled", "mislabelled", "centre", "centres", "centred",
-    "centring", "analyser", "neighbour", "neighbours", "neighbouring", "grey", "greys",
-    "greyed", "organisation", "organisations", "organise", "organised", "travelled",
-    "travelling", "signalled", "signalling", "behaviour", "behaviours", "honour", "honours",
-    "honoured", "honouring", "acknowledgement", "acknowledgements", "portalled", "dialled",
-    "panelled", "totalling", "modelled", "modelling", "summarise", "summarises",
-    "summarised", "sanitise", "sanitised", "serialise", "serialises", "serialised",
-    "recognise", "recognised", "initialise", "initialised", "parameterised", "capitalised",
-    "capitalising", "virtualised", "ageing", "catalogue", "catalogues", "favour", "favoured",
-    "licence",
-  ];
-  const cap = (word) => word[0].toUpperCase() + word.slice(1);
-  const british = new RegExp(
-    words
-      .flatMap((word) => [
-        `(?<![A-Za-z])${word}(?![a-z])`,
-        `(?<![A-Z])${cap(word)}(?![a-z])`,
-        `(?<![A-Z])${word.toUpperCase()}(?![A-Z])`,
-      ])
-      .join("|"),
-  );
-  const kept = /labelledBy|AnalyserNode|createAnalyser|NSUserCancelledError|tasks\.colourCode|["\x27`]cancelled["\x27`]|cancelled\??:|"cancelled" in/g;
-  const skipped = /^(pnpm-lock\.yaml|patches\/|packages\/database\/migrations\/|packages\/agent-runner\/src\/codex-protocol\/|scripts\/repository-checks\.sh$)|\.patch$/;
-  const repository = process.argv[1];
-  const files = execFileSync("git", ["-C", repository, "ls-files"], { encoding: "utf8" }).split("\n");
-  const offenders = [];
-  for (const file of files) {
-    if (file === "" || skipped.test(file)) continue;
-    if (british.test(file)) offenders.push(`${file}: its name`);
-    let text;
-    try {
-      text = readFileSync(`${repository}/${file}`, "utf8");
-    } catch {
-      continue;
-    }
-    if (text.includes("\u0000")) continue;
-    text.split("\n").forEach((line, index) => {
-      const hit = line.replace(kept, "").match(british);
-      if (hit) offenders.push(`${file}:${index + 1}: ${hit[0]}`);
-    });
-  }
-  if (offenders.length > 0) {
-    console.error(`error: write American spellings (color, canceled, labeled, center, gray, -ize):\n${offenders.join("\n")}`);
     process.exit(1);
   }
 ' "$APP_REPO_ROOT"

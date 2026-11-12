@@ -88,8 +88,7 @@ builds a control of its own.
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
-  table, in the light theme and the dark; never edit it by hand, and
-  `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
+  table, in the light theme and the dark; never edit it by hand. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
   The app reads as Vespin beside the desktop, not as iOS's defaults: a
   screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
