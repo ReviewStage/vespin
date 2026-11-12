@@ -1004,8 +1004,10 @@ export function linkChip(
   label: string,
   doors: MentionDoors,
   at?: MarkdownSpan | undefined,
+  /** What stands after a mention's name in place of where its provider says it stands: a suggestion's Started or Sent. */
+  after?: ReactNode,
 ): React.JSX.Element | undefined {
-  const chip = chipOfLink(href, label, doors, at);
+  const chip = chipOfLink(href, label, doors, at, after);
 
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
@@ -1052,6 +1054,7 @@ function chipOfLink(
   label: string,
   doors: MentionDoors,
   at: MarkdownSpan | undefined,
+  after: ReactNode,
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);
@@ -1071,6 +1074,7 @@ function chipOfLink(
         name={chip.name}
         doors={placed}
         bare={bare}
+        state={after}
       />
     );
   }

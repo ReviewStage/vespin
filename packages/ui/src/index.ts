@@ -376,6 +376,8 @@ export * from "./components/steps/steps.js";
 
 export * from "./components/subject-line/subject-line.js";
 
+export * from "./components/suggestion/suggestion.js";
+
 export * from "./components/suggestion-card/suggestion-card.js";
 
 export * from "./components/swatch/swatch.js";

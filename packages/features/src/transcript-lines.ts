@@ -13,6 +13,7 @@ import {
   MESSAGE_CHANNEL,
   MESSAGE_ROLE,
   type SlackLineMetadata,
+  type SuggestedBy,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
   USER_MESSAGE_METADATA,
@@ -143,6 +144,26 @@ export function slackLineOf(message: AgentTranscriptMessage): SlackLineMetadata 
   const read = userMetadataOf(message);
 
   return read?.channel === MESSAGE_CHANNEL.SLACK ? read : undefined;
+}
+
+/**
+ * The suggestion in another agent's reply a line was sent from: a message
+ * a member sent from it, or the first line of an agent a member started
+ * from it; nothing for any other line.
+ */
+export function suggestedByOf(message: AgentTranscriptMessage): SuggestedBy | undefined {
+  const read = userMetadataOf(message);
+
+  if (read?.channel === MESSAGE_CHANNEL.SUGGESTION) return read.suggested_by;
+
+  return read?.channel === MESSAGE_CHANNEL.START ? read.suggested_by : undefined;
+}
+
+/** The suggestion an agent was started from, as its first line carries it; nothing for any other line, a suggestion sent to a running agent among them. */
+export function suggestionStartOf(message: AgentTranscriptMessage): SuggestedBy | undefined {
+  const read = userMetadataOf(message);
+
+  return read?.channel === MESSAGE_CHANNEL.START ? read.suggested_by : undefined;
 }
 
 /** What GitHub said on the agent's pull request that a line steered into the agent carries; nothing for any other line. */

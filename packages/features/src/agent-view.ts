@@ -324,6 +324,9 @@ export type AgentCallFailure = (typeof AGENT_CALL_FAILURE)[keyof typeof AGENT_CA
 
 const failureSchema = EffectSchema.Literals(Object.values(AGENT_CALL_FAILURE));
 
+/** Whether a failure is one an agent call names, which its words say (`agent-refusal-words.ts`). */
+export const isAgentCallFailure = EffectSchema.is(failureSchema);
+
 /** A failed call, as every answer below spells one, with the facts of what failed beneath it where the host caught it (`failure-facts.ts`), which the window reports and never draws. */
 const failed = EffectSchema.Struct({
   failure: failureSchema,

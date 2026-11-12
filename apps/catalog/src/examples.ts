@@ -138,6 +138,7 @@ import { SPLIT_BARS_EXAMPLE } from "./examples/split-bars";
 import { SPLIT_BUTTONS_EXAMPLE } from "./examples/split-buttons";
 import { STEPS_EXAMPLE } from "./examples/steps";
 import { SUGGESTION_CARDS_EXAMPLE } from "./examples/suggestion-cards";
+import { SUGGESTIONS_EXAMPLE } from "./examples/suggestions";
 import { SWATCHES_EXAMPLE } from "./examples/swatches";
 import { SWITCHES_EXAMPLE } from "./examples/switches";
 import { TAB_NOTICES_EXAMPLE } from "./examples/tab-notices";
@@ -177,6 +178,7 @@ export const EXAMPLES: readonly Example[] = [
   WRITING_GLYPHS_EXAMPLE,
   ATTACHMENT_CHIPS_EXAMPLE,
   AVATARS_EXAMPLE,
+  SUGGESTIONS_EXAMPLE,
   REPOSITORIES_EXAMPLE,
   TASK_MARKS_EXAMPLE,
   TASK_ROWS_EXAMPLE,

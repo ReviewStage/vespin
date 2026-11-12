@@ -6,6 +6,7 @@ import {
 } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
 import { GITHUB_PAGE, gitHubPageLink, LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { SUGGESTION_LEAD } from "@repo/features/reply-button-wire";
 import {
   COMMENT_LINE_LEAD,
   CONCLUSION_WORDS,
@@ -37,6 +38,7 @@ import {
   type GitHubLineMetadata,
   isFailingConclusion,
   type SlackLineMetadata,
+  type SuggestedBy,
   type ThreadLineMetadata,
 } from "@repo/wire";
 import { createContext, type ReactNode, useContext } from "react";
@@ -122,6 +124,43 @@ export function ThreadLineHead({
   return (
     <SubjectLine lead={leadOf(THREAD_LINE_DID[line.event], received)} fit={fit} data-thread-line="">
       {chip}
+    </SubjectLine>
+  );
+}
+
+/**
+ * A line sent from a suggestion in another agent's reply: Suggested by that
+ * agent's chip, which opens it and hangs its card, as a thread's line is
+ * headed by the thread, its name the one it had as the line was sent until
+ * the agent itself is read. The member who sent it is the line's sender.
+ */
+export function SuggestionLineHead({
+  suggestedBy,
+  fit,
+  then,
+}: {
+  suggestedBy: SuggestedBy;
+  /** How much of the line the chip takes: the rest of it alone, or its own width beside its sender (`MessageHead`). */
+  fit?: SubjectFit | undefined;
+  /** What follows the chip with no gap before it, as the comma before who started an agent does; nothing where the head ends there. */
+  then?: string | undefined;
+}): React.JSX.Element {
+  const doors = useMentionDoors();
+
+  const href =
+    doors.place.workspace === ""
+      ? undefined
+      : linkOf(
+          { kind: LINK_DESTINATION.AGENT, agentId: suggestedBy.agent_id },
+          doors.place.workspace,
+        );
+
+  return (
+    <SubjectLine lead={SUGGESTION_LEAD} fit={fit} data-suggestion-line="">
+      <span className="inline-flex min-w-0 items-center">
+        {href === undefined ? suggestedBy.name : linkChip(href, suggestedBy.name, doors)}
+        {then}
+      </span>
     </SubjectLine>
   );
 }

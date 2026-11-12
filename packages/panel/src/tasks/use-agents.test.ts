@@ -470,6 +470,50 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
   assert.equal(again.control().draft, undefined);
 });
 
+test("a suggestion's draft keeps its suggestion through a chip change; another suggestion pressed opens on its own brief, the first closed with Undo, and the two put back together go through neither", async () => {
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
+  await tab.mount();
+
+  const invite = {
+    agentId: AGENT,
+    buttonId: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
+    label: "Invite",
+  };
+
+  const digest = {
+    agentId: AGENT,
+    buttonId: "a3c4d5e6-7f80-4912-8a3b-4c5d6e7f8091",
+    label: "Digest",
+  };
+
+  act(() => {
+    tab.control().onSuggestDraft(invite, "Send the invite email.", undefined);
+  });
+  act(() =>
+    tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
+  );
+  assert.deepEqual(tab.control().draft?.suggestion, invite, "a chip changed keeps the suggestion");
+  act(() => tab.control().onDraftChange({ prompt: "Send the invite email, and retry once." }));
+
+  act(() => {
+    tab.control().onSuggestDraft(digest, "Count invites apart.", undefined);
+  });
+  assert.deepEqual(
+    [tab.control().draft?.suggestion, tab.control().draft?.prompt],
+    [digest, "Count invites apart."],
+    "another suggestion's words never go out through this one",
+  );
+  assert.equal(newestToastSays(), "Draft closedUndo");
+
+  act(() => newestToastAction()?.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      [tab.control().draft?.suggestion, tab.control().draft?.prompt],
+      [undefined, "Count invites apart.\n\nSend the invite email, and retry once."],
+    ),
+  );
+});
+
 test("two windows' draft agents on one plan each keep their own words under their own key", async () => {
   const first = mount({ taskId: TASK, repository: "acme/relay" }, "first");
   const second = mount({ taskId: TASK, repository: "acme/relay" }, "second");

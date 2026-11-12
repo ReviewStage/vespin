@@ -12,6 +12,7 @@ import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/featur
 import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { readReplyButtonLink } from "@repo/features/reply-button-wire";
 import {
   blockSays,
   TOOL_BLOCK,
@@ -193,6 +194,7 @@ import {
 import { LoneLinkCard } from "./lone-link-card.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
+import { ReplyButtonLink } from "./reply-button-link.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import {
@@ -381,7 +383,7 @@ function markMentions(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
         ? definitions.get(node.identifier)?.url
         : undefined;
 
-  if (target !== undefined && mayNameChip(target)) {
+  if (target !== undefined && (mayNameChip(target) || readReplyButtonLink(target) !== undefined)) {
     node.data = {
       hName: MENTION_ELEMENT.TAG,
       hProperties: { [MENTION_ELEMENT.TARGET]: target },
@@ -676,6 +678,22 @@ function MentionElement({
   const doors = useMentionDoors();
   const target = String(node?.properties[MENTION_ELEMENT.TARGET] ?? "");
   const words = node === undefined ? "" : wordsOf(node);
+  const button = readReplyButtonLink(target);
+
+  if (button !== undefined) {
+    return (
+      <ReplyButtonLink
+        link={button}
+        words={words}
+        plain={(href) => (
+          <TranscriptLink href={href} words={words}>
+            {children}
+          </TranscriptLink>
+        )}
+      />
+    );
+  }
+
   const chip = node === undefined ? undefined : linkChip(target, words, doors);
 
   return (
