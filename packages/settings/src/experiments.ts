@@ -30,6 +30,8 @@ export const EXPERIMENT = {
   REPLY_BUTTONS: "reply-buttons",
   /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
   FOLLOWING: "following",
+  /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
+  VOICE: "voice",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -82,6 +84,15 @@ export interface ExperimentEntry {
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.VOICE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    name: "Voice",
+    detail:
+      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
   {
     key: EXPERIMENT.FOLLOWING,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
