@@ -50,39 +50,9 @@ appId: dev.vespin.ios
     commands:
       - tapOn: "All"
 - tapOn: "Open.*"
-# A swipe from the leading edge reveals Mark as read or unread, which a full
-# swipe would press at once, so the flow swipes partway across "Recorded the
-# invite flow", the second row, which a compact window stands at about a
-# quarter of its height whatever the list holds below it; a long press offers
-# the same in the row's menu. Note that the press is optional, because a
-# regular window's sidebar stands its rows elsewhere.
-- swipe:
-    start: "8%, 27%"
-    end: "38%, 27%"
-    duration: 900
-- takeScreenshot: inbox-swipe
-- tapOn:
-    text: "Mark as .*"
-    optional: true
-# A swipe from the trailing edge reveals Resolve, which a full swipe would
-# press at once, and Remind me, so the flow swipes partway back across the
-# same row, and a tap on the Inbox's tab closes it unpressed. Note that a
-# regular window, which stands "Choose an item" beside its sidebar, is left
-# out, as its swipes read as taps.
-- runFlow:
-    when:
-      notVisible: "Choose an item"
-    commands:
-      - swipe:
-          start: "92%, 27%"
-          end: "60%, 27%"
-          duration: 900
-      - assertVisible: "Resolve"
-      - takeScreenshot: inbox-swipe-trailing
-      - tapOn: "Inbox"
-      - waitForAnimationToEnd
-# The thread comes before the row's long press, so its files, the PDF among
-# them, are shot whatever the press below does.
+# The thread comes first, before the row's swipes and its long press: a row
+# a swipe opened takes the next tap to close its actions, and its files, the
+# PDF among them, are shot whatever the press below does.
 # Note that the list is scrolled back to its first row, rather than to the
 # first point this row shows, because the folded Duo then stands it against the
 # top edge, where a tap a point or two higher no longer opens it. Neither row
@@ -161,6 +131,37 @@ appId: dev.vespin.ios
 # Back on the list, from the thread.
 - tapOn: "Inbox"
 - waitForAnimationToEnd
+# A swipe from the leading edge reveals Mark as read or unread, which a full
+# swipe would press at once, so the flow swipes partway across "Recorded the
+# invite flow", the second row, which a compact window stands at about a
+# quarter of its height whatever the list holds below it; a long press offers
+# the same in the row's menu. Note that the press is optional, because a
+# regular window's sidebar stands its rows elsewhere.
+- swipe:
+    start: "8%, 27%"
+    end: "38%, 27%"
+    duration: 900
+- takeScreenshot: inbox-swipe
+- tapOn:
+    text: "Mark as .*"
+    optional: true
+# A swipe from the trailing edge reveals Resolve, which a full swipe would
+# press at once, and Remind me, so the flow swipes partway back across the
+# same row, and a tap on the Inbox's tab closes it unpressed. Note that a
+# regular window, which stands "Choose an item" beside its sidebar, is left
+# out, as its swipes read as taps.
+- runFlow:
+    when:
+      notVisible: "Choose an item"
+    commands:
+      - swipe:
+          start: "92%, 27%"
+          end: "60%, 27%"
+          duration: 900
+      - assertVisible: "Resolve"
+      - takeScreenshot: inbox-swipe-trailing
+      - tapOn: "Inbox"
+      - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "acceptInvite can add a member twice"
     direction: DOWN
