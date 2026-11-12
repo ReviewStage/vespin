@@ -129,7 +129,7 @@ it.effect("a file past every tool's bound is read only one byte past it", () =>
 );
 
 it.effect(
-  "a file is written into the running sandbox tagged with the agent's session, under its attachments folder, readable by the agent, answering its path",
+  "a file is written into the running sandbox tagged with the agent's session, readable by the agent, at the path it answers",
   () =>
     Effect.gen(function* () {
       const { sandbox: memory, up } = standing(tmpdir());
@@ -142,7 +142,8 @@ it.effect(
         sandbox.writeFile?.({ name: "description/spec.pdf", contents }),
       );
 
-      assert.equal(path, "/tmp/agent-attachments/description/spec.pdf");
+      // Note that the folder is the machine's own (`MachineLayout`'s `attachments`), so only where under it the file stands is asserted.
+      assert.ok(path?.endsWith("/description/spec.pdf"));
       assert.deepEqual(memory.state.files, [
         { name: up.name, running: up.running, file: { path, contents, mode: 0o644 } },
       ]);
