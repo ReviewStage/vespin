@@ -39,10 +39,11 @@ private struct Command {
   var nonRepeatable = false
 }
 
-/// A glyph by its name: an SF Symbol where one has it, else the asset catalog's symbol of that name, as the app's Lucide glyphs are.
+/// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
+/// Note that the catalog is asked first, because every name here is a Lucide one, and a system lookup should never stand in for it.
 private func glyph(_ name: String?) -> UIImage? {
   guard let name else { return nil }
-  return UIImage(systemName: name) ?? UIImage(named: name)
+  return UIImage(named: name) ?? UIImage(systemName: name)
 }
 
 /// What a command takes no key for: one pressed rarely, or one inside a submenu.
