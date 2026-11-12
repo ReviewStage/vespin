@@ -668,8 +668,7 @@ function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined 
  * of files anywhere over the column below the hairline parting the head
  * from the text, its gaps between blocks and its margins included, is the
  * text's, so the window never opens a file, and the system shows a copy
- * where it carries one the text keeps (`offersDescriptionFiles`) and
- * refuses it, drawing no line, where it carries none. It lands before the
+ * where it carries one the text keeps (`offersDescriptionFiles`). It lands before the
  * first line, or below the line it stands on or the
  * line above the gap it stands in, as deep in its lists as the pointer
  * stands across (`fileDropSpot`), which the line answered marks while the
@@ -677,7 +676,10 @@ function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined 
  * editor there while it is closed (`dropPlacement`), and the editor lays
  * its pictures in where the line marked (`PictureLanding`). Note that the drag is taken before the
  * editor's own handling, so the editor's text caret for a drop never draws
- * beside the line. None while `editable` is false.
+ * beside the line. A drag is taken but refused, no line drawn and no copy
+ * shown, where it carries no file the text keeps, or while an editor opened
+ * is still loading, since nothing could lay its files in yet. None while
+ * `editable` is false.
  */
 function useFileDrop({
   body,
@@ -703,9 +705,14 @@ function useFileDrop({
 
     if (!editable || column === null) return;
 
+    // Whether the open editor is still loading, its drawn sections standing in its place, where a drop could lay nothing in yet.
+    const loading = () =>
+      latest.current.editor !== undefined && body.current?.querySelector(linesWithin(true)) == null;
+
+    // Note that an editor still loading draws the sections in its place, whose lines a drag reads meanwhile.
     const spotOf = (event: DragEvent) => {
       const text = body.current;
-      const within = linesWithin(latest.current.editor !== undefined);
+      const within = linesWithin(text?.querySelector(linesWithin(true)) != null);
       const floor = text === null ? undefined : textFloor(text, within);
 
       if (text === null || floor === undefined || event.clientY < floor) return undefined;
@@ -713,19 +720,22 @@ function useFileDrop({
       return fileDropSpot(textLines(text, within), event.clientX, event.clientY);
     };
 
-    // Note that a drag of files the text keeps none of is still held, so the window never opens them, but refused: no line, and no copy.
+    // Whether a drag over the text is refused: no line, and no copy, though it is still held so the window never opens its files.
+    const refused = (event: DragEvent) =>
+      loading() || !offersDescriptionFiles(event.dataTransfer?.items ?? []);
+
     const over = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
       const spot = spotOf(event);
-      const taken = offersDescriptionFiles(event.dataTransfer?.items ?? []);
-      const at = taken ? spot?.line : undefined;
+      const refuse = refused(event);
+      const at = refuse ? undefined : spot?.line;
       setLine((was) => (sameLine(was, at) ? was : at));
 
       if (spot === undefined) return;
       event.preventDefault();
       event.stopPropagation();
 
-      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = taken ? "copy" : "none";
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = refuse ? "none" : "copy";
     };
 
     const left = (event: DragEvent) => {
@@ -743,6 +753,8 @@ function useFileDrop({
       if (spot === undefined || text === null) return;
       event.preventDefault();
       event.stopPropagation();
+
+      if (loading()) return;
       const files = Array.from(event.dataTransfer?.files ?? []);
       const open = latest.current.editor !== undefined;
       const place = (range: Range) => (open ? undefined : drawnWordsAt(text, range));
