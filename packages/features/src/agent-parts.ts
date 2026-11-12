@@ -589,7 +589,7 @@ export function agentRows(
   { workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
   const drawn = drawnParts(message, arrived);
-  // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
+  // Note that a turn that ended with `end_turn` reads its summary as its reply, and only the words it wrote after the call as notes, which fold away with it, because the summary stands in for them; every word before the call stays open.
   const summary = moving ? undefined : endTurnSummary(drawn);
 
   const reply: AgentPart | undefined =
@@ -597,10 +597,16 @@ export function agentRows(
 
   const parts = reply === undefined ? drawn : [...drawn, reply];
 
+  const ended = drawn.findLastIndex(
+    (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
+  );
+
+  const restated = new Set(reply === undefined ? [] : drawn.slice(ended + 1));
+
   const reading: RowReading<AgentPart> = {
     ...AGENT_READING,
     part: (part) =>
-      reply !== undefined && part.kind === AGENT_PART.TEXT && part !== reply
+      part.kind === AGENT_PART.TEXT && restated.has(part)
         ? ROW_PART.NOTE
         : AGENT_READING.part(part),
     running: (part) =>
