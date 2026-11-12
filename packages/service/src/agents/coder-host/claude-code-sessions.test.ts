@@ -101,6 +101,7 @@ import {
   DateTime,
   Duration,
   Effect,
+  ErrorReporter,
   Exit,
   Fiber,
   Layer,
@@ -4244,18 +4245,26 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start in a workspace with no drive yet is created from the image alone and clones its repository whole, filling no drive",
+    "a Start in a workspace with no drive yet is created from the image alone and clones its repository whole, filling no drive, and reports the drive gone",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
         const kept = keptAfterResponse();
+        const reported: Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"][] =
+          [];
+
+        const reporting = ErrorReporter.layer([
+          ErrorReporter.make(({ attributes }) => {
+            reported.push(attributes);
+          }),
+        ]);
 
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
-        ).pipe(Effect.provide(kept.layer));
+        ).pipe(Effect.provide(Layer.merge(kept.layer, reporting)));
 
         yield* kept.run;
 
@@ -4269,6 +4278,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 1);
         assert.deepEqual(api.drives, [], "no drive was made or filled");
+        assert.deepEqual(
+          reported.filter((each) => each.broken !== undefined),
+          [{ workspaceId: agent.organizationId, broken: "gone" }],
+        );
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
       }),
