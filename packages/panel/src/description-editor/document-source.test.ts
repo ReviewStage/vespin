@@ -501,3 +501,44 @@ test("a lettered line indented under a numbered item stays the item's words when
   );
   assert.equal(handedOver(), "1. Then People\nMr. Smith\n2. Finish\n");
 });
+
+test.each([
+  {
+    block: "a GitHub alert in a list item keeps its marker",
+    text: "- Before you start\n\n  > [!WARNING]\n  > Back up the database.\n",
+    words: "Before you start",
+    saved: "- Before you start now\n  > [!WARNING]\n  > Back up the database.\n",
+  },
+  {
+    block: "a code line written as an escaped alert keeps its backslashes",
+    text: "```md\n> \\[!NOTE\\]\nRun it\n```\n",
+    words: "> \\[!NOTE\\]\nRun it",
+    saved: "```md\n> \\[!NOTE\\]\nRun it now\n```\n",
+  },
+  {
+    block: "a table gains no blank line over it",
+    text: "The steps:\n\n| Step | Command    |\n| ---- | ---------- |\n| Run  | `pnpm dev` |\n",
+    words: "Run",
+    saved:
+      "The steps:\n\n| Step    | Command    |\n| ------- | ---------- |\n| Run now | `pnpm dev` |\n",
+  },
+])("an edited block is re-printed as GitHub draws it: $block", ({ text, words, saved }) => {
+  const { editor, handedOver } = opened(text);
+  let end = 0;
+  editor.state.doc.descendants((node, pos) => {
+    if (node.text === words) end = pos + node.nodeSize;
+  });
+
+  editor.chain().setTextSelection(end).insertContent(" now").run();
+
+  assert.equal(handedOver(), saved);
+});
+
+test("a kept line over an indented code block keeps the code apart once the heading between them is deleted", () => {
+  const { editor, handedOver } = opened("Intro\n## Remove\n    alpha\n\n    beta\n");
+  const intro = editor.state.doc.child(0).nodeSize;
+
+  editor.commands.deleteRange({ from: intro, to: intro + editor.state.doc.child(1).nodeSize });
+
+  assert.equal(handedOver(), "Intro\n\n    alpha\n\n    beta\n");
+});
