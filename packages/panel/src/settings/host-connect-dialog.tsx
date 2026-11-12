@@ -1,12 +1,17 @@
-import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
+import {
+  HOST_CONNECT_WORDS,
+  hostBoxFacts,
+  hostCodeExpiryText,
+  hostConnectQuestion,
+  hostConnectRefusalWords,
+  hostDeniedTitle,
+} from "@repo/features/host-connect-words";
 import {
   HOST_PAIRING_CALL_FAILURE,
   type HostPairingFailed,
 } from "@repo/features/host-pairing-view";
 import { type HostPairingAnswer, shownHostUserCode } from "@repo/features/host-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { clockText, momentText } from "@repo/features/time-format";
-import { readFailedWords, readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
@@ -57,24 +62,7 @@ import { DeviceGlyph } from "../tasks/runs-on.js";
 /** The code a window was handed to approve, which Settings › Hosts draws its dialog for until it is put away. */
 const hostConnectStore = createStore<string | undefined>(undefined);
 
-const WORDS = {
-  TITLE: "Connect a machine",
-  MATCH: "Connect it only if you ran the command on it, and this code matches the one it shows.",
-  CONNECT: "Connect",
-  CONNECTING: "Connecting",
-  DENY: "Deny",
-  DENYING: "Denying",
-  DENIED:
-    "It isn't connected to your account, and its command stops waiting. To connect it, run the command on it again.",
-  AGAIN: "Run the command on the machine again for a new code.",
-  NOT_FOUND_TITLE: "This code can't be used",
-  NOT_FOUND: "It may have expired, been used already, or been typed wrong.",
-  HELD_TITLE: "Too many codes tried",
-  HELD: "Your account tried too many codes that match no machine.",
-  HELD_SOON: "Try again in a few minutes.",
-  UNREAD: readFailedWords("the code"),
-  UNANSWERED: "Could not connect. Check your internet connection and try again.",
-} as const;
+const WORDS = HOST_CONNECT_WORDS;
 
 /** Where the dialog stands: reading the pairing, unable to, asking, or done in one of the ways it ends. */
 const STANDING = {
@@ -117,36 +105,6 @@ type Standing =
 
 /** An answer that never reached the service, as a call that failed on its way is read. */
 const UNANSWERED: HostPairingFailed = { failure: HOST_PAIRING_CALL_FAILURE.UNANSWERED };
-
-/** What the box is, as its row says under its name: its platform, its architecture, and the address its start came from. */
-function boxFacts(box: HostPairingAnswer): string {
-  return [DEVICE_PLATFORM_NAME[box.platform], box.arch, ...(box.ip === null ? [] : [box.ip])].join(
-    " · ",
-  );
-}
-
-/** When the code lapses, as a time of day, since a pairing lasts minutes. */
-function expiresAt(at: number): string {
-  const moment = new Date(at);
-
-  return clockText(moment.getHours(), moment.getMinutes());
-}
-
-type RefusalWordsResult = { title: string; body: string };
-
-/** What a code that cannot be approved says: why, and what to do next. */
-function refusalWords(refusal: HostPairingFailed): RefusalWordsResult {
-  if (refusal.failure !== HOST_PAIRING_CALL_FAILURE.HELD) {
-    return { title: WORDS.NOT_FOUND_TITLE, body: `${WORDS.NOT_FOUND} ${WORDS.AGAIN}` };
-  }
-
-  const when =
-    refusal.heldUntil === undefined
-      ? WORDS.HELD_SOON
-      : `Try again after ${momentText(refusal.heldUntil)}.`;
-
-  return { title: WORDS.HELD_TITLE, body: `${WORDS.HELD} ${when} ${WORDS.AGAIN}` };
-}
 
 /** Where a read or an answer that failed leaves the dialog: unable to read or answer where it never reached the service, and refused otherwise. */
 function failedStanding(failed: HostPairingFailed, unanswered: Standing): Standing {
@@ -215,7 +173,7 @@ function AskDialog({
   return (
     <Dialog
       open
-      title={`Connect ${box.name}?`}
+      title={hostConnectQuestion(box)}
       // Note that the question names the box by the name and address it reported, so its title stays masked in a screen recording.
       replayUnmasked
       titleReplayMasked
@@ -256,7 +214,7 @@ function AskDialog({
               </SettingsRowMark>
             }
             label={<ReplayMask>{box.name}</ReplayMask>}
-            description={<ReplayMask>{boxFacts(box)}</ReplayMask>}
+            description={<ReplayMask>{hostBoxFacts(box)}</ReplayMask>}
           />
         </SettingsSection>
         <Text>{WORDS.MATCH}</Text>
@@ -264,7 +222,7 @@ function AskDialog({
           <ReplayMask>{shownHostUserCode(code)}</ReplayMask>
         </Text>
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {`This code expires at ${expiresAt(box.expiresAt)}.`}
+          {hostCodeExpiryText(box.expiresAt)}
         </Text>
         <ErrorLine
           level={ANNOUNCE.ALERT}
@@ -332,7 +290,7 @@ function ReadingDialog({
           {WORDS.UNREAD}
         </ErrorState>
       ) : (
-        <SpinnerRegion label={readingWords("the code")} />
+        <SpinnerRegion label={WORDS.READING} />
       )}
     </Dialog>
   );
@@ -409,14 +367,14 @@ export function HostConnectDialog({
     case STANDING.DENIED:
       return (
         <EndedDialog
-          title={`Denied ${standing.box.name}`}
+          title={hostDeniedTitle(standing.box)}
           titleReplayMasked
           body={WORDS.DENIED}
           onClose={onClose}
         />
       );
     case STANDING.REFUSED:
-      return <EndedDialog {...refusalWords(standing.refusal)} onClose={onClose} />;
+      return <EndedDialog {...hostConnectRefusalWords(standing.refusal)} onClose={onClose} />;
     default:
       return (
         <ReadingDialog

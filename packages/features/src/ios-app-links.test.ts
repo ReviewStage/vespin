@@ -3,6 +3,7 @@ import {
   IOS_APP_LINK_COMPONENTS,
   iosAppRouteOf,
   iosAppRouteOfAddress,
+  iosHostConnectCode,
   iosRouteHidesTabs,
 } from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
@@ -48,6 +49,13 @@ describe("a vespin.dev link", () => {
     expect(read === undefined ? undefined : iosAppRouteOf(read.place)).toBe(route);
     expect(claimed(path)).toBe(route !== undefined);
   });
+});
+
+// Note that the regression this catches is a pairing's link left to Safari, or one the app is handed and cannot read.
+it("a machine's pairing link opens in the app with its code", () => {
+  expect(claimed("/connect/BCDF-GHJK")).toBe(true);
+  expect(iosHostConnectCode("https://vespin.dev/connect/bcdf-ghjk")).toBe("BCDFGHJK");
+  expect(iosHostConnectCode("https://vespin.dev/acme/task/42")).toBeUndefined();
 });
 
 // Note that the regression these catch is a pull request a chip names leaving the app for GitHub

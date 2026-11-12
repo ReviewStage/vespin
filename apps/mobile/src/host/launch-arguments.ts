@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -19,6 +19,7 @@ const LAUNCH_ARGUMENT = {
   AUTH_SERVER: "authServer",
   AGENT: "agent",
   PULL_REQUEST: "pullRequest",
+  CONNECT: "connect",
   LIVE_ACTIVITY: "liveActivity",
   UPDATE_NEEDED: "updateNeeded",
   REFUSE_WRITES: "refuseWrites",
@@ -66,6 +67,14 @@ export function launchPullRequest(): number | undefined {
   const number = Predicate.isNumber(named) ? named : Number(named);
 
   return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+/** The pairing code this launch hands the app, as `-connect <code>` names it, as a machine's link would (`maestro/settings-machine-connect.yaml`); none on any other platform, and where none is named. */
+export function launchHostConnect(): string | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.CONNECT);
+
+  return Predicate.isString(named) && named !== "" ? named : undefined;
 }
 
 /** Whether the launch argument `key` says true, as iOS registers `-key true`: a string, a boolean, or a number by how it was passed. */

@@ -133,9 +133,6 @@ const IOS = {
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
-  HOSTS_PAIRING: notYet(
-    "iOS's Machines page lists and removes machines; a pairing link opens in Safari",
-  ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
@@ -239,9 +236,9 @@ export const CLIENT_PARITY = {
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
   ),
-  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: panel(IOS.HOSTS_PAIRING),
+  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_LIST]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,

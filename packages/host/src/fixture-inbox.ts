@@ -52,9 +52,11 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
+import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
+import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -1047,6 +1049,23 @@ const MEMORIES: readonly MemorySummary[] = [
     lastRecalledAt: null,
   },
 ];
+
+/** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
+const PENDING_PAIRING_CODE = "BCDFGHJK";
+
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+const PENDING_PAIRING: HostPairingAnswer = {
+  name: "Ada's Mac mini",
+  platform: DEVICE_PLATFORM.DARWIN,
+  arch: DEVICE_ARCH.ARM64,
+  ip: "203.0.113.7",
+  expiresAt: LANDED + 10 * 60_000,
+};
+
+/** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
+function pairingAnswer<Answer>(code: string, answer: Answer) {
+  return code === PENDING_PAIRING_CODE ? answer : { failure: HOST_PAIRING_CALL_FAILURE.NOT_FOUND };
+}
 
 /** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
 const HOSTS: readonly HostLine[] = [
@@ -2143,6 +2162,11 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
+  [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
+  [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
+    pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
+  [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
   // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
   [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
   [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({

@@ -1,8 +1,9 @@
 // +native-intent.tsx -- each incoming link routed before expo-router reads it: a vespin.dev link to the tab and item that draw it, one the app leaves to the web out to Safari.
 
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
+import { iosAppRouteOf, iosHostConnectCode } from "@repo/features/ios-app-links";
 import { readShownLink } from "@repo/features/link-grammar";
 import { openURL } from "expo-linking";
+import { handHostConnect } from "../host-connect-link.js";
 
 /** Where a launch with nothing to route opens: the Inbox, through the root's own redirect. */
 const HOME = "/";
@@ -19,7 +20,9 @@ const WEB_ADDRESS = /^https?:\/\//iu;
  * but a page another device hands off reaches it for any page of the host,
  * since the association's `activitycontinuation` claims the whole domain,
  * so a page no link names goes to Safari too, never to expo-router, which
- * would draw no screen for it. Nothing here may throw, since expo-router
+ * would draw no screen for it. A machine's pairing link hands its code to
+ * Settings › Machines, which opens on it once the app stands signed in
+ * (`host-connect-link.ts`), and the app stays where it was. Nothing here may throw, since expo-router
  * reads a throw as the app's failure to launch.
  */
 export function redirectSystemPath({
@@ -30,6 +33,14 @@ export function redirectSystemPath({
   readonly initial: boolean;
 }): string | null {
   try {
+    const code = iosHostConnectCode(path);
+
+    if (code !== undefined) {
+      handHostConnect(code);
+
+      return initial ? HOME : null;
+    }
+
     const read = readShownLink(path);
 
     if (read === undefined && !WEB_ADDRESS.test(path)) return path;
