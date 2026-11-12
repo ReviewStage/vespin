@@ -21,6 +21,7 @@ import {
   awaitsNod,
   EVERYONES,
   INBOX_LINE,
+  INBOX_RUN,
   INBOX_SHOW,
   INBOX_WHOSE,
   type InboxGroup,
@@ -33,6 +34,7 @@ import {
   inboxGroup,
   inboxLineKind,
   inboxList,
+  inboxPinnedRuns,
   inboxPlaces,
   inboxPreview,
   inboxPreviewHeard,
@@ -481,11 +483,63 @@ function drawn(view: InboxListView): readonly string[] {
   return view.items.map(({ item }) => item.id);
 }
 
+/** The Billing task's items beside an Invites task pinned, whose one item changed before every other, so only the pin stands it first. */
+const PINNED_INVITES: readonly InboxGroup[] = [
+  ...TASKS.slice(0, 1),
+  { holder: taskHolder({ ...INVITES, pinnedAt: 5 }), items: [item({ id: "late", updatedAt: 5 })] },
+];
+
+/** A list's runs as it draws them: each run, its rows' ids, its count, and whether it is folded. */
+function runsOf(view: InboxListView) {
+  return inboxPinnedRuns(view)?.map(({ run, items, count, folded }) => ({
+    run,
+    ids: items.map(({ item }) => item.id),
+    count,
+    folded,
+  }));
+}
+
 test("the list holds every item in one run across tasks, the latest changed first", () => {
   assert.deepEqual(
     drawn(inboxList(TASKS, { show: INBOX_SHOW.ALL, readerId: undefined, chosen: undefined })),
     ["retry", "expiry", "threshold", "channel"],
   );
+});
+
+test("asked for its pinned tasks first, the list stands a pinned task's items before the rest, each the latest first, under headings only once something pinned is listed", () => {
+  const all = { show: INBOX_SHOW.ALL, readerId: undefined, chosen: undefined, pinnedFirst: true };
+  const view = inboxList(PINNED_INVITES, all);
+
+  assert.deepEqual(drawn(view), ["late", "retry", "threshold", "channel"]);
+  assert.deepEqual(runsOf(view), [
+    { run: INBOX_RUN.PINNED, ids: ["late"], count: 1, folded: false },
+    { run: INBOX_RUN.REST, ids: ["retry", "threshold", "channel"], count: 3, folded: false },
+  ]);
+  assert.equal(inboxPinnedRuns(inboxList(TASKS, all)), undefined, "nothing pinned, one run");
+});
+
+test("a folded run lists none of its items but the chosen one, still counting them all, and a search folds nothing", () => {
+  const folded = {
+    show: INBOX_SHOW.ALL,
+    readerId: undefined,
+    chosen: undefined,
+    pinnedFirst: true,
+    folded: new Set([INBOX_RUN.REST]),
+  };
+
+  assert.deepEqual(runsOf(inboxList(PINNED_INVITES, folded)), [
+    { run: INBOX_RUN.PINNED, ids: ["late"], count: 1, folded: false },
+    { run: INBOX_RUN.REST, ids: [], count: 3, folded: true },
+  ]);
+  assert.deepEqual(drawn(inboxList(PINNED_INVITES, { ...folded, chosen: "threshold" })), [
+    "late",
+    "threshold",
+  ]);
+  assert.deepEqual(drawn(inboxList(PINNED_INVITES, { ...folded, search: ["billing"] })), [
+    "retry",
+    "threshold",
+    "channel",
+  ]);
 });
 
 test("a list drawn again from a task's same items lists each in the object it listed it in before, and groups them in the same group; an item that changed is listed anew, and its task grouped anew", () => {
