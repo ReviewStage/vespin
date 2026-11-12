@@ -46,6 +46,7 @@
     "./memory-wire": "./src/memory-wire.js",
     "./model-effort": "./src/model-effort.js",
     "./reply-button-wire": "./src/reply-button-wire.js",
+    "./suggestion-model": "./src/suggestion-model.js",
     "./sandbox-size": "./src/sandbox-size.js",
     "./sentry-account": "./src/sentry-account.js",
     "./sentry-addresses": "./src/sentry-addresses.js",
