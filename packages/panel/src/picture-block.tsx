@@ -1,6 +1,7 @@
 import { chipBase64, sizeLabel } from "@repo/features/attachment-model";
 import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import {
+  ATTACHMENT_CHIP_HOVER,
   ATTACHMENT_CHIP_STATE,
   AttachmentChip,
   type AttachmentChipState,
@@ -100,6 +101,8 @@ export function PdfFile({
         detail={sizeLabel(base64)}
         onOpen={onOpen}
         state={state}
+        // Note that it hangs no card, because a card would cover the description's words and say only what the chip does.
+        hover={ATTACHMENT_CHIP_HOVER.NONE}
       />
     </span>
   );
