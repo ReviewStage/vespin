@@ -12,6 +12,7 @@ import {
   PULL_REQUEST_CHAPTERS_FUNCTION,
   PULL_REQUEST_CHAPTERS_ROUTE_PATHS,
 } from "@repo/service/chapters/chapters-function";
+import { GITHUB_DELIVERY_READ } from "@repo/service/github/github-delivery-read-bounds";
 import {
   BASE_DRIVE_REFRESH,
   BASE_DRIVE_REFRESH_PATH,
@@ -144,8 +145,9 @@ const STANDALONE_ROUTES: readonly string[] = [
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
  * Fluid default a Start's function runs under, the sandbox-releases
- * consumer, under its own short bound, and the workspace-drive-fills
- * consumer, under the platform's longest.
+ * consumer, under its own short bound, the workspace-drive-fills
+ * consumer, under the platform's longest, and the github-delivery-reads
+ * consumer, under the Fluid default.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -182,6 +184,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(WORKSPACE_DRIVE_FILL.PATH)],
     dispatches: false,
     queueTopic: WORKSPACE_DRIVE_FILL.TOPIC,
+  },
+  {
+    file: routeKeyOf(GITHUB_DELIVERY_READ.PATH),
+    maxDuration: GITHUB_DELIVERY_READ.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(GITHUB_DELIVERY_READ.PATH)],
+    dispatches: false,
+    queueTopic: GITHUB_DELIVERY_READ.TOPIC,
   },
 ];
 
