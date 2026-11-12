@@ -7,7 +7,7 @@ import {
   entityOfMention,
   entityWordHeard,
 } from "@repo/features/entity-kind";
-import { type LinkDestination, readLink } from "@repo/features/link-grammar";
+import { type LinkDestination, openableLinkOf, readLink } from "@repo/features/link-grammar";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { LINK_CHIP, linkChipOf, MENTION_KIND } from "@repo/features/mention-link";
@@ -163,9 +163,6 @@ export interface MarkdownReading {
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
 const SOFT_BREAK = /\r?\n/gu;
 
-/** The schemes a link opens in Safari by. */
-const WEB_SCHEMES: ReadonlySet<string> = new Set(["https:", "http:", "mailto:"]);
-
 /** The schemes a picture is drawn from: the web's, and a picture written into the words. */
 const PICTURE_SOURCE = /^(?:https:\/\/|data:image\/)/u;
 
@@ -218,11 +215,10 @@ function linkTarget(href: string): LinkTarget {
   const read = readLink(href);
 
   if (read !== undefined) return { kind: LINK_TARGET.PLACE, ...read, href };
-  const scheme = /^[a-z][a-z0-9+.-]*:/iu.exec(href)?.[0].toLowerCase();
 
-  if (scheme !== undefined && WEB_SCHEMES.has(scheme)) return { kind: LINK_TARGET.WEB, href };
-
-  return { kind: LINK_TARGET.NONE };
+  return openableLinkOf(href) === undefined
+    ? { kind: LINK_TARGET.NONE }
+    : { kind: LINK_TARGET.WEB, href };
 }
 
 function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {

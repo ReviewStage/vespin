@@ -34,8 +34,9 @@ import {
   type InboxItem,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
+import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -218,7 +219,7 @@ export function InboxRow({
   const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
+  const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -280,7 +281,7 @@ export function InboxRow({
       ]}
       link={linkOf(
         { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
-        workspace?.slug ?? workspace?.id ?? holder.task.workspaceId ?? "",
+        workspaceStep,
       )}
       preview={
         <ThreadPreview
@@ -458,7 +459,7 @@ function ThreadDetail({
 
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const { workspaceId } = holder.task;
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
@@ -468,8 +469,7 @@ function ThreadDetail({
       itemId: item.id,
     } as const;
 
-    const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
-    openInSafari(address);
+    openInSafari(linkOf(place, workspaceStep));
   };
 
   const { sources, sizes } = useThreadMedia(item.id, media);
@@ -574,7 +574,7 @@ function ThreadDetail({
                     planId: page.place.taskId,
                     pageId: page.pageId,
                   },
-                  workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
+                  workspaceStep,
                 ),
               ),
             openLink,
@@ -727,7 +727,9 @@ function InboxStackList(words: InboxSearch) {
               look={LIST_LOOK.PLAIN}
               listed={listing.listed}
               readerId={listing.readerId}
-              onSelect={(id) => router.push(`/inbox/${encodeURIComponent(id)}`)}
+              onSelect={(id) =>
+                router.push(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }))
+              }
               onRefresh={acts.refresh}
               onMark={acts.mark}
               onRemind={remind.open}

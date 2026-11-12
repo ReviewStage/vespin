@@ -8,7 +8,7 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -137,21 +137,21 @@ const MODE_SYMBOL = {
 const MERGE_WORD = "Merge";
 const MERGE_QUESTION = "Merge this pull request?";
 
-/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
+/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
   agentId: string,
   workspaceId: string | undefined,
   taskId: string | undefined,
-): string {
+): string | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const step = linkWorkspaceStep(workspaceId, workspaces);
 
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
 
-  return linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+  return step === undefined ? undefined : linkOf(place, step);
 }
 
 /** The change a card's Merge sends, by what the pull request offers: merged at once by the first method the repository allows, or queued once ready where it merges through a queue; none where it offers neither. */
@@ -444,14 +444,16 @@ export function AgentScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
-              {MENU_WORDS.COPY_LINK}
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
-              {VERB.OPEN_IN_BROWSER}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
+          {address === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
+                {MENU_WORDS.COPY_LINK}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
+                {VERB.OPEN_IN_BROWSER}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
@@ -525,7 +527,7 @@ export function AgentScreen() {
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
           mediaSource={(pictureId) => media.get(pictureId)}
-          onOpenElsewhere={() => openInSafari(address)}
+          onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
           onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>
             router.push({

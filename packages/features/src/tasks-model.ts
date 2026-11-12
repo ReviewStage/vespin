@@ -1,3 +1,4 @@
+import { encodedPath, GITHUB_ORIGIN } from "./link-grammar.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import {
   TASK_BOUNDS,
@@ -165,12 +166,12 @@ export function strandedTaskHome(
 
 /** The page of a repository on GitHub, which Open on GitHub opens. */
 export function repositoryPageUrl(repository: string): string {
-  return `https://github.com/${repository}`;
+  return `${GITHUB_ORIGIN}/${encodedPath(repository)}`;
 }
 
 /** The page of a GitHub account by its login, a person's profile or an organization's. */
 export function githubAccountPageUrl(login: string): string {
-  return `https://github.com/${encodeURIComponent(login)}`;
+  return `${GITHUB_ORIGIN}/${encodeURIComponent(login)}`;
 }
 
 /**

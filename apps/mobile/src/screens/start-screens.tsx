@@ -1,6 +1,8 @@
 // start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its relation to another task, its repository, its model and effort, and where its agent runs, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -316,11 +318,9 @@ function useSheetStart(
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
+        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
 
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
+        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
       })
       .finally(() => setStarting(false));
   };
