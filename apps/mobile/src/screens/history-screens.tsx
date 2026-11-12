@@ -26,6 +26,7 @@ import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-rout
 import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
+import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import {
   HISTORY_READ,
   useNewestVersion,
@@ -211,6 +212,7 @@ function Version({
   }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
+  const { pictureSource, videoAt } = useDescriptionPictures(read?.document.body);
 
   const restore = () => {
     if (restoring) return;
@@ -254,7 +256,12 @@ function Version({
   ) : (
     <RowList look={LIST_LOOK.PLAIN}>
       <ListSection>
-        <WordsRow words={read.document.body} onOpenLink={openLink} />
+        <WordsRow
+          words={read.document.body}
+          onOpenLink={openLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+        />
       </ListSection>
     </RowList>
   );

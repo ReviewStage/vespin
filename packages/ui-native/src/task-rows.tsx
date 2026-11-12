@@ -46,7 +46,7 @@ import {
   type RowSwipe,
   rowPlacement,
 } from "./list-row.js";
-import { Markdown } from "./markdown.js";
+import { Markdown, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
   type Face,
@@ -462,6 +462,10 @@ type WordsRowProps = {
   readonly comments?: WordsComments | undefined;
   /** How far under the words the next row stands: a page's gap after the last block, a block's own gap between blocks. */
   readonly last?: boolean | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a description's picture read through the host; each from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** The video a picture's address names, played in its place; none where none is given. */
+  readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -504,13 +508,22 @@ export function WordsRow({
   menuActions = [],
   comments,
   last = true,
+  pictureSource,
+  videoAt,
 }: WordsRowProps) {
   const colors = useColors();
 
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
-        <Markdown words={words} repository={repository} onOpenLink={onOpenLink} headings />
+        <Markdown
+          words={words}
+          repository={repository}
+          onOpenLink={onOpenLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+          headings
+        />
       </View>
     </RNHostView>
   );
