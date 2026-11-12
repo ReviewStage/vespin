@@ -278,6 +278,23 @@ function followedAnswer<Failure extends Failed>(answer: AgentTranscriptLiveAnswe
   return "failure" in answer ? answer : followedRead(answer);
 }
 
+/**
+ * A poll's answer as the follow takes it: a refusal of its session as signed
+ * out, while the account the follow was read for still stands, is a poll the
+ * service did not answer, asked again on the live read's backoff. Note that
+ * the access token lapses every hour and a poll's 401 renews it once, so a
+ * renewal that did not land (a dropped connection, a slow auth service) would
+ * otherwise end the read for good with the account still signed in; a sign-out
+ * or another account clears `stands`, and the refusal then ends it as before.
+ */
+function polledAnswer(answer: AgentTranscriptLiveAnswer | Failed, stands: boolean) {
+  if (!stands || !("failure" in answer) || answer.failure !== LIVE_SIGNED_OUT.failure) {
+    return followedAnswer(answer);
+  }
+
+  return { failure: AGENT_CALL_FAILURE.UNANSWERED };
+}
+
 /** The transcript's first read, its newest messages past the start, asked again on `FOLLOW_BACKOFF` as `resealing` allows while the service does not answer; none where the account does not reach it. */
 function sealedOf(
   seal: (
@@ -333,11 +350,16 @@ export function transcriptFollows<Key = TranscriptKey>(
 
         if (Option.isNone(first)) return { kind: LIVE_STATE.REFUSED } as const;
         const state = yield* SubscriptionRef.make<TranscriptState>({ kind: LIVE_STATE.WAITING });
-        // A live read that stops for good, signed out or a row that does not decode, marks the state broken.
+        // A live read that stops for good, its account signed out or another's, or a row that does not decode, marks the state broken.
         yield* Effect.forkScoped(
           Stream.runForEach(
             decodedLiveRows(
-              { poll: (after, cursor) => Effect.map(seal(true, after, cursor), followedAnswer) },
+              {
+                poll: (after, cursor) =>
+                  Effect.map(seal(true, after, cursor), (answer) =>
+                    polledAnswer(answer, dependencies.accountId() === userId),
+                  ),
+              },
               followedRead(first.value),
               AGENT_TRANSCRIPT_READ.rows,
               joinedWindowRows,
