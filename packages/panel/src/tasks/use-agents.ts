@@ -45,6 +45,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOfferedModels } from "../account-choices.js";
 import {
@@ -68,7 +69,7 @@ import {
 import type { ShownFailure } from "../failure-report.js";
 import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameTerms } from "../rename-write.js";
-import { rendererPause } from "../renderer-runtime.js";
+import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { useToast } from "../toast.js";
 import {
@@ -1022,18 +1023,34 @@ export function useAgents(input: {
    * nothing waits on it for ever; should it land after, it settles as read.
    * An ask that landed settles once the slice says how it went (below),
    * since a Try again answers alike whether its ask was answered or not.
+   * The ask and its bound run as one fiber, stopped by the next ask or as
+   * the hook leaves, so neither sets state on a tab no longer standing.
    */
   const { mutateAsync: retryModels } = useMutation(modelsRetryMutation());
+  const stopModelsRead = useRef<(() => void) | undefined>(undefined);
+
+  useEffect(() => () => stopModelsRead.current?.(), []);
 
   const readModels = useCallback(() => {
     modelsGeneration.current += 1;
     const generation = modelsGeneration.current;
     // The menu reads again while a read is out, so a Retry shows its reading.
     setModelsRead({ state: MODELS_READ.READING, generation });
-    retryModels()
-      .catch(() => undefined)
-      .then(() => setModelsLanded(generation));
-    rendererPause(MODELS_READ_BOUND_MS).then(() => settleModels(generation, MODELS_READ.FAILED));
+    stopModelsRead.current?.();
+
+    stopModelsRead.current = rendererFork(
+      Effect.all(
+        [
+          Effect.promise(() => retryModels().catch(() => undefined)).pipe(
+            Effect.andThen(Effect.sync(() => setModelsLanded(generation))),
+          ),
+          Effect.sleep(Duration.millis(MODELS_READ_BOUND_MS)).pipe(
+            Effect.andThen(Effect.sync(() => settleModels(generation, MODELS_READ.FAILED))),
+          ),
+        ],
+        { concurrency: "unbounded", discard: true },
+      ),
+    );
   }, [retryModels, settleModels]);
 
   // Note that a landed ask reads as read only where the slice holds models, and as failed where it never answered, so a card waiting on its devices never takes no list for an empty one.
