@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
@@ -1267,6 +1268,31 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
+test("Memory digest is suggested no more once the list holds the reader's own or a workspace automation made from it, whatever its name, and still beside a teammate's personal one or one merely named for it", async () => {
+  memoryOn();
+
+  for (const { held, suggested } of [
+    {
+      held: { name: "Weekly memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: true },
+      suggested: false,
+    },
+    {
+      held: { name: "Their memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: false },
+      suggested: true,
+    },
+    { held: { name: "Memory digest", mine: true }, suggested: true },
+  ]) {
+    world.standing = [SWEEP, automation(4, { ...held, scope: AUTOMATION_SCOPE.PERSONAL })];
+    const page = mount();
+    await settle();
+
+    assert.equal(automationRows(page).length, 2);
+    assert.equal(page.querySelector("[aria-label='Suggested']") !== null, suggested, held.name);
+    act(() => world.root?.unmount());
+    document.body.innerHTML = "";
+  }
+});
+
 test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {
   memoryOn();
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
@@ -1290,6 +1316,7 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: made.repositories,
       archiveSuccessful: made.archiveSuccessful,
       target: made.target,
+      preset: made.preset,
     },
     {
       name: "Memory digest",
@@ -1301,6 +1328,7 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: [],
       archiveSuccessful: true,
       target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+      preset: AUTOMATION_PRESET.MEMORY_DIGEST,
     },
   );
   assert.match(made.action.prompt, /forget_memory/u);

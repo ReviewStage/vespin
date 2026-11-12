@@ -43,6 +43,8 @@ import { task } from "./task.js";
  * archives a new agent once its run finishes without failing.
  * `slack_delivery` sends each run's result to the automation's owner as a
  * Slack message from the workspace's own bot once the run's agent ends.
+ * `preset` names the list's suggestion an automation was made from, which
+ * the list then suggests no more, and is null for one made otherwise.
  */
 export const automation = pgTable(
   "automation",
@@ -78,6 +80,12 @@ export const automation = pgTable(
     }),
     archiveSuccessful: boolean("archive_successful").notNull().default(false),
     slackDelivery: boolean("slack_delivery").notNull().default(false),
+    /**
+     * The suggestion it was made from, an `AUTOMATION_PRESET` value; null for
+     * one not made from a suggestion. Note that it is read as any text, since
+     * a row may hold a preset a reader's release does not know.
+     */
+    preset: text("preset"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

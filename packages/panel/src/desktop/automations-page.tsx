@@ -154,7 +154,9 @@ import {
  * suggested automations: a press opens a new automation's page filled in
  * from the suggestion's preset (`@repo/features/automation-presets`), to
  * look over and Create. A suggestion behind an experiment, as Memory digest
- * stands behind the workspace's Memory, is offered only while it is on.
+ * stands behind the workspace's Memory, is offered only while it is on, and
+ * one the reader already made, or the workspace already holds, is offered
+ * no more.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -688,35 +690,52 @@ function useOfferedPresets(workspaceId: string | undefined): readonly Automation
  * The automations suggested under the list, or under the line saying there
  * is none yet, each a card whose press opens a new automation's page filled
  * in from its preset, to look over and Create; nothing where none is
- * offered.
+ * offered. A preset is taken by an automation made from it, whatever its
+ * name, that is the reader's own or the workspace's: a teammate's personal
+ * one runs for that teammate alone, so the reader is still offered their
+ * own, while one for the workspace serves everyone.
  */
-function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Element | null {
+function SuggestedAutomations({
+  tasks,
+  listed,
+}: {
+  tasks: TasksControl;
+  listed: readonly AutomationSummary[];
+}): React.JSX.Element | null {
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const offered = useOfferedPresets(workspace?.id);
 
-  if (offered.length === 0) return null;
+  const taken = new Set(
+    listed.flatMap((automation) =>
+      automation.mine === true || automation.scope === AUTOMATION_SCOPE.WORKSPACE
+        ? [automation.preset]
+        : [],
+    ),
+  );
+
+  const cards = SUGGESTIONS.flatMap(({ preset, glyph }) => {
+    if (!offered.includes(preset) || taken.has(preset)) return [];
+
+    const filled = automationPreset(preset);
+
+    return [
+      <SuggestionCard
+        key={preset}
+        glyph={glyph}
+        name={filled.name}
+        detail={filled.description}
+        disabled={workspace === undefined}
+        onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
+      />,
+    ];
+  });
+
+  if (cards.length === 0) return null;
 
   return (
     <div className="automation-suggestions mt-page-section-gap">
-      <SuggestionCards title="Suggested">
-        {SUGGESTIONS.flatMap(({ preset, glyph }) => {
-          if (!offered.includes(preset)) return [];
-
-          const filled = automationPreset(preset);
-
-          return [
-            <SuggestionCard
-              key={preset}
-              glyph={glyph}
-              name={filled.name}
-              detail={filled.description}
-              disabled={workspace === undefined}
-              onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
-            />,
-          ];
-        })}
-      </SuggestionCards>
+      <SuggestionCards title="Suggested">{cards}</SuggestionCards>
     </div>
   );
 }
@@ -737,9 +756,8 @@ function ListPage({
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle } = automations;
-
-  const groups =
-    read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
+  const listed = read !== undefined && "automations" in read ? read.automations : [];
+  const groups = automationGroups(listed);
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
@@ -780,7 +798,7 @@ function ListPage({
         {groups.length === 0 ? (
           <div className="automations-empty flex min-h-0 flex-1 flex-col before:flex-2 before:content-[''] after:flex-3 after:content-[''] [&>.ui-empty-state]:flex-none">
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </div>
         ) : (
           <>
@@ -795,7 +813,7 @@ function ListPage({
               onToggle={(automation, enabled) => toggle(automation.id, enabled)}
               onDelete={deletion.ask}
             />
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </>
         )}
         <ConfirmDialog

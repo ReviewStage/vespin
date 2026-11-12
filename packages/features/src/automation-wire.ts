@@ -1,6 +1,7 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { agentFailureSchema, agentStatusSchema, disabledServersSchema } from "./agent-wire.js";
+import { AUTOMATION_PRESET } from "./automation-presets.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
 import { chosenIdSchema, countedNumber, wireUuidSchema } from "./service-wire.js";
@@ -341,6 +342,9 @@ const automationTargetSchema = EffectSchema.Union([
 
 export type AutomationTarget = typeof automationTargetSchema.Type;
 
+/** The list's suggestion an automation was made from (`automation-presets.ts`). */
+const automationPresetSchema = EffectSchema.Literals(Object.values(AUTOMATION_PRESET));
+
 /** Where a run came from, beyond the automation's own trigger. */
 export const AUTOMATION_FIRING = {
   ...AUTOMATION_TRIGGER,
@@ -540,6 +544,13 @@ const automationSummarySchema = EffectSchema.Struct({
   /** Whether each run's result is sent to its owner on Slack by the workspace's bot; absent from a service before it. */
   slackDelivery: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
+   * The suggestion it was made from, which the list then suggests no more;
+   * null for one made otherwise, and absent from a service before it. Note
+   * that it is read as any text, not this release's presets, so a preset a
+   * newer service added, or one since retired, never refuses the list.
+   */
+  preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the
    * one origin that holds is the caller's.
@@ -609,6 +620,8 @@ export const automationCreateRequestSchema = EffectSchema.Struct({
   target: EffectSchema.optionalKey(automationTargetSchema),
   archiveSuccessful: EffectSchema.optionalKey(EffectSchema.Boolean),
   slackDelivery: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** The suggestion it is made from, as the list's card opened it; set only here, since no change names it. */
+  preset: EffectSchema.optionalKey(automationPresetSchema),
 });
 
 /**
