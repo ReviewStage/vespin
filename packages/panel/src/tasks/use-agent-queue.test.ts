@@ -7,13 +7,17 @@ import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   type AgentQueueChange,
+  type AgentTranscriptMessage,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
-import { act, createElement, type ReactNode, useState } from "react";
+import { MESSAGE_ROLE } from "@repo/wire";
+import { sentLineId } from "@repo/wire/host-ids";
+import { act, createElement, Fragment, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { useDraftsOwner } from "../composer-drafts.js";
 import { pictureNow } from "../picture-query.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
@@ -31,8 +35,9 @@ import {
 /**
  * An agent's queue as its tab changes it; the host draws each change over
  * the queue its page carries (`@repo/host`'s `agent-queue-writes.ts`). The
- * message box's part: a message the queue refused comes back into the box,
- * an edit the queue did not save stays open with its new words, an edit of
+ * message box's part: a message the queue did not take stays in the queue
+ * marked not delivered, the box left as it is, until a read lists it, Retry
+ * sends it again under its id, or Edit takes it back into the box, an edit the queue did not save stays open with its new words, an edit of
  * a message the queue would not hold closes, an edit
  * steered is one change of that message, and an edit takes the message's
  * files into the box, read as its row draws them, which Save sends back with
@@ -52,6 +57,7 @@ let held:
       queue: AgentQueueControl;
       editing: QueueEditing;
       page: (queue: AgentQueue | undefined) => void;
+      read: (lines: readonly AgentTranscriptMessage[]) => void;
     }
   | undefined;
 
@@ -62,6 +68,7 @@ let owed: ((answer: AgentQueueAnswerView) => void)[] = [];
 
 function Tab(): ReactNode {
   const [page, setPage] = useState<AgentQueue | undefined>();
+  const [lines, setLines] = useState<readonly AgentTranscriptMessage[]>([]);
 
   const composer = useAgentComposer({
     agentId: "agent-1",
@@ -70,11 +77,31 @@ function Tab(): ReactNode {
     send: () => new Promise(ignore),
   });
 
-  const queue = useAgentQueue("agent-1", page);
+  const queue = useAgentQueue("agent-1", page, lines);
   const files = useAgentPictureDoor("agent-1");
-  held = { composer, queue, editing: useQueueEditing(composer, queue, files), page: setPage };
+  held = {
+    composer,
+    queue,
+    editing: useQueueEditing(composer, queue, files),
+    page: setPage,
+    read: setLines,
+  };
 
   return null;
+}
+
+/** The account signed in to the window, which keeps a message not delivered for it. */
+function SignedIn(): null {
+  useDraftsOwner({ id: "u-dean", email: "dean@example.com" });
+
+  return null;
+}
+
+/** The tab, drawn afresh under a new `key`, as the window draws it for the account signed in. */
+function tab(key?: string): ReactNode {
+  return withQueryClient(
+    createElement(Fragment, null, createElement(SignedIn), createElement(Tab, { key })),
+  );
 }
 
 function now(): NonNullable<typeof held> {
@@ -131,7 +158,7 @@ beforeEach(async () => {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Tab))));
+  await act(async () => root.render(tab()));
 });
 
 afterEach(() => {
@@ -142,31 +169,82 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("a message the queue refused comes back into the box it was queued from", async () => {
+test("a message the queue did not answer stays in the queue marked not delivered, the box left as it is, until a read lists it", async () => {
+  act(() => now().page({ messages: [], revision: 1 }));
+  act(() => now().composer.setDraft("Please update the tests"));
+  act(() => now().editing.queue());
+  await settle();
+  const queued = sent.at(-1);
+  assert.ok(queued?.change === QUEUE_CHANGE.ADD);
+  await answer(refused);
+
+  assert.equal(now().composer.draft, "");
+  assert.deepEqual(
+    now().queue.unsent.map(({ id, text }) => ({ id, text })),
+    [{ id: queued.id, text: "Please update the tests" }],
+  );
+  // The add had landed: the service's next page lists it.
+  act(() => now().page({ messages: [message(queued.id, "Please update the tests")], revision: 2 }));
+  act(() => now().page({ messages: [], revision: 3 }));
+
+  assert.deepEqual(now().queue.unsent, []);
+});
+
+test("a message not delivered that was handed straight on to the agent, never listed, settles once the transcript holds its row", async () => {
   act(() => now().composer.setDraft("Please update the tests"));
   act(() => now().editing.queue());
   await answer(refused);
+  const [unsent] = now().queue.unsent;
+  assert.ok(unsent !== undefined, "the message stays, not delivered");
+  act(() =>
+    now().read([
+      {
+        id: "row-1",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Please update the tests" }],
+        clientId: sentLineId(unsent.id),
+      },
+    ]),
+  );
 
-  assert.equal(now().composer.draft, "Please update the tests");
+  assert.deepEqual(now().queue.unsent, []);
 });
 
-test("a message the queue refused comes back ahead of the words and files written while it was out, in the tab drawn afresh meanwhile", async () => {
+test("Retry sends a message not delivered again under the id it went under", async () => {
+  act(() => now().composer.setDraft("Please update the tests"));
+  act(() => now().editing.queue());
+  await answer(refused);
+  const [unsent] = now().queue.unsent;
+  assert.ok(unsent !== undefined, "the message stays, not delivered");
+  act(() => now().editing.retry(unsent.id));
+  await settle();
+
+  assert.deepEqual(sent.at(-1), {
+    change: QUEUE_CHANGE.ADD,
+    id: unsent.id,
+    text: "Please update the tests",
+  });
+});
+
+test("a message not delivered taken back with Edit comes ahead of the words and files written since, in the tab drawn afresh meanwhile", async () => {
   act(() => now().composer.setDraft("Please update the tests"));
   act(() => now().composer.setAttachments(() => [SHOT]));
   act(() => now().editing.queue());
   // The tab is closed and opened again while the message is out.
-  await act(async () =>
-    roots[0]?.render(withQueryClient(createElement(Tab, { key: "opened again" }))),
-  );
+  await act(async () => roots[0]?.render(tab("opened again")));
   act(() => now().composer.setDraft("And the docs"));
   act(() => now().composer.setAttachments(() => [SPEC]));
   await answer(refused);
+  const [unsent] = now().queue.unsent;
+  assert.ok(unsent !== undefined, "the message stays, not delivered");
+  act(() => now().editing.takeBack(unsent.id));
 
   assert.equal(now().composer.draft, "Please update the tests\nAnd the docs");
   assert.deepEqual(now().composer.attachments, [SHOT, SPEC]);
+  assert.deepEqual(now().queue.unsent, []);
 });
 
-test("a refused message that would pass a message's bound beside the box's newer words leaves the box as it is, and Put back lays it in ahead once there is room", async () => {
+test("a message not delivered that would pass a message's bound beside the box's newer words leaves the box as it is on Edit, and Put back lays it in ahead once there is room", async () => {
   const toasts = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(toasts);
   act(() => toasts.render(withQueryClient(createElement(ToastHost))));
@@ -175,6 +253,9 @@ test("a refused message that would pass a message's bound beside the box's newer
   act(() => now().editing.queue());
   act(() => now().composer.setDraft("And the docs"));
   await answer(refused);
+  const [unsent] = now().queue.unsent;
+  assert.ok(unsent !== undefined, "the message stays, not delivered");
+  act(() => now().editing.takeBack(unsent.id));
   assert.equal(now().composer.draft, "And the docs");
 
   act(() => now().composer.setDraft("Ok"));

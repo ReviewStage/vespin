@@ -1,6 +1,6 @@
 import type { Failure } from "@repo/features/failure-remedy";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { MessageFailedMark } from "@repo/ui";
+import { type MenuEntry, MessageFailedMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { createContext, type ReactNode, useContext } from "react";
 import { failureShown } from "../failure-report.js";
@@ -25,7 +25,9 @@ import { refusedAtLimit } from "./agent-model.js";
  * The line marked so fades its bubble and its files (`useLineMarked`,
  * `tasks.css`'s `.is-user[data-undelivered]`). The tab hands its transcript
  * the lines so marked (`SentLineMarks`), by the id each was drawn under, and
- * the lines still on their way, whose files are drawn going up.
+ * the lines still on their way, whose files are drawn going up. A message
+ * the agent's queue did not take wears the same alert on its row in the
+ * queue (`QueuedUnsentMark`), with the same acts.
  */
 
 /** What a line that did not go says, on its time line and as its alert's name. */
@@ -91,6 +93,27 @@ function lineCause(messageId: string, code: LineCause["code"]): LineCause {
   return made;
 }
 
+/** The acts on a message refused for now: Retry and Edit where it offers them, then Delete. */
+function unsentGroups(
+  retry: (() => void) | undefined,
+  takeBack: (() => void) | undefined,
+  drop: () => void,
+): readonly (readonly MenuEntry[])[] {
+  const mends: readonly MenuEntry[] = [
+    ...(retry === undefined
+      ? []
+      : [{ label: ACT_WORDS.RETRY, icon: <GLYPH.RETRY />, onSelect: retry }]),
+    ...(takeBack === undefined
+      ? []
+      : [{ label: ACT_WORDS.EDIT, icon: <GLYPH.RENAME />, onSelect: takeBack }]),
+  ];
+
+  return [
+    ...(mends.length === 0 ? [] : [mends]),
+    [{ label: ACT_WORDS.DELETE, icon: <GLYPH.DELETE />, danger: true, onSelect: drop }],
+  ];
+}
+
 /** Hands an agent's transcript the lines that did not go. */
 export const UndeliveredLines = MarksContext.Provider;
 
@@ -151,37 +174,47 @@ export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode
 
   if (!marks.unsent.has(messageId)) return null;
   const { retry, takeBack } = marks;
+  const mends = retry !== undefined && takeBack !== undefined;
 
   return (
     <MessageFailedMark
       label={undeliveredWords(marks, messageId)}
       reason={marks.notes.get(messageId)?.text ?? UNDELIVERED_WORDS}
-      groups={[
-        ...(retry === undefined || takeBack === undefined
-          ? []
-          : [
-              [
-                { label: ACT_WORDS.RETRY, icon: <GLYPH.RETRY />, onSelect: () => retry(messageId) },
-                {
-                  label: ACT_WORDS.EDIT,
-                  icon: <GLYPH.RENAME />,
-                  onSelect: () => takeBack(messageId),
-                },
-              ],
-            ]),
-        [
-          {
-            label: ACT_WORDS.DELETE,
-            icon: <GLYPH.DELETE />,
-            danger: true,
-            onSelect: () => marks.drop(messageId),
-          },
-        ],
-      ]}
+      groups={unsentGroups(
+        mends ? () => retry(messageId) : undefined,
+        mends ? () => takeBack(messageId) : undefined,
+        () => marks.drop(messageId),
+      )}
       failure={failureShown({
         surface: FAILURE_SURFACE.AGENT_SEND,
         cause: lineCause(messageId, FAILURE_CONDITION.NOT_KEPT),
       })}
+    />
+  );
+}
+
+/** The red alert on a queued message's row that the queue did not take, its menu saying why and offering Retry and Edit where it can still be sent or written again, and Delete. */
+export function QueuedUnsentMark({
+  reason,
+  retry,
+  takeBack,
+  drop,
+}: {
+  /** Why it did not go; "Not delivered" where unsaid. */
+  reason: string | undefined;
+  /** Sends it again under its id; none where its files did not outlast a relaunch. */
+  retry: (() => void) | undefined;
+  /** Takes its words and files back into the box; none where it kept nothing to take. */
+  takeBack: (() => void) | undefined;
+  drop: () => void;
+}): ReactNode {
+  return (
+    <MessageFailedMark
+      label={UNDELIVERED_WORDS}
+      reason={reason ?? UNDELIVERED_WORDS}
+      groups={unsentGroups(retry, takeBack, drop)}
+      failure={undefined}
+      replayUnmasked
     />
   );
 }

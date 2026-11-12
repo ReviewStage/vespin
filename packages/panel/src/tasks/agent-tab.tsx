@@ -3129,7 +3129,7 @@ function AgentTabView({
   );
 
   const lines = useMemo(() => agentLines(kept, composer.sent), [kept, composer.sent]);
-  const queue = useAgentQueue(agent.id, transcript.queue);
+  const queue = useAgentQueue(agent.id, transcript.queue, transcript.messages);
   const pictures = useAgentPictureDoor(agent.id);
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
@@ -3475,6 +3475,10 @@ function AgentTabView({
             onCancelEdit={queueEditing.cancelRow}
             onDelete={queue.remove}
             onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
+            unsent={queue.unsent}
+            onRetry={queueEditing.retry}
+            onTakeBack={queueEditing.takeBack}
+            onDrop={queue.drop}
           />
         </AgentPicturesProvider>
         {onUnarchive !== undefined ? (

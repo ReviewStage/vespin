@@ -1,5 +1,6 @@
 import { QUEUE_PAUSE, type QueuedMessage, type QueuePaused } from "@repo/features/agent-queue-wire";
-import { pausedWords, QUEUE_WORDS } from "@repo/features/agent-queue-words";
+import { pausedWords, QUEUE_REFUSED_WORDS, QUEUE_WORDS } from "@repo/features/agent-queue-words";
+import { hasWordsOrFiles, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import {
@@ -30,7 +31,10 @@ import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure } from "../failure-report.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { KeptFileChips, WordFilesOf } from "./agent-pictures.js";
+import { attachmentChips } from "./attached-file-chips.js";
 import { SentWords } from "./skill-chip.js";
+import { QueuedUnsentMark } from "./undelivered-mark.js";
+import type { UnsentQueued } from "./use-agent-queue.js";
 
 /**
  * agent-queue-dock.tsx -- the messages queued behind an agent's running turn, docked over its message box, under its to-do list and its pull request.
@@ -50,7 +54,10 @@ import { SentWords } from "./skill-chip.js";
  * other. A reader who did not start the agent finds no press.
  * A queue standing paused says why
  * over its rows, after a Stop in the quiet tone and after a refusal in the
- * danger one, with Resume. Nothing is drawn while none is queued.
+ * danger one, with Resume. A message the queue did not take stays at its
+ * end, muted, wearing the not-delivered alert (`QueuedUnsentMark`), whose
+ * menu offers Retry, Edit, and Delete. Nothing is drawn while none is queued
+ * and none waits so.
  */
 
 /** A queued message's files as a line's chips: each by its name, read by the id the queue names it under where it names one. */
@@ -62,6 +69,9 @@ function queuedFileChips(message: QueuedMessage) {
     ...(file.id === undefined ? undefined : { pictureId: file.id }),
   }));
 }
+
+/** Why a message not delivered did not go, which heads its alert's menu. */
+const UNSENT_REASON = QUEUE_REFUSED_WORDS[QUEUE_CHANGE.ADD];
 
 /** What asking to delete a queued message says. */
 const DELETE_QUESTION: DialogQuestion = {
@@ -85,6 +95,10 @@ export function AgentQueueDock({
   onCancelEdit,
   onDelete,
   onResume,
+  unsent,
+  onRetry,
+  onTakeBack,
+  onDrop,
 }: {
   messages: readonly QueuedMessage[];
   /** Whether the reader may change the queue: the agent's starter alone may. */
@@ -101,6 +115,11 @@ export function AgentQueueDock({
   /** Deletes the message once the dialog's Delete is pressed, answering how that went. */
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
   onResume: () => void;
+  /** The messages queued from this window that did not go, drawn after the queue's own. */
+  unsent: readonly UnsentQueued[];
+  onRetry: (id: string) => void;
+  onTakeBack: (id: string) => void;
+  onDrop: (id: string) => void;
 }): React.JSX.Element | null {
   const drag = useRowDrag(onMove, { handle: "[data-queue-handle]" });
   const [doomed, setDoomed] = useState<QueuedMessage>();
@@ -115,7 +134,7 @@ export function AgentQueueDock({
     confirmFailure(FAILURE_SURFACE.AGENT_QUEUE_DELETE),
   );
 
-  if (messages.length === 0) return null;
+  if (messages.length === 0 && unsent.length === 0) return null;
   // Note that a lone message has nowhere to move, so it offers no handle.
   const movable = controls && messages.length > 1;
 
@@ -223,6 +242,52 @@ export function AgentQueueDock({
                       />
                     </>
                   )
+                }
+              />
+            );
+          })}
+          {unsent.map((each) => {
+            const chips = attachmentChips(each.attachments);
+
+            return (
+              <ListRow
+                key={each.id}
+                leading={
+                  <span className="agent-queue-lead">
+                    <GLYPH.QUEUED />
+                  </span>
+                }
+                title={
+                  <WordFilesOf files={chips} words={each.text}>
+                    <OneLine words={each.text}>
+                      <SentWords text={each.text} line />
+                    </OneLine>
+                  </WordFilesOf>
+                }
+                attachments={
+                  chips.length === 0 ? undefined : (
+                    <WordFilesOf files={chips} words={each.text}>
+                      <KeptFileChips files={chips} />
+                    </WordFilesOf>
+                  )
+                }
+                attachmentsOpen
+                muted
+                actionsAt={LIST_ROW_ACTIONS.ALWAYS}
+                actions={
+                  <QueuedUnsentMark
+                    reason={UNSENT_REASON}
+                    // Note that one whose files' bytes did not outlast a relaunch is not sent again without them.
+                    retry={
+                      each.attachments.length === each.files ? () => onRetry(each.id) : undefined
+                    }
+                    takeBack={
+                      hasWordsOrFiles(each.text, each.attachments)
+                        ? () => onTakeBack(each.id)
+                        : undefined
+                    }
+                    drop={() => onDrop(each.id)}
+                  />
                 }
               />
             );
