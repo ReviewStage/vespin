@@ -14,6 +14,7 @@
  * report nobody pressed for goes quietly and does not come here.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { ACT_UNREACHED_WORDS, offlineRefusedWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -136,6 +137,25 @@ export function useOfflineNotice(): void {
       console.error("The count of changes refused offline was not cleared.", cause),
     );
   }, [refused, notices, acts]);
+}
+
+/**
+ * Lets every standing notice go as the signed-in account changes, signed out
+ * by Settings, the menu bar, or a refused renewal, or another signed in, so
+ * no Try again or Undo a notice offered acts for the next account with the
+ * last one's words or pictures.
+ */
+export function useNoticeForAccount(): void {
+  const notices = useFailureNotices();
+
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  useEffect(() => {
+    notices.clear();
+  }, [accountId, notices]);
 }
 
 /** The write door every press goes through; see the module's head. */
