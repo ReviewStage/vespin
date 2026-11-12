@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the account's photo in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace switcher in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,9 +12,11 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The account's photo leads the bar, heard as Settings: the fixture's account
-# has no picture, so its letters stand in it.
-- assertVisible: "Settings"
+# The workspace switcher leads the bar once the workspaces are read, as they
+# are at once on the fixture: the workspace's tile, its letter standing in it,
+# and the chevron that opens its menu.
+- assertVisible:
+    id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
 # The ⋯ menu: Mark all as read. A tap off the menu closes it.
@@ -137,11 +139,11 @@ appId: dev.vespin.ios
 # press opens it full screen, its pages drawn in a web view under a bar with
 # Done and Share.
 - scrollUntilVisible:
-    element: "invite-test-plan.pdf, PDF, .*"
+    element: "invite-test-plan.pdf, PDF.*"
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: inbox-file
-- tapOn: "invite-test-plan.pdf, PDF, .*"
+- tapOn: "invite-test-plan.pdf, PDF.*"
 - assertVisible:
     id: "file-viewer"
 - waitForAnimationToEnd:
