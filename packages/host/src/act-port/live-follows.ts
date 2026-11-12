@@ -78,7 +78,7 @@ interface FollowProcedureBuilder {
 /** `actPort`'s builder of the procedure `kind` keys. */
 function builderOf(kind: string): FollowProcedureBuilder {
   // SAFETY: a declared follow's kinds key its own procedures in the contract `actPort` implements.
-  return actPort[kind as keyof typeof actPort] as unknown as FollowProcedureBuilder;
+  return actPort[kind as keyof typeof actPort] as FollowProcedureBuilder;
 }
 
 /**

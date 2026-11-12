@@ -89,7 +89,7 @@ export function inProcessChannel(): InProcessChannel {
 
   // SAFETY: oRPC's adapters call `postMessage` and `addEventListener` for `message` and `close` on a port, and the app's root `start` and `close`, which each end answers; nothing reads the rest of a `MessagePort`.
   return {
-    port1: portOf(0) as unknown as MessagePort,
-    port2: portOf(1) as unknown as MessagePort,
+    port1: portOf(0) as MessagePort,
+    port2: portOf(1) as MessagePort,
   };
 }

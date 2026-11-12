@@ -21,20 +21,26 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** An observer of what jsdom never lays out, which tells nothing. */
-class StillObserver {
+class StillObserver implements ResizeObserver {
   observe(): void {}
   unobserve(): void {}
   disconnect(): void {}
-  takeRecords(): [] {
+}
+
+/** The same observer for what scrolls into view, rooted at the viewport. */
+class StillIntersectionObserver extends StillObserver implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds = [0];
+  takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
 }
 
-// SAFETY: the examples read no size, so an observer that never fires stands in for jsdom's missing one.
-globalThis.ResizeObserver ??= StillObserver as unknown as typeof ResizeObserver;
+globalThis.ResizeObserver ??= StillObserver;
 
-// SAFETY: the examples read no intersection, so an observer that never fires stands in for jsdom's missing one.
-globalThis.IntersectionObserver ??= StillObserver as unknown as typeof IntersectionObserver;
+globalThis.IntersectionObserver ??= StillIntersectionObserver;
 
 Element.prototype.scrollIntoView ??= () => undefined;
 

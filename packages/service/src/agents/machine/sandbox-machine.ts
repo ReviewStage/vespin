@@ -635,14 +635,14 @@ function foundOf(
     runner: own === undefined ? undefined : runnerInSession(session, sandbox, own),
     launch: own === undefined ? undefined : markOf(own),
     // SAFETY: what is kept is this machine's own to read back in `discard` and `resume`; no caller reads it.
-    kept: kept as unknown as MachineKept,
+    kept: kept as KeptPlace & MachineKept,
   };
 }
 
 /** What a found place keeps, which `foundOf` kept. */
 function keptOf(found: FoundPlace): KeptPlace {
   // SAFETY: a place this machine found keeps what `foundOf` kept.
-  return found.kept as unknown as KeptPlace;
+  return found.kept as MachineKept & KeptPlace;
 }
 
 /**

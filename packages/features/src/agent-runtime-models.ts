@@ -182,7 +182,7 @@ export function runtimeModels<
       };
 
       // SAFETY: only the two optional keys are left out, which `M` holds as optional.
-      return [kept as unknown as M];
+      return [kept as M];
     });
 }
 

@@ -220,12 +220,16 @@ it.effect(
         const tab = {
           closed: false,
           opener: app,
-          location: { replace: (url: string) => sentTo.push(url) },
-          sessionStorage: { setItem: () => undefined },
+          location: {
+            replace: (url: string) => {
+              sentTo.push(url);
+            },
+          },
+          sessionStorage: { setItem: (_key: string, _value: string): void => undefined },
         };
 
         // SAFETY: the tab's opener is cut, and its `closed`, `location.replace`, and `sessionStorage.setItem` read, alone, which this holds.
-        vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+        vi.spyOn(window, "open").mockReturnValue(tab as Window);
 
         const { bridge, actPort, actPortClient } = yield* standingHost(
           fakeService({ signedIn: true }),
@@ -252,12 +256,16 @@ it.effect("a workspace connect on the act port lands in the tab its press opened
 
       const tab = {
         closed: false,
-        location: { replace: (url: string) => sentTo.push(url) },
-        sessionStorage: { setItem: () => undefined },
+        location: {
+          replace: (url: string) => {
+            sentTo.push(url);
+          },
+        },
+        sessionStorage: { setItem: (_key: string, _value: string): void => undefined },
       };
 
       // SAFETY: the connect reads a tab's `closed`, `location.replace`, and `sessionStorage.setItem`, and cuts its opener, alone.
-      vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+      vi.spyOn(window, "open").mockReturnValue(tab as Window);
 
       const { bridge, actPort, actPortClient } = yield* standingHost(
         fakeService({ signedIn: true }),

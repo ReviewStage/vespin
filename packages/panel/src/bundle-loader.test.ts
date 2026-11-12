@@ -12,9 +12,10 @@ import { bundleLanded } from "./testing/side-bundles.js";
  * life, its own error kept as the failure's cause; and one that landed is had by every later reader. The bundle is a stand-in, failing until the connection is back.
  */
 
-/** The Terminal tab's bundle as it lands; nothing reads past who it is. */
-// SAFETY: a stand-in compared by identity alone, never drawn.
-const TERMINAL = { stand: "terminal" } as unknown as TerminalModule;
+/** The Terminal tab's bundle as it lands; nothing reads past who it is, so it is never drawn. */
+const TERMINAL: TerminalModule = {
+  create: () => assert.fail("the stand-in bundle is compared by identity alone, never drawn"),
+};
 
 it.effect("a bundle whose import failed is imported again by its next reader", () =>
   Effect.gen(function* () {

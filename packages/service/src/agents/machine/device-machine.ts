@@ -563,7 +563,7 @@ function deviceMachineOver(
           runner: live,
           launch: Option.getOrUndefined(mark),
           // SAFETY: the pin is this machine's own to read back; no caller reads it.
-          kept: pin.value as unknown as MachineKept,
+          kept: pin.value as DeviceAgentPin & MachineKept,
         };
 
         return Option.some(found);

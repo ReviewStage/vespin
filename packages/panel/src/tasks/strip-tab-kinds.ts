@@ -415,7 +415,7 @@ const STRIP_TAB_KINDS = {
 /** The declaration of a tab's kind, over any tab. */
 function declarationOf(tab: StripTab): StripTabKindDeclaration<StripTabKind> {
   // SAFETY: each entry is read only with a tab of its own kind, which is what makes the widening sound.
-  return STRIP_TAB_KINDS[stripTabKind(tab)] as unknown as StripTabKindDeclaration<StripTabKind>;
+  return STRIP_TAB_KINDS[stripTabKind(tab)] as StripTabKindDeclaration<StripTabKind>;
 }
 
 /** A tab as its kind's answers take it. */

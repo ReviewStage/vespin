@@ -120,8 +120,8 @@ function kept(held: Held, next: Held): Held {
  */
 export function keepIdentity<Value>(held: Value, next: Value): Value {
   // SAFETY: both are one shape of the data this module is bounded to, which the walk reads as the JSON it is.
-  const answer = kept(held as unknown as Held, next as unknown as Held);
+  const answer = kept(held as Held, next as Held);
 
   // SAFETY: what the walk answers is `held`, `next`, or a value equal to `next` built of their parts, so it is the caller's shape again.
-  return answer as unknown as Value;
+  return answer as Value;
 }

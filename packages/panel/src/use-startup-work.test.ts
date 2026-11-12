@@ -53,10 +53,13 @@ beforeEach(() => {
 
     if (each) each.canceled = true;
   });
+
+  const platform: Partial<AppPlatform> = {
+    applySessionReplay: (word: SessionReplayBootstrap) => void heard.push(word),
+  };
+
   // SAFETY: only the capability under test is answered; nothing here reads another.
-  uninstall = installAppPlatform({
-    applySessionReplay: (word: SessionReplayBootstrap) => heard.push(word),
-  } as unknown as AppPlatform);
+  uninstall = installAppPlatform(platform as AppPlatform);
 });
 
 afterEach(() => {

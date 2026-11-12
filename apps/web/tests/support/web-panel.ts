@@ -109,7 +109,7 @@ export function fixtureBridge(profile: RunProfile): AppBridge {
   return {
     ...quiet,
     requestAppState: () => Promise.resolve(state),
-  } as unknown as AppBridge;
+  } as AppBridge;
 }
 
 /**

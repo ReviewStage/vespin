@@ -139,7 +139,7 @@ export function heldUntilClosed<Kind extends HoldKind>(
   };
 
   // SAFETY: the window reads oRPC's stream as an async iterator alone, which this is.
-  return Promise.resolve(stream as unknown as PortActResult<Kind>);
+  return Promise.resolve(stream as PortActResult<Kind>);
 }
 
 /**

@@ -134,7 +134,7 @@ const RECORDED_RESETS = Layer.succeed(NativeAgentSessions, {
     Option.some(
       Effect.succeed(
         // SAFETY: a delete only resets a session here, and any other call fails the test.
-        new Proxy(
+        new Proxy<Partial<NativeSessions<SessionTurn>>>(
           {
             reset: (sessionId: string) =>
               Effect.sync(() => {
@@ -147,7 +147,7 @@ const RECORDED_RESETS = Layer.succeed(NativeAgentSessions, {
             get: (target, key) =>
               key === "reset" ? target.reset : () => assert.fail(`a delete asked ${String(key)}`),
           },
-        ) as unknown as NativeSessions<SessionTurn>,
+        ) as NativeSessions<SessionTurn>,
       ),
     ),
 });

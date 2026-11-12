@@ -205,7 +205,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
             : { errorText: "Not taken." }),
         },
       ],
-    }) as unknown as StoredUIMessage;
+    }) as StoredUIMessage;
 
   assert.equal(lastSaid(ended("output-available")), summary);
   assert.equal(lastSaid(ended("output-error")), said);
@@ -217,7 +217,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
     lastSaid({
       ...unanswered,
       parts: [text, { ...call, output: undefined }],
-    } as unknown as StoredUIMessage),
+    } as StoredUIMessage),
     said,
   );
   // A later call refused stands for the turn over an earlier one taken.
@@ -227,7 +227,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
     lastSaid({
       ...unanswered,
       parts: [text, call, { ...refused, toolCallId: "call-2" }],
-    } as unknown as StoredUIMessage),
+    } as StoredUIMessage),
     said,
   );
 });

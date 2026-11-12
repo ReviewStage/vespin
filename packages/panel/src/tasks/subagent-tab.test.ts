@@ -261,7 +261,7 @@ test("a worker's tab whose earlier messages could not be read says so over its l
 
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
     },
-  } as unknown as Parameters<typeof fakeActPort>[0]);
+  } as Parameters<typeof fakeActPort>[0]);
   pushedTranscripts(() => [
     {
       messages: [

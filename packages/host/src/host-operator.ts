@@ -231,7 +231,7 @@ function record(result: GatewayCallResult): WireRecord | undefined {
 /** One answered value of the host's, as the domain type its method documents. */
 function answered<Value>(value: UnparsedWireValue): Value | undefined {
   // SAFETY: the host is our own authenticated process answering the shape the method documents; the act's own answer guard re-checks it before a renderer sees it.
-  return value === undefined ? undefined : (value as unknown as Value);
+  return value === undefined ? undefined : (value as Value);
 }
 
 /** One live follow's slice as the host tells it: its read's name, and the slice whole. */

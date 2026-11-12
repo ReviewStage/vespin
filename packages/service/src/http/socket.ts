@@ -78,7 +78,7 @@ export function voiceSocket(
     const platform = yield* Socket.fromWebSocket(
       Effect.acquireRelease(
         // SAFETY: `ws`'s socket is the WebSocket this reads; the DOM interface is the only name TypeScript has for it.
-        Effect.succeed(socket as unknown as globalThis.WebSocket),
+        Effect.succeed(socket as WebSocket & globalThis.WebSocket),
         (open) => Effect.sync(() => open.close()),
       ),
       // A socket handed over already gone never emits the `open` this would

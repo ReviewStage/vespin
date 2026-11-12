@@ -107,9 +107,7 @@ export function declaredActProcedures<
     if (act === undefined || handler === undefined || isLiveFollow(act) || act.byHand) continue;
 
     // SAFETY: a declared act's kind keys its own procedure in the contract `actPort` implements.
-    const builder = actPort[
-      act.kind as keyof typeof actPort
-    ] as unknown as DeclaredProcedureBuilder;
+    const builder = actPort[act.kind as keyof typeof actPort] as DeclaredProcedureBuilder;
 
     procedures.set(
       act.kind,

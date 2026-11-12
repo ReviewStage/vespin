@@ -83,7 +83,7 @@ function stubPlatform(picture: Omit<Bitmap, "close">): void {
           }
         }
       },
-    } as unknown as CanvasRenderingContext2D;
+    } as CanvasRenderingContext2D;
   });
   vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
     this: HTMLCanvasElement,

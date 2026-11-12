@@ -1522,7 +1522,7 @@ export function subject(
       emit: (kind: GatewayEventKind, payload: WireValue) => {
         if (kind === GATEWAY_EVENT.LIVE_READ_CHANGED) {
           // SAFETY: a live follow's slice is told as its name and the slice whole (`liveTold`).
-          const { read, held } = payload as unknown as { read: LiveRead; held: WireValue };
+          const { read, held } = payload as { read: LiveRead; held: WireValue };
           pushed.push([read, held]);
           events.push({ kind: read, payload: held });
 
@@ -1617,7 +1617,7 @@ export function subject(
     /** The follow `name`'s handler, by a name not yet known. */
     const followOf = (name: keyof typeof TASKS_FOLLOWS) =>
       // SAFETY: every Tasks follow's handler holds and asks again by its own key, which the overloads below pair with its name.
-      tasks.acts[name] as unknown as {
+      tasks.acts[name] as {
         readonly hold: (key: unknown) => Effect.Effect<void, never, Scope.Scope>;
         readonly retry?: (key: unknown) => Effect.Effect<void>;
       };

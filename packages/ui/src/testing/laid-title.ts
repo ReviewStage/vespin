@@ -24,8 +24,9 @@ export interface TitleLayout {
 }
 
 /** No resize is watched: a bar reads itself once, as it renders. */
-class StillObserver {
+class StillObserver implements ResizeObserver {
   observe(): void {}
+  unobserve(): void {}
   disconnect(): void {}
 }
 
@@ -61,8 +62,7 @@ export function layTitle(layout: TitleLayout): LayTitleResult {
     return 0;
   };
 
-  // SAFETY: a laid title is measured once, so an observer that never fires stands in for jsdom's missing one.
-  globalThis.ResizeObserver = StillObserver as unknown as typeof ResizeObserver;
+  globalThis.ResizeObserver = StillObserver;
   document.documentElement.style.setProperty("--ui-title-floor", `${layout.floor}px`);
 
   return {

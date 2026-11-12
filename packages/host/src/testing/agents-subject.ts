@@ -1382,7 +1382,7 @@ export function subject(
         )
           continue;
         // SAFETY: the held transcripts are the host's own, told as built.
-        const held = event.payload.held as unknown as AppTranscripts;
+        const held = event.payload.held as AppTranscripts;
         const read = held[transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
 
         if (read === was) continue;
