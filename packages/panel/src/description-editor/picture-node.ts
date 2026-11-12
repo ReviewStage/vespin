@@ -1,6 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { type EditorState, Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { imageFiles } from "../picture-files.js";
@@ -17,7 +18,8 @@ import { inTableCell } from "./writing-keys.js";
  * quotes escaped, which TipTap's own writer does not. A picture laid in from
  * a paste, a drop, or a file chosen has no address yet: it waits on an
  * upload the panel names, writes nothing to the text meanwhile, and takes
- * its address once the panel kept it (`settled`). A picture of another description
+ * its address once the panel kept it (`settled`), a change undo never takes
+ * back alone, so undo and redo take the picture out and bring it back whole. A picture of another description
  * pasted in is kept again on this one, so its new readers can see it. The
  * node's element is the panel's to draw into, as a mention's is: its
  * picture, its upload, and its tools while selected.
@@ -41,6 +43,54 @@ function pictureMarkdown(attrs: JSONContent["attrs"]): string {
   const title = attrs?.title ? ` "${escaped(String(attrs.title), /[\\"]/gu)}"` : "";
 
   return `![${alt}](${src}${title})`;
+}
+
+/** The uploads the panel has kept, each with the address it was kept at, which a picture waiting on one takes whenever it stands in the text. */
+const SETTLED = new PluginKey<ReadonlyMap<string, string>>("settled-pictures");
+
+/** An upload kept, as a transaction tells `SETTLED`. */
+interface Settled {
+  readonly upload: string;
+  readonly src: string;
+}
+
+/**
+ * Every picture still waiting on an upload the panel has kept given its
+ * address, kept out of the undo history. Note that this runs on every change,
+ * not only the settle, because undo or redo can bring back a picture after
+ * its upload settled, which the panel no longer holds and would draw failed.
+ */
+function picturesFilled(state: EditorState): Transaction | null {
+  const settled = SETTLED.getState(state);
+
+  if (settled === undefined || settled.size === 0) return null;
+  const { tr } = state;
+  state.doc.descendants((node, pos) => {
+    const src = node.type.name === PICTURE_NODE ? settled.get(node.attrs.upload) : undefined;
+
+    if (src !== undefined) tr.setNodeMarkup(pos, undefined, { ...node.attrs, src, upload: "" });
+  });
+
+  return tr.docChanged ? tr.setMeta("addToHistory", false) : null;
+}
+
+/** What remembers the uploads kept and lays each address into its picture, wherever undo or redo brings it back. */
+function settledPictures(): Plugin<ReadonlyMap<string, string>> {
+  return new Plugin<ReadonlyMap<string, string>>({
+    key: SETTLED,
+    state: {
+      init: (): ReadonlyMap<string, string> => new Map(),
+      apply: (tr, was): ReadonlyMap<string, string> => {
+        const settled: Settled | undefined = tr.getMeta(SETTLED);
+
+        return settled === undefined ? was : new Map(was).set(settled.upload, settled.src);
+      },
+    },
+    appendTransaction: (trs, _old, state) =>
+      trs.some((tr) => tr.docChanged || tr.getMeta(SETTLED) !== undefined)
+        ? picturesFilled(state)
+        : null,
+  });
 }
 
 /** The node's picture as the panel draws it. */
@@ -81,6 +131,9 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
   if (pictures === undefined) return node;
 
   return node.extend({
+    addProseMirrorPlugins() {
+      return [...(this.parent?.() ?? []), settledPictures()];
+    },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
         const dom = document.createElement("span");
@@ -210,13 +263,10 @@ function waitingAt(view: EditorView, upload: string): number | undefined {
   return found;
 }
 
-/** The picture waiting on `upload` given its address, which the text now writes; nothing where it was taken out meanwhile. */
+/** The picture waiting on `upload` given its address, which the text now writes, and any that undo or redo brings back later; nothing where it was taken out meanwhile. */
 export function settledPicture(view: EditorView, upload: string, src: string): void {
-  const pos = waitingAt(view, upload);
-  const node = pos === undefined ? undefined : view.state.doc.nodeAt(pos);
-
-  if (pos === undefined || node === undefined || node === null) return;
-  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, src, upload: "" }));
+  const settled: Settled = { upload, src };
+  view.dispatch(view.state.tr.setMeta(SETTLED, settled).setMeta("addToHistory", false));
 }
 
 /** The picture waiting on `upload` taken out of the text. */

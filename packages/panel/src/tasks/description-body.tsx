@@ -81,6 +81,7 @@ import {
   DocumentBlock,
   EditableTitle,
   EmptyDocumentBlock,
+  TextFileDrop,
   textBoxOf,
   useTextRoom,
   useWordsKeptOnClose,
@@ -1748,6 +1749,14 @@ export const DescriptionBody = memo(function DescriptionBody({
           )}
         </WordsDatePickerRoom>
       </DescriptionBodyColumn>
+      {/* Files carried over the text, drawn or open, are taken anywhere over it, a line marking where they land. */}
+      <TextFileDrop
+        body={body}
+        room={scroller}
+        editing={editing}
+        handle={editorHandle}
+        editable={editable && units !== undefined}
+      />
     </DocumentScroll>
   );
 
