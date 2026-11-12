@@ -106,7 +106,7 @@ function useWaitingBrief(itemId: string): AppInboxWaitingItem | undefined {
   return (inbox?.waiting ?? []).flatMap((task) => task.items).find((each) => each.id === itemId);
 }
 
-/** An item's card from main's brief alone, wearing no glyph, as its read card wears none: its question, that it needs the reader, since main's brief lists only what waits on them, as its read card says, and when it was asked. */
+/** An item's card from main's brief alone. It says the item needs the reader, since main's brief lists only what waits on them. */
 function WaitingItemCard({
   item,
   now,

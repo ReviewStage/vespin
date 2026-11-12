@@ -73,9 +73,9 @@ import { useOpenPlace } from "./use-open-link.js";
 import { useTaskAgent } from "./use-task-work.js";
 
 /**
- * An item put away until a reminder says when it comes back in its age's
- * place, after the clock glyph the reminder's acts wear, in the accent's
- * ink, so a row put away reads apart from one that changed.
+ * When a reminder brings a row back, after the clock glyph the reminder's
+ * acts wear, in the accent's ink, so a row put away reads apart from one
+ * that changed.
  */
 const INBOX_ROW_DUE =
   "inbox-row-due inline-flex items-center gap-tight-gap text-accent-ink [&>svg]:size-caption-glyph";
@@ -262,7 +262,7 @@ export function InboxItemCard({
 
 /**
  * The task holding an item, as its card says it under the head, a quieter
- * row flush with the name, which wears no glyph: by its key, as the task's
+ * row flush with the name: by its key, as the task's
  * own card says it (`TaskKey`), and by its chip as a mention of it is drawn
  * (`HolderRef`), which wears the task's status as its mark, so the card
  * says no status in words. Note that the row wears no glyph of its own,
@@ -442,7 +442,7 @@ export function InboxItemMarks({
       {drafted && !open ? <DraftMark /> : null}
       {needsYou && needsYouSaid ? <VisuallyHidden>{NEEDS_YOU.LABEL}</VisuallyHidden> : null}
       <TaskStatusChip holder={holder} drawn={standing} />
-      {/* Note that an item put away until a reminder says when it comes back in its age's place, as Mail's Remind Me list does. */}
+      {/* An item put away until a reminder says when it comes back in its age's place. */}
       {item.remindAt === undefined ? (
         <Time at={item.updatedAt} now={now} hint={false} />
       ) : (

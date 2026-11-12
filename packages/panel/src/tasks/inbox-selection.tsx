@@ -76,7 +76,7 @@ export function useInboxSelection({
 
   const { mark: pressMark } = useInboxPresses();
 
-  // Note that each item's mark goes on its own, there being no act marking several, and one toast answers them all once each did, its Undo, as ⌘Z, taking back each the service took that still holds the mark (`inbox-writes.ts`).
+  // Note that each item's mark goes on its own, there being no act marking several.
   const markAll = (marking: readonly InboxListed[], unread: boolean) => {
     if (onMark === undefined || marking.length === 0) return;
 

@@ -26,7 +26,6 @@ import { useEffect, useRef } from "react";
  */
 const saidRevisions = new Map<string, number>();
 
-/** Whether some Inbox of the window said `item` at its revision already. */
 function saidBefore(item: InboxItem): boolean {
   return (saidRevisions.get(item.id) ?? 0) >= item.revision;
 }

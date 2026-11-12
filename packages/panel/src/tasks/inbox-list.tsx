@@ -1170,7 +1170,6 @@ function ListHead({
     );
   }
 
-  // Note that the window's Inbox leaves the title bar's row over its list empty, the sidebar's toggle alone standing there while it is folded, and names itself to a reader alone, its search heading the list in its place, as Mail's and Gmail's do.
   return (
     <>
       <Toolbar />
@@ -1211,7 +1210,6 @@ function SearchEmpty({ searched }: { searched: string }): React.JSX.Element {
   );
 }
 
-/** The words of the way on from an Inbox with nothing in it. */
 const NEW_TASK_LABEL = "New task";
 
 /**
@@ -1403,7 +1401,7 @@ interface InboxSearchHead {
   readonly onQuery: (query: string) => void;
 }
 
-/** Mark all as read as a phone's ⋯ offers it: whether any item is unread or a notice it acknowledges stands, filtered out or not, and the mark. */
+/** Mark all as read: whether any item is unread or a notice it acknowledges stands, filtered out or not, and the mark. */
 interface InboxReadAll {
   readonly unread: boolean;
   readonly onMarkAll: () => void;
@@ -1579,9 +1577,7 @@ export function InboxList({
   note: React.ReactNode;
   /** Whether the list is still being read, as its reads land one after another while the window opens, so a row arriving fades in where it stands rather than sliding in as a new one does. */
   reading?: boolean;
-  /** Which of the Inbox's columns stand. */
   columns: InboxColumnsShown;
-  /** Where each row's press is kept, by the item it opens. */
   rows: InboxRowPresses;
   onChoose: (listed: InboxListed) => void;
   /** Marks an item read or unread from its row or the selection's bar, answering whether the service took it; none where the rows offer no mark. */
@@ -1631,7 +1627,6 @@ export function InboxList({
   });
 
   const rovingBody = useMemo(() => joinRefs(bodyRef, roving.ref), [roving.ref]);
-  // Note that the runs draw only the rows near the view, and every row while a find bar stands open over the list.
   const finding = useFindOpen();
   const { holdRun } = rows;
 
@@ -1687,7 +1682,6 @@ export function InboxList({
   const several: InboxChosen | undefined =
     picks.length > 1 ? { count: picks.length, acts: selection.acts } : undefined;
 
-  // Note that a phone's head is its own, so a phone keeps the acts in a bar at the list's foot.
   const phone = usePhoneRoom();
   const footed = head.phone !== undefined || (head.tab === true && phone);
   // Note that E resolves every item chosen where several are, else the item open beside the list, as U and H act on it.
@@ -1706,8 +1700,7 @@ export function InboxList({
       : undefined,
   );
 
-  // Note that a row whose item is done with is drawn gray, the chosen row kept on Questions and every such row on All alike.
-  // A row leaving the list is the list's motion's rather than one of the keyboard's rows (`ListMotion`).
+  // Note that a row leaving the list is the list's motion's rather than one of the keyboard's rows (`ListMotion`).
   const row = (listed: InboxListed, leaving: boolean, at?: VirtualRowPlace) => (
     <InboxItemRow
       key={listed.item.id}

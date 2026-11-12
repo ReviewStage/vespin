@@ -111,8 +111,7 @@ export function ItemWords({
 }
 
 /**
- * The files a message on the thread carried, drawn over its words, as the agent's tab draws a sent message's and every
- * box holds them over what is typed. A picture its words
+ * The files a message on the thread carried, drawn over its words. A picture its words
  * name already stands there, as an agent's do, so it is not drawn again;
  * every other picture is drawn as one in the words is, side by side where
  * several, the item's viewer walking it with the rest (`inbox-pictures.tsx`),
