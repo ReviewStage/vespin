@@ -59,7 +59,7 @@ const deviceZone = getCalendars()[0]?.timeZone;
 if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
   try {
     // SAFETY: a polyfilled `Intl.DateTimeFormat` is FormatJS's, which adds `__setDefaultTimeZone`.
-    (Intl.DateTimeFormat as unknown as FormatJsDateTimeFormat).__setDefaultTimeZone(deviceZone);
+    (Intl.DateTimeFormat as FormatJsDateTimeFormat).__setDefaultTimeZone(deviceZone);
   } catch {
     // The zone is one FormatJS cannot place, and UTC stands.
   }
@@ -95,7 +95,7 @@ if (globalThis.crypto === undefined) {
   };
 
   // SAFETY: the host calls `getRandomValues`, `randomUUID`, and `subtle.digest` alone of `Crypto`.
-  globalThis.crypto = { getRandomValues, randomUUID, subtle } as unknown as Crypto;
+  globalThis.crypto = { getRandomValues, randomUUID, subtle } as Crypto;
 }
 
 /** The index `with` names, counted from the end where negative, or none where it names no element. */
@@ -150,7 +150,7 @@ if (!Predicate.isFunction(Array.prototype.toSorted)) {
 // keys, which would otherwise all be the one key `"undefined"`. Registered
 // symbols, as Expo registers `Symbol.asyncIterator`.
 // SAFETY: the two are read-only in the lib's declaration and absent in the runtime; this writes them once.
-const symbols = Symbol as unknown as Record<"dispose" | "asyncDispose", symbol | undefined>;
+const symbols = Symbol as Record<"dispose" | "asyncDispose", symbol | undefined>;
 
 symbols.dispose ??= Symbol.for("Symbol.dispose");
 
@@ -241,11 +241,11 @@ class StreamingResponse extends PlatformResponse {
 }
 
 // SAFETY: the subclass answers every member of `Response` the host and Effect read, and its constructor takes the platform's arguments.
-globalThis.Response = StreamingResponse as unknown as typeof Response;
+globalThis.Response = StreamingResponse as typeof Response;
 
 // `fetch` whose answers carry their body as a stream: React Native's builds
 // its `Response` from its own copy of whatwg-fetch's, which no global above
 // reaches, so the host's calls go out on Expo's WinterCG `fetch`, which
 // streams.
 // SAFETY: Expo's `fetch` takes the web's arguments and answers a `Response`; its declaration names its own narrower input and answer types.
-globalThis.fetch = streamingFetch as unknown as typeof globalThis.fetch;
+globalThis.fetch = streamingFetch as typeof globalThis.fetch;

@@ -245,7 +245,8 @@ export interface AnyLiveRead {
   readonly olderParts: readonly string[] | undefined;
   readonly errors: Partial<typeof HOSTED_ERRORS>;
   readonly input: Schema.Top;
-  readonly answer: Schema.Top;
+  /** An answer decodes and encodes with no services. */
+  readonly answer: Schema.Codec<unknown, unknown>;
   readonly rows: Schema.Top;
 }
 
@@ -364,9 +365,10 @@ export function liveRead<
     ),
   );
 
+  // SAFETY: each part's field is its query as `partField` builds it, which `AnswerFields` names.
   const queries = mapped<string, AnyLiveRows, Schema.Top>(spec.parts, (rows) =>
     partField(rows, sealedLiveQuerySchema),
-  );
+  ) as { readonly [Part in keyof Parts]: PartField<Parts[Part], typeof sealedLiveQuerySchema> };
 
   return {
     name: spec.name,
@@ -379,7 +381,7 @@ export function liveRead<
     olderParts: spec.olderParts,
     errors: { ...refuses(...ANY_PROCEDURE_REFUSALS), ...own },
     // SAFETY: the fields are those `InputFields`, `AnswerFields`, and `RowsFields` name, built from the same records.
-    input: Schema.Struct({ ...params, ...MODE_FIELDS[spec.mode] }) as unknown as Schema.Struct<
+    input: Schema.Struct({ ...params, ...MODE_FIELDS[spec.mode] }) as Schema.Struct<
       InputFields<Params, Mode, Query>
     >,
     // SAFETY: the fields are those `AnswerFields` names, built from the same records.
@@ -387,13 +389,13 @@ export function liveRead<
       url: Schema.String,
       queries: Schema.Struct(queries),
       ...beside,
-    }) as unknown as Schema.Struct<AnswerFields<Parts, Beside>>,
+    }),
     // SAFETY: the fields are those `RowsFields` names, one per declared part.
     rows: Schema.Struct(
       mapped<string, AnyLiveRows, Schema.Top>(spec.parts, (rows) =>
         partField(rows, rowsReading(rows.row)),
       ),
-    ) as unknown as Schema.Struct<RowsFields<Parts>>,
+    ) as Schema.Struct<RowsFields<Parts>>,
   };
 }
 
@@ -411,11 +413,11 @@ export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
     .meta(openapi({ method: HTTP_METHOD.GET, path: read.path }))
     .input(
       // SAFETY: a query's fields decode with no services, so it is the codec from its `Encoded` to its `Type`.
-      read.input as unknown as Schema.Codec<Read["input"]["Type"], Read["input"]["Encoded"]>,
+      read.input as Schema.Codec<Read["input"]["Type"], Read["input"]["Encoded"]>,
     )
     .output(
       // SAFETY: an answer's fields decode with no services, so its flip is the codec from its `Type` to its `Encoded`.
-      Schema.flip(read.answer) as unknown as Schema.Codec<
+      Schema.flip(read.answer) as Schema.Codec<
         Read["answer"]["Encoded"],
         Read["answer"]["Type"]
       >,

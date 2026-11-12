@@ -32,7 +32,7 @@ const ORIGIN = "https://app.test";
 const METRICS_PATH = "/api/admin/metrics";
 
 // SAFETY: the resource writes the metrics read's answer as it came, so a marker object stands in for the whole answer.
-const METRICS = { generatedAt: 1 } as unknown as AdminMetrics;
+const METRICS = { generatedAt: 1 } as AdminMetrics;
 
 /** An admin signed in on a browser of their own, on Better Auth over its own PGlite. */
 const openAdmin = Effect.gen(function* () {

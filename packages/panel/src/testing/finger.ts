@@ -29,16 +29,17 @@ function touch(type: string): PointerEvent {
 
 /** The window answers that its main pointer is a finger until the test finishes. */
 export function underAFinger(): void {
-  // SAFETY: the panel reads only what the stand-in media query list has.
-  const stub = vi.spyOn(window, "matchMedia").mockImplementation(
-    (query) =>
-      ({
-        matches: query === "(pointer: coarse)",
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }) as unknown as MediaQueryList,
-  );
+  const stub = vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+    const list: Partial<MediaQueryList> = {
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+
+    // SAFETY: the panel reads only what the stand-in media query list has.
+    return list as MediaQueryList;
+  });
 
   onTestFinished(() => stub.mockRestore());
 }

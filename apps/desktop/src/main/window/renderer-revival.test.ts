@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import type { RunMode } from "@repo/host";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PanelManager, type PanelSystem } from "./panel-manager";
+import { STAND_IN_DISPLAY } from "./stand-in-display";
 
 /**
  * What a window does once its renderer dies or its page fails to load: the
@@ -58,12 +59,17 @@ class FakeBrowserWindow extends EventEmitter {
   };
 }
 
-const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
+/**
+ * Electron's window class, stood in for by the fake above. Note that it is
+ * held as unknown, because the fake answers only the part of a
+ * `BrowserWindow` the panel calls, which no type short of Electron's own names.
+ */
+const STAND_IN_WINDOW: unknown = FakeBrowserWindow;
 
 /** Electron as the panel meets it: these windows, one display, a quit, and sheets answered from `sheets`. */
 // SAFETY: the panel reaches only these members of Electron, each stood in for here.
-const SYSTEM = {
-  BrowserWindow: FakeBrowserWindow,
+const SYSTEM: PanelSystem = {
+  BrowserWindow: STAND_IN_WINDOW as PanelSystem["BrowserWindow"],
   app: {
     focus: () => undefined,
     quit: () => {
@@ -76,11 +82,14 @@ const SYSTEM = {
     showMessageBox: (window: unknown) => {
       sheets.shownOn.push(window);
 
-      return Promise.resolve({ response: sheets.answers.shift() ?? 0 });
+      return Promise.resolve({ response: sheets.answers.shift() ?? 0, checkboxChecked: false });
     },
   },
-  screen: { getPrimaryDisplay: () => DISPLAY, getAllDisplays: () => [DISPLAY] },
-} as unknown as PanelSystem;
+  screen: {
+    getPrimaryDisplay: () => STAND_IN_DISPLAY,
+    getAllDisplays: () => [STAND_IN_DISPLAY],
+  },
+};
 
 const RUN_MODE: RunMode = {
   requiresAccount: false,

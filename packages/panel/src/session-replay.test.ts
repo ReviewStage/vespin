@@ -5,7 +5,6 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { PostHog } from "posthog-js/dist/module.no-external";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, test, vi } from "vitest";
@@ -17,27 +16,25 @@ const client = (() => {
 
   const heard =
     (name: string) =>
-    (...args: unknown[]) => {
-      calls.push([name, ...args]);
-    };
+    (...args: unknown[]) =>
+      void calls.push([name, ...args]);
 
-  return {
-    calls,
-    posthog: Object.fromEntries(
-      [
-        "init",
-        "opt_in_capturing",
-        "opt_out_capturing",
-        "register",
-        "identify",
-        "reset",
-        "group",
-        "resetGroups",
-        "startSessionRecording",
-        "stopSessionRecording",
-      ].map((name) => [name, heard(name)]),
-    ),
+  const posthog = {
+    init: heard("init"),
+    opt_in_capturing: heard("opt_in_capturing"),
+    opt_out_capturing: heard("opt_out_capturing"),
+    register: heard("register"),
+    identify: heard("identify"),
+    reset: heard("reset"),
+    group: heard("group"),
+    resetGroups: heard("resetGroups"),
+    startSessionRecording: heard("startSessionRecording"),
+    stopSessionRecording: heard("stopSessionRecording"),
+    setPersonProperties: () => expect.unreachable("no person's properties are set here"),
+    unsetPersonProperties: () => expect.unreachable("no person's properties are unset here"),
   };
+
+  return { calls, posthog };
 })();
 
 afterEach(() => {
@@ -86,8 +83,7 @@ function testShell(): Parameters<typeof sessionReplay>[0] {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
-    // SAFETY: the replay calls only `init` and the recorder's own members, which the stand-in has.
-    importClient: () => Promise.resolve(client.posthog as unknown as PostHog),
+    importClient: () => Promise.resolve(client.posthog),
   };
 }
 

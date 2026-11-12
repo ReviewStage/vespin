@@ -24,7 +24,11 @@ const STORED: StoredAccount = {
 function manager(options: {
   stored?: StoredAccount;
   revoke?: (token: string) => Effect.Effect<void, Error>;
-  exchangeCode?: () => Effect.Effect<{ accessToken: string; refreshToken: string }, Error>;
+  exchangeCode?: (input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }) => Effect.Effect<{ accessToken: string; refreshToken: string }, Error>;
   client?: AccountClient;
   /** Who the service says a token belongs to; the stored account's person unless given. */
   identity?: { id: string; email: string };
@@ -80,7 +84,7 @@ function manager(options: {
       refresh:
         options.refresh ??
         (() => Effect.succeed({ accessToken: "new-access", refreshToken: "new-refresh" })),
-      authorizeUrl: (input: { redirectUri: string; state: string }) => {
+      authorizeUrl: (input: { redirectUri: string; state: string; codeChallenge: string }) => {
         authorizations.push(input);
 
         return `https://accounts.example/authorize?state=${encodeURIComponent(input.state)}`;
@@ -88,7 +92,14 @@ function manager(options: {
       exchangeCode:
         options.exchangeCode ??
         (() => Effect.succeed({ accessToken: "issued-access", refreshToken: "issued-refresh" })),
-      exchangeSessionCode: (input: { code: string; state: string; codeVerifier: string }) =>
+      exchangeSessionCode: (input: {
+        code: string;
+        state: string;
+        codeVerifier: string;
+      }): Effect.Effect<
+        { sessionToken: string; userId: string | undefined; email: string },
+        Error
+      > =>
         Effect.sync(() => {
           sessionExchanges.push(input);
 
@@ -98,12 +109,12 @@ function manager(options: {
             email: options.sessionEmail ?? STORED.email,
           };
         }),
-      endSession: (token: string) =>
+      endSession: (token: string): Effect.Effect<void, Error> =>
         Effect.sync(() => {
           endedSessions.push(token);
         }),
       deleteUser: options.deleteUser ?? (() => Effect.void),
-    } as unknown as AccountClient;
+    } as AccountClient;
 
     const instance = yield* AccountSessionManager.make({
       client: options.client ?? fixtureClient,

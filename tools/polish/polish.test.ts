@@ -100,7 +100,7 @@ describe("the scroll fade pin", () => {
       animationName:
         box.id === "faded" ? "ui-scroll-area-fade-start, ui-scroll-area-fade-end" : "none",
       getPropertyValue: (name: string) => depths.get(name) ?? "",
-    })) as unknown as typeof dom.window.getComputedStyle;
+    })) as typeof dom.window.getComputedStyle;
 
     dom.window.eval(PIN_SCROLL_FADES_SCRIPT);
 

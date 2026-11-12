@@ -88,7 +88,7 @@ function fakeAuthService(tokens: Map<string, string>, revokeAsAnswered = false) 
       if (revokeAsAnswered) tokens.delete(authorization);
 
       return { sub };
-    }) as unknown as typeof auth.api.oauth2UserInfo,
+    }) as typeof auth.api.oauth2UserInfo,
   );
 }
 

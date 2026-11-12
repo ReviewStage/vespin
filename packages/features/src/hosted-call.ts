@@ -149,7 +149,7 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
   HttpClient.HttpClient
 > {
   // SAFETY: the live contract's procedure under a declared read's name is `liveProcedure` of that declaration (`contract/live.ts`), which the live reads' contract test holds.
-  const procedure = live[read.name as keyof HostedClient["live"]] as unknown as HostedProcedure<
+  const procedure = live[read.name as keyof HostedClient["live"]] as HostedProcedure<
     LivePollInput,
     LiveReadAnswer<Read>,
     ORPCErrorFromErrorMap<Read["errors"]>

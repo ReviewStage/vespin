@@ -221,16 +221,17 @@ test("a row's ⋯ takes the keyboard's focus, is described by the item's title, 
 });
 
 test("a finger's list standing alone draws no row open and no ⋯ at rest, a long press opening its chosen row's menu, still the one U acts on", () => {
-  // SAFETY: the list reads only what the stand-in media query list has.
-  vi.spyOn(window, "matchMedia").mockImplementation(
-    (query) =>
-      ({
-        matches: query === "(pointer: coarse)",
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }) as unknown as MediaQueryList,
-  );
+  vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+    const list: Partial<MediaQueryList> = {
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+
+    // SAFETY: the list reads only what the stand-in media query list has.
+    return list as MediaQueryList;
+  });
   mount(VIEW.items[0]?.item.id, INBOX_COLUMNS.LIST);
 
   expect(document.querySelector('[aria-current="page"]')).toBeNull();

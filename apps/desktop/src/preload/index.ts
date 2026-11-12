@@ -44,7 +44,7 @@ for (const [method, definition] of bridgeEntries()) {
 // itself (`renderer/window-root.tsx`), so nothing here listens for a push.
 function exposedBridge(): PreloadBridge {
   // SAFETY: the loop derives every method and transport from all entries in BRIDGE.
-  return bridge as unknown as PreloadBridge;
+  return bridge as PreloadBridge;
 }
 
 contextBridge.exposeInMainWorld("appBridge", exposedBridge());

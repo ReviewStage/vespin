@@ -29,11 +29,13 @@ export function stubCanvas(width: number, height: number, bytes: Uint8Array<Arra
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
     this: HTMLCanvasElement,
   ) {
-    // SAFETY: the encoder calls drawImage alone on the context it is handed.
-    return {
+    const context: Partial<CanvasRenderingContext2D> = {
       drawImage: (_bitmap: CanvasImageSource, ...at: number[]) =>
         drawn.push({ source: at.slice(0, 4), canvas: [this.width, this.height] }),
-    } as unknown as CanvasRenderingContext2D;
+    };
+
+    // SAFETY: the encoder calls drawImage alone on the context it is handed.
+    return context as CanvasRenderingContext2D;
   });
   vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback, type) =>
     callback(new Blob([bytes], type === undefined ? {} : { type })),

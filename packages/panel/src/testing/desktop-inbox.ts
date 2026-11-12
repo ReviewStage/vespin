@@ -433,7 +433,7 @@ function heldInboxes() {
 
       // SAFETY: the window reads oRPC's stream as an async iterator alone, which this is.
       return Promise.resolve(
-        stream as unknown as PortActResult<typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_FOLLOW>,
+        stream as PortActResult<typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_FOLLOW>,
       );
     },
     [AGENT_INBOX_ACT_KIND.AGENTS_INBOX_RETRY]: (scope) => {

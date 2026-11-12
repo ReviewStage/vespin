@@ -160,7 +160,7 @@ export function outerJoined<Joined extends Column>(
  */
 export function columnAs<Declared>(column: Column): SQLWrapper<Declared> {
   // SAFETY: the column renders as itself; only the type a row is held to narrows.
-  return column as unknown as SQLWrapper<Declared>;
+  return column as SQLWrapper<Declared>;
 }
 
 /**

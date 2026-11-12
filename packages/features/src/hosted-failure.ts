@@ -221,16 +221,22 @@ export function failureSetOf<
 /**
  * The schema of a procedure's answer as it crosses to a window: its output
  * as the wire schema reads it, or a failure the domain spells, with the
- * fields its refusal carries and the facts of what failed beneath it.
+ * fields its refusal carries and the facts of what failed beneath it. Note
+ * that the type is the overload's, because the union built below is the
+ * output and the failures the procedure's declaration spells, as
+ * `HostedAnswerView` spells them, which no value can be checked against
+ * while the procedure is generic.
  */
 export function answerView<
   Procedure extends AnyProcedureContract,
   const As extends HostedRenames = NoRenames,
   Live extends boolean = false,
->(
-  procedure: Procedure,
-  reading: HostedReading<As, Live> = {},
-): HostedAnswerView<Procedure, As, Live> {
+>(procedure: Procedure, reading?: HostedReading<As, Live>): HostedAnswerView<Procedure, As, Live>;
+
+export function answerView(
+  procedure: AnyProcedureContract,
+  reading: HostedReading<HostedRenames, boolean> = {},
+): Schema.Top {
   const output = procedureOutputWire(procedure);
 
   if (output === undefined) throw new TypeError("A hosted procedure's output is a wire schema");
@@ -249,6 +255,5 @@ export function answerView<
     ...Object.fromEntries(dataFields),
   });
 
-  // SAFETY: the union is the output and the failures the procedure's declaration spells, as the type spells them.
-  return Schema.Union([output, failed]) as unknown as HostedAnswerView<Procedure, As, Live>;
+  return Schema.Union([output, failed]);
 }

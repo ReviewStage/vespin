@@ -97,7 +97,7 @@ function inGroupOrder<Selection extends Readonly<Record<string, unknown>>>(
   ]);
 
   // SAFETY: the groups name every key of the selection, which was built from them, once each.
-  return Object.fromEntries(keys.map((key) => [key, selection[key]])) as unknown as Selection;
+  return Object.fromEntries(keys.map((key) => [key, selection[key]])) as Selection;
 }
 
 /** The agent a run started and what its status is read from, each under the key its row reads it by: the agent and turn joined beside the run, null where it started none. */

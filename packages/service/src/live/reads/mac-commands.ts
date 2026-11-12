@@ -19,8 +19,8 @@ import { TOPIC } from "@repo/database/sync/notification";
 import { macCommandSync } from "@repo/database/sync/tables";
 import { MAC_COMMANDS_READ } from "@repo/features/mac-command-live";
 import { macCommandKindsRead } from "@repo/features/mac-command-wire";
-import { and, eq, inArray, isNull, type SQL } from "drizzle-orm";
-import { bindLiveRead, liveRowsStatement, WATCHED_LOOK } from "../live-read-binding.js";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { bindLiveRead, columnAs, liveRowsStatement, WATCHED_LOOK } from "../live-read-binding.js";
 
 export const macCommandsRead = bindLiveRead(MAC_COMMANDS_READ, {
   reads: [macCommandSync],
@@ -34,7 +34,7 @@ export const macCommandsRead = bindLiveRead(MAC_COMMANDS_READ, {
           id: macCommand.id,
           kind: macCommand.kind,
           // SAFETY: a shell command, the one kind a Mac reads, always holds its text, which the column alone does not say; it is selected as the column, so the statement names it as it always did.
-          command: macCommand.command as unknown as SQL<string>,
+          command: columnAs<string>(macCommand.command),
           timeoutSeconds: macCommand.timeoutSeconds,
         },
         instants: { queuedAt: macCommand.queuedAt },

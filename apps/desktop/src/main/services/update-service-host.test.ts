@@ -4,7 +4,6 @@ import type { AppStateStore } from "@repo/host/client";
 import type { UpdaterEngine, UpdaterEngineEvents } from "@repo/host/update-service";
 import { UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
 import { Effect } from "effect";
-import type { DesktopConfig } from "./desktop-config";
 import { createUpdateServiceHost } from "./update-service-host";
 
 /**
@@ -41,9 +40,10 @@ const restartFixture = (answer: boolean) =>
       clearCachedUpdate: async () => undefined,
     };
 
+    const state: Pick<AppStateStore, "update"> = { update: () => undefined };
+
     const updates = yield* createUpdateServiceHost({
-      // SAFETY: the updater reads only the fields `CONFIG` names.
-      config: CONFIG as unknown as DesktopConfig,
+      config: CONFIG,
       recordProductEvent: (name) => happened.push(`counted ${name}`),
       engine,
       beforeRestart: async () => {
@@ -54,8 +54,7 @@ const restartFixture = (answer: boolean) =>
 
         return answer;
       },
-      // SAFETY: the updater only writes where it stands, which no assertion reads.
-      state: { update: () => undefined } as unknown as AppStateStore,
+      state,
       showSettings: () => undefined,
       moveToApplications: () => undefined,
     });
@@ -101,9 +100,13 @@ it.effect("an install Squirrel refuses on a read-only volume is told as that fai
   Effect.gen(function* () {
     const told: UpdateSnapshot[] = [];
     let heard: UpdaterEngineEvents | undefined;
+
+    const state: Pick<AppStateStore, "update"> = {
+      update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
+    };
+
     yield* createUpdateServiceHost({
-      // SAFETY: the updater reads only the fields `CONFIG` names.
-      config: CONFIG as unknown as DesktopConfig,
+      config: CONFIG,
       recordProductEvent: () => undefined,
       engine: {
         wire: (events) => {
@@ -115,10 +118,7 @@ it.effect("an install Squirrel refuses on a read-only volume is told as that fai
       },
       beforeRestart: async () => undefined,
       askBeforeRestart: async () => true,
-      // SAFETY: the updater only writes where it stands, which `told` keeps.
-      state: {
-        update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
-      } as unknown as AppStateStore,
+      state,
       showSettings: () => undefined,
       moveToApplications: () => undefined,
     });

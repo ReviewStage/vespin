@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
-import type { PostHog } from "posthog-js/dist/module.no-external";
 import { afterEach, expect, test, vi } from "vitest";
 import { sessionReplay } from "./session-replay.js";
 
@@ -18,6 +17,13 @@ const client = {
   register: vi.fn(),
   identify: vi.fn(),
   startSessionRecording: vi.fn(),
+  opt_out_capturing: () => expect.unreachable("a recording opts nobody out"),
+  reset: () => expect.unreachable("a recording resets nobody"),
+  group: () => expect.unreachable("a recording with no workspace groups nothing"),
+  resetGroups: () => expect.unreachable("a recording with no workspace ungroups nothing"),
+  setPersonProperties: () => expect.unreachable("a recording sets no person's properties"),
+  unsetPersonProperties: () => expect.unreachable("a recording unsets no person's properties"),
+  stopSessionRecording: () => expect.unreachable("a recording is not stopped here"),
 };
 
 afterEach(() => {
@@ -35,8 +41,7 @@ async function mask(): Promise<Mask> {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
-    // SAFETY: the replay calls only `init` and the recorder's own members, which the stand-in has.
-    importClient: () => Promise.resolve(client as unknown as PostHog),
+    importClient: () => Promise.resolve(client),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
 

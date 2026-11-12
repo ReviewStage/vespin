@@ -312,7 +312,7 @@ export function markdownStep<Values extends readonly unknown[], Tree>(
     const attach = (_serials: unknown, ...attached: Values) => step(...attached);
     Object.defineProperty(attach, "name", { value: step.name });
     // SAFETY: a unified attacher takes its options and answers a transformer, which `step` does.
-    keyed = attach as unknown as MarkdownStep;
+    keyed = attach as MarkdownStep;
     keyedSteps.set(step, keyed);
   }
 
@@ -321,7 +321,7 @@ export function markdownStep<Values extends readonly unknown[], Tree>(
   );
 
   // SAFETY: a step's tuple is the step, then the options it is attached with.
-  return [keyed, { serials }, ...values] as unknown as MarkdownStep;
+  return [keyed, { serials }, ...values] as MarkdownStep;
 }
 
 /** A serial for each address rewriter, which a note's whole parse is keyed by, since its memo reads its words and steps alone. */

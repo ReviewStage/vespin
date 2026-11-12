@@ -344,6 +344,24 @@ declare global {
   }
 }
 
+/** What the controller calls on the client, all a stand-in client answers; it reads nothing `init` answers. */
+type ReplayClient = {
+  readonly init: (...args: Parameters<PostHog["init"]>) => void;
+} & Pick<
+  PostHog,
+  | "group"
+  | "identify"
+  | "opt_in_capturing"
+  | "opt_out_capturing"
+  | "register"
+  | "reset"
+  | "resetGroups"
+  | "setPersonProperties"
+  | "startSessionRecording"
+  | "stopSessionRecording"
+  | "unsetPersonProperties"
+>;
+
 /** What a shell that records answers for itself; everything else is decided here. */
 export interface SessionReplayShell {
   /**
@@ -379,7 +397,7 @@ export interface SessionReplayShell {
    * The client's bundle, the library's "no-external" build unless a test
    * stands its own client in.
    */
-  readonly importClient?: BundleImporter<PostHog>;
+  readonly importClient?: BundleImporter<ReplayClient>;
   /**
    * Where the client keeps its person and its consent in the window's
    * storage, in place of the library's names for them, which are its
@@ -545,7 +563,7 @@ function preloadRemoteConfig(key: string): void {
  * The opt-in names no event: `$opt_in` counts a consent moving, and nothing
  * here moves one.
  */
-function optIn(posthog: PostHog): void {
+function optIn(posthog: ReplayClient): void {
   posthog.opt_in_capturing({ captureEventName: false });
 }
 
@@ -559,7 +577,7 @@ function optIn(posthog: PostHog): void {
  * recordings made before it were filed by.
  */
 function registerBuild(
-  posthog: PostHog,
+  posthog: ReplayClient,
   bootstrap: SessionReplayBootstrap,
   platform: ProductPlatform,
 ): void {
@@ -602,7 +620,7 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   let initialized = false;
   let loading = false;
   /** The client, once its module has landed after the recorder. */
-  let client: PostHog | undefined;
+  let client: ReplayClient | undefined;
   /** The run's latest word asking for a recording, which a recorder that finishes loading starts under. */
   let latest: SignedInBootstrap | undefined;
   /** The account the running recording is filed under, as last identified, cleared with the person on a stop. */
@@ -622,7 +640,7 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * by its id and nothing else, or under none once it lists none. A workspace
    * already grouped is not grouped again, since most words move nothing.
    */
-  const followWorkspace = (posthog: PostHog, workspaceId: string | undefined): void => {
+  const followWorkspace = (posthog: ReplayClient, workspaceId: string | undefined): void => {
     if (grouped === workspaceId) return;
     grouped = workspaceId;
 
@@ -649,7 +667,7 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * a tab comes back), only the person's properties are set again, so the
    * recording stays findable by what the account is called now.
    */
-  const followAccount = (posthog: PostHog, bootstrap: SignedInBootstrap): void => {
+  const followAccount = (posthog: ReplayClient, bootstrap: SignedInBootstrap): void => {
     const before = identified;
     identified = bootstrap;
 
@@ -674,13 +692,13 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   };
 
   /** Files the recording under the word's account, and then under its workspace. */
-  const follow = (posthog: PostHog, bootstrap: SignedInBootstrap): void => {
+  const follow = (posthog: ReplayClient, bootstrap: SignedInBootstrap): void => {
     followAccount(posthog, bootstrap);
     followWorkspace(posthog, bootstrap.workspaceId);
   };
 
   /** Starts the client over a recorder already loaded: built once per window, resumed after that. */
-  const record = (posthog: PostHog, key: string, bootstrap: SignedInBootstrap): void => {
+  const record = (posthog: ReplayClient, key: string, bootstrap: SignedInBootstrap): void => {
     if (initialized) {
       // The client is built once per window. A second `init` would not rebuild
       // it, so a recording resumed after an account change is started rather
