@@ -41,6 +41,7 @@ import {
   type RunActionPut,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceRunActionEdit,
+  type WorkspaceRunActionEditAnswer,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { Data, DateTime, Effect, Option, Result } from "effect";
@@ -103,6 +104,12 @@ function placed(
   return [...list.slice(0, position), action, ...list.slice(position)];
 }
 
+/** What an edit makes of the list: the list to write, and where in it the action added or changed stands; none for a remove. */
+interface EditedRunActions {
+  readonly actions: readonly RunActionWrite[];
+  readonly at?: number;
+}
+
 /**
  * The list an edit of one action makes of the repository's as it stands:
  * an action added, last where no place is named, or the one its id names
@@ -114,7 +121,7 @@ function placed(
 function editedRunActions(
   standing: readonly WorkspaceRunAction[],
   edit: WorkspaceRunActionEdit,
-): Result.Result<RunActionWrite[], HostedRefusal> {
+): Result.Result<EditedRunActions, HostedRefusal> {
   const list: RunActionWrite[] = standing.map((row) => ({
     id: row.id,
     label: row.label,
@@ -146,7 +153,7 @@ function editedRunActions(
     if (found === undefined) return Result.fail(HOSTED_REFUSAL.NOT_FOUND);
     const rest = list.filter((_, index) => index !== at);
 
-    if (edit.remove === true) return Result.succeed(rest);
+    if (edit.remove === true) return Result.succeed({ actions: rest });
     edited = {
       ...found,
       ...(edit.label === undefined ? undefined : { label: edit.label }),
@@ -157,11 +164,14 @@ function editedRunActions(
     next = placed(rest, edited, edit.position ?? at);
   }
 
-  if (edited.isDefault !== true) return Result.succeed(next);
+  const at = next.indexOf(edited);
 
-  return Result.succeed(
-    next.map((action) => (action === edited ? action : { ...action, isDefault: false })),
-  );
+  if (edited.isDefault !== true) return Result.succeed({ actions: next, at });
+
+  return Result.succeed({
+    actions: next.map((action) => (action === edited ? action : { ...action, isDefault: false })),
+    at,
+  });
 }
 
 /** A script's last run as the wire says it, its agent by the name every place gives it; none where it never ran. */
@@ -295,35 +305,44 @@ export const saveRunActions = Effect.fn("web/saveRunActions")(function* (
  * added, changed, moved, or removed (`editedRunActions`), the list read and
  * written back under the repository's lock (`editRunActions`), so an edit
  * made at the same time as another changes what that one wrote rather than
- * undoing it; the setup as it then stands.
+ * undoing it; the setup as it then stands, with the id of the action it
+ * added or changed, a new one's as the store named it.
  */
 export const editRunAction = Effect.fn("web/editRunAction")(function* (
   userId: string,
   workspaceId: string,
   edit: WorkspaceRunActionEdit,
-): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
+): Effect.fn.Return<WorkspaceRunActionEditAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
+  // Note that where the edited action lands is known only from the list read under the lock, so the edit hands it out here.
+  let at: number | undefined;
 
-  const refused = yield* hostedStoreOrUnavailable(
+  const written = yield* hostedStoreOrUnavailable(
     editRunActions(
       workspace.id,
       edit.repository,
       (standing) =>
         Result.match(editedRunActions(standing, edit), {
-          onSuccess: (actions) => Effect.succeed(actions),
+          onSuccess: (edited) => {
+            at = edited.at;
+
+            return Effect.succeed(edited.actions);
+          },
           onFailure: (refusal) => Effect.fail(new RunActionEditRefused({ refusal })),
         }),
       now,
     ).pipe(
-      Effect.as(Option.none<HostedRefusal>()),
+      Effect.map(Result.succeed),
       Effect.catchTag("RunActionEditRefused", ({ refusal }) =>
-        Effect.succeed(Option.some(refusal)),
+        Effect.succeed(Result.fail(refusal)),
       ),
     ),
   );
 
-  if (Option.isSome(refused)) return yield* Effect.fail(refused.value);
+  if (Result.isFailure(written)) return yield* Effect.fail(written.failure);
+  const actionId = at === undefined ? undefined : written.success[at];
+  const setup = yield* setupAnswer(workspace.id);
 
-  return yield* setupAnswer(workspace.id);
+  return actionId === undefined ? setup : { ...setup, actionId };
 });
