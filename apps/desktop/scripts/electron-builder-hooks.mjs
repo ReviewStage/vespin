@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { signAsync } from "@electron/osx-sign";
-import { BUNDLED_HOST_ENTITLEMENTS } from "./package-config.mjs";
+import { BUNDLED_HOST_ENTITLEMENTS, macAppDesignatedRequirement } from "./package-config.mjs";
 import { BUNDLED_HOST } from "./package-layout.mjs";
 import {
   awaitNotarizationDecision,
@@ -93,26 +93,39 @@ function staple(artifactPath) {
 }
 
 /**
- * electron-builder's signing, as `mac.sign` hands it over, with the host's
- * two executables (`BUNDLED_HOST`) signed with entitlements of their own,
- * since electron-builder signs every other file with the app's inherited
- * entitlements and has no option for one file's. Everything else, the
+ * electron-builder's signing options, as `mac.sign` hands them over, with
+ * two changes of this app's own. The host's two executables (`BUNDLED_HOST`)
+ * are signed with entitlements of their own, since electron-builder signs
+ * every other file with the app's inherited entitlements and has no option
+ * for one file's. And the app bundle, alone, is signed with the designated
+ * requirement that accepts a Developer ID from any of `teamIds`
+ * (`macAppDesignatedRequirement`), where there are any: a Developer ID
+ * release names them, and an ad-hoc package names none, so its requirement
+ * stays codesign's, which its own signature satisfies. Everything else, the
  * identity, hardened runtime, timestamp, and the inside-out order
  * `@electron/osx-sign` signs in, is electron-builder's.
  */
-export async function signElectronBuilderApp(configuration) {
-  const contents = path.join(configuration.app, "Contents");
+export function electronBuilderSignOptions(configuration, teamIds) {
+  const appPath = path.resolve(configuration.app);
+  const contents = path.join(appPath, "Contents");
 
   const ownEntitlements = new Map([
     [path.resolve(contents, BUNDLED_HOST.launcherPath), BUNDLED_HOST_ENTITLEMENTS.launcher],
     [path.resolve(contents, BUNDLED_HOST.nodePath), BUNDLED_HOST_ENTITLEMENTS.node],
   ]);
 
-  const options = {
+  const appRequirements =
+    teamIds === undefined ? {} : { requirements: `=${macAppDesignatedRequirement(teamIds)}` };
+
+  return {
     ...configuration,
     optionsForFile: (filePath) => {
       const fileOptions = configuration.optionsForFile(filePath);
-      const entitlements = ownEntitlements.get(path.resolve(filePath));
+      const resolvedPath = path.resolve(filePath);
+
+      if (resolvedPath === appPath) return { ...fileOptions, ...appRequirements };
+
+      const entitlements = ownEntitlements.get(resolvedPath);
 
       // Note that a fresh list each time, since osx-sign replaces a list it is handed with the plist it writes for it.
       return entitlements === undefined
@@ -120,15 +133,45 @@ export async function signElectronBuilderApp(configuration) {
         : { ...fileOptions, entitlements: [...entitlements] };
     },
   };
+}
+
+/**
+ * Refuses a signed app whose designated requirement does not name every
+ * team, since nothing later would: a release that lost the requirement
+ * would still notarize, pass every check, and ship, and only the switch to
+ * the other team's certificate would find it, by stranding every install.
+ */
+function assertDesignatedRequirement(appPath, teamIds) {
+  const requirement = execFileSync("codesign", ["-d", "-r-", appPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+
+  const designated = requirement.split("\n").find((line) => line.startsWith("designated =>"));
+
+  for (const teamId of teamIds) {
+    if (designated?.includes(teamId)) continue;
+    throw new Error(
+      `${appPath} is not signed with a designated requirement naming team ${teamId}: ${designated ?? "none"}`,
+    );
+  }
+}
+
+/** electron-builder's `mac.sign`, signing with `electronBuilderSignOptions` and as many tries as its own signing makes. */
+export async function signElectronBuilderApp(configuration, teamIds) {
+  const options = electronBuilderSignOptions(configuration, teamIds);
 
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await signAsync(options);
+      await signAsync(options);
+      break;
     } catch (error) {
       if (attempt >= SIGN_ATTEMPTS) throw error;
       sleep(SIGN_RETRY_INTERVAL_MS * attempt);
     }
   }
+
+  if (teamIds !== undefined) assertDesignatedRequirement(configuration.app, teamIds);
 }
 
 function shouldNotarize() {

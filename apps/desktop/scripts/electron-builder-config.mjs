@@ -13,6 +13,7 @@ import {
   APP_UPDATE_CACHE_DIR_NAME,
   APP_UPDATE_FEED_URL,
   APPLE_EVENTS_USAGE_DESCRIPTION,
+  MAC_SIGNING_TEAM_ID,
   MACOS_DEPLOYMENT_TARGET,
   MICROPHONE_USAGE_DESCRIPTION,
   resolveSigningMode,
@@ -139,8 +140,14 @@ export function createElectronBuilderConfig(env = process.env) {
         ),
       ],
       // The host's two executables are signed with entitlements of their own
-      // rather than the app's (`signElectronBuilderApp`).
-      sign: signElectronBuilderApp,
+      // rather than the app's, and a Developer ID release's bundle with the
+      // designated requirement that accepts either signing team
+      // (`signElectronBuilderApp`).
+      sign: (configuration) =>
+        signElectronBuilderApp(
+          configuration,
+          developerIdSigned ? Object.values(MAC_SIGNING_TEAM_ID) : undefined,
+        ),
       // The app's own scheme, which an app link's page that opens it in the app hands
       // the plan to (`src/main/services/window-service.ts`): written into the
       // bundle's CFBundleURLTypes, which macOS registers the app for.
