@@ -44,12 +44,7 @@ import {
   selectFixtureStaged,
   selectListedTasks,
 } from "../use-app-state.js";
-import {
-  startFailureNote as agentStartFailureNote,
-  choiceRequest,
-  openingLineOf,
-  type SentLine,
-} from "./agent-model.js";
+import { startFailureNote as agentStartFailureNote, choiceRequest } from "./agent-model.js";
 import type { NewTaskPress } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
@@ -182,17 +177,6 @@ interface NewTaskCardKept {
   readonly words: string;
 }
 
-/**
- * New task's agent start under way: the line its agent opens on, and the
- * model it was started with, which the page draws while it waits. It names
- * no task, since the task stands Untitled until its agent names it.
- */
-export interface StartingTask {
-  readonly line: SentLine;
-  /** The model the card's chip picked; none where the start takes the default. */
-  readonly choice: ModelChoice | undefined;
-}
-
 /** A start Home's own composer refused, with the arrivals counted as it was refused, past which it gives way. */
 interface HomeRefusedPage {
   readonly kind: typeof NEW_TASK_PAGE.HOME_REFUSED;
@@ -210,11 +194,13 @@ interface HomeRefusedPage {
  * either.
  */
 type NewTaskPage =
-  | (StartingTask & {
+  | {
       readonly kind: typeof NEW_TASK_PAGE.STARTING;
+      /** The key the start's agent carries, which tells this start's page from another's. */
+      readonly key: string;
       readonly arrivals: number;
       readonly over: HomeRefusedPage | undefined;
-    })
+    }
   | HomeRefusedPage;
 
 /** The refusal Home's composer stands on under `page`, if any. */
@@ -249,11 +235,11 @@ export type QuickAddStart = (name: string, into: QuickAddInto) => Promise<Failur
 /** New task as the window draws and presses it: the presses that open it, the dialog, Home's own composer's asks, and a start under way. */
 export interface NewTask {
   /**
-   * New task's agent start under way, which the window draws on a task's
-   * page in its shape until the start answers (`StartingAgentTab`); none
-   * otherwise, or once the developer went to another task or page meanwhile.
+   * Whether New task's agent start is under way, which the window draws as
+   * a task's page in its shape until the start answers; false otherwise, or
+   * once the developer went to another task or page meanwhile.
    */
-  starting: StartingTask | undefined;
+  starting: boolean;
   /** Opens the New task dialog over whatever stands open, which it leaves standing; on Home, hands Home's own composer the caret instead (`homeAsks`). */
   onOpen: () => void;
   /** New task with a repository already chosen in the dialog: what a repository group's + asks. */
@@ -457,24 +443,11 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // service answers; a refusal opens the card again where it was left.
     const { handed, card } = from;
     const stays = !opensNewTask;
-    // Note that the starting page's line is stamped at the press.
-    const sentAt = Date.now();
-
-    const line =
-      handed === undefined || stays
-        ? undefined
-        : openingLineOf({
-            key: handed.idempotencyKey,
-            prompt: handed.prompt,
-            attachments: handed.attachments,
-            sentAt,
-          });
+    const key = handed === undefined || stays ? undefined : handed.idempotencyKey;
 
     // Note that a start's page is let go only while it is still this start's, because another start may have replaced it.
     const letGoOfPage = () =>
-      setPage((now) =>
-        now?.kind === NEW_TASK_PAGE.STARTING && now.line === line ? now.over : now,
-      );
+      setPage((now) => (now?.kind === NEW_TASK_PAGE.STARTING && now.key === key ? now.over : now));
 
     // Staying, an agent's start puts the card away at once and opens nothing; an opening one stands the task bound's own
     // place, or Home, where its page draws, in place of whatever stood in it, as a step the task it starts takes in place,
@@ -483,14 +456,13 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     let standBack = place.keepPressedOver(false);
 
     if (handed !== undefined && stays) setNewTaskAsk(undefined);
-    else if (line !== undefined) {
+    else if (key !== undefined) {
       const moved = place.standStartPage();
       standBack = place.keepPressedOver(moved);
       const arrivals = place.arrivals() + (moved ? 1 : 0);
       setPage((now) => ({
         kind: NEW_TASK_PAGE.STARTING,
-        line,
-        choice: handed?.choice,
+        key,
         arrivals,
         over: homeRefusedUnder(now),
       }));
@@ -705,10 +677,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
   const arrived = place.arrivals();
-
-  const starting =
-    page?.kind === NEW_TASK_PAGE.STARTING && arrived <= page.arrivals ? page : undefined;
-
+  const starting = page?.kind === NEW_TASK_PAGE.STARTING && arrived <= page.arrivals;
   // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
   const homeRefused = homeRefusedUnder(page);
 

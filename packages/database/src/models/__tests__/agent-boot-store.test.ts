@@ -87,8 +87,9 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
 
         assert.ok(Option.isNone(heldWhileStarting), "nothing goes while the machine boots");
         assert.deepEqual(
-          Option.map(up, (boot) => boot.phase),
-          Option.some(BOOT_PHASE.HANDING_OFF),
+          Option.map(up, (boot) => [boot.phase, boot.phaseAt.getTime()]),
+          Option.some([BOOT_PHASE.HANDING_OFF, AT.getTime()]),
+          "a hand-off still counts from when its attempt began",
         );
         assert.deepEqual(
           Option.map(handedOn, (message) => message.text),
