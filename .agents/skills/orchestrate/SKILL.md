@@ -99,9 +99,13 @@ hand, such as adding a secret) comes to you as a report, by
 PR asking for its go, a question or a to-do only they can settle, relayed
 under its own thread, and the final report (Step 4). Never pass a worker's
 routine milestones (opened, fix pushed, CI green, merged) on to the user; the
-final report covers them. A worker's picture cannot travel in a message: the
-worker shows it in its own transcript, and your inbox item mentions the
-worker for the user to open it there. Where another coding agent started you,
+final report covers them. A worker's picture cannot travel in a message, so
+the worker posts it in a thread of its own and sends you that thread's
+mention: that thread is the user's one item on that thing, so post none of
+your own on it, and mention it where your later items need it. For a held PR
+whose pictures its worker posted, have that worker put the go ask in that
+same thread and report the answer to you. One thing, one thread, whoever
+posts it. Where another coding agent started you,
 the inbox is that agent's, not yours: everything above that would reach the
 user goes to that agent instead, as the table's "Ask the user" and "Tell the
 user" rows say for it.
@@ -172,8 +176,10 @@ Every brief must contain:
    other workers' PRs and agent ids, and that it messages them too, where
    their work meets: a shared file, an interface, a PR it builds on. It
    reports to the orchestrator only, never to the user: it posts nothing to
-   the developer's inbox, and sends the orchestrator instead whatever it would
-   have posted there.
+   the developer's inbox, not even the PR it opened, and sends the
+   orchestrator instead whatever it would have posted there. A picture is the
+   one exception, since no message carries it: the worker posts it in a
+   thread of its own and sends the orchestrator that thread's mention.
 5. **Ask, do not guess**: when the task is ambiguous, the plan and the code
    disagree, or a choice would change a PR's shape, send the question to the
    orchestrator the same way and wait for the answer instead of picking an
@@ -295,7 +301,9 @@ unless another coding agent started you on it.
 
 - Never do the PR's implementation work yourself.
 - Only you talk to the user. Workers report to you and never post to the
-  user's inbox; you relay what needs the user and nothing routine.
+  user's inbox but for a picture; you relay what needs the user and nothing
+  routine, and never post a second thread on something a worker's thread
+  already holds.
 - Point the user at a worker or PR with a deep link or mention, not an id.
 - One PR per subtask and per worker. Do not reuse a worker or a subtask for
   a second PR; a continuation of a worker takes over its source's PR on its

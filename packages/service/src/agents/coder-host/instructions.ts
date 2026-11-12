@@ -63,7 +63,11 @@ const AGENT_EDIT_DESCRIPTION_TOOL = EDIT_DESCRIPTION_TOOL.name;
  * goes in a thread it posts to the inbox (`inbox.ts`), which the developer
  * also reads on its task; another agent is reached
  * with `message_agent` alone (`agent-message.ts`), which only the two of
- * them see.
+ * them see. Note that an agent another agent started sends that agent what
+ * it would post, a picture aside, and its starter relays what needs the
+ * developer, because the two posting the same pull request or ask left the
+ * developer two threads on one thing. It is told so in words alone: every
+ * agent is offered `post_thread`, as the developer asked of every tool.
  * The worker's instructions stand beside the agent's: it owns one slice,
  * grounds what it says in paths, lines, and command output, and returns a
  * result the agent reads whole.
@@ -313,10 +317,10 @@ const TOKEN_OPENED_WORDS = `Once your pull request is open, nothing on it reache
  */
 function writeUpPlace(brief: AgentBrief, onTask: boolean): string {
   if (brief === AGENT_BRIEF.DESCRIPTION && onTask) {
-    return `write it into the description with \`${AGENT_EDIT_DESCRIPTION_TOOL}\`, or show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` where it reads better as one, and post it in a thread for the developer`;
+    return `write it into the description with \`${AGENT_EDIT_DESCRIPTION_TOOL}\`, or show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` where it reads better as one, and post it in a thread for the developer, as the threads section below says`;
   }
 
-  return `show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread for the developer`;
+  return `show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread for the developer, as the threads section below says`;
 }
 
 /**
@@ -528,8 +532,8 @@ const PULL_REQUEST_BRANCH_WORDS =
 /** What the agent is told of messaging another agent: when its work meets theirs, short and complete, and how its message and theirs read. */
 const MESSAGE_AGENT_WORDS = ` Message another agent with \`${MESSAGE_AGENT_TOOL.name}\` and its id when its work meets yours, such as a change of yours it depends on or something only it knows, and keep each message short and complete; only the two of you see it, and it is told of it at once, under your name, without your waiting for a reply.`;
 
-/** How an agent the agent starts reports back: its final message handed to the agent by itself, and `message_agent` before then. */
-const STARTED_REPORT_WORDS = `reports back to you: once its turn ends, its final message reaches you by itself, as a line opening \`${AGENT_MESSAGE_LEAD} ·\` naming it and how its turn ended, completed, failed with why, or stopped, which is yours to act on; before then it may message you with \`${MESSAGE_AGENT_TOOL.name}\``;
+/** How an agent the agent starts reports back: its final message handed to the agent by itself, and `message_agent` before then, with what it would have posted in a thread, which the agent relays to the developer once. */
+const STARTED_REPORT_WORDS = `reports back to you: once its turn ends, its final message reaches you by itself, as a line opening \`${AGENT_MESSAGE_LEAD} ·\` naming it and how its turn ended, completed, failed with why, or stopped, which is yours to act on; before then it may message you with \`${MESSAGE_AGENT_TOOL.name}\`. It posts no thread of its own but for a picture, and sends you what it would have posted, so the developer hears of its work from you alone: post in a thread of yours what of it needs them, such as a pull request ready for review or a question only they can answer, and never a second thread on something it already posted, whose thread you mention instead`;
 
 /** How an agent another started reaches it before its final report: with `message_agent`, by the starter's id. */
 const STARTER_REACH_WORDS = `with \`${MESSAGE_AGENT_TOOL.name}\` and that agent's id`;
@@ -922,7 +926,7 @@ What you need from the developer goes in a thread with \`${INBOX_TOOLS.POST.name
 
 A thread goes to the inbox, and shows on your task as well where you work on one. Post only what a person would act on or be glad to know: an update on something you posted goes into its thread, never a thread of its own.
 
-Where another agent started you, as your first message says, your final message reaches it by itself as your report, and you may send it before then, ${STARTER_REACH_WORDS}, what concerns the work it handed you, such as a question it can answer for you. A message carries no picture, so a picture the developer should see, such as a screenshot of what you built, goes in a thread of your own with \`${INBOX_TOOLS.POST.name}\`, drawn in it, and you tell that agent the thread's mention, never that the picture stands in your transcript.
+Where another agent started you, as your first message says, the developer hears of the work it handed you from that agent, so what this section says to post goes to it instead: send it, ${STARTER_REACH_WORDS}, what you would have posted, such as a pull request ready for review, a page or a write-up, a question, a decision, or something only the developer can do by hand, and it puts to the developer what needs them, so they never get the same thing twice. Your final message reaches it by itself as your report. A message carries no picture, so a picture the developer should see, such as a screenshot of what you built, goes in a thread of your own with \`${INBOX_TOOLS.POST.name}\`, drawn in it, and you tell that agent the thread's mention, never that the picture stands in your transcript. Post any other thread only where the developer asks you to, and answer a member who writes to you on a thread there, as below.
 
 One thread per thing you need; \`${INBOX_TOOLS.POST.name}\`'s own words say how to write its posts and the asks they end with. Decide small things yourself.
 
