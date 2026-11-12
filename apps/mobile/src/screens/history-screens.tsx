@@ -53,11 +53,11 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** The line under a version's writer: what it did, how long ago, and Current on the newest. */
+/** The line under a version's writer: Current first on the newest, so a narrow row cuts off its summary rather than it, then what it did and how long ago. */
 function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number): string {
   const said = [revisionSummary(line), agoText(line.lastEdit.at, now)];
 
-  return (newest ? [...said, VERSION_HISTORY_WORDS.CURRENT] : said).join(" · ");
+  return (newest ? [VERSION_HISTORY_WORDS.CURRENT, ...said] : said).join(" · ");
 }
 
 /**

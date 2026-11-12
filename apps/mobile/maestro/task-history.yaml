@@ -20,7 +20,7 @@ appId: dev.vespin.ios
 - tapOn: "Version history"
 - waitForAnimationToEnd
 - assertVisible: "Build the invite flow"
-- assertVisible: ".*Current"
+- assertVisible: "Current.*"
 - assertVisible: "Ada Lovelace|You"
 - assertVisible: "Earlier"
 - takeScreenshot: task-history
