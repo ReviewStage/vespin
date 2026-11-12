@@ -1,4 +1,5 @@
-import { AGENT_PART, agentParts, isTaskCall, messageWords } from "@repo/features/agent-parts";
+import { isRecord, valueFromJsonText, type WireValue } from "@repo/wire";
+import { AGENT_PART, agentParts, isTaskCall, messageWords } from "./agent-parts.js";
 import {
   firstMessageParts,
   type NoteFiles,
@@ -10,17 +11,18 @@ import {
   type ReplayStep,
   type ReplayToolState,
   type ReplayValueForm,
-} from "@repo/features/agent-replay";
+} from "./agent-replay.js";
+import { foldTaskCall, NO_TASKS, type TaskFold, todosOf } from "./agent-todos.js";
 import {
   AGENT_SENDER,
   type AgentSender,
   type AgentSummary,
   type AgentTodos,
   type AgentTranscriptMessage,
-} from "@repo/features/agent-wire";
-import { type DrawnCall, drawnCall } from "@repo/features/native-tool-calls";
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import { TOOL_BLOCK, TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
+} from "./agent-wire.js";
+import { type DrawnCall, drawnCall } from "./native-tool-calls.js";
+import { PRODUCT_NAME } from "./product-name.js";
+import { TOOL_BLOCK, TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
   type CalledAgent,
   calledAgent,
@@ -28,10 +30,8 @@ import {
   type ToolCallView,
   todosListView,
   toolCallView,
-} from "@repo/features/tool-call-model";
-import { CALL_KIND, CALL_WORDS, type CallKind } from "@repo/features/turn-rows";
-import { isRecord, valueFromJsonText, type WireValue } from "@repo/wire";
-import { foldTaskCall, NO_TASKS, type TaskFold, todosOf } from "./agent-todos.js";
+} from "./tool-call-model.js";
+import { CALL_KIND, CALL_WORDS, type CallKind } from "./turn-rows.js";
 
 /**
  * replay-card-model.ts -- the opening of an agent started from another, read out of its first message: the brief as its source's was, the replay's card, and the developer's note.

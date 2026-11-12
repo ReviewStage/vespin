@@ -36,6 +36,7 @@ import {
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { wakeupDelayOf } from "@repo/features/transcript-lines";
 import { TURN_ROW } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -67,7 +68,6 @@ import {
   tabTurnOf,
   transcriptRowKey,
   unreadSentLines,
-  wakeupDelayOf,
   workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
