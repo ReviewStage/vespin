@@ -8,7 +8,8 @@ import { organization } from "./auth.js";
  * workspace-sandbox-script-run.ts -- how each of a workspace's cloud setup scripts last ran in an agent's sandbox, so Settings › Cloud setup can say whether a script works without starting an agent.
  *
  * One row per script: the workspace's install script, and each repository's
- * setup script and archive script, each replaced by its next run
+ * setup script (an archive script's row from before archive scripts were
+ * removed is never read), each replaced by its next run
  * (`../models/workspace-sandbox-script-run-store.ts`). A row holds facts
  * alone, when the run started, how it exited, and whose sandbox it ran in,
  * never what the script printed, since a setup log may print a workspace
@@ -25,7 +26,7 @@ export const workspaceSandboxScriptRun = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** Which script ran (`CLOUD_SETUP_SCRIPT`). */
     script: text("script").$type<CloudSetupScript>().notNull(),
-    /** `owner/name` of the repository whose setup or archive script ran, lowercased, since GitHub's names ignore case; null for the install script, which is the workspace's. */
+    /** `owner/name` of the repository whose script ran, lowercased, since GitHub's names ignore case; null for the install script, which is the workspace's. */
     repository: text("repository"),
     /** The agent whose sandbox it ran in. */
     agentId: uuid("agent_id")
