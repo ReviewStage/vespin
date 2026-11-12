@@ -302,9 +302,10 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
-// without a DSN, a local or simulator one, still starts the native half, so
-// it runs the launch TestFlight's does, but sends nothing: `enabled` is off,
-// and were the empty DSN refused, the start's fallback would hold no DSN.
+// without a DSN, a local or simulator one, starts nothing natively: the empty
+// DSN is refused, and so is the start's `{}` fallback, which left the SDK
+// starting on no options at all and faulting at launch, so the patched
+// `RNSentrySDK` returns instead (`pnpm-workspace.yaml`'s patch for it).
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
