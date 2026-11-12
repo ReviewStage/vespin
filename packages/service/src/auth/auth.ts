@@ -40,6 +40,7 @@ import {
   workspaceDeletion,
 } from "./auth-policy.js";
 import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "./oauth-clients.js";
+import { refreshKeepsSession } from "./refresh-session.js";
 import { supportAccess } from "./support-access.js";
 
 const deployment = authDeployment(process.env);
@@ -138,6 +139,9 @@ export const auth = betterAuth({
       // registered above holds, and the desktop's client holds none of them.
       resourcePrivileges: denyOAuthResourcePrivileges,
     }),
+    // A refresh grant holds open the session its sign-in was minted under,
+    // which the provider's own token checks read and its refresh never does.
+    refreshKeepsSession(),
     // A client named by the URL of its Client ID Metadata Document, as the
     // MCP clients of 2026 name themselves: its document fetched through the
     // package's own Node transport, with its host resolved once and pinned.

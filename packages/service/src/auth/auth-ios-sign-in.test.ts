@@ -18,6 +18,7 @@ import {
 import { oauthUserInfoFromAuthAnswer, requestUserId } from "./bearer.js";
 import type { UserInfoEndpoint } from "./bearer-callers.js";
 import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
+import { refreshKeepsSession } from "./refresh-session.js";
 
 /**
  * The iPhone's OAuth sign-in, end to end on one Better Auth configured as
@@ -28,8 +29,9 @@ import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
  * registers, which the phone exchanges with its verifier. The tokens name
  * the account at userinfo, and on the account routes' own read of a bearer
  * (`bearer.ts`'s `requestUserId`, which every write the phone makes
- * resolves its caller through), a refresh mints another, and a revocation
- * ends one; and no return address but the registered one is redirected to.
+ * resolves its caller through), a refresh mints another, even once the
+ * consenting browser's session would have run out, and a revocation ends
+ * one; and no return address but the registered one is redirected to.
  * Synthetic accounts throughout.
  */
 
@@ -40,6 +42,8 @@ const GITHUB_TOKEN = "ghu_signed-in-token-under-test";
 const GITHUB_EMAIL = "octo@github.test";
 
 const NOW = new Date("2026-11-08T12:00:00.000Z");
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** RFC 7636's example pair, standing in for a verifier the phone drew. */
 const PKCE = {
@@ -100,6 +104,7 @@ function iosAuth() {
         clientPrivileges: denyOAuthClientPrivileges,
         cachedTrustedClients: new Set([IOS_OAUTH_CLIENT.id]),
       }),
+      refreshKeepsSession(),
     ],
   });
 }
@@ -359,6 +364,23 @@ test("a refresh mints an access token that names the same account, and a revoked
     HOSTED_HTTP_STATUS.OK,
   );
   assert.notEqual((await refresh(auth, second.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
+});
+
+test("a refresh after the consenting browser's session ran out still mints a token that names the account", async () => {
+  const auth = iosAuth();
+  const { returned } = await signIn(auth);
+  const first = await exchange(auth, returned);
+  const signedIn = decodeUserInfo(await (await userInfo(auth, first.access_token)).json());
+
+  // Past Better Auth's seven-day session, within the refresh token's thirty days.
+  vi.setSystemTime(new Date(NOW.getTime() + 8 * DAY_MS));
+  const refreshed = await refresh(auth, first.refresh_token);
+  assert.equal(refreshed.status, HOSTED_HTTP_STATUS.OK);
+  const second = decodeTokens(await refreshed.json());
+
+  const answered = await userInfo(auth, second.access_token);
+  assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+  assert.equal(decodeUserInfo(await answered.json()).sub, signedIn.sub);
 });
 
 test("a return address the client did not register, another host on the same path or the loopback the Mac returns to, is refused on the provider's own error page rather than redirected to", async () => {
