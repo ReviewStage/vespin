@@ -83,7 +83,7 @@ import {
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
-import { goalWatchedStore } from "./claude-goals.js";
+import { type GoalWatchedFile, goalWatchedFile, goalWatchedStore } from "./claude-goals.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
@@ -344,6 +344,7 @@ function queryOptions(
   from: ResumePoint,
   store: SessionStore | undefined,
   approvals: Approvals,
+  goalFile: GoalWatchedFile | undefined,
 ): Options {
   const mode = config.permissionMode ?? PERMISSION_MODE.FULL_ACCESS;
 
@@ -383,7 +384,7 @@ function queryOptions(
     // SDK server the runner relays over the CLI's own stdio (`mcp-relay.ts`), as is each integration's.
     mcpServers: { ...servers },
     sandbox: { enabled: false },
-    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks },
+    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks, ...goalFile?.hooks },
   };
 
   if (config.effort !== undefined) options.effort = config.effort;
@@ -449,6 +450,8 @@ interface Launch {
   readonly inFlight: MutableRef.MutableRef<InFlight | undefined>;
   /** The goals the transcript says settled since the last `result`, posted ahead of the next (`claude-goals.ts`). */
   readonly goals: MutableRef.MutableRef<readonly RunnerGoal[]>;
+  /** The CLI's own transcript file, read for the goals it settles at each `result`, where the launch keeps no store; none where it does. */
+  readonly goalFile: GoalWatchedFile | undefined;
   /** Whether the CLI is in a turn: from a message the service sent, or from the CLI's own output, a wakeup's turn included. */
   readonly turnRunning: Ref.Ref<boolean>;
   /** The messages the service sent that no `result` has answered yet, by their uuid. */
@@ -721,6 +724,10 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
 
   // A goal the turn settled is said before the `result` that ends the turn, so it lands in that turn.
   if (message.type === SDK_MESSAGE.RESULT) {
+    const file = launch.goalFile;
+
+    if (file !== undefined) yield* Effect.promise(() => file.settle());
+
     for (const goal of MutableRef.getAndSet(launch.goals, [])) yield* launch.sink.emit(goal);
   }
 
@@ -1045,6 +1052,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
   const memoryWatch = claudeCodeMemoryWatch();
+  // Note that a launch keeping no store reads the goals the CLI settles off its own transcript file.
+  const goalFile = store === undefined ? goalWatchedFile(goals) : undefined;
 
   const options = queryOptions(
     config,
@@ -1055,6 +1064,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     from,
     store,
     approvals,
+    goalFile,
   );
 
   const started = yield* trace
@@ -1085,6 +1095,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     trace,
     inFlight,
     goals,
+    goalFile,
     turnRunning: yield* Ref.make(false),
     unanswered: yield* Ref.make<ReadonlySet<string>>(new Set()),
     heard: yield* Ref.make(0),

@@ -667,9 +667,10 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
   if (Option.isNone(read)) return [];
   const { content } = read.value.message;
 
-  if (read.value.isSynthetic === true) return goalVerdictMoments(content);
+  // Note that a line the CLI wrote itself may carry a goal's verdict, and is still read for any call it answers.
+  const verdicts = read.value.isSynthetic === true ? goalVerdictMoments(content) : [];
 
-  if (Predicate.isString(content)) return [];
+  if (Predicate.isString(content)) return verdicts;
   const moments: NativeMoment[] = [];
 
   for (const block of content) {
@@ -701,7 +702,9 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
     });
   }
 
-  return moments.length === 0 ? [] : [...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
+  return moments.length === 0
+    ? verdicts
+    : [...verdicts, ...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
 }
 
 /** A token of the words while they stream: the step a model call opens, and the piece of its words. */

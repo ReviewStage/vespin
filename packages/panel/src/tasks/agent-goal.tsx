@@ -84,13 +84,21 @@ const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
   GOAL_EVENT.CLEARED,
 ]);
 
-/** How much of its budget the goal has spent, or the turn it is on, as the row and its card say it. */
-function spentWords(goal: AgentGoal): string {
-  if (goal.tokens === null) return `Turn ${goal.turns}`;
+/** How much of its budget the goal spent, as its card says it once it settled: "184k tokens", "184k of 500k tokens". */
+function tokenWords(tokens: number, budget: number | null): string {
+  return budget === null
+    ? `${TOKENS.format(tokens)} tokens`
+    : `${TOKENS.format(tokens)} of ${TOKENS.format(budget)} tokens`;
+}
 
-  return goal.tokenBudget === null
-    ? `${TOKENS.format(goal.tokens)} tokens`
-    : `${TOKENS.format(goal.tokens)} of ${TOKENS.format(goal.tokenBudget)} tokens`;
+/**
+ * Whether the harness counts the goal's turns, as Claude Code's checker does
+ * with each verdict; Codex counts tokens instead, said only as the goal moves,
+ * so a running Codex goal's count is never fresh and goes unsaid until it
+ * settles.
+ */
+function countsTurns(goal: AgentGoal): boolean {
+  return goal.tokens === null;
 }
 
 /**
@@ -155,7 +163,7 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
       // Note that a goal whose agent stopped working is still set, and the harness picks it up again on the next message.
       return working ? (
         <span className={`${STANDING_CLASS} text-muted-foreground`}>
-          <span>{spentWords(goal)}</span>
+          {countsTurns(goal) ? <span>{`Turn ${goal.turns}`}</span> : null}
           {goal.setAt === undefined ? null : <Time at={goal.setAt} look={TIME_LOOK.DURATION} />}
         </span>
       ) : (
@@ -168,6 +176,12 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
 function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   const stopped = goal.state === AGENT_GOAL_STATE.ACTIVE && !working;
 
+  const figures = countsTurns(goal)
+    ? [{ label: "Turns", figure: String(goal.turns) }]
+    : goal.tokens !== null && goalSettled(goal)
+      ? [{ label: "Tokens", figure: tokenWords(goal.tokens, goal.tokenBudget) }]
+      : [];
+
   return (
     <HoverCard>
       <HoverCardHead glyph={<GLYPH.GOAL />} name={goal.condition} sub={GOAL_THING} />
@@ -177,14 +191,12 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
           The agent stopped before the goal was met. Your next message picks it up again.
         </HoverCardNote>
       ) : null}
-      <HoverCardRule />
-      <HoverCardFigures
-        label="How far it has run"
-        figures={[
-          { label: "Turns", figure: String(goal.turns) },
-          ...(goal.tokens === null ? [] : [{ label: "Tokens", figure: spentWords(goal) }]),
-        ]}
-      />
+      {figures.length === 0 ? null : (
+        <>
+          <HoverCardRule />
+          <HoverCardFigures label="How far it has run" figures={figures} />
+        </>
+      )}
     </HoverCard>
   );
 }
