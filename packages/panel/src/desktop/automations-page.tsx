@@ -156,7 +156,7 @@ import {
  * from the suggestion's preset (`@repo/features/automation-presets`), to
  * look over and Create. A suggestion behind an experiment, as Memory digest
  * stands behind the workspace's Memory, is offered only while it is on, and
- * one the list already holds is offered no more.
+ * one the list already holds an automation made from is offered no more.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -665,7 +665,8 @@ function useOfferedPresets(workspaceId: string | undefined): readonly Automation
  * The automations suggested under the list, or under the line saying there
  * is none yet, each a card whose press opens a new automation's page filled
  * in from its preset, to look over and Create; nothing where none is
- * offered. One the list already holds (`presetListed`) is not suggested.
+ * offered. One the list already holds an automation made from, by the
+ * preset that automation saved (`presetListed`), is not suggested.
  */
 function SuggestedAutomations({
   tasks,

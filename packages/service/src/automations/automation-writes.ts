@@ -215,6 +215,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
         : { kind: AUTOMATION_TARGET.NEW_AGENT },
     archiveSuccessful: automation.archiveSuccessful,
     slackDelivery: automation.slackDelivery,
+    preset: automation.preset,
     mine: automation.userId === userId,
     creatorId: automation.userId,
   };
@@ -456,6 +457,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       ...target,
       archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
+      preset: made.preset ?? null,
     }),
   );
   const cadence = yield* AutomationCadence;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -173,12 +174,18 @@ it.layer(getTestDB())("the automation store", (it) => {
   );
 
   it.effect(
-    "a new automation takes the workspace and repositories named, its owner's alone and a new agent each run where the maker names neither",
+    "a new automation takes the workspace and repositories named, its owner's alone, a new agent each run, and no preset where the maker names none",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
         const workspaceId = yield* openWorkspace(owner);
         const made = Option.getOrThrow(yield* createAutomation(owner, nightly(workspaceId)));
+        const fromCard = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            ...nightly(workspaceId),
+            preset: AUTOMATION_PRESET.MEMORY_DIGEST,
+          }),
+        );
 
         assert.deepEqual(
           [
@@ -187,9 +194,18 @@ it.layer(getTestDB())("the automation store", (it) => {
             made.scope,
             made.targetKind,
             made.archiveSuccessful,
+            made.preset,
           ],
-          [workspaceId, ["acme/api"], AUTOMATION_SCOPE.PERSONAL, AUTOMATION_TARGET.NEW_AGENT, true],
+          [
+            workspaceId,
+            ["acme/api"],
+            AUTOMATION_SCOPE.PERSONAL,
+            AUTOMATION_TARGET.NEW_AGENT,
+            true,
+            null,
+          ],
         );
+        assert.equal(fromCard.preset, AUTOMATION_PRESET.MEMORY_DIGEST);
       }),
   );
 

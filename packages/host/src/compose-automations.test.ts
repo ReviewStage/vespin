@@ -117,6 +117,7 @@ const ROW: AutomationsLiveRows["automations"][number] = {
   targetAgentId: null,
   archiveSuccessful: false,
   slackDelivery: false,
+  preset: null,
   createdAt: 1,
   mine: true,
   runId: null,

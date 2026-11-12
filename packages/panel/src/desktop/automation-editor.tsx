@@ -2816,7 +2816,11 @@ export function AutomationEditor({
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
     void saving.run(() =>
       (automation === undefined
-        ? writes.create(createRequestOf(draft, workspace.id))
+        ? writes.create({
+            ...createRequestOf(draft, workspace.id),
+            // Note that a new automation opened from a suggestion keeps its preset, so the list suggests it no more.
+            ...(preset === undefined ? undefined : { preset }),
+          })
         : writes.change({ automationId: automation.id, change: change ?? {} })
       ).then(landed),
     );

@@ -10,13 +10,14 @@ import { INBOX_BOUNDS, INBOX_TOOL } from "./inbox-wire.js";
  * The list suggests it as a card, and a press opens a new automation's page
  * filled in from it (`automation-draft-model.ts`'s `presetDraft`), to look
  * over, change, and Create. It runs on the one path every automation runs
- * on (`automation-runs.ts`), and no automation remembers the preset it was
- * made from, so the member's edits are the automation and no second copy of
- * what it does is kept. A preset is taken for added once the list holds an
- * automation by its name or with its prompt (`presetListed`), so a card is
- * not suggested beside the automation it already made. Which presets a list
- * suggests, such as one only while the workspace has an experiment on, is
- * the list's to say, since the experiments are a package above this one.
+ * on (`automation-runs.ts`), and nothing reads a preset's fields after it is
+ * saved, so the member's edits are the automation and no second copy of what
+ * it does is kept. An automation made from a card keeps only the preset's
+ * key (its `preset`), so the list suggests that card no more once it holds
+ * the automation, whatever the member renamed it to (`presetListed`). Which
+ * presets a list suggests, such as one only while the workspace has an
+ * experiment on, is the list's to say, since the experiments are a package
+ * above this one.
  *
  * Memory digest, the one preset, has an agent post the memories the
  * workspace kept or corrected that week as one Inbox thread every Monday,
@@ -81,21 +82,10 @@ export function automationPreset(name: AutomationPresetName): AutomationPreset {
   }
 }
 
-/**
- * Whether the list already holds the preset `name` names: an automation by
- * its name, whatever its case, or one handed its prompt, as one made from it
- * and renamed still is.
- */
+/** Whether the list already holds an automation made from the preset `name` names. */
 export function presetListed(
   name: AutomationPresetName,
-  automations: readonly Pick<AutomationSummary, "name" | "action">[],
+  automations: readonly Pick<AutomationSummary, "preset">[],
 ): boolean {
-  const preset = automationPreset(name);
-  const presetName = preset.name.toLowerCase();
-  const presetPrompt = preset.prompt.trim();
-  return automations.some(
-    (automation) =>
-      automation.name.trim().toLowerCase() === presetName ||
-      automation.action.prompt.trim() === presetPrompt,
-  );
+  return automations.some((automation) => automation.preset === name);
 }

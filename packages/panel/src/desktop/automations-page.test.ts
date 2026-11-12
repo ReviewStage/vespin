@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
-import { AUTOMATION_PRESET, automationPreset } from "@repo/features/automation-presets";
+import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import {
   AUTOMATION_CALL_FAILURE,
   AUTOMATION_FOLLOW,
@@ -2102,19 +2102,21 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
-test("Memory digest is suggested no more once the list holds it by its name or, renamed, by its prompt", async () => {
+test("Memory digest is suggested no more once the list holds an automation made from it, whatever its name, and still beside one merely named for it", async () => {
   memoryOn();
-  const prompt = automationPreset(AUTOMATION_PRESET.MEMORY_DIGEST).prompt;
-  for (const held of [
-    { name: "memory digest" },
-    { name: "Weekly memories", action: { kind: AUTOMATION_ACTION.AGENT, prompt } },
+  for (const { held, suggested } of [
+    {
+      held: { name: "Weekly memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST },
+      suggested: false,
+    },
+    { held: { name: "Memory digest" }, suggested: true },
   ]) {
     standing = [SWEEP, automation(4, { ...held, scope: AUTOMATION_SCOPE.PERSONAL })];
     const page = mount();
     await settle();
 
     assert.equal(automationRows(page).length, 2);
-    assert.equal(page.querySelector("[aria-label='Suggested']") === null, true, held.name);
+    assert.equal(page.querySelector("[aria-label='Suggested']") !== null, suggested, held.name);
     act(() => root?.unmount());
     document.body.innerHTML = "";
   }
@@ -2143,6 +2145,7 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: made.repositories,
       archiveSuccessful: made.archiveSuccessful,
       target: made.target,
+      preset: made.preset,
     },
     {
       name: "Memory digest",
@@ -2154,6 +2157,7 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: [],
       archiveSuccessful: true,
       target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+      preset: AUTOMATION_PRESET.MEMORY_DIGEST,
     },
   );
   assert.match(made.action.prompt, /forget_memory/u);
