@@ -1,0 +1,116 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository whose run actions to edit, as owner/name, under any casing of its name."
+    },
+    "actionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The action to change or remove, by the id read_sandbox_setup answered; leave it out to add one, which then needs a label and a command."
+    },
+    "remove": {
+      "type": "boolean",
+      "description": "true to remove the action actionId names; nothing else given is then read."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "description": "What the Run menu and the action's Terminal tab call it."
+    },
+    "command": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "The bash it runs from the repository's checkout, with the workspace's environment variables, such as pnpm dev."
+    },
+    "icon": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "emoji"
+                  ]
+                },
+                "emoji": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [
+                "kind",
+                "emoji"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "glyph"
+                  ]
+                },
+                "glyph": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "red",
+                    "orange",
+                    "yellow",
+                    "green",
+                    "teal",
+                    "blue",
+                    "purple",
+                    "pink"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "glyph"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The icon it wears in the Run menu, one emoji or one Lucide icon by its kebab-case name in a color or none, such as rocket; null for the menu's own."
+    },
+    "isDefault": {
+      "type": "boolean",
+      "description": "true to make it the repository's default, which the Run button runs, so no other action is; false to make it no longer the default."
+    },
+    "position": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 19,
+      "description": "Its place in the list after the edit, from 0, a place past the end being the last; an added action goes last and a changed one stays where it stood where left out."
+    }
+  },
+  "required": [
+    "repository"
+  ],
+  "additionalProperties": false
+}

@@ -56,12 +56,10 @@ import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_LIST_ARCHIVED,
-  AGENT_MACHINE,
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
-import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -109,7 +107,6 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -128,11 +125,16 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
-import { runActionOf } from "./run-actions.js";
+import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
-import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
-import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
+import { AgentSandbox } from "./terminal/agent-sandbox.js";
+import {
+  listedShells,
+  reachedAgentSession,
+  sandboxOrUpstream,
+  shellRefusal,
+} from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
 import { runOnMacStanding } from "./workspace-tools.js";
 
@@ -201,21 +203,6 @@ const committedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 /** The session alone of the agent the path names, as `reachedAgentSession` reads it. */
 const reachedSession = (userId: string, id: string) =>
   Effect.map(reachedAgentSession(userId, id), ({ sessionId }) => sessionId);
-
-/** Why a shell could not be had, as the refusal the route answers. */
-function shellRefusal(refusal: ShellRefusal): HostedRefusal {
-  if (refusal.kind === SHELL_REFUSAL.NOT_FOUND) return HOSTED_REFUSAL.NOT_FOUND;
-  return refusal.sandbox === SANDBOX_STATE.STARTING
-    ? HOSTED_REFUSAL.AGENT_NOT_READY
-    : HOSTED_REFUSAL.SANDBOX_STOPPED;
-}
-
-/** The agent's shells as they stand now, the answer every change returns too. */
-const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (sessionId: string | undefined) {
-  if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING, terminals: [] };
-  const sandbox = yield* AgentSandbox;
-  return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
-});
 
 /**
  * A pull request's changes: its files, who it names (`github-people.ts`),
@@ -667,41 +654,12 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      */
     runAction: signedIn.runAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
-      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.id);
-      const action = yield* runActionOf(agent, actionId);
-      if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      const environment = yield* workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL);
-      return yield* inSandbox(
-        Effect.gen(function* () {
-          const sandbox = yield* AgentSandbox;
-          const ran = yield* sandboxOrUpstream(
-            // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
-            sandbox.run(sessionId, action.id, {
-              actionId: action.id,
-              label: action.label,
-              command: action.command,
-              environment,
-            }),
-          );
-          if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
-          return { terminal: ran.success };
-        }),
-      );
+      return yield* inSandbox(ranRunAction(context.userId, input.id, actionId));
     }),
     /** One run action stopped, TERM then KILL where it outlives the grace (`agent-sandbox.ts`), answering the shells as they stand after. */
     stopRunAction: signedIn.stopRunAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
-      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.id);
-      yield* runActionOf(agent, actionId);
-      if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return yield* inSandbox(
-        Effect.gen(function* () {
-          const sandbox = yield* AgentSandbox;
-          const stopped = yield* sandboxOrUpstream(sandbox.stop(sessionId, actionId));
-          if (Result.isFailure(stopped)) return yield* Effect.fail(shellRefusal(stopped.failure));
-          return yield* listedShells(sessionId);
-        }),
-      );
+      return yield* inSandbox(stoppedRunAction(context.userId, input.id, actionId));
     }),
     /** One shell ended, answering the shells as they stand after. */
     endTerminal: signedIn.endTerminal.effect(function* ({ input, context }) {

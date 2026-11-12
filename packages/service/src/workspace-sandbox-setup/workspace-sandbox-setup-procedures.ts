@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-setup-procedures.ts -- a workspace's cloud sandbox setup: read it as a member, and save its install script, a repository's setup or archive script, or a repository's run actions as an owner or admin.
+ * workspace-sandbox-setup-procedures.ts -- a workspace's cloud sandbox setup: read it as a member, and save its install script, a repository's setup or archive script, or a repository's run actions, whole or one action at a time, as an owner or admin.
  *
  * Every procedure resolves the caller (`accountMiddleware`, on the resource
  * so it runs before an input is read), then runs the operation every door
@@ -13,6 +13,7 @@ import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-w
 import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import {
+  editRunAction,
   readSandboxSetup,
   saveInstallScript,
   saveRepositorySetup,
@@ -47,6 +48,10 @@ export function workspaceSandboxSetupProcedures(seams: WorkspaceSandboxSetupProc
 
     putRunActions: signedIn.putRunActions.effect(function* ({ input, context: { userId } }) {
       return yield* saveRunActions(userId, input.workspaceId, input.repository, input.actions);
+    }),
+
+    editRunAction: signedIn.editRunAction.effect(function* ({ input, context: { userId } }) {
+      return yield* editRunAction(userId, input.workspaceId, input);
     }),
   };
 }

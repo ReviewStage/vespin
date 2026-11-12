@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `queue`, `stop`, `update`, `rewind`, `delete`, and `wake` (`agent-lifecycle.ts`), `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, rewound, deleted, woken, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `queue`, `stop`, `update`, `rewind`, `delete`, and `wake` (`agent-lifecycle.ts`), `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), `shell` and `shells` (`agent-shell.ts`), and `run` (`agent-run-action.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, rewound, deleted, woken, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here, and its repository's run actions run and stopped in its sandbox.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -53,6 +53,7 @@ import { resolveWorkspace } from "../workspace.js";
 import { forwardCommand } from "./agent-forward.js";
 import { deleteCommand, rewindCommand, wakeCommand } from "./agent-lifecycle.js";
 import { diffCommand, prCommand } from "./agent-pull-request.js";
+import { runCommand } from "./agent-run-action.js";
 import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
@@ -1557,6 +1558,7 @@ export const agentCommand = Command.make("agent").pipe(
     tabsCommand,
     shellCommand,
     shellsCommand,
+    runCommand,
   ]),
   Command.withExamples([
     { command: "vespin agent start ACME-42 --wait", description: "Start an agent, and wait on it" },
