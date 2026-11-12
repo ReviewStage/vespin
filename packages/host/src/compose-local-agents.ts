@@ -63,7 +63,7 @@ import type { Composer } from "./composer.js";
 import { Environment, LocalAgentPlatform, Reporter } from "./effect/seams.js";
 import type { HostKernel } from "./host-kernel.js";
 import { agentOnBox } from "./local-agent-box.js";
-import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
+import { LAUNCH_NOTE, notedFirstLines, ownSessionResumed } from "./local-agent-first-lines.js";
 import {
   agentPlaces,
   answeredLocalAgentRequest,
@@ -818,7 +818,7 @@ export function composeLocalAgents(
             // Note that the agent is kept as this machine's before its folder is made, so an uninstall finds whatever a launch cut off left.
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
             const worked = yield* workExists(layout, withRepository);
-            const cleared = sessionResumed(secrets.stdin) && !worked;
+            const cleared = ownSessionResumed(secrets.stdin) && !worked;
 
             if (cleared) {
               report("a local agent's folder was cleared since its last turn, so it starts afresh");

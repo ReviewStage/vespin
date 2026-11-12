@@ -427,9 +427,10 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
 /**
  * Where the source's work reaches the new agent. A source whose sandbox
  * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
- * hands that sandbox, whose latest snapshot the new agent's is created from at its
- * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
- * other has its work copied to a branch (`snapshot.ts`), and a source on a
+ * hands that sandbox to a new agent in the cloud, whose sandbox is created
+ * from its latest snapshot at its first open (`../machine/sandbox-machine.ts`),
+ * so it is never woken; any other, and any going to a Mac, which never reads
+ * a sandbox's snapshot, has its work copied to a branch (`snapshot.ts`), and a source on a
  * Mac hands only the branch it pushed, since nothing of the Mac's is read
  * for a Start, whoever asks it. Note that a
  * sandbox still running is copied rather than handed, because its snapshot
@@ -441,6 +442,7 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
 const sourceWorkOf = (
   userId: string,
   source: Agent,
+  into: AgentMachineKind,
   repository: string | null,
   forked: boolean,
   idempotencyKey: string,
@@ -460,6 +462,7 @@ const sourceWorkOf = (
     }
 
     const [session] =
+      into === AGENT_MACHINE.VERCEL &&
       source.repository?.toLowerCase() === repository?.toLowerCase()
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
         : [];
@@ -497,12 +500,14 @@ const placeRepository = (userId: string, place: StartWhere) =>
  * naming nothing, so a source on another plan is never dropped and started
  * afresh; a message that is none of its journals is invalid. The work is
  * taken once the transcript reads, so a Start refused on its message pushes
- * nothing.
+ * nothing, and taken for the place the new agent runs (`runsOn`, else its
+ * source's, `inheritedPlaceOf`).
  */
 export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   place: StartWhere,
   from: AgentStartFrom,
+  runsOn: AgentRunsOnRequest | undefined,
   noteFiles: readonly AgentAttachment[],
   idempotencyKey: string,
 ): Effect.fn.Return<StartFrom, HostedRefusal, DatabaseServices | SourceCopyServices> {
@@ -524,7 +529,8 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const transcript = yield* sourceTranscriptOf(source, from, noteFiles);
   const forked = from.messageId !== undefined;
-  const work = yield* sourceWorkOf(userId, source, repository, forked, idempotencyKey);
+  const into = (runsOn ?? inheritedPlaceOf(userId, source)).machine;
+  const work = yield* sourceWorkOf(userId, source, into, repository, forked, idempotencyKey);
   const inPullRequest = !forked && (yield* goesOnInPullRequest(userId, source, published));
   const [, ...extras] = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, source.id));
   const edited = yield* transcript.edited;
@@ -590,6 +596,7 @@ export const takeoverOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     userId,
     whereOf(ask),
     asked,
+    ask.runsOn,
     ask.attachments ?? [],
     ask.idempotencyKey,
   );

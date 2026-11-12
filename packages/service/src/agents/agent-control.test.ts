@@ -98,6 +98,7 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
             userId,
             { taskId: task.id },
             { agentId: agent.id, ...(messageId === undefined ? undefined : { messageId }) },
+            undefined,
             [],
             randomUUID(),
           );
@@ -213,6 +214,7 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
           teammate,
           { taskId: task.id },
           { agentId: onMac.id },
+          undefined,
           [],
           randomUUID(),
         );

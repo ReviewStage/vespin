@@ -257,6 +257,9 @@ const RESUMING_LINES = [
   .map((line) => `${JSON.stringify(line)}\n`)
   .join("");
 
+/** A continued agent's first lines, which fork its source's Claude Code session. */
+const FORKING_LINES = RESUMING_LINES.replace('"resume":', '"fork":true,"resume":');
+
 /** The lines the runner was handed first on its stdin, as the device wrote them, each read as JSON. */
 const firstLinesOf = (spawned: ScriptedSpawner["spawned"]) =>
   Effect.gen(function* () {
@@ -285,7 +288,12 @@ const firstLinesOf = (spawned: ScriptedSpawner["spawned"]) =>
  * the steps the launch reported in the order the service had them, and what
  * waits for the launch's settle and its report that the runner starts.
  */
-const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = false) =>
+const launching = (
+  workStands: boolean,
+  repositoryHangs = false,
+  tempPlanted = false,
+  stdin = RESUMING_LINES,
+) =>
   Effect.gen(function* () {
     const root = yield* temporaryDirectoryScoped("agent-launch-");
     const home = path.join(root, "home");
@@ -332,7 +340,7 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
                 firstSequence: 0,
               },
             },
-            secrets: { env: { APP_RUNNER_TOKEN: "runner-secret" }, stdin: RESUMING_LINES },
+            secrets: { env: { APP_RUNNER_TOKEN: "runner-secret" }, stdin },
           });
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_LINES:
           if (init?.method === "POST") {
@@ -436,6 +444,21 @@ it.effect.each([
           steps,
           workStands ? ["preparing", "starting"] : ["preparing", "fetching", "starting"],
         );
+      }),
+    ).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
+it.effect(
+  "a continued agent's first launch, in a folder new to it, forks its source's session rather than starting afresh as a cleared one does",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { spawned, launched } = yield* launching(false, false, false, FORKING_LINES);
+        yield* launched;
+
+        const [config, message] = yield* firstLinesOf(spawned);
+        assert.deepEqual([config?.resume, config?.fork], ["session-fixture", true]);
+        assert.equal(message?.content?.[0]?.text, "Go on with the relay.");
       }),
     ).pipe(Effect.provide(NodeFileSystem.layer)),
 );
