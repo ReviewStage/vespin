@@ -1,5 +1,5 @@
 import { ACT_KIND } from "@repo/host/acts";
-import type { MacCommandAsk } from "@repo/host/app-state";
+import { isMacShellAsk, type MacCommandAsk, type MacShellAsk } from "@repo/host/app-state";
 import { MAC_COMMAND_DECISION, type MacCommandDecision } from "@repo/host/contract";
 import { CommandAsk } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -20,9 +20,9 @@ import { useHeldThroughExit } from "./use-held-through-exit.js";
  * standing once it has faded out. An answer main refuses says why in a toast, as every press does.
  */
 
-/** The ask drawn: the earliest waiting, which main lists first. */
-function firstAsk(asks: readonly MacCommandAsk[] | undefined): MacCommandAsk | undefined {
-  return asks?.[0];
+/** The ask drawn: the earliest shell command waiting, which main lists first; an app's ask is not drawn here. */
+function firstAsk(asks: readonly MacCommandAsk[] | undefined): MacShellAsk | undefined {
+  return asks?.find(isMacShellAsk);
 }
 
 export function MacCommandAskDialog(): React.JSX.Element | null {
