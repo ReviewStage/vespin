@@ -68,7 +68,6 @@ export function useInboxPager(
   };
 }
 
-/** The pager at the end of an item's bar, each arrow named and keyed as its command is everywhere else. */
 export function InboxPagerControls({ pager }: { pager: InboxPager }): React.JSX.Element {
   return (
     <Pager
