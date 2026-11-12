@@ -273,13 +273,13 @@ const runOnOneLine = () => (tree: MarkdownRoot) => {
 const oneBlock = (markdown: string): string[] => [markdown];
 
 /** A serial for each value a step closes over, which Streamdown's processor cache cannot tell apart by itself. */
-const stepSerials = new WeakMap<object, number>();
+const stepSerials = new WeakMap<WeakKey, number>();
 let nextStepSerial = 0;
 
 /** A step's name as the processor cache reads it, standing for the step itself. */
 const keyedSteps = new WeakMap<object, MarkdownStep>();
 
-function serialOf(value: object): number {
+function serialOf(value: WeakKey): number {
   const held = stepSerials.get(value);
 
   if (held !== undefined) return held;

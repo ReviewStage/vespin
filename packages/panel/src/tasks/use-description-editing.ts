@@ -115,7 +115,7 @@ function takeLeft(taskId: string): DocumentEditor | undefined {
 }
 
 /** A save's answer where it refused the words, for the toast to report; none where it saved them. */
-function failureOf(answered: object): object | undefined {
+function failureOf<Answered extends object>(answered: Answered): Answered | undefined {
   return "failure" in answered ? answered : undefined;
 }
 

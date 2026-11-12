@@ -16,6 +16,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import type { WireRecord } from "@repo/wire";
 import {
   HTTP_STATUS,
   jsonResponse,
@@ -487,7 +488,7 @@ it.layer(getTestDB())("a ChatGPT plan's renewal and revocation", (it) => {
           scopes: ["chatgpt.tokens.use.direct", "offline_access", "openid"],
         };
 
-        const sealRetired = (seal: object) =>
+        const sealRetired = (seal: WireRecord) =>
           saveProviderKey(
             owner,
             PROVIDER_KEY_PROVIDER.OPENAI,

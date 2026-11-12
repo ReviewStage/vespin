@@ -499,7 +499,7 @@ function harnessRecording(
     path: string,
     account: string,
     message: SessionMessage | undefined,
-    body: object,
+    body: Pick<SessionMessage, "message"> | { readonly turnId: string },
   ) =>
     sent.push({
       path,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement, useState } from "react";
+import { act, type ComponentProps, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { RELATED_TASK_CELLS, TASK_ROW_CELL, TaskRow, TaskRows } from "./task-row.js";
@@ -44,7 +44,7 @@ function drawList(opened: string[], chosen: ReadonlySet<string>[]): HTMLElement 
     const [open, setOpen] = useState(true);
     const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 
-    const row = (id: string, name: string, more: object = {}) =>
+    const row = (id: string, name: string, more: Partial<ComponentProps<typeof TaskRow>> = {}) =>
       createElement(TaskRow, {
         key: id,
         taskId: id,

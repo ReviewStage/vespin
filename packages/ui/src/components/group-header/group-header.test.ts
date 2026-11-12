@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement, type ReactElement, useRef, useState } from "react";
+import {
+  act,
+  type ComponentProps,
+  createElement,
+  type ReactElement,
+  useRef,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { NAV_COUNT_SHOWN } from "../nav-item/nav-item.js";
@@ -49,7 +56,10 @@ function render(element: ReactElement): HTMLElement {
   return container;
 }
 
-function group(fold: GroupFold | undefined, extra: object = {}): ReactElement {
+function group(
+  fold: GroupFold | undefined,
+  extra: Partial<ComponentProps<typeof GroupHeader>> = {},
+): ReactElement {
   return createElement(GroupHeader, { label: "acme/web", fold, ...extra, children: ROWS });
 }
 

@@ -86,6 +86,7 @@ import { CheckIcon, GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { useAccountPreferences } from "../account-choices.js";
+import type { ActResult } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { PANE_EDGE, usePaneSlide } from "../desktop/pane-motion.js";
@@ -422,7 +423,7 @@ function NoChaptersYet({
 
   const { mutate: pick, isPending: picking } = useMutation({
     ...actMutation(ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE),
-    onSettled: refusalToast((answer: object) =>
+    onSettled: refusalToast((answer: ActResult<typeof ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE>) =>
       "failure" in answer ? CHAPTERS_WORDS.PICK_FAILED : undefined,
     ),
   });

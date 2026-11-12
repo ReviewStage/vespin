@@ -494,7 +494,8 @@ export async function rewritesDrifted(web: string): Promise<boolean> {
 }
 
 /** Whether a route or a top-level rewrite is held to one host, as the sandbox's are. */
-const isHostLocked = (route: object): boolean => "has" in route;
+const isHostLocked = (route: VercelConfig["services"]["web"]["routes"][number]): boolean =>
+  "has" in route;
 
 /**
  * `vercel.json` with the web service's generated rewrites replaced by the

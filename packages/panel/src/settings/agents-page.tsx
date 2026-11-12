@@ -158,7 +158,7 @@ const DEFAULT_SKELETON: readonly SettingsRowSkeletonShape[] = [
 const FAST_ACCESS_WORD = "Request access";
 
 /** A default's write refused, in the page's words; one the service kept answers no failure. */
-function choiceRefused(answer: object): string | undefined {
+function choiceRefused<Answer extends object>(answer: Answer): string | undefined {
   return "failure" in answer ? PAGE_LINE.WRITE_FAILED : undefined;
 }
 

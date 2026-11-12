@@ -45,7 +45,7 @@
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { task } from "@repo/database/schemas/task";
-import { HTTP_METHOD, type HttpMethod } from "@repo/wire";
+import { HTTP_METHOD, type HttpMethod, type WireRecord } from "@repo/wire";
 import { eq, sql } from "drizzle-orm";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -166,7 +166,7 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
     const call = resendCall(sender.value.key, REQUEST_TIMEOUT_MS);
 
     // One call, whose refusal is logged by what was asked and its status alone, because the body carries the address.
-    const send = (asked: string, method: HttpMethod, path: string, body?: object) =>
+    const send = (asked: string, method: HttpMethod, path: string, body?: WireRecord) =>
       Effect.gen(function* () {
         const answer = yield* call.send({
           method,

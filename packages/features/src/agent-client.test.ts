@@ -50,7 +50,7 @@ function client(): HostedAgentClient {
 }
 
 /** An answer without what failed beneath it, for a case about which failure it names; the Start's deadline case reads the cause whole. */
-function uncaused(answer: object): object {
+function uncaused<Answer extends object>(answer: Answer): object {
   if (!("cause" in answer)) return answer;
   const { cause: _cause, ...named } = answer;
 
@@ -58,7 +58,7 @@ function uncaused(answer: object): object {
 }
 
 /** The trace a failed answer's cause names, checked to be a trace id, since every ask mints its own. */
-function causeTraceOf(answer: object): unknown {
+function causeTraceOf<Answer extends object>(answer: Answer): unknown {
   const traceId =
     "cause" in answer &&
     typeof answer.cause === "object" &&

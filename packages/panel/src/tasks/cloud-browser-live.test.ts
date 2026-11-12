@@ -6,6 +6,7 @@ import {
   BROWSER_LIVE_CLOSE_REASON,
   BROWSER_LIVE_KEY_ACTION,
   BROWSER_LIVE_SERVER,
+  type BrowserLiveServerMessage,
 } from "@repo/features/browser-live-wire";
 import { Effect, Fiber, Stream } from "effect";
 import { TestClock } from "effect/testing";
@@ -72,7 +73,7 @@ function harness() {
     onFrame: (frame) => frames.push(frame),
   });
 
-  const say = (socket: FakeSocket | undefined, message: object) =>
+  const say = (socket: FakeSocket | undefined, message: BrowserLiveServerMessage) =>
     Effect.sync(() => socket?.listener.message(JSON.stringify(message)));
 
   const run = Effect.forkChild(

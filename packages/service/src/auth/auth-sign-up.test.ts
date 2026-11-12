@@ -6,6 +6,7 @@ import { member } from "@repo/database/schemas/auth";
 import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
 import { openMigratedPglite, sqlClientOverPglite } from "@repo/database/testing";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
+import type { WireRecord } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
@@ -99,7 +100,7 @@ it.effect(
           { disableLogger: true },
         );
 
-        const post = (path: string, body: object) =>
+        const post = (path: string, body: WireRecord) =>
           Effect.promise(() =>
             handler(
               new Request(`${BASE_URL}/api/auth/${path}`, {

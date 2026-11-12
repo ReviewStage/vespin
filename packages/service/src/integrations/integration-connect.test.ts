@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { INTEGRATION_PROVIDER, INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
+import type { WireRecord } from "@repo/wire";
 import {
   type ConnectAuthorizationResponse,
   type ConnectTokenResponse,
@@ -33,7 +34,7 @@ const FAR_FUTURE = Date.UTC(2100, 0, 1);
 
 /** A deployment's own Vercel OIDC token, as the SDK reads it from the environment: unsigned, and good past any test. */
 function deploymentOidcToken(): string {
-  const encoded = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const encoded = (value: WireRecord) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
   return `${encoded({ alg: "none" })}.${encoded({ exp: Math.floor(FAR_FUTURE / 1000) })}.`;
 }

@@ -67,7 +67,7 @@ const readRows = new WeakMap<object, object>();
  * Note that a row read again while it stands is the very object read
  * before, so a reader of a row that did not move holds the same object.
  */
-export function rowOf<Row extends object>(stored: object): Row {
+export function rowOf<Row extends object, Stored extends object>(stored: Stored): Row {
   let read = readRows.get(stored);
 
   if (read === undefined) {

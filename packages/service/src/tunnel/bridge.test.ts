@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import net, { type AddressInfo } from "node:net";
 import { createInterface } from "node:readline";
+import type { WireRecord } from "@repo/wire";
 import { it } from "vitest";
 import { PORT_BRIDGE_SOURCE } from "./bridge.js";
 
@@ -38,7 +39,8 @@ function bridge(port: number) {
 
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const next = async () => JSON.parse(String((await lines.next()).value));
-  const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+
+  const send = (frame: WireRecord) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
 
   return { child, next, send };
 }

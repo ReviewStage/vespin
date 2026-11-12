@@ -17,6 +17,7 @@ import { HOSTED_API_ERROR } from "@repo/features";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
+import type { WireRecord } from "@repo/wire";
 import { Clock, type Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { sessionSandboxesLayer } from "../agents/session-sandboxes.js";
@@ -70,7 +71,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     // SAFETY: setting where a task runs yields the store and the clock alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
 
-    return (method: string, path: string, bearer: string, body: object) =>
+    return (method: string, path: string, bearer: string, body: WireRecord) =>
       Effect.promise(async () => {
         const response = await handle(
           new Request(new URL(path, ORIGIN), {

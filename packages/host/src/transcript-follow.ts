@@ -389,7 +389,7 @@ function movedFrom(was: TranscriptState): (state: TranscriptState) => boolean {
 }
 
 /** A page the service did not answer, which is read again after `resealWait`; not found is the service's last word. */
-function unanswered(answer: { readonly failure: string } | object): boolean {
+function unanswered<Answer extends object>(answer: Answer): boolean {
   return "failure" in answer && answer.failure !== AGENT_CALL_FAILURE.NOT_FOUND;
 }
 

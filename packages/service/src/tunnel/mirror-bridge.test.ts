@@ -6,6 +6,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { MIRROR_BOUNDS, mirrorFrameSchema } from "@repo/features/sandbox-mirror-wire";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import type { WireRecord } from "@repo/wire";
 import { Schema } from "effect";
 import { it, type TestContext } from "vitest";
 import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
@@ -63,7 +64,7 @@ function bridge(t: TestContext, root: string) {
     return readMessage(JSON.parse(Buffer.from(data.data, "base64").toString("utf8")));
   };
 
-  const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+  const send = (frame: WireRecord) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
 
   const ask = (paths: string[]) => {
     const request = JSON.stringify({ type: "request", paths });
@@ -81,7 +82,7 @@ function shown(message: Awaited<ReturnType<ReturnType<typeof bridge>["next"]>>) 
 }
 
 /** The path a message names, for putting messages that arrive in no set order in one. */
-const pathOf = (message: object) => ("path" in message ? String(message.path) : "");
+const pathOf = (message: WireRecord) => ("path" in message ? String(message.path) : "");
 
 it("the open sends git's files without ignored ones or symlinks, and a request is answered in order", async (t) => {
   const { root, head } = await checkout(t);

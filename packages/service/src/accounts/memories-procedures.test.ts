@@ -19,7 +19,7 @@ import {
   memorySearchAnswerSchema,
 } from "@repo/features/memory-wire";
 import { EXPERIMENT } from "@repo/settings";
-import { HTTP_METHOD, unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import { HTTP_METHOD, unparsedWire, type WireBoundaryInput, type WireRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Layer, Option, Result, type Schema } from "effect";
@@ -141,7 +141,7 @@ function request(
   path: string,
   userId: string | undefined,
   method: string = HTTP_METHOD.GET,
-  body?: object,
+  body?: WireRecord,
 ) {
   return new Request(new URL(path, ORIGIN), {
     method,
@@ -163,7 +163,7 @@ const forget = (userId: string | undefined, workspaceId: string, id: string) =>
     HTTP_METHOD.DELETE,
   );
 
-const save = (userId: string, body: object) =>
+const save = (userId: string, body: WireRecord) =>
   request(MEMORIES_PATH, userId, HTTP_METHOD.POST, body);
 
 const search = (userId: string, workspaceId: string, query?: string) =>

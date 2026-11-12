@@ -207,7 +207,7 @@ export type OwnEnrollOutcome =
   | HostedFailed<DeclaredBy<typeof enrollOwn>, typeof HOST_JOIN_RENAMES>;
 
 /** Whether a call on the device secret was refused, rather than answered or unanswered. */
-function refused(answer: object): boolean {
+function refused<Answer extends object>(answer: Answer): boolean {
   return "failure" in answer && answer.failure !== DEVICE_AGENT_FAILURE.UNANSWERED;
 }
 

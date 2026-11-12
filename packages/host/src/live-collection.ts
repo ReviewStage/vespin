@@ -62,7 +62,7 @@ import { TX_WAIT_TIMEOUT } from "./live-follow.js";
 export function rowsOf<Row extends object>(collection: {
   readonly toArray: readonly Row[];
 }): WithoutVirtualProps<Row>[] {
-  return collection.toArray.map((stored) => rowOf<WithoutVirtualProps<Row>>(stored));
+  return collection.toArray.map((stored) => rowOf<WithoutVirtualProps<Row>, Row>(stored));
 }
 
 /**
@@ -507,7 +507,11 @@ export interface HeldRows<Key, Rows> {
 }
 
 /** `keyed` with `read` laid at `path`, or the key there dropped where it is none, every other key and level the very one held. */
-function withKeyLaid(keyed: object, path: readonly string[], read: object | undefined): object {
+function withKeyLaid<Read extends object>(
+  keyed: SliceLevel,
+  path: readonly string[],
+  read: Read | undefined,
+): SliceLevel {
   const [id, ...below] = path;
 
   if (id === undefined) return keyed;
@@ -515,7 +519,7 @@ function withKeyLaid(keyed: object, path: readonly string[], read: object | unde
 
   if (below.length > 0) {
     const level = Object.hasOwn(next, id) ? next[id] : undefined;
-    next[id] = withKeyLaid(typeof level === "object" && level !== null ? level : {}, below, read);
+    next[id] = withKeyLaid(isSliceLevel(level) ? level : {}, below, read);
   } else if (read === undefined) Reflect.deleteProperty(next, id);
   else next[id] = read;
 
@@ -531,7 +535,10 @@ function isSliceLevel(value: unknown): value is SliceLevel {
 }
 
 /** The read `keyed` holds at `path`; none where it holds none. */
-function readAt(keyed: object, path: readonly string[]): AppHostRead<unknown> | undefined {
+function readAt<Level extends object>(
+  keyed: Level,
+  path: readonly string[],
+): AppHostRead<unknown> | undefined {
   let level: unknown = keyed;
 
   for (const id of path) {

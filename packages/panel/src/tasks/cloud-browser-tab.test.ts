@@ -10,6 +10,7 @@ import {
   BROWSER_LIVE_HISTORY,
   BROWSER_LIVE_REFUSAL,
   BROWSER_LIVE_SERVER,
+  type BrowserLiveServerMessage,
 } from "@repo/features/browser-live-wire";
 import {
   BROWSER_TAB_OPEN_FAILURE,
@@ -167,7 +168,7 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
     },
   });
 
-  const say = async (message: object) => {
+  const say = async (message: BrowserLiveServerMessage) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
@@ -757,7 +758,7 @@ test("a live tab's bar opens a typed address and steps back, forward, and reload
     },
   });
 
-  const say = async (message: object) => {
+  const say = async (message: BrowserLiveServerMessage) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };

@@ -38,7 +38,7 @@ import {
 } from "@repo/features/automation-wire";
 import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { HTTP_METHOD } from "@repo/wire";
+import { HTTP_METHOD, type WireRecord } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
 import { symmetricEncrypt } from "better-auth/crypto";
@@ -183,7 +183,7 @@ const openAuthRoute = (
 
     yield* Effect.addFinalizer(() => Effect.promise(() => dispose()));
 
-    const post = (path: string, body: object, cookie?: string) =>
+    const post = (path: string, body: WireRecord, cookie?: string) =>
       Effect.promise(() =>
         handler(
           new Request(`${BASE_URL}/api/auth/${path}`, {
