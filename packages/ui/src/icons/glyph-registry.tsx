@@ -227,7 +227,7 @@ export const GLYPH = {
   BACK: BackIcon,
   PIN: lucideGlyph(Pin),
   UNPIN: lucideGlyph(PinOff),
-  // Something put out of sight, as a development build's branch is for a demo, and brought back.
+  // Something put out of sight, as a development build's branch is for a demo, and brought back; a task kept in sight by following it, and let go.
   HIDE: lucideGlyph(EyeOff),
   SHOW: lucideGlyph(Eye),
   ARCHIVE: ArchiveIcon,

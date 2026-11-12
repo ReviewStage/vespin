@@ -648,7 +648,7 @@ export function BotBadge({ actor }: { actor: Actor }): React.JSX.Element | null 
 }
 
 /** An actor's card head: its mark at a card's size, its name, which `onOpen` makes the press that opens its page, and the line under it. */
-function ActorHead({
+export function ActorHead({
   actor,
   sub,
   onOpen,
@@ -1155,10 +1155,12 @@ const MORE_FACES_LABEL = "Everyone else";
 
 /**
  * How many more a pile holds, in a pill of a face's height on the tile,
- * ringed by the ground as the faces are.
+ * ringed by the ground as the faces are. Note that it is positioned as the
+ * faces are, so as the last of them it paints over the face before it, as
+ * each face does, rather than under it.
  */
 const PILE_COUNT =
-  "actor-stack-more inline-grid h-avatar-stack min-w-avatar-stack place-items-center rounded-ui-full bg-actor-tile px-tight-gap text-caption-inline font-ui-semibold text-muted-foreground tabular-nums shadow-actor-ring";
+  "actor-stack-more relative inline-grid h-avatar-stack min-w-avatar-stack place-items-center rounded-ui-full bg-actor-tile px-tight-gap text-caption-inline font-ui-semibold text-muted-foreground tabular-nums shadow-actor-ring";
 
 /**
  * How far a pile's face or count stands from the one before it: each
