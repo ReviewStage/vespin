@@ -15,7 +15,8 @@
  * mark, rename, and delete, a task moved into a section from its menu or
  * dragged into one on an iPad, its repository changed, its parent, sub-tasks,
  * and blocks added, changed, and taken away, and a task's
- * description, pages, and comment threads followed, with a thread started
+ * description, pages, and comment threads followed, and read again where
+ * they could not be, with a thread started
  * on one block of the description and a reply on a thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
@@ -427,13 +428,13 @@ export const CLIENT_PARITY = {
   },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.DESCRIPTION_EDIT),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_ACT]: EVERYWHERE,
 
