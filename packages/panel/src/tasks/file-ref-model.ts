@@ -9,6 +9,7 @@ import type { SnippetLines } from "./code-snippet-model.js";
 /** Whether `line` of the file is one the reference points at. */
 function isPointed(ref: CodeRef, line: number): boolean {
   if (ref.startLine === undefined || ref.endLine === undefined) return false;
+
   return line >= ref.startLine && line <= ref.endLine;
 }
 
@@ -17,6 +18,7 @@ export function copiedLines(code: SnippetLines): string {
   const kept = code.lines.filter(
     (_line, at) => code.ref.startLine === undefined || isPointed(code.ref, code.firstLine + at),
   );
+
   return kept.join("\n");
 }
 

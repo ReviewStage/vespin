@@ -28,9 +28,11 @@ function focusedPage(): WebContents | undefined {
 
 export function menuOffers(show: (change: MenuBarChange) => void): MenuOffers {
   const held = new Map<WebContents, readonly AppCommand[]>();
+
   return {
     tell: (sender, commands) => {
       held.set(sender, commands);
+
       if (focusedPage() === sender) show({ offered: commands });
     },
     focusMoved: () => {

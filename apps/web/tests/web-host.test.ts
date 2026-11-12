@@ -16,7 +16,7 @@ import { installActPort, installAppBridge } from "@repo/panel/app-bridge";
 import { HOST_CAPABILITY, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS, isRecord, unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { composeWeb, WebHostTag } from "../src/app/web-host";
@@ -39,6 +39,7 @@ import {
 const standingHost = (service: ReturnType<typeof fakeService>) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<never>();
+
     const built = yield* Layer.build(
       composeWeb({
         httpClient: service.layer,
@@ -48,6 +49,7 @@ const standingHost = (service: ReturnType<typeof fakeService>) =>
         history: createMemoryHistory(),
       }),
     );
+
     return Context.get(built, WebHostTag);
   });
 
@@ -69,20 +71,24 @@ it.effect(
           const { bridge, actPort } = yield* standingHost(fakeService({ signedIn: false }));
           installAppBridge(bridge);
           installActPort(actPort);
+
           return yield* Effect.promise(() =>
             askAct(ACT_KIND.SETTING_UPDATE, { field: "theme", value: THEME.DARK }),
           );
         }),
       );
+
       assert.equal(first.status, ACTION_RESULT_STATUS.ACCEPTED);
       assert.equal(first.settings.stored.theme, THEME.DARK);
 
       const reread = yield* Effect.scoped(
         Effect.gen(function* () {
           const { bridge } = yield* standingHost(fakeService({ signedIn: false }));
+
           return yield* Effect.promise(() => bridge.requestAppState());
         }),
       );
+
       assert.equal(reread.settings?.stored.theme, THEME.DARK);
     }),
 );
@@ -96,6 +102,7 @@ it.effect(
         const { bridge, actPort } = yield* standingHost(service);
         installAppBridge(bridge);
         installActPort(actPort);
+
         const slack = Effect.map(
           Effect.promise(() => bridge.requestAppState()),
           (state) =>
@@ -103,13 +110,16 @@ it.effect(
               INTEGRATION_PROVIDER.SLACK
             ],
         );
+
         /** Gives the host's fibers turns, the clock a second on before each, until the tab's state draws Slack as `status`. */
         const drawsSlack = (status: string) =>
           Effect.gen(function* () {
             for (let second = 0; second < 60 && (yield* slack) !== status; second += 1) {
               yield* TestClock.adjust("1 second");
+
               for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
             }
+
             assert.equal(yield* slack, status);
           });
 
@@ -178,9 +188,11 @@ it.effect(
 
         installAppBridge(writer.bridge);
         installActPort(writer.actPort);
+
         const written = yield* Effect.promise(() =>
           askAct(ACT_KIND.SETTING_UPDATE, { field: "theme", value: THEME.DARK }),
         );
+
         assert.equal(written.status, ACTION_RESULT_STATUS.ACCEPTED);
         // The browser tells every tab but the writer's; jsdom holds one window, so the event is
         // said here as the browser would, again until the reader has heard it.
@@ -204,17 +216,25 @@ it.effect(
       Effect.gen(function* () {
         const sentTo: string[] = [];
         const app: Window | null = window;
+
         const tab = {
           closed: false,
           opener: app,
-          location: { replace: (url: string) => sentTo.push(url) },
-          sessionStorage: { setItem: () => undefined },
+          location: {
+            replace: (url: string) => {
+              sentTo.push(url);
+            },
+          },
+          sessionStorage: { setItem: (_key: string, _value: string): void => undefined },
         };
+
         // SAFETY: the tab's opener is cut, and its `closed`, `location.replace`, and `sessionStorage.setItem` read, alone, which this holds.
-        vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+        vi.spyOn(window, "open").mockReturnValue(tab as Window);
+
         const { bridge, actPort, actPortClient } = yield* standingHost(
           fakeService({ signedIn: true }),
         );
+
         installAppBridge(bridge);
         installActPort(actPort, actPortClient);
 
@@ -233,16 +253,24 @@ it.effect("a workspace connect on the act port lands in the tab its press opened
   Effect.scoped(
     Effect.gen(function* () {
       const sentTo: string[] = [];
+
       const tab = {
         closed: false,
-        location: { replace: (url: string) => sentTo.push(url) },
-        sessionStorage: { setItem: () => undefined },
+        location: {
+          replace: (url: string) => {
+            sentTo.push(url);
+          },
+        },
+        sessionStorage: { setItem: (_key: string, _value: string): void => undefined },
       };
+
       // SAFETY: the connect reads a tab's `closed`, `location.replace`, and `sessionStorage.setItem`, and cuts its opener, alone.
-      vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+      vi.spyOn(window, "open").mockReturnValue(tab as Window);
+
       const { bridge, actPort, actPortClient } = yield* standingHost(
         fakeService({ signedIn: true }),
       );
+
       installAppBridge(bridge);
       installActPort(actPort, actPortClient);
 
@@ -273,6 +301,7 @@ it.effect(
 
         yield* Effect.promise(() => askAct(ACT_KIND.WINDOW_COPY_TEXT, { words: "copied" }));
         yield* Effect.promise(() => askAct(ACT_KIND.WINDOW_FOCUS_PANEL));
+
         const refusals = yield* Effect.promise(() =>
           Promise.all([
             askAct(ACT_KIND.UPDATE_CHECK).catch((error: Error) => error.message),
@@ -308,7 +337,7 @@ class RelaySocket extends EventTarget {
     RelaySocket.opened.push(this);
   }
   send(data: string | Uint8Array): void {
-    this.sent.push(typeof data === "string" ? data : `bytes:${new TextDecoder().decode(data)}`);
+    this.sent.push(Predicate.isString(data) ? data : `bytes:${new TextDecoder().decode(data)}`);
     this.dispatchEvent(new Event("sent"));
   }
   close(): void {
@@ -329,6 +358,7 @@ const heardOn = (port: MessagePort, count: number) =>
     const heard: WireBoundaryInput[] = [];
     port.onmessage = (event: MessageEvent<WireBoundaryInput>) => {
       heard.push(event.data);
+
       if (heard.length === count) resume(Effect.succeed(heard));
     };
   });
@@ -347,6 +377,7 @@ it.effect(
         vi.stubGlobal("WebSocket", RelaySocket);
         const posted: { message: WireBoundaryInput; origin: string; ports: MessagePort[] }[] = [];
         // jsdom's postMessage carries no port, so the page's own post is read where it is made.
+        // SAFETY: the stand-in takes postMessage's window form, the one the page calls.
         vi.spyOn(window, "postMessage").mockImplementation(
           ((message: WireBoundaryInput, origin: string, transfer: MessagePort[] = []) =>
             void posted.push({ message, origin, ports: transfer })) as typeof window.postMessage,
@@ -362,9 +393,11 @@ it.effect(
         yield* Effect.promise(() =>
           askAct(ACT_KIND.TERMINAL_ATTACH, { agentId, terminalId, cols: 120, rows: 32 }),
         );
+
         // Note that the shell's relay is found by its path, because the tab's live reads open a socket of their own.
         const shellRelay = () =>
           RelaySocket.opened.find((socket) => new URL(socket.url).pathname === TERMINAL_RELAY.PATH);
+
         yield* until(() => shellRelay() !== undefined);
         const relay = shellRelay();
         assert.ok(relay);
@@ -399,6 +432,7 @@ it.effect(
           heard.map((message) => {
             // Note that the bytes are read as their text, because a port's copy of them is of Node's realm, not jsdom's.
             const read = unparsedWire(message);
+
             return isRecord(read) && ArrayBuffer.isView(read.data)
               ? { ...read, data: new TextDecoder().decode(read.data) }
               : read;
@@ -426,6 +460,7 @@ const runAt = (address: string, development: boolean) =>
       vi.stubEnv("DEV", development);
       history.replaceState(null, "", address);
       const { bridge } = yield* standingHost(fakeService({ signedIn: false }));
+
       return (yield* Effect.promise(() => bridge.requestAppState())).run;
     }),
   );

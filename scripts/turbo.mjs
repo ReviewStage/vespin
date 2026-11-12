@@ -8,4 +8,5 @@ import { turboInvocation } from "./lib/turbo.mjs";
 // token travels on the command line.
 const turbo = turboInvocation(process.argv.slice(2));
 const run = spawnSync(turbo.command, turbo.args, { stdio: "inherit", env: turbo.env });
+
 process.exitCode = run.status ?? 1;

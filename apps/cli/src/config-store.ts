@@ -43,6 +43,7 @@ export function configuredWorkspace(origin: string) {
 /** The default workspace kept for a service, written over any before it. */
 export function keepWorkspace(origin: string, workspace: string) {
   const file = configPath();
+
   return Effect.flatMap(readConfigFile(file, configJson, NO_CONFIG), (config) =>
     writeConfigFile(file, configJson, {
       services: { ...config.services, [origin]: { ...config.services[origin], workspace } },
@@ -56,12 +57,16 @@ export function keepWorkspace(origin: string, workspace: string) {
  */
 export function forgetWorkspace(origin: string, workspace: { id: string; slug?: string | null }) {
   const file = configPath();
+
   return Effect.flatMap(readConfigFile(file, configJson, NO_CONFIG), (config) => {
     const service = config.services[origin];
     const kept = service?.workspace;
+
     if (service === undefined || kept === undefined) return Effect.void;
+
     if (kept !== workspace.id && kept !== workspace.slug) return Effect.void;
     const { workspace: _forgotten, ...rest } = service;
+
     return writeConfigFile(file, configJson, {
       services: { ...config.services, [origin]: rest },
     });

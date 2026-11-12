@@ -47,6 +47,7 @@ describe("inboxSendingDrawn", () => {
     const drawn = inboxSendingDrawn(ITEM, sending, READER);
     expect(drawn.thread?.map(({ text }) => text)).toEqual(["Which day?", "Hold on"]);
     expect(drawn.unread).toBe(false);
+
     const carried: InboxItem = {
       ...ITEM,
       thread: [
@@ -60,6 +61,7 @@ describe("inboxSendingDrawn", () => {
         },
       ],
     };
+
     expect(inboxSendingDrawn(carried, sending, READER)).toBe(carried);
   });
 
@@ -77,13 +79,16 @@ describe("inboxSendingDrawn", () => {
       ],
       READER,
     );
+
     expect(answered.status).toBe(INBOX_STATUS.ANSWERED);
     expect(answered.thread?.[0]?.ask?.status).toBe(INBOX_ASK_STATUS.ANSWERED);
+
     const closed = inboxSendingDrawn(
       ITEM,
       [{ kind: INBOX_SENDING.CLOSE, revision: ITEM.revision, at: 2_000 }],
       READER,
     );
+
     expect(closed.status).toBe(INBOX_STATUS.CLOSED);
     expect(
       inboxSendingDrawn(

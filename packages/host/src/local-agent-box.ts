@@ -39,5 +39,6 @@ export function agentOnBox(
   const path = [command.env.PATH, parentOf(gh)]
     .filter((each) => each !== undefined && each.length > 0)
     .join(":");
+
   return { command: command.command, args: command.args, env: { ...command.env, PATH: path } };
 }

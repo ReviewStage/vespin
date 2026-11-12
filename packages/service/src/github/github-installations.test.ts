@@ -96,6 +96,7 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
           GITHUB_INSTALLATION_STATUS.SUSPENDED,
         );
         yield* TestClock.adjust("1 hour");
+
         const again = yield* linkInstallation(workspace, {
           ...installation,
           accountLogin: "octo-renamed",
@@ -223,6 +224,7 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
         yield* TestClock.adjust("1 minute");
         const running = freshInstallation("acme-labs");
         yield* linkInstallation(workspace, running);
+
         const legacy = () =>
           Effect.map(
             workspaceOf(owner, workspace),
@@ -286,6 +288,7 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
           GITHUB_INSTALLATION_STATUS.DELETED,
         );
         yield* TestClock.adjust("1 hour");
+
         const installedAgain = {
           ...installation,
           installationId: installation.installationId + 1,
@@ -391,6 +394,7 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
             .set({ role: WORKSPACE_ROLE.MEMBER })
             .where(and(eq(member.organizationId, workspace), eq(member.userId, demoted))),
         );
+
         const [asOwner, asAdmin, asDemoted, asTeammate, asStranger] = [
           freshInstallation(),
           freshInstallation(),
@@ -489,6 +493,7 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
         yield* joinWorkspace(workspace, teammate, WORKSPACE_ROLE.MEMBER);
         const installation = freshInstallation();
         yield* linkInstallation(workspace, installation);
+
         const connected = {
           github: { login: installation.accountLogin, active: true },
           githubInstallations: [

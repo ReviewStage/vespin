@@ -42,6 +42,7 @@ function dayAt(now: number, days: number, hour: number): number {
   const day = new Date(now);
   day.setDate(day.getDate() + days);
   day.setHours(hour, 0, 0, 0);
+
   return day.getTime();
 }
 

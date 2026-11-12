@@ -149,16 +149,19 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, agentSessions, ask } = yield* openTask();
+
         const shown = yield* writePage(
           owner,
           taskPageOwner(task.id),
           { title: "Chart", html: "<h1>Chart</h1>" },
           { kind: PAGE_SHOWER.APP },
         );
+
         assert.ok(Option.isSome(shown));
         const prompt = `Build ${mentionMarkdown({ kind: MENTION_KIND.PAGE, taskId: task.id, pageId: shown.value.id }, "Chart", { workspace: "acme", repository: task.repository })}.`;
         const idempotencyKey = randomUUID();
         const sql = yield* SqlClient.SqlClient;
+
         // The pages' table is moved aside for the Start alone, so the store's read of the page fails.
         const answered = yield* Effect.ensuring(
           Effect.andThen(
@@ -181,6 +184,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openTask();
+
         const start = () =>
           Effect.map(
             ask(
@@ -193,14 +197,19 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             (started) =>
               readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).agent.id,
           );
+
         const first = yield* start();
         yield* TestClock.adjust(Duration.seconds(1));
         const second = yield* start();
+
         const listed = (by: string, query: Readonly<Record<string, string>>) => {
           const url = new URL(WORKSPACE_AGENTS, ORIGIN);
+
           for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
+
           return ask(new Request(url, { headers: { authorization: `Bearer ${by}` } }));
         };
+
         const ids = (answered: Answer) =>
           readAnswer(agentListAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).agents.map(
             (agent) => agent.id,
@@ -236,10 +245,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const kept = yield* startedAgentOf(owner, task.id, ask);
         const put = yield* startedAgentOf(owner, task.id, ask);
         yield* archiveAgent(owner, put.agent.id, true);
+
         const listed = (query: Readonly<Record<string, string>>) => {
           const url = new URL(WORKSPACE_AGENTS, ORIGIN);
           url.searchParams.set("workspaceId", task.workspaceId);
+
           for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
+
           return Effect.map(
             ask(new Request(url, { headers: { authorization: `Bearer ${owner}` } })),
             (answered) =>
@@ -270,6 +282,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const bound = AGENT_BOUNDS.MAX_WORKSPACE_AGENTS;
         // One past the bound of agents is written through the store, which takes about two seconds.
         const made = new Set<string>();
+
         for (let each = 0; each <= bound; each += 1) {
           const started = yield* createAgent(owner, {
             ...AGENT_DEFAULT_CHOICE,
@@ -280,12 +293,16 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             repository: task.repository,
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           });
+
           made.add(Option.getOrThrow(started).agent.id);
         }
+
         const page = (offset: number | undefined) => {
           const url = new URL(WORKSPACE_AGENTS, ORIGIN);
           url.searchParams.set("workspaceId", task.workspaceId);
+
           if (offset !== undefined) url.searchParams.set("offset", String(offset));
+
           return Effect.map(
             ask(new Request(url, { headers: { authorization: `Bearer ${owner}` } })),
             (answered) =>
@@ -316,10 +333,12 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const other = yield* startedAgentOf(owner, task.id, ask);
         yield* renameAgent(owner, titled.agent.id, "Ledger 100% sweep");
         yield* renameAgent(owner, other.agent.id, "Unrelated");
+
         const found = (words: string) => {
           const url = new URL(WORKSPACE_AGENTS, ORIGIN);
           url.searchParams.set("workspaceId", task.workspaceId);
           url.searchParams.set("words", words);
+
           return Effect.map(
             ask(new Request(url, { headers: { authorization: `Bearer ${owner}` } })),
             (answered) =>
@@ -412,14 +431,17 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           HOSTED_HTTP_STATUS.CREATED,
           started,
         );
+
         assert.equal(agentRefusal, undefined);
         assert.ok(agent !== undefined);
         assert.notEqual(plan.id, task.id);
         const db = yield* Database;
+
         const [written] = yield* db
           .select({ xmin: sql<string>`xmin::text` })
           .from(taskTable)
           .where(eq(taskTable.id, plan.id));
+
         assert.equal(txid, written?.xmin, "the start answers its last write, the task's standing");
         assert.equal(plan.repository, RELAY_FULL_NAME);
         assert.equal(plan.document.body, "");
@@ -460,6 +482,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             body: { idempotencyKey: randomUUID() },
           }),
         );
+
         const withTask = yield* ask(
           request(TASKS, undefined, {
             method: "POST",
@@ -471,6 +494,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             },
           }),
         );
+
         const stranger = yield* ask(
           request(TASK_AGENTS, undefined, {
             method: "POST",
@@ -508,12 +532,14 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
       Effect.gen(function* () {
         const { owner, task, agentSessions, ask } = yield* openTask();
         const team = yield* openWorkspace(owner);
+
         const body = {
           name: "Invitation expiry",
           workspaceId: task.workspaceId,
           repository: RELAY_FULL_NAME,
           agent: { idempotencyKey: randomUUID(), prompt: "Expire invitations after a week." },
         };
+
         const startOnce = (status: number) =>
           Effect.map(ask(request(TASKS, owner, { method: "POST", body })), (answered) =>
             readAnswer(taskStartAnswerSchema, status, answered),
@@ -521,9 +547,11 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
 
         const first = yield* startOnce(HOSTED_HTTP_STATUS.CREATED);
         const again = yield* startOnce(HOSTED_HTTP_STATUS.OK);
+
         const elsewhere = yield* ask(
           request(TASKS, owner, { method: "POST", body: { ...body, workspaceId: team } }),
         );
+
         const listed = readAnswer(
           heldTaskListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -566,6 +594,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             }),
           ),
         );
+
         const opened = yield* ask(request(TASK(started.plan.id), owner));
 
         assert.equal(started.agent, undefined);
@@ -586,6 +615,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const { owner, task, github, ask } = yield* openTask();
         const agent = { idempotencyKey: randomUUID(), prompt: "Expire invitations." };
         const asked = github.sent.length;
+
         const startWith = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
 
@@ -594,6 +624,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           HOSTED_HTTP_STATUS.CREATED,
           yield* startWith({ name: "No repository", workspaceId: task.workspaceId, agent }),
         );
+
         const planned = yield* startWith({
           name: "Planned",
           workspaceId: task.workspaceId,
@@ -601,6 +632,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           planning: true,
           agent: { ...agent, idempotencyKey: randomUUID() },
         });
+
         const listed = readAnswer(
           heldTaskListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -644,6 +676,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, installation, agentSessions, ask } = yield* openTask();
+
         const linked = yield* linkInstallation(task.workspaceId, {
           installationId: installation.id + 10_000,
           accountId: installation.accountId ?? 50_000 + installation.id,
@@ -651,6 +684,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           accountType: GITHUB_ACCOUNT_TYPE.ORGANIZATION,
           suspended: false,
         });
+
         assert.equal(linked, LINK_OUTCOME.LINKED);
 
         const started = yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() }));
@@ -679,12 +713,14 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         yield* registerDevice(owner, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
 
         const theirKey = randomUUID();
+
         const byTeammate = yield* ask(
           startAs(other, task.id, {
             idempotencyKey: theirKey,
             runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: studio },
           }),
         );
+
         assert.deepEqual(byTeammate, {
           status: HOSTED_HTTP_STATUS.CONFLICT,
           body: {
@@ -704,15 +740,18 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
         const teammate = yield* openGithubUser();
+
         const task = yield* startTask(owner, {
           name: "Teammate invitations",
           repository: RELAY_FULL_NAME,
         });
+
         yield* joinWorkspace(task.workspaceId, teammate);
         const team = yield* openWorkspace(owner);
         const installation = freshInstallation();
         assert.equal(yield* connectWorkspaceGitHub(team, installation), LINK_OUTCOME.LINKED);
         const agentSessions = fakeAgentSessions();
+
         const { ask } = yield* standing(
           new Map([
             [`Bearer ${owner}`, owner],
@@ -752,10 +791,12 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
+
         const task = yield* startTask(owner, {
           name: "Teammate invitations",
           repository: RELAY_FULL_NAME,
         });
+
         const personal = yield* ensurePersonalWorkspace(owner, yield* fakeWorkspaceSeams);
         assert.ok(Option.isSome(personal));
         const installation = freshInstallation();
@@ -766,6 +807,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         yield* Database.use((db) =>
           db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner)),
         );
+
         const { ask } = yield* standing(
           new Map([[`Bearer ${owner}`, owner]]),
           githubReaching([installation]),
@@ -793,14 +835,17 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
+
         const task = yield* startTask(owner, {
           name: "Teammate invitations",
           repository: RELAY_FULL_NAME,
         });
+
         const team = yield* openWorkspace(owner);
         const ledgerOnly = freshInstallation([{ owner: RELAY.owner, name: "Ledger" }]);
         assert.equal(yield* connectWorkspaceGitHub(team, ledgerOnly), LINK_OUTCOME.LINKED);
         const agentSessions = fakeAgentSessions();
+
         const { ask } = yield* standing(
           new Map([[`Bearer ${owner}`, owner]]),
           githubReaching([ledgerOnly]),
@@ -846,17 +891,21 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openTask();
+
         const first = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         yield* TestClock.adjust(Duration.minutes(1));
+
         const second = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const stored = yield* readAgent(owner, second.id);
         assert.ok(Option.isSome(stored));
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -868,6 +917,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASK_AGENTS, owner, { id: task.id })),
         );
+
         assert.deepEqual(
           listed.agents.map((agent) => [agent.id, agent.status]),
           // The first has no turn yet, but its Start's line awaits the one its harness opens on it.
@@ -906,6 +956,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           (yield* ask(request(TASK(task.id), owner))).status,
           HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
         );
+
         const reads = (bearer: string, id: string) =>
           [request(TASK_AGENTS, bearer, { id }), request(TASK_INBOX, bearer, { id })] as const;
 
@@ -913,6 +964,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         readAnswer(agentListAnswerSchema, HOSTED_HTTP_STATUS.OK, yield* ask(agents));
         readAnswer(inboxAnswerSchema, HOSTED_HTTP_STATUS.OK, yield* ask(inbox));
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+
         for (const refused of [...reads(other, task.id), ...reads(owner, randomUUID())]) {
           assert.deepEqual(yield* ask(refused), notFound, refused.url);
         }
@@ -924,16 +976,19 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openTask();
+
         const agent = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const stored = yield* readAgent(owner, agent.id);
         assert.ok(Option.isSome(stored));
         const target = { userId: owner, conversationId: stored.value.conversationId };
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
         const turnId = randomUUID();
+
         // Before any turn the Start's line awaits it: a read past the line is held rather than
         // spinning, and lets go at the hold with the status the page was read at.
         const opening = readAnswer(
@@ -941,18 +996,23 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id, after: "0:0" })),
         );
+
         assert.equal(opening.messages.length, 1);
+
         const starting = yield* Effect.forkChild(
           ask(request(AGENT_MESSAGES, owner, { id: agent.id, after: opening.cursor })),
         );
+
         yield* TestClock.adjust(CODER.MESSAGES_POLL);
         assert.equal(starting.pollUnsafe(), undefined);
         yield* TestClock.adjust(CODER.MESSAGES_HOLD);
+
         const empty = readAnswer(
           agentMessagesAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* drivenWhileStarting(starting),
         );
+
         assert.deepEqual(empty.messages, []);
         assert.equal(empty.status, AGENT_STATUS.RUNNING);
         yield* writer.enqueueTurn(target, {
@@ -977,6 +1037,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
         );
+
         assert.equal(page.messages.length, 1);
         assert.equal(page.messages[0]?.role, MESSAGE_ROLE.USER);
         assert.notEqual(page.cursor, "0:0");
@@ -1002,6 +1063,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const stored = Option.getOrThrow(yield* readAgent(owner, agent.id));
         const output = "built one more file\n".repeat(100_000);
         const half = AGENT_BOUNDS.MAX_PART_CHARS / 2;
+
         const command = {
           type: "tool-bash",
           toolCallId: "call-1",
@@ -1009,8 +1071,10 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           input: { command: "pnpm build" },
           output,
         };
+
         const thought = "Weigh the build again. ".repeat(500);
         const thinking = { type: "reasoning", text: thought, state: "done" };
+
         // An answer the window reads for what it means is carried whole, however long.
         const read = {
           type: "tool-read_agent",
@@ -1019,6 +1083,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           input: { agentId: agent.id },
           output: { agent: { id: agent.id, title: "Builder" }, tail: "x".repeat(10_000) },
         };
+
         const journal = yield* transcriptRow(stored, 2, MESSAGE_ROLE.ASSISTANT, [
           text("Building."),
           command,
@@ -1029,13 +1094,16 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const answered = yield* ask(
           request(AGENT_MESSAGES, owner, { id: agent.id, parts: TRANSCRIPT_PARTS_QUERY.CUT }),
         );
+
         assert.ok(JSON.stringify(answered.body).length < 20_000);
+
         // The Start's line stands ahead of the journal.
         const [, cutJournal] = readAnswer(
           agentMessagesAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           answered,
         ).messages;
+
         assert.deepEqual(cutJournal?.cutParts, [
           {
             index: 1,
@@ -1055,14 +1123,17 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const { output: _output, ...withoutOutput } = command;
         const { text: _text, ...withoutText } = thinking;
         assert.deepEqual(cutJournal?.parts, [text("Building."), withoutOutput, withoutText, read]);
+
         // A reader that asks no cut, as a released desktop, is answered the part whole.
         const [, wholeJournal] = readAnswer(
           agentMessagesAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
         ).messages;
+
         assert.deepEqual(wholeJournal?.parts, [text("Building."), command, thinking, read]);
         assert.equal(wholeJournal?.cutParts, undefined);
+
         // The read back from the end cuts the same parts where it is asked to.
         const [, newestJournal] = readAnswer(
           agentNewestAnswerSchema,
@@ -1071,10 +1142,12 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             request(AGENT_NEWEST, owner, { id: agent.id, parts: TRANSCRIPT_PARTS_QUERY.CUT }),
           ),
         ).messages;
+
         assert.deepEqual(newestJournal?.cutParts, cutJournal?.cutParts);
 
         const part = (bearer: string, index: number) =>
           ask(request(`/api/agents/${agent.id}/messages/${journal}/parts/${index}`, bearer));
+
         assert.deepEqual(
           readAnswer(agentPartAnswerSchema, HOSTED_HTTP_STATUS.OK, yield* part(owner, 1)),
           { part: command },
@@ -1096,11 +1169,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         const { owner, task, installation, github, ask } = yield* openTask({
           github: publishedPullRequest,
         });
+
         const { agent } = yield* startedAgent(owner, task.id, ask);
         yield* updateAgentBranch(owner, agent.id, PUBLISHED.branch);
         // Note that the Start reached the repository itself, so the reads begin past every kept answer.
         yield* TestClock.adjust(Duration.hours(2));
         const asked = github.sent.length;
+
         const overview = () =>
           Effect.all(
             AGENT_OVERVIEW.map((path) => ask(request(path, owner, { id: agent.id }))),
@@ -1113,6 +1188,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         for (const read of cold) {
           assert.equal(read.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(read.body));
         }
+
         assert.deepEqual(warm, cold);
         assert.deepEqual(reachRequests(github.sent.slice(asked), installation.id), {
           installationReads: 1,
@@ -1140,12 +1216,14 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             .set({ repository: "Acme/Former" })
             .where(eq(agentTable.id, agent.id)),
         );
+
         const unreached = {
           status: HOSTED_HTTP_STATUS.FORBIDDEN,
           contentType: "application/json",
           cacheControl: null,
           text: '{"error":"repository-not-reachable"}',
         };
+
         const asked = [
           ...[AGENT_PULL_REQUEST, AGENT_PULL_REQUEST_VIEWED, ...AGENT_OVERVIEW].map((path) =>
             request(path, owner, { id: agent.id, number: "12" }),
@@ -1157,6 +1235,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             body: { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW },
           }),
         ];
+
         for (const sent of asked) {
           const answered = yield* fetch(sent);
           assert.deepEqual(
@@ -1177,6 +1256,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const contents = `/repos/${RELAY_FULL_NAME}/contents/docs/diagram.svg`;
+
         const { owner, task, ask, fetch } = yield* openTask({
           github: (sent) =>
             new URL(sent.url).pathname === contents
@@ -1185,6 +1265,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
                 })
               : undefined,
         });
+
         const { agent } = yield* startedAgent(owner, task.id, ask);
 
         const served = yield* fetch(
@@ -1258,6 +1339,7 @@ it.layer(getTestDB())("a blank agent and the calls into an agent", (it) => {
           finishedAt: new Date(startedAt + 2_400),
         },
       ]);
+
       return { voiceSessionId, startedAt, developerRow, agentRow };
     });
 
@@ -1266,13 +1348,16 @@ it.layer(getTestDB())("a blank agent and the calls into an agent", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openTask({ repository: null });
+
         const started = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), blank: true })),
         ).agent;
+
         const agent = Option.getOrThrow(yield* readAgent(owner, started.id));
         const call = yield* callInto(agent, owner, ["What did you change?", "I moved the export."]);
+
         const read = Effect.map(ask(request(AGENT_MESSAGES, owner, { id: agent.id })), (answered) =>
           readAnswer(agentMessagesAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
         );
@@ -1325,9 +1410,11 @@ it.layer(getTestDB())("a blank agent and the calls into an agent", (it) => {
               eq(messages.clientId, call.agentRow),
             ),
           );
+
         const spoken = (yield* read).messages.find(
           (message) => message.role === MESSAGE_ROLE.ASSISTANT,
         );
+
         assert.ok(spoken !== undefined);
         assert.deepEqual(
           { startedAt: spoken.startedAt, model: spoken.model, sentAt: spoken.sentAt },
@@ -1354,18 +1441,21 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
           parentConversationId: target.conversationId,
         });
         const agentPicture = Option.getOrThrow(yield* keepConversationPicture(target, picture(1)));
+
         const workerPicture = Option.getOrThrow(
           yield* keepConversationPicture(
             { userId: owner, conversationId: workerConversation },
             picture(2),
           ),
         );
+
         const at = (bearer: string | undefined, pictureId: string, call?: string) =>
           request(AGENT_PICTURE, bearer, {
             id: agent.id,
             picture: pictureId,
             ...(call === undefined ? undefined : { call }),
           });
+
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
         const served = yield* fetch(at(owner, agentPicture.id));
@@ -1413,17 +1503,21 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openTask();
+
         const agent = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const opening = readAnswer(
           transcriptNowAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id, after: "0:0", wait: "none" })),
         );
+
         assert.equal(opening.messages.length, 1);
+
         // Nothing stands past the Start's line, which awaits the turn its harness opens on it, so the held read
         // would hold on it; this answers at once.
         const own = readAnswer(
@@ -1433,6 +1527,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
             request(AGENT_MESSAGES, owner, { id: agent.id, after: opening.cursor, wait: "none" }),
           ),
         );
+
         assert.deepEqual(own.messages, []);
         assert.equal(own.status, AGENT_STATUS.RUNNING);
         assert.equal(own.holds, true);
@@ -1449,6 +1544,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(worker.messages, []);
         assert.equal(worker.status, AGENT_STATUS.STARTING);
         assert.equal(worker.holds, true);
@@ -1465,11 +1561,13 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openTask();
+
         const agent = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const stored = Option.getOrThrow(yield* readAgent(owner, agent.id));
         const PAGE = AGENT_BOUNDS.MESSAGES_PAGE;
         // Two pages and some, so the oldest page is the short one that ends the read.
@@ -1490,6 +1588,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
             })),
           ),
         );
+
         const wordsOf = (page: { readonly messages: readonly AgentTranscriptMessage[] }) =>
           page.messages.map((message) =>
             message.parts
@@ -1502,6 +1601,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_NEWEST, owner, { id: agent.id })),
         );
+
         assert.deepEqual(wordsOf(newest), said.slice(-PAGE), "the newest page, oldest first");
         // The Start's line awaits the first turn.
         assert.equal(newest.status, AGENT_STATUS.RUNNING);
@@ -1510,16 +1610,19 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
         const read = [...wordsOf(newest)];
         let before = newest.before;
         let pages = 1;
+
         while (before !== undefined) {
           const older = readAnswer(
             agentOlderAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* ask(request(AGENT_NEWEST, owner, { id: agent.id, before })),
           );
+
           read.unshift(...wordsOf(older));
           before = older.before;
           pages += 1;
         }
+
         assert.deepEqual(
           read,
           [SNAPSHOT, ...said],
@@ -1529,6 +1632,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
 
         // A row written after the newest page was read is heard by the follow from its cursor, and nothing before it.
         yield* transcriptRow(stored, total + 2, MESSAGE_ROLE.ASSISTANT, [text("Done.")]);
+
         const followed = readAnswer(
           transcriptNowAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -1536,6 +1640,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
             request(AGENT_MESSAGES, owner, { id: agent.id, after: newest.cursor, wait: "none" }),
           ),
         );
+
         assert.deepEqual(wordsOf(followed), ["Done."]);
 
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
@@ -1556,17 +1661,20 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openTask();
+
         const agent = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         // The Start's own line is the transcript's one row.
         const newest = readAnswer(
           agentNewestAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_NEWEST, owner, { id: agent.id })),
         );
+
         assert.equal(newest.messages.length, 1);
         assert.equal(newest.before, undefined, "nothing older stands");
 
@@ -1575,6 +1683,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(SUBAGENT_NEWEST, owner, { id: agent.id, call: "call-7" })),
         );
+
         assert.deepEqual(worker.messages, []);
         assert.equal(worker.status, AGENT_STATUS.STARTING);
         assert.equal(worker.before, undefined);
@@ -1586,24 +1695,29 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openTask();
+
         const agent = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const stored = Option.getOrThrow(yield* readAgent(owner, agent.id));
         yield* transcriptRow(stored, 2, MESSAGE_ROLE.USER, [text("Expire invitations.")]);
         yield* transcriptRow(stored, 3, MESSAGE_ROLE.ASSISTANT, [text("Expired.")]);
         const dropped = yield* transcriptRow(stored, 4, MESSAGE_ROLE.USER, [text("And emails.")]);
         yield* transcriptRow(stored, 5, MESSAGE_ROLE.ASSISTANT, [text("Emailed.")]);
+
         const newest = () =>
           Effect.map(ask(request(AGENT_NEWEST, owner, { id: agent.id })), (answered) =>
             readAnswer(agentNewestAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
           );
+
         const before = yield* newest();
 
         yield* rewindConversation(stored, dropped);
         const after = yield* newest();
+
         const past = readAnswer(
           transcriptNowAnswerSchema,
           HOSTED_HTTP_STATUS.OK,

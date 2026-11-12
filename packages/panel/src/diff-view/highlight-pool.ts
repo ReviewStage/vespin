@@ -113,14 +113,15 @@ export function startHighlighting(
       follow: () => Promise.resolve(),
     };
   }
+
   const pool = new WorkerPoolManager(
     {
       workerFactory: startWorker,
       poolSize: HIGHLIGHT_WORKERS,
       totalASTLRUCacheSize: HIGHLIGHT_CACHE_ENTRIES,
-      ...(preferredHighlighter() === HIGHLIGHTER.HIGHLIGHTS
-        ? { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
-        : {}),
+      ...(preferredHighlighter() === HIGHLIGHTER.HIGHLIGHTS && {
+        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+      }),
       // Note that a worker failing to start is no error of the window's, since the list then highlights on its own thread.
       onWorkerError: (event) => event.preventDefault(),
     },
@@ -129,12 +130,15 @@ export function startHighlighting(
       preferredHighlighter: preferredHighlighter(),
     },
   );
+
   const settled = pool.initialize().then(
     () => (pool.isWorkingPool() ? HIGHLIGHT_MODE.POOL : HIGHLIGHT_MODE.MAIN_THREAD),
     () => HIGHLIGHT_MODE.MAIN_THREAD,
   );
+
   // Note that a look not taken, the pool having failed, leaves the list on the window's own thread in its own look.
   const follow = (next: DiffLook) =>
     pool.setRenderOptions(poolRenderOptions(next, maxLineDiffLength)).catch(() => undefined);
+
   return { pool, settled, follow };
 }

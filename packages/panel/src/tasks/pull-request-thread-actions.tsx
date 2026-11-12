@@ -75,6 +75,7 @@ export function ThreadWritesProvider({
   children: ReactNode;
 }): React.JSX.Element {
   const edits = useRef(heldBodies());
+
   return (
     <ThreadWritesContext.Provider
       value={{
@@ -107,7 +108,9 @@ export interface ThreadControls {
 export function useThreadControls(thread: ReviewThread): ThreadControls | undefined {
   const writing = useThreadWriting();
   const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
+
   if (writing === undefined || thread.id === undefined) return undefined;
+
   return { agentId: writing.agentId, threadId: thread.id, writes };
 }
 
@@ -124,10 +127,13 @@ export function ThreadResolve({
 }): React.JSX.Element | null {
   if (controls === undefined) return null;
   const { threadId, writes } = controls;
+
   const action = resolved
     ? PULL_REQUEST_ACTION.UNRESOLVE_THREAD
     : PULL_REQUEST_ACTION.RESOLVE_THREAD;
+
   const label = resolved ? THREAD_WORDS.REOPEN : THREAD_WORDS.RESOLVE;
+
   return (
     <Tooltip label={label}>
       <IconButton
@@ -155,14 +161,17 @@ function ReplyBox({ controls }: { controls: ThreadControls }): React.JSX.Element
   const out = writes.pending;
   const sending = out === PULL_REQUEST_ACTION.REPLY_TO_THREAD;
   const blank = words.trim() === "" || overCommentBound(words);
+
   const send = () => {
     const body = words.trim();
+
     if (blank || out !== undefined) return;
     // Note that the words stay until GitHub took them, so a refusal leaves them to send again, and only the words sent go, so any written since stay.
     void writes.write({ action: PULL_REQUEST_ACTION.REPLY_TO_THREAD, threadId, body }, () =>
       update((was) => (was.text === words ? { ...was, text: "" } : was)),
     );
   };
+
   return (
     <CommentEditor
       variant={REPLY_VARIANT.REPLY}
@@ -191,6 +200,7 @@ export function ThreadReply({
   controls: ThreadControls | undefined;
 }): React.JSX.Element | null {
   if (controls === undefined) return null;
+
   return (
     <div className="pull-request-thread-actions flex flex-col gap-control-gap px-list-inset pb-list-inset">
       <ReplyBox controls={controls} />

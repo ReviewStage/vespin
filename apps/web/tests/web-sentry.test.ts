@@ -19,8 +19,10 @@ const { sentBodies } = vi.hoisted(() => {
   globalThis.fetch = async (_input, init) => {
     // Note that the SDK posts each envelope as its text, uncompressed.
     if (init?.body !== undefined && init.body !== null) sentBodies.push(String(init.body));
+
     return new Response("{}", { status: 200 });
   };
+
   return { sentBodies };
 });
 
@@ -145,6 +147,7 @@ test("a refusal of a browser extension's address, or of what its own script did,
 
 test("a refusal dropped because the early reports were full is sent when it comes again", async () => {
   const sentry = startWebSentry(PRODUCTION);
+
   // A tab failing in a loop while the chunk loads fills what is kept for it.
   for (let index = 0; index < 20; index += 1) sentry.reportBlankTab(new Error(`blank ${index}`));
   document.dispatchEvent(refusal("connect-src", "wss://crowded.example/socket"));
@@ -196,6 +199,7 @@ test("each page load and navigation, and the errors under it, are named by the k
   history.replaceState(null, "", "/acme/plan/0b805267-0061-4b69-8e2c-964920ec4a30");
   const named: string[] = [];
   const transactions: (string | undefined)[] = [];
+
   // Each navigation follows a press, as a link's does; one with none this soon is told as a redirect.
   const navigate = (path: string) => {
     document.dispatchEvent(new MouseEvent("click"));
@@ -207,6 +211,7 @@ test("each page load and navigation, and the errors under it, are named by the k
   transactions.push(Sentry.getCurrentScope().getScopeData().transactionName);
   Sentry.getClient()?.on("spanStart", (span) => {
     const { name, attributes } = Sentry.spanToJSON(span);
+
     if (attributes?.["sentry.op"] === "navigation") named.push(name);
   });
   navigate("/acme/plan/0b805267-0061-4b69-8e2c-964920ec4a30/agent/f458cf99");

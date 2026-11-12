@@ -167,6 +167,7 @@ function takeSignInLeft(): boolean {
   try {
     const left = window.sessionStorage.getItem(SIGN_IN_LEFT_KEY) !== null;
     window.sessionStorage.removeItem(SIGN_IN_LEFT_KEY);
+
     return left;
   } catch {
     return false;
@@ -190,7 +191,9 @@ function cookieDoor(tab: PageLeave, history: RouterHistory): CookieSessionDoor {
     Stream.fromEventListener(document, "visibilitychange"),
     () => document.visibilityState === "visible",
   );
+
   const focused = Stream.fromEventListener(window, "focus");
+
   return {
     currentAddress: () => history.location.href,
     navigate: (url, signingIn) =>
@@ -215,6 +218,7 @@ function filesChangedElsewhere(storage: Storage): Stream.Stream<void> {
     Stream.fromEventListener<StorageEvent>(window, "storage"),
     (event) => event.storageArea === storage && (event.key === FILES_KEY || event.key === null),
   );
+
   return Stream.as(changed, undefined);
 }
 
@@ -231,9 +235,11 @@ function tabOnline(): Stream.Stream<boolean> {
         const heard = () => {
           Queue.offerUnsafe(queue, navigator.onLine);
         };
+
         window.addEventListener("online", heard);
         window.addEventListener("offline", heard);
         heard();
+
         return heard;
       }),
       (heard) =>
@@ -279,6 +285,7 @@ const pageTerminalPorts: TerminalPortSeam<WebSender> = {
     const { port1, port2 } = new MessageChannel();
     sender.postMessage({ channel: TERMINAL_PORT_CHANNEL, ticket }, sender.location.origin, [port2]);
     port1.start();
+
     return {
       post: (message) => port1.postMessage(message),
       onMessage: (listener) => port1.addEventListener("message", (event) => listener(event.data)),
@@ -309,6 +316,7 @@ function platformProcedures(
   const port = actPortFor<WebSender>();
   const feedback = feedbackDelivery({ url: new URL(FEEDBACK_PATH, location.origin).href });
   const KIND = WINDOW_SURFACE_ACT_KIND;
+
   return {
     ...refusedPlatformProcedures<WebSender>(),
     ...terminalProcedures<WebSender>({
@@ -353,6 +361,7 @@ function portDependencies(
   tabs: ConnectTabs,
 ): ActPortDependencies {
   const host = operator.host;
+
   return {
     account: {
       host,
@@ -408,6 +417,7 @@ const servedActPort = (
         }),
       });
       channel.port2.start();
+
       return channel;
     }),
     (channel) =>
@@ -431,6 +441,7 @@ const composedWeb = (
       const assembly = yield* HostAssemblyTag;
       const http = yield* HttpClient.HttpClient;
       const services: Context.Context<never> = yield* Effect.context();
+
       const state = new AppStateStore(
         initialAppState(
           {
@@ -449,9 +460,11 @@ const composedWeb = (
         ),
         services,
       );
+
       // An address the host opens goes to a connect's waiting tab, or opens as a link.
       const tabs = connectTabs(tabBrowser(openTab, tab.leave, history));
       yield* Effect.acquireRelease(Effect.sync(tabs.listen), (stop) => Effect.sync(stop));
+
       const operator = yield* createOperatorClient({
         report,
         gateway: assembly.gateway,
@@ -460,6 +473,7 @@ const composedWeb = (
         node: { openExternal: async (url) => tabs.open(url) },
         state,
       });
+
       yield* linkNetworkWatch({
         state,
         online: tabOnline(),
@@ -478,6 +492,7 @@ const composedWeb = (
       );
 
       const doors = yield* noticeDoors;
+
       // Whether the browser lets the tab post notifications, which Settings says under the switch:
       // read as the tab opens and each time it is shown again, since the developer may change it
       // in the browser's own settings meanwhile, and as an ask is answered.
@@ -486,6 +501,7 @@ const composedWeb = (
           state.update({ notifications: { status } });
         }
       };
+
       yield* Effect.acquireRelease(
         Effect.sync(() =>
           onTabShownChanged((shown) => {
@@ -494,12 +510,14 @@ const composedWeb = (
         ),
         (stop) => Effect.sync(stop),
       );
+
       // Note that an ask the browser fails is said as where it stands then, since that is all it tells.
       const askForNotifications = () => {
         void askTabNotifications().then(sayNotifications, () =>
           sayNotifications(tabNotificationsStatus()),
         );
       };
+
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
@@ -525,17 +543,20 @@ const composedWeb = (
           ),
         );
       };
+
       const made = yield* createInProcessBridge({
         state,
         windowFacts: () => ({ fullScreen: document.fullscreenElement !== null }),
         reports: { notifyReady: () => undefined, recordSurfaceEvent: count },
         report,
       });
+
       const actPort = yield* servedActPort(
         portDependencies(operator, notices, crypto.randomUUID(), tabs),
         platformProcedures(http, { operator, fork }),
         services,
       );
+
       return {
         bridge: made.bridge,
         actPort,
@@ -573,6 +594,7 @@ export function composeWeb(
   const storage = tabStorage();
   // Only a development tab's address can name one, so a production tab's host is always live.
   const fixture = developmentFixtureProfile(location.search);
+
   // Every call the host makes to the service tells the service's reach beside it, which the tab's network watch follows.
   const assembly = Layer.provide(
     hostAssemblyLayer([HOST_PLATFORM_CONCERN.TERMINALS]),
@@ -584,6 +606,7 @@ export function composeWeb(
       Layer.provide(cookieAccountSourceLayer(cookieDoor(tab, history)), httpClient),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
+
   const launched = Layer.unwrap(
     Effect.map(ComposedWebTag, (web) =>
       Layer.mergeAll(
@@ -597,6 +620,7 @@ export function composeWeb(
       ).pipe(Layer.provideMerge(hostStandingLayer)),
     ),
   );
+
   // A tab left open across a deploy asks to move onto the build now live once a chunk of its own fails to load.
   const staleBuild = Layer.effectDiscard(
     Effect.forkScoped(
@@ -608,6 +632,7 @@ export function composeWeb(
       ),
     ),
   );
+
   return Layer.merge(launched, staleBuild).pipe(
     Layer.provideMerge(composedWeb(fork, tab, history, linkPlatform, fixture)),
     Layer.provideMerge(assembly),

@@ -56,12 +56,14 @@ function fileUrl(file: AgentAttachment): string {
 /** The files a change sends with a message, where it sends any. */
 function filesOf(change: AgentQueueChange): readonly AgentAttachment[] {
   if (change.change !== QUEUE_CHANGE.ADD && change.change !== QUEUE_CHANGE.EDIT) return [];
+
   return change.attachments ?? [];
 }
 
 /** The message a change names, by its id; none for one of the whole queue. */
 function messageOf(change: AgentQueueChange): string | undefined {
   if (change.change === QUEUE_CHANGE.ADD) return change.id;
+
   return "messageId" in change ? change.messageId : undefined;
 }
 
@@ -79,9 +81,12 @@ function keepLandedFiles(
   attachments: readonly AgentAttachment[],
 ): void {
   const landed = queue.messages.find((message) => message.id === messageId);
+
   for (const [index, file] of (landed?.files ?? []).entries()) {
     const held = attachments[index];
+
     if (file.id === undefined || held === undefined) continue;
+
     if (pictureNow(client, owner, file.id).kind !== PICTURE_STATE.READY) {
       keepPictureRead(client, owner, file.id, fileUrl(held));
     }
@@ -115,25 +120,32 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
         : undefined,
     ),
   );
+
   const queryClient = useQueryClient();
   const toast = useToast();
   const messages = queue?.messages ?? NO_MESSAGES;
   const listed = useMemo(() => new Set(messages.map((message) => message.id)), [messages]);
+
   const change = (next: AgentQueueChange, after?: Promise<unknown>) => {
     const files = filesOf(next);
     const messageId = messageOf(next);
+
     const drawnAs = files.map((file) => {
       const id = crypto.randomUUID();
       keepPictureRead(queryClient, agentId, id, fileUrl(file));
+
       return id;
     });
+
     const params = {
       agentId,
       change: next,
       ...(drawnAs.length === 0 ? undefined : { pictures: drawnAs }),
     };
+
     // Note that a message queued behind the box's own sends is asked only once they settle, so it never reaches the service ahead of them.
     const asked = after === undefined ? sendQueue(params) : after.then(() => sendQueue(params));
+
     return asked
       .catch(() => UNANSWERED)
       .then((answer) => {
@@ -141,7 +153,9 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
         if ("queue" in answer && messageId !== undefined && files.length > 0) {
           keepLandedFiles(queryClient, agentId, answer.queue, messageId, files);
         }
+
         const words = QUEUE_REFUSED_WORDS[next.change];
+
         if (!("failure" in answer) || words === undefined) return answer;
         toast({
           replayUnmasked: true,
@@ -159,21 +173,27 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
             about: { agentId },
           },
         });
+
         return answer;
       });
   };
+
   const move = (from: number, to: number) => {
     const ids = messages.map((message) => message.id);
     const [taken] = ids.splice(from, 1);
+
     if (taken === undefined) return;
     ids.splice(to, 0, taken);
     void change({ change: QUEUE_CHANGE.REORDER, order: ids });
   };
+
   // Note that the host draws the deletion on the press, so the dialog closes at once; one refused is taken back and said in a toast.
   const remove = (message: QueuedMessage) => {
     void change({ change: QUEUE_CHANGE.DELETE, messageId: message.id });
+
     return Promise.resolve<ActionResult>({ status: ACTION_RESULT_STATUS.ACCEPTED });
   };
+
   return { messages, listed, paused: queue?.paused, change, move, remove };
 }
 
@@ -184,9 +204,11 @@ function readQueuedFiles(
   door: AgentPictureDoor,
 ): Promise<readonly AgentAttachment[] | undefined> {
   const files = message.files ?? [];
+
   return Promise.all(
     files.map(({ name, mediaType, id }) => {
       if (id === undefined) return undefined;
+
       // Note that a file the window holds already, one of a message queued here, is taken as it stands, since a picture's query never goes stale.
       return client.fetchQuery(pictureQuery(door.owner, id, door.read)).then(
         (read) =>
@@ -258,7 +280,9 @@ export function useQueueEditing(
   // Whether the service's queue has listed the message since its edit opened, which its leaving the queue is read against.
   const seen = useRef(false);
   const listed = stashed !== undefined && queue.listed.has(stashed.id);
+
   if (listed) seen.current = true;
+
   if (stashed === undefined) seen.current = false;
   // A message that left the queue while its edit stood open, sent or deleted elsewhere, is no longer the box's to
   // edit: the edit closes, its words left in the box.
@@ -271,30 +295,36 @@ export function useQueueEditing(
   // The message whose files are still being read into the box, by id, which no Save or Steer sends meanwhile.
   const reading = useRef<string | undefined>(undefined);
   const { change } = queue;
+
   const giveBack = (stash: Stashed) => {
     composer.setDraft(stash.text);
     composer.setAttachments(() => stash.attachments);
     setStashed(undefined);
   };
+
   /** The edit closed once the queue took `edit`, where it is still this message's; left open where it was refused. */
   const closing = (stash: Stashed, edit: AgentQueueChange) => {
     void change(edit).then((answer) => {
       if (!("failure" in answer) && held.current === stash.id) giveBack(stash);
     });
   };
+
   /** The edit of `stash` given up, its mark cleared and the box given back what it held. */
   const cancelOf = (stash: Stashed) => {
     void change({ change: QUEUE_CHANGE.HOLD, messageId: stash.id, held: false });
     giveBack(stash);
   };
+
   const cancel = () => {
     if (stashed !== undefined) cancelOf(stashed);
   };
+
   return {
     editing: stashed?.id,
     queue: () => {
       const text = composer.draft.trim();
       const { attachments } = composer;
+
       if (!hasWordsOrFiles(text, attachments)) return;
       const again = refused.current;
       const id = again !== undefined && again.text === text ? again.id : crypto.randomUUID();
@@ -318,7 +348,9 @@ export function useQueueEditing(
           update: (next) =>
             composer.updateHeld((now) => {
               const joined = next(now);
+
               if (joined !== undefined) refused.current = { text, id };
+
               return joined;
             }),
         });
@@ -327,11 +359,13 @@ export function useQueueEditing(
     edit: (message) => {
       if (stashed !== undefined)
         void change({ change: QUEUE_CHANGE.HOLD, messageId: stashed.id, held: false });
+
       const kept = stashed ?? {
         id: message.id,
         text: composer.draft,
         attachments: composer.attachments,
       };
+
       const stash = { ...kept, id: message.id };
       setStashed(stash);
       composer.setDraft(message.text);
@@ -342,12 +376,14 @@ export function useQueueEditing(
           if ("failure" in answer && held.current === message.id) giveBack(stash);
         },
       );
+
       if ((message.files ?? []).length === 0) return;
       // Its files join the box ahead of any taken on meanwhile, or, where they did not read, the edit closes.
       reading.current = message.id;
       void readQueuedFiles(queryClient, message, files).then((read) => {
         if (held.current !== message.id) return;
         reading.current = undefined;
+
         if (read === undefined) return cancelOf(stash);
         composer.setAttachments((added) => [...read, ...added]);
       });
@@ -356,6 +392,7 @@ export function useQueueEditing(
       if (stashed === undefined || reading.current === stashed.id) return;
       const text = composer.draft.trim();
       const { attachments } = composer;
+
       if (!hasWordsOrFiles(text, attachments)) return cancel();
       closing(stashed, {
         change: QUEUE_CHANGE.EDIT,
@@ -368,6 +405,7 @@ export function useQueueEditing(
       if (stashed === undefined || reading.current === stashed.id) return;
       const text = composer.draft.trim();
       const { attachments } = composer;
+
       if (!hasWordsOrFiles(text, attachments)) return cancel();
       closing(stashed, {
         change: QUEUE_CHANGE.STEER,

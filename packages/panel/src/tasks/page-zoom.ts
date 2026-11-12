@@ -22,11 +22,13 @@ import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "re
 /** Reads a message the frame posted as the zoom's, nothing for anything else the page posts. */
 const readZoom = Schema.decodeUnknownOption(pageZoomAnswerSchema);
 
-/** The page's size in `frame`, and a step of it the menu takes. */
-export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): {
+type UsePageZoomResult = {
   readonly zoom: number;
   readonly press: (key: PageZoomKey) => void;
-} {
+};
+
+/** The page's size in `frame`, and a step of it the menu takes. */
+export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): UsePageZoomResult {
   const [zoom, setZoom] = useState(PAGE_ZOOM_ACTUAL);
   const latest = useRef(zoom);
   useLayoutEffect(() => {
@@ -38,16 +40,23 @@ export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): {
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined || event.source !== framed) return;
       const answer = readZoom(event.data);
+
       if (Option.isNone(answer)) return;
       const message = answer.value;
+
       if ("ask" in message) return framed.postMessage(pageZoomTell(latest.current), "*");
+
       if ("key" in message) return setZoom((was) => pageZoomAfter(was, message.key));
       setZoom((was) => pageZoomPinched(was, message.pinch));
     };
+
     window.addEventListener("message", hear);
+
     return () => window.removeEventListener("message", hear);
   }, [frame]);
+
   return { zoom, press: (key) => setZoom((was) => pageZoomAfter(was, key)) };
 }

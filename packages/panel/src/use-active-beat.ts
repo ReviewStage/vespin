@@ -31,16 +31,20 @@ export function useActiveBeat(signedIn: boolean): void {
   useEffect(() => {
     if (!signedIn) return undefined;
     let lastSent = Number.NEGATIVE_INFINITY;
+
     const used = () => {
       const now = clockNow();
+
       if (now - lastSent < PRESENCE.BEAT_EVERY_MS) return;
       lastSent = now;
       tellAct(ACT_KIND.ACCOUNT_ACTIVE);
     };
+
     // Capture and passive: the beat reads no event and never stands in a handler's way.
     for (const name of ACTIVITY_EVENTS) {
       window.addEventListener(name, used, { capture: true, passive: true });
     }
+
     return () => {
       for (const name of ACTIVITY_EVENTS) {
         window.removeEventListener(name, used, { capture: true });

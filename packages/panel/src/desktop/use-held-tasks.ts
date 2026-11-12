@@ -1,5 +1,5 @@
 import type { TaskSummary } from "@repo/features/task-wire";
-import { sameShape } from "@repo/features/turn-rows";
+import { readAlike } from "@repo/features/turn-rows";
 import {
   filterValues,
   TASKS_FILTER_FIELD,
@@ -37,7 +37,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** No task waiting on the view. */
 const NO_TASKS: ReadonlySet<string> = new Set();
 
-/** How deep two layouts of the page are read alike (`sameShape`): each group's head, and each of its tasks as the same task. */
+/** How deep two layouts of the page are read alike (`readAlike`): each group's head, and each of its tasks as the same task. */
 const LAID_OUT_DEPTH = 2;
 
 /** What decides where the page stands its tasks: the workspace listed, the filter, and the display's layout of them. */
@@ -52,6 +52,7 @@ function sameFilter(a: TasksFilter, b: TasksFilter): boolean {
   return Object.values(TASKS_FILTER_FIELD).every((field) => {
     const was = filterValues(a, field);
     const now = filterValues(b, field);
+
     return was.length === now.length && was.every((value, at) => value === now[at]);
   });
 }
@@ -81,11 +82,14 @@ export function useHeldTasks(
   const live = new Map(listed.map((task) => [task.id, task] as const));
   // The tasks waiting on the view when the page was last drawn.
   const waited = useRef<ReadonlySet<string>>(NO_TASKS);
+
   const moving = (task: TaskSummary) =>
     tasks.pendingTasks?.has(task.id) === true || waited.current.has(task.id);
+
   // Each task as it was first drawn, or as it is now where it is new or the reader moved it.
   const placed = (held: ReadonlyMap<string, TaskSummary>) =>
     listed.map((task) => (moving(task) ? task : (held.get(task.id) ?? task)));
+
   const groups = useHeldOrder<HeldTasksView, TaskSummary, readonly TasksGroup[]>(
     view,
     tasks.shown,
@@ -99,19 +103,22 @@ export function useHeldTasks(
       // Note that only a task drawn holds its place, so one the filter or the completed window left out comes in where it stands once it is let in.
       placesOf: (drawn, held) => {
         const shown = new Set(drawn.flatMap((each) => each.tasks.map((task) => task.id)));
+
         return new Map(
           placed(held).flatMap((task) => (shown.has(task.id) ? [[task.id, task] as const] : [])),
         );
       },
     },
   );
+
   // Note that the groups are made anew on every draw, though they lay the same tasks out alike.
   const laidOut = useRef(groups);
-  const steady = sameShape(laidOut.current, groups, LAID_OUT_DEPTH) ? laidOut.current : groups;
+  const steady = readAlike(laidOut.current, groups, LAID_OUT_DEPTH) ? laidOut.current : groups;
   // Note that this runs after the held order keeps its places, so a task that stopped waiting is placed anew once before it holds still.
   useLayoutEffect(() => {
     waited.current = tasks.pendingTasks ?? NO_TASKS;
     laidOut.current = steady;
   });
+
   return steady;
 }

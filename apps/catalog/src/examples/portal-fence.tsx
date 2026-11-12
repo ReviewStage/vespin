@@ -19,6 +19,7 @@ import { CatalogSection } from "../section";
 
 function PortalFences(): React.JSX.Element {
   const [presses, setPresses] = useState(0);
+
   return (
     <CatalogSection id="portal-fence-summary" title="Fenced in a summary">
       <Disclosure>

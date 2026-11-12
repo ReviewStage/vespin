@@ -32,6 +32,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -44,6 +45,7 @@ test("a truncated heading is still named by its whole title", () => {
       children: LONG_TITLE,
     }),
   );
+
   const heading = container.querySelector("h2");
   assert.ok(heading);
   assert.equal(heading.textContent, LONG_TITLE);
@@ -51,6 +53,7 @@ test("a truncated heading is still named by its whole title", () => {
 
 test("a path cut from its start still holds every part of it", () => {
   const path = "packages/panel/src/tasks/cloud-browser/address-bar-model.ts";
+
   const container = render(
     createElement(Text, {
       as: TEXT_ELEMENT.SPAN,
@@ -58,5 +61,6 @@ test("a path cut from its start still holds every part of it", () => {
       children: createElement("bdi", null, path),
     }),
   );
+
   assert.equal(container.textContent, path);
 });

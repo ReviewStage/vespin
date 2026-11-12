@@ -223,6 +223,7 @@ function dayAfter(day: string): string | undefined {
   if (day >= LAST_DAY) return undefined;
   const next = new Date(`${day}T00:00:00.000Z`);
   next.setUTCDate(next.getUTCDate() + 1);
+
   return next.toISOString().slice(0, 10);
 }
 
@@ -235,13 +236,17 @@ function dayAfter(day: string): string | undefined {
 function endAfter(start: DateWallMoment): DateWallMoment | undefined {
   if (start.time === undefined) {
     const day = dayAfter(start.day);
+
     return day === undefined ? undefined : { day };
   }
+
   const [hour = "0", minute = "00"] = start.time.split(":");
   const next = Number(hour) + 1;
+
   if (next <= LAST_HOUR)
     return { day: start.day, time: `${String(next).padStart(2, "0")}:${minute}` };
   const day = dayAfter(start.day);
+
   return day === undefined ? undefined : { day, time: `00:${minute}` };
 }
 
@@ -264,21 +269,29 @@ function orderOf(moment: DateWallMoment): string {
  */
 function dayPicked(draft: Draft, day: string): Draft {
   const { start, end } = draft.wall;
+
   if (end === undefined) return changedTo({ start: { ...start, day } }, false);
+
   if (draft.pickingEnd) {
     if (day < start.day) {
       return changedTo({ start: { ...start, day }, end: { ...end, day: start.day } }, false);
     }
+
     const picked = { ...end, day };
+
     // Note that an end at the start's own moment names no range, and one earlier on its day swaps with it.
     if (orderOf(picked) === orderOf(start)) return changedTo({ start }, false);
+
     const wall =
       orderOf(picked) < orderOf(start) ? { start: picked, end: start } : { start, end: picked };
+
     return changedTo(wall, false);
   }
+
   const moved = { ...start, day };
   const kept = { ...end, day: day > end.day ? day : end.day };
   const after = orderOf(moved) < orderOf(kept) ? kept : endAfter(moved);
+
   return changedTo({ start: moved, end: after }, after !== undefined);
 }
 
@@ -288,8 +301,11 @@ function dayPicked(draft: Draft, day: string): Draft {
  */
 function ordered(wall: DateWall): DateWall {
   const { start, end } = wall;
+
   if (end === undefined || orderOf(start) < orderOf(end)) return wall;
+
   if (orderOf(end) < orderOf(start)) return { start: end, end: start };
+
   return { start, end: endAfter(start) };
 }
 
@@ -302,20 +318,25 @@ function ordered(wall: DateWall): DateWall {
 function typedInto(draft: Draft, which: DateEnd, moment: DateWallMoment): Draft {
   const { start, end } = draft.wall;
   const timed = start.time !== undefined || moment.time !== undefined;
+
   const timeOf = (was: DateWallMoment, fallback: string) =>
     timed ? (was.time ?? fallback) : undefined;
+
   const typed = (was: DateWallMoment, fallback: string) => ({
     day: moment.day,
     time: moment.time ?? timeOf(was, fallback),
   });
+
   const kept = (was: DateWallMoment, fallback: string) => ({
     day: was.day,
     time: timeOf(was, fallback),
   });
+
   const wall =
     which === DATE_END.START
       ? { start: typed(start, DEFAULT_TIME.START), end: end && kept(end, DEFAULT_TIME.END) }
       : { start: kept(start, DEFAULT_TIME.START), end: end && typed(end, DEFAULT_TIME.END) };
+
   return changedTo(ordered(wall), false);
 }
 
@@ -333,31 +354,39 @@ function wordsRead(
   single: boolean,
 ): { readonly draft: Draft; readonly day: string } | undefined {
   const { typing } = draft;
+
   if (typing === undefined) return { draft, day: draft.wall.start.day };
   const named = dateOfWords(typing.words, now, zone);
   const wall = named === undefined ? undefined : dateWall(named, zone);
+
   if (wall === undefined) return undefined;
+
   if (wall.end !== undefined && !single)
     return { draft: changedTo(wall, false), day: wall.start.day };
+
   return { draft: typedInto(draft, typing.end, wall.start), day: wall.start.day };
 }
 
 /** End date switched: on, an end just after the start (`endAfter`), which the next pick moves; off, the start alone. */
 function endSwitched(draft: Draft, on: boolean): Draft {
   const { start } = draft.wall;
+
   if (!on) return changedTo({ start }, false);
   // Note that the last day a mention spells has no day after it, so its switch stays off.
   const end = endAfter(start);
+
   return end === undefined ? draft : changedTo({ start, end }, true);
 }
 
 /** Include time switched: on, a time on each end; off, the days alone. */
 function timeSwitched(draft: Draft, on: boolean): Draft {
   const { start, end } = draft.wall;
+
   const timed = (moment: DateWallMoment, time: string) => ({
     day: moment.day,
     time: on ? time : undefined,
   });
+
   return changedTo(
     {
       start: timed(start, DEFAULT_TIME.START),
@@ -387,8 +416,10 @@ function zoneOffset(zone: string, now: number): string | undefined {
 /** Every zone as Time zone lists them, `zone` among them where the runtime lists it under no name of its own, each with its offset now, which a search matches too. */
 function zoneRows(zone: string, now: number): MenuRow[] {
   const zones = TIME_ZONES.includes(zone) ? TIME_ZONES : [zone, ...TIME_ZONES];
+
   return zones.map((each) => {
     const offset = zoneOffset(each, now);
+
     return {
       id: each,
       label: zoneLabel(each),
@@ -444,7 +475,9 @@ function openingWall(
   single: boolean,
 ): DateWall {
   const wall = (date === undefined ? undefined : dateWall(date, zone)) ?? { start: { day: today } };
+
   if (!single) return wall;
+
   return { start: { day: wall.start.day, time: wall.start.time ?? DEFAULT_TIME.START } };
 }
 
@@ -485,12 +518,14 @@ function DatePickerPanel({
   const today = dateToday(now, zone) ?? new Date(now).toISOString().slice(0, 10);
   const field = useRef<HTMLInputElement>(null);
   const done = useRef(false);
+
   const [draft, setDraft] = useState<Draft>(() => ({
     wall: openingWall(date, zone, today, single),
     pickingEnd: false,
     typing: undefined,
     changed: false,
   }));
+
   // Note that the draft is kept beside its state too, because a field's blur reads its words just before a press outside closes the picker, in the same event.
   const latest = useRef(draft);
   const [month, setMonth] = useState(() => draft.wall.start.day.slice(0, 7));
@@ -501,6 +536,7 @@ function DatePickerPanel({
     latest.current = next;
     setDraft(next);
   };
+
   const finish = (how: DatePickerClose) => {
     if (done.current) return;
     done.current = true;
@@ -514,14 +550,17 @@ function DatePickerPanel({
       how,
     });
   };
+
   const leave = () => {
     if (!turning.current) finish(DATE_PICKER_CLOSE.LEAVE);
   };
+
   const turnTo = (next: DatePickerPage) => {
     turning.current = true;
     setFrom(page);
     setPage(next);
   };
+
   // A zone picked keeps the times as written, read now in the zone picked.
   const zonePicked = (picked: string) => {
     if (picked !== chosenZone.current) {
@@ -529,8 +568,10 @@ function DatePickerPanel({
       setZone(picked);
       update(changedTo(latest.current.wall, latest.current.pickingEnd));
     }
+
     turnTo(DATE_PICKER_PAGE.DATE);
   };
+
   // The page turned has taken the focus by now, its own effects run before this one.
   useEffect(() => {
     turning.current = false;
@@ -539,25 +580,34 @@ function DatePickerPanel({
   useEffect(() => {
     if (!open && page === DATE_PICKER_PAGE.ZONE) onExited();
   }, [open, page, onExited]);
+
   const zones = useMemo(
     () => (page === DATE_PICKER_PAGE.ZONE ? zoneRows(zone, now) : []),
     [page, zone, now],
   );
+
   // Typed words are read as the field is left, the month shown moving to the end they set; words that name no date are marked and kept.
   const read = (): boolean => {
     const typing = latest.current.typing;
+
     if (typing === undefined) return true;
     const next = wordsRead(latest.current, Date.now(), chosenZone.current, single);
+
     if (next === undefined) {
       update({ ...latest.current, typing: { ...typing, invalid: true } });
+
       return false;
     }
+
     update(next.draft);
     setMonth(next.day.slice(0, 7));
+
     return true;
   };
+
   const dateField = (which: DateEnd, moment: DateWallMoment, control: FieldControl) => {
     const typing = draft.typing?.end === which ? draft.typing : undefined;
+
     return (
       <TextField
         ref={which === DATE_END.START ? field : undefined}
@@ -576,6 +626,7 @@ function DatePickerPanel({
       />
     );
   };
+
   // Each end under its label, its time beside its date while Include time is on, and under both the line saying its words named no date.
   const endField = (which: DateEnd, moment: DateWallMoment) => (
     <FormField
@@ -596,6 +647,7 @@ function DatePickerPanel({
       }
     </FormField>
   );
+
   const timeField = (which: DateEnd, moment: DateWallMoment) => (
     <TimeField
       label={
@@ -607,6 +659,7 @@ function DatePickerPanel({
           which === DATE_END.START
             ? { start: { ...start, time }, end }
             : { start, end: end && { ...end, time } };
+
         update(changedTo(wall, draft.pickingEnd));
       }}
     />
@@ -614,6 +667,7 @@ function DatePickerPanel({
 
   if (page === DATE_PICKER_PAGE.ZONE) {
     if (!open) return null;
+
     return (
       <SearchableMenu
         replayUnmasked
@@ -744,6 +798,7 @@ function boxOf(
   | { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }
   | undefined {
   if (!(at instanceof Element)) return { ...at, right: at.left };
+
   return at.isConnected ? at.getBoundingClientRect() : undefined;
 }
 
@@ -758,12 +813,15 @@ export function useDatePicker(room: RefObject<HTMLElement | null>): DatePicker {
     | { readonly opening: DatePickerOpening; readonly key: number; readonly standing: boolean }
     | undefined
   >(undefined);
+
   const counted = useRef(0);
+
   const open = (opening: DatePickerOpening) => {
     if (room.current === null) return;
     counted.current += 1;
     setOpened({ opening, key: counted.current, standing: true });
   };
+
   const popover =
     opened === undefined ? null : (
       // Note that the layer stands while the panel fades, because the panel's own fade is what tells the owner it is gone.
@@ -783,5 +841,6 @@ export function useDatePicker(room: RefObject<HTMLElement | null>): DatePicker {
         />
       </RectFloat>
     );
+
   return { popover, open };
 }

@@ -25,21 +25,27 @@ const task = (taskId: string): DescriptionMention => ({ kind: MENTION_KIND.TASK,
 function opener() {
   const opened: string[] = [];
   let handTo: ((mention: DescriptionMention) => void) | undefined;
+
   function Probe({ gated, arriving }: { gated: boolean; arriving?: DescriptionMention }): null {
     const open = useLinkOpener<DescriptionMention>(gated, (mention) => opened.push(mention.taskId));
     handTo = open;
     useLayoutEffect(() => {
       if (arriving !== undefined) open(arriving);
     }, [arriving, open]);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
+
   const stand = (gated: boolean, arriving?: DescriptionMention) =>
     act(() =>
       root.render(createElement(Probe, arriving === undefined ? { gated } : { gated, arriving })),
     );
+
   const hand = (mention: DescriptionMention) => act(() => handTo?.(mention));
+
   return { opened, stand, hand };
 }
 

@@ -87,6 +87,7 @@ function storedWindow(window: typeof WindowAnswerSchema.Type): StoredUsageWindow
 /** Whether the plan's reading and its last ask are old enough, or absent, that ChatGPT may be asked. */
 function due(row: ProviderKeyRow, since: Date): boolean {
   if (!ASKED_STATUSES.has(row.status)) return false;
+
   return [row.usageHeardAt, row.usageAskedAt].every(
     (at) => at === null || at.getTime() <= since.getTime(),
   );
@@ -99,9 +100,11 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
   row: ProviderKeyRow,
 ) {
   const access = yield* refreshChatGptAccess(userId, ring, undefined, row.id, true);
+
   if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<StoredUsageWindow[]>();
   const client = yield* HttpClient.HttpClient;
   const { chatgptAccountId } = access.plan;
+
   const request = HttpClientRequest.get(CHATGPT_USAGE_URL).pipe(
     HttpClientRequest.setHeader("accept", "application/json"),
     HttpClientRequest.bearerToken(Redacted.value(access.accessToken)),
@@ -109,6 +112,7 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
       ? (same) => same
       : HttpClientRequest.setHeader(ACCOUNT_HEADER, chatgptAccountId),
   );
+
   // A request that failed or timed out is no answer, and its cause is dropped unread, since it may quote the token.
   const answered = yield* client.execute(request).pipe(
     Effect.flatMap((response) =>
@@ -120,6 +124,7 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.orElseSucceed(() => Option.none()),
   );
+
   return Option.flatMap(answered, (body) =>
     Option.map(Schema.decodeUnknownOption(UsageAnswerSchema)(body), ({ rate_limit }) =>
       [rate_limit?.primary_window, rate_limit?.secondary_window].flatMap((window) =>
@@ -141,6 +146,7 @@ const askDue = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, ring
         // Note that the ask is claimed before it is made, so it counts though ChatGPT never answers it.
         if (!(yield* claimPlanUsageAsk(userId, row.id, now, since))) return;
         const windows = yield* askUsage(userId, ring, row);
+
         if (Option.isSome(windows) && windows.value.length > 0) {
           yield* setPlanUsageWindows(userId, row.id, windows.value, now);
         }

@@ -19,8 +19,10 @@ const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 it.effect("a named local port that is taken is not moved to the next free one", () =>
   Effect.gen(function* () {
     const taken = new Set([3001]);
+
     const listen: ListenOnLoopback = (port) =>
       Effect.succeed(taken.has(port) ? undefined : Stream.empty);
+
     const forwarded = yield* forwardPort(
       {
         socketOrigin: "wss://tryapp.test",
@@ -31,6 +33,7 @@ it.effect("a named local port that is taken is not moved to the next free one", 
       { agentId: AGENT_ID, port: 3000, localPort: 3001 },
       Effect.void,
     );
+
     assert.equal(forwarded.localPort, undefined);
   }).pipe(Effect.scoped),
 );

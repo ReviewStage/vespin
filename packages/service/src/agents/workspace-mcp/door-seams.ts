@@ -18,6 +18,7 @@ export const workspaceMcpDoorSeams: Effect.Effect<AgentDoorSeams, never, HostedE
   Effect.gen(function* () {
     const environment = yield* HostedEnvironment;
     const writer = yield* Effect.cached(storeWriter({ tools: CODER_TOOL_SET }));
+
     return {
       writer: () => writer,
       summaryModel: (owner, chosen, effort) =>

@@ -73,13 +73,16 @@ export function useAgentPullRequestSource(
   number: number | undefined,
 ): PullRequestSource {
   const write = useMemo(() => agentPullRequestWrite(agentId, number), [agentId, number]);
+
   const agent =
     control.agents?.find((each) => each.id === agentId) ??
     control.archived?.find((each) => each.id === agentId);
+
   const ended = !agentStillWriting(agent?.status ?? AGENT_STATUS.RUNNING);
   const taskId = agent?.planId ?? null;
   const published = pullRequestOfTab(control, { changes: agentId, number });
   const { generateChapters } = control;
+
   // Note that the doors are kept while what they name stands, because every part under the tab that hears the source draws anew on a new one.
   const doors = useMemo(
     () => ({
@@ -88,8 +91,10 @@ export function useAgentPullRequestSource(
     }),
     [write, agentId, number, generateChapters],
   );
+
   // Note that a repository out of reach is mended in the agent's own workspace, by its task.
   const place = useMemo(() => ({ taskId }), [taskId]);
+
   return useMemo(
     () => ({ ...doors, ended, place, published, number }),
     [doors, ended, place, published, number],

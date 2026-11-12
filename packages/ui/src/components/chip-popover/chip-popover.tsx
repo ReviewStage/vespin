@@ -104,6 +104,7 @@ export function ChipPopover({
     setOpen(false);
     chip.current?.focus();
   };
+
   const left = (target: EventTarget | null) => {
     if (!(target instanceof Node && box.current?.contains(target))) setOpen(false);
   };

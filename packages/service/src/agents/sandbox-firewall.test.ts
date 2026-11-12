@@ -81,6 +81,7 @@ const ownSession = Effect.gen(function* () {
   const organizationId = yield* openWorkspace(userId);
   const task = yield* createTask(userId, { organizationId });
   const agentId = yield* openTaskAgent(userId, organizationId, task.id);
+
   return {
     userId,
     agentId,
@@ -93,6 +94,7 @@ const ownSession = Effect.gen(function* () {
 function standing(session: Effect.Success<typeof ownSession>) {
   const sandbox = memorySandbox();
   sandbox.stand({ name: session.name, running: session.sandboxSessionId });
+
   return {
     firewall: sandboxFirewall(sandbox.service),
     policies: () => sandbox.state.policies.map((each) => each.policy),
@@ -111,6 +113,7 @@ it.layer(getTestDB())("a sandbox session's firewall", (it) => {
           yield* firewall.keepLaunch(session, bearerLaunch(session.agentId));
           yield* firewall.write(session, { github: write });
           yield* firewall.write(session, { github: write, clone: read });
+
           return yield* readFirewallLaunch(session);
         }).pipe(Effect.provide(LOCAL_AGENT_ENVIRONMENT));
 
@@ -132,6 +135,7 @@ it.layer(getTestDB())("a sandbox session's firewall", (it) => {
         ]);
         assert.ok(kept !== undefined);
         assert.equal(kept.agentId, session.agentId);
+
         for (const value of [BEARER, "runner-placeholder-fixture"]) {
           assert.equal(kept.sealedEntries.includes(value), false);
         }

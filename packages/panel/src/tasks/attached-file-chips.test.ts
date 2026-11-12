@@ -49,21 +49,31 @@ const SPEC: AgentAttachment = {
   mediaType: "application/pdf",
   data: "JVBERi0=",
 };
+
 const NOTES: AgentAttachment = { name: "notes.txt", mediaType: "text/plain", data: "aGk=" };
 
 let root: Root | undefined;
 let played: Played[] = [];
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 beforeEach(() => {
   played = [];
+
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
+
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[]) {
-      const motion = { onfinish: null as (() => void) | null, cancel: () => undefined };
+      const motion: Motion = {
+        onfinish: null,
+        cancel: () => undefined,
+      };
+
       played.push({ element: this, keyframes, finish: () => motion.onfinish?.() });
+
       return motion;
     },
   });
@@ -72,14 +82,18 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     const row = this.parentElement;
+
     if (!this.matches("li") || row === null) return new DOMRect(0, 0, 0, 0);
+
     const laidOut = [...row.children].filter(
       (each) => each instanceof HTMLElement && each.style.position !== "absolute",
     );
+
     const left =
       this.style.position === "absolute"
         ? Number.parseFloat(this.style.left)
         : laidOut.indexOf(this) * CHIP;
+
     return new DOMRect(left, 0, CHIP, 48);
   });
 });
@@ -88,6 +102,7 @@ afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
+
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   Reflect.deleteProperty(Element.prototype, "animate");
   vi.restoreAllMocks();
@@ -103,6 +118,7 @@ function Box({
 }): React.JSX.Element {
   const [files, setFiles] = useState(start);
   held.now = files;
+
   return createElement(
     "div",
     null,
@@ -119,6 +135,7 @@ function draw(start: readonly AgentAttachment[]) {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(withQueryClient(createElement(Box, { start, held }))));
+
   return held;
 }
 
@@ -144,9 +161,11 @@ test("the way off takes the file off on the press, and its chip scales out out o
   const leaving = chips().find((chip) => chip.hasAttribute("data-leaving"));
   assert.equal(leaving && attachmentChipName(leaving), "spec.pdf", "drawn through its exit");
   assert.equal(leaving?.hasAttribute("inert"), true);
+
   const scaled = played
     .filter((motion) => motion.element === leaving)
     .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
+
   assert.ok(scaled, "it scales out");
   finishAll();
   assert.deepEqual(chips().map(attachmentChipName), ["notes.txt"]);
@@ -167,9 +186,11 @@ test("a file the box takes on scales in", () => {
   act(() => document.querySelector<HTMLButtonElement>("button")?.click());
   const arrived = chips().at(-1);
   assert.equal(arrived && attachmentChipName(arrived), "notes.txt");
+
   const scaled = played
     .filter((motion) => motion.element === arrived)
     .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
+
   assert.ok(scaled, "it scales in");
 });
 
@@ -178,9 +199,11 @@ test("the first file an empty box takes on scales in too", () => {
   act(() => document.querySelector<HTMLButtonElement>("button")?.click());
   const arrived = chips()[0];
   assert.equal(arrived && attachmentChipName(arrived), "notes.txt");
+
   const scaled = played
     .filter((motion) => motion.element === arrived)
     .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
+
   assert.ok(scaled, "it scales in");
 });
 

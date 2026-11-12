@@ -88,6 +88,7 @@ const SHARED = sql<boolean>`(not ${PERSONAL} and ${MEMBER_COUNT} >= ${SHARED_MEM
  */
 function keptByScope(scope: AdminMetricsScope): SQL | undefined {
   if (scope === ADMIN_METRICS_SCOPE.ALL) return undefined;
+
   return exists(
     queryBuilder
       .select({ one: member.id })
@@ -211,6 +212,7 @@ const findWorkspaceRows = SqlSchema.findAll({
         .from(organization)
         .where(keptByFilter(request))
         .as("listed");
+
       return db
         .select()
         .from(listed)
@@ -332,6 +334,7 @@ function readConnections(organizationIds: readonly string[]) {
   if (organizationIds.length === 0) {
     return Effect.succeed([[], []] as const);
   }
+
   return Effect.all([findOwners(organizationIds), findInstallations(organizationIds)], {
     concurrency: "unbounded",
   });
@@ -340,6 +343,7 @@ function readConnections(organizationIds: readonly string[]) {
 /** The trailing week's first instant, which every row's activity counts from. */
 function activitySince(now: number): Date {
   const sinceDay = lastNDayKeys(now, ADMIN_WORKSPACES_ACTIVITY_DAYS)[0];
+
   return new Date(`${sinceDay}T00:00:00.000Z`);
 }
 
@@ -406,6 +410,7 @@ export function readAdminWorkspaceSource(input: {
 }): AdminSeamEffect<AdminWorkspaceDetailSource | undefined> {
   return Effect.gen(function* () {
     const since = activitySince(input.now);
+
     const [found, members, installations] = yield* Effect.all(
       [
         findWorkspaceRow({ id: input.id, since, sinceMs: since.getTime() }),
@@ -414,8 +419,10 @@ export function readAdminWorkspaceSource(input: {
       ],
       { concurrency: "unbounded" },
     );
+
     if (Option.isNone(found)) return undefined;
     const { createdAt, ...row } = found.value;
+
     // Note that the plugin's role text may name several roles, so each is
     // read as the highest it names, and the owners are moved first after,
     // keeping the order they joined in.
@@ -424,7 +431,9 @@ export function readAdminWorkspaceSource(input: {
       role: roleOf(memberRole),
       joinedAt: joinedAt.getTime(),
     }));
+
     const owning = (each: (typeof read)[number]) => each.role === WORKSPACE_ROLE.OWNER;
+
     return {
       row: { ...row, createdAt: createdAt.getTime() },
       members: [...read.filter(owning), ...read.filter((each) => !owning(each))],
@@ -462,6 +471,7 @@ export function readAdminWorkspacesSource(input: {
       ],
       { concurrency: "unbounded" },
     );
+
     const [owners, installations] = yield* readConnections(rows.map((row) => row.id));
 
     const totals = Option.getOrElse(summary, () => ({

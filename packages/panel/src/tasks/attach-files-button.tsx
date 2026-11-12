@@ -59,6 +59,7 @@ export function AttachFilesButton({
   useImperativeHandle(handed, () => ({ open: picker.open }));
   const menu = useMenu(true);
   const press = more.length === 0 ? { onClick: picker.open } : menu.trigger(riseAbove);
+
   // Note that a box held from taking files still opens its menu, its Attachment dimmed, because its other rows, the agent's servers, are no files.
   return (
     <>

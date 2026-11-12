@@ -15,7 +15,9 @@ import { vi } from "vitest";
 /** `arrive` on a control, then the hint's wait run out. */
 function rested(arrive: () => void): void {
   const faked = vi.isFakeTimers();
+
   if (!faked) vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(arrive);
     act(() => {

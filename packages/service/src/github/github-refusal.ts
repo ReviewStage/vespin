@@ -10,7 +10,7 @@
  * refused as its own kind, so the desktop says GitHub, not the service, failed.
  */
 
-import { Effect } from "effect";
+import { Effect, Match, Predicate } from "effect";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import type { GitHubReadFailure, GitHubWorkspaceReadFailure } from "./github-app.js";
@@ -22,13 +22,10 @@ export function logGitHubReadFailure(failure: GitHubReadFailure): Effect.Effect<
 
 /** A workspace read's failure as one warning line of kinds alone. */
 export function logWorkspaceReadFailure(failure: GitHubWorkspaceReadFailure): Effect.Effect<void> {
-  switch (failure._tag) {
-    case "GitHubAppNotConfigured":
-    case "GitHubUnavailable":
-      return logGitHubReadFailure(failure);
-    default:
-      return logStoreFailure(failure);
-  }
+  return Match.value(failure).pipe(
+    Match.tag("GitHubAppNotConfigured", "GitHubUnavailable", logGitHubReadFailure),
+    Match.orElse(logStoreFailure),
+  );
 }
 
 /** A read of the workspace's installation the handler cannot answer without, refused on the terms above. */
@@ -48,7 +45,7 @@ export function githubReachOrRefusal<A, R>(
   return effect.pipe(
     Effect.tapError(logWorkspaceReadFailure),
     Effect.mapError((failure) =>
-      failure._tag === "GitHubUnavailable"
+      Predicate.isTagged(failure, "GitHubUnavailable")
         ? HOSTED_REFUSAL.GITHUB_UNANSWERED
         : HOSTED_REFUSAL.UNAVAILABLE,
     ),

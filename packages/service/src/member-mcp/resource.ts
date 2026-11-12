@@ -73,6 +73,7 @@ export interface OAuthResourceRecord {
 /** The resource's row as the seeder writes it under a deployment: enabled, with the policy above, keyed by its identifier. */
 export function oauthResourceRecord(baseURL: string, now: Date): OAuthResourceRecord {
   const resource = memberMcpResource(baseURL);
+
   return {
     id: resource.identifier,
     identifier: resource.identifier,

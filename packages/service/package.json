@@ -63,6 +63,7 @@
     "./agents/coder-host/transcript": "./src/agents/coder-host/transcript.js",
     "./agents/coder-host/usage": "./src/agents/coder-host/usage.js",
     "./agents/host-install-script-app": "./src/agents/host-install-script-app.js",
+    "./agents/workspace-drive": "./src/agents/workspace-drive.js",
     "./agents/workspace-mcp/app": "./src/agents/workspace-mcp/app.js",
     "./agents/workspace-mcp/sandbox-door": "./src/agents/workspace-mcp/sandbox-door.js",
     "./agents/native-events/native-title": "./src/agents/native-events/native-title.js",
@@ -231,28 +232,28 @@
     "@sentry/effect": "11.7.0",
     "@sentry/profiling-node": "11.7.0",
     "@vercel/connect": "2.4.1",
-    "@vercel/functions": "3.10.1",
+    "@vercel/functions": "3.11.1",
     "@vercel/queue": "0.11.0",
     "@vercel/schedules": "0.0.3",
     "ai": "catalog:",
     "better-auth": "1.7.7",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
-    "pg": "8.23.0",
+    "pg": "8.23.1",
     "request-filtering-agent": "3.2.1",
     "ws": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@types/node": "catalog:",
-    "@types/pg": "8.21.0",
-    "@types/ws": "8.18.1",
+    "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
     "jsdom": "^30.0.1",
     "react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   }
 }

@@ -70,6 +70,7 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
   const shared = [MENTION_KIND.FILE, MENTION_KIND.FILE, MENTION_KIND.LINK, MENTION_KIND.LINK];
   // A task's own things are named by its number, a place the window draws as the task's chip once it finds the task.
   const own = [LINK_DESTINATION.TASK, LINK_DESTINATION.SECTION];
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     const words = coderInstructions(REPOSITORY, brief, TASK_ADDRESS, standingFor(REPOSITORY));
     const told = words.slice(words.indexOf("## What your messages are"));
@@ -87,6 +88,7 @@ test("every address the link rule shows an author how to build is one Vespin dra
   const addresses = [
     ...linkRuleWords("https://vespin.dev/acme").matchAll(/`(https:\/\/[^`\s]*<[^`\s]+)`/gu),
   ];
+
   assert.deepEqual(
     addresses.map(
       ([, target]) =>
@@ -131,6 +133,7 @@ test("a coding agent is shown to name an MCP server as a mention Vespin draws as
     TASK_ADDRESS,
     standingFor(REPOSITORY),
   );
+
   assert.deepEqual(appMentionsIn(words), [
     { kind: MENTION_KIND.SERVER, mention: true },
     { kind: MENTION_KIND.SERVER, mention: true },
@@ -151,5 +154,6 @@ test("a coding agent is shown a day, a time, and a range, each a date Vespin dra
     TASK_ADDRESS,
     standingFor(REPOSITORY),
   );
+
   assert.deepEqual(datesIn(words), [MENTION_KIND.DATE, MENTION_KIND.DATE, MENTION_KIND.DATE]);
 });

@@ -102,7 +102,8 @@ async function opened() {
   await act(async () => undefined);
   const element = container.querySelector<TiptapEditorHTMLElement>(".ProseMirror");
   const editor = element?.editor ?? assert.fail("the editor is running");
-  return { container, element: element as TiptapEditorHTMLElement, editor };
+
+  return { container, element: element ?? assert.fail("the editor is mounted"), editor };
 }
 
 /** Where `words` end in the editor's text, as a position. */
@@ -110,8 +111,10 @@ function endOf(editor: Editor, words: string): number {
   let found: number | undefined;
   editor.state.doc.descendants((node, pos) => {
     const at = node.isText ? (node.text ?? "").indexOf(words) : -1;
+
     if (found === undefined && at >= 0) found = pos + at + words.length;
   });
+
   return found ?? assert.fail(`${words} is in the text`);
 }
 
@@ -144,7 +147,9 @@ function newLineAfter(editor: Editor, words: string): void {
 /** The menu's rows, by their names, where it stands. */
 function menuRows(container: HTMLElement): string[] | undefined {
   const menu = container.querySelector<HTMLElement>('[role="listbox"][aria-label="Blocks"]');
+
   if (menu === null) return undefined;
+
   return [...menu.querySelectorAll<HTMLElement>('[role="option"]')].map((row) =>
     (row.querySelector(".ui-combobox-option-label")?.textContent ?? row.textContent ?? "").trim(),
   );
@@ -153,6 +158,7 @@ function menuRows(container: HTMLElement): string[] | undefined {
 /** The menu's group headings, where it stands. */
 function menuGroups(container: HTMLElement): string[] {
   const menu = container.querySelector<HTMLElement>('[role="listbox"][aria-label="Blocks"]');
+
   return [...(menu?.querySelectorAll<HTMLElement>('[role="group"]') ?? [])].map(
     (group) => group.getAttribute("aria-label") ?? "",
   );
@@ -164,6 +170,7 @@ function press(element: HTMLElement, key: string, init: KeyboardEventInit = {}):
   act(() => {
     element.dispatchEvent(event);
   });
+
   return event;
 }
 

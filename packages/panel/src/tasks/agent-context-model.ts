@@ -80,16 +80,20 @@ function contextPercent(context: AgentContext): number {
 /** How the ring reads: at or past the harness's threshold, within a tenth of the window of it, or short of that. */
 export function contextLevel(context: AgentContext): ContextLevel {
   const { inputTokens, compactionThresholdTokens, windowTokens } = context;
+
   if (inputTokens >= compactionThresholdTokens) return CONTEXT_LEVEL.OVER;
+
   if (inputTokens >= compactionThresholdTokens - NEAR_SHARE * windowTokens) {
     return CONTEXT_LEVEL.NEAR;
   }
+
   return CONTEXT_LEVEL.ROOM;
 }
 
 /** The ring's hover: "62% of context used", and ", near the limit" once the ring has turned amber or red, so the warning is not color alone. */
 export function contextHint(context: AgentContext): string {
   const used = `${contextPercent(context)}% of context used`;
+
   return contextLevel(context) === CONTEXT_LEVEL.ROOM ? used : `${used}, near the limit`;
 }
 
@@ -110,6 +114,7 @@ export function contextTotalLine(context: AgentContext): string {
  */
 export function contextRows(context: AgentContext, brief: AgentBrief | undefined): ContextRow[] {
   const { systemPromptTokens, toolDefinitionTokens, briefTokens } = context.estimated;
+
   const rows: ContextRow[] = [
     {
       part: CONTEXT_PART.SYSTEM_PROMPT,
@@ -124,6 +129,7 @@ export function contextRows(context: AgentContext, brief: AgentBrief | undefined
       estimated: true,
     },
   ];
+
   if (briefTokens !== undefined) {
     rows.push({
       part: CONTEXT_PART.BRIEF,
@@ -132,6 +138,7 @@ export function contextRows(context: AgentContext, brief: AgentBrief | undefined
       estimated: true,
     });
   }
+
   const named = rows.reduce((sum, row) => sum + row.tokens, 0);
   // Note that estimates that outrun the provider's count are scaled down to it, because the
   // count is the one measured figure and the parts must not add up to more than it.
@@ -144,6 +151,7 @@ export function contextRows(context: AgentContext, brief: AgentBrief | undefined
     tokens: Math.max(0, left),
     estimated: true,
   });
+
   return fitted;
 }
 
@@ -160,22 +168,29 @@ export function rowWidth(row: ContextRow, context: AgentContext): number {
 /** What the popover says under the legend, at the time given: the cache, the step's answer, where the harness compacts, and when it last did. */
 export function contextStats(context: AgentContext, now: number): ContextStat[] {
   const stats: ContextStat[] = [];
+
   if (context.cachedInputTokens !== undefined) {
     stats.push({ label: "Read from cache", value: formatCompact(context.cachedInputTokens) });
   }
+
   if (context.cacheWriteTokens !== undefined && context.cacheWriteTokens > 0) {
     stats.push({ label: "Written to cache", value: formatCompact(context.cacheWriteTokens) });
   }
+
   stats.push({ label: "Last step's output", value: formatCompact(context.outputTokens) });
+
   const thresholdPercent = Math.round(
     (context.compactionThresholdTokens / context.windowTokens) * 100,
   );
+
   stats.push({
     label: "Compacts at",
     value: `${formatCompact(context.compactionThresholdTokens)} (${thresholdPercent}%)`,
   });
+
   if (context.compactedAt !== undefined) {
     stats.push({ label: "Last compacted", value: agoText(context.compactedAt, now) });
   }
+
   return stats;
 }

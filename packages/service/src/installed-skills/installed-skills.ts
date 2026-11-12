@@ -84,8 +84,10 @@ const memberWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<MemberWorkspace, HostedRefusal, DatabaseServices> {
   const workspaces = yield* hostedStoreOrUnavailable(listWorkspaces(userId));
   const workspace = workspaces.find((one) => one.id === workspaceId);
+
   if (workspace === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const personal = yield* hostedStoreOrUnavailable(personalWorkspaceOf(userId));
+
   return {
     id: workspace.id,
     role: workspace.role,
@@ -103,6 +105,7 @@ const checkedScope = /* @__PURE__ */ Effect.fnUntraced(function* (
   scope: InstalledSkillScope,
 ): Effect.fn.Return<void, HostedRefusal> {
   if (scope === INSTALLED_SKILL_SCOPE.PERSONAL) return;
+
   if (workspace.personal) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 });
 
@@ -140,6 +143,7 @@ function contentOf(skill: InstalledSkillRead): InstalledSkillContent {
  */
 function managedBy(userId: string, workspace: MemberWorkspace, skill: InstalledSkill): boolean {
   if (skill.scope === INSTALLED_SKILL_SCOPE.PERSONAL) return skill.ownerUserId === userId;
+
   return (
     skill.organizationId === workspace.id &&
     (skill.installedByUserId === userId || MANAGING_ROLES.has(workspace.role))
@@ -186,6 +190,7 @@ function storeWrite<A, R>(
       InstallNotPermitted: () => refusedAs<A>(HOSTED_REFUSAL.NOT_PERMITTED),
     }),
   );
+
   return Effect.flatMap(hostedStoreOrUnavailable(settled), (result) =>
     Result.isSuccess(result) ? Effect.succeed(result.success) : Effect.fail(result.failure),
   );
@@ -197,6 +202,7 @@ const refusedWrite = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<never, HostedRefusal, DatabaseServices> {
   const readable = yield* hostedStoreOrUnavailable(readInstalledSkill(userId, id));
+
   return yield* Effect.fail(
     Option.isSome(readable) ? HOSTED_REFUSAL.NOT_PERMITTED : HOSTED_REFUSAL.NOT_FOUND,
   );
@@ -225,6 +231,7 @@ export const listSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const workspace = yield* memberWorkspace(userId, workspaceId);
   const listed = yield* hostedStoreOrUnavailable(listInstalledSkills(userId, workspace.id));
+
   return {
     skills: listed.map((skill) => summaryOf(skill, managedBy(userId, workspace, skill))),
   };
@@ -234,7 +241,9 @@ export const listSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const readSkill = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, id: string) {
   const uuid = yield* pathUuid(id);
   const read = yield* hostedStoreOrUnavailable(readInstalledSkill(userId, uuid));
+
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return contentOf(read.value);
 });
 
@@ -244,6 +253,7 @@ export const previewSkillPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
   asked: SkillPasteAsked,
 ) {
   const workspace = yield* memberWorkspace(userId, asked.workspaceId);
+
   return yield* previewOfPaste(userId, workspace.id, parseSkillPaste(asked.text));
 });
 
@@ -255,10 +265,12 @@ export const installSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
   const workspace = yield* memberWorkspace(userId, asked.workspaceId);
   yield* checkedScope(workspace, asked.scope);
   const made = yield* madeFromPaste(userId, workspace.id, parseSkillPaste(asked.text), asked);
+
   const owner =
     asked.scope === INSTALLED_SKILL_SCOPE.PERSONAL
       ? { scope: INSTALLED_SKILL_SCOPE.PERSONAL }
       : { scope: INSTALLED_SKILL_SCOPE.WORKSPACE, organizationId: workspace.id };
+
   // Note that the store's own transactions nest as savepoints, so one refusal undoes every install before it.
   const installed = yield* storeWrite(
     Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -274,7 +286,9 @@ export const installSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
     ),
     made.length === 1 ? made[0]?.name : undefined,
   );
+
   yield* skillChanged(userId, SERVER_SKILL_ACTION.INSTALL);
+
   // Note that every skill of an install is written in the one transaction, so the first's names it.
   return {
     skills: installed.map((skill) => summaryOf(skill, true)),
@@ -289,7 +303,9 @@ export const removeSkill = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const uuid = yield* pathUuid(id);
   const removed = yield* hostedStoreOrUnavailable(removeInstalledSkill(userId, uuid));
+
   if (Option.isNone(removed)) return yield* refusedWrite(userId, uuid);
   yield* skillChanged(userId, SERVER_SKILL_ACTION.REMOVE);
+
   return { id: uuid, txid: removed.value };
 });

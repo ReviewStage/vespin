@@ -121,6 +121,7 @@ export function DetailPage({
   useEffect(() => {
     onPickUp?.({ name: named.name, shown: named.away });
   }, [onPickUp, named.name, named.away]);
+
   return (
     <section
       className="ui-detail-page @container flex flex-1 flex-col min-w-0 h-full min-h-0 text-foreground font-ui text-body"

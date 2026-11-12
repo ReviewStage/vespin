@@ -54,6 +54,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -66,6 +67,7 @@ function taskMenu(chosen: string[]): ListRowMenu {
     ],
     [{ label: "Delete", danger: true, onSelect: () => chosen.push("Delete") }],
   ];
+
   return { thing: "Task", groups };
 }
 
@@ -78,6 +80,7 @@ function TaskList({
   disabled?: boolean;
 }): React.JSX.Element {
   const [opened, setOpened] = useState(0);
+
   return createElement(
     "div",
     null,
@@ -101,7 +104,9 @@ function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`No button named ${name}`);
+
   return found;
 }
 
@@ -115,13 +120,18 @@ function openMenu(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[role="menu"]');
 }
 
+type OfferedResult = { label: string | null; items: string[] };
+
 /** What the open menu offers, by its items' words, and what it is named. */
-function offered(): { label: string | null; items: string[] } {
+function offered(): OfferedResult {
   const menu = openMenu();
+
   if (menu === null) throw new Error("No menu open");
+
   const items = [...menu.querySelectorAll('[role="menuitem"]')].map(
     (item) => item.textContent ?? "",
   );
+
   return { label: menu.getAttribute("aria-label"), items };
 }
 
@@ -136,7 +146,8 @@ function key(target: HTMLElement, name: string, shiftKey = false): void {
 
 /** Closes the open menu by Escape, on whatever holds the focus. */
 function pressEscape(): void {
-  key((document.activeElement as HTMLElement | null) ?? document.body, "Escape");
+  const focused = document.activeElement;
+  key(focused instanceof HTMLElement ? focused : document.body, "Escape");
 }
 
 const SAME_MENU = { label: "Task actions", items: ["Rename", "Archive", "Delete"] };
@@ -194,9 +205,11 @@ test("an item chosen from the menu does its act and closes the menu, the row lef
   const chosen: string[] = [];
   draw(createElement(TaskList, { menu: taskMenu(chosen) }));
   key(rowPress(), "ContextMenu");
+
   const archive = [...(openMenu()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])].find(
     (item) => item.textContent === "Archive",
   );
+
   act(() => archive?.click());
   expect(chosen).toEqual(["Archive"]);
   expect(openMenu()).toBeNull();
@@ -235,6 +248,7 @@ test("an open row's ⋯ lights its glyph alone at every density, never a fill", 
       "true",
       "glyph",
     ]);
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.replaceChildren();
   }
@@ -300,14 +314,17 @@ test("the arrows walk a list's rows past their ⋯, which stays a Tab stop of it
     }),
   );
   const [first, second] = names.map((name) => button(name));
+
   if (first === undefined || second === undefined) throw new Error("No rows");
   act(() => first.focus());
   key(first, "ArrowDown");
   expect(document.activeElement).toBe(second);
   key(second, "ArrowDown");
   expect(document.activeElement).toBe(first);
+
   const mores = [
     ...document.querySelectorAll<HTMLButtonElement>('button[aria-label="Task actions"]'),
   ];
+
   expect(mores.map((more) => more.tabIndex)).toEqual([0, 0]);
 });

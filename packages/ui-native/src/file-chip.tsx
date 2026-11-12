@@ -93,6 +93,7 @@ function kindOf(name: string, mediaType: string): string {
   if (mediaType === PDF_TYPE) return FILE_WORDS.PDF;
   const dot = name.lastIndexOf(".");
   const extension = dot <= 0 ? "" : name.slice(dot + 1);
+
   return extension === "" || extension.length > MAX_EXTENSION
     ? FILE_WORDS.FILE
     : extension.toUpperCase();
@@ -110,8 +111,8 @@ function isDocument(mediaType: string): boolean {
 
 /** Opens the system's share sheet on the file, which saves it to Files or opens it in another app. */
 function shareFile(source: string, name: string): void {
-  Share.share({ url: source, title: name }).catch((error: unknown) =>
-    console.error("The file's share sheet did not open.", error),
+  Share.share({ url: source, title: name }).catch((cause: unknown) =>
+    console.error("The file's share sheet did not open.", cause),
   );
 }
 
@@ -142,16 +143,20 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
   const insets = useSafeAreaInsets();
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+
   const staysOnFile = (request: WebViewNavigation): boolean => {
     // Note that any file's address is let through, since the web view may read the file alone (`allowingReadAccessToURL`) and spells its address as WebKit escapes it.
     if (request.url.startsWith(FILE_ADDRESS)) return true;
+
     if (request.navigationType === "click" && WEB_ADDRESS.test(request.url)) {
-      Linking.openURL(request.url).catch((error: unknown) =>
-        console.error("The file's link did not open.", error),
+      Linking.openURL(request.url).catch((cause: unknown) =>
+        console.error("The file's link did not open.", cause),
       );
     }
+
     return false;
   };
+
   return (
     <Modal
       visible={visible}
@@ -280,11 +285,14 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   const heard = [name, kind, size].filter((part) => part !== undefined).join(", ");
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
   const viewed = isPdf(mediaType);
+
   const press = () => {
     if (source === undefined) return;
+
     if (viewed) setOpen(true);
     else shareFile(source, name);
   };
+
   return (
     <>
       <Pressable

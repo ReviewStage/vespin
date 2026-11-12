@@ -33,6 +33,7 @@ export const applyThemePreference = /* @__PURE__ */ Effect.fn("desktop/applyThem
   function* (preference: Theme | undefined) {
     const theme = yield* NativeTheme;
     const wanted = preference ?? APP_SETTING_SCHEMA.theme.default;
+
     if (theme.themeSource !== wanted) theme.themeSource = wanted;
   },
 );
@@ -60,6 +61,7 @@ export type WindowMaterial = (typeof WINDOW_MATERIAL)[keyof typeof WINDOW_MATERI
 /** The material a Mac at `systemVersion` (`process.getSystemVersion()`, such as "26.1") draws the window on. */
 export function windowMaterialFor(systemVersion: string): WindowMaterial {
   const major = Number.parseInt(systemVersion.split(".")[0] ?? "", 10);
+
   return Number.isFinite(major) && major >= LIQUID_GLASS_SINCE
     ? WINDOW_MATERIAL.LIQUID_GLASS
     : WINDOW_MATERIAL.SIDEBAR;

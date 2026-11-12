@@ -40,8 +40,10 @@ export function OwnerMark({
   size: OwnerMarkSize;
 }): React.JSX.Element | null {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+
   if (owner === AUTOMATION_SCOPE.WORKSPACE) {
     if (workspace === undefined) return null;
+
     return (
       <WorkspaceTile
         workspace={workspace}
@@ -49,10 +51,13 @@ export function OwnerMark({
       />
     );
   }
+
   const actorSize = size === OWNER_MARK_SIZE.INLINE ? ACTOR_SIZE.INLINE : ACTOR_SIZE.ROW;
+
   if (mine && account?.status === ACCOUNT_STATUS.SIGNED_IN) {
     return <ActorMark actor={accountActor(account)} size={actorSize} />;
   }
+
   return (
     <ActorMark
       actor={{ kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED }}

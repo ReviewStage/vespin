@@ -57,6 +57,7 @@ function run(
   patch: Partial<AutomationRunSummary> = {},
 ): AutomationRunSummary {
   const firedAt = NOW - agoHours * HOUR;
+
   return {
     id: uuid("1c2d3e4f-5a6b-4c7d-8e9f", n),
     firing,
@@ -151,6 +152,7 @@ const REVIEW_RUNS: readonly AutomationRunSummary[] = [
 
 /** The deploy check's runs, the newest of which could not start its agent. */
 const FAILED_RUN_ID = uuid("1c2d3e4f-5a6b-4c7d-8e9f", 7);
+
 const DEPLOY_RUNS: readonly AutomationRunSummary[] = [
   run(
     7,
@@ -206,6 +208,7 @@ function automations(workspaceId: string): readonly AutomationSummary[] {
     guards: AUTOMATION_DEFAULT_GUARDS,
     target: { kind: AUTOMATION_TARGET.NEW_AGENT },
   } as const;
+
   return [
     {
       ...common,
@@ -309,6 +312,7 @@ export function automationsLaunchPlace(profile: string): AutomationsPlace | unde
 function stagedReads(workspaceIds: readonly string[]): AppAutomationReads {
   const ofEach = <Rows>(ids: readonly string[], rows: (id: string) => Rows) =>
     Object.fromEntries(ids.map((id) => [id, { rows: rows(id) }]));
+
   return {
     [LIVE_READ.AUTOMATIONS]: ofEach(workspaceIds, automations),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: ofEach(workspaceIds, workspaceRuns),
@@ -338,10 +342,15 @@ function laidOver<Read extends keyof AppAutomationReads>(
 ): AppAutomationReads[Read] {
   const kept = LAID_OVER[read];
   const laid = kept.get(held);
-  // SAFETY: what is kept for `held` is `held` with its own staged reads laid over it.
-  if (laid !== undefined) return laid as AppAutomationReads[Read];
+
+  if (laid !== undefined) {
+    // SAFETY: what is kept for `held` is `held` with its own staged reads laid over it.
+    return laid as AppAutomationReads[Read];
+  }
+
   const next = { ...held, ...staged };
   kept.set(held, next);
+
   return next;
 }
 
@@ -357,10 +366,12 @@ export function automationsAppState(
 ): AppStateSnapshot {
   if (!AUTOMATIONS_PLACES.has(state.run.profile)) return state;
   let staged = STAGED_READS.get(workspaceIds);
+
   if (staged === undefined) {
     staged = stagedReads(workspaceIds);
     STAGED_READS.set(workspaceIds, staged);
   }
+
   return {
     ...state,
     [LIVE_READ.AUTOMATIONS]: laidOver(

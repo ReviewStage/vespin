@@ -60,16 +60,19 @@ describe("the seam tags", () => {
   it.effect("read the account override out of that provider, and never in a packaged build", () =>
     Effect.gen(function* () {
       const override = "http://127.0.0.1:3000/api/auth";
+
       const development = yield* Effect.provide(
         HostKernelTag,
         kernelLayerOver(seams({ environment: { [ACCOUNT_BASE_URL_VARIABLE]: override } })),
       );
+
       const packaged = yield* Effect.provide(
         HostKernelTag,
         kernelLayerOver(
           seams({ packaged: true, environment: { [ACCOUNT_BASE_URL_VARIABLE]: override } }),
         ),
       );
+
       const none = yield* Effect.provide(HostKernelTag, kernelLayerOver(seams()));
 
       assert.equal(development.accountBaseUrl, override);
@@ -85,6 +88,7 @@ describe("the seam tags", () => {
       Effect.gen(function* () {
         const origin = "https://preview.example.test";
         const override = "http://127.0.0.1:3000/api/auth";
+
         const kernelOn = (packaged: boolean) =>
           Effect.provide(
             HostKernelTag,

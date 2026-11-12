@@ -52,10 +52,13 @@ export interface CatalogView {
 /** The themes a reader picks between; `system` is the desktop's own and follows whatever the machine is set to. */
 const THEMES = [THEME.DARK, THEME.LIGHT] as const;
 const PROFILES = [PROFILE.DESKTOP, PROFILE.WEB] as const;
+
 /** The site's densities: its own, which no attribute names, and the compact one. */
 const DENSITIES = [undefined, DENSITY.COMPACT] as const;
+
 /** The widths offered at a click: the stage's own, a phone's, and a tablet's in portrait. */
 const WIDTHS = [undefined, 390, 768] as const;
+
 /** The narrowest and widest frame an address may ask for, so a typo draws a frame rather than a sliver or a runaway. */
 const WIDTH_RANGE = { min: 240, max: 2560 } as const;
 
@@ -64,6 +67,7 @@ function widthOf(value: string | null): number | undefined {
   // Note that a fraction is rounded rather than refused, because the browser never checks the field's form.
   if (value === null || !/^\d+(\.\d+)?$/.test(value)) return undefined;
   const width = Math.round(Number(value));
+
   return width >= WIDTH_RANGE.min && width <= WIDTH_RANGE.max ? width : undefined;
 }
 
@@ -80,8 +84,10 @@ function oneOf<Value extends string>(
 export function readView(search: string): CatalogView {
   const params = new URLSearchParams(search);
   const first = EXAMPLES[0];
+
   if (first === undefined) throw new Error("The catalog has no examples");
   const profile = oneOf(params.get("profile"), PROFILES, PROFILE.DESKTOP);
+
   return {
     example: EXAMPLES.find((example) => example.id === params.get("example")) ?? first,
     profile,
@@ -102,8 +108,11 @@ function hrefOf(view: CatalogView): string {
     profile: view.profile,
     theme: view.theme,
   });
+
   if (view.density !== undefined) params.set("density", view.density);
+
   if (view.width !== undefined) params.set("width", String(view.width));
+
   return `?${params.toString()}`;
 }
 
@@ -132,6 +141,7 @@ function ViewLink({
 function WidthField({ view }: { view: CatalogView }): React.JSX.Element {
   const [draft, setDraft] = useState(view.width);
   const carried = [...new URLSearchParams(hrefOf({ ...view, width: undefined }))];
+
   return (
     <form className="catalog-width" method="get" noValidate>
       {carried.map(([name, value]) => (
@@ -182,6 +192,7 @@ function ExampleFrame({
 
 export function Catalog({ view }: { view: CatalogView }): React.JSX.Element {
   const { example, profile, theme, density, width } = view;
+
   return (
     <div className="catalog">
       <nav className="catalog-index" aria-label="Examples">

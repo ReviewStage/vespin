@@ -45,6 +45,7 @@ afterEach(() => {
 /** The tasks page at `state`, its search held in the page's caller as an app holds it. */
 function Tasks({ state }: { state: CollectionState }): React.JSX.Element {
   const [query, setQuery] = useState("");
+
   return createElement(CollectionPage, {
     frame: PAGE_FRAME.PAGE,
     title: "Tasks",
@@ -70,15 +71,20 @@ function draw(state: CollectionState): (next: CollectionState) => void {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const render = (next: CollectionState) =>
     act(() => root.render(createElement(Tasks, { state: next })));
+
   render(state);
+
   return render;
 }
 
 function search(): HTMLInputElement {
   const input = document.querySelector<HTMLInputElement>('input[aria-label="Search tasks"]');
+
   if (input === null) throw new Error("the search field is not drawn");
+
   return input;
 }
 
@@ -93,6 +99,7 @@ function typeInto(input: HTMLInputElement, value: string): void {
 
 test("the page is a region named by its title, with its acts and filters in every state", () => {
   const render = draw(COLLECTION_STATE.LOADING);
+
   for (const state of Object.values(COLLECTION_STATE)) {
     render(state);
     const region = document.querySelector("section");
@@ -176,6 +183,7 @@ function drawUnderToolbar(state: CollectionState): (next: CollectionState) => vo
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const render = (next: CollectionState) =>
     act(() =>
       root.render(
@@ -207,7 +215,9 @@ function drawUnderToolbar(state: CollectionState): (next: CollectionState) => vo
         }),
       ),
     );
+
   render(state);
+
   return render;
 }
 

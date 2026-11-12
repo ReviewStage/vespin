@@ -8,13 +8,13 @@ import { cn } from "../cn.js";
  * The component is shadcn's own source, kept as close to it as the window
  * allows, so a later `shadcn add button` reads as a small diff. Our
  * changes: the sizes are the control's roles (`control`, `compact`, `icon`,
- * `icon-compact`, and a menu's `row`) and a `shape` that rounds them; the
+ * `icon-compact`, and a menu's `row`) and a `corners` that rounds them; the
  * looks are not here, because a look is a set of `--ui-button-*` inks a
  * container's sheet may restyle (`components/button/button.css`), so the
  * fill and ink are drawn there and only the edge is read here; none of
  * shadcn's outline or ring utilities, because the window's own focus ring
  * (`@repo/panel`'s base.css) draws the keyboard's ring and a utility would
- * outrank it (`anti-slop/no-shadcn-focus-ring`); none of its press translate, which
+ * outrank it; none of its press translate, which
  * our button answers by its face (`button.css`); and the desktop's arrow
  * cursor. `@repo/ui`'s `Button` and `IconButton`
  * (`components/button/button.tsx`) are what an app draws; this is their
@@ -32,23 +32,23 @@ const buttonVariants = cva(
         "icon-compact": "inline-flex size-6 p-0 rounded-ui-6 text-label font-label",
         row: "flex w-full justify-start h-menu-row px-2 rounded-menu-row text-body font-text",
       },
-      shape: {
+      corners: {
         square: "",
         round: "",
       },
     },
     compoundVariants: [
       {
-        shape: "round",
+        corners: "round",
         size: "control",
         class: "rounded-ui-full px-[calc(var(--ui-control-height)/2)]",
       },
-      { shape: "round", size: "compact", class: "rounded-ui-full" },
-      { shape: "round", size: "icon", class: "rounded-ui-full" },
+      { corners: "round", size: "compact", class: "rounded-ui-full" },
+      { corners: "round", size: "icon", class: "rounded-ui-full" },
     ],
     defaultVariants: {
       size: "control",
-      shape: "square",
+      corners: "square",
     },
   },
 );
@@ -56,13 +56,13 @@ const buttonVariants = cva(
 function Button({
   className,
   size = "control",
-  shape = "square",
+  corners = "square",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ size, shape, className }))}
+      className={cn(buttonVariants({ size, corners, className }))}
       {...props}
     />
   );

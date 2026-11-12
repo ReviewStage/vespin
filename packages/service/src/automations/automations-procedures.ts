@@ -61,6 +61,7 @@ export interface AutomationsProcedureSeams {
  */
 export function automationsProcedures(seams: AutomationsProcedureSeams) {
   const automations = hosted.automations.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** The account's automations, or one workspace's; none for a task, on which no automation stands. */
     list: automations.list.effect(function* ({ input, context }) {
@@ -70,13 +71,16 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
               listAutomations(context.userId, { organizationId: input.workspaceId }),
             )
           : [];
+
       const summaries = yield* Effect.forEach(listed, (each) => summaryOf(context.userId, each));
+
       return { automations: summaries };
     }),
 
     /** An automation made on a workspace of the account's with the repositories its runs work in. */
     create: automations.create.effect(function* ({ input: made, context: { userId } }) {
       const created = yield* createAutomationAs(userId, made, SERVER_AUTOMATION_SOURCE.MEMBER);
+
       return {
         automation: created.automation,
         ...(created.webhookSecret === undefined
@@ -90,7 +94,9 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
     read: automations.read.effect(function* ({ input, context: { userId } }) {
       const id = yield* pathUuid(input.id);
       const standing = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
       if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { automation: yield* summaryOf(userId, standing.value) };
     }),
 
@@ -101,13 +107,16 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
     }) {
       const id = yield* pathUuid(params.id);
       const standing = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
       if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       const written = yield* changeAutomationAs(
         userId,
         standing.value,
         asked,
         SERVER_AUTOMATION_SOURCE.MEMBER,
       );
+
       return {
         automation: written.automation,
         ...(written.webhookSecret === undefined
@@ -121,7 +130,9 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
     remove: automations.remove.effect(function* ({ input, context: { userId } }) {
       const id = yield* pathUuid(input.id);
       const standing = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
       if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return {
         txid: yield* removeAutomationAs(userId, standing.value, SERVER_AUTOMATION_SOURCE.MEMBER),
       };
@@ -132,19 +143,24 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
       const { userId } = context;
       const id = yield* pathUuid(input.params.id);
       const key = input.body.idempotencyKey;
+
       const automation = yield* hostedStoreOrUnavailable(
         readAutomation(userId, id, AUTOMATION_ACCESS.RUN),
       );
+
       if (Option.isNone(automation)) {
         const readable = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
         return yield* Effect.fail(
           Option.isSome(readable) ? HOSTED_REFUSAL.NOT_PERMITTED : HOSTED_REFUSAL.NOT_FOUND,
         );
       }
+
       // Note that the run reaches the agent's sessions as this request's caller, whoever made the automation, as a Start does.
       const ran = yield* runAutomationNowAs(userId, automation.value, key, () =>
         routedSessions<TypedTurn>(userId),
       );
+
       return {
         status: ran.made ? HOSTED_HTTP_STATUS.CREATED : HOSTED_HTTP_STATUS.OK,
         body: ran.txid === undefined ? { run: ran.run } : { run: ran.run, txid: ran.txid },
@@ -155,10 +171,13 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
     runs: automations.runs.effect(function* ({ input, context: { userId } }) {
       const id = yield* pathUuid(input.id);
       const automation = yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
       if (Option.isNone(automation)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       const runs = yield* hostedStoreOrUnavailable(
         listAutomationRuns(userId, id, AUTOMATION_RUNS_HELD),
       );
+
       return { runs: yield* runSummaries(userId, runs) };
     }),
   };

@@ -32,6 +32,7 @@ test("a picture's address is its item's link with its id after it, under the tas
     onAgent,
     `https://vespin.dev/acme/agent/${AGENT_ID}/inbox/${ITEM_ID}/files/${PICTURE}`,
   );
+
   for (const address of [onTask, onAgent, onTask.replace("https:", "vespin:")]) {
     assert.deepEqual(inboxAttachmentOf(address), { itemId: ITEM_ID, attachmentId: PICTURE });
   }

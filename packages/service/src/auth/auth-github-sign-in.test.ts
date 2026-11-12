@@ -37,6 +37,7 @@ interface Grant {
   readonly refresh_token_expires_in?: number;
   readonly scope: string;
 }
+
 const APP_GRANT = {
   access_token: "ghu_app-token",
   refresh_token: "ghr_app-refresh",
@@ -56,17 +57,22 @@ function json(body: WireValue): Response {
 /** GitHub's token endpoint and the two profile reads, answering whatever `grant` holds. */
 async function fakeGitHub(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const url = new URL(input instanceof Request ? input.url : input);
+
   if (url.href === "https://github.com/login/oauth/access_token") {
     const body = input instanceof Request ? await input.text() : String(init?.body ?? "");
     exchanges.push(new URLSearchParams(body));
+
     return json({ token_type: "bearer", ...grant });
   }
+
   if (url.href === "https://api.github.com/user") {
     return json({ id: Number(GITHUB_ACCOUNT_ID), login: "octocat", email: null });
   }
+
   if (url.href === "https://api.github.com/user/emails") {
     return json([{ email: GITHUB_EMAIL, primary: true, verified: true }]);
   }
+
   throw new Error(`this test reaches no network: ${url.href}`);
 }
 
@@ -102,6 +108,7 @@ async function startSignIn(auth: Auth) {
       body: JSON.stringify({ provider: "github", callbackURL: "/" }),
     }),
   );
+
   return {
     authorize: new URL(decodeStarted(await response.json()).url),
     cookie: cookiesFrom(response),
@@ -114,10 +121,13 @@ async function signInCounted(auth: Auth) {
   const callback = new URL(`${BASE_URL}/api/auth/callback/github`);
   callback.searchParams.set("code", "github-code-under-test");
   callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+
   const { answer: landed, counts } = await withAuthCounts(() =>
     auth.handler(new Request(callback, { headers: { cookie } })),
   );
+
   assert.equal(landed.status, 302);
+
   return { cookie: cookiesFrom(landed), counts };
 }
 
@@ -164,6 +174,7 @@ test("the auth service hands no browser the GitHub token: the token endpoints ar
         body: JSON.stringify({ providerId: "github" }),
       }),
     );
+
     assert.equal(response.status, 404, path);
     assert.equal((await response.text()).includes(APP_GRANT.access_token), false);
   }

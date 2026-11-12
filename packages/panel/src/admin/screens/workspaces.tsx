@@ -103,6 +103,7 @@ function InstallationsCell({
       </Text>
     );
   }
+
   return (
     <Stack gap={GAP.CONTROL}>
       {installations.map((installation) => (
@@ -142,6 +143,7 @@ function workspaceColumns(
       meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
       cell: ({ row: { original: row } }) => formatCount(value(row)),
     });
+
   return workspaceColumn.columns([
     workspaceColumn.display({
       id: WORKSPACE_COLUMN.NAME,
@@ -218,6 +220,7 @@ const WORKSPACES_SKELETON_ROWS = 10;
 /** What the table's figures mean, and where its bound cut it. */
 function WorkspacesNote({ list }: { list: AdminWorkspaceList }): React.JSX.Element {
   const truncated = list.total > list.rows.length;
+
   return (
     <Text tone={TEXT_TONE.MUTED}>
       Tasks and Agents count those started in the last {list.activityDays} UTC days, and Merged the
@@ -253,6 +256,7 @@ function WorkspacesSections({
     () => workspaceColumns(onOpenAccount, onOpenWorkspace),
     [onOpenAccount, onOpenWorkspace],
   );
+
   return (
     <>
       <StatCards layout={STAT_LAYOUT.PAIRS} stats={WORKSPACE_STATS} data={list} />
@@ -306,14 +310,17 @@ export function WorkspacesScreen({
   // the debounced read searches every workspace, and the mount's address keeps it.
   const { reads, gate, address } = useAdminDoors();
   const [query, setQuery] = useState(address.search);
+
   const changeQuery = (typed: string) => {
     const next = typed.slice(0, ADMIN_USERS_SEARCH_MAX_LENGTH);
     setQuery(next);
     address.keepSearch(next.trim());
   };
+
   useEffect(() => address.onSearchMoved(() => setQuery(address.search())), [address]);
 
   const [sharedOnly, setSharedOnly] = useState(WORKSPACES_SHARED_ONLY.read);
+
   const changeSharedOnly = (next: boolean) => {
     WORKSPACES_SHARED_ONLY.write(next);
     setSharedOnly(next);
@@ -345,6 +352,7 @@ export function WorkspacesScreen({
         {...content}
       />,
     );
+
   const search = (
     <SearchField
       label="Search workspaces by name"
@@ -385,10 +393,12 @@ export function WorkspacesScreen({
     failed: (error) => page({ filters: search, state: COLLECTION_STATE.ERROR, error }),
     ready: (list, refreshed) => {
       const tokens = searchTokens(query);
+
       const rows =
         tokens.length > 0
           ? list.rows.filter((row) => matchesTokens([row.name], tokens))
           : list.rows;
+
       return page({
         filters: (
           <>

@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Match, Predicate, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -20,10 +20,12 @@ const CONTENT_LENGTH = "content-length";
 
 function sentHeaders(headers: HttpClientRequest.HttpClientRequest["headers"]): Headers {
   const sent = new Headers();
+
   for (const [name, value] of Object.entries(headers)) {
     if (name.toLowerCase() === CONTENT_LENGTH) continue;
     sent.set(name, value);
   }
+
   return sent;
 }
 
@@ -51,7 +53,7 @@ export function fakeHttpClient(respond: FakeResponder): HttpClient.HttpClient {
               method: request.method,
               headers: sentHeaders(request.headers),
               ...(body === undefined ? undefined : { body }),
-              ...(request.body._tag === "Stream" ? { duplex: "half" } : undefined),
+              ...(Predicate.isTagged(request.body, "Stream") ? { duplex: "half" } : undefined),
               signal,
             }),
           catch: (cause) =>
@@ -62,20 +64,19 @@ export function fakeHttpClient(respond: FakeResponder): HttpClient.HttpClient {
         (response) => HttpClientResponse.fromWeb(request, response),
       );
 
-    switch (request.body._tag) {
-      case "Raw":
-      case "Uint8Array":
+    return Match.value(request.body).pipe(
+      Match.tag("Raw", "Uint8Array", (body) =>
         // SAFETY: `HttpBody.Raw` carries whatever a caller handed it, and the
         // platform's fetch client passes it to `fetch` the same way; the fake
         // cannot narrow it further without refusing a body fetch accepts.
-        return send(request.body.body as BodyInit);
-      case "FormData":
-        return send(request.body.formData);
-      case "Stream":
-        return Effect.flatMap(Stream.toReadableStreamEffect(request.body.stream), send);
-      default:
-        return send(undefined);
-    }
+        send(body.body as BodyInit),
+      ),
+      Match.tag("FormData", (body) => send(body.formData)),
+      Match.tag("Stream", (body) =>
+        Effect.flatMap(Stream.toReadableStreamEffect(body.stream), send),
+      ),
+      Match.orElse(() => send(undefined)),
+    );
   });
 }
 

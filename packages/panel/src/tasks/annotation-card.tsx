@@ -79,7 +79,9 @@ function StateWords({ word }: { word: string }): React.JSX.Element {
 /** How many comments the card holds, beside a message's glyph, drawn while it is folded alone. */
 function FoldedCount({ count }: { count: number }): React.JSX.Element | null {
   const { open } = useDisclosureState();
+
   if (open) return null;
+
   return (
     <span className="annotation-card-count inline-flex flex-none items-center gap-tight-gap text-muted-foreground">
       <MessageSquareIcon className="size-ui-12" aria-hidden="true" />
@@ -245,6 +247,7 @@ export function AnnotationComment({
       {children}
     </div>
   );
+
   if (reply === undefined) {
     return (
       <li className={className === undefined ? COMMENT_CLASS : `${COMMENT_CLASS} ${className}`}>
@@ -252,6 +255,7 @@ export function AnnotationComment({
       </li>
     );
   }
+
   return (
     <li className={className}>
       <Comment

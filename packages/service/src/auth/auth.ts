@@ -44,6 +44,7 @@ import { supportAccess } from "./support-access.js";
 
 const deployment = authDeployment(process.env);
 const secrets = authSecrets(process.env);
+
 // Note that a missing session secret is reported once, as the module loads,
 // and refused on every request below, because Better Auth left to itself
 // would sign sessions under its built-in default secret outside production.

@@ -9,6 +9,7 @@ const DESCRIPTION =
 function spanOf(text: string, words: string): CommentSpan {
   const from = text.indexOf(words);
   assert.ok(from >= 0, `"${words}" is not in the text`);
+
   return { from, to: from + words.length };
 }
 
@@ -22,6 +23,7 @@ test("an anchor moves with its words when a change writes in above them", () => 
     "## Goal\n\n",
     "## Context\n\nOnly an admin can add someone.\n\n## Goal\n\n",
   );
+
   const moved = textChange(DESCRIPTION, after)(spanOf(DESCRIPTION, "single-use link"));
 
   assert.equal(wordsAt(after, moved), "single-use link");
@@ -32,6 +34,7 @@ test("words written between an anchor's words join it, and words written at its 
     "expires in",
     "expires after",
   );
+
   const moved = textChange(DESCRIPTION, after)(spanOf(DESCRIPTION, "single-use link"));
 
   assert.equal(wordsAt(after, moved), "single-use invite link");
@@ -56,6 +59,7 @@ test("an anchor whose sentence a change rewrote whole stands nowhere, though a w
     "The invite email follows the mock Lee shared.",
     "Every message reuses the shared template.",
   );
+
   const change = textChange(DESCRIPTION, after);
 
   assert.equal(change(spanOf(DESCRIPTION, "follows the mock Lee shared")), undefined);

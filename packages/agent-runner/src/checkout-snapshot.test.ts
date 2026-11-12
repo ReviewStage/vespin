@@ -61,12 +61,14 @@ function repository(): string {
   writeFileSync(join(cwd, ".gitignore"), "out/\n");
   git(cwd, "add", "-A");
   git(cwd, "commit", "--quiet", "-m", "first");
+
   return cwd;
 }
 
 /** The paths and contents of the tree, as `ls-tree` and `show` read them. */
 function treeOf(cwd: string, commit: string): Record<string, string> {
   const paths = git(cwd, "ls-tree", "-r", "--name-only", commit).split("\n");
+
   return Object.fromEntries(paths.map((path) => [path, git(cwd, "show", `${commit}:${path}`)]));
 }
 
@@ -92,9 +94,11 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
           { head: snapshot.head, branch: snapshot.branch },
           { head, branch: "main" },
         );
+
         const [ref] = git(cwd, "for-each-ref", "--format=%(refname)", AGENT_REFS)
           .split("\n")
           .filter((each) => each.endsWith(`-${LINE.FIRST}`));
+
         assert.ok(
           ref !== undefined,
           "the snapshot stands under a ref named for the agent and the line",
@@ -120,21 +124,25 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
       const snapshots = yield* CheckoutSnapshots;
       // One more snapshot than the checkout keeps, each under a line of its own, so the oldest goes.
       const lines = Array.from({ length: CHECKOUT_SNAPSHOT.KEEP + 1 }, () => randomUUID());
+
       for (const [index, line] of lines.entries()) {
         // Each is taken a moment after the last, as turns are, so their stamps order them.
         yield* TestClock.adjust("1 millis");
         writeFileSync(join(cwd, "kept.txt"), `turn ${index}\n`);
         assert.ok((yield* snapshots.take(cwd, AGENT, line)) !== undefined);
       }
+
       // Another agent's snapshot in the same clone, which the first agent's prune leaves alone.
       yield* TestClock.adjust("1 millis");
       assert.ok((yield* snapshots.take(cwd, OTHER_AGENT, LINE.SECOND)) !== undefined);
+
       // The oldest goes and the rest stand, named for the lines they were taken under.
       const kept = git(cwd, "for-each-ref", "--format=%(refname)", AGENT_REFS)
         .split("\n")
         .filter((ref) => ref !== "")
         // The line's id follows the stamp, past the first dash after the agent's prefix.
         .map((ref) => ref.slice(ref.indexOf("-", AGENT_REFS.length) + 1));
+
       assert.deepEqual(kept.sort(), [...lines.slice(1)].sort());
       assert.equal(
         git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX).split("\n")

@@ -73,6 +73,7 @@ const fileDigest = (file: string) =>
     yield* Stream.runForEach(fileSystem.stream(file), (chunk) =>
       Effect.sync(() => void hash.update(chunk)),
     );
+
     return hash.digest("hex");
   });
 
@@ -80,9 +81,11 @@ const fileDigest = (file: string) =>
 const filesAsPinned = (pin: AgentToolPin, folder: string) =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
+
     for (const [file, digest] of Object.entries(pin.FILES ?? {})) {
       if ((yield* fileDigest(path.join(folder, file))) !== digest) return false;
     }
+
     return true;
   });
 
@@ -92,6 +95,7 @@ const stampsOf = (pin: AgentToolPin, folder: string) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const stamps: Record<string, typeof StampSchema.Type> = {};
+
     for (const file of Object.keys(pin.FILES ?? {})) {
       const info = yield* fileSystem.stat(path.join(folder, file));
       stamps[file] = {
@@ -100,16 +104,19 @@ const stampsOf = (pin: AgentToolPin, folder: string) =>
         inode: Option.getOrElse(info.ino, () => 0),
       };
     }
+
     return stamps;
   });
 
 /** Whether two sets of stamps name the same files, each the same size, written at the same time, and the same inode. */
 function sameStamps(left: Stamps, right: Stamps): boolean {
   const files = Object.keys(left);
+
   return (
     files.length === Object.keys(right).length &&
     files.every((file) => {
       const [was, now] = [left[file], right[file]];
+
       return (
         was !== undefined &&
         now !== undefined &&
@@ -145,14 +152,18 @@ const signedAsPinned = (binary: string, team: string) =>
         }),
         (handle) => handle.exitCode,
       );
+
       if (Number(verified) !== 0) return false;
+
       const described = yield* ChildProcess.make(CODESIGN, ["-dv", binary], {
         stdin: "ignore",
         stdout: "ignore",
       });
+
       // Note that `codesign -dv` writes what it reads of the signature to stderr.
       const printed = yield* Stream.mkString(Stream.decodeText(described.stderr));
       yield* described.exitCode;
+
       return TEAM_LINE.exec(printed)?.[1] === team;
     }),
   );
@@ -171,30 +182,39 @@ const fetchTool = Effect.fnUntraced(function* (pin: AgentToolPin, folder: string
     (staging) =>
       Effect.gen(function* () {
         const saved = path.join(staging, "archive");
+
         const archive = yield* streamedArchive(pin.ARCHIVE, saved, {
           maxBytes: pin.BYTES,
           stall: TOOL_FETCH.STALL,
           timeout: TOOL_FETCH.TIMEOUT,
         });
+
         // Note that nothing of an archive short of the pin's size, or whose digest is not the pin's, is extracted.
         if (archive.bytes !== pin.BYTES) return yield* Effect.fail("short");
+
         if (archive.sha256 !== pin.SHA256) return yield* Effect.fail("checksum");
         yield* unpackedArchive(
           saved,
           staging,
           pin.MEMBERS.map((member) => `${pin.ROOT}/${member}`),
         );
+
         return path.join(staging, pin.ROOT);
       }),
   );
+
   if (pin.TEAM !== undefined && !(yield* signedAsPinned(path.join(folder, pin.BINARY), pin.TEAM))) {
     yield* fileSystem.remove(folder, { recursive: true, force: true });
+
     return yield* Effect.fail("signature");
   }
+
   if (!(yield* filesAsPinned(pin, folder))) {
     yield* fileSystem.remove(folder, { recursive: true, force: true });
+
     return yield* Effect.fail("files");
   }
+
   yield* markWritten(pin, folder);
 });
 
@@ -219,13 +239,16 @@ const keptAsChecked = (pin: AgentToolPin, folder: string) =>
     const path = yield* Path.Path;
     const mark = decodeMark(yield* fileSystem.readFileString(path.join(folder, TOOL_FETCH.MARK)));
     const stamps = yield* stampsOf(pin, folder);
+
     if (
       Option.exists(mark, (each) => each.sha256 === pin.SHA256 && sameStamps(each.files, stamps))
     ) {
       return true;
     }
+
     if (!(yield* filesAsPinned(pin, folder))) return false;
     yield* markWritten(pin, folder);
+
     return true;
   }).pipe(Effect.orElseSucceed(() => false));
 
@@ -239,6 +262,7 @@ const otherVersionsRemoved = (pin: AgentToolPin, toolFolder: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     for (const entry of yield* fileSystem.readDirectory(toolFolder)) {
       if (entry === pin.VERSION || entry.startsWith(".")) continue;
       yield* fileSystem.remove(path.join(toolFolder, entry), { recursive: true, force: true });
@@ -275,21 +299,27 @@ export const localAgentTool = Effect.fnUntraced(function* (
 > {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const exists = (target: string) =>
     fileSystem.exists(target).pipe(Effect.orElseSucceed(() => false));
+
   const folder = path.join(stateRoot, TOOL_FETCH.FOLDER, pin.NAME, pin.VERSION);
   const binary = path.join(folder, pin.BINARY);
   const marked = (yield* exists(path.join(folder, TOOL_FETCH.MARK))) && (yield* exists(binary));
   // Note that a kept build's files are checked before it is answered, since anything of the developer's could
   // have written them since: a binary changed since is fetched again.
   const kept = marked && (yield* keptAsChecked(pin, folder));
+
   if (!kept) yield* fetching;
+
   const answer = kept
     ? Option.some(binary)
     : yield* fetchTool(pin, folder).pipe(
         Effect.as(Option.some(binary)),
         Effect.orElseSucceed(() => Option.none<string>()),
       );
+
   if (Option.isSome(answer)) yield* otherVersionsRemoved(pin, path.dirname(folder));
+
   return answer;
 });

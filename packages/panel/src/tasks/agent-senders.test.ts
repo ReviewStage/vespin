@@ -221,11 +221,13 @@ async function drawnFor(
     { ...hosted, tasks: { ...IDLE_TASKS_VIEW, taskAgents: [listedAgent(SENDER_NOW)] } },
   );
   handMembers(() => ({ rows: { members: MEMBERS } }));
+
   if (automations !== undefined) {
     holdAutomations(handHostReads({}).deliverAutomations, {
       [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: automations.rows }),
     });
   }
+
   pushedTranscripts(() => [
     {
       messages: [...messages],
@@ -234,10 +236,12 @@ async function drawnFor(
       title: null,
     },
   ]);
+
   const control = agentsControl({
     agents: [agent],
     me: reader,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -272,6 +276,7 @@ async function drawnFor(
   await settleQueries();
   const drawn = [...container.querySelectorAll(".is-user, .is-received")];
   assert.equal(drawn.length, messages.length);
+
   return drawn;
 }
 
@@ -285,13 +290,16 @@ async function sendersFor(
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
 ): Promise<readonly Seen[]> {
   const drawn = await drawnFor(reader, [], agent, messages);
+
   return drawn.flatMap((message, index): Seen[] => {
     const sender = message.querySelector<HTMLElement>(`${SENDER} [data-actor-ref]`);
+
     if (sender === null) return [];
     const id = messages[index]?.id ?? "";
     const name = sender.querySelector(".ui-inline-ref-label")?.textContent ?? "";
     const picture = sender.querySelector("img")?.getAttribute("src");
     const kind = sender.dataset.kind ?? "";
+
     return [picture == null ? [id, kind, name] : [id, kind, name, picture]];
   });
 }
@@ -328,6 +336,7 @@ test("each member sees a teammate's face and name under the teammate's messages 
     ["claude-agent", ACTOR_KIND.AGENT, "Split view"],
     ["older", ACTOR_KIND.SOMEONE, "Vespin"],
   ];
+
   assert.deepEqual(deanSees, [
     ["charles", ACTOR_KIND.PERSON, "Charles Pan", CHARLES_PICTURE],
     ...others,
@@ -342,11 +351,14 @@ test("each member sees a teammate's face and name under the teammate's messages 
 
 test("another agent's message wears the mark of the harness its model runs in, and the mark of no known harness where the service names no model", async () => {
   const drawn = await drawnFor(DEAN.userId);
+
   const harnessOf = (id: string) => {
     const sender = drawn[MESSAGES.findIndex((message) => message.id === id)]?.querySelector(
       `${SENDER} .actor-mark`,
     );
+
     const mark = sender?.querySelector(".ui-harness-mark");
+
     return mark?.getAttribute("data-provider") ?? undefined;
   };
 
@@ -359,13 +371,16 @@ test("another agent's message wears the mark of the harness its model runs in, a
 function readingOrder(message: Element, words: string): readonly string[] {
   const walker = document.createTreeWalker(message, NodeFilter.SHOW_TEXT);
   let text: Node | null = walker.nextNode();
+
   while (text !== null && text.textContent !== words) text = walker.nextNode();
+
   const seen: [string, Node | null][] = [
     ["words", text],
     ["Copy", message.querySelector('button[aria-label="Copy message"]')],
     ["sender", message.querySelector(SENDER)],
     ["sent at", message.querySelector("time")],
   ];
+
   return seen
     .flatMap(([name, node]) => (node === null ? [] : [{ name, node }]))
     .sort((a, b) =>
@@ -377,9 +392,11 @@ function readingOrder(message: Element, words: string): readonly string[] {
 test("another agent named as a line's sender opens its tab on a press and hangs its card as it stands now, while its mark stays the one it sent under", async () => {
   const opened: LinkDestination[] = [];
   const drawn = await drawnFor(DEAN.userId, opened);
+
   const sender = drawn[
     MESSAGES.findIndex((message) => message.id === "claude-agent")
   ]?.querySelector<HTMLElement>(`${SENDER} [data-actor-ref]`);
+
   assert.ok(sender instanceof HTMLButtonElement, "the sender is a door");
 
   restOn(sender);
@@ -412,6 +429,7 @@ test("a line an automation sent hangs its card and opens its page, on an agent i
       automationId: TRIAGE.id,
     }),
   ];
+
   const opened: string[] = [];
   const drawn = await drawnFor(DEAN.userId, [], AGENT, messages, { rows: [TRIAGE], opened });
   const sender = drawn[1]?.querySelector<HTMLElement>(`${SENDER} [data-actor-ref]`);
@@ -439,14 +457,18 @@ test("an automation's agent opens on the run its tab holds, naming the pull requ
     automationId: TRIAGE.id,
     automationName: TRIAGE.name,
   };
+
   const fired = line("run", "Triage the failures.\n\nFired by a pull request.");
+
   const run = {
     prompt: "Triage the failures.",
     subject: { number: 12, title: "Fix the flaky invite test" },
   };
+
   const drawn = await drawnFor(DEAN.userId, [], automated, [fired], undefined, {
     [LIVE_READ.AGENT_ORIGINS]: { [automated.id]: { rows: run } },
   });
+
   const opening = drawn[0] ?? assert.fail("nothing drawn");
   assert.ok(opening.querySelector("[data-origin-description]"), "it opens on the run's card");
   assert.match(opening.textContent ?? "", /Nightly triage.*Fix the flaky invite test/u);
@@ -471,10 +493,12 @@ test("a teammate's message names them over its bubble, with when and its Copy on
 
 test("an agent started blank draws its first line as a line, no description's card and no task under its starter's name, a line spoken on a call naming no one and a teammate's typed line naming them", async () => {
   const blank: AgentSummary = { ...AGENT, brief: AGENT_BRIEF.BLANK };
+
   const spoken: AgentTranscriptMessage = {
     ...line("spoken", "What did you change?"),
     metadata: { author: "developer", channel: "voice", voice_session_id: "call-1", from_ms: 0 },
   };
+
   const typed = line("typed", "Keep the old copy.", { ...DEAN, kind: MEMBER });
 
   // Every line is drawn as a line of the developer's, the first among them, and none as the description's card.

@@ -84,6 +84,7 @@ function drawn(node: ReactNode): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(Fragment, null, node))));
+
   return container;
 }
 
@@ -107,6 +108,7 @@ const THREE_CHIPS_ON_PAGE = [["section", "Rollout"], ...THREE_CHIPS.slice(1)];
 /** Words drawn as Markdown with the page's mentions, as a version and a note draw them. */
 function PageWords({ words, marks }: { words: string; marks: MarkdownMark[] }): ReactNode {
   const link = useMentionLink();
+
   return createElement(MarkdownMessage, { words, link, edit: { marks } });
 }
 
@@ -157,6 +159,7 @@ test("a version's diff draws a mention written in as its chip, still marked as w
 test("a link whose label a version changed in part is drawn as words with the change marked, not as one chip", () => {
   const words = `Read [the new store](https://github.com/${REPOSITORY}/blob/HEAD/store.ts).`;
   const from = words.indexOf("new");
+
   const container = drawn(
     createElement(TaskMentions, {
       value: PAGE,
@@ -173,6 +176,7 @@ test("a link whose label a version changed in part is drawn as words with the ch
 
 test("the description's version history, off the plan's page, reads a version's mentions against the description it is of", () => {
   const document = { body: `## Rollout\n\n${LINKS}\n`, assumptions: [] };
+
   const container = drawn(
     createElement(VersionView, {
       onRetry: () => undefined,

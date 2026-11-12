@@ -131,14 +131,19 @@ export function withNativeProjection<A, E, R>(
 ): Effect.Effect<Option.Option<A>, E | StoreFailure, R | DatabaseServices> {
   const locked = Effect.gen(function* () {
     const held = yield* lockProjectionRow({ ...target, runnerTokenHash });
+
     if (Option.isNone(held)) return Option.none<A>();
+
     if (launch !== undefined && held.value.launch !== launch) return Option.none<A>();
     const applied = yield* apply(held.value);
+
     if (applied.saved !== undefined) {
       yield* saveProjectionRow({ ...target, ...applied.saved });
     }
+
     return Option.some(applied.result);
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(locked));
 }
 

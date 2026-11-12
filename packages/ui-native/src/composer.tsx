@@ -12,12 +12,11 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  buttonBorderShape,
   buttonStyle,
-  contentShape,
   disabled,
   font,
   foregroundStyle,
@@ -25,7 +24,6 @@ import {
   glassEffect,
   lineLimit,
   padding,
-  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -48,7 +46,7 @@ const SEND_SIZE = 32;
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-  contentShape(shapes.rectangle()),
+  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
 ];
 
 /** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
@@ -58,7 +56,7 @@ const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
 function roundModifiers(colors: ReturnType<typeof useColors>) {
   return [
     buttonStyle("borderedProminent"),
-    buttonBorderShape("circle"),
+    SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
     foregroundStyle(colors.GROUND),
     ...PRESS_FRAME,
@@ -144,6 +142,7 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+
   if (empty && onStop !== undefined && stopping) {
     return (
       <ProgressView
@@ -156,6 +155,7 @@ function SendButton({
       />
     );
   }
+
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
@@ -163,6 +163,7 @@ function SendButton({
       </Button>
     );
   }
+
   if (empty && onDictate !== undefined) {
     return (
       <Button
@@ -178,6 +179,7 @@ function SendButton({
       </Button>
     );
   }
+
   return (
     <Button
       onPress={() => onSend?.()}
@@ -197,6 +199,7 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
   const colors = useColors();
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
+
   return (
     <Menu
       label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
@@ -244,6 +247,7 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
   } = props;
+
   const colors = useColors();
   const text = useNativeState(held ?? "");
   const [typed, setTyped] = useState(held ?? "");
@@ -255,21 +259,26 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
   const type = (next: string) => {
     shown.current = next;
     setTyped(next);
     onWords?.(next);
   };
+
   const empty = words.trim() === "" && !sendable;
+
   const send =
     onSend === undefined
       ? undefined
       : () => {
           onSend(words.trim());
+
           if (held !== undefined) return;
           text.set("");
           setTyped("");
         };
+
   return (
     <>
       {addMenu !== undefined ? (
@@ -298,7 +307,7 @@ function ComposerPieces(props: ComposerProps) {
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...(addMenu === undefined && onAdd === undefined ? { leading: FIELD_LEADING } : {}),
+            ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
           }),
           accessibilityIdentifier("composer-field"),
         ]}
@@ -326,6 +335,7 @@ function ComposerPieces(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
+
   return (
     <GlassBar
       head={props.head}
@@ -346,11 +356,13 @@ export function ComposerFoot(props: ComposerProps) {
     padding({ all: BAR_EDGE }),
     glassEffect({
       glass: { variant: "regular", interactive: true },
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
       shape: "roundedRectangle",
       cornerRadius: BAR_RADIUS,
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
   ];
+
   if (props.head === undefined) {
     return (
       <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
@@ -358,6 +370,7 @@ export function ComposerFoot(props: ComposerProps) {
       </HStack>
     );
   }
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
       <BarHead>{props.head}</BarHead>

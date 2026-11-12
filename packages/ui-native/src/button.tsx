@@ -1,13 +1,13 @@
 // button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
 import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   background,
-  buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
@@ -18,7 +18,6 @@ import {
   monospacedDigit,
   padding,
   pickerStyle,
-  shapes,
   strokeBorder,
   tag,
   tint,
@@ -89,6 +88,7 @@ export function Button(props: ButtonProps) {
   const colors = useColors();
   const accent = props.destructive !== true;
   const filled = accent && FILLED_LOOKS.has(look);
+
   return (
     <SwiftUIButton
       label={label}
@@ -113,12 +113,13 @@ export function Button(props: ButtonProps) {
 function capsuleModifiers(colors: BrandColors, filled: boolean) {
   return [
     padding(CAPSULE_PADDING),
-    background(filled ? colors.TEXT : colors.SURFACE, shapes.capsule()),
+    background(filled ? colors.TEXT : colors.SURFACE, SwiftModifiers.shapes.capsule()),
     ...(filled
       ? []
       : [
           strokeBorder({
             content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "capsule",
             style: { lineWidth: HAIRLINE },
           }),
@@ -150,7 +151,9 @@ function CapsuleWords({
     foregroundStyle(ink),
     monospacedDigit(),
   ];
+
   if (count === undefined) return <Text modifiers={modifiers}>{label}</Text>;
+
   return (
     <Fragment key={label}>
       <Text key={count} modifiers={modifiers}>
@@ -183,6 +186,7 @@ type ChipProps = {
  */
 export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       label={count === undefined ? label : `${label} ${count}`}
@@ -190,7 +194,7 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
       onPress={onPress}
       modifiers={[
         buttonStyle(selected ? "borderedProminent" : "bordered"),
-        buttonBorderShape("capsule"),
+        SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("small"),
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),
@@ -248,6 +252,7 @@ export function ScopePicker({
   readonly children: ReactNode;
 }) {
   const chosen = scopes.find((scope) => scope.selected);
+
   return (
     <VStack spacing={0}>
       <Picker<string>
@@ -290,23 +295,28 @@ type FieldChipProps = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
+
   if (props.face !== undefined) {
     return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
   }
+
   if (props.symbol !== undefined) {
     return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
   }
+
   if (props.mark !== undefined) {
     return (
       <ToneGlyph glyph={props.mark.glyph} tone={props.mark.tone} textStyle={TYPE_ROLE.ROW_LINE} />
     );
   }
+
   return null;
 }
 
 /** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed, and heard as its words once, its mark saying the same. */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 2}

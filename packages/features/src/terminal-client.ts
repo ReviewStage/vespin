@@ -42,6 +42,7 @@ export function terminalRelayAddress(socketOrigin: string, ask: TerminalRelayAsk
     [TERMINAL_RELAY.QUERY.COLUMNS]: String(ask.cols),
     [TERMINAL_RELAY.QUERY.ROWS]: String(ask.rows),
   });
+
   return `${socketOrigin}${TERMINAL_RELAY.PATH}?${query}`;
 }
 

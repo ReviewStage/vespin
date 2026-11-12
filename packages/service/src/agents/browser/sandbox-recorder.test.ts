@@ -58,6 +58,7 @@ test("a stop's run is the video's length and size, a known failure, or an encode
     ok: false,
     reason: RECORDING_FAILURE.NONE,
   });
+
   for (const odd of [run("not json"), run('{"ok":false,"reason":"gremlins"}'), run("", 1)]) {
     assert.deepEqual(recordingStopOf(odd), { ok: false, reason: RECORDING_FAILURE.ENCODER });
   }

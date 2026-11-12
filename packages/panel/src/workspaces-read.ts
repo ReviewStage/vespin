@@ -26,5 +26,6 @@ export function useWorkspacesRead(): WorkspacesRead {
   const failed = useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
   const { mutate: refreshTasks } = useMutation(pressMutation(ACT_KIND.TASKS_REFRESH));
   const onRetry = useCallback(() => refreshTasks(), [refreshTasks]);
+
   return { failed, onRetry };
 }

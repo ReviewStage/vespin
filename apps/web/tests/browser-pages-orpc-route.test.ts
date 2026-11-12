@@ -59,6 +59,7 @@ const serve = (session: Session, asked: string[]) =>
       Effect.succeed(
         Option.fromNullishOr(request.headers.get("cookie") === PAGE_COOKIE ? session : null),
       );
+
     const route = hostedFetch({
       github: githubProcedures({
         resolveUserId: () => Effect.succeed(Option.none()),
@@ -70,25 +71,31 @@ const serve = (session: Session, asked: string[]) =>
         resolveSessionUserId,
       }),
     });
+
     // SAFETY: the claim and the offer read the database alone, which is all a test provides of the web runtime's services, here one that refuses every statement.
     const services = (yield* Effect.context<DatabaseServices>()) as Context.Context<WebServices>;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = new URL(String(input), window.location.href);
       asked.push(url.pathname);
+
       if (url.pathname === SESSION_PATH) {
         return new Response(JSON.stringify(SIGNED_IN), {
           headers: { "content-type": "application/json" },
         });
       }
+
       if (
         !url.pathname.startsWith("/api/github/") &&
         !url.pathname.startsWith("/api/workspaces/")
       ) {
         return new Promise<Response>(() => undefined);
       }
+
       // Note that the page's own abort signal is jsdom's, which Node's `Request` refuses, so the route is handed the rest.
       const headers = new Headers(init?.headers);
+
       if (init?.credentials === "include") headers.set("cookie", PAGE_COOKIE);
+
       return route(
         new Request(url, { method: init?.method ?? "GET", headers, body: init?.body ?? null }),
         services,
@@ -109,6 +116,7 @@ const openPage = (module: "connect-github" | "accept-invitation", address: strin
         ? import("../src/connect-github")
         : import("../src/accept-invitation"));
     });
+
     return root;
   });
 
@@ -136,6 +144,7 @@ it.layer(noDatabase)("the browser pages over the oRPC routes, refused", (it) => 
     () =>
       Effect.gen(function* () {
         yield* serve(null, []);
+
         const page = yield* openPage(
           "accept-invitation",
           `/accept-invitation.html?id=invitation-1&email=${INVITED}`,
@@ -150,6 +159,7 @@ it.layer(noDatabase)("the browser pages over the oRPC routes, refused", (it) => 
     () =>
       Effect.gen(function* () {
         yield* serve(USER_ID, []);
+
         const page = yield* openPage(
           "accept-invitation",
           `/accept-invitation.html?id=invitation-1&email=${INVITED}`,

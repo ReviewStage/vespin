@@ -60,7 +60,7 @@ export interface PullRequestParts {
 }
 
 /** Says on the console an ask the host refused, which the screen draws without. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 
@@ -90,11 +90,13 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
           () => undefined,
         ),
       );
+
       return () => {
         for (const stop of stops) stop();
       };
     }, [acts, follow, agentId, number]),
   );
+
   const pullRequest = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -102,6 +104,7 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
       [agentId, number],
     ),
   }).data;
+
   const checks = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -110,6 +113,7 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
       [agentId, number],
     ),
   }).data;
+
   const conversation = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -118,6 +122,7 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
       [agentId, number],
     ),
   }).data;
+
   return useMemo(
     () => ({ pullRequest, checks, conversation }),
     [pullRequest, checks, conversation],
@@ -128,6 +133,7 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
 export function usePullRequestRetry(key: PullRequestKey): () => Promise<void> {
   const acts = useHostActs();
   const { agentId, number } = key;
+
   return useCallback(
     () =>
       Promise.all(
@@ -171,15 +177,18 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
   // Note that the change out is held in a ref as well, because two presses in one frame both read the state from before either.
   const out = useRef(false);
   const write = useWrite();
+
   const change = useCallback(
     async (request: PullRequestActionRequest) => {
       if (out.current) return false;
       out.current = true;
       setPending(request.action);
       setNote(undefined);
+
       try {
         // Note that GitHub's own sentence of a refusal is kept beside the words, so the note says both; a change that got no answer says the words alone.
         let said: WriteNote | undefined;
+
         return await write(
           async () => {
             const answer = await acts[ACT_KIND.AGENTS_PULL_REQUEST_ACTION]({
@@ -187,9 +196,11 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
               number,
               request,
             });
+
             // Note that a refusal may still have moved the pull request, so every answer from GitHub reads again.
             if (!("failure" in answer)) await retry();
             said = pullRequestWriteWords(answer);
+
             return answer;
           },
           {
@@ -206,6 +217,7 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
     },
     [acts, write, retry, agentId, number],
   );
+
   return { pending, note, write: change };
 }
 
@@ -215,11 +227,14 @@ const NO_PULL_REQUESTS: ReadonlyMap<number, AgentOverviewPullRequest> = new Map(
 /** The numbers handed, as the same array while they are the same numbers, so a follow over them is not opened again as the list is drawn again. */
 function useSameNumbers(numbers: readonly number[]): readonly number[] {
   const [held, setHeld] = useState(numbers);
+
   const same =
     held.length === numbers.length && held.every((number, index) => numbers[index] === number);
+
   // Note that new numbers are taken as they are drawn, as React keeps a value from the last render, rather than through a ref read while drawing.
   if (same) return held;
   setHeld(numbers);
+
   return numbers;
 }
 
@@ -239,17 +254,20 @@ export function usePullRequestsRead(
   useFocusEffect(
     useCallback(() => {
       const part = PULL_REQUEST_PART.PULL_REQUEST;
+
       const stops = held.map((number) =>
         follow(
           () => acts[ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]({ part, agentId, number }),
           () => undefined,
         ),
       );
+
       return () => {
         for (const stop of stops) stop();
       };
     }, [acts, follow, agentId, held]),
   );
+
   const slice = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -257,15 +275,19 @@ export function usePullRequestsRead(
       [agentId],
     ),
   }).data;
+
   return useMemo(() => {
     if (slice === undefined) return NO_PULL_REQUESTS;
     const read = new Map<number, AgentOverviewPullRequest>();
+
     for (const number of held) {
       const rows = slice[String(number)]?.rows;
+
       if (rows !== undefined && !("failure" in rows) && rows.pullRequest !== null) {
         read.set(number, rows.pullRequest);
       }
     }
+
     return read;
   }, [slice, held]);
 }

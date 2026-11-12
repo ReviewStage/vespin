@@ -20,7 +20,7 @@
 
 import type { ORPCError } from "@orpc/client";
 import type { ORPCErrorFromErrorMap } from "@orpc/contract";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { FailureFacts } from "./failure-facts.js";
 import {
@@ -68,6 +68,7 @@ type DeclaredBy<Failure> =
 /** The input a poll asks with: the rows inline, past `after` where it names one. */
 function polledInput<Input>(input: Input, poll: HostedPoll | undefined): Input {
   if (poll === undefined) return input;
+
   return {
     ...input,
     [LIVE_POLL.QUERY]: LIVE_POLL.ON,
@@ -75,18 +76,20 @@ function polledInput<Input>(input: Input, poll: HostedPoll | undefined): Input {
   };
 }
 
+type Failed = { readonly failure: string; readonly cause?: FailureFacts };
+
 /** A call's failure as its domain reads it. */
-function failedOf(
-  failed: HostedFailure,
-  reading: HostedReading<HostedRenames, boolean>,
-): { readonly failure: string; readonly cause?: FailureFacts } {
-  if (failed._tag === "HostedRefused") {
+function failedOf(failed: HostedFailure, reading: HostedReading<HostedRenames, boolean>): Failed {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     if (reading.live === true && failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) {
       return LIVE_SIGNED_OUT;
     }
+
     const failure = spelledFailure(failed.refusal, reading);
+
     if (failure !== undefined) return { ...failed.data, failure };
   }
+
   return { failure: HOSTED_CALL_FAILURE.UNANSWERED, cause: hostedFailureFacts(failed) };
 }
 
@@ -112,6 +115,7 @@ export function hostedCall<
 > {
   const { poll } = options;
   const held = poll?.after === undefined ? undefined : HOSTED_DEADLINE.HELD;
+
   return Effect.catch(
     askHosted(
       procedure,
@@ -145,20 +149,22 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
   HttpClient.HttpClient
 > {
   // SAFETY: the live contract's procedure under a declared read's name is `liveProcedure` of that declaration (`contract/live.ts`), which the live reads' contract test holds.
-  const procedure = live[read.name as keyof HostedClient["live"]] as unknown as HostedProcedure<
+  const procedure = live[read.name as keyof HostedClient["live"]] as HostedProcedure<
     LivePollInput,
     LiveReadAnswer<Read>,
     ORPCErrorFromErrorMap<Read["errors"]>
   >;
+
   // SAFETY: a read's params are the fields of its input its mode's poll fields stand beside, each as text.
   const input = params as LivePollInput & { readonly [LIVE_POLL.SYNC]?: string };
   // Note that a read past a sync id is held by the service until something moves, polled or not, so it travels under the held deadline, as a poll past `after` does.
   const sync = input[LIVE_POLL.SYNC];
   const held = sync !== undefined && sync !== "";
+
   return hostedCall(procedure, input, {
     live: true,
-    ...(poll === undefined ? {} : { poll }),
-    ...(held ? { deadline: HOSTED_DEADLINE.HELD } : {}),
-    ...(as === undefined ? {} : { as }),
+    ...(poll !== undefined && { poll }),
+    ...(held && { deadline: HOSTED_DEADLINE.HELD }),
+    ...(as !== undefined && { as }),
   });
 }

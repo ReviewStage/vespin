@@ -38,19 +38,23 @@ export function routeFromWebServices(
 ): Route {
   const refuseCrossSite = cookieOriginGuard(process.env);
   let building: Promise<WebHandler> | undefined;
+
   return {
     fetch: sentryReportedFetch(async (request) => {
       const refusal = refuseCrossSite(request);
+
       if (refusal !== undefined) return refusal;
       building ??= webServicesWith(beside).then(handlerFor);
       const attempt = building;
       let handler: WebHandler;
+
       try {
         handler = await attempt;
       } catch (failure) {
         if (building === attempt) building = undefined;
         throw failure;
       }
+
       return handler(request);
     }, waitUntil),
   };
@@ -79,6 +83,7 @@ export function routeFromHttpRouter(
       disableLogger: true,
       middleware: traceIdAnnotated,
     });
+
     return (incoming: Request) => handler(withSentryTraceparent(incoming), context);
   }, beside);
 }

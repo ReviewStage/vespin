@@ -1,4 +1,4 @@
-import { Schema as EffectSchema, Option, SchemaTransformation } from "effect";
+import { Schema as EffectSchema, Option, Predicate, SchemaTransformation } from "effect";
 import { MODEL_PROVIDER } from "./models-wire.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -81,7 +81,8 @@ export interface WrittenPlanStatus {
 /** A named reset in epoch milliseconds, or none. */
 function resetMillis(resetsAt: Date | number | null | undefined): number | undefined {
   if (resetsAt === null || resetsAt === undefined) return undefined;
-  return typeof resetsAt === "number" ? resetsAt : resetsAt.getTime();
+
+  return Predicate.isNumber(resetsAt) ? resetsAt : resetsAt.getTime();
 }
 
 /**
@@ -95,6 +96,7 @@ function resetMillis(resetsAt: Date | number | null | undefined): number | undef
 export function planStanding(plan: WrittenPlanStatus, now: number): ProviderKeyStatus {
   if (plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED) return plan.status;
   const resetsAt = resetMillis(plan.limitResetsAt);
+
   return resetsAt !== undefined && resetsAt <= now
     ? PROVIDER_KEY_STATUS.VERIFIED
     : PROVIDER_KEY_STATUS.LIMIT_REACHED;
@@ -108,6 +110,7 @@ export function planStanding(plan: WrittenPlanStatus, now: number): ProviderKeyS
  */
 export function planLimitResetsAt(plan: WrittenPlanStatus, now: number): number | undefined {
   if (planStanding(plan, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED) return undefined;
+
   return resetMillis(plan.limitResetsAt);
 }
 
@@ -480,6 +483,7 @@ export function planNamesOf(
 ): ReadonlyMap<string, string> {
   const planName = PLAN_NAME[provider];
   const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
+
   return new Map(
     added.map((plan, at) => [
       plan.id,

@@ -29,6 +29,7 @@ const openConversation = Effect.gen(function* () {
   const digest = randomUUID();
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -39,8 +40,10 @@ const openConversation = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const agent = Option.getOrThrow(started).agent;
   assert.equal(yield* recordAgentRunnerToken(userId, agent.id, digest), true);
+
   return { userId, conversationId: agent.conversationId, agentId: agent.id, digest };
 });
 
@@ -107,6 +110,7 @@ it.layer(getTestDB())("the native projection's place", (it) => {
       yield* withNativeProjection(target, target.digest, () =>
         Effect.succeed({ result: undefined, saved: { sequence: 1, projection: {} } }),
       );
+
       const failed = yield* Effect.exit(
         withNativeProjection(target, target.digest, () =>
           Effect.andThen(
@@ -120,6 +124,7 @@ it.layer(getTestDB())("the native projection's place", (it) => {
           ),
         ),
       );
+
       const after = yield* readBack(target);
 
       assert.equal(failed._tag, "Failure");
@@ -131,10 +136,13 @@ it.layer(getTestDB())("the native projection's place", (it) => {
     Effect.gen(function* () {
       const target = yield* openConversation;
       yield* recordAgentRunnerToken(target.userId, target.agentId, randomUUID());
+
       const replaced = yield* withNativeProjection(target, target.digest, () =>
         Effect.succeed({ result: undefined, saved: { sequence: 1, projection: {} } }),
       );
+
       yield* recordAgentRunnerToken(target.userId, target.agentId, null);
+
       const retired = yield* withNativeProjection(target, target.digest, () =>
         Effect.succeed({ result: undefined, saved: { sequence: 1, projection: {} } }),
       );
@@ -152,9 +160,11 @@ it.layer(getTestDB())("the native projection's place", (it) => {
       const deleted = yield* openConversation;
       yield* db.delete(conversations).where(eq(conversations.id, deleted.conversationId));
       let ran = 0;
+
       const apply = () =>
         Effect.sync(() => {
           ran += 1;
+
           return { result: undefined, saved: { sequence: 5, projection: {} } };
         });
 
@@ -163,8 +173,10 @@ it.layer(getTestDB())("the native projection's place", (it) => {
         target.digest,
         apply,
       );
+
       const gone = yield* withNativeProjection(deleted, deleted.digest, apply);
       const untouched = yield* readBack(target);
+
       const strangers = yield* readNativeSequence({
         userId: stranger.userId,
         conversationId: target.conversationId,

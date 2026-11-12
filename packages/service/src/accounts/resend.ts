@@ -32,8 +32,10 @@ export function readResendSender(fromVariable: string): Effect.Effect<Option.Opt
       key: Config.option(Config.Redacted(RESEND.API_KEY_ENVIRONMENT)),
       from: Config.option(Config.String(fromVariable)),
     }).pipe(Effect.orElseSucceed(() => ({ key: Option.none(), from: Option.none() })));
+
     const key = present(Option.map(read.key, Redacted.value));
     const from = present(read.from);
+
     return key === undefined || from === undefined ? Option.none() : Option.some({ key, from });
   });
 }

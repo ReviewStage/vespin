@@ -11,10 +11,10 @@ import { Directory, File, Paths } from "expo-file-system";
 const WRITING_SUFFIX = ".writing";
 
 /** The extension each video type a read answers is written under. */
-const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
-  [MP4_TYPE]: "mp4",
-  [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
-};
+const VIDEO_EXTENSION: ReadonlyMap<string, string> = new Map([
+  [MP4_TYPE, "mp4"],
+  [CONVERSATION_MEDIA_TYPE.WEBM, "webm"],
+]);
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video or file waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
@@ -34,10 +34,12 @@ const PDF_EXTENSION = ".pdf";
 /** Bytes written under a name of their own beside `file` and moved into place as it, answering its address once they are all on disk. */
 async function written(file: File, base64: string): Promise<string> {
   const partial = new File(file.parentDirectory, `${file.name}${WRITING_SUFFIX}`);
+
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
   await partial.move(file, { overwrite: true });
+
   return file.uri;
 }
 
@@ -45,9 +47,11 @@ async function written(file: File, base64: string): Promise<string> {
 function once(file: File, base64: string): Promise<string> {
   if (file.exists) return Promise.resolve(file.uri);
   const under = writing.get(file.uri);
+
   if (under !== undefined) return under;
   const write = written(file, base64).finally(() => writing.delete(file.uri));
   writing.set(file.uri, write);
+
   return write;
 }
 
@@ -68,8 +72,9 @@ export async function cachedVideo(
   contentType: string,
   base64: string,
 ): Promise<string> {
-  const extension = VIDEO_EXTENSION[contentType];
+  const extension = VIDEO_EXTENSION.get(contentType);
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
+
   return once(new File(Paths.cache, name), base64);
 }
 
@@ -96,7 +101,9 @@ export async function cachedFile(
   const trimmed = name.replace(PATH_PARTS, "_").trim();
   const safe = DOTS_ALONE.test(trimmed) ? UNNAMED : trimmed;
   const pdf = mediaType === AGENT_ATTACHMENT_TYPE.PDF;
+
   const named =
     pdf && !safe.toLowerCase().endsWith(PDF_EXTENSION) ? `${safe}${PDF_EXTENSION}` : safe;
+
   return once(new File(folder, named), base64);
 }

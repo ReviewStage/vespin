@@ -38,6 +38,7 @@ export function buildAdminWorkspaceDetail(
   now: number,
 ): AdminWorkspaceDetail {
   const owner = source.members.find((each) => each.role === WORKSPACE_ROLE.OWNER);
+
   return {
     generatedAt: now,
     activityDays: ADMIN_WORKSPACES_ACTIVITY_DAYS,
@@ -66,6 +67,7 @@ export function handleAdminWorkspace(
   options: AdminWorkspaceOptions,
 ): Effect.Effect<AdminWorkspaceDetail, AdminRefusal, DatabaseServices> {
   const id = adminWorkspaceId(options.query.id);
+
   if (id === undefined) return Effect.fail(ADMIN_REFUSAL.MISSING_WORKSPACE_ID);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

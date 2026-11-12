@@ -37,10 +37,13 @@ const NATIVE_SESSION_PREFIX_BEFORE_RENAME = {
 export function nativeRuntimeOfSession(sessionId: string): NativeRuntime | undefined {
   for (const prefixes of [NATIVE_SESSION_PREFIX, NATIVE_SESSION_PREFIX_BEFORE_RENAME]) {
     for (const [runtime, prefix] of Object.entries(prefixes)) {
-      // SAFETY: the keys are the prefix tables' own, each a native runtime.
-      if (sessionId.startsWith(prefix)) return runtime as NativeRuntime;
+      if (sessionId.startsWith(prefix)) {
+        // SAFETY: the keys are the prefix tables' own, each a native runtime.
+        return runtime as NativeRuntime;
+      }
     }
   }
+
   return undefined;
 }
 

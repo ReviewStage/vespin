@@ -65,6 +65,7 @@ function DigitSlot({
   // mid-roll.
   const changed = roll !== undefined && was !== digit;
   const leaving = changed && !left ? was : undefined;
+
   return (
     <span className="ui-rolling-number-slot relative inline-block [clip-path:inset(0)]">
       <Fragment key={changed ? turn : "standing"}>
@@ -102,6 +103,7 @@ export function RollingNumber({
     turn: 0,
     left: true,
   });
+
   // Note that the change is taken in the render that sees it, because a
   // change noticed an effect later would draw one frame of the new count
   // standing still before it rolls.
@@ -114,14 +116,17 @@ export function RollingNumber({
       left: false,
     });
   }
+
   const digits = digitsOf(shown.value);
   const before = shown.previous === undefined ? [] : digitsOf(shown.previous);
   const left = () => setShown((current) => ({ ...current, left: true }));
+
   // A digit is matched with the one in its place counted from the units.
   return (
     <span className="ui-rolling-number inline-flex tabular-nums">
       {digits.map((digit, index) => {
         const place = digits.length - index;
+
         return (
           <DigitSlot
             key={place}

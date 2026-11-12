@@ -108,6 +108,14 @@ function holdsCarried(draft: Draft, carry: ContinueCarry): boolean {
   );
 }
 
+type UseContinueStartResult = {
+  readonly busy: boolean;
+  readonly note: Failure | undefined;
+  readonly start: (choice?: ModelChoice) => void;
+  /** Lets the box's words go where it still holds what the press carried. */
+  readonly letGo: () => void;
+};
+
 /**
  * A continue started at once from the agent's whole transcript, on `choice`
  * where one is named, with the box's words and files as its note: held busy
@@ -118,24 +126,20 @@ function useContinueStart(
   agentId: string,
   control: Pick<AgentsControl, "continueAgent">,
   carry: ContinueCarry | undefined,
-): {
-  readonly busy: boolean;
-  readonly note: Failure | undefined;
-  readonly start: (choice?: ModelChoice) => void;
-  /** Lets the box's words go where it still holds what the press carried. */
-  readonly letGo: () => void;
-} {
+): UseContinueStartResult {
   const starting = useAsyncAction<Failure>(rejectedFailure);
   const note = starting.refusal;
   const writer = useDraftWriter();
   const { continueAgent } = control;
   useAnnounceShown(ANNOUNCE.ALERT, note?.text ?? "");
+
   const letGo = () => {
     if (carry === undefined) return;
     writer.update({ kind: DRAFT_PLACE.AGENT, planId: carry.taskId, agentId }, (now) =>
       holdsCarried(now, carry) ? EMPTY_DRAFT : now,
     );
   };
+
   const start = (choice?: ModelChoice) => {
     if (continueAgent === undefined) return;
     const words = carry?.words.trim() ?? "";
@@ -149,10 +153,12 @@ function useContinueStart(
       ).then((failed) => {
         // The words went on into the new agent, so the box lets them go, where nothing newer stands.
         if (failed === undefined) letGo();
+
         return failed;
       }),
     );
   };
+
   return { busy: starting.running, note, start, letGo };
 }
 
@@ -182,12 +188,15 @@ export function ContinueAgent({
     if (opensDraft !== undefined && control.continueAgent !== undefined) {
       opensDraft(carry?.words ?? "", carry?.attachments ?? []);
       letGo();
+
       return;
     }
+
     start();
   };
 
   if (control.continueAgent === undefined) return null;
+
   return (
     <span className="inline-flex flex-wrap items-center gap-x-control-gap gap-y-tight-gap">
       <Button
@@ -235,9 +244,11 @@ export function RefusalContinue({
   const root = useRef<HTMLSpanElement>(null);
   const remedy = useRepositoryRemedy();
   const { models } = control;
+
   if (control.continueAgent === undefined || models === undefined) return null;
   const offer = refusalOffer(models, agent);
   const choice = picked ?? offer.choice;
+
   const connect =
     offer.connect === undefined
       ? undefined
@@ -246,7 +257,9 @@ export function RefusalContinue({
           text: CONTINUED_COPY.CONNECT_HINT,
           provider: offer.connect,
         };
+
   const close = () => setOpen(false);
+
   return (
     <span
       ref={root}
@@ -313,7 +326,9 @@ interface ContinuedDoors {
 /** An agent the list does not hold, named by the title the source's summary gives it where it gives one. */
 function titledSubject(subject: AgentSubject, title: string | undefined): AgentSubject {
   if (subject.agent !== undefined || title === undefined) return subject;
+
   if (subject.tile.kind !== ACTOR_KIND.AGENT) return subject;
+
   return { ...subject, name: title, tile: { ...subject.tile, name: title } };
 }
 
@@ -322,12 +337,16 @@ function distinctNames(names: readonly string[]): readonly string[] {
   // Note that every name is held taken first, so a suffix never lands on a name another already has.
   const taken = new Set(names);
   const given = new Set<string>();
+
   return names.map((name) => {
     let label = name;
+
     for (let count = 2; given.has(label) || (label !== name && taken.has(label)); count += 1) {
       label = `${name} · ${count}`;
     }
+
     given.add(label);
+
     return label;
   });
 }
@@ -349,10 +368,13 @@ function ContinuedIn({
   const folds = agentIds.length > CONTINUED_CHIPS + 1;
   const earlier = folds ? agentIds.slice(0, agentIds.length - CONTINUED_CHIPS) : [];
   const chips = folds ? agentIds.slice(-CONTINUED_CHIPS) : agentIds;
+
   const subjectOf = (agentId: string) =>
     titledSubject(agentSubject(control, agentId, NOTHING_HELD, false), titles.get(agentId));
+
   const names = distinctNames(earlier.map((agentId) => subjectOf(agentId).name));
   const trigger = menu.trigger(riseAboveEnd);
+
   return (
     <span className="inline-flex min-w-0 flex-wrap items-baseline gap-tight-gap" data-continued="">
       <span>{CONTINUED_IN}</span>
@@ -424,10 +446,12 @@ export function ContinuedComposerNote({
   shown: boolean;
 }): React.JSX.Element {
   const [stopping, setStopping] = useState(false);
+
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (stopping && stop === undefined) setStopping(false);
   const archive = useAgentArchive(agent, control, shown);
+
   const pressStop = (run: () => Promise<boolean>) => {
     setStopping(true);
     run().then(
@@ -435,6 +459,7 @@ export function ContinuedComposerNote({
       () => setStopping(false),
     );
   };
+
   return (
     <>
       <div className={COMPOSER_ROOM_CLASS}>

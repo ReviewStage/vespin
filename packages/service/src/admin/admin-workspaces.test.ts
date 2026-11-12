@@ -96,6 +96,7 @@ describe("the workspaces builder", () => {
       ADMIN_WORKSPACES_KIND.SHARED,
       undefined,
     );
+
     assert.deepEqual(list.summary.invitations, {
       accepted: 6,
       pending: 3,
@@ -117,6 +118,7 @@ describe("the workspaces builder", () => {
       ADMIN_WORKSPACES_KIND.SHARED,
       undefined,
     );
+
     assert.equal(list.summary.invitations.acceptanceRate, null);
     assert.equal(list.summary.invitations.pending, 4);
     assert.equal(list.summary.github.activeShare, null);
@@ -133,6 +135,7 @@ describe("the workspaces builder", () => {
       prsMergedWeek: 0,
       createdAt: NOW,
     };
+
     const list = buildAdminWorkspaceList(
       source({
         total: 2,
@@ -153,6 +156,7 @@ describe("the workspaces builder", () => {
       ADMIN_WORKSPACES_KIND.SHARED,
       "north",
     );
+
     assert.equal(list.rows[0]?.owner?.id, OWNER.id);
     assert.deepEqual(list.rows[0]?.installations, [
       { login: "northwind", status: GITHUB_INSTALLATION_STATUS.ACTIVE },
@@ -180,6 +184,7 @@ const insertWorkspace = (
     const id = randomUUID();
     const createdAt = options.createdAt ?? daysAgo(60);
     yield* db.insert(organization).values({ id, name, slug: `workspace-${id}`, createdAt });
+
     for (const [index, userId] of members.entries()) {
       const role: WorkspaceRole = index === 0 ? WORKSPACE_ROLE.OWNER : WORKSPACE_ROLE.MEMBER;
       yield* db.insert(member).values({
@@ -190,11 +195,13 @@ const insertWorkspace = (
         createdAt: new Date(createdAt.getTime() + index),
       });
     }
+
     if (options.personalOf !== undefined) {
       yield* db
         .insert(personalWorkspace)
         .values({ userId: options.personalOf, organizationId: id, createdAt });
     }
+
     return id;
   });
 
@@ -217,6 +224,7 @@ const insertTask = (organizationId: string, userId: string, createdAt: Date) =>
       createdAt,
       updatedAt: createdAt,
     });
+
     return id;
   });
 
@@ -263,6 +271,7 @@ const insertAgent = (
       idempotencyKey: randomUUID(),
       createdAt,
     });
+
     if (merged === undefined) return;
     yield* db.insert(agentPullRequest).values({
       agentId: id,
@@ -355,6 +364,7 @@ const seedWorld = Effect.gen(function* () {
   yield* insertWorkspace("Quiet Co", ["margaret", "grace"], { createdAt: daysAgo(5) });
 
   const maintainers = yield* insertWorkspace("Maintainers", ["ada", "alan"]);
+
   for (const day of [0, 1, 2, 3, 4]) yield* insertTask(maintainers, "ada", daysAgo(day));
   yield* insertInstallation(maintainers, "luke-maintainers", GITHUB_INSTALLATION_STATUS.ACTIVE);
   yield* insertInvitation(maintainers, "ada", INVITATION_STATUS.ACCEPTED, daysAgo(10));
@@ -362,6 +372,7 @@ const seedWorld = Effect.gen(function* () {
   const gracePersonal = yield* insertWorkspace("grace-personal", ["grace", "linus"], {
     personalOf: "grace",
   });
+
   yield* insertTask(gracePersonal, "grace", daysAgo(0));
   yield* insertWorkspace("ada-personal", ["ada"], { personalOf: "ada" });
   yield* insertWorkspace("Solo", ["margaret"]);
@@ -415,6 +426,7 @@ inSeededWorld(
 
     // Names of workspaces and accounts are the read's; what members wrote never is.
     const answered = JSON.stringify(list);
+
     for (const written of ["Secret launch plan", "Confidential", "prompt", "title"]) {
       assert.equal(answered.includes(written), false, written);
     }
@@ -456,6 +468,7 @@ inSeededWorld(
       Effect.map(read(ADMIN_METRICS_SCOPE.NON_ADMINS, ADMIN_WORKSPACES_KIND.ALL, search), (list) =>
         list.rows.map((row) => row.name),
       );
+
     assert.deepEqual(yield* names("north wind"), ["Northwind"]);
     assert.deepEqual(yield* names("wind  NORTH"), ["Northwind"]);
     assert.deepEqual(yield* names("north hopper"), []);
@@ -470,6 +483,7 @@ inSeededWorld(
       ADMIN_WORKSPACES_KIND.SHARED,
       "NORTH",
     );
+
     assert.deepEqual(
       shared.rows.map((row) => row.name),
       ["Northwind"],
@@ -481,6 +495,7 @@ inSeededWorld(
       ADMIN_WORKSPACES_KIND.ALL,
       "hopper",
     );
+
     assert.deepEqual(
       personal.rows.map((row) => row.name),
       ["Grace Hopper"],

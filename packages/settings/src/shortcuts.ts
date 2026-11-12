@@ -16,6 +16,14 @@
  * offers a Command chord to the page before the menu, and the keymap claims
  * it only while the command can run, so a chord nothing answers falls through
  * to the menu and from there to the same nothing.
+ *
+ * A browser tab is pressed with the same chords but four, which a browser
+ * keeps for its own windows and tabs and never hands the page: ⌘N, ⌘T, ⌘W,
+ * and ⇧⌘T. Each of those commands names a `browser` chord, the same key with
+ * Option added, as VS Code for the Web moves its New File from ⌘N to ⌥⌘N, and
+ * a window that is a browser's tab (`installBrowserChords`) draws and answers
+ * that one instead. Only that one, because Close other tabs gives up its
+ * ⌥⌘W there to Close tab, so the Mac app's chords cannot stand beside them.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -293,6 +301,14 @@ export type CommandKey = (typeof COMMAND_KEY)[keyof typeof COMMAND_KEY];
  */
 let commandKey: CommandKey = COMMAND_KEY.META;
 
+/**
+ * Whether the window is a browser's tab, which presses a chord the browser
+ * keeps for itself with that chord's `browser` one. Module state, as the
+ * command key is, installed once by the window's shell before anything is
+ * drawn (`installBrowserChords`); the Mac app installs none.
+ */
+let inBrowser = false;
+
 /** How `aria-keyshortcuts` names each command key. */
 const COMMAND_ARIA = {
   [COMMAND_KEY.META]: "Meta",
@@ -339,7 +355,9 @@ const MODIFIER_SPELLING = {
 
 function modifierGlyph(name: string): string {
   const { names } = MODIFIER_SPELLING[commandKey];
+
   if (!Object.hasOwn(names, name)) return name;
+
   // SAFETY: Object.hasOwn narrows name to a key the glyph table documents.
   return names[name as keyof typeof names];
 }
@@ -362,7 +380,7 @@ function modifierGlyph(name: string): string {
  * itself, from the press to the ⌃'s release (`tab-switcher.tsx` in
  * `@repo/panel`), so the keymap leaves it, as it leaves the layered Escape.
  */
-export interface ShortcutChord {
+interface PressedChord {
   key: ShortcutKey;
   control?: true;
   option?: true;
@@ -372,8 +390,17 @@ export interface ShortcutChord {
   switching?: true;
 }
 
+/**
+ * A chord, and the one a browser's tab presses it with where the browser
+ * keeps this one for itself (`browser`): a window that is a browser's tab
+ * (`installBrowserChords`) draws, spells, and answers that one instead.
+ */
+export interface ShortcutChord extends PressedChord {
+  browser?: PressedChord;
+}
+
 /** Whether a chord is pressed without Command: the window's layered Escape, a letter alone, or the tab switcher's ⌃Tab. */
-function commandless(chord: ShortcutChord): boolean {
+function commandless(chord: PressedChord): boolean {
   return chord.bare === true || chord.plain === true || chord.switching === true;
 }
 
@@ -432,7 +459,11 @@ export interface AppShortcut {
  * menu's own items answer them.
  */
 export const APP_SHORTCUTS = {
-  [APP_COMMAND.NEW_TASK]: { label: "New task", chord: { key: SHORTCUT_KEY.N } },
+  // Note that a browser keeps ⌘N for a window of its own, so a tab takes ⌥⌘N, as VS Code for the Web's New File does.
+  [APP_COMMAND.NEW_TASK]: {
+    label: "New task",
+    chord: { key: SHORTCUT_KEY.N, browser: { key: SHORTCUT_KEY.N, option: true } },
+  },
   // Note that a link takes ⇧⌘C, as Arc and Dia copy a page's address, and what the focused pane shows takes ⌥⌘C beside it: the description where the description is focused, an agent's concise transcript where its pane or tab is, each menu item saying which (`command-items.tsx` in `@repo/panel`).
   [APP_COMMAND.COPY_LINK]: { label: "Copy link", chord: { key: SHORTCUT_KEY.C, shift: true } },
   [APP_COMMAND.COPY_CONTENT]: {
@@ -573,16 +604,31 @@ export const APP_SHORTCUTS = {
     label: "Move row down",
     chord: { key: SHORTCUT_KEY.DOWN, shift: true },
   },
-  [APP_COMMAND.NEW_TAB]: { label: "New tab", chord: { key: SHORTCUT_KEY.T } },
-  [APP_COMMAND.CLOSE_TAB]: { label: "Close tab", chord: { key: SHORTCUT_KEY.W } },
-  // Note that Close other tabs takes ⌥⌘W, as Safari has it, since ⇧⌘W closes the window.
+  // Note that a browser keeps ⌘T, ⌘W, and ⇧⌘T for its own tabs, so a browser's tab takes each with Option added, as it does ⌘N.
+  [APP_COMMAND.NEW_TAB]: {
+    label: "New tab",
+    chord: { key: SHORTCUT_KEY.T, browser: { key: SHORTCUT_KEY.T, option: true } },
+  },
+  [APP_COMMAND.CLOSE_TAB]: {
+    label: "Close tab",
+    chord: { key: SHORTCUT_KEY.W, browser: { key: SHORTCUT_KEY.W, option: true } },
+  },
+  // Note that Close other tabs takes ⌥⌘W, as Safari has it, since ⇧⌘W closes the window, and a browser's tab adds Shift, since there ⌥⌘W is Close tab's.
   [APP_COMMAND.CLOSE_OTHER_TABS]: {
     label: "Close other tabs",
-    chord: { key: SHORTCUT_KEY.W, option: true },
+    chord: {
+      key: SHORTCUT_KEY.W,
+      option: true,
+      browser: { key: SHORTCUT_KEY.W, option: true, shift: true },
+    },
   },
   [APP_COMMAND.REOPEN_CLOSED_TAB]: {
     label: "Reopen closed tab",
-    chord: { key: SHORTCUT_KEY.T, shift: true },
+    chord: {
+      key: SHORTCUT_KEY.T,
+      shift: true,
+      browser: { key: SHORTCUT_KEY.T, option: true, shift: true },
+    },
   },
   [APP_COMMAND.CLOSE_WINDOW]: {
     label: "Close window",
@@ -1326,6 +1372,7 @@ export const WRITING_GROUP_TITLE = "Writing";
 /** The writing actions the Keyboard shortcuts page lists: each one a chord or a Markdown rule reaches, in the vocabulary's order. */
 export const WRITING_ACTIONS_LISTED: readonly WritingAction[] = WRITING_ACTIONS.filter((action) => {
   const shortcut: WritingShortcut = WRITING_SHORTCUTS[action];
+
   return shortcut.chord !== undefined || shortcut.markdown !== undefined;
 });
 
@@ -1357,10 +1404,13 @@ export function shortcutShown(
   capabilities: readonly HostCapability[],
 ): boolean {
   const shortcut: AppShortcut = APP_SHORTCUTS[command];
+
   const experimentStands =
     shortcut.experiment === undefined || experimentOn(experiments, shortcut.experiment);
+
   const capabilityStands =
     shortcut.capability === undefined || capabilities.includes(shortcut.capability);
+
   return experimentStands && capabilityStands;
 }
 
@@ -1369,6 +1419,7 @@ export function shortcutWorkspaceExperiment(
   command: KeyedCommand,
 ): WorkspaceExperiment | undefined {
   const { experiment }: AppShortcut = APP_SHORTCUTS[command];
+
   return experiment !== undefined && isWorkspaceExperiment(experiment) ? experiment : undefined;
 }
 
@@ -1379,10 +1430,13 @@ export function shortcutWorkspaceExperiment(
  */
 export function experimentsOffered(commands: readonly AppCommand[]): WorkspaceExperimentChoices {
   const on: Partial<Record<WorkspaceExperiment, boolean>> = {};
+
   for (const command of commands) {
     const experiment = isKeyedCommand(command) ? shortcutWorkspaceExperiment(command) : undefined;
+
     if (experiment !== undefined) on[experiment] = true;
   }
+
   return on;
 }
 
@@ -1390,6 +1444,7 @@ export function experimentsOffered(commands: readonly AppCommand[]): WorkspaceEx
 export function shortcutLabel(command: KeyedCommand, experiments: ExperimentChoices): string {
   const shortcut: AppShortcut = APP_SHORTCUTS[command];
   const { renamed } = shortcut;
+
   return renamed !== undefined && experimentOn(experiments, renamed.experiment)
     ? renamed.label
     : shortcut.label;
@@ -1401,6 +1456,7 @@ export function inContextShown(
   capabilities: readonly HostCapability[],
 ): boolean {
   const shortcut: InContextShortcut = IN_CONTEXT_SHORTCUTS[key];
+
   return shortcut.capability === undefined || capabilities.includes(shortcut.capability);
 }
 
@@ -1419,20 +1475,25 @@ export function shownShortcutGroups(
   readonly commands: readonly KeyedCommand[];
   readonly keys: readonly InContextKey[];
 }[] {
-  return APP_SHORTCUT_GROUPS.map((group) => ({
-    title: group.title,
-    commands: group.commands.filter(
-      (command) =>
-        !shortcutLayered(APP_SHORTCUTS[command].chord) &&
-        shortcutShown(command, experiments, capabilities),
-    ),
-    keys: group.keys.filter((key) => inContextShown(key, capabilities)),
-  })).filter((group) => group.commands.length + group.keys.length > 0);
+  return APP_SHORTCUT_GROUPS.flatMap((group) => {
+    const shown = {
+      title: group.title,
+      commands: group.commands.filter(
+        (command) =>
+          !shortcutLayered(APP_SHORTCUTS[command].chord) &&
+          shortcutShown(command, experiments, capabilities),
+      ),
+      keys: group.keys.filter((key) => inContextShown(key, capabilities)),
+    };
+
+    return shown.commands.length + shown.keys.length > 0 ? [shown] : [];
+  });
 }
 
 /** A command's name as the window says it, keyed, the menu bar's own, or ⌘K's own. */
 export function appCommandLabel(command: AppCommand): string {
   if (isKeyedCommand(command)) return APP_SHORTCUTS[command].label;
+
   return isMenuCommand(command) ? MENU_COMMAND_LABELS[command] : PALETTE_COMMAND_LABELS[command];
 }
 
@@ -1441,8 +1502,15 @@ export function isAppCommand(value: UnparsedWireValue): value is AppCommand {
   return isWireString(value) && APP_COMMANDS.some((command) => command === value);
 }
 
-/** The chord as Electron's accelerator, for the menu bar. */
-export function shortcutAccelerator(chord: ShortcutChord): string {
+/** The chord the window presses: its `browser` one in a browser's tab where it names one, and itself everywhere else. */
+function pressedNow(chord: ShortcutChord): PressedChord {
+  return inBrowser && chord.browser !== undefined ? chord.browser : chord;
+}
+
+/** The chord as Electron's accelerator, for the menu bar, and as every chord is drawn: the one the window presses (`pressedNow`). */
+export function shortcutAccelerator(shortcut: ShortcutChord): string {
+  const chord = pressedNow(shortcut);
+
   return [
     chord.control ? "Control" : undefined,
     chord.option ? "Alt" : undefined,
@@ -1458,6 +1526,7 @@ export function shortcutAccelerator(chord: ShortcutChord): string {
 export function installCommandKey(key: CommandKey): () => void {
   const before = commandKey;
   commandKey = key;
+
   return () => {
     commandKey = before;
   };
@@ -1480,7 +1549,18 @@ export function shortcutGlyphs(accelerator: string): readonly string[] {
   // A name no modifier answers to is kept, ahead of the ones that do, rather than dropped.
   const unknown = [...held].filter((glyph) => !order.some((each) => each === glyph));
   const ordered = order.filter((glyph) => held.has(glyph));
+
   return [...unknown, ...ordered, KEY_GLYPHS.get(key) ?? key];
+}
+
+/** Installs whether the window is a browser's tab, which its shell says once before anything is drawn; answers the function that puts back what stood before. */
+export function installBrowserChords(browser: boolean): () => void {
+  const before = inBrowser;
+  inBrowser = browser;
+
+  return () => {
+    inBrowser = before;
+  };
 }
 
 /** The window's command key now, which a chord drawn in words reads. */
@@ -1502,7 +1582,9 @@ export function surfaceKeepsPress(press: { ctrlKey: boolean; metaKey: boolean })
 }
 
 /** The chord as `aria-keyshortcuts` spells it, its Command as the window's command key. */
-export function shortcutAria(chord: ShortcutChord): string {
+export function shortcutAria(shortcut: ShortcutChord): string {
+  const chord = pressedNow(shortcut);
+
   // Note that a set, because where Command is Ctrl a chord naming Control too names one key.
   const held = new Set([
     commandless(chord) ? undefined : COMMAND_ARIA[commandKey],
@@ -1510,6 +1592,7 @@ export function shortcutAria(chord: ShortcutChord): string {
     chord.option ? "Alt" : undefined,
     chord.shift ? "Shift" : undefined,
   ]);
+
   return [
     ...held,
     chord.key.aria ?? (chord.key.key.length === 1 ? chord.key.key.toUpperCase() : chord.key.key),
@@ -1542,20 +1625,25 @@ interface ShortcutKeyPress {
  * and the tab switcher's ⌃Tab, a Control chord without Command, is Ctrl too;
  * no chord with Command is Tab, so the two stay apart.
  */
-function heldAsChord(chord: ShortcutChord, event: ShortcutKeyPress): boolean {
+function heldAsChord(chord: PressedChord, event: ShortcutKeyPress): boolean {
   const command = !commandless(chord);
   const control = chord.control === true;
+
   if (commandKey === COMMAND_KEY.META)
     return event.metaKey === command && event.ctrlKey === control;
+
   // Note that a chord naming both, the system's ⌃⌘F, has no spelling where Ctrl is Command, and that AltGr is typing, never Ctrl and Alt.
   if (command && control) return false;
+
   if (event.getModifierState?.("AltGraph") === true) return false;
+
   return !event.metaKey && event.ctrlKey === (command || control);
 }
 
 /**
- * Whether a key press is the chord: Command, pressed as the window's command
- * key, unless the chord goes without, and exactly the chord's other
+ * Whether a key press is the chord the window presses (`pressedNow`):
+ * Command, pressed as the window's command key, unless the chord goes
+ * without, and exactly the chord's other
  * modifiers, and the key. The character is read where it can be,
  * which is what the menu bar matches too, and the physical key where Option
  * has changed the character, or where a plain chord's key is read by its
@@ -1563,15 +1651,22 @@ function heldAsChord(chord: ShortcutChord, event: ShortcutKeyPress): boolean {
  * either character, Shift held or not, because which of the two needs Shift
  * is the keyboard layout's to say.
  */
-export function shortcutMatches(chord: ShortcutChord, event: ShortcutKeyPress): boolean {
+export function shortcutMatches(shortcut: ShortcutChord, event: ShortcutKeyPress): boolean {
+  const chord = pressedNow(shortcut);
+
   if (!heldAsChord(chord, event)) return false;
   const shiftFree = chord.key.unshifted !== undefined;
+
   if (event.altKey !== (chord.option === true)) return false;
+
   if (!shiftFree && event.shiftKey !== (chord.shift === true)) return false;
+
   if (event.altKey || (chord.plain === true && chord.key.placed === true)) {
     return event.code === chord.key.code;
   }
+
   const pressed = event.key.toLowerCase();
+
   return pressed === chord.key.key.toLowerCase() || pressed === chord.key.unshifted;
 }
 

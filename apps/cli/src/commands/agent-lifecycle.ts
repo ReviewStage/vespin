@@ -40,10 +40,12 @@ export const rewindCommand = Command.make(
   ({ agent: id, message }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       const { agent } = yield* askService(hosted.agents.rewind, {
         params: { id },
         body: { messageId: message },
       });
+
       yield* answer({
         json: agent,
         lines: [`Rewound agent ${agent.id} to just before that line.`],

@@ -65,8 +65,10 @@ const decodeRows = Schema.decodeUnknownOption(TASK_LIST_READ.rows);
 /** An answer's rows decoded; none where it carries none inline, and failed where a row does not decode. Note that its issues part carries none, for a released desktop alone. */
 function rowsOf(read: TaskListLiveAnswer): Option.Option<TaskListLiveRows> | "undecoded" {
   const { plans, agents } = read.queries;
+
   if (plans.rows === undefined || agents.rows === undefined) return Option.none();
   const rows = decodeRows({ plans: plans.rows, agents: agents.rows });
+
   return Option.isSome(rows) ? rows : "undecoded";
 }
 
@@ -77,13 +79,17 @@ function followRows(
 ): Effect.Effect<void, LiveBroken> {
   const taken = (read: TaskListLiveAnswer) => {
     const rows = rowsOf(read);
+
     if (rows === "undecoded") return Effect.succeed(false);
+
     return Option.isSome(rows)
       ? Effect.as(dependencies.take(rows.value, syncStandingOf<"plans" | "agents">(read)), true)
       : Effect.succeed(true);
   };
+
   return Effect.gen(function* () {
     if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
+
     const poll = (_after: string | undefined, _cursor?: string, sync?: string) =>
       Effect.flatMap(dependencies.live(sync), (read) =>
         "failure" in read
@@ -92,6 +98,7 @@ function followRows(
               decoded ? read : { failure: "a row did not decode" },
             ),
       );
+
     const { onTxWait, behind } = dependencies;
     // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
     yield* Stream.runDrain(
@@ -106,22 +113,29 @@ function followRows(
 /** The task list, followed live until interrupted or until the service says it never will again. */
 export function followTaskList(dependencies: TaskListFollowDependencies): Effect.Effect<void> {
   let past = dependencies.from;
+
   const attempt = Effect.gen(function* () {
     const sealed = yield* dependencies.live(past ?? "");
     past = undefined;
+
     if ("failure" in sealed) {
       if (sealed.gone === true) return false;
       dependencies.failed();
+
       return true;
     }
+
     // A read the service refused for good, as one under another session, ends the follow rather than starting it again.
     const gone = yield* followRows(dependencies, sealed).pipe(
       Effect.as(false),
       Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
     );
+
     // A follow that broke draws the list it had until it is read again, so it says the list may be behind.
     if (!gone) dependencies.behind();
+
     return !gone;
   });
+
   return restarting(attempt);
 }

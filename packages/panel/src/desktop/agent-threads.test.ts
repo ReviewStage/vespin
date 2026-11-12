@@ -132,6 +132,7 @@ async function mount(
   ]);
   const inboxes: unknown[] = [];
   const covered: (string | undefined)[] = [];
+
   const control = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     me,
@@ -147,6 +148,7 @@ async function mount(
     onShowInbox: (choice) => inboxes.push(choice),
     onThreadsShown: (agentId) => covered.push(agentId),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -161,22 +163,27 @@ async function mount(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return { container, inboxes, covered };
 }
 
 test("the dock opens the agent's threads in its card on the oldest waiting, its own alone, and Escape gives the transcript back", async () => {
   const { container, inboxes, covered } = await mount();
   const transcript = container.querySelector<HTMLElement>(".desktop-agent");
+
   const dock =
     container.querySelector<HTMLElement>(
       ".agent-threads-dock [role='button'], .agent-threads-dock button",
     ) ?? assert.fail("the agent's box docks its waiting threads");
+
   act(() => dock.click());
 
   assert.deepEqual(inboxes, [], "the dock leaves the task for no Inbox");
+
   const threads =
     container.querySelector<HTMLElement>(".agent-threads") ??
     assert.fail("the card shows the agent's threads");
+
   assert.equal(transcript?.hidden, true, "the transcript stands hidden beneath them");
   assert.equal(covered.at(-1), AGENT.id, "main is told the transcript is out of sight");
   const list = threads.querySelector("nav")?.textContent ?? "";
@@ -202,15 +209,19 @@ test("with none waiting on the reader, the quiet dock opens the agent's latest c
     ...item("a1b2c3d4-0000-4000-8000-000000000004", AGENT.id, "Asked of a teammate", 10),
     waitsOn: { userId: "user-grace", name: "Grace Hopper" },
   };
+
   const answered: InboxItem = {
     ...item("a1b2c3d4-0000-4000-8000-000000000005", AGENT.id, "Answered lately", 40),
     status: INBOX_STATUS.ANSWERED,
   };
+
   const { container } = await mount([teammates, answered], "user-ada");
+
   const dock =
     container.querySelector<HTMLElement>(
       ".agent-threads-dock [role='button'], .agent-threads-dock button",
     ) ?? assert.fail("the agent's box docks its threads, quiet");
+
   assert.match(dock.textContent ?? "", /2 threads/u);
   act(() => dock.click());
 

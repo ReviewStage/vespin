@@ -21,8 +21,11 @@ const SAFE_LINK = /^(?:https?:\/\/|mailto:)/i;
 
 /** The drawn tree's types: the tree root or an element, a node under it, an element's child, and a run of text. */
 type HastParent = Root | Element;
+
 type HastNode = RootContent;
+
 type HastChild = ElementContent;
+
 type HastText = Text;
 
 /** A stretch of the words, from one offset up to another. */
@@ -80,19 +83,23 @@ function editedText(text: HastText, start: number, edit: MarkdownEdit): readonly
   const { marks = [] } = edit;
   const local = (offset: number) => Math.min(Math.max(offset - start, 0), text.value.length);
   const cuts = new Set([0, text.value.length]);
+
   for (const span of marks) cuts.add(local(span.from)).add(local(span.to));
   const bounds = [...cuts].sort((left, right) => left - right);
   const parts: HastChild[] = [];
   bounds.forEach((from, index) => {
     const to = bounds[index + 1];
+
     if (to === undefined || to === from) return;
     const value = text.value.slice(from, to);
     const covering = marks.filter((each) => from >= local(each.from) && to <= local(each.to));
     // Note that a change mark wins over a comment's, and words under several threads name every one of them.
     const mark = covering.find((each) => each.kind !== MARKDOWN_MARK.COMMENT) ?? covering[0];
+
     const threads = covering.flatMap((each) =>
       each.kind === MARKDOWN_MARK.COMMENT && each.thread !== undefined ? [each.thread] : [],
     );
+
     const drawn = mark === undefined ? undefined : MARK_DRAWN[mark.kind];
     parts.push(
       drawn !== undefined
@@ -111,6 +118,7 @@ function editedText(text: HastText, start: number, edit: MarkdownEdit): readonly
         : { type: "text", value },
     );
   });
+
   return parts;
 }
 
@@ -126,8 +134,10 @@ function markedPicture(
   edit: MarkdownEdit,
 ): HastNode {
   const mark = edit.marks?.find((each) => each.from <= start && end <= each.to);
+
   if (mark === undefined || picture.type !== "element") return picture;
   const drawn = MARK_DRAWN[mark.kind];
+
   return {
     type: "element",
     tagName: drawn.tagName,
@@ -145,24 +155,30 @@ function markedPicture(
 function editChildren(parent: HastParent, edit: MarkdownEdit): void {
   const original = [...parent.children];
   const kept: HastNode[] = [];
+
   for (const child of original) {
     const start = child.position?.start.offset;
     const end = child.position?.end.offset;
+
     if (start === undefined || end === undefined) {
       kept.push(child);
       continue;
     }
+
     if (child.type === "text") {
       kept.push(...editedText(child, start, edit));
       continue;
     }
+
     if (child.type === "element" && child.tagName === "img") {
       kept.push(markedPicture(child, start, end, edit));
       continue;
     }
+
     if (child.type === "element") editChildren(child, edit);
     kept.push(child);
   }
+
   // SAFETY: every node kept is one of this parent's own children, or a run of
   // text or a mark cut from one, each a child any parent holds.
   parent.children.splice(0, original.length, ...kept);
@@ -189,13 +205,16 @@ function placeFencedCode(parent: HastParent, words: string): void {
     if (child.type !== "element") continue;
     const opened = child.position?.start;
     const [text, ...rest] = child.children;
+
     if (!isCodeOf(parent, child) || opened?.offset === undefined) {
       placeFencedCode(child, words);
       continue;
     }
+
     if (text?.type !== "text" || rest.length > 0 || text.position !== undefined) continue;
     const fenced = FENCE_OPENINGS.some((opening) => words.startsWith(opening, opened.offset));
     const from = words.indexOf("\n", opened.offset) + 1;
+
     if (!fenced || from === 0 || !words.startsWith(text.value, from)) continue;
     const lines = text.value.split("\n");
     text.position = {
@@ -219,14 +238,17 @@ const drawEdit =
 
 /** An element of the tree, and what it may hold. */
 type HastElement = Element;
+
 type HastElementChild = ElementContent;
 
 /** One run of text with the words a search asks for marked where they landed. */
 function foundIn(text: HastText, tokens: readonly string[]): readonly HastElementChild[] {
   const ranges = matchRanges(text.value, tokens);
+
   if (ranges.length === 0) return [text];
   const parts: HastElementChild[] = [];
   let from = 0;
+
   for (const range of ranges) {
     if (range.start > from)
       parts.push({ type: "text", value: text.value.slice(from, range.start) });
@@ -238,7 +260,9 @@ function foundIn(text: HastText, tokens: readonly string[]): readonly HastElemen
     });
     from = range.end;
   }
+
   if (from < text.value.length) parts.push({ type: "text", value: text.value.slice(from) });
+
   return parts;
 }
 
@@ -246,7 +270,9 @@ function foundIn(text: HastText, tokens: readonly string[]): readonly HastElemen
 function markFoundIn(element: HastElement, tokens: readonly string[]): void {
   element.children = element.children.flatMap((child) => {
     if (child.type === "text") return foundIn(child, tokens);
+
     if (child.type === "element") markFoundIn(child, tokens);
+
     return [child];
   });
 }
@@ -267,9 +293,11 @@ function keyedText(
   targets: ReadonlyMap<string, string>,
 ): readonly HastElementChild[] {
   const spans = keySpansIn(text.value, targets);
+
   if (spans.length === 0) return [text];
   const parts: HastElementChild[] = [];
   let from = 0;
+
   for (const span of spans) {
     if (span.start > from) parts.push({ type: "text", value: text.value.slice(from, span.start) });
     parts.push({
@@ -280,7 +308,9 @@ function keyedText(
     });
     from = span.end;
   }
+
   if (from < text.value.length) parts.push({ type: "text", value: text.value.slice(from) });
+
   return parts;
 }
 
@@ -288,7 +318,9 @@ function keyedText(
 function linkKeysIn(element: HastElement, targets: ReadonlyMap<string, string>): void {
   element.children = element.children.flatMap((child) => {
     if (child.type === "text") return keyedText(child, targets);
+
     if (child.type === "element" && !KEYLESS_TAGS.has(child.tagName)) linkKeysIn(child, targets);
+
     return [child];
   });
 }
@@ -352,6 +384,7 @@ function plainLink(
   openLink: ((href: string) => void) | undefined,
 ): ReactNode {
   if (href === undefined || !SAFE_LINK.test(href)) return children;
+
   return (
     <TextLink href={href} words={plainLabelOf(link)} onOpen={openLink}>
       {children}
@@ -376,6 +409,7 @@ export type LinkDrawer = (
 function writtenAt(node: HastParent | undefined): MarkdownSpan | undefined {
   const from = node?.position?.start.offset;
   const to = node?.position?.end.offset;
+
   return from === undefined || to === undefined ? undefined : { from, to };
 }
 
@@ -411,14 +445,18 @@ function isMark(node: HastNode): boolean {
 /** The marks a link's words wear: none, the one every word wears, or a change inside the label. */
 function marksOf(link: HastParent | undefined): LinkMarks {
   const drawn = (link?.children ?? []).filter((child) => !isBlockBreak(child));
+
   if (!drawn.some(isMark)) return LINK_MARKS.NONE;
   const first = drawn[0];
+
   const mark = Object.values(MARK_DRAWN).find(
     (each) => first?.type === "element" && each.tagName === first.tagName,
   );
+
   const whole =
     mark !== undefined &&
     drawn.every((child) => child.type === "element" && child.tagName === mark.tagName);
+
   return whole ? mark : LINK_MARKS.MIXED;
 }
 
@@ -438,19 +476,24 @@ function drawnMarked(
   openLink: ((href: string) => void) | undefined,
 ): ReactNode {
   const marks = marksOf(link);
+
   if (marks === LINK_MARKS.NONE) return drawn;
+
   if (marks === LINK_MARKS.MIXED) return plainLink(href, children, link, openLink);
   const Mark = marks.tagName;
   // Note that a comment's mark keeps the threads it names, so a press on a marked chip still opens them.
   const first = link?.children.find((child) => !isBlockBreak(child));
+
   const threads =
     first?.type === "element" && isWireString(first.properties.dataThreads)
       ? { "data-threads": first.properties.dataThreads }
       : undefined;
+
   const active =
     first?.type === "element" && first.properties.dataActive === "true"
       ? { "data-active": "true" }
       : undefined;
+
   return (
     <Mark className={marks.className} {...threads} {...active}>
       {drawn}
@@ -461,7 +504,9 @@ function drawnMarked(
 /** The words under a node of the tree, however they are formatted: a heading's emphasis copied into a label still reads as its words. */
 function wordsOf(node: HastParent | HastNode): string {
   if (node.type === "text") return node.value;
+
   if (!("children" in node)) return "";
+
   return node.children.map((child) => wordsOf(child)).join("");
 }
 
@@ -473,6 +518,7 @@ function labelOf(link: HastParent | undefined): string {
 /** A link's label as its words where it is words alone; nothing where an edit or a change marks inside it. */
 function plainLabelOf(link: HastParent | undefined): string | undefined {
   const marked = link?.children.some((child) => child.type === "element") ?? false;
+
   return marked ? undefined : labelOf(link);
 }
 
@@ -488,10 +534,14 @@ const DIAGRAM_FENCE_CLASS = "language-mermaid";
  */
 function diagramCode(pre: HastElement | undefined): string | undefined {
   const [code, ...rest] = (pre?.children ?? []).filter((child) => !isBlockBreak(child));
+
   if (rest.length > 0 || code?.type !== "element" || code.tagName !== "code") return undefined;
   const classes = code.properties.className;
+
   if (!Array.isArray(classes) || !classes.includes(DIAGRAM_FENCE_CLASS)) return undefined;
+
   if (!code.children.every((child) => child.type === "text")) return undefined;
+
   // Note that the fence's closing line break is dropped, so the code is the editor's block's own and one picture serves both.
   return wordsOf(code).replace(/\n$/u, "");
 }
@@ -507,14 +557,18 @@ const FenceEdit = createContext<MarkdownEdit | undefined>(undefined);
 function editReaches(edit: MarkdownEdit | undefined, block: HastElement | undefined): boolean {
   const from = block?.position?.start.offset;
   const to = block?.position?.end.offset;
+
   if (edit === undefined || from === undefined || to === undefined) return false;
+
   return (edit.marks ?? []).some((span) => span.from < to && span.to > from);
 }
 
 /** A fence's one code element, where it holds its words alone, unmarked by a search or a change. */
 function plainFencedCode(pre: HastElement | undefined): HastElement | undefined {
   const [code, ...rest] = (pre?.children ?? []).filter((child) => !isBlockBreak(child));
+
   if (rest.length > 0 || code?.type !== "element" || code.tagName !== "code") return undefined;
+
   return code.children.every((child) => child.type === "text") ? code : undefined;
 }
 
@@ -533,8 +587,10 @@ function NoteFence({
 }): React.JSX.Element {
   const edit = useContext(FenceEdit);
   const code = editReaches(edit, node) ? undefined : plainFencedCode(node);
+
   if (code === undefined) return <pre>{children}</pre>;
   const classes = code.properties.className;
+
   return (
     <TranscriptCodeBlock
       className={Array.isArray(classes) ? classes.join(" ") : undefined}
@@ -554,6 +610,7 @@ function DiagramFence({
   const edit = useContext(FenceEdit);
   const source = <NoteFence node={node}>{children}</NoteFence>;
   const code = editReaches(edit, node) ? undefined : diagramCode(node);
+
   return code === undefined ? source : <DescriptionDiagram code={code} source={source} />;
 }
 
@@ -580,7 +637,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   words,
   className,
   edit,
-  link,
+  link: drawer,
   openLink,
   picture,
   found,
@@ -592,8 +649,14 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   className?: string;
   /** The changes and comments the words are drawn with marked; drawn plain without one. */
   edit?: MarkdownEdit | undefined;
-  /** Draws the links the place knows better, a mention's chip say; every link is drawn as words without one. */
-  link?: LinkDrawer | undefined;
+  /**
+   * Draws every link a chip names as that chip (`tasks/task-mentions.tsx`'s
+   * `useMentionLink`), as every place drawing words does; `null` only where
+   * the place draws every link as words on purpose. Note that it is asked of
+   * every caller, so a place that forgets chips fails to build rather than
+   * drawing a link as words that every other place draws as its chip.
+   */
+  link: LinkDrawer | null;
   /** Opens a plain link pressed; every plain link is words going nowhere without one. */
   openLink?: ((href: string) => void) | undefined;
   /** Draws the pictures the place knows how to, a description's say; every picture is its alt text without one. */
@@ -607,17 +670,24 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   /** Whether the words are one line's, a to-do's step say: drawn in the place's own element as one run of inline words, with no root, its blocks' words run together. */
   inline?: boolean | undefined;
 }): React.JSX.Element {
+  const link = drawer ?? undefined;
   const keyTargets = useWordTargets();
+
   const rehypePlugins = useMemo(() => {
     const plugins: MarkdownSteps = [];
+
     if (edit !== undefined) plugins.push(markdownStep(drawEdit, edit, words));
+
     // Note that a task's key is written as its link only where the place draws links as chips.
     if (link !== undefined && keyTargets.size > 0) {
       plugins.push(markdownStep(linkTaskKeys, keyTargets));
     }
+
     if (found !== undefined && found.length > 0) plugins.push(markdownStep(markFound, found));
+
     return plugins;
   }, [edit, words, found, link, keyTargets]);
+
   // Note that a place drawing its own links is handed every destination,
   // since only it knows which it draws; any it leaves is drawn as above,
   // so a destination that is not the web's is still words alone.
@@ -631,26 +701,32 @@ export const MarkdownMessage = memo(function MarkdownMessage({
     ) {
       return COMPONENTS;
     }
+
     const drawing: MarkdownComponents = {
       ...COMPONENTS,
-      ...(inline === true ? { code: LINE_CODE } : {}),
+      ...(inline === true && { code: LINE_CODE }),
       a: ({ href, children, node }) => {
         const drawn =
           href === undefined || link === undefined
             ? undefined
             : link(href, labelOf(node), writtenAt(node));
+
         return drawn === undefined || href === undefined
           ? plainLink(href, children, node, openLink)
           : drawnMarked(drawn, node, href, children, openLink);
       },
     };
+
     if (diagrams === true) drawing.pre = DiagramFence;
+
     if (picture !== undefined) {
       drawing.img = ({ src, alt, title }) =>
         (isWireString(src) ? picture(src, alt ?? "", title) : undefined) ?? <>{alt ?? ""}</>;
     }
+
     return drawing;
   }, [link, openLink, diagrams, picture, inline]);
+
   return (
     <FenceEdit.Provider value={edit}>
       <Markdown

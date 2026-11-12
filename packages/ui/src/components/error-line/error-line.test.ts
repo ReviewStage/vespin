@@ -37,6 +37,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -74,9 +75,11 @@ function describedByErrorLine(container: HTMLElement): void {
   const input = container.querySelector("input");
   assert.ok(input);
   const ids = (input.getAttribute("aria-describedby") ?? "").split(" ");
+
   const line = ids
     .map((id) => document.getElementById(id))
     .find((element) => element?.dataset.slot === "field-error");
+
   assert.ok(line, "the control is described by its error line");
 }
 
@@ -85,17 +88,20 @@ test("a form field's error and a Settings row's each describe their control", ()
   describedByErrorLine(render(settingsRow(REFUSED)));
 });
 
-/** What the window's polite and alert regions say once `place` goes from no error to `REFUSED`. */
-function saidOnArrival(place: (error: string | undefined) => ReactElement): {
+type SaidOnArrivalResult = {
   polite: string | null | undefined;
   alert: string | null | undefined;
-} {
+};
+
+/** What the window's polite and alert regions say once `place` goes from no error to `REFUSED`. */
+function saidOnArrival(place: (error: string | undefined) => ReactElement): SaidOnArrivalResult {
   render(createElement(Announcer));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(place(undefined)));
   act(() => root.render(place(REFUSED)));
+
   return {
     polite: document.querySelector('[role="status"]')?.textContent,
     alert: document.querySelector('[role="alert"]')?.textContent,

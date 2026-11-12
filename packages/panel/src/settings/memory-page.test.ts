@@ -85,13 +85,17 @@ const TESTS: MemorySummary = {
 };
 
 /** The memories the test's service holds, by the workspace, held and forgotten by the page. */
-let stored: Readonly<Record<string, readonly MemorySummary[]>> = {};
+let stored: ReadonlyMap<string, readonly MemorySummary[]> = new Map();
+
 /** Every act the page sent, in order. */
 let sent: AnyAct[] = [];
+
 /** Whether the host's read of the memories failed before it ever answered. */
 let readFails = false;
+
 /** Whether a forget is answered with a failure rather than the memories. */
 let refuseForget = false;
+
 /** What the test's service answers a save with, by the save. */
 let saveAnswer: (save: {
   readonly workspaceId: string;
@@ -100,13 +104,17 @@ let saveAnswer: (save: {
 }) => PortActResult<typeof ACT_KIND.MEMORIES_SAVE> = () => ({
   failure: AGENT_CALL_FAILURE.UNANSWERED,
 });
+
 /** What a save waits on before the test's service answers it; nothing from the start. */
 let saveHeld: Promise<void> = Promise.resolve();
+
 /** Whether the host has read nothing yet, so it lays no memories. */
 let readsNothing = false;
+
 /** Each workspace's memories as the test's host lays them on the document, under the version it last delivered. */
 let laid: AppMemories = NO_KEYS_HELD;
 let version = 1;
+
 /** The window's listeners to the document's deliveries. */
 const listeners = new Set<(delivery: AppStateDelivery) => void>();
 
@@ -121,6 +129,7 @@ const unanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): void {
   laid = { ...laid, [workspaceId]: read };
   version += 1;
+
   for (const listener of [...listeners]) {
     listener({ version, entries: { [LIVE_READ.MEMORIES]: laid } });
   }
@@ -129,39 +138,50 @@ function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): 
 /** Lays a workspace's memories as the test's host reads them now; nothing while it reads nothing. */
 function layRead(workspaceId: string): void {
   if (readsNothing) return;
-  lay(workspaceId, readFails ? { failed: true } : { rows: stored[workspaceId] ?? [] });
+  lay(workspaceId, readFails ? { failed: true } : { rows: stored.get(workspaceId) ?? [] });
 }
 
 /** The bridge, answering the page's acts the way the host would. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   sent.push(request);
+
   switch (request.kind) {
     case ACT_KIND.MEMORIES_FOLLOW: {
       const { workspaceId } = request.payload;
       // Note that the host lays what it read once the hold is taken, never inside it, and holds it quietly.
       void Promise.resolve().then(() => layRead(workspaceId));
+
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
     }
+
     case ACT_KIND.MEMORIES_RETRY:
       layRead(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.MEMORIES_FORGET: {
       const { workspaceId, id } = request.payload;
-      const before = stored[workspaceId] ?? [];
+      const before = stored.get(workspaceId) ?? [];
       const after = before.filter((memory) => memory.id !== id);
       // The host draws the memory gone the moment it is asked, and puts it back where the service refused it.
       lay(workspaceId, { rows: after });
+
       if (refuseForget) {
         lay(workspaceId, { rows: before });
+
         return Promise.resolve(done(unanswered));
       }
-      stored = { ...stored, [workspaceId]: after };
+
+      stored = new Map([...stored, [workspaceId, after]]);
+
       return Promise.resolve(done({ memories: after }));
     }
+
     case ACT_KIND.MEMORIES_SAVE: {
       const { payload } = request;
+
       return saveHeld.then(() => done(saveAnswer(payload)));
     }
+
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -170,7 +190,7 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 const roots: Root[] = [];
 
 beforeEach(() => {
-  stored = { [ACME.id]: [DEPLOYS, TESTS] };
+  stored = new Map([[ACME.id, [DEPLOYS, TESTS]]]);
   sent = [];
   readFails = false;
   refuseForget = false;
@@ -185,6 +205,7 @@ beforeEach(() => {
     requestAppState: () => Promise.resolve(stateWith({}, { version, [LIVE_READ.MEMORIES]: laid })),
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
@@ -222,6 +243,7 @@ async function mount(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (shown: Workspace | null, readerId: string | undefined) =>
     act(() =>
       root.render(
@@ -241,6 +263,7 @@ async function mount(
         ),
       ),
     );
+
   // Note that the page stands read once the memories the host holds reach their query, unless the test holds the read out.
   const read = () =>
     readsNothing
@@ -248,9 +271,11 @@ async function mount(
       : vi.waitFor(() =>
           assert.equal(container.textContent?.includes("Reading Vespin's memory"), false),
         );
+
   draw(workspace, signedIn ? READER : undefined);
   await settle();
   await read();
+
   return {
     page: container,
     show: async (next, readerId = READER) => {
@@ -263,6 +288,7 @@ async function mount(
 
 beforeAll(() => {
   installEditorLayout();
+
   return Effect.runPromise(editorBundleLanded);
 });
 
@@ -308,6 +334,7 @@ function pressInField(_page: HTMLElement, label: string): void {
     [...document.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
       (each) => (each.getAttribute("aria-label") ?? each.textContent) === label,
     ) ?? assert.fail(`no ${label} in the field`);
+
   act(() => press.click());
 }
 
@@ -316,6 +343,7 @@ function openMenu(page: HTMLElement, memory: MemorySummary): void {
   const more =
     rowOf(page, memory).querySelector<HTMLButtonElement>('button[aria-label="Memory actions"]') ??
     assert.fail("no ⋯ on the row");
+
   act(() => more.click());
 }
 
@@ -331,6 +359,7 @@ async function forget(page: HTMLElement, memory: MemorySummary): Promise<boolean
   const askedFirst = !sent.some((request) => request.kind === ACT_KIND.MEMORIES_FORGET);
   act(() => button(dialog(), "Delete memory").click());
   await settle();
+
   return askedFirst;
 }
 
@@ -339,6 +368,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   const field =
     page.querySelector<HTMLInputElement>('input[aria-label="Search memories"]') ??
     assert.fail("no search");
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, query);
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -365,7 +395,7 @@ test("what Vespin kept in the workspace is held for it and drawn a row each, its
 
 test("a memory's code in backticks is drawn as inline code, never as the backticks themselves", async () => {
   const written = { ...TESTS, text: "Run `pnpm db:generate` after changing a schema." };
-  stored = { [ACME.id]: [written] };
+  stored = new Map([[ACME.id, [written]]]);
   const { page } = await mount();
 
   const code = [
@@ -374,6 +404,7 @@ test("a memory's code in backticks is drawn as inline code, never as the backtic
       text: "Run pnpm db:generate after changing a schema.",
     }).querySelectorAll("code"),
   ];
+
   assert.deepEqual(
     code.map((each) => each.textContent),
     ["pnpm db:generate"],
@@ -453,7 +484,8 @@ test("several memories chosen are forgotten on one question, one after another, 
     id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
     text: "Pricing lives in the billing service.",
   };
-  stored = { [ACME.id]: [DEPLOYS, pricing, TESTS] };
+
+  stored = new Map([[ACME.id, [DEPLOYS, pricing, TESTS]]]);
   const { page } = await mount();
 
   for (const memory of [DEPLOYS, pricing, TESTS]) act(() => boxOf(page, memory).click());
@@ -478,7 +510,7 @@ test("several memories chosen are forgotten on one question, one after another, 
 });
 
 test("showing another workspace holds that workspace's memories in place of the first's", async () => {
-  stored = { ...stored, [GLOBEX.id]: [] };
+  stored = new Map([...stored, [GLOBEX.id, []]]);
   const { page, show } = await mount();
 
   await show(GLOBEX);
@@ -494,7 +526,7 @@ test("showing another workspace holds that workspace's memories in place of the 
 });
 
 test("a workspace Vespin has remembered nothing in says so", async () => {
-  stored = { [ACME.id]: [] };
+  stored = new Map([[ACME.id, []]]);
   const { page } = await mount();
 
   assert.deepEqual(words(page), []);
@@ -557,6 +589,7 @@ test("the memories agents recalled most in the last 30 days stand first, then th
     recalls30d: 4,
     lastRecalledAt: Date.UTC(2026, 9, 20, 12),
   };
+
   const flags: MemorySummary = {
     ...TESTS,
     id: "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f7a",
@@ -565,7 +598,8 @@ test("the memories agents recalled most in the last 30 days stand first, then th
     recalls30d: 9,
     lastRecalledAt: Date.UTC(2026, 9, 21, 12),
   };
-  stored = { [ACME.id]: [DEPLOYS, TESTS, pricing, flags] };
+
+  stored = new Map([[ACME.id, [DEPLOYS, TESTS, pricing, flags]]]);
   const { page } = await mount();
 
   assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
@@ -653,7 +687,13 @@ test("while an edit's save is out, Add memory opens nothing over its card", asyn
   chooseMenuItem("Edit");
   await writeInField(page, "Deployments go out from main.");
   pressInField(page, "Save");
-  await settle();
+  // Note that the save's pending state reaches the page on the query client's
+  // own next task, so the card is waited on until it holds still for it.
+  await vi.waitFor(async () => {
+    await settle();
+    const box = field(page) ?? assert.fail("no card");
+    assert.equal(composerEditor(box).editor?.isEditable, false);
+  });
 
   act(() => button(page, "Add memory").click());
   await settle();

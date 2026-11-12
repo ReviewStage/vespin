@@ -36,6 +36,7 @@ export const NO_TASK_SECTIONS: TaskSections = { sections: [], entries: [], agent
 /** The write that puts the task in a section at a place, or by its instant, or, under null, in none. */
 function placeWrite(taskId: string, sectionId: string | null, position?: string): TaskSectionWrite {
   const where = position === undefined ? undefined : { position };
+
   return { kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId, ...where };
 }
 
@@ -129,13 +130,16 @@ export function placeWrites(
 ): TaskSectionWrite[] {
   const from = order.findIndex((entry) => entry.taskId === taskId);
   const at = Math.max(0, Math.min(to, order.length - (from < 0 ? 0 : 1)));
+
   if (from >= 0) return entryMoveWrites(order, sectionId, from, at);
   const moving = entryFor(taskId, sectionId, now);
   const positions = pinPositionsForMove([moving, ...order], 0, at, entryPlace);
   const first = placeWrite(taskId, sectionId, positions.get(moving));
-  const rest = [...positions]
-    .filter(([entry]) => entry !== moving)
-    .map(([entry, position]) => placeWrite(entry.taskId, sectionId, position));
+
+  const rest = [...positions].flatMap(([entry, position]) =>
+    entry === moving ? [] : [placeWrite(entry.taskId, sectionId, position)],
+  );
+
   return [first, ...rest];
 }
 
@@ -155,19 +159,23 @@ export function placeAllWrites(
 ): TaskSectionWrite[] {
   let order = sectionOrder(state, sectionId).filter((entry) => !taskIds.includes(entry.taskId));
   const writes: TaskSectionWrite[] = [];
+
   for (const taskId of [...taskIds].reverse()) {
     const entry = entryFor(taskId, sectionId, now);
     const positions = pinPositionsForInsert(order, entry, 0, entryPlace);
     // Note that the order is kept here rather than read back from the state, because a section just made is in none yet.
     order = [entry, ...order].map((each) => {
       const position = positions.get(each);
+
       return position === undefined ? each : { ...each, position };
     });
+
     // The moving row stands first in the answer, so its own write goes ahead of its neighbors'.
     for (const [each, position] of positions) {
       writes.push(placeWrite(each.taskId, sectionId, position));
     }
   }
+
   return writes;
 }
 
@@ -190,21 +198,27 @@ export function restoreWrites(
   const due = taskIds.filter((taskId) => (sectionOfTask(current, taskId) ?? null) === movedTo);
   const writes: TaskSectionWrite[] = [];
   const orders = new Map<string, TaskSectionEntry[]>();
+
   const back = due.map((taskId) => {
     const from = sectionOfTask(before, taskId);
     const was = from === undefined ? [] : sectionOrder(before, from);
+
     return { taskId, from, was, at: was.findIndex((entry) => entry.taskId === taskId) };
   });
+
   // Note that each section's rows go back from the top down, so each lands under those put back before it.
   for (const { taskId, from, was, at } of back.sort((a, b) => a.at - b.at)) {
     if (from === undefined) {
       writes.push(placeWrite(taskId, null));
       continue;
     }
+
     const order = orders.get(from) ?? sectionOrder(current, from);
+
     const above = was
       .slice(0, at)
       .filter((entry) => order.some((each) => each.taskId === entry.taskId)).length;
+
     const entry = entryFor(taskId, from, now);
     const positions = pinPositionsForInsert(order, entry, above, entryPlace);
     const next = [...order];
@@ -213,13 +227,16 @@ export function restoreWrites(
       from,
       next.map((each) => {
         const position = positions.get(each);
+
         return position === undefined ? each : { ...each, position };
       }),
     );
+
     for (const [each, position] of positions) {
       writes.push(placeWrite(each.taskId, from, position));
     }
   }
+
   return writes;
 }
 
@@ -255,18 +272,23 @@ export function sectionedTasks(
 ): SectionedTasks {
   if (workspaceId === undefined) return { sections: [], taskIds: new Set() };
   const byId = new Map(free.map((task) => [task.id, task]));
+
   const sections = workspaceSections(state, workspaceId).map((section): DrawnSection => {
     const held = sectionOrder(state, section.id).flatMap((entry) => {
       const task = byId.get(entry.taskId);
+
       return task === undefined ? [] : [{ entry, task }];
     });
+
     return {
       section,
       entries: held.map(({ entry }) => entry),
       tasks: held.map(({ task }) => task),
     };
   });
+
   const taskIds = new Set(sections.flatMap((drawn) => drawn.tasks.map((task) => task.id)));
+
   return { sections, taskIds };
 }
 
@@ -283,10 +305,13 @@ export function sectionInView(
 ): DrawnSection {
   const held = new Set(tasksAssignedTo(drawn.tasks, view.assignedTo, readerId));
   const shown = (task: TaskSummary) => held.has(task) && taskInView(task, view);
+
   const kept = drawn.tasks.flatMap((task, at) => {
     const entry = drawn.entries[at];
+
     return entry !== undefined && shown(task) ? [{ entry, task }] : [];
   });
+
   return {
     ...drawn,
     entries: kept.map(({ entry }) => entry),

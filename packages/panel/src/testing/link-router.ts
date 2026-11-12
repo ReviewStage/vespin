@@ -19,6 +19,7 @@ export function underWindowRouter(element: ReactElement, at = "/acme/inbox"): Re
     createMemoryHistory({ initialEntries: [at] }),
     new QueryClient(),
   );
+
   return createElement(RouterContextProvider, {
     router,
     children: createElement(RoutedExitsProvider, null, element),

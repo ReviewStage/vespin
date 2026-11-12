@@ -68,39 +68,50 @@ export function followLiveRead<
   answers: HeldAnswers<Drawn>,
 ): Effect.Effect<void> {
   const ends = (failure: string) => failure === LIVE_SIGNED_OUT.failure || read.endsFollow(failure);
+
   const attempt = Effect.scoped(
     Effect.gen(function* () {
       const first = yield* read.seal(false);
+
       if ("failure" in first) {
         if (first.failure === LIVE_SIGNED_OUT.failure) return false;
         answers.unanswered();
+
         return !read.endsFollow(first.failure);
       }
+
       let wait: TxWait | undefined;
       let answered = false;
       /** Why a poll ended the follow for good, the first such failure kept, so one the account no longer reaches is told unanswered. */
       let endedBy: string | undefined;
+
       const drawn: Effect.Effect<void> = yield* drawnAtEdges((now) => {
         if (!answered) return undefined;
         const rows = held.rows();
         answers.answered(read.draw(rows, first, now));
+
         return read.edge?.(rows, now);
       });
+
       const held: HeldRows<Row> = yield* read.pool.stand(read.kind, {
         redraw: () => drawn,
         confirmation: () => {
           const handed = wait;
+
           return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
         },
-        ...(read.adopts === undefined ? {} : { adopts: read.adopts }),
+        ...(read.adopts !== undefined && { adopts: read.adopts }),
       });
+
       const gone = yield* followTakingRows(
         {
           poll: (after) =>
             Effect.map(read.seal(true, after), (sealed) => {
               if (!("failure" in sealed)) return sealed;
               const ended = ends(sealed.failure);
+
               if (ended && endedBy === undefined) endedBy = sealed.failure;
+
               return { failure: sealed.failure, gone: ended };
             }),
           onTxWait: (handed) => {
@@ -114,6 +125,7 @@ export function followLiveRead<
             held.answer(rows[read.part]),
             Effect.suspend(() => {
               answered = true;
+
               return drawn;
             }),
           ),
@@ -121,10 +133,14 @@ export function followLiveRead<
         Effect.as(false),
         Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
       );
+
       if (!gone) return true;
+
       if (endedBy !== undefined && endedBy !== LIVE_SIGNED_OUT.failure) answers.unanswered();
+
       return false;
     }),
   );
+
   return restarting(attempt);
 }

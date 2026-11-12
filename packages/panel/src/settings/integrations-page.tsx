@@ -25,7 +25,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SearchField,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   Shortcut,
   Stack,
@@ -132,7 +132,7 @@ const CONNECTED_SKELETON_ROWS = 2;
  * every one led by its mark, so the rows land in the height they
  * stood in.
  */
-const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: true,
     rows: INTEGRATION_PROVIDER_LIST.slice(0, CONNECTED_SKELETON_ROWS).map(() => ({
@@ -165,6 +165,7 @@ function FilterField({ filter }: { filter: IntegrationsFilter }): React.JSX.Elem
   const field = useRef<HTMLInputElement | null>(null);
   const { query, onQueryChange } = filter;
   useAppCommand(APP_COMMAND.FIND, () => focusSearchField(FILTER_INPUT_ID));
+
   return (
     <search>
       <SearchField
@@ -190,6 +191,7 @@ function FilterField({ filter }: { filter: IntegrationsFilter }): React.JSX.Elem
 function NoMatchNote({ query }: { query: string }): React.JSX.Element {
   const words = `No integrations match “${query.trim()}”`;
   useAnnounceShown(ANNOUNCE.POLITE, words);
+
   // Note that the note quotes the query, so it stays masked in a screen recording.
   return (
     <ReplayMask>
@@ -207,6 +209,7 @@ function samePlaces(one: SectionPlaces, other: SectionPlaces): boolean {
     one.length === other.length &&
     one.every(([heading, rows], at) => {
       const [otherHeading, otherRows] = other[at] ?? [];
+
       return (
         heading === otherHeading &&
         rows.length === otherRows?.length &&
@@ -229,17 +232,21 @@ function MovingSections({
   children: React.ReactNode;
 }): React.JSX.Element {
   const moving = useRef<HTMLElement | null>(null);
+
   const places: SectionPlaces = found.map((group) => [
     group.heading,
     group.rows.map((row) => row.connection),
   ]);
+
   const [placed, setPlaced] = useState(() => ({ places, change: {} }));
   // Note that the placing follows the rows as they render, React's way of keeping what an earlier render drew, so the commit that moves a row is the one that plays.
   let { change } = placed;
+
   if (!samePlaces(placed.places, places)) {
     change = {};
     setPlaced({ places, change });
   }
+
   return (
     <ListMotion root={moving} change={change}>
       <Stack gap={GAP.PAGE} moves ref={moving}>
@@ -258,6 +265,7 @@ function MovingSections({
  */
 function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.Element {
   const statuses = useIntegrationStatuses();
+
   const { reads, retry } = useIntegrationToolReads(
     namedServers({
       statusOf: statuses.statusOf,
@@ -265,9 +273,11 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
       standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
     }).map((server) => server.connection),
   );
+
   const { query } = filter;
 
   const read = INTEGRATION_PROVIDER_LIST.some((provider) => statuses.statusOf(provider));
+
   if (!read && !statuses.readFailed) {
     return (
       <SettingsSectionsSkeleton
@@ -276,8 +286,10 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
       />
     );
   }
+
   const healthOf = (server: string) =>
     connectionHealth(integrationConnectionOf(server)?.provider ?? GITHUB, reads[server]);
+
   // Note that the rows stand in the order of their names within each
   // section, so no provider is pinned above the rest by the order its value
   // set happens to list it in.
@@ -289,8 +301,10 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
     readFailed: statuses.readFailed,
     disabled: [],
   }).toSorted((one, other) => one.name.localeCompare(other.name, "en"));
+
   const tokens = searchTokens(query);
   const found = serverGroups(searchServers(rows, query));
+
   return (
     <MovingSections found={found}>
       {statuses.readFailed ? (
@@ -336,6 +350,7 @@ function PageNote({ children }: { children: string }): React.JSX.Element {
 function SearchedRows({ filter }: { filter: IntegrationsFilter | undefined }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const shown = filter ?? { query, onQueryChange: setQuery };
+
   return (
     <>
       <FilterField filter={shown} />

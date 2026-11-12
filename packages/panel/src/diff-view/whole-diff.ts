@@ -18,22 +18,28 @@ import type { DiffFileTexts } from "./contract.js";
  */
 export function wholeOf(read: FileDiffMetadata, whole: DiffFileTexts): FileDiffMetadata {
   const kept = WHOLE_DIFFS.get(whole);
+
   if (kept !== undefined) return kept;
+
   const parsed = parseDiffFromFile(
     { name: read.prevName ?? read.name, contents: whole.before },
     { name: read.name, contents: whole.after },
     { context: Number.MAX_SAFE_INTEGER },
   );
+
   // Note that texts alike, a file that only moved, diff to no hunk at all, so its lines are laid out as one of context.
   const drawn = parsed.hunks.length === 0 ? unchangedWhole(parsed) : parsed;
   WHOLE_DIFFS.set(whole, drawn);
+
   return drawn;
 }
 
 /** A file whose texts are alike drawn whole: every one of its lines in one hunk of context, numbered alike on both sides. */
 function unchangedWhole(parsed: FileDiffMetadata): FileDiffMetadata {
   const lines = parsed.additionLines.length;
+
   if (lines === 0) return parsed;
+
   const hunk: Hunk = {
     collapsedBefore: 0,
     additionStart: 1,
@@ -53,6 +59,7 @@ function unchangedWhole(parsed: FileDiffMetadata): FileDiffMetadata {
     noEOFCRDeletions: false,
     noEOFCRAdditions: false,
   };
+
   return { ...parsed, hunks: [hunk], splitLineCount: lines, unifiedLineCount: lines };
 }
 

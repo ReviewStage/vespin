@@ -107,6 +107,7 @@ const AUDITOR = agentOf("2a1b0c9d-8e7f-4a6b-9c5d-4e3f2a1b0c9d", {
 /** Main's document holding the billing task, by which an agent of it names where it works, before the task list first answers live. */
 const STATE: AppStateSnapshot = (() => {
   const snapshot = signedInAs({ id: ME, email: "dean@example.com", name: "Dean Stratakos" });
+
   return {
     ...snapshot,
     tasks: { ...IDLE_TASKS_VIEW, tasks: [BILLING], workspaces: [ACME] },
@@ -215,6 +216,7 @@ async function drawnElement(
     requestAppState: () => Promise.resolve(state),
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       told.push(request);
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
     },
   });
@@ -222,10 +224,12 @@ async function drawnElement(
   writeAppState(state);
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const words = createElement(WordsWorkspace, {
     value: ACME.id,
     children: element,
   });
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -237,6 +241,7 @@ async function drawnElement(
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -268,6 +273,7 @@ async function cardOf(chip: Element | undefined) {
   await settle();
   const card = [...document.querySelectorAll(".ui-tooltip-card > *")].at(-1);
   assert.ok(card, "the chip hangs a card");
+
   const look = {
     agent: card.matches("[data-agent-card]"),
     pullRequest: card.matches("[data-pull-request-card]"),
@@ -281,9 +287,11 @@ async function cardOf(chip: Element | undefined) {
     foot: card.querySelector(".ui-hover-card-row:last-child .ui-hover-card-row-label")?.textContent,
     words: card.textContent,
   };
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return look;
 }
 
@@ -296,6 +304,7 @@ test("chips of agents off their task's page read nothing, and hang their tab's c
     ].join(" "),
     LISTED_STATE,
   );
+
   const [onTask, own, unlisted] = container.querySelectorAll("[data-mention-ref]");
 
   const prorate = await cardOf(onTask);
@@ -399,6 +408,7 @@ test("a pull request's chip off its task's page hangs the card its Pull request 
     `Lands in [@#42](${SEAT_PULL_REQUEST.url}) after [@#7](${OUTSIDE_PULL_REQUEST}) and [@#41](${OLDER_PULL_REQUEST}).`,
     LISTED_STATE,
   );
+
   const [opened, outside, older] = container.querySelectorAll("[data-mention-ref]");
 
   const card = await cardOf(opened);
@@ -424,6 +434,7 @@ test("an agent named as an actor leads its card with its tile until the task lis
       state: ACTOR_STATE.REST,
     },
   });
+
   const container = await drawnElement(actor);
 
   const card = await cardOf(container.querySelector("[data-actor-ref]") ?? undefined);
@@ -458,6 +469,7 @@ test("Vespin and an agent named as actors hang Vespin's card and the agent's tab
     ),
     LISTED_STATE,
   );
+
   const [luke, agent] = container.querySelectorAll("[data-actor-ref]");
 
   const lukeCard = await cardOf(luke);

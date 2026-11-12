@@ -84,14 +84,18 @@ function sameReadNotes(a: readonly ReadNote[], b: readonly ReadNote[]): boolean 
   );
 }
 
+type Place = { line: number | undefined; note: string | undefined };
+
 /** The line a range of drawn words stands on, read from the row Pierre drew it in, or the note its words are in. */
-function placeOf(range: Range): { line: number | undefined; note: string | undefined } {
+function placeOf(range: Range): Place {
   const start = range.startContainer;
   const element = start instanceof Element ? start : start.parentElement;
   const note = element?.closest(`[${NOTE_KEY_ATTRIBUTE}]`)?.getAttribute(NOTE_KEY_ATTRIBUTE);
+
   if (note !== undefined && note !== null) return { line: undefined, note };
   const row = element?.closest("[data-line]");
   const line = Number(row?.getAttribute("data-line"));
+
   return { line: Number.isInteger(line) ? line : undefined, note: undefined };
 }
 
@@ -102,11 +106,14 @@ function placeOf(range: Range): { line: number | undefined; note: string | undef
 function drawnAt(ranges: readonly Range[], match: FileMatch | undefined): number {
   if (match === undefined) return -1;
   let seen = 0;
+
   return ranges.findIndex((range) => {
     const place = placeOf(range);
     const here = match.note === undefined ? place.line === match.line : place.note === match.note;
+
     if (!here) return false;
     seen += 1;
+
     return seen - 1 === match.nth;
   });
 }
@@ -124,25 +131,32 @@ function useWholeFileFind(
   findable: boolean,
 ): () => void {
   const [find] = useState(() => {
+    const matches: FileMatch[] = [];
+    const notes: readonly ReadNote[] = [];
+
     const state = {
       query: "",
-      matches: [] as FileMatch[],
+      matches,
       at: -1,
       painting: NO_PAINTING,
       // Whether the match the find is at still waits to be brought into view, once drawn.
       pending: false,
       // The text and notes the matches were read from.
-      searched: { text: "", notes: [] as readonly ReadNote[] },
+      searched: { text: "", notes },
       listeners: new Set<(tally: FindTally) => void>(),
       // The note cards watched while a query stands, each with what stops its watch.
       watching: new Map<string, () => void>(),
     };
+
     const tell = () => {
       const tally = { count: state.matches.length, at: state.at };
+
       for (const listener of state.listeners) listener(tally);
     };
+
     const paint = () => {
       const root = host.current;
+
       if (root === null || state.query.length === 0) return;
       const ranges = findRanges(root, state.query);
       const at = drawnAt(ranges, state.matches[state.at]);
@@ -150,19 +164,23 @@ function useWholeFileFind(
       repaint(state.painting, next);
       state.painting = next;
       const current = ranges[at];
+
       if (state.pending && current !== undefined) {
         state.pending = false;
         reveal(current, root);
       }
     };
+
     const go = () => {
       tell();
       const match = state.matches[state.at];
       state.pending = match !== undefined;
+
       if (match !== undefined)
         handle.current?.revealLines({ startLine: match.line, endLine: match.line });
       paint();
     };
+
     // Note that a note's words are read from the card the view draws for it, which React draws whether or not Pierre has its line in view.
     const readNotes = (): ReadNote[] =>
       read.current.notes.map((note) => ({
@@ -170,14 +188,17 @@ function useWholeFileFind(
         line: note.line,
         words: noteElement(note.key).textContent,
       }));
+
     // Note that a card is watched while a query stands, since it draws its own words anew, its age among them, with no draw of the file's.
     const watchNotes = () => {
       const standing = new Set(read.current.notes.map((note) => note.key));
+
       for (const [key, stop] of state.watching) {
         if (standing.has(key)) continue;
         stop();
         state.watching.delete(key);
       }
+
       for (const note of read.current.notes) {
         if (!state.watching.has(note.key)) {
           state.watching.set(
@@ -187,46 +208,57 @@ function useWholeFileFind(
         }
       }
     };
+
     const unwatchNotes = () => {
       for (const stop of state.watching.values()) stop();
       state.watching.clear();
     };
+
     const readMatches = () => {
       watchNotes();
       const { text, notes } = read.current;
       state.searched = { text, notes: readNotes() };
+
       const counted = notes.map((note) => ({
         key: note.key,
         line: note.line,
         matches: findRanges(noteElement(note.key), state.query).length,
       }));
+
       return fileMatches(text.split("\n"), counted, state.query);
     };
+
     const search = (query: string) => {
       state.query = query;
       state.matches = readMatches();
       state.at = matchFrom(state.matches, read.current.from);
       go();
     };
+
     // Note that matches are read again where the text or the notes changed under an open find, as a note the app adds, the find kept at the match it was at where that still stands, and nothing scrolled.
     const refresh = () => {
       if (state.query.length === 0) return;
       const { text } = read.current;
+
       if (text === state.searched.text && sameReadNotes(readNotes(), state.searched.notes)) return;
       const was = state.matches[state.at];
       state.matches = readMatches();
+
       const kept = state.matches.findIndex(
         (match) => match.line === was?.line && match.note === was.note && match.nth === was.nth,
       );
+
       state.at = kept !== -1 ? kept : matchFrom(state.matches, was?.line ?? read.current.from);
       tell();
       paint();
     };
+
     const source: FindSource = {
       search,
       step: (query: string, step: FindStep) => {
         if (query !== state.query) return search(query);
         const count = state.matches.length;
+
         if (count === 0) return tell();
         state.at = (state.at + step + count) % count;
         go();
@@ -239,20 +271,25 @@ function useWholeFileFind(
         state.at = -1;
         state.pending = false;
         unwatchNotes();
+
         for (const listener of state.listeners) listener(NO_TALLY);
       },
       onTally: (listener) => {
         state.listeners.add(listener);
+
         return () => state.listeners.delete(listener);
       },
       selection: () => (host.current === null ? undefined : selectedWords(host.current)),
     };
+
     return { source, paint, refresh, clear: source.clear };
   });
+
   useFindSource(findable ? find.source : undefined);
   // Note that the tints are taken away with the file, since they name ranges of its rows.
   useEffect(() => find.clear, [find]);
   useEffect(() => find.refresh());
+
   return find.paint;
 }
 
@@ -298,23 +335,34 @@ export function WholeFile({
   const handle = useRef<FileViewHandle | undefined>(undefined);
   const look = useDiffLook(true);
   const elements = useRef(new Map<string, HTMLElement>());
+
   const elementFor = useCallback((key: string) => {
     const held = elements.current.get(key);
+
     if (held !== undefined) return held;
     const element = document.createElement("div");
     element.setAttribute(NOTE_KEY_ATTRIBUTE, key);
     elements.current.set(key, element);
+
     return element;
   }, []);
-  const read = useRef({ text: "", notes: [] as readonly WholeFileNote[], from: 1 });
+
+  const read = useRef<{ text: string; notes: readonly WholeFileNote[]; from: number }>({
+    text: "",
+    notes: [],
+    from: 1,
+  });
+
   read.current = { text, notes, from: findFrom };
   const paint = useWholeFileFind(host, read, elementFor, handle, findable);
   // Whether Pierre has drawn the file's lines since the bundle mounted it.
   const [drawn, setDrawn] = useState(false);
+
   const onDrawn = useCallback(() => {
     setDrawn(true);
     paint();
   }, [paint]);
+
   const props: FileViewProps = {
     name,
     text,
@@ -325,14 +373,17 @@ export function WholeFile({
     renderAnnotation: elementFor,
     onDrawn,
   };
+
   const latest = useRef(props);
   latest.current = props;
 
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
     const mounted = module.mountFile(element, latest.current);
     handle.current = mounted;
+
     return () => {
       handle.current = undefined;
       mounted.unmount();
@@ -345,6 +396,7 @@ export function WholeFile({
   const revealedAt = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (revealed === undefined || handle.current === undefined) return;
+
     if (revealedAt.current === revealed.at) return;
     revealedAt.current = revealed.at;
     handle.current.revealLines(revealed.range);
@@ -371,8 +423,9 @@ export function WholeFile({
       </ErrorState>
     );
   }
+
   return (
-    <Fill className="whole-file ph-no-capture relative">
+    <Fill className="whole-file relative">
       <ScrollArea ref={host}>{null}</ScrollArea>
       {!drawn ? (
         <div className="absolute inset-0 flex">

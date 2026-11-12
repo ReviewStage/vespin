@@ -72,7 +72,9 @@ export function fileDiffLines(file: AgentChangedFile): string[] {
   const from = file.status === CHANGED_FILE_STATUS.ADDED ? NO_FILE : `a/${before}`;
   const to = file.status === CHANGED_FILE_STATUS.DELETED ? NO_FILE : `b/${file.path}`;
   const header = [`diff --git a/${before} b/${file.path}`, `--- ${from}`, `+++ ${to}`];
+
   if (file.patch !== null) return [...header, file.patch];
+
   return [
     ...header,
     file.omitted === PATCH_OMITTED.BINARY ? "Binary file" : "Patch too large; GitHub carried none",
@@ -82,6 +84,7 @@ export function fileDiffLines(file: AgentChangedFile): string[] {
 /** One file as a line of the stat: what became of it, the lines it adds and removes, and its path. */
 export function fileStatRow(file: AgentChangedFile): string[] {
   const path = file.previousPath === null ? file.path : `${file.previousPath} -> ${file.path}`;
+
   return [file.status, `+${file.additions}`, `-${file.deletions}`, path];
 }
 
@@ -98,17 +101,22 @@ export const diffCommand = Command.make(
   ({ agent: id, number, stat }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       const { pullRequest } = yield* askService(hosted.agents.changes, {
         id,
         ...numberQuery(number),
       });
+
       if (pullRequest === null) {
         yield* answer({ json: { pullRequest }, lines: ["The agent opened no pull request yet."] });
+
         return;
       }
+
       if (pullRequest.truncated) {
         yield* note(`GitHub listed only the first ${pullRequest.files.length} files.`);
       }
+
       yield* answer({
         json: { pullRequest },
         lines: stat
@@ -148,14 +156,19 @@ interface PrChoice {
 function changeRequest(id: string, query: { readonly number?: string }, choice: PrChoice) {
   return Effect.gen(function* () {
     if (choice.change === PR_CHANGE.READY) return { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW };
+
     if (choice.change === PR_CHANGE.DRAFT) return { action: PULL_REQUEST_ACTION.CONVERT_TO_DRAFT };
+
     if (choice.off) return { action: PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE };
     const { hosted } = yield* session;
+
     const { pullRequest } = yield* askService(hosted.agentPullRequests.overviewPullRequest, {
       id,
       ...query,
     });
+
     const merging = pullRequest?.merging;
+
     if (merging === undefined) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
@@ -165,23 +178,28 @@ function changeRequest(id: string, query: { readonly number?: string }, choice: 
             : "GitHub did not say how this pull request may be merged.",
       });
     }
+
     const headSha = Option.getOrElse(choice.head, () => merging.headSha);
     const method = Option.getOrUndefined(choice.method) ?? merging.methods[0];
+
     if (choice.change === PR_CHANGE.AUTO_MERGE) {
       // Note that a merge queue merges by its own method unless one is named.
       const named = merging.queue ? Option.getOrUndefined(choice.method) : method;
+
       return {
         action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE,
         headSha,
-        ...(named === undefined ? {} : { method: named }),
+        ...(named !== undefined && { method: named }),
       };
     }
+
     if (method === undefined) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: "The repository allows no merge method.",
       });
     }
+
     return { action: PULL_REQUEST_ACTION.MERGE, method, headSha };
   });
 }
@@ -196,12 +214,15 @@ function changeAnswer(change: PrChange, off: boolean, written: PullRequestWriteA
       }),
     );
   }
+
   if (written.outcome === PULL_REQUEST_WRITE_OUTCOME.REFUSED) {
     return Effect.fail(
       new CommandFailed({ exit: CLI_EXIT.REFUSED, message: `GitHub refused: ${written.words}` }),
     );
   }
+
   const words = off ? "Auto-merge is off." : DONE_WORDS[change];
+
   return answer({ json: written, lines: [words] });
 }
 
@@ -238,14 +259,17 @@ export const prCommand = Command.make(
           message: "--off goes with auto-merge alone.",
         });
       }
+
       const { hosted } = yield* session;
       const query = numberQuery(number);
       const body = yield* changeRequest(id, query, { change, off, method, head });
+
       const written = yield* askService(hosted.agentPullRequests.action, {
         params: { id },
         query,
         body,
       });
+
       yield* changeAnswer(change, off, written);
     }),
 ).pipe(

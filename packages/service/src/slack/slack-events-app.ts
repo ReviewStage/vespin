@@ -149,10 +149,12 @@ function verified(
   body: Uint8Array,
 ): Effect.Effect<boolean> {
   const headers = authorization === undefined ? undefined : { authorization };
+
   const request = new Request(new URL(SLACK_EVENTS_PATH, VERIFIED_ORIGIN), {
     method: HTTP_METHOD.POST,
     ...(headers === undefined ? undefined : { headers }),
   });
+
   return Effect.tryPromise(async () => Boolean(await verify(request, body))).pipe(
     Effect.orElseSucceed(() => false),
   );
@@ -165,7 +167,9 @@ function requestPayload(
 ): Effect.Effect<UnparsedWireValue, HostedRefusal> {
   if (!(contentType ?? "").startsWith(FORM_CONTENT_TYPE)) return parseJsonBytes(body);
   const field = new URLSearchParams(new TextDecoder().decode(body)).get(INTERACTION_FIELD);
+
   if (field === null) return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   return parseJsonBytes(new TextEncoder().encode(field));
 }
 
@@ -176,8 +180,10 @@ function pressedChoice(
   for (const action of press.actions) {
     if (action.value === undefined) continue;
     const choice = Schema.decodeUnknownOption(SlackChoiceSchema)(action.value);
+
     if (Option.isSome(choice)) return { choice: choice.value, actionId: action.action_id };
   }
+
   return undefined;
 }
 
@@ -185,8 +191,10 @@ function pressedChoice(
 function tickedPlaces(press: BlockActions): readonly number[] {
   for (const block of Object.values(press.state?.values ?? {})) {
     const ticked = block[SLACK_PICKS_ACTION]?.selected_options;
+
     if (ticked !== undefined) return ticked.map(({ value }) => Number(value));
   }
+
   return [];
 }
 
@@ -196,8 +204,10 @@ const pressedAsk = /* @__PURE__ */ Effect.fnUntraced(function* (
   choice: SlackChoice,
 ) {
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(member, choice.item));
+
   if (Option.isNone(stored)) return undefined;
   const message = (stored.value.item.thread ?? []).find((each) => each.id === choice.ask);
+
   return message?.ask === undefined ? undefined : knownAsk(message.ask);
 });
 
@@ -214,23 +224,31 @@ const pressedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   press: BlockActions,
 ) {
   const { reply } = choice;
+
   if (reply !== undefined) {
     const ask = yield* pressedAsk(member, choice);
     const steps = ask?.type === INBOX_ASK.DO ? ask.steps : [];
     const ticked = reply === INBOX_REPLY.DONE ? steps.map((_, at) => at) : [];
+
     return { answers: { ask: choice.ask, reply, steps: ticked }, line: doneLine(reply) };
   }
+
   if (choice.choice !== undefined) {
     const choices = [choice.choice];
     const answers = { ask: choice.ask, reply: INBOX_REPLY.CHOSE, choices };
+
     return { answers, line: chosenLine(choices) };
   }
+
   const ask = yield* pressedAsk(member, choice);
   const options = ask?.type === INBOX_ASK.DECIDE ? ask.options : [];
+
   const choices = tickedPlaces(press).flatMap((place) => {
     const option = options[place];
+
     return option === undefined ? [] : [option.label];
   });
+
   return {
     answers: { ask: choice.ask, reply: INBOX_REPLY.CHOSE, choices },
     line: chosenLine(choices),
@@ -241,6 +259,7 @@ const pressedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
 function pressedDm(press: BlockActions): SlackMessage | undefined {
   const channel = press.container?.channel_id;
   const ts = press.container?.message_ts;
+
   return channel === undefined || ts === undefined ? undefined : { channel, ts };
 }
 
@@ -254,17 +273,23 @@ function pressedDm(press: BlockActions): SlackMessage | undefined {
  */
 const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockActions) {
   const pressed = pressedChoice(press);
+
   if (pressed === undefined) return;
   const { choice, actionId } = pressed;
   const organizationId = yield* hostedStoreOrUnavailable(itemWorkspace(choice.item));
+
   if (Option.isNone(organizationId)) return;
   const teamId = press.team?.id ?? press.user.team_id;
+
   if (teamId === undefined) return;
+
   const member = yield* hostedStoreOrUnavailable(
     (yield* SlackBot).memberOf(organizationId.value, teamId, press.user.id),
   );
+
   if (Option.isNone(member)) return;
   const { answers, line } = yield* pressedAnswer(member.value, choice, press);
+
   const answered = yield* answerAsMember(
     storeWriter({ tools: CODER_TOOL_SET }),
     member.value,
@@ -283,12 +308,16 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
       () => Effect.succeedNone,
     ),
   );
+
   const dm = pressedDm(press);
+
   if (Option.isNone(answered) || dm === undefined) return;
   const { item, outcome } = answered.value;
+
   if (outcome === INBOX_ASK_ANSWER.TAKEN) return;
   const message = (item.thread ?? []).find((each) => each.id === choice.ask);
   const status = message?.ask?.status;
+
   // A refused answer to an ask still open leaves the DM's buttons standing.
   if (outcome === INBOX_ASK_ANSWER.REFUSED && status === INBOX_ASK_STATUS.OPEN) return;
   const said = outcome === INBOX_ASK_ANSWER.REPEATED ? line : settledLine(status);
@@ -304,23 +333,32 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
 const eventsEndpoint = (verify: ConnectWebhookVerifier) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
+
     if (request.method !== HTTP_METHOD.POST) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const body = yield* readBodyBytesEffect(MAXIMUM_REQUEST_BYTES);
+
     if (!(yield* verified(verify, request.headers.authorization, body))) {
       yield* Effect.logWarning("A Slack request was refused: Connect's bearer did not hold");
+
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     const payload = yield* requestPayload(request.headers["content-type"], body);
     const check = readRequest(UrlVerificationSchema, payload);
+
     if (Result.isSuccess(check)) {
       yield* Effect.logInfo("A Slack request was heard", {
         kind: SLACK_REQUEST_TYPE.URL_VERIFICATION,
       });
+
       return hostedJsonResponse(200, { challenge: check.success.challenge });
     }
+
     const press = readRequest(BlockActionsSchema, payload);
+
     if (Result.isSuccess(press)) {
       yield* Effect.logInfo("A Slack request was heard", {
         kind: SLACK_REQUEST_TYPE.BLOCK_ACTIONS,
@@ -335,6 +373,7 @@ const eventsEndpoint = (verify: ConnectWebhookVerifier) =>
         ),
       );
     } else yield* actOnSlackEvent(payload, request.headers[SLACK_RETRY_HEADER] !== undefined);
+
     return hostedJsonResponse(200, {});
   });
 

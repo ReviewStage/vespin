@@ -49,6 +49,7 @@ export const markdownHtmlParserQuery = queryOptions({
     import("rehype-raw").then(
       (module) => {
         parser = module.default;
+
         return true;
       },
       () => false,
@@ -61,6 +62,7 @@ export const markdownHtmlParserQuery = queryOptions({
 /** Starts the parser loading, where it has not started already. */
 export function usePrefetchMarkdownHtmlParser(): () => void {
   const client = useQueryClient();
+
   return useCallback(() => {
     void client.prefetchQuery(markdownHtmlParserQuery);
   }, [client]);

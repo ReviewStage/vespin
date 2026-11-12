@@ -11,8 +11,10 @@ import type { WebContents } from "electron";
 
 /** How many times a window's renderer may be stood back up before a load succeeds. */
 export const MAXIMUM_REVIVALS_PER_LOAD = 3;
+
 /** The pause before a revival, so a renderer dying on load cannot spin the process. */
 const REVIVAL_DELAY_MS = 1_000;
+
 /** Chromium's code for a load another navigation replaced, which is no failure of the page. */
 const ERR_ABORTED = -3;
 
@@ -69,15 +71,19 @@ export class RendererRevival {
   /** The renderer went: stood back up after the pause, or given up on past the bound. */
   gone(reason: string): void {
     if (this.#stopped || this.#timer) return;
+
     if (this.#revivals >= MAXIMUM_REVIVALS_PER_LOAD) {
       this.#stopped = true;
       this.#options.onGaveUp(reason);
+
       return;
     }
+
     this.#revivals += 1;
     this.#options.onGone(reason);
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
+
       if (!this.#stopped) this.#options.revive();
     }, REVIVAL_DELAY_MS);
     this.#timer.unref();
@@ -94,6 +100,7 @@ export class RendererRevival {
   /** Nothing is stood back up after this: the window is going for good. */
   stop(): void {
     this.#stopped = true;
+
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
   }

@@ -101,13 +101,16 @@ interface Answer {
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   const bearers = new Map([
     [`Bearer ${owner}`, owner],
     [`Bearer ${other}`, other],
   ]);
+
   const procedures = accountProcedures({
     resolveUserId: (incoming) =>
       Effect.succeed(
@@ -118,12 +121,14 @@ const openAccounts = Effect.gen(function* () {
     accountFastOffer,
     writePreferences: writeAccountPreferences,
   });
+
   return { owner, other, ask: (request: Request) => answer(procedures, request) };
 });
 
 const answer = (procedures: ReturnType<typeof accountProcedures>, request: Request) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -136,10 +141,12 @@ const answer = (procedures: ReturnType<typeof accountProcedures>, request: Reque
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       ANALYTICS.layer,
     );
+
     const response = yield* hostedAnswer({ account: procedures }, services, request);
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -158,7 +165,9 @@ function request(userId: string, body?: WireBoundaryInput) {
 function partOf(answered: Answer, part: string): UnparsedWireValue {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(answered.body));
   const body = unparsedWire(answered.body);
+
   if (!isRecord(body)) return assert.fail("the snapshot is not a record");
+
   return body[part];
 }
 
@@ -182,9 +191,11 @@ it.layer(getTestDB())("the preferences snapshot's experiments part", (it) => {
   it.effect("passes over a key this deployment does not list, and refuses what is no record", () =>
     Effect.gen(function* () {
       const { owner, ask } = yield* openAccounts;
+
       const newer = yield* ask(
         request(owner, { experiments: { [EXPERIMENT.MEMORY]: true, newer: true } }),
       );
+
       assert.deepEqual(partOf(newer, "experiments"), { [EXPERIMENT.MEMORY]: true });
 
       const refused = yield* ask(request(owner, { experiments: [EXPERIMENT.MEMORY] }));
@@ -296,6 +307,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
           turnNotifications: true,
         }),
       );
+
       for (const refused of [
         { soundWhen: "sometimes" },
         { completionSound: "kazoo" },
@@ -307,6 +319,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
           body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
         });
       }
+
       const kept = yield* ask(request(owner));
       assert.equal(partOf(kept, "soundWhen"), SOUND_WHEN.ALWAYS);
       assert.equal(partOf(kept, "completionSound"), COMPLETION_SOUND.BELL);
@@ -327,9 +340,11 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
           partOf(yield* ask(request(owner, { onboardingSurvey: answers })), "onboardingSurvey"),
           answers,
         );
+
         // Note that the same answers written again, as a retry or another machine's sync writes them, post nothing more, and a key the survey does not name is not kept.
         const padded =
           '{"referral":"other","referralOther":"A meetup","role":"founder","notes":"x"}';
+
         assert.equal(
           partOf(yield* ask(request(owner, { onboardingSurvey: padded })), "onboardingSurvey"),
           answers,
@@ -347,6 +362,7 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
             body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
           });
         }
+
         assert.equal(partOf(yield* ask(request(owner)), "onboardingSurvey"), answers);
 
         // Note that the response keys are the ones the onboarding survey's Slack destination in PostHog reads.
@@ -395,12 +411,14 @@ it.layer(getTestDB())("the preferences snapshot's chapters model part", (it) => 
     Effect.gen(function* () {
       const { owner, ask } = yield* openAccounts;
       yield* ask(request(owner, { chaptersModel: CHAPTERS_MODEL.OPUS }));
+
       for (const offered of ["gpt-5.5", "anthropic/claude-opus-5.5", 3]) {
         assert.deepEqual(yield* ask(request(owner, { chaptersModel: offered })), {
           status: HOSTED_HTTP_STATUS.BAD_REQUEST,
           body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
         });
       }
+
       assert.equal(partOf(yield* ask(request(owner)), "chaptersModel"), CHAPTERS_MODEL.OPUS);
     }),
   );
@@ -425,6 +443,7 @@ it.layer(getTestDB())("the preferences snapshot's agent part", (it) => {
         const opusFast = yield* ask(
           request(owner, { agent: { model: OPUS_FAST.id, effort: "high" } }),
         );
+
         assert.deepEqual(opusFast, {
           status: HOSTED_HTTP_STATUS.BAD_REQUEST,
           body: { error: HOSTED_API_ERROR.INVALID_REQUEST },

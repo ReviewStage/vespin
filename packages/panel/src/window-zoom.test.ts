@@ -43,8 +43,10 @@ function ZoomWindow({
   useAppKeymap(true);
   useWindowZoom(100, (zoom) => {
     writes.push(zoom);
+
     return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
   });
+
   return null;
 }
 
@@ -74,9 +76,11 @@ function pressCommand(key: string, code: string, repeat = false): KeyboardEvent 
     bubbles: true,
     cancelable: true,
   });
+
   act(() => {
     document.body.dispatchEvent(event);
   });
+
   return event;
 }
 
@@ -120,8 +124,10 @@ function RefusedZoomWindow({ landed }: { landed: boolean[] }): ReactElement {
     useWindowZoom(100, () =>
       Promise.resolve({ status: ACTION_RESULT_STATUS.REJECTED, reason: "Settings are locked." }),
     );
+
     return null;
   }
+
   return createElement(
     Fragment,
     null,
@@ -143,11 +149,13 @@ test("a zoom size the settings refuse is said in a toast", async () => {
 
   await act(async () => {
     pressCommand("+", "Equal");
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
 
   const said = [...document.querySelectorAll(".ui-toast .ui-toast-words")].map(
     (words) => words.textContent,
   );
+
   assert.deepEqual(said, ["The window could not be zoomed. Try again."]);
 });

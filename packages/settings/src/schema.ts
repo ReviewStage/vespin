@@ -98,6 +98,7 @@ export {
   type SettingsPage,
   type SettingsResetScope,
 } from "./schema-types.js";
+
 // The ids themselves live in core, because the product-event vocabulary names
 // the same set and may not depend on anything here.
 export { APP_SETTING_ID, isAppSettingId };
@@ -125,6 +126,7 @@ function themeOptionLabel(theme: Theme): string {
 /** One of a fixed set of words, as a diff setting's guard reads a value arriving from storage or IPC. */
 function oneOf<Value extends string>(values: readonly Value[]) {
   const reads = Schema.is(Schema.Literals(values));
+
   return (value: UnparsedWireValue): value is Value => reads(value);
 }
 
@@ -157,7 +159,9 @@ function themeLabel(themes: readonly { readonly id: string; readonly label: stri
  */
 function macCommandModeGuard(value: UnparsedWireValue) {
   if (value === true) return optional(MAC_COMMAND_MODE.ASK, isMacCommandMode);
+
   if (value === false) return optional(MAC_COMMAND_MODE.NEVER, isMacCommandMode);
+
   return optional(value, isMacCommandMode);
 }
 
@@ -392,6 +396,7 @@ export const APP_SETTING_SCHEMA = {
     label: "Commit author",
     detail: (settings) => {
       const chosen = settings("commitAuthor");
+
       return COMMIT_AUTHOR_DETAIL[isCommitAuthor(chosen) ? chosen : COMMIT_AUTHOR_DEFAULT];
     },
     values: COMMIT_AUTHOR_LIST,

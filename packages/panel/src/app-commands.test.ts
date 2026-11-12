@@ -20,6 +20,7 @@ import { withQueryClient } from "./testing/copy-feedback.js";
  */
 
 let menuListener: ((command: AppCommand) => void) | undefined;
+
 /** Each set of commands the window told the menu bar it offers, in order. */
 let toldOffers: (readonly AppCommand[])[] = [];
 const roots: Root[] = [];
@@ -30,6 +31,7 @@ beforeEach(() => {
     menuOffers: (commands: readonly AppCommand[]) => toldOffers.push(commands),
     onMenuCommand: (listener: (command: AppCommand) => void) => {
       menuListener = listener;
+
       return () => {
         menuListener = undefined;
       };
@@ -49,6 +51,7 @@ function HistoryWindow({ moves, dialog }: { moves: string[]; dialog: boolean }):
   useMenuCommands(true);
   useAppCommand(APP_COMMAND.BACK, () => moves.push("back"));
   useAppCommand(APP_COMMAND.FORWARD, () => moves.push("forward"));
+
   return createElement(
     Fragment,
     null,
@@ -67,9 +70,12 @@ function HistoryWindow({ moves, dialog }: { moves: string[]; dialog: boolean }):
 function drawWindow(moves: string[]): (dialog: boolean) => void {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = (dialog: boolean) =>
     act(() => root.render(withQueryClient(createElement(HistoryWindow, { moves, dialog }))));
+
   draw(false);
+
   return draw;
 }
 
@@ -104,6 +110,7 @@ function KeyedWindow({ moves }: { moves: string[] }): ReactElement {
   useAppKeymap(true);
   useAppCommand(APP_COMMAND.NEXT_INBOX_ITEM, () => moves.push("inbox"));
   useAppCommand(APP_COMMAND.UNDO, () => moves.push("undo"));
+
   return createElement("textarea", { "aria-label": "Message" });
 }
 
@@ -123,9 +130,11 @@ function pressUndo(target: EventTarget): boolean {
     bubbles: true,
     cancelable: true,
   });
+
   act(() => {
     target.dispatchEvent(press);
   });
+
   return press.defaultPrevented;
 }
 
@@ -149,6 +158,7 @@ function OpenThing({ presses }: { presses: string[] }): null {
   useAppCommand(APP_COMMAND.TOGGLE_READ, () => presses.push("open read"));
   useAppCommand(APP_COMMAND.PIN, () => presses.push("open pin"));
   useAppCommand(APP_COMMAND.SET_STATUS, () => presses.push("open status"));
+
   return null;
 }
 
@@ -162,12 +172,14 @@ function FocusableRow({ presses }: { presses: string[] }): ReactElement {
     () => presses.push("row pin"),
     () => presses.push("row status"),
   );
+
   return createElement("div", { ref: row, tabIndex: 0, "aria-label": "Row" });
 }
 
 /** The keymap with the open thing, mounted anew under `opened`, beside a focusable row. */
 function RowWindow({ presses, opened }: { presses: string[]; opened: number }): ReactElement {
   useAppKeymap(true);
+
   return createElement(
     Fragment,
     null,
@@ -190,8 +202,10 @@ test("U, P, and S act on the focused sidebar row over the open thing, even once 
   const presses: string[] = [];
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = (opened: number) =>
     act(() => root.render(withQueryClient(createElement(RowWindow, { presses, opened }))));
+
   draw(0);
   pressLetter("u");
   assert.deepEqual(presses.splice(0), ["open read"]);
@@ -216,12 +230,14 @@ function OfferingWindow({ linked }: { linked: boolean }): ReactElement | null {
   useMenuOffers();
   useAppCommand(APP_COMMAND.BACK, () => undefined);
   useAppCommand(APP_COMMAND.COPY_LINK, linked ? () => undefined : undefined);
+
   return null;
 }
 
 test("the window tells the menu bar the commands it offers as one set each time the set changes, and nothing when a redraw changes none", async () => {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = async (linked: boolean) => {
     await act(async () => {
       root.render(withQueryClient(createElement(OfferingWindow, { linked })));

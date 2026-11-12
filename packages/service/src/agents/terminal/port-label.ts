@@ -71,9 +71,11 @@ function named(word: string | undefined): string | undefined {
 function scriptName(path: string): string | undefined {
   const segments = path.split("/").filter(Boolean);
   const modules = segments.lastIndexOf("node_modules");
+
   if (modules === -1) return named(baseName(path).replace(/\.[^.]+$/, ""));
   const first = segments[modules + 1];
   const second = segments[modules + 2];
+
   // Note that `.bin` holds a package's commands by name, and a scoped package is named without its scope.
   return named(first === ".bin" || first?.startsWith("@") === true ? second : first);
 }
@@ -82,21 +84,26 @@ function scriptName(path: string): string | undefined {
 function withSubcommand(name: string | undefined, rest: readonly string[]): string | undefined {
   if (name === undefined) return undefined;
   const subcommand = rest[0] !== undefined && VERB.test(rest[0]) ? rest[0] : undefined;
+
   return subcommand === undefined ? name : `${name} ${subcommand}`;
 }
 
 /** What an interpreter runs: a Python module given by `-m`, or the first word that is not a flag. */
 function interpreted(program: string, rest: readonly string[]): string | undefined {
   const module = rest.indexOf("-m");
+
   if (PYTHON.test(program) && module !== -1) {
     return withSubcommand(named(rest[module + 1]), rest.slice(module + 2));
   }
+
   // Note that a module loaded first, as `-r dotenv/config` names one, is not what runs.
   const at = rest.findIndex(
     (word, index) =>
       !word.startsWith("-") && word !== "run" && !PRELOAD_FLAGS.has(rest[index - 1] ?? ""),
   );
+
   if (at === -1) return program;
+
   return withSubcommand(scriptName(rest[at] ?? ""), rest.slice(at + 1));
 }
 
@@ -104,14 +111,17 @@ function interpreted(program: string, rest: readonly string[]): string | undefin
 function managed(manager: string, rest: readonly string[]): string | undefined {
   for (let at = 0; at < rest.length; at++) {
     const word = rest[at] ?? "";
+
     if (VALUED_FLAGS.has(word) || (manager === "npm" && word === NPM_WORKSPACE_FLAG)) at++;
     else if (PASSES_ON.has(word)) return labelOf(rest.slice(at + 1));
     else if (!word.startsWith("-") && !RUNS_SCRIPT.has(word)) {
       // Note that bun runs a file as an interpreter does.
       if (manager === "bun" && word.includes(".")) return interpreted(manager, rest.slice(at));
+
       return VERB.test(word) ? `${manager} ${word}` : manager;
     }
   }
+
   return manager;
 }
 
@@ -125,14 +135,20 @@ export function labelOf(argv: readonly string[]): string | undefined {
   // Note that a process that renamed itself, as `next-server (v15.0.0)` does, reads as one word with spaces.
   const words = argv.length === 1 ? (argv[0] ?? "").trim().split(/\s+/) : argv;
   const [first, ...rest] = words;
+
   if (first === undefined || first === "") return undefined;
   const program = baseName(first);
+
   if (RUNNERS.has(program)) {
     // Note that a runner's own flags and an environment's assignments come before the command it runs.
     const command = rest.findIndex(isCommand);
+
     return command === -1 ? undefined : labelOf(rest.slice(command));
   }
+
   if (PACKAGE_MANAGERS.has(program)) return managed(program, rest);
+
   if (INTERPRETERS.has(program) || PYTHON.test(program)) return interpreted(program, rest);
+
   return withSubcommand(named(program), rest);
 }

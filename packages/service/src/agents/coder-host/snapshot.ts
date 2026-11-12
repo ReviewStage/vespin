@@ -141,6 +141,7 @@ function printedCommits(
   const last = stdout.trim().split("\n").at(-1) ?? "";
   const [commit, head] = last.split(" ");
   const sha = /^[0-9a-f]{40,64}$/u;
+
   return commit !== undefined && head !== undefined && sha.test(commit) && sha.test(head)
     ? { commit, head }
     : undefined;
@@ -163,6 +164,7 @@ function stderrTail(stderr: string): string {
   const line = redactCredentials(stderr)
     .trim()
     .replace(/\s*\n\s*/gu, " / ");
+
   return line.slice(-SNAPSHOT.STDERR_TAIL);
 }
 
@@ -171,31 +173,39 @@ const copyIn = <R>(ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
     const sandboxes = yield* Sandbox;
     const sandbox = yield* agentSandboxOf(sandboxes, ask.sessionId);
+
     if (sandbox === undefined) {
       return { copied: false, miss: SNAPSHOT_MISS.NO_SANDBOX } as const;
     }
+
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; a stopped one with a
     // snapshot is handed by it instead (`takeover.ts`'s `sourceWorkOf`), and one in any other
     // state is a miss.
     if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
       return { copied: false, miss: SNAPSHOT_MISS.FAILED } as const;
     }
+
     const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
     const owner = { userId: ask.userId, name: sandbox.name, sandboxSessionId: running.running };
     const credential = yield* ask.credential;
     yield* sandboxFirewall(sandboxes).write(owner, { github: credential });
+
     const ran = yield* sandboxes.run(running, {
       command: "sh",
       args: ["-c", SNAPSHOT_SCRIPT, "sh", ask.branch, ask.message],
       cwd: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
     });
+
     const printed = ran.exitCode === 0 ? printedCommits(ran.stdout) : undefined;
+
     if (printed === undefined) {
       yield* Effect.logWarning(
         `the source's work was not copied: the copy exited ${ran.exitCode}: ${stderrTail(ran.stderr)}`,
       );
+
       return { copied: false, miss: SNAPSHOT_MISS.FAILED } as const;
     }
+
     return {
       copied: true,
       branch: ask.branch,
@@ -221,8 +231,10 @@ export const snapshotSource = /* @__PURE__ */ Effect.fn("web/snapshotSource")(fu
       ),
     ),
   );
+
   if (Option.isSome(outcome)) return outcome.value;
   yield* Effect.logWarning("the source's work was not copied in time");
+
   return { copied: false, miss: SNAPSHOT_MISS.TIMED_OUT };
 });
 
@@ -238,6 +250,7 @@ const TAKEN_UP = { CONTINUED: "continued", FORKED: "forked" } as const;
 function snapshotBranch(source: Agent, forked: boolean, idempotencyKey: string): string {
   const base = source.branch ?? `${CODER.BRANCH_PREFIX}agent-${source.id.slice(0, 8)}`;
   const start = createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 8);
+
   return `${base}-${forked ? TAKEN_UP.FORKED : TAKEN_UP.CONTINUED}-${start}`;
 }
 
@@ -261,19 +274,24 @@ export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(fu
   idempotencyKey: string,
 ): Effect.fn.Return<SnapshotOutcome, never, SourceCopyServices> {
   const missed = (miss: SnapshotMiss): SnapshotOutcome => ({ copied: false, miss });
+
   return yield* Effect.gen(function* () {
     if (Option.isSome(yield* readAgentByKey(userId, idempotencyKey))) {
       return missed(SNAPSHOT_MISS.STARTED);
     }
+
     // Note that the new agent clones the task's repository as it stands now, so a branch pushed to the
     // one the source cloned before the task moved would be none of its checkout's.
     // A source with no repository has no branch any checkout would hold.
     if (!hasRepository(source) || repository?.toLowerCase() !== source.repository.toLowerCase()) {
       return missed(SNAPSHOT_MISS.MOVED);
     }
+
     const [session] = yield* standingSessionsOf(source.userId, [source.conversationId]);
+
     if (session === undefined) return missed(SNAPSHOT_MISS.NO_SANDBOX);
     const target = { userId, conversationId: source.conversationId };
+
     return yield* snapshotSource({
       userId: source.userId,
       sessionId: session.sessionId,

@@ -24,7 +24,7 @@
  *   by its module.
  * - A one-off wait (a hint's rest, a copy's hold, a pane's exit) holds no
  *   value, so it is no store: it is a `Wait`, which runs one Effect at a
- *   time, each `start` interrupting the last. `makeWait` makes one a module
+ *   time, each `start` interrupting the last. `createWait` makes one a module
  *   holds for the whole window, and `useWait` makes one a component holds
  *   and interrupts as it leaves. A family of waits, one per id, is a `Map`
  *   of them keyed by the id itself.
@@ -50,12 +50,14 @@ export interface Wait {
 }
 
 /** A wait its maker holds, a module for the whole window among them, so a wait begun anywhere calls off the one before. */
-export function makeWait(fork: ForkEffect = forkEffect): Wait {
+export function createWait(fork: ForkEffect = forkEffect): Wait {
   let running: (() => void) | undefined;
+
   const stop = () => {
     running?.();
     running = undefined;
   };
+
   return {
     start: (effect) => {
       stop();
@@ -67,7 +69,8 @@ export function makeWait(fork: ForkEffect = forkEffect): Wait {
 
 /** A wait a component holds, the same one across its renders, interrupted as it leaves. */
 export function useWait(fork?: ForkEffect): Wait {
-  const [wait] = useState(() => makeWait(fork));
+  const [wait] = useState(() => createWait(fork));
   useEffect(() => wait.stop, [wait]);
+
   return wait;
 }

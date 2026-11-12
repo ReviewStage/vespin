@@ -50,6 +50,7 @@ describe("⌃Tab", () => {
     const twice = pressed(SCREENS, true, SWITCH_STEP.ON, SWITCH_STEP.ON);
     assert.ok(twice.held && twice.shown);
     assert.equal(switcherTarget(twice), "task b");
+
     const around = pressed(
       SCREENS,
       true,
@@ -58,6 +59,7 @@ describe("⌃Tab", () => {
       SWITCH_STEP.ON,
       SWITCH_STEP.ON,
     );
+
     assert.equal(switcherTarget(around), undefined, "back on the screen here, so nothing moves");
   });
 

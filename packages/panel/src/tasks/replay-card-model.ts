@@ -192,14 +192,18 @@ const OPENINGS = new WeakMap<AgentTranscriptMessage, ReplayOpening | undefined>(
 function filesOf(message: AgentTranscriptMessage, noteFiles: NoteFiles) {
   const kinds = agentParts(message);
   const files = message.parts.filter((_, index) => kinds[index]?.kind !== AGENT_PART.TEXT);
+
   const isText = (part: (typeof files)[number]) =>
     isRecord(part) && part.mediaType === TEXT_FILE_TYPE;
+
   const texts = files.filter(isText);
   const others = files.filter((part) => !isText(part));
+
   const note = new Set([
     ...texts.slice(texts.length - Math.min(noteFiles.text, texts.length)),
     ...others.slice(others.length - Math.min(noteFiles.other, others.length)),
   ]);
+
   return {
     brief: files.filter((part) => !note.has(part)),
     note: files.filter((part) => note.has(part)),
@@ -209,8 +213,10 @@ function filesOf(message: AgentTranscriptMessage, noteFiles: NoteFiles) {
 /** The opening read afresh from the first message. */
 function readOpening(first: AgentTranscriptMessage): ReplayOpening | undefined {
   const parts = firstMessageParts(messageWords(first));
+
   if (parts.replay === undefined) return undefined;
   const files = filesOf(first, parts.note?.files ?? { text: 0, other: 0 });
+
   return {
     brief: withWords(first, parts.brief, files.brief),
     replay: parts.replay,
@@ -231,6 +237,7 @@ export function replayOpening(first: AgentTranscriptMessage): ReplayOpening | un
   if (OPENINGS.has(first)) return OPENINGS.get(first);
   const opening = readOpening(first);
   OPENINGS.set(first, opening);
+
   return opening;
 }
 
@@ -243,7 +250,9 @@ export function replayVerb(replay: Replay): ReplayVerb {
 export function replayCount(replay: Replay): string | undefined {
   if (replay.carried === true) return undefined;
   const kept = replay.steps.length;
+
   if (kept < replay.totalSteps) return `${kept} of ${replay.totalSteps} steps`;
+
   return kept === 1 ? "1 step" : `${kept} steps`;
 }
 
@@ -251,27 +260,33 @@ export function replayCount(replay: Replay): string | undefined {
 export function leftOutLine(replay: Replay): string | undefined {
   // Note that steps we summarized are no steps left out: the summary stands for them.
   const left = replay.totalSteps - replay.steps.length - (replay.summary?.steps ?? 0);
+
   if (left <= 0) return undefined;
   const steps = left === 1 ? "1 earlier step was" : `${left} earlier steps were`;
+
   return `${steps} left out to keep the replay within its size limit.`;
 }
 
 /** What the summary's row says: how many of the oldest steps it stands for, and that we wrote it rather than the agent; none where the replay holds no summary. */
 export function summaryLine(replay: Replay): string | undefined {
   const steps = replay.summary?.steps;
+
   if (steps === undefined) return undefined;
+
   return `Summary of ${steps === 1 ? "1 earlier step" : `${steps} earlier steps`} (written by ${PRODUCT_NAME})`;
 }
 
 /** The steps drawn of `kept` once `shown` of the newest are: never fewer than one page, nor more than are kept. */
 export function replayPage(kept: number, shown: number): ReplayPage {
   const from = Math.max(0, kept - Math.max(shown, REPLAY_PAGE));
+
   return { from, next: Math.min(REPLAY_PAGE, from) };
 }
 
 /** What the row before the drawn steps says: how many earlier steps a press draws, and of how many where more stand: "Show 20 of 180 earlier steps", "Show 3 earlier steps". */
 export function earlierStepsLine(page: ReplayPage): string {
   if (page.next < page.from) return `Show ${page.next} of ${page.from} earlier steps`;
+
   return page.next === 1 ? "Show 1 earlier step" : `Show ${page.next} earlier steps`;
 }
 
@@ -285,12 +300,15 @@ export function earlierStepsLine(page: ReplayPage): string {
 function lineSplit(step: ReplayStep): number {
   const words = step.words.replace(/\s+/gu, " ").trim();
   let first = -1;
+
   for (let at = step.summary.indexOf(SPEAKER_SEPARATOR); at >= 0; ) {
     if (first < 0) first = at;
     const tail = step.summary.slice(at + SPEAKER_SEPARATOR.length).replace(/…$/u, "");
+
     if (words.startsWith(tail)) return at;
     at = step.summary.indexOf(SPEAKER_SEPARATOR, at + 1);
   }
+
   return first;
 }
 
@@ -304,15 +322,20 @@ export function stepLine(step: ReplayStep): StepLine {
   switch (step.kind) {
     case REPLAY_STEP_KIND.LINE: {
       const split = lineSplit(step);
+
       if (split < 0) return { who: SENDER_WORD, line: step.summary };
       const line = step.summary.slice(split + SPEAKER_SEPARATOR.length);
+
       return { who: step.summary.slice(0, split), line };
     }
+
     case REPLAY_STEP_KIND.SAID: {
       const lead = `${SAID_WORD}${SPEAKER_SEPARATOR}`;
       const said = step.summary.startsWith(lead);
+
       return { who: AGENT_WORD, line: said ? step.summary.slice(lead.length) : step.summary };
     }
+
     case REPLAY_STEP_KIND.TOOL:
       return { who: AGENT_WORD, line: step.summary };
   }
@@ -326,12 +349,15 @@ export function stepLine(step: ReplayStep): StepLine {
  */
 function briefSource(agent: AgentSummary, agents: readonly AgentSummary[]): AgentSummary {
   let at = agent;
+
   for (let link = 0; link < MAX_CHAIN && at.from !== undefined; link += 1) {
     const sourceId: string = at.from.agentId;
     const source = agents.find((each) => each.id === sourceId);
+
     if (source === undefined) return at;
     at = source;
   }
+
   return at;
 }
 
@@ -344,9 +370,12 @@ function briefSource(agent: AgentSummary, agents: readonly AgentSummary[]): Agen
  */
 export function briefAgent(agent: AgentSummary, agents: readonly AgentSummary[]): AgentSummary {
   const source = briefSource(agent, agents);
+
   if (source === agent) return agent;
   const { automationId, automationName } = source;
+
   if (automationId === undefined && automationName === undefined) return agent;
+
   return {
     ...agent,
     ...(automationId === undefined ? undefined : { automationId }),
@@ -365,7 +394,9 @@ export function briefAgent(agent: AgentSummary, agents: readonly AgentSummary[])
 function wireOf(words: string, form: ReplayValueForm | undefined): WireValue {
   if (form === REPLAY_VALUE_FORM.TEXT) return words;
   const value = valueFromJsonText(words);
+
   if (form === REPLAY_VALUE_FORM.JSON) return value;
+
   return isRecord(value) || Array.isArray(value) ? value : words;
 }
 
@@ -389,6 +420,7 @@ function markedCall(
   step: ReplayStep & { readonly state: ReplayToolState; readonly input: string },
 ): CallRead {
   const { state, input, output } = step;
+
   return {
     state: ROW_STATE[state],
     input,
@@ -407,13 +439,17 @@ function spelledCall(step: ReplayStep): CallRead {
   const words = step.words.startsWith(CALL_PARTS.INPUT)
     ? step.words.slice(CALL_PARTS.INPUT.length)
     : step.words;
+
   // Note that the first result lead is the one, because a call's input is its JSON, which holds no bare newline.
   const at = words.indexOf(CALL_PARTS.RESULT);
   const input = at < 0 ? words : words.slice(0, at);
   const result = at < 0 ? undefined : words.slice(at + CALL_PARTS.RESULT.length);
+
   const running =
     step.summary.endsWith(RUNNING_MARK) && (result === undefined || result === NO_RESULT);
+
   const failed = !running && result?.startsWith(CALL_PARTS.FAILED) === true;
+
   return {
     state: running
       ? TOOL_STATE.INPUT_AVAILABLE
@@ -432,6 +468,7 @@ function stepCall(
   tool: string,
 ): DrawnCall {
   const read = markedCall(step);
+
   return drawnCall({
     tool,
     input: wireOf(read.input, step.inputForm),
@@ -453,6 +490,7 @@ function toolView(
 ): StepView {
   const read = markedCall(step);
   const call = stepCall(step, tool);
+
   return {
     kind: STEP_VIEW.CALL,
     state: read.state,
@@ -475,6 +513,7 @@ type MarkedToolStep = ReplayStep & {
 /** A step as a marked tool call, or nothing where its marker named no tool, its state, or its input. */
 function markedToolStep(step: ReplayStep): MarkedToolStep | undefined {
   const { state, input, tool } = step;
+
   return state !== undefined && input !== undefined && tool !== undefined
     ? { ...step, state, input, tool }
     : undefined;
@@ -491,6 +530,7 @@ export function replayTaskTodos(steps: readonly ReplayStep[]): ReadonlyMap<numbe
   let fold: TaskFold = NO_TASKS;
   steps.forEach((step, index) => {
     const marked = step.kind === REPLAY_STEP_KIND.TOOL ? markedToolStep(step) : undefined;
+
     if (marked === undefined || !isTaskCall(marked.tool)) return;
     const read = markedCall(marked);
     fold = foldTaskCall(fold, {
@@ -499,6 +539,7 @@ export function replayTaskTodos(steps: readonly ReplayStep[]): ReadonlyMap<numbe
     });
     lists.set(index, todosOf(fold));
   });
+
   return lists;
 }
 
@@ -506,11 +547,13 @@ export function replayTaskTodos(steps: readonly ReplayStep[]): ReadonlyMap<numbe
 function callView(step: ReplayStep, todos: Todos | undefined): StepView {
   const { state, input, tool } = step;
   const marked = state !== undefined && input !== undefined ? { ...step, state, input } : undefined;
+
   if (marked !== undefined && tool !== undefined) return toolView(marked, tool, todos);
   const read = marked === undefined ? spelledCall(step) : markedCall(marked);
   const split = step.summary.indexOf(SPEAKER_SEPARATOR);
   const verb = split < 0 ? step.summary : step.summary.slice(0, split);
   const running = read.state === TOOL_STATE.INPUT_AVAILABLE && step.summary.endsWith(RUNNING_MARK);
+
   const subject =
     split < 0
       ? ""
@@ -518,6 +561,7 @@ function callView(step: ReplayStep, todos: Todos | undefined): StepView {
           split + SPEAKER_SEPARATOR.length,
           running ? -RUNNING_MARK.length : undefined,
         );
+
   return {
     kind: STEP_VIEW.CALL,
     state: read.state,
@@ -540,6 +584,7 @@ function callView(step: ReplayStep, todos: Todos | undefined): StepView {
  */
 function sentByOf(step: ReplayStep, name: string): AgentSender | undefined {
   const sent = step.sender;
+
   switch (sent?.kind) {
     case undefined:
     case REPLAY_SENDER.DEVELOPER:
@@ -568,6 +613,7 @@ export function stepView(step: ReplayStep, todos?: Todos): StepView {
   switch (step.kind) {
     case REPLAY_STEP_KIND.LINE: {
       const sender = stepLine(step).who;
+
       return {
         kind: STEP_VIEW.LINE,
         sender,
@@ -577,6 +623,7 @@ export function stepView(step: ReplayStep, todos?: Todos): StepView {
         words: step.words,
       };
     }
+
     case REPLAY_STEP_KIND.SAID:
       return { kind: STEP_VIEW.SAID, words: step.words };
     case REPLAY_STEP_KIND.TOOL:
@@ -599,14 +646,17 @@ function stepWords(step: ReplayStep): string {
 /** The replay as its card's Copy copies it, as the agent was handed it: our summary of the oldest steps where it wrote one, then each step. */
 export function replayWords(replay: Replay): string {
   const summary = replay.summary === undefined ? [] : [replay.summary.text];
+
   return [...summary, ...replay.steps.map(stepWords)].join("\n\n");
 }
 
 /** Whether a step is a call of a server's tool, as the transcript draws it, whose row names the account it ran on. */
 function callsServer(step: ReplayStep): boolean {
   const { state, input, tool } = step;
+
   if (step.kind !== REPLAY_STEP_KIND.TOOL || state === undefined || input === undefined)
     return false;
+
   return tool !== undefined && isServerCallTool(stepCall({ ...step, state, input }, tool).tool);
 }
 

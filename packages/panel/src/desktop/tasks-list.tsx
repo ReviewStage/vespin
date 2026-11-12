@@ -272,6 +272,7 @@ const KEPT = {
 /** A set of folded values with one folded or opened. */
 function flipped<T>(held: readonly T[] | undefined, value: T): readonly T[] {
   const kept = held ?? [];
+
   return kept.includes(value) ? kept.filter((each) => each !== value) : [...kept, value];
 }
 
@@ -319,12 +320,15 @@ function toggledIn(folds: ListFolds, head: TasksGroupHead): ListFolds {
   }
 }
 
-/** Which groups are folded, and the press that folds or opens one, kept on this Mac as it is pressed. */
-function useListFolds(): {
+type UseListFoldsResult = {
   folded: (head: TasksGroupHead) => boolean;
   toggle: (head: TasksGroupHead) => void;
-} {
+};
+
+/** Which groups are folded, and the press that folds or opens one, kept on this Mac as it is pressed. */
+function useListFolds(): UseListFoldsResult {
   const [folds, keep] = useKept(KEPT.FOLDS, {});
+
   return {
     folded: (head) => foldedIn(folds, head),
     toggle: (head) => keep(toggledIn(folds, head)),
@@ -382,14 +386,18 @@ type ListTasks = TasksControl & Pins;
 /** What the page stands: its read, or none of the workspace's tasks. */
 function listState(tasks: TasksControl, empty: boolean): CollectionState {
   if (tasks.listFailed && empty) return COLLECTION_STATE.ERROR;
+
   if (!tasks.listRead && !tasks.listFailed) return COLLECTION_STATE.LOADING;
+
   return empty ? COLLECTION_STATE.EMPTY : COLLECTION_STATE.READY;
 }
 
 /** The account's sections in the listed workspace, each with its tasks' ids in its own order; none while it keeps no sections. */
 function listSections(tasks: ListTasks): readonly TasksSection[] {
   const workspaceId = tasks.workspace?.id;
+
   if (workspaceId === undefined) return [];
+
   return workspaceSections(tasks.taskSections, workspaceId).map((section) => ({
     sectionId: section.id,
     taskIds: sectionTaskIds(tasks.taskSections, section.id),
@@ -429,6 +437,7 @@ function groupHead(
     case TASKS_GROUP.SECTION: {
       const section = tasks.taskSections.sections.find((each) => each.id === head.sectionId);
       const glyph = sectionGlyph(section?.icon) ?? <GLYPH.SECTION />;
+
       // Note that a section's emoji is drawn as words, which a screen recording keeps masked, while a glyph is a picture.
       return {
         icon:
@@ -441,6 +450,7 @@ function groupHead(
         masked: true,
       };
     }
+
     case TASKS_GROUP.STATUS:
       return {
         icon: <TaskStatusMark status={head.status} />,
@@ -511,6 +521,7 @@ function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
 /** A section's entries for the tasks its group draws, in its own order. */
 function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
   const drawn = new Set(group.tasks.map((task) => task.id));
+
   return sectionOrder(tasks.taskSections, sectionId).filter((entry) => drawn.has(entry.taskId));
 }
 
@@ -536,47 +547,62 @@ function listDrops(
   setStanding: (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => void,
 ): ListDrops {
   const pins = groups.find((group) => group.head.kind === TASKS_GROUP.PINNED)?.tasks ?? [];
+
   const move = (group: TasksGroup) => {
     const { head } = group;
+
     if (head.kind === TASKS_GROUP.PINNED) {
       return (taskId: string, to: number) => {
         const from = group.tasks.findIndex((each) => each.id === taskId);
+
         if (from < 0) return;
         tasks.onMovePins(pinMoves(pinPositionsForMove(group.tasks, from, to, pinPlaceOf)));
       };
     }
+
     if (head.kind === TASKS_GROUP.SECTION) {
       return (taskId: string, to: number) => {
         const entries = drawnEntries(tasks, group, head.sectionId);
         const entry = entries.find((each) => each.taskId === taskId);
+
         if (entry === undefined) return;
         tasks.onWriteSections(placeWrites(entries, entry.taskId, head.sectionId, to, Date.now()));
       };
     }
+
     return undefined;
   };
+
   const dropOut = (group: TasksGroup, taskId: string, zone: string, at: number) => {
     const task = group.tasks.find((each) => each.id === taskId);
     const onto = groups.find((each) => zoneOf(each.head) === zone)?.head;
+
     if (task === undefined || onto === undefined) return;
     // A task stands in one place, so one carried out of Pinned is unpinned, and one carried out of its section leaves it.
     const fromPins = group.head.kind === TASKS_GROUP.PINNED;
+
     const leaving: TaskSectionWrite[] =
       group.head.kind === TASKS_GROUP.SECTION && onto.kind !== TASKS_GROUP.SECTION
         ? leaveSection(tasks, task.id)
         : [];
+
     const leave = () => {
       if (fromPins) tasks.onMarkTask(task.id, TASK_MARK.UNPIN);
+
       if (leaving.length > 0) tasks.onWriteSections(leaving);
     };
+
     // Note that a row put back is pinned anew, so it is placed as a new pin dropped at its place among every pin of the workspace, the filter's hidden ones too, any neighbor its new pin instant would cross given a position, as a row dragged into Pinned is; and kept in its section under the rows it stood under.
     const before = tasks.taskSections;
+
     const allPins = inPinOrder(
       tasks.listed.tasks.filter((each) => each.pinnedAt !== undefined),
       pinPlaceOf,
     );
+
     const back = () => {
       const now = latest();
+
       if (fromPins) {
         const others = allPins.filter((each) => each.id !== task.id);
         const at = allPins.findIndex((each) => each.id === task.id);
@@ -585,10 +611,13 @@ function listDrops(
         now.onMarkTask(task.id, TASK_MARK.PIN);
         now.onMovePins(pinMoves(pinPositionsForInsert(others, again, at, pinPlaceOf)));
       }
+
       if (leaving.length === 0) return;
       const writes = restoreWrites(before, now.taskSections, [task.id], null, Date.now());
+
       if (writes.length > 0) now.onWriteSections(writes);
     };
+
     switch (onto.kind) {
       case TASKS_GROUP.PINNED: {
         // Note that the task lands as one pinned now, with no place of its own yet, as the sidebar pins one dragged into Pinned.
@@ -598,34 +627,43 @@ function listDrops(
         tasks.onMarkTask(task.id, TASK_MARK.PIN);
         const positions = pinPositionsForInsert(pins, moving, at, pinPlaceOf);
         tasks.onMovePins(pinMoves(positions));
+
         return;
       }
+
       case TASKS_GROUP.SECTION: {
         const target = groups.find(
           (each) =>
             each.head.kind === TASKS_GROUP.SECTION && each.head.sectionId === onto.sectionId,
         );
+
         const entries = target === undefined ? [] : drawnEntries(tasks, target, onto.sectionId);
         leave();
         tasks.onWriteSections(placeWrites(entries, task.id, onto.sectionId, at, Date.now()));
+
         return;
       }
+
       case TASKS_GROUP.STATUS:
         leave();
         setStanding(task, { status: onto.status }, back);
+
         return;
       case TASKS_GROUP.PRIORITY:
         leave();
         setStanding(task, { priority: onto.priority }, back);
+
         return;
       case TASKS_GROUP.ASSIGNEE:
         leave();
         setStanding(task, { assigneeId: onto.assigneeId }, back);
+
         return;
       default:
         leave();
     }
   };
+
   return { move, dropOut };
 }
 
@@ -681,6 +719,7 @@ const TasksPageRow = memo(function TasksPageRow({
 }): React.JSX.Element {
   const maker = useTaskMaker(task);
   const onOpen = () => onSelect(task.id);
+
   return (
     <TaskListRow
       tasks={tasks}
@@ -782,20 +821,24 @@ function TasksListGroup({
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(run), [holdRun]);
   const move = folded ? undefined : drops.move(group);
+
   const drag = useTaskDrag(move, {
     handle: ROW_HANDLE,
     onDropOut: (taskId, zone, at) => drops.dropOut(group, taskId, zone, at),
   });
+
   const zone = zoneOf(group.head);
   const titled = group.head.kind !== TASKS_GROUP.ALL;
   const into = quickAddInto(group.head);
   const quick = useQuickAdd(tasks, into ?? {});
   const adding = quick.shown;
+
   // A folded group opens as its + asks, so the draft stands in sight.
   const add = () => {
     if (folded) onToggle();
     quick.open();
   };
+
   const rows =
     drawn.length === 0 && !adding ? (
       group.older === undefined ? (
@@ -841,18 +884,21 @@ function TasksListGroup({
           >
             {(index, at) => {
               const entry = drawn[index];
+
               return entry === undefined ? null : row(entry.value, at);
             }}
           </VirtualRows>
         )}
       </>
     );
+
   const body = (
     <>
       {rows}
       <OlderCompleted older={group.older} onShow={onShowOlder} />
     </>
   );
+
   return (
     <section
       className="tasks-list-group col-span-full grid grid-cols-subgrid content-start gap-y-list-gap rounded-ui-10 transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit data-leaving:grid-cols-tasks-list data-leaving:gap-x-block-gap data-[drop-target=true]:bg-muted [&>:not(.tasks-list-rows)]:col-span-full"
@@ -896,6 +942,7 @@ function LeavingTasksGroups({
   group: (group: TasksGroup) => ReactNode;
 }): React.JSX.Element {
   const drawn = useLeaving(groups, (each) => groupKey(each.head));
+
   return <>{drawn.map(({ value }) => group(value))}</>;
 }
 
@@ -924,22 +971,27 @@ export function TasksList({
   const more = !useCoarsePointer();
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
   const subTaskCounts = useMemo(() => childTaskCounts(tasks.listed.tasks), [tasks.listed.tasks]);
+
   // The columns its display chose, and the sub-tasks' count beside them where any task has sub-tasks, folded for its own width (`fitted-columns.ts`).
   const chosen = useMemo(
     () =>
       subTaskCounts.size > 0 ? [...display.properties, LIST_COLUMN.SUB_TASKS] : display.properties,
     [display.properties, subTaskCounts.size],
   );
+
   const properties = useFittedColumns<ListColumn>(listElement, chosen, { narrow });
   const listed = tasks.listed.tasks;
+
   const pinned = inPinOrder(
     listed.filter((task) => task.pinnedAt !== undefined),
     pinPlaceOf,
   ).map((task) => task.id);
+
   const people: GroupPeople = {
     creatorName: (creatorId) => creatorWords(creatorId, directory, listed),
     creatorMark: (creatorId) => {
       const named = listed.find((task) => (task.createdBy?.userId ?? task.ownerId) === creatorId);
+
       return (
         <ActorMark
           actor={creatorActor(named ?? { ownerId: creatorId }, directory, undefined)}
@@ -952,6 +1004,7 @@ export function TasksList({
       <ActorMark actor={assigneeFor(assigneeId, directory, listed)} size={ACTOR_SIZE.MARK} />
     ),
   };
+
   // While the page is shown each task keeps the group and the place it was first drawn in, so one a teammate's change would move stays under the reader's eye.
   const groups = useHeldTasks(
     tasks,
@@ -969,17 +1022,21 @@ export function TasksList({
         now,
       }),
   );
+
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
   const setStanding = useSteadyDoor(standingDoor.set);
   const rowTab = useTaskRowTab(tasks);
   const { region, agents } = tasks;
   const opened = useMemo(() => openedTaskOf({ region, agents }), [region, agents]);
+
   const repositories = useMemo(
     () => groups.flatMap((group) => group.tasks.map((task) => ({ repository: task.repository }))),
     [groups],
   );
+
   const workspaceName = tasks.workspace?.name ?? "";
+
   // What every task listed says in the columns before its name whose words differ row to row, which those columns stand as wide as (`taskRowFit`); read again only as those change, since it walks every task.
   const fit = useMemo(
     () =>
@@ -992,6 +1049,7 @@ export function TasksList({
       ),
     [groups, workspaceName],
   );
+
   const listStyle = useMemo(
     () => ({
       ...fit,
@@ -999,52 +1057,66 @@ export function TasksList({
     }),
     [fit, properties, more],
   );
+
   // The tab as it stands, which an Undo pressed or a refusal answered renders after its act reads.
   const latest = useRef(listTasks);
   latest.current = listTasks;
   const drops = listDrops(listTasks, () => latest.current, groups, setStanding);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
+
   // Every open group's tasks, in the order drawn down the page, those its run leaves undrawn among them; a folded group's are not drawn.
   const order = groups.flatMap((group) =>
     folds.folded(group.head) ? [] : group.tasks.map(taskIdOf),
   );
+
   const runs = useVirtualRuns();
   // Note that the runs draw only the rows near the view, and every row while a find bar stands open over the page.
   const finding = useFindOpen();
+
   const runsPlace = useMemo(
     (): ListRunsPlace => ({ scroller, list, finding, holdRun: runs.hold }),
     [finding, runs.hold],
   );
+
   const pressIn = (row: Element | null | undefined) =>
     row?.querySelector<HTMLElement>(ROW_HANDLE) ?? undefined;
+
   // The rows of every group are one Tab stop that ↑↓ walk, a folded group's passed by, as they are not drawn; a key
   // reaching past the rows drawn goes on to the List's own first or last row, or the one after or before, brought in where it is not drawn.
   const roving = useRovingKeys<HTMLDivElement>({
     reach: (from, to) => {
       const inHand = from?.closest(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}]`);
+
       const id = reachedKey(
         order,
         inHand?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? undefined,
         to,
       );
+
       if (id === undefined) return false;
+
       const press = pressIn(
         list.current?.querySelector(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}="${CSS.escape(id)}"]`),
       );
+
       if (press !== undefined) {
         press.focus();
+
         return true;
       }
+
       return runs.bringIn(id, (row) => pressIn(row)?.focus());
     },
   });
+
   const listRef = useMemo(() => joinRefs(list, roving.ref, setListElement), [roving.ref]);
   // Note that only rows an open group lists stay chosen, so a task the filter or a fold took away is never acted on.
   const selection = useTasksSelection(tasks, new Set(order), frame.chosen);
   const { regionId, selected } = selection;
   // Note that the motion is handed what lays the rows out, so a draw that moved none measures none; a fold tells it of its own (`useListMotionReplay`).
   const laidOut = useMemo(() => ({ groups, properties }), [groups, properties]);
+
   return (
     <CollectionPage
       frame={PAGE_FRAME.TOOLBAR}
@@ -1113,6 +1185,7 @@ export function TasksList({
               groups={groups}
               group={(group) => {
                 const named = groupHead(group.head, listTasks, repositories, people, pictures);
+
                 return (
                   <TasksListGroup
                     key={groupKey(group.head)}

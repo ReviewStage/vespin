@@ -57,8 +57,10 @@ export interface AgentModelPick {
 /** The catalog id a pick of a model sends: its version at the speed the agent runs, where the catalog offers one, else the model's own. */
 function atSpeed(offered: readonly CatalogModel[], model: string, running: string): string {
   const speed = modelSpeedOf(running);
+
   if (speed === MODEL_SPEED.STANDARD) return model;
   const version = `${model}${MODEL_SPEED_SUFFIX[speed]}`;
+
   return offered.some(({ id }) => id === version) ? version : model;
 }
 
@@ -94,6 +96,7 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
   // Note that the fast version is the catalog's, listed beside the model, so a model with none offers no switch.
   const fastId =
     model === undefined ? undefined : `${model}${MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST]}`;
+
   const fastOffered = fastId !== undefined && offered.some(({ id }) => id === fastId);
 
   return {
@@ -106,6 +109,7 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
       if (agent === undefined || picked === model) return;
       const id = atSpeed(offered, picked, agent.model);
       const effort = effortFor(effortsOf(offered, id), agent.effort);
+
       if (effort === undefined) return;
       const windows = offered.find((each) => each.id === id)?.contextWindows;
       choose({
@@ -132,6 +136,7 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
             toggle: () => {
               const id = agent.model === fastId ? model : fastId;
               const effort = effortFor(effortsOf(offered, id), agent.effort);
+
               if (effort === undefined) return;
               const windows = offered.find((each) => each.id === id)?.contextWindows;
               choose({

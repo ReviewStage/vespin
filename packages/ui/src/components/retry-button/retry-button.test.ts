@@ -44,7 +44,7 @@ function draw(label?: string) {
   act(() =>
     root?.render(
       createElement(RetryButton, {
-        ...(label === undefined ? {} : { label }),
+        ...(label !== undefined && { label }),
         onRetry: () => {
           presses += 1;
         },
@@ -52,6 +52,7 @@ function draw(label?: string) {
     ),
   );
   const button = container.querySelector("button") ?? assert.fail("no button");
+
   return { button, presses: () => presses };
 }
 

@@ -42,9 +42,11 @@ const BUNDLE_ID = "dev.vespin.ios";
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -56,6 +58,7 @@ const phoneOf = (userId: string) =>
   Effect.gen(function* () {
     const phone = { token: token(), environment: PUSH_ENVIRONMENT.PRODUCTION };
     yield* registerPushDevice(userId, { ...phone, bundleId: BUNDLE_ID });
+
     return phone;
   });
 
@@ -63,6 +66,7 @@ const phoneOf = (userId: string) =>
 const agentWithTurn = (userId: string, status: TurnStatus, startedAt: Date) =>
   Effect.gen(function* () {
     const task = yield* startTask(userId, { name: "Session refresh" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -73,8 +77,10 @@ const agentWithTurn = (userId: string, status: TurnStatus, startedAt: Date) =>
       prompt: null,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
+
     const [turn] = yield* (yield* Database)
       .insert(turns)
       .values({
@@ -86,7 +92,9 @@ const agentWithTurn = (userId: string, status: TurnStatus, startedAt: Date) =>
         startedAt,
       })
       .returning({ id: turns.id });
+
     assert.ok(turn);
+
     return { agentId: agent.id, turnId: turn.id };
   });
 
@@ -256,6 +264,7 @@ it.layer(getTestDB())("the live activity store", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
+
         for (const userId of [owner, other]) {
           yield* registerLiveActivityToken(
             userId,
@@ -264,6 +273,7 @@ it.layer(getTestDB())("the live activity store", (it) => {
             token(),
           );
         }
+
         yield* TestClock.adjust("1 minute");
         // Note that this sweep takes every account standing, so the two below see only each other.
         assert.ok((yield* listLiveActivityMembers(10_000)).length >= 2);

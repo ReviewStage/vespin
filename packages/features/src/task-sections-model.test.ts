@@ -45,6 +45,7 @@ const create = (id: string, title: string): TaskSectionWrite => ({
 function launchWithThree(): TaskSections {
   let state = applyAll(NO_TASK_SECTIONS, [create(LAUNCH, "Launch")], 1);
   state = applyAll(state, [create(LATER, "Later")], 2);
+
   for (const [n, at] of [
     [3, 10],
     [2, 11],
@@ -56,6 +57,7 @@ function launchWithThree(): TaskSections {
       at,
     );
   }
+
   return state;
 }
 
@@ -65,6 +67,7 @@ const tasksIn = (state: TaskSections, sectionId: string) =>
 describe("a task dropped into a section", () => {
   it("stands where it was let go: on top, between two, or at the foot", () => {
     const state = launchWithThree();
+
     for (const [to, expected] of [
       [0, [TASK(9), TASK(1), TASK(2), TASK(3)]],
       [2, [TASK(1), TASK(2), TASK(9), TASK(3)]],
@@ -77,11 +80,13 @@ describe("a task dropped into a section", () => {
 
   it("leaves the section it stood in, and Tasks takes it back out of any", () => {
     const state = launchWithThree();
+
     const moved = applyAll(
       state,
       placeWrites(sectionOrder(state, LATER), TASK(2), LATER, 0, 20),
       20,
     );
+
     assert.deepEqual(tasksIn(moved, LAUNCH), [TASK(1), TASK(3)]);
     assert.deepEqual(tasksIn(moved, LATER), [TASK(2)]);
 
@@ -90,6 +95,7 @@ describe("a task dropped into a section", () => {
       { kind: TASK_SECTION_WRITE.PLACE, taskId: TASK(2), sectionId: null },
       21,
     );
+
     assert.deepEqual(tasksIn(out, LATER), []);
   });
 
@@ -97,11 +103,13 @@ describe("a task dropped into a section", () => {
     const state = launchWithThree();
     const once = applyAll(state, entryMoveWrites(sectionOrder(state, LAUNCH), LAUNCH, 0, 2), 20);
     assert.deepEqual(tasksIn(once, LAUNCH), [TASK(2), TASK(3), TASK(1)]);
+
     const twice = applyAll(
       once,
       placeWrites(sectionOrder(once, LAUNCH), TASK(1), LAUNCH, 0, 21),
       21,
     );
+
     assert.deepEqual(tasksIn(twice, LAUNCH), [TASK(1), TASK(2), TASK(3)]);
   });
 });
@@ -117,11 +125,13 @@ describe("tasks moved together", () => {
 
   it("stand above a section's dragged tasks as well as its loose ones", () => {
     const later = applyAll(launchWithThree(), placeWrites([], TASK(8), LATER, 0, 14), 14);
+
     const loose = applyAll(
       later,
       placeWrites(sectionOrder(later, LATER), TASK(9), LATER, 1, 15),
       15,
     );
+
     const dragged = applyAll(loose, entryMoveWrites(sectionOrder(loose, LATER), LATER, 0, 1), 16);
     const moved = applyAll(dragged, placeAllWrites(dragged, [TASK(3), TASK(1)], LATER, 20), 20);
     assert.deepEqual(tasksIn(moved, LATER), [TASK(3), TASK(1), TASK(9), TASK(8)]);
@@ -177,19 +187,23 @@ describe("a section", () => {
 
   it("edited takes its new title and icon, and none clears the icon", () => {
     const icon = { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph: TASK_SECTION_GLYPH.ROCKET };
+
     const edited = applySectionWrite(
       launchWithThree(),
       { kind: TASK_SECTION_WRITE.EDIT, id: LAUNCH, title: "Ship it", icon },
       20,
     );
+
     const launch = () => edited.sections.find((section) => section.id === LAUNCH);
     assert.equal(launch()?.title, "Ship it");
     assert.deepEqual(launch()?.icon, icon);
+
     const cleared = applySectionWrite(
       edited,
       { kind: TASK_SECTION_WRITE.EDIT, id: LAUNCH, title: "Ship it", icon: null },
       21,
     );
+
     assert.equal(cleared.sections.find((section) => section.id === LAUNCH)?.icon, undefined);
   });
 
@@ -199,6 +213,7 @@ describe("a section", () => {
       { kind: TASK_SECTION_WRITE.PLACE, taskId: TASK(1), sectionId: LAUNCH },
       1,
     );
+
     assert.deepEqual(state, NO_TASK_SECTIONS);
   });
 });
@@ -217,11 +232,13 @@ describe("an Undo of tasks moved together", () => {
     const state = applyAll(launchWithThree(), [create(TASK(50), "Today")], 3);
     const taskIds = [TASK(2), TASK(9)];
     const moved = applyAll(state, placeAllWrites(state, taskIds, LATER, 20), 20);
+
     const again = applyAll(
       moved,
       placeWrites(sectionOrder(moved, TASK(50)), TASK(2), TASK(50), 0, 21),
       21,
     );
+
     const undone = applyAll(again, restoreWrites(state, again, taskIds, LATER, 30), 30);
     assert.deepEqual(tasksIn(undone, TASK(50)), [TASK(2)]);
     assert.deepEqual(tasksIn(undone, LATER), []);

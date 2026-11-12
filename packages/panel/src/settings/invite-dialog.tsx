@@ -54,6 +54,7 @@ import { replayMaskedError } from "./marks.js";
 function roleOptions(owner: boolean): ChoiceOption<WorkspaceInvitation["role"]>[] {
   return INVITATION_ROLES.map((one) => {
     const ownerOnly = one === INVITATION_ROLE.ADMIN && !owner;
+
     return {
       value: one,
       label: ROLE_WORDS[one],
@@ -107,6 +108,7 @@ export function useInviteDialog({
                   () => result,
                   (refusal: Error) => {
                     invitees.keep(asked.slice(index));
+
                     return refused(refusal.message);
                   },
                 ),
@@ -114,13 +116,16 @@ export function useInviteDialog({
         Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED }),
       ),
   });
+
   // Note that a second press joins the run under way rather than starting
   // another, because it can land before the render that stills the act.
   const flight = useRef<Promise<ActionResult> | undefined>(undefined);
+
   const send = (): Promise<ActionResult> => {
     flight.current ??= inviting.mutateAsync(invitees.commit().pending).finally(() => {
       flight.current = undefined;
     });
+
     return flight.current;
   };
 
@@ -128,12 +133,15 @@ export function useInviteDialog({
     send: send,
     answered: sameAnswer,
   });
+
   const confirm = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_INVITE),
   );
+
   const form = useFormDialog(confirm, invitees.pending.length > 0);
+
   const dialog = (
     <Dialog
       open={form.open}
@@ -179,10 +187,12 @@ export function useInviteDialog({
                 // Note that a refusal alone holds the card up, so a change to the addresses asks the question again rather than clearing it.
                 onAdd={(typed) => {
                   invitees.add(typed);
+
                   if (confirm.rejection !== undefined) confirm.ask();
                 }}
                 onRemove={(id) => {
                   invitees.remove(id);
+
                   if (confirm.rejection !== undefined) confirm.ask();
                 }}
               />
@@ -205,6 +215,7 @@ export function useInviteDialog({
       </Stack>
     </Dialog>
   );
+
   return {
     ask: () => {
       invitees.clear();

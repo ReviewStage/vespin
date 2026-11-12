@@ -73,6 +73,7 @@ const decodeCall = Schema.decodeUnknownOption(RunnerTranscriptCallSchema);
 function keptWhereRestored(call: RunnerTranscriptCall): boolean {
   if (call.call !== RUNNER_TRANSCRIPTS.CALL.APPEND) return true;
   const { projectKey, subpath } = call.key;
+
   return (
     projectKey !== RUNNER_TRANSCRIPTS.CODEX_PROJECT ||
     subpath === undefined ||
@@ -89,25 +90,34 @@ const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
   switch (call.call) {
     case RUNNER_TRANSCRIPTS.CALL.APPEND:
       yield* appendSessionEntries(userId, conversationId, call.key, call.entries);
+
       return {};
     case RUNNER_TRANSCRIPTS.CALL.LOAD: {
       const entries = yield* loadSessionEntries(userId, conversationId, call.key);
+
       // Note that a key never written is answered none, as the SDK's `load` answers null.
       return { entries: Option.getOrNull(entries) } satisfies RunnerTranscriptLoad;
     }
+
     case RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE: {
       const page = yield* loadSessionEntryPage(userId, conversationId, call.key, call.after);
+
       return page satisfies RunnerTranscriptPage;
     }
+
     case RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS: {
       const sessions = yield* listSessionEntrySessions(userId, conversationId, call.projectKey);
+
       return { sessions } satisfies RunnerTranscriptSessions;
     }
+
     case RUNNER_TRANSCRIPTS.CALL.DELETE:
       yield* deleteSessionEntries(userId, conversationId, call.key);
+
       return {};
     case RUNNER_TRANSCRIPTS.CALL.LIST_SUBKEYS: {
       const subkeys = yield* listSessionEntrySubkeys(userId, conversationId, call.key);
+
       return { subkeys } satisfies RunnerTranscriptSubkeys;
     }
   }
@@ -121,25 +131,33 @@ const runnerTranscriptsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTranscrip
     HttpServerRequest.HttpServerRequest | DatabaseServices
   > {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.POST) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
     const bearer = presentedBearer(request);
+
     if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
     const admitted = yield* hostedStoreOrUnavailable(
       admitRunnerBearer(bearer, presentedLaunch(request)),
     );
+
     if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const { target } = admitted.value;
     const body = yield* readBodyBytesEffect(MAX_BODY_BYTES);
     const call = decodeCall(yield* parseJsonBytes(body));
+
     if (Option.isNone(call) || !keptWhereRestored(call.value)) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     const answer = yield* hostedStoreOrUnavailable(
       answerOf(target.userId, target.conversationId, call.value),
     );
+
     return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, answer);
   },
 );

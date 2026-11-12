@@ -87,7 +87,7 @@ const accepted = <A extends object, R>(
   unavailable: string = MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
 ) =>
   work.pipe(
-    Effect.map((answer): object => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
+    Effect.map((answer) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
     Effect.catch((refusal) =>
       Effect.succeed(
         agentToolRejected(
@@ -107,6 +107,7 @@ const namedAccount = (provider: string, connection: string | undefined) =>
 export const listIntegrationsAsMember = () =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* accepted(
       statusesAnswer(integrationAccountSeams(), UNNAMED, member.userId, true),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
@@ -128,9 +129,11 @@ export const connectIntegrationAsMember = ({
 }: IntegrationConnectAsked) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
       beginConnect(integrationAccountSeams(), member.userId, asked, add === true, member.baseURL),
     );
+
     // Note that the transaction is the window's to wait on, so the agent is answered the address and the account alone.
     return yield* accepted(
       Effect.map(work, ({ url, connection: signedIn }) => ({ url, connection: signedIn })),
@@ -143,9 +146,11 @@ export const connectIntegrationAsMember = ({
 export const listIntegrationToolsAsMember = (provider: string, connection: string) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
       toolsAnswer(integrationAccountSeams(), TOOLS, member.userId, asked),
     );
+
     return yield* accepted(
       Effect.map(work, (answer) => ({ connection, ...answer })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
@@ -157,9 +162,11 @@ export const listIntegrationToolsAsMember = (provider: string, connection: strin
 export const renameIntegrationAsMember = (provider: string, connection: string, label: string) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
       renameAccount(integrationAccountSeams(), member.userId, asked, label),
     );
+
     return yield* accepted(
       Effect.map(work, ({ account }) => ({ account })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
@@ -170,9 +177,11 @@ export const renameIntegrationAsMember = (provider: string, connection: string, 
 export const disconnectIntegrationAsMember = (provider: string, connection: string) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
       disconnectAccount(integrationAccountSeams(), member.userId, asked),
     );
+
     return yield* accepted(
       Effect.map(work, (answer) => ({ connection, standing: answer.status })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
@@ -184,6 +193,7 @@ export const disconnectIntegrationAsMember = (provider: string, connection: stri
 export const listMcpClientsAsMember = () =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* accepted(
       mcpClientsRead(member.userId, memberMcpResourceUrl(member.baseURL)),
       MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
@@ -194,6 +204,7 @@ export const listMcpClientsAsMember = () =>
 export const revokeMcpClientAsMember = (clientId: string) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+
     return yield* accepted(
       mcpClientRevoke(member.userId, clientId, memberMcpResourceUrl(member.baseURL)),
       MEMBER_INTEGRATION_REFUSAL.UNANSWERED,

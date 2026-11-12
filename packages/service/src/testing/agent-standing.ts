@@ -18,21 +18,18 @@ interface StandingFor {
  */
 export function standingFor(
   repository: string | null,
-  {
-    local = false,
-    memory = false,
-    descriptions = true,
-    turnEnd = false,
-  }: StandingFor = {},
+  { local = false, memory = false, descriptions = true, turnEnd = false }: StandingFor = {},
 ): AgentStanding {
-  const opens: { readonly [G in ToolGate]: boolean } = {
+  const opens: Readonly<Record<ToolGate, boolean>> = {
     [TOOL_GATE.REPOSITORY]: repository !== null,
     [TOOL_GATE.SANDBOX]: !local,
     [TOOL_GATE.MEMORY]: memory,
     [TOOL_GATE.DESCRIPTIONS]: descriptions,
     [TOOL_GATE.TURN_END]: turnEnd,
   };
+
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
+
   return {
     agent: Option.none(),
     open: new Set(open),

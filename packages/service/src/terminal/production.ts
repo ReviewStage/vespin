@@ -46,27 +46,34 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
   function* () {
     const context = yield* Effect.context<RelayServices>();
     const sandboxes = yield* Sandbox;
+
     const run = <A, E>(effect: Effect.Effect<A, E, RelayServices>) =>
       Effect.provideContext(effect, context);
+
     const sandbox = yield* Effect.provide(
       Effect.gen(function* () {
         return yield* AgentSandbox;
       }),
       agentSandboxLayer,
     );
+
     return {
       reach: (userId, agentId) =>
         run(
           Effect.gen(function* () {
             const found = yield* readVisibleAgent(userId, agentId);
+
             if (Option.isNone(found) || found.value.archivedAt !== null) return Option.none();
             const agent = found.value;
+
             // Note that a shell in an agent on its starter's own GitHub token is its starter's alone.
             if (!controlsAgent(userId, agent)) return Option.none();
+
             // An agent with no repository opens no sandbox for a shell to reach.
             if (!hasRepository(agent)) return Option.none();
             const target = { userId: agent.userId, conversationId: agent.conversationId };
             const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
+
             return Option.some({
               userId: agent.userId,
               conversationId: agent.conversationId,

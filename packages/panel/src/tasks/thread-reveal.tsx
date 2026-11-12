@@ -60,6 +60,7 @@ export function useWindowThreadReveal(
 ): { readonly reveal: ThreadReveal; readonly onRevealed: (ask: number) => void } | undefined {
   const standing = useContext(ThreadRevealContext);
   const reveal = standing?.reveal;
+
   return reveal === undefined || reveal.agentId !== agentId
     ? undefined
     : { reveal, onRevealed: standing?.onRevealed ?? (() => undefined) };
@@ -134,15 +135,19 @@ function useLanding(
   const landing = useContext(ThreadLandingContext);
   const asked = landing !== undefined && landing.target === target ? landing : undefined;
   const card = useRef<HTMLElement | null>(null);
+
   const ref = useCallback((element: HTMLElement | null) => {
     card.current = element;
   }, []);
+
   const [seen, setSeen] = useState<number | undefined>(undefined);
   const [ringed, setRinged] = useState(false);
+
   if (asked !== undefined && asked.ask !== seen) {
     setSeen(asked.ask);
     onAsked();
   }
+
   const latest = useRef({ asked, focused });
   latest.current = { asked, focused };
   // The landing's word that its ring ended, kept from the moment it landed, since the ask is let go then.
@@ -150,7 +155,9 @@ function useLanding(
   const ask = asked?.ask;
   useEffect(() => {
     const standing = latest.current.asked;
+
     if (ask === undefined || standing === undefined) return undefined;
+
     return focusSeek({
       find: () => card.current,
       ready: standing.ready ?? landable,
@@ -164,6 +171,7 @@ function useLanding(
       },
     });
   }, [ask]);
+
   return {
     ref,
     ringed,
@@ -191,6 +199,7 @@ function itself(card: HTMLElement): HTMLElement {
 export function useLandedThread(thread: ReviewThread, defaultOpen: boolean): LandedThread {
   const [open, setOpen] = useState(defaultOpen);
   const card = useLanding(thread.id, summaryOf, () => setOpen(true));
+
   return { ...card, open, onOpenChange: setOpen };
 }
 

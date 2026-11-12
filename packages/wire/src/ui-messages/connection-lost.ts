@@ -11,4 +11,5 @@ export const ConnectionLostNoticeSchema = Schema.Struct({
   /** When the provider's host answered again, in epoch milliseconds; null while the runner still waits, or where it gave up. */
   restoredAt: Schema.NullOr(Schema.Number),
 });
+
 export type ConnectionLostNotice = typeof ConnectionLostNoticeSchema.Type;

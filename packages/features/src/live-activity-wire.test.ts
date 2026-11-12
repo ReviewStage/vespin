@@ -23,6 +23,7 @@ describe("liveActivityContentStateSchema", () => {
         { id: "agent-2", title: "Resend invites", startedAt: 1_762_794_000_000 },
       ],
     });
+
     expect(JSON.parse(JSON.stringify(encoded))).toStrictEqual({
       running: 2,
       waiting: 1,

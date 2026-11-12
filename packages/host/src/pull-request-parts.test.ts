@@ -109,13 +109,16 @@ function subject(failing: Set<PullRequestPart> = new Set()) {
     const told: Partial<AppPullRequestParts>[] = [];
     const drawings = yield* PubSub.unbounded<PullRequestListing>();
     const failure = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
     const answering =
       <Answer>(part: PullRequestPart, answer: (key: PullRequestKey) => Answer) =>
       (key: PullRequestKey) =>
         Effect.sync(() => {
           asked.push(`${part} ${key.number ?? "own"}`);
+
           return failing.has(part) ? failure : answer(key);
         });
+
     const parts = yield* pullRequestParts({
       gate: () => true,
       focus: yield* windowFocus,
@@ -156,6 +159,7 @@ function subject(failing: Set<PullRequestPart> = new Set()) {
           void told.push({ [LIVE_READ.PULL_REQUEST_VIEWED]: held }),
       },
     });
+
     return {
       parts,
       asked,

@@ -71,6 +71,7 @@ const RECORDING_NOTICE = {
  */
 function projectApiKey(): string {
   if (webDeployment() !== PRODUCTION_DEPLOYMENT) return "";
+
   return import.meta.env.VITE_POSTHOG_PROJECT_API_KEY ?? "";
 }
 
@@ -86,8 +87,10 @@ function projectApiKey(): string {
  */
 function namesThisTab(value: string): boolean {
   if (OWN_PATH.test(value)) return true;
+
   if (!value.startsWith(location.origin)) return false;
   const next = value.charAt(location.origin.length);
+
   return next === "" || AFTER_ORIGIN.has(next);
 }
 
@@ -100,8 +103,11 @@ function namesThisTab(value: string): boolean {
  */
 function namesReferrer(value: string): boolean {
   const referrer = document.referrer;
+
   if (referrer === "") return false;
+
   if (value === referrer) return true;
+
   return URL.canParse(referrer) && value === new URL(referrer).host;
 }
 
@@ -138,8 +144,10 @@ let held: { signedOutSince: boolean } | undefined;
 /** The host's word as it stands under a hold from another tab's deletion, which a sign-in after a sign-out lifts. */
 function underHold(bootstrap: SessionReplayBootstrap): SessionReplayBootstrap {
   if (held === undefined) return bootstrap;
+
   if (bootstrap.accountId === undefined) held.signedOutSince = true;
   else if (held.signedOutSince) held = undefined;
+
   return held === undefined ? bootstrap : { ...bootstrap, permitted: false };
 }
 
@@ -150,6 +158,7 @@ channel.addEventListener("message", (event) => {
   if (event.data !== RECORDING_NOTICE.ACCOUNT_DELETED) return;
   // A tab already signed out has seen the sign-out a sign-in must follow.
   held = { signedOutSince: latest !== undefined && latest.accountId === undefined };
+
   if (latest !== undefined) recording({ ...latest, permitted: false });
 });
 
@@ -172,6 +181,7 @@ export const applyWebSessionReplay: ApplySessionReplay = (bootstrap, importRecor
   if (deletionLanded(bootstrap) && (latest === undefined || !deletionLanded(latest))) {
     channel.postMessage(RECORDING_NOTICE.ACCOUNT_DELETED);
   }
+
   latest = bootstrap;
   recording(underHold(bootstrap), importRecorder);
 };

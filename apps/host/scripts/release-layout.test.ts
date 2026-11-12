@@ -23,6 +23,7 @@ const folders: string[] = [];
 const folder = () => {
   const made = mkdtempSync(join(tmpdir(), "vespin-host-release-"));
   folders.push(made);
+
   return made;
 };
 
@@ -37,6 +38,7 @@ it("packs a release whose bin/vespin-host a host finds to run, and whose version
     daemon,
     `if (process.argv[2] === "version") process.stdout.write("${VERSION}\\n");\n`,
   );
+
   for (const each of ["runner.mjs", "LICENSE", "NOTICE"]) writeFileSync(join(sources, each), "");
   const staging = folder();
   const root = join(staging, ROOT_FOLDER);

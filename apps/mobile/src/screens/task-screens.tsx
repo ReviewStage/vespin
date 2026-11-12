@@ -202,6 +202,12 @@ function statusSubmenu(
   };
 }
 
+type RowActsResult = {
+  readonly trailingActions: readonly RowSwipe[];
+  readonly leadingActions: readonly RowSwipe[];
+  readonly menuActions: readonly RowAction[];
+};
+
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
@@ -213,16 +219,9 @@ function statusSubmenu(
  * first. Move to section, priority, and assignee are left to the desktop
  * and the web.
  */
-function rowActs(
-  task: TaskSummary,
-  unread: boolean,
-  listing: TasksListing,
-): {
-  readonly trailingActions: readonly RowSwipe[];
-  readonly leadingActions: readonly RowSwipe[];
-  readonly menuActions: readonly RowAction[];
-} {
+function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
+
   const markDone: readonly RowSwipe[] =
     task.status === TASK_STATUS.DONE
       ? []
@@ -234,6 +233,7 @@ function rowActs(
             onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
           },
         ];
+
   return {
     trailingActions: [...markDone, statusSubmenu(task, listing.setStatus)],
     leadingActions: [
@@ -283,6 +283,7 @@ function rowActs(
 /** A task's long press preview, its Overview at a glance: its status, key and repository, its name, what needs the reader, and its agents. */
 function taskPreview(task: TaskSummary, listing: TasksListing) {
   const glance = listing.glanceOf(task.id);
+
   return (
     <TaskPreview
       name={task.name}
@@ -318,12 +319,14 @@ export function StatusQuestionAsk({ question }: { readonly question: StatusQuest
 /** A task's key in its workspace, `ACME-42`; none before the workspace or the task's number is read. */
 function keyOf(task: TaskSummary, workspace: Workspace | undefined): string | undefined {
   if (workspace === undefined || task.number === undefined) return undefined;
+
   return taskKey(workspace.name, task.number);
 }
 
 /** A task's path, as the bar names it: its repository's name and its key. */
 function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly string[] {
   const repository = task.repository?.split("/").at(-1);
+
   return [repository, keyOf(task, workspace)].filter(
     (step): step is string => step !== undefined && step !== "",
   );
@@ -341,6 +344,7 @@ export function TaskNodeRow({
 }) {
   const { task, children } = node;
   const look = listing.lookOf(task);
+
   return (
     <TaskRow
       id={task.id}
@@ -376,7 +380,9 @@ export function TaskNodeRow({
 /** The task a link dropped on a group names, by its id or its number, among the tasks the tree lists; none for a link to anything else. */
 function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
   const place = readLink(url)?.place;
+
   if (place?.kind !== LINK_DESTINATION.TASK) return undefined;
+
   const listed = [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
     ...tree.sections,
@@ -384,6 +390,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
   ]
     .flatMap((group) => group.rows)
     .map(({ task }) => task);
+
   return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
 }
 
@@ -395,11 +402,14 @@ const dropsLanded = new Map<string, number>();
 function countDrop(taskId: string): (landed: boolean) => boolean {
   const drop = (dropsMade.get(taskId) ?? 0) + 1;
   dropsMade.set(taskId, drop);
+
   return (landed) => {
     if (!landed) return false;
     const newest = dropsLanded.get(taskId) ?? 0;
+
     if (newest > drop) return false;
     dropsLanded.set(taskId, drop);
+
     return true;
   };
 }
@@ -418,16 +428,21 @@ function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummar
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
       const newest = countDrop(task.id);
+
       if (listing.sectionOf(task.id) === undefined) {
         if (newest(true)) listing.pin(task.id, true);
+
         return;
       }
+
       void listing.place(task.id, null).then((landed) => {
         if (newest(landed)) listing.pin(task.id, true);
       });
     };
   }
+
   const sectionId = group.kind === TASK_TREE_GROUP.SECTION ? group.key : null;
+
   return (task) => {
     const newest = countDrop(task.id);
     void listing.place(task.id, sectionId).then((landed) => {
@@ -450,6 +465,7 @@ function GroupSection({
   readonly listing: TasksListing;
 }) {
   const place = placeIn(group, listing);
+
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
@@ -457,6 +473,7 @@ function GroupSection({
       foldable
       onDropLink={(url) => {
         const task = droppedTask(listing.tree, url);
+
         if (task !== undefined) place(task);
       }}
     >
@@ -494,10 +511,12 @@ type TasksTreeProps = {
  */
 function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree, found } = listing;
+
   if (search.trim() !== "") {
     if (found.length === 0) {
       return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
     }
+
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
         <ListSection>
@@ -508,6 +527,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
       </RowList>
     );
   }
+
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
@@ -531,6 +551,7 @@ export function useSidebarTasks(): SidebarTasks {
   const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
   const groups = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections];
+
   return {
     sections: groups.map((group) => (
       <GroupSection key={group.key} group={group} listing={listing} />
@@ -558,6 +579,7 @@ interface TaskMenuDoors {
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
+
   return {
     ...WORDS.MORE,
     choices: [],
@@ -593,12 +615,14 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
 function useNewSubTask(): (task: TaskSummary) => void {
   const router = useRouter();
+
   return (task) => router.push({ pathname: "/start-task", params: { parent: task.id } });
 }
 
 /** What an agent's mark says of it: at work while it may still write, failed, or at rest. */
 function agentState(status: AgentStatus): AgentRowState {
   if (agentStillWriting(status)) return AGENT_ROW_STATE.WORKING;
+
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
@@ -606,6 +630,7 @@ function agentState(status: AgentStatus): AgentRowState {
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
+
   return (
     <TaskHead
       name={task.name}
@@ -635,12 +660,15 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
+
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
     { kind: TASK_RELATION_KIND.BLOCKED_BY, ids: document?.blockedBy ?? [] },
     { kind: TASK_RELATION_KIND.BLOCKS, ids: document?.blocks ?? [] },
   ] as const;
+
   const related = sides.some(({ ids }) => ids.length > 0);
+
   return (
     <>
       <ListSection title={WORDS.SUB_TASKS} count={subTasks.length}>
@@ -663,6 +691,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
           {sides.map(({ kind, ids }) =>
             ids.map((id) => {
               const other = byId.get(id);
+
               return (
                 <RelationRow
                   key={id}
@@ -701,7 +730,9 @@ function agentSwipes(
       },
     ];
   }
+
   if (onArchive === undefined) return [];
+
   return [
     {
       label: WORDS.ARCHIVE,
@@ -712,6 +743,11 @@ function agentSwipes(
   ];
 }
 
+type UseAgentArchiveAskResult = {
+  readonly archive: (agentId: string) => void;
+  readonly ask: ReactElement;
+};
+
 /**
  * Archive on an agent's row, asked first: `archive` raises the question for
  * an agent, and `ask` is the system's alert that asks it, which the screen
@@ -720,15 +756,13 @@ function agentSwipes(
  * asks (`archiveQuestion`), because one that starts working while the alert
  * is up would otherwise be stopped and archived without a word of it.
  */
-export function useAgentArchiveAsk(): {
-  readonly archive: (agentId: string) => void;
-  readonly ask: ReactElement;
-} {
+export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
   const agent = useFollowedAgent(asked?.agentId ?? "");
   const question = archiveQuestion(agent !== undefined && agentStillWriting(agent.status));
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
+
   return {
     archive: (agentId) => setAsked({ agentId, presented: true }),
     ask: (
@@ -774,6 +808,7 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+
   return (
     <AgentRow
       id={agent.id}
@@ -819,6 +854,7 @@ function OverviewAgents({
 }) {
   const router = useRouter();
   const { task } = overview;
+
   return (
     <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
       {overview.agents.map((line) => (
@@ -845,7 +881,9 @@ function OverviewAgents({
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task, pages } = overview;
+
   if (pages.length === 0) return null;
+
   return (
     <ListSection title={WORDS.PAGES} count={pages.length}>
       {pages.map((page) => (
@@ -882,7 +920,9 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
+
   if (open.length === 0) return null;
+
   return (
     <ListSection title={WORDS.COMMENTS} count={open.length}>
       {open.map((thread) => (
@@ -924,17 +964,21 @@ function OverviewPage({
   const openLink = useOpenLink();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
   });
+
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
+
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
     if (related.has(id)) router.push(`/tasks/${encodeURIComponent(id)}`);
     else if (agents.has(id)) router.push(iosAgentRoute(id));
   };
+
   return (
     <RowList look={LIST_LOOK.PLAIN} onSelect={open} onRefresh={onRefresh}>
       <ListSection>
@@ -969,6 +1013,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   const read = useTasksListing(search);
   const { listing, status, deletion } = useListingAsks(read);
   const { refreshTasks } = useInboxActs();
+
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
@@ -980,6 +1025,7 @@ function TasksStackList(words: TasksSearch) {
   const switcher = useWorkspaceSwitcher();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
+
   return (
     <>
       <Stack.Screen options={{ title: TASKS_TITLE }}>
@@ -1031,6 +1077,7 @@ function TasksSplitScreen({
   const archiveAsk = useAgentArchiveAsk();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -1092,6 +1139,7 @@ export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
+
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
@@ -1105,9 +1153,11 @@ export function TaskScreen() {
   const router = useRouter();
   const colors = useColors();
   const held = useTaskOverview(id);
+
   const { setStatus, question } = useStatusAsk(
     held ?? { setStatus: () => undefined, agentsWorking: () => false },
   );
+
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const { remove } = useTaskWrites();
   // Note that a task deleted from its own page gives way to the list it stood in, rather than saying it is not found.
@@ -1116,14 +1166,18 @@ export function TaskScreen() {
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
+
   const menu =
     overview === undefined
       ? undefined
       : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask });
+
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
+
   if (handed) return null;
+
   return (
     <>
       <Stack.Screen

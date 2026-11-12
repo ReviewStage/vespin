@@ -49,6 +49,7 @@ import {
   PhoneOff,
   Pin,
   PinOff,
+  Rocket,
   RotateCcw,
   Server,
   ShieldUser,
@@ -215,6 +216,8 @@ export const GLYPH = {
   COPY: CopyIcon,
   LINK: LinkIcon,
   STOP: StopIcon,
+  // Running one of a repository's run actions, as the Run button and an action that wears no icon of its own draw it.
+  RUN_ACTION: lucideGlyph(Rocket),
   END_CALL: lucideGlyph(PhoneOff),
   RETRY: RetryIcon,
   GO_BACK: lucideGlyph(RotateCcw),

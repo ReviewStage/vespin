@@ -101,12 +101,16 @@ function pullRequestOf(body: string, canEditDescription: boolean): AgentOverview
 
 let root: Root | undefined;
 let bundles: SideBundles;
+
 /** The description as GitHub holds it, which each read answers anew and a change GitHub takes moves. */
 let onGitHub = BODY;
+
 /** Every change to the pull request the tab asked for, in order. */
 let changes: PullRequestActionRequest[] = [];
+
 /** How the service answers the next change asked for. */
 let changeAnswer: PullRequestWriteAnswer = { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE };
+
 /** What the service waits on before it answers a change, where a test holds it; none answers at once. */
 let changeHeld: Promise<void> | undefined;
 
@@ -132,13 +136,16 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
       changes.push(request);
+
       if (
         changeAnswer.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE &&
         request.action === PULL_REQUEST_ACTION.EDIT_DESCRIPTION
       ) {
         onGitHub = request.body;
       }
+
       const answer = changeAnswer;
+
       return (changeHeld ?? Promise.resolve()).then(() => answer);
     },
   });
@@ -170,6 +177,7 @@ async function drawTab(canEditDescription = true): Promise<HTMLElement> {
     [PULL_REQUEST_PART.CONVERSATION]: () =>
       Promise.resolve({ pullRequest: { reviewers: [], conversation: [], earlier: 0 } }),
   });
+
   const control = agentsControl({
     agents: [AGENT],
     agentIds: [AGENT.id],
@@ -190,6 +198,7 @@ async function drawTab(canEditDescription = true): Promise<HTMLElement> {
       ],
     ]),
   });
+
   const tab = createElement(AgentPullRequestTab, {
     agentId: AGENT.id,
     control,
@@ -200,6 +209,7 @@ async function drawTab(canEditDescription = true): Promise<HTMLElement> {
     onView: () => undefined,
     onActions: () => undefined,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -224,6 +234,7 @@ async function drawTab(canEditDescription = true): Promise<HTMLElement> {
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -249,12 +260,14 @@ async function clickWords(container: HTMLElement, words: string, at = 0): Promis
         (each) => each.textContent === words,
       ) ?? assert.fail(`${words} are drawn`),
   );
+
   const text = target.firstChild ?? assert.fail("the words are a text node");
   Object.defineProperty(document, "caretRangeFromPoint", {
     configurable: true,
     value: () => {
       const range = document.createRange();
       range.setStart(text, at);
+
       return range;
     },
   });
@@ -361,9 +374,11 @@ test("a description changed on GitHub keeps the draft open and says so, and Relo
 
   const kept = editorIn(container) ?? assert.fail("the editor stays open");
   assert.match(kept.textContent ?? "", /seven days\. Mine\./u, "the draft stays");
+
   const alert =
     description(container).querySelector(".description-editor-note") ??
     assert.fail("a refusal is said");
+
   assert.match(alert.textContent ?? "", /changed on GitHub/u);
   assert.match(announcedAsAlert(), /changed on GitHub/u, "and announced as an alert");
 
@@ -374,8 +389,10 @@ test("a description changed on GitHub keeps the draft open and says so, and Relo
     /Mine\./u,
     "nothing is dropped before the question is answered",
   );
+
   const question =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("Reload asks first");
+
   act(() => button(question, "Reload description").click());
   await settle();
   await settle();

@@ -1,6 +1,7 @@
 import type { AnyExtension, NodeViewRenderer } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
+import { Predicate } from "effect";
 import type { CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
 
 /**
@@ -41,11 +42,14 @@ function languageOf(node: PmNode): string {
 /** The class naming a block's language on its code, as TipTap's own block names it; none for a block naming none. */
 function languageClass(node: PmNode): string {
   const language = languageOf(node);
+
   return language === "" ? "" : `${LANGUAGE_CLASS_PREFIX}${language}`;
 }
 
+type Frame = { dom: HTMLElement; head: HTMLElement; code: HTMLElement };
+
 /** The block's frame, its header's element, and its lines' element, which ProseMirror edits. */
-function frameOf(node: PmNode): { dom: HTMLElement; head: HTMLElement; code: HTMLElement } {
+function frameOf(node: PmNode): Frame {
   const dom = document.createElement("figure");
   dom.className = FRAME_CLASS;
   const head = document.createElement("div");
@@ -57,6 +61,7 @@ function frameOf(node: PmNode): { dom: HTMLElement; head: HTMLElement; code: HTM
   code.className = languageClass(node);
   pre.append(code);
   dom.append(head, pre);
+
   return { dom, head, code };
 }
 
@@ -65,9 +70,11 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
   return ({ node, editor, getPos }) => {
     const { dom, head, code } = frameOf(node);
     let current = node;
+
     const setLanguage = (language: string) => {
       const at = getPos();
-      if (!editor.isEditable || typeof at !== "number") return;
+
+      if (!editor.isEditable || !Predicate.isNumber(at)) return;
       editor
         .chain()
         .focus(undefined, { scrollIntoView: false })
@@ -79,29 +86,38 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
           // Note that a caret outside the block goes to its lines' end, so typing after a pick types in it.
           const end = at + current.nodeSize - 1;
           const { from, to } = tr.selection;
+
           if (from <= at || to > end) tr.setSelection(TextSelection.create(tr.doc, end));
+
           return true;
         })
         .run();
     };
+
     const blockOf = (held: PmNode): EditorCodeBlock => ({
       language: languageOf(held),
       code: held.textContent,
       setLanguage,
     });
+
     const drawing = drawCodeHeader(head, blockOf(node));
+
     return {
       dom,
       contentDOM: code,
       update: (next) => {
         if (next.type !== current.type) return false;
+
         const changed =
           languageOf(next) !== languageOf(current) || next.textContent !== current.textContent;
+
         current = next;
+
         if (changed) {
           code.className = languageClass(next);
           drawing.redraw(blockOf(next));
         }
+
         return true;
       },
       // Note that the header's own presses, keys, and menu are its own and not the editor's.
@@ -122,6 +138,7 @@ export function withCodeHeaders(
   drawCodeHeader: CodeHeaderDrawer | undefined,
 ): AnyExtension {
   if (drawCodeHeader === undefined) return kit;
+
   return kit.extend({
     addExtensions() {
       return (this.parent?.() ?? []).map((extension) =>

@@ -97,6 +97,7 @@ const TEXT_BASE =
 function roleClass(variant: TextVariant): string {
   if (variant === TEXT_VARIANT.INHERIT) return "[font:inherit] text-inherit";
   const ink = variant === TEXT_VARIANT.GROUP ? "text-muted-foreground" : "text-foreground";
+
   return `${TEXT_ROLE_CLASS[variant]} font-ui ${ink}`;
 }
 
@@ -104,6 +105,7 @@ function roleClass(variant: TextVariant): string {
 function truncateClass(truncate: boolean | TextTruncate): string | undefined {
   if (truncate === false) return undefined;
   const cut = "min-w-0 overflow-clip text-ellipsis whitespace-nowrap";
+
   return truncate === TEXT_TRUNCATE.START ? `${cut} [direction:rtl] text-left` : cut;
 }
 
@@ -137,7 +139,7 @@ export function Text({
   return (
     <Element
       {...attributes}
-      // Note that every element a role may stand in is a plain HTMLElement to a ref's reader, so the union's one element type is named here.
+      // SAFETY: every element a role may stand in is a plain HTMLElement to a ref's reader, so the union's one element type is named here.
       ref={ref as Ref<HTMLDivElement> | undefined}
       className={cn(TEXT_BASE, roleClass(variant), truncateClass(truncate), className)}
       data-variant={variant}

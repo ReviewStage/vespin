@@ -14,7 +14,7 @@ import {
   type ComposerLook,
   GAP,
   IconButton,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   Stack,
   TEXT_ELEMENT,
@@ -96,8 +96,8 @@ function BoxSkeleton(): React.JSX.Element {
   return (
     <ComposerFrame look={COMPOSER_LOOK.CARD}>
       <ComposerFootSkeleton
-        tools={<Skeleton shape={SKELETON_SHAPE.CIRCLE} />}
-        actions={<Skeleton shape={SKELETON_SHAPE.CONTROL} />}
+        tools={<Skeleton kind={SKELETON_KIND.CIRCLE} />}
+        actions={<Skeleton kind={SKELETON_KIND.CONTROL} />}
       />
     </ComposerFrame>
   );

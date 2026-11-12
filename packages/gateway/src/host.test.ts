@@ -12,11 +12,13 @@ it.effect(
   "a handler that dies is refused as internal and reported; a refusal is answered and not",
   () => {
     const reported: string[] = [];
+
     const reporter = ErrorReporter.layer([
       ErrorReporter.make(({ error }) => {
         reported.push(error.message);
       }),
     ]);
+
     return Effect.gen(function* () {
       const host = gatewayHost({
         client: { clientId: "operator", role: GATEWAY_CLIENT_ROLE.OPERATOR },
@@ -26,6 +28,7 @@ it.effect(
             Effect.fail(new NotFoundRefusal({ message: "No such task." })),
         },
       });
+
       const died = yield* host.call(GATEWAY_METHOD.TASKS_RESYNC);
       const refused = yield* host.call(GATEWAY_METHOD.TASKS_PAGE);
       assert.deepEqual(

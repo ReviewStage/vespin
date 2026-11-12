@@ -95,6 +95,7 @@ function failedRunsOf(userId: string): InboxStoreEffect<readonly AccountFailedRu
     const now = yield* Clock.currentTimeMillis;
     const since = new Date(now - Duration.toMillis(FAILED_RUN_WINDOW));
     const runs = yield* ownFailedAutomationRuns(userId, since);
+
     return runs.map((run) => ({ ...run, failedAt: run.failedAt.getTime() }));
   });
 }
@@ -148,6 +149,7 @@ function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorSta
   return Effect.gen(function* () {
     const items = yield* accountWaitingStamps(userId);
     const runs = failedRunStamps(yield* failedRunsOf(userId));
+
     return [...items, ...runs];
   });
 }
@@ -172,6 +174,7 @@ export function accountInboxPast(
     const tasks = yield* accountInboxTasks(userId);
     const failedRuns = yield* failedRunsOf(userId);
     const items = rows.map(({ status: _status, ...entry }) => entry);
+
     return {
       items,
       plans: tasks,
@@ -183,6 +186,7 @@ export function accountInboxPast(
       readAt,
     };
   });
+
   return heldUntilMoved(
     accountStamps(userId),
     after,

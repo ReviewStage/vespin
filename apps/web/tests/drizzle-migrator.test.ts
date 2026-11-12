@@ -39,10 +39,12 @@ interface RecordedMigration {
 /** Drizzle's history, in the order it was written. */
 const recorded = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const rows = yield* sql<RecordedMigration>`
     select hash, created_at::text as created_at, name
     from ${sql(DRIZZLE_MIGRATIONS.SCHEMA)}.${sql(DRIZZLE_MIGRATIONS.TABLE)} order by id
   `.withoutTransform;
+
   return rows.map(({ hash, created_at, name }) => ({ hash, created_at, name }));
 });
 
@@ -51,9 +53,11 @@ const recordedNames = Effect.map(recorded, (rows) => rows.map((row) => row.name)
 const tableNamed = (schema: string, table: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const rows = yield* sql`
       select 1 from information_schema.tables where table_schema = ${schema} and table_name = ${table}
     `;
+
     return rows.length > 0;
   });
 
@@ -94,6 +98,7 @@ function migrateAsTheOldRunner(
       ],
     ),
   );
+
   return Migrator.make({})({ loader, table: EFFECT_MIGRATIONS_TABLE });
 }
 
@@ -102,10 +107,12 @@ const oldRunnerMigrations = Effect.promise(() =>
   Promise.all(
     Object.entries(EFFECT_MIGRATION_FOLDERS).map(async ([tag, folder]) => {
       const file = await readFile(join(MIGRATIONS_FOLDER, folder, "migration.sql"), "utf8");
+
       const statements = file
         .split(STATEMENT_BREAKPOINT)
         .map((statement) => statement.trim())
         .filter((statement) => statement.length > 0);
+
       return [tag, statements] as const;
     }),
   ),
@@ -138,6 +145,7 @@ const syntheticMigrationsFolder = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "migrations-" });
+
   const write = (name: string) =>
     Effect.gen(function* () {
       yield* fileSystem.makeDirectory(path.join(folder, name));
@@ -146,6 +154,7 @@ const syntheticMigrationsFolder = Effect.gen(function* () {
         `create table "${name}" (id integer primary key)`,
       );
     });
+
   return { folder, write };
 });
 
@@ -163,9 +172,11 @@ it.effect(
           yield* write(FIRST);
           assert.deepEqual(yield* runWebMigrations(folder), [FIRST]);
           const sql = yield* SqlClient.SqlClient;
+
           const [setting] = yield* sql<{ readonly timeout: string }>`
             select current_setting('lock_timeout') as timeout
           `;
+
           assert.equal(setting?.timeout, "5s");
         }),
       ),

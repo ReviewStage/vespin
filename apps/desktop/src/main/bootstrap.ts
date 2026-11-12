@@ -53,6 +53,7 @@ export interface BootstrapDependencies {
 /** Reads one `--name value` argument. */
 function argumentValue(argv: readonly string[], name: string): string | undefined {
   const index = argv.indexOf(name);
+
   return index >= 0 ? argv[index + 1] : undefined;
 }
 
@@ -73,15 +74,18 @@ export function bootstrapDesktop(dependencies: BootstrapDependencies): DesktopCo
   // its own, so its state, lock, and Keychain entry are its own too.
   const requested = environment.APP_INSTANCE || undefined;
   const instance = resolveInstance({ packaged: app.isPackaged, requested });
+
   if (!app.isPackaged && requested !== undefined && instance === undefined) {
     dependencies.report(
       `APP_INSTANCE "${requested}" is not an instance name; running as the plain one`,
     );
   }
+
   const identity = {
     packaged: app.isPackaged,
     developerIdSigned: buildCarriesDeveloperIdSigning(),
   };
+
   const appName = resolveAppName({ ...identity, instance });
   app.setName(appName);
   const stateRoot = path.join(app.getPath("appData"), appName);

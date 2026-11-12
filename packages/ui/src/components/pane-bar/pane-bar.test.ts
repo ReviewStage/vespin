@@ -37,6 +37,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -49,6 +50,7 @@ function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   return found ?? assert.fail(`a button named ${name}`);
 }
 
@@ -74,9 +76,11 @@ test("the left pane's toggle, the lead, the middle, the actions, the ⋯, and th
       end: createElement("button", { type: "button", onClick: ignore }, "Show files"),
     }),
   );
+
   const said = [...barOf(container).querySelectorAll("[data-part], .ui-one-line, button")].map(
     (part) => part.getAttribute("data-part") ?? part.getAttribute("aria-label") ?? part.textContent,
   );
+
   assert.deepEqual(said, [
     "Show chapters",
     "mark",
@@ -98,12 +102,14 @@ test("a slot that says nothing is not drawn, and a bar with no menu has no ⋯",
 
 test("the ⋯ drops the menu it was handed, and a choice in it acts and closes it", () => {
   const chosen: string[] = [];
+
   const groups: readonly (readonly MenuEntry[])[] = [
     [
       { label: "Copy path", onSelect: () => chosen.push("Copy path") },
       { label: "Save as…", onSelect: () => chosen.push("Save as…") },
     ],
   ];
+
   render(createElement(PaneBar, { title: "index.ts", menu: { thing: "File", groups } }));
   const more = button("File actions");
   assert.equal(more.getAttribute("aria-haspopup"), "menu");
@@ -131,12 +137,14 @@ test("a title the bar would cut under the readable floor stands on a row of its 
     whole: 203,
     floor: 120,
   });
+
   try {
     const bar = barOf(
       render(
         createElement(PaneBar, { title: TITLE, actions: createElement("span", null, "Viewed") }),
       ),
     );
+
     assert.equal(bar.dataset.wrapped, "true");
     assert.match(bar.textContent ?? "", new RegExp(TITLE));
   } finally {

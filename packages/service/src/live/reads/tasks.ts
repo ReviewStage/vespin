@@ -181,6 +181,7 @@ function issuesStatement() {
  */
 function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
   const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
+
   return liveRowsStatement(
     TASK_LIST_READ.parts.agents,
     {
@@ -313,10 +314,12 @@ const PENDING_APPROVALS_OF_AGENT = sql<
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
   const members = moved.keys(userSync, user.id);
+
   const blockedByMoved = sql`(${queryBuilder
     .select({ id: taskBlock.blockedTaskId })
     .from(taskBlock)
     .where(liveKeysIn(taskBlock.blockerTaskId, plans))})`;
+
   return (
     or(
       liveKeysIn(task.id, [
@@ -340,6 +343,7 @@ function movedPlans(moved: SyncMoved): SQL {
 function movedAgents(moved: SyncMoved): SQL {
   const agents = moved.keys(agentSync, agentTable.id);
   const members = moved.keys(userSync, user.id);
+
   return (
     or(
       liveKeysIn(agentTable.id, [

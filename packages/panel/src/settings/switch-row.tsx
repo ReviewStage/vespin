@@ -50,6 +50,7 @@ export function SwitchRow({
     if (agreed) write.settle();
   }, [agreed, write]);
   const run = write === undefined ? onChange : write.run;
+
   return (
     <SettingsRow
       label={<ReplayWords unmasked={labelReplayUnmasked}>{label}</ReplayWords>}

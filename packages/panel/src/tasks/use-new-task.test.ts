@@ -37,6 +37,7 @@ afterEach(() => {
 
 function Probe({ workspaceId }: { workspaceId: string | undefined }): null {
   quickAdd = useQuickAddStart(workspaceId);
+
   return null;
 }
 
@@ -45,6 +46,7 @@ test("a group's quick add sends one quiet start in the listed workspace with the
   fakeActPort({
     [ACT_KIND.TASKS_START]: (start) => {
       sent.push(start);
+
       return Promise.resolve({ planId: "task-1" });
     },
   });

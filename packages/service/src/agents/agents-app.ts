@@ -90,7 +90,9 @@ const callIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<string, HostedRefusal> {
   const call = new URL(request.url).searchParams.get(QUERY.CALL) ?? "";
   const read = readEither(agentCallIdSchema)(unparsedWire(call));
+
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return read.success;
 });
 
@@ -107,20 +109,28 @@ const githubImageEndpoint = /* @__PURE__ */ Effect.fn("web/agentGitHubImageEndpo
   seams: AgentsAppSeams,
 ): Effect.fn.Return<HttpServerResponse.HttpServerResponse, HostedRefusal, AgentsServices> {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const image = githubImageOf(new URL(request.url).searchParams.get(QUERY.SRC) ?? "");
+
   if (image === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const { userId, agent } = yield* reachedAgent(seams, request);
+
   // An agent with no repository has no image of one to show.
   if (!hasRepository(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   const read = yield* Effect.gen(function* () {
     const { token } = yield* agentPullRequestReach(userId, agent);
+
     return yield* githubImage(token, agent.repository, image);
   }).pipe(githubReadRefusal);
+
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return HttpServerResponse.uint8Array(read.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: read.value.contentType,
@@ -140,17 +150,22 @@ const inboxAttachmentEndpoint = /* @__PURE__ */ Effect.fn("web/inboxAttachmentEn
   seams: AgentsAppSeams,
 ): Effect.fn.Return<HttpServerResponse.HttpServerResponse, HostedRefusal, AgentsServices> {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const itemId = yield* idOf(request);
   const attachmentId = yield* attachmentIdOf(request);
   const userId = yield* resolvedUserId(seams, request);
+
   const found = yield* hostedStoreOrUnavailable(
     readServedInboxAttachment(userId, itemId, attachmentId, playableVideoOf(request)),
   );
+
   if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return HttpServerResponse.uint8Array(found.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: found.value.contentType,
@@ -176,31 +191,39 @@ const pictureEndpoint = /* @__PURE__ */ Effect.fn("web/agentPictureEndpoint")(fu
   seams: AgentsAppSeams,
 ): Effect.fn.Return<HttpServerResponse.HttpServerResponse, HostedRefusal, AgentsServices> {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const pictureId = yield* pictureIdOf(request);
   const worker = new URL(request.url).searchParams.has(QUERY.CALL);
   const callId = worker ? yield* callIdOf(request) : undefined;
   const { agent } = yield* reachedAgent(seams, request);
+
   const conversationId =
     callId === undefined ? agent.conversationId : childConversationId(agent.conversationId, callId);
+
   const found = yield* hostedStoreOrUnavailable(
     readServedConversationPicture(conversationId, pictureId, playableVideoOf(request)),
   );
+
   if (Option.isNone(found)) {
     const queued =
       callId === undefined
         ? yield* hostedStoreOrUnavailable(readQueuedFile(agent.id, pictureId))
         : Option.none();
+
     if (Option.isNone(queued)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return HttpServerResponse.uint8Array(Buffer.from(queued.value.data, "base64"), {
       status: HOSTED_HTTP_STATUS.OK,
       contentType: queued.value.mediaType,
       headers: HOSTED_BYTES_HEADERS,
     });
   }
+
   return HttpServerResponse.uint8Array(found.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: found.value.contentType,

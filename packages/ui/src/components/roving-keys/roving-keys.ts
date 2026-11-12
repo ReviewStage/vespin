@@ -161,6 +161,7 @@ function current(item: HTMLElement): boolean {
 /** The item of the box an event landed on, where it landed on one. */
 function itemAt(box: HTMLElement, target: EventTarget): HTMLElement | undefined {
   if (!(target instanceof HTMLElement) || !target.hasAttribute(ITEM_ATTRIBUTE)) return undefined;
+
   return itemsOf(box).includes(target) ? target : undefined;
 }
 
@@ -173,8 +174,10 @@ function landing(
 ): number | undefined {
   for (let walked = 0; walked < count; walked += 1) {
     const at = (((start + step * walked) % count) + count) % count;
+
     if (!skipped(at)) return at;
   }
+
   return undefined;
 }
 
@@ -195,9 +198,11 @@ export function rovingStep(
 ): number | undefined {
   const step = STEP_KEYS[orientation];
   const forward = key === "Home" || step.next.some((each) => each === key);
+
   if (!forward && key !== "End" && !step.previous.some((each) => each === key)) return undefined;
   const edge = key === "Home" || key === "End" || at < 0;
   const start = edge ? (forward ? 0 : count - 1) : at + (forward ? 1 : -1);
+
   return landing(start, forward ? 1 : -1, count, skipped) ?? at;
 }
 
@@ -214,9 +219,12 @@ export function reachedKey(
   to: RovingReach,
 ): string | undefined {
   if (to === ROVING_REACH.FIRST) return keys[0];
+
   if (to === ROVING_REACH.LAST) return keys.at(-1);
   const at = from === undefined ? -1 : keys.indexOf(from);
+
   if (at < 0) return undefined;
+
   return keys[(at + (to === ROVING_REACH.NEXT ? 1 : keys.length - 1)) % keys.length];
 }
 
@@ -228,14 +236,18 @@ export function reachedKey(
  */
 function reachOf(key: string, orientation: RovingOrientation, at: number): RovingReach | undefined {
   if (key === "Home") return ROVING_REACH.FIRST;
+
   if (key === "End") return ROVING_REACH.LAST;
   const step = STEP_KEYS[orientation];
+
   if (step.next.some((each) => each === key)) {
     return at < 0 ? ROVING_REACH.FIRST : ROVING_REACH.NEXT;
   }
+
   if (step.previous.some((each) => each === key)) {
     return at < 0 ? ROVING_REACH.LAST : ROVING_REACH.PREVIOUS;
   }
+
   return undefined;
 }
 
@@ -249,11 +261,14 @@ export function focusRovingStop(box: HTMLElement): boolean {
   const open = itemsOf(box).filter(available);
   const stop = open.find((item) => item.tabIndex === 0) ?? open[0];
   stop?.focus();
+
   return stop !== undefined;
 }
 
+type RovingItemResult = { readonly "data-roving-item": "" };
+
 /** What an item of a roving set wears, spread on the element that takes the focus. */
-export function rovingItem(): { readonly "data-roving-item": "" } {
+export function rovingItem(): RovingItemResult {
   return { [ITEM_ATTRIBUTE]: "" };
 }
 
@@ -314,12 +329,15 @@ export function useRovingKeys<T extends HTMLElement>({
       // chosen row, else the current one, else the first, so a list opens
       // where its owner already stands.
       const remembered = stop === ROVING_STOP.HELD ? held.current : null;
+
       const tabStop =
         remembered !== null && open.includes(remembered)
           ? remembered
           : (open.find(chosen) ?? open.find(current) ?? open[0]);
+
       for (const item of items) {
         const order = item === tabStop ? 0 : -1;
+
         // Note that a disabled control is out of the order already: one
         // that stood as the stop gives up its tabindex rather than keep one
         // that would offer it the focus, and any other is left as drawn.
@@ -338,6 +356,7 @@ export function useRovingKeys<T extends HTMLElement>({
       settle(box);
       const watcher = new MutationObserver(() => settle(box));
       watcher.observe(box, WATCHED);
+
       return () => {
         drawn.current = null;
         watcher.disconnect();
@@ -356,6 +375,7 @@ export function useRovingKeys<T extends HTMLElement>({
   const onFocus = useCallback(
     (event: FocusEvent<T>) => {
       const item = itemAt(event.currentTarget, event.target);
+
       if (item === undefined) return;
       held.current = item;
       settle(event.currentTarget);
@@ -366,24 +386,32 @@ export function useRovingKeys<T extends HTMLElement>({
   const onKeyDown = useCallback(
     (event: KeyboardEvent<T>): boolean => {
       if (event.defaultPrevented) return false;
+
       if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return false;
       const box = event.currentTarget;
       // Note that a key heard on the box itself steps from the item holding the focus, or from none.
       const onBox = event.target === box;
       const item = itemAt(box, onBox ? (document.activeElement ?? box) : event.target);
+
       if (item === undefined && !onBox) return false;
       const open = itemsOf(box).filter(available);
       const at = item === undefined ? -1 : open.indexOf(item);
       const to = rovingStep(event.key, orientation, at, open.length);
+
       if (to === undefined) return false;
       const reached = reachOf(event.key, orientation, at);
+
       if (reached !== undefined && reaching.current?.(item, reached) === true) {
         event.preventDefault();
+
         return true;
       }
+
       event.preventDefault();
       const landed = open[to];
+
       if (landed !== undefined) move.current(landed);
+
       return true;
     },
     [orientation],
@@ -407,25 +435,35 @@ export interface RovingColumns<T extends HTMLElement> {
 export function useRovingColumns<T extends HTMLElement>(): RovingColumns<T> {
   const onKeyDown = useCallback((event: KeyboardEvent<T>): boolean => {
     if (event.defaultPrevented) return false;
+
     if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return false;
     const across = STEP_KEYS[ROVING_ORIENTATION.HORIZONTAL];
+
     if (![...across.next, ...across.previous].some((each) => each === event.key)) return false;
     const target = event.target;
+
     if (!(target instanceof HTMLElement) || !target.hasAttribute(ITEM_ATTRIBUTE)) return false;
     const columns = boxesOf(event.currentTarget);
     const from = target.parentElement?.closest<HTMLElement>(`[${BOX_ATTRIBUTE}]`) ?? null;
     const at = from === null ? -1 : columns.indexOf(from);
+
     if (at < 0) return false;
+
     const empty = (index: number) => {
       const column = columns[index];
+
       return column === undefined || !itemsOf(column).some(available);
     };
+
     const to = rovingStep(event.key, ROVING_ORIENTATION.HORIZONTAL, at, columns.length, empty);
     const column = to === undefined || to === at ? undefined : columns[to];
+
     if (column === undefined) return false;
     event.preventDefault();
     focusRovingStop(column);
+
     return true;
   }, []);
+
   return { onKeyDown };
 }

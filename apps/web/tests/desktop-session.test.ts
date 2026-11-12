@@ -34,8 +34,10 @@ async function openPage(
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
     const answer = answers.get(url.pathname);
+
     if (!answer) return new Promise(() => undefined);
     const { status, body } = answer();
+
     return Promise.resolve(
       new Response(body === undefined ? null : JSON.stringify(body), {
         status,
@@ -51,6 +53,7 @@ async function openPage(
   await act(async () => {
     await import("../src/desktop-session");
   });
+
   return root;
 }
 
@@ -65,7 +68,9 @@ function buttonNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const button = Array.from(page.querySelectorAll("button")).find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (!button) throw new Error(`No button named ${name}`);
+
   return button;
 }
 
@@ -131,6 +136,7 @@ test("a signed-out browser is offered the providers, and a sign-in that cannot s
       ["/api/auth/sign-in/social", () => ({ status: 500, body: { message: "unavailable" } })],
     ]),
   );
+
   await titled(page, "Sign in to finish");
   expect(page.textContent).toContain("Sign in with the account you use in Vespin.");
   expect(page.querySelector('[role="alert"]')?.textContent).toBe("");

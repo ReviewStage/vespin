@@ -62,7 +62,9 @@ const RoutedExitsContext = createContext<
 /** The window's routed exits and memory, which only a window's root provides. */
 function useRouted(): { readonly exits: RoutedExits; readonly memory: RoutedMemory } {
   const routed = useContext(RoutedExitsContext);
+
   if (routed === undefined) throw new Error("A route hook is called outside RoutedExitsProvider.");
+
   return routed;
 }
 
@@ -90,5 +92,6 @@ export function RoutedExitsProvider({ children }: { readonly children?: ReactNod
       personNames: new Store<ReadonlyMap<string, string>>(new Map()),
     },
   }));
+
   return createElement(RoutedExitsContext.Provider, { value: routed }, children);
 }

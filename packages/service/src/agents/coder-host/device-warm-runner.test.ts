@@ -60,6 +60,7 @@ const idled = (warm: WarmLocalAgent) =>
       sessionId: warm.sessionId,
       sequence: 3,
     });
+
     return yield* driven(yield* forkClockDriven(idle), MAC_MACHINE.POLL);
   });
 
@@ -73,6 +74,7 @@ const stopped = (warm: WarmLocalAgent, turnId: string) =>
     const cancel = Effect.flatMap(localAgentSessions(warm.userId), (sessions) =>
       sessions.cancel(warm.sessionId, turnId),
     );
+
     return yield* driven(yield* forkClockDriven(cancel), MAC_MACHINE.POLL);
   });
 
@@ -91,6 +93,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
 
           const keptRetired = yield* idled(kept);
           const updatingRetired = yield* idled(updating);
+
           const sent = yield* kept.sessions.send(
             kept.sessionId,
             typedMessage(kept.agent, "Now the emails."),
@@ -132,6 +135,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const warm = yield* warmLocalAgent;
           const { userId, deviceId } = warm;
           yield* TestClock.adjust("1 second");
+
           // The runner took the next message into a turn, which is ending as the Stop lands.
           const [ending] = yield* db
             .insert(turns)
@@ -143,6 +147,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
               queuedAt: yield* DateTime.nowAsDate,
             })
             .returning({ id: turns.id });
+
           assert.ok(ending !== undefined);
 
           const canceled = yield* stopped(warm, ending.id);
@@ -156,6 +161,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             .update(turns)
             .set({ status: TURN_STATUS.SETTLED, settledAt: yield* DateTime.nowAsDate })
             .where(eq(turns.id, ending.id));
+
           const sent = yield* warm.sessions.send(
             warm.sessionId,
             typedMessage(warm.agent, "And the tests."),
@@ -194,17 +200,23 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           );
 
           assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
           const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).find(
             (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
           );
+
           assert.ok(relaunch !== undefined);
+
           const claimed = Option.getOrThrow(
             yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id),
           );
+
           assert.ok("secrets" in claimed);
+
           const { stdin } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(
             claimed.secrets,
           );
+
           const config: ClaudeCodeConfig = JSON.parse(stdin.split("\n")[0] ?? "");
           assert.deepEqual([config.resume, config.transcriptsUrl], [BEGUN_BEFORE, undefined]);
         }),
@@ -225,6 +237,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const newest = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(newest?.id, warm.turnId);
           assert.equal(newest?.status, TURN_STATUS.SETTLED);
         }),

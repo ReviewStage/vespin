@@ -6,7 +6,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { useRef } from "react";
-import { firstRefusal, type Kept } from "../act.js";
+import { firstNotKept, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
 import { useToast } from "../toast.js";
 import type { InboxResolver } from "./inbox-close.js";
@@ -76,28 +76,34 @@ export function useInboxSelection({
 
   const { mark: pressMark } = useInboxPresses();
 
-  // Note that each item's mark goes on its own, there being no act marking several, and one toast answers them all once each did, its Undo, as ⌘Z, taking back each the service took that still holds the mark (`inbox-writes.ts`).
+  // Note that each item's mark goes on its own, there being no act marking several.
   const markAll = (marking: readonly InboxListed[], unread: boolean) => {
     if (onMark === undefined || marking.length === 0) return;
+
     const pressed = pressMark(
       marking.map(({ item }) => item),
       unread,
     );
+
     void Promise.all(marking.map((entry) => onMark(entry, unread, { quiet: true }))).then(
       (taken) => {
         const landed = marking.filter((_, at) => taken[at]?.kept === true);
         const note = markedNote(unread, landed.length, marking.length - landed.length);
+
         if (landed.length > 0) {
           const kept = new Set(landed.map(({ item }) => item.id));
           const said = pressed.keep(note, (id) => kept.has(id));
+
           if (said !== undefined) toast(said);
+
           return;
         }
+
         toast({
           replayUnmasked: true,
           words: note,
           tone: STATUS_TONE.DANGER,
-          failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstRefusal(taken) },
+          failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstNotKept(taken)?.cause },
         });
       },
     );
@@ -106,13 +112,16 @@ export function useInboxSelection({
   const unread = listed.filter(({ item }) => isUnread(item));
   const read = listed.filter(({ item }) => !isUnread(item));
   const items = listed.map(({ item }) => item);
+
   const acted = (act: () => void) => () => {
     act();
     onClear();
   };
+
   // Note that one mark stands, turned as Mail's is: read while any item chosen is unread, else unread.
   const mark = unread.length > 0 ? PANEL_COMMAND.MARK_READ : PANEL_COMMAND.MARK_UNREAD;
   const first = items[0];
+
   const acts: SelectionGlyphAct[] = [
     ...(onMark === undefined || listed.length === 0
       ? []
@@ -144,6 +153,7 @@ export function useInboxSelection({
                       const still = items.filter((item) =>
                         chosenNow.current.some((each) => each.item.id === item.id),
                       );
+
                       onRemindMany(still, at);
                       onClear();
                     }),
@@ -160,5 +170,6 @@ export function useInboxSelection({
           },
         ]),
   ];
+
   return { acts };
 }

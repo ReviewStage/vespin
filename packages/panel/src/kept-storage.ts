@@ -37,6 +37,7 @@ export function readKept<A>(key: string, schema: Schema.Codec<A, string>, fallba
 export function writeKept<A>(key: string, schema: Schema.Codec<A, string>, value: A): boolean {
   try {
     window.localStorage.setItem(key, Schema.encodeSync(schema)(value));
+
     return true;
   } catch {
     // The choice opens at what was kept before on the next launch.

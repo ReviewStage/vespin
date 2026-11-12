@@ -4,20 +4,22 @@
  * Better Auth's `deleteUser` deletes the account's `account` rows, so their
  * tokens leave our database, but the providers that issued them are never
  * told: a GitHub sign-in is an authorization of our GitHub App, whose user
- * token reaches repositories and pull requests until GitHub expires it, about
- * eight hours on. So an account's deletion reads each sign-in's token before
+ * token reaches repositories and pull requests for about eight hours, and
+ * whose refresh token mints new ones for about six months. So an account's deletion reads each sign-in's token before
  * the delete (`grantsOf`) and revokes it at its provider after (`revoke`), as
  * it revokes an integration's grant at Vercel Connect
  * (`accounts/account-deletion.ts`).
  *
  * GitHub's is the App's own user token, read as every caller that acts as
  * the developer reads it (`GitHubApp.userToken`), refreshed where it is about
- * to expire so there is a live token to revoke, and revoked under the App's
- * client credentials (`GitHubApp.revokeUserToken`). Google's is opened under
- * the session secret Better Auth sealed it under: the refresh token where the
- * row holds one, since revoking it revokes the grant, and else the access
- * token while it is unexpired, which is all an expired one reaches; Google is
- * asked at its revocation endpoint
+ * to expire, since GitHub takes only a live token as the grant's name, and the
+ * whole grant it names is revoked under the App's client credentials
+ * (`GitHubApp.revokeUserGrant`), which takes the refresh token with it; a
+ * token revoked alone would leave the refresh token standing. Google's is
+ * the access token, opened under the session secret Better Auth sealed it
+ * under and revoked while it is unexpired, since an expired one reaches
+ * nothing: our Google sign-in asks for no offline access, so Google issues no
+ * refresh token to keep. Google is asked at its revocation endpoint
  * (https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke).
  * A provider is one row of each table below, so Sign in with Apple's revoke
  * (https://developer.apple.com/documentation/sign_in_with_apple/revoke_tokens)
@@ -33,6 +35,7 @@
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { account } from "@repo/database/schemas/auth";
+import { valueKind } from "@repo/wire";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
 import {
@@ -44,6 +47,7 @@ import {
   Effect,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Schema,
 } from "effect";
@@ -56,6 +60,7 @@ import { AUTH_SECRET_ENVIRONMENT } from "./auth-deployment.js";
 
 /** The sign-in providers whose grants a deletion revokes, by the provider id Better Auth writes on their rows. */
 const SIGN_IN_PROVIDER = { GOOGLE: "google", GITHUB: GITHUB_PROVIDER_ID } as const;
+
 type SignInProvider = (typeof SIGN_IN_PROVIDER)[keyof typeof SIGN_IN_PROVIDER];
 
 /** Each provider as a log line names it. */
@@ -98,6 +103,7 @@ const GoogleRowSchema = Schema.Struct({
   refreshToken: Schema.NullOr(Schema.String),
   accessTokenExpiresAt: Schema.NullOr(InstantColumnSchema),
 });
+
 type GoogleRow = typeof GoogleRowSchema.Type;
 
 /** The account's Google rows, their tokens still sealed. */
@@ -117,13 +123,16 @@ const readGoogleRows = SqlSchema.findAll({
     ),
 });
 
-/** The sealed token a Google row is revoked by: its refresh token, else its access token while unexpired; none where it holds neither. */
+/** The sealed token a Google row is revoked by: its access token while unexpired, or a refresh token, which our sign-in never asks for but would revoke the grant were one kept. */
 function sealedGoogleToken(row: GoogleRow, now: number): string | undefined {
   if (row.refreshToken !== null) return row.refreshToken;
+
   if (row.accessToken === null) return undefined;
+
   if (row.accessTokenExpiresAt !== null && row.accessTokenExpiresAt.getTime() <= now) {
     return undefined;
   }
+
   return row.accessToken;
 }
 
@@ -143,21 +152,24 @@ function unsealed(
 /** The token posted to Google's revocation endpoint; a request that never got an answer carries no status, since its cause may quote the form. */
 const revokeAtGoogle = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redacted.Redacted) {
   const client = yield* HttpClient.HttpClient;
+
   // The token is revealed here alone, into the one form Google reads it from.
   const request = HttpClientRequest.post(GOOGLE_REVOKE_ENDPOINT).pipe(
     HttpClientRequest.bodyUrlParams({ token: Redacted.value(token) }),
   );
+
   const status = yield* client.execute(request).pipe(
     Effect.map((response) => response.status),
     Effect.scoped,
     Effect.mapError(() => new SignInRevokeRefused({ status: undefined })),
   );
+
   if (status !== GOOGLE_REVOKED_STATUS) return yield* new SignInRevokeRefused({ status });
 });
 
 /** What a defect is logged as: its kind alone, since a thrown value's words or fields may quote whatever it was handed. */
-function defectKind(defect: unknown): string {
-  return typeof defect === "object" && defect !== null ? defect.constructor.name : typeof defect;
+function defectKind(cause: unknown): string {
+  return Predicate.isObjectOrArray(cause) ? cause.constructor.name : valueKind(cause);
 }
 
 /**
@@ -174,6 +186,7 @@ function bestEffort<A, E extends { readonly message: string }, R>(
   fallback: A,
 ): Effect.Effect<A, never, R> {
   const warning = `${SIGN_IN_PROVIDER_NAME[provider]} could not revoke a deleted account's sign-in`;
+
   return step.pipe(
     Effect.timeout(PROVIDER_DEADLINE),
     Effect.catch((failure) => Effect.as(Effect.logWarning(warning, failure.message), fallback)),
@@ -216,13 +229,17 @@ function signInRevocation(
       const now = yield* Clock.currentTimeMillis;
       const rows = yield* readGoogleRows(userId);
       const grants: SignInGrant[] = [];
+
       for (const row of rows) {
         const sealed = sealedGoogleToken(row, now);
+
         if (sealed === undefined) continue;
         const token = yield* unsealed(sealed, sessionSecret);
+
         if (Option.isSome(token))
           grants.push({ provider: SIGN_IN_PROVIDER.GOOGLE, token: token.value });
       }
+
       return grants;
     });
 
@@ -233,7 +250,7 @@ function signInRevocation(
     ) => Effect.Effect<void, { readonly message: string }, HttpClient.HttpClient>
   > = {
     [SIGN_IN_PROVIDER.GOOGLE]: revokeAtGoogle,
-    [SIGN_IN_PROVIDER.GITHUB]: github.revokeUserToken,
+    [SIGN_IN_PROVIDER.GITHUB]: github.revokeUserGrant,
   };
 
   return {
@@ -279,6 +296,7 @@ export const signInRevocationFromEnvironment: Layer.Layer<
 > = Layer.unwrap(
   Effect.map(Config.option(Config.Redacted(AUTH_SECRET_ENVIRONMENT.SESSION_SECRET)), (read) => {
     const named = text(Option.getOrUndefined(Option.map(read, Redacted.value)));
+
     return SignInRevocation.layer(named === undefined ? undefined : Redacted.make(named));
   }),
 );

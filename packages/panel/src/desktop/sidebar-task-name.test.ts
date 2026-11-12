@@ -66,6 +66,7 @@ async function mountSidebar(): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const tasks = tasksControl({
     tasks: [
       task("0a1b2c3d-0000-4000-8000-100000000001", LONG_NAME),
@@ -74,10 +75,12 @@ async function mountSidebar(): Promise<HTMLElement> {
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
   });
+
   act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -86,6 +89,7 @@ function rowOf(sidebar: HTMLElement, name: string): HTMLElement {
   const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
     (each) => each.querySelector(".ui-list-row-title .ui-one-line")?.textContent === name,
   );
+
   return row ?? assert.fail(`no ${name} row`);
 }
 
@@ -101,6 +105,7 @@ function pillOver(target: Element): string | undefined {
   restOn(target);
   const pill = document.querySelector('[role="tooltip"]:not([inert])')?.textContent ?? undefined;
   act(() => target.dispatchEvent(new MouseEvent("pointerout", { bubbles: true })));
+
   return pill;
 }
 

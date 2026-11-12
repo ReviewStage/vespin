@@ -15,7 +15,7 @@ import {
  * stands for.
  */
 export interface WireGuard<Value> {
-  (value: unknown): boolean;
+  <Input>(value: Input): boolean;
   readonly wireType?: Value;
 }
 
@@ -26,9 +26,13 @@ export type WireGuardValue<Guard> = Guard extends WireGuard<infer Value> ? Value
 function isWireValue(value: UnparsedWireValue): boolean {
   if (value === undefined || value === null || isWireString(value) || isWireBoolean(value))
     return true;
+
   if (isWireNumber(value)) return Number.isFinite(value);
+
   if (Array.isArray(value)) return value.every(isWireValue);
+
   if (!isRecord(value)) return false;
+
   return Object.values(value).every(isWireValue);
 }
 

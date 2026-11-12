@@ -70,6 +70,7 @@ function insetIn(
   drawn: CSSStyleDeclaration,
 ): Pick<PageTheme, "inset" | "narrowInset"> {
   if (room === PAGE_ROOM.WORDS) return { inset: "", narrowInset: "" };
+
   return {
     inset: drawn.getPropertyValue("--ui-page-inset").trim(),
     narrowInset: drawn.getPropertyValue("--ui-page-inset-narrow").trim(),
@@ -79,12 +80,15 @@ function insetIn(
 /** The theme as the window's root draws it now, for a page drawn in `room`. */
 function themeNow(room: PageRoom): PageTheme {
   const drawn = getComputedStyle(document.documentElement);
+
+  // SAFETY: ROLE_OF is a literal keyed by every PageThemeVariable, and by nothing else.
   const variables = Object.fromEntries(
     Object.entries(ROLE_OF).map(([variable, role]) => [
       variable,
       drawn.getPropertyValue(role).trim(),
     ]),
   ) as Record<PageThemeVariable, string>;
+
   return {
     scheme: drawnDark() ? PAGE_THEME_SCHEME.DARK : PAGE_THEME_SCHEME.LIGHT,
     variables,
@@ -97,15 +101,20 @@ export function usePageTheme(frame: RefObject<HTMLIFrameElement | null>, room: P
   useEffect(() => {
     const send = () =>
       frame.current?.contentWindow?.postMessage(pageThemeMessage(themeNow(room)), "*");
+
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined || event.source !== framed) return;
+
       if (isAsk(event.data)) send();
     };
+
     window.addEventListener("message", hear);
     const stop = onDrawnThemeChange(send);
     // Note that the theme is told as the hook comes up, because a frame kept hidden under `Activity` heard no change while it was down.
     send();
+
     return () => {
       window.removeEventListener("message", hear);
       stop();

@@ -47,16 +47,20 @@ export function useHomeRoute(input: { listed: () => string | undefined }): HomeR
   const here = useWindowPlace();
   const open = here.place === ROUTED_PLACE.HOME;
   const standingIn = open ? here.params.workspace : undefined;
+
   const onOpen = () => {
     if (open) return;
     const workspace = input.listed();
+
     if (workspace === undefined) void navigate({ to: "/app" });
     else void navigate({ to: "/$workspace", params: { workspace } });
   };
+
   const onTurn = (workspace: string) => {
     if (standingIn === workspace) return;
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
+
   return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn };
 }
 
@@ -96,21 +100,27 @@ export function useBoardRoute(): BoardRoute {
   const here = useWindowPlace();
   const open = here.place === ROUTED_PLACE.BOARD;
   const standingIn = open ? here.params.workspace : undefined;
+
   const onOpen = (workspace: string) => {
     // Opening the Board standing moves nothing, and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
     if (standingIn === workspace) {
       exits.stay();
+
       return;
     }
+
     void navigate({ to: "/$workspace/tasks", params: { workspace } });
   };
+
   const onTurn = (workspace: string) => {
     if (standingIn === workspace) return;
     void navigate({ to: "/$workspace/tasks", params: { workspace }, replace: true });
   };
+
   const onPreload = (workspace: string) => {
     void router.preloadRoute({ to: "/$workspace/tasks", params: { workspace } });
   };
+
   return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn, onPreload };
 }
 
@@ -126,23 +136,29 @@ export function usePersonRoute(): PersonRoute {
   const userId = open ? here.params.userId : undefined;
   const name = useSelector(names, (held) => (userId === undefined ? undefined : held.get(userId)));
   const workspace = open ? here.params.workspace : undefined;
+
   const onOpen = (to: string, named: string | undefined, toWorkspace: string) => {
     if (named !== undefined) names.setState((held) => new Map(held).set(to, named));
+
     if (to === userId && toWorkspace === workspace) {
       exits.stay();
+
       return;
     }
+
     void navigate({
       to: "/$workspace/person/$userId",
       params: { workspace: toWorkspace, userId: to },
     });
   };
+
   const onPreload = (to: string, toWorkspace: string) => {
     void router.preloadRoute({
       to: "/$workspace/person/$userId",
       params: { workspace: toWorkspace, userId: to },
     });
   };
+
   return {
     userId,
     name,
@@ -171,6 +187,7 @@ export function useRoutedViews(): RoutedViews {
   const { userId, name, workspace } = usePersonRoute();
   const automations = useAutomationsPlace();
   const inbox = useInboxRoute();
+
   return {
     board: open,
     person: { userId, name, workspace },
@@ -197,17 +214,22 @@ export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
   const access = useRouteAccess();
   const open = here.place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
   const standingIn = open ? here.params.workspace : undefined;
+
   // Note that the page standing is read from where the router's history stands at the call, as a refused start's restore
   // calls it after the window has left the page (`agent-route.ts`).
   const onOpen = (workspace: string) => {
     const matches = router.matchRoutes(router.history.location.pathname);
     const standing = routedPlaceOf(matches, access) === ROUTED_PLACE.UNKNOWN_WORKSPACE;
+
     if (standing && placeParamsOf(matches).workspace === workspace) {
       exits.stay();
+
       return;
     }
+
     // Note that it takes the step's place, because a workspace not there for the reader is no place of theirs to come back to.
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
+
   return { workspace: standingIn, onOpen, onClose: () => exits.leave() };
 }

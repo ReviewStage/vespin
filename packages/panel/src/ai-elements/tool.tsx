@@ -82,7 +82,9 @@ import { Fold, type FoldProps } from "./fold.js";
 /** What a patch's line does, by its first characters: a line added, one removed, or one that stands. */
 function patchRow(line: string): CodeRow {
   if (line.startsWith("+")) return CODE_ROW.ADDED;
+
   if (line.startsWith("-")) return CODE_ROW.REMOVED;
+
   return CODE_ROW.CONTEXT;
 }
 
@@ -131,7 +133,9 @@ export function Tool({ children, ...props }: ToolProps): ReactNode {
  */
 export function ToolStateMark({ state }: { state: ToolState }): ReactNode {
   if (state === TOOL_STATE.OUTPUT_AVAILABLE) return null;
+
   if (state === TOOL_STATE.OUTPUT_ERROR) return stateEndMark(GLYPH_STATE.FAILED, false);
+
   return <StateGlyph state={GLYPH_STATE.WORKING} />;
 }
 
@@ -182,6 +186,7 @@ export function ToolLine({
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
   const failed = state === TOOL_STATE.OUTPUT_ERROR;
+
   return (
     <>
       <GlyphSlot>{icon}</GlyphSlot>
@@ -245,6 +250,7 @@ export function ToolSummary({
   [mark: `data-${string}`]: string | undefined;
 }): ReactNode {
   const { open } = useDisclosureState();
+
   return (
     <Tooltip label={open ? FOLD_HINT.HIDE : FOLD_HINT.SHOW}>
       <LineSummary {...marks}>{children}</LineSummary>
@@ -266,6 +272,7 @@ export function ToolHeader({
   paused,
 }: ToolHeaderProps): ReactNode {
   const previewed = useDisclosurePreviewShown(subjectInBody);
+
   return (
     <ToolSummary>
       <ToolLine
@@ -304,6 +311,7 @@ export function ToolContent({
       </DisclosureBody>
     );
   }
+
   return (
     <DisclosureBody inset={DISCLOSURE_BODY.NONE}>
       <Card
@@ -340,7 +348,9 @@ function BlockCard({
       </div>
     );
   }
+
   const isCommand = block.kind === TOOL_BLOCK.COMMAND;
+
   return (
     <CodeCard
       title={title}
@@ -364,7 +374,9 @@ export function ToolInput({
   markdown: ToolMarkdown;
 }): ReactNode {
   const readable = readableBlock(block);
+
   if (readable.text === "") return null;
+
   return (
     <BlockCard
       block={readable}
@@ -401,7 +413,9 @@ function ToolFailure({ errorText }: { errorText: string }): ReactNode {
 export function ToolOutput({ block, errorText, markdown }: ToolOutputProps): ReactNode {
   if (errorText !== undefined) return <ToolFailure errorText={errorText} />;
   const readable = block === undefined ? undefined : shownOutput(block);
+
   if (readable === undefined) return null;
+
   if (readable.text.trim() === "") {
     return (
       <div data-tool-output="" data-empty="">
@@ -409,6 +423,7 @@ export function ToolOutput({ block, errorText, markdown }: ToolOutputProps): Rea
       </div>
     );
   }
+
   return (
     <BlockCard
       block={readable}
@@ -432,6 +447,7 @@ export interface ToolTerminalProps extends Omit<ToolOutputProps, "markdown"> {
 export function ToolTerminal({ input, block, errorText }: ToolTerminalProps): ReactNode {
   const printed = block === undefined ? "" : readableBlock(block).text.trimEnd();
   const prompt = `${COMMAND_PROMPT}${input.text}`;
+
   return (
     <>
       <CodeCard

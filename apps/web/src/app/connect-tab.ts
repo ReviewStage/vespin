@@ -92,17 +92,21 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
   /** Lets go of every connect abandoned by now, whose landing is no longer this tab's to answer. */
   const dropAbandoned = (): void => {
     const now = Date.now();
+
     for (const [made, at] of handedOff) if (now - at > CONNECT_BOUND_MS) handedOff.delete(made);
   };
 
   /** A connect pressed: its empty tab opened at once, and closed where its act opened nothing. */
   const press = <A>(go: () => Promise<A>): Promise<A> => {
     const pressed: Press = { tab: browser.openEmptyTab(), handoff: crypto.randomUUID() };
+
     // Note that the tab is marked now, while it is still this origin's empty page and its storage this tab's to write.
     if (pressed.tab !== null) markHandoff(pressed.tab, pressed.handoff);
     waiting.push(pressed);
+
     return go().finally(() => {
       const left = waiting.indexOf(pressed);
+
       if (left === -1) return;
       // The act opened nothing, so its empty tab goes.
       waiting.splice(left, 1);
@@ -115,10 +119,12 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
     const account = client[TASKS_ACT_KIND.GITHUB_CONNECT];
     const integration = client[INTEGRATION_ACT_KIND.INTEGRATIONS_CONNECT];
     const github = client[WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT];
+
     // SAFETY: every procedure the contract names is read off the client, so this answers each one the client does.
     const procedures = Object.fromEntries(
       Object.keys(actContract).map((kind) => [kind, client[kind as keyof ActPortClient]]),
     ) as ActPortClient;
+
     return {
       ...procedures,
       [TASKS_ACT_KIND.GITHUB_CONNECT]: (...args: Parameters<typeof account>) =>
@@ -134,20 +140,27 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
     // Note that an address off the web opens nowhere and takes no press, so a press it answered closes its tab as its act ends.
     if (!isWebAddress(url)) {
       console.warn("An address that is not an http or https one was not opened.");
+
       return;
     }
+
     const press = waiting.shift();
+
     if (press === undefined) {
       browser.openLink(url);
+
       return;
     }
+
     if (press.tab === null) {
       browser.leave(() => {
         rememberReturn(browser.address());
         browser.navigate(url);
       });
+
       return;
     }
+
     // Note that a tab the developer closed before the address came opens nothing, because closing it said no.
     if (press.tab.closed) return;
     press.tab.location.replace(url);
@@ -158,24 +171,29 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
   /** Takes the hand-off a landing names, answering whether this tab made it and its connect is not yet abandoned. */
   const claim = (handoff: string): boolean => {
     dropAbandoned();
+
     return handedOff.delete(handoff);
   };
 
   const listen = (): (() => void) => {
     // The app standing in this tab again ends any same-tab connect that left from it.
     forgetReturn();
+
     // So does the browser bringing the page back from its cache, which runs nothing here again.
     const restored = (event: PageTransitionEvent) => {
       if (event.persisted) forgetReturn();
     };
+
     window.addEventListener("pageshow", restored);
     const channel = new BroadcastChannel(CONNECT_CHANNEL);
     channel.onmessage = (event) => {
       const landed = saying(event, CONNECT_SAID.LANDED);
+
       if (landed?.handoff === undefined || !claim(landed.handoff)) return;
       channel.postMessage({ kind: CONNECT_SAID.MINE, landing: landed.landing });
       window.focus();
     };
+
     return () => {
       channel.close();
       window.removeEventListener("pageshow", restored);
@@ -194,7 +212,9 @@ export function tabBrowser(
   return {
     openEmptyTab: () => {
       const tab = window.open("", "_blank");
+
       if (tab !== null) tab.opener = null;
+
       return tab;
     },
     navigate: (url) => location.assign(url),

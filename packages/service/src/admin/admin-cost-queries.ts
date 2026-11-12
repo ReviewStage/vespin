@@ -125,9 +125,12 @@ const findTokenUsage = SqlSchema.findAll({
           and(isNotNull(turns.usage), gte(TURN_INSTANT, filter.fetchStart), keptAccounts(filter)),
         )
         .as("shares");
+
       const counted = (field: string) =>
         sql<number | null>`sum((${shares.share}->>${field})::numeric)`;
+
       const model = sql<string | null>`${shares.share}->>'model'`;
+
       return db
         .select({
           day: shares.day,
@@ -223,16 +226,19 @@ export function readAdminCostUsage(input: {
 }): Effect.Effect<AdminCostUsage, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const fetchStartDay = costWindowKeys(input.now, input.windowDays).prior[0] ?? "";
+
     const filter: UsageFilter = {
       fetchStart: dayStart(fetchStartDay),
       fetchStartDay,
       scope: input.scope,
       userId: input.userId ?? null,
     };
+
     const [tokens, dictation, merged] = yield* Effect.all(
       [findTokenUsage(filter), findDictationSeconds(filter), findMergedPullRequests(filter)],
       { concurrency: "unbounded" },
     );
+
     return {
       tokens: tokens.map((row) => ({
         ...row,
@@ -261,14 +267,17 @@ export function readAdminCost(input: {
 }): Effect.Effect<AdminCost, StoreFailure, DatabaseServices | ModelCatalog> {
   return Effect.gen(function* () {
     const catalog = yield* ModelCatalog;
+
     const [read, usage] = yield* Effect.all(
       [Effect.result(catalog.read), readAdminCostUsage(input)],
       { concurrency: "unbounded" },
     );
+
     const offered = Result.isSuccess(read) ? read.success : [];
     const priced = priceCostUsage(usage, offered);
     const ids = topCostAccountIds(priced, input.now, input.windowDays);
     const rows = ids.length === 0 ? [] : yield* findAccountFaces(ids);
+
     const accounts = new Map<string, AdminCostAccountInfo>(
       rows.map((row) => [
         row.id,
@@ -281,6 +290,7 @@ export function readAdminCost(input: {
         },
       ]),
     );
+
     return buildAdminCost({
       priced,
       merged: usage.merged,

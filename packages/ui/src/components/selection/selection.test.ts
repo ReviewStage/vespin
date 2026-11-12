@@ -56,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
+
   for (const each of listening.splice(0)) document.removeEventListener("keydown", each);
   document.body.replaceChildren();
   vi.unstubAllGlobals();
@@ -69,6 +70,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -86,6 +88,7 @@ function Choosing({
 }): React.JSX.Element {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(chosen));
   const [opened, setOpened] = useState<string[]>([]);
+
   return createElement(
     Fragment,
     null,
@@ -118,6 +121,7 @@ function heardBehind(): string[] {
   const hear = (event: KeyboardEvent) => heard.push(event.key);
   listening.push(hear);
   document.addEventListener("keydown", hear);
+
   return heard;
 }
 
@@ -126,7 +130,9 @@ function button(within: HTMLElement, name: string): HTMLButtonElement {
   const found = [...within.querySelectorAll("button")].find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`No button named ${name}`);
+
   return found;
 }
 
@@ -151,15 +157,18 @@ function click(target: HTMLElement, held: MouseEventInit = {}): void {
 /** Presses `name` on whatever holds the focus, answering whether something took it. */
 function key(name: string, held: KeyboardEventInit = {}): boolean {
   const target = document.activeElement ?? document.body;
+
   const event = new KeyboardEvent("keydown", {
     key: name,
     bubbles: true,
     cancelable: true,
     ...held,
   });
+
   act(() => {
     target.dispatchEvent(event);
   });
+
   return event.defaultPrevented;
 }
 
@@ -260,6 +269,7 @@ test("a set its owner cleared starts the next ⇧-click's run afresh, at the row
 
 test("a list not asked to choose rows opens its row on a ⌘-click, and leaves ⌘A and Esc alone", () => {
   const pressed: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Places",
@@ -273,6 +283,7 @@ test("a list not asked to choose rows opens its row on a ⌘-click, and leaves �
       ),
     }),
   );
+
   click(button(container, "Board"), { metaKey: true });
   expect(pressed).toEqual(["Board"]);
   act(() => button(container, "Board").focus());
@@ -289,6 +300,7 @@ function Bar({ count }: { count: number }): React.JSX.Element {
   const [left, setLeft] = useState(count);
   const [places, setPlaces] = useState<readonly string[]>(PLACES);
   const [heard, setHeard] = useState<string[]>([]);
+
   const acts: SelectionAct[] = [
     { label: "Mark done", onAct: () => setHeard((all) => [...all, "done"]) },
     {
@@ -303,6 +315,7 @@ function Bar({ count }: { count: number }): React.JSX.Element {
       menu: [[{ label: "Later", onSelect: () => setHeard((all) => [...all, "later"]) }]],
     },
   ];
+
   return createElement(
     Fragment,
     null,
@@ -335,8 +348,10 @@ test("the count is said politely as rows are chosen, the first one included", ()
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const bar = (count: number) =>
     createElement(SelectionBar, { count, acts: [], onClear: () => undefined, controls: "places" });
+
   act(() => root.render(bar(0)));
   act(() => root.render(bar(1)));
   expect(document.querySelector('[role="status"]')?.textContent).toBe("1 selected");
@@ -351,9 +366,11 @@ test("the bar does its acts, drops an act's menu of choices, and Clear chooses n
   const move = button(container, "Move to section");
   act(() => move.click());
   expect(move.getAttribute("aria-expanded")).toBe("true");
+
   const later = [...document.querySelectorAll('[role="menuitem"]')].find(
     (item) => item.textContent === "Later",
   );
+
   expect(later).toBeDefined();
   act(() => button(container, "Clear selection").click());
   expect(container.querySelector('[role="toolbar"]')).toBeNull();
@@ -368,11 +385,13 @@ test.each([
   (leave, landed) => {
     const container = draw(createElement(Bar, { count: 2 }));
     act(() => button(container, "Mark done").focus());
+
     if (leave === "Escape") key("Escape");
     else {
       act(() => button(container, leave).focus());
       act(() => button(container, leave).click());
     }
+
     expect(container.querySelector('[role="toolbar"]')).toBeNull();
     expect(document.activeElement).toBe(button(container, landed));
     expect(button(container, landed).tabIndex).toBe(0);
@@ -431,26 +450,30 @@ function ChoosingCards({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [opened, setOpened] = useState<string[]>([]);
   const [first, rest] = [PLACES.slice(0, 2), PLACES.slice(2)];
+
   const list = (names: readonly string[]) =>
     createElement(
       "ul",
       runs ? selectionRun() : null,
-      names
-        .filter((name) => !undrawn.includes(name))
-        .map((name) =>
-          createElement(
-            "li",
-            { key: name },
-            createElement(CardPress, {
-              selectKey: name,
-              selectBox: SELECT_BOX_PLACE.GUTTER,
-              disabled: off.includes(name),
-              onPress: () => setOpened((held) => [...held, name]),
-              children: name,
-            }),
-          ),
-        ),
+      names.flatMap((name) =>
+        undrawn.includes(name)
+          ? []
+          : [
+              createElement(
+                "li",
+                { key: name },
+                createElement(CardPress, {
+                  selectKey: name,
+                  selectBox: SELECT_BOX_PLACE.GUTTER,
+                  disabled: off.includes(name),
+                  onPress: () => setOpened((held) => [...held, name]),
+                  children: name,
+                }),
+              ),
+            ],
+      ),
     );
+
   return createElement(
     Fragment,
     null,
@@ -466,6 +489,7 @@ function ChoosingCards({
       order: undrawn.length === 0 ? undefined : runs ? [first, rest] : [PLACES],
       bringIn: (key: string) => {
         broughtIn.push(key);
+
         return true;
       },
       children: [
@@ -480,17 +504,22 @@ function ChoosingCards({
 
 test("a region chooses its card presses across its lists: ⌘-click one, ⇧-click a run into the next list, Esc none, a plain press opening its card", () => {
   const page = draw(createElement(ChoosingCards));
+
   const card = (name: string) => {
     const press = [...page.querySelectorAll<HTMLButtonElement>("[data-card-press]")].find(
       (each) => each.textContent === name,
     );
+
     if (press === undefined) throw new Error(`no card for ${name}`);
+
     return press;
   };
+
   const click = (name: string, keys: MouseEventInit = {}) =>
     act(() => {
       card(name).dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
     });
+
   const chosen = () => page.querySelector("[data-chosen]")?.textContent;
 
   click("Tasks", { metaKey: true });
@@ -512,13 +541,17 @@ test("a region chooses its card presses across its lists: ⌘-click one, ⇧-cli
 test("a region handed its order reaches the rows it draws no card for: ⇧-click runs across them, ⇧↓ brings one in, ⌘A chooses them", () => {
   const broughtIn: string[] = [];
   const page = draw(createElement(ChoosingCards, { undrawn: ["Board"], broughtIn }));
+
   const card = (name: string) => {
     const press = [...page.querySelectorAll<HTMLButtonElement>("[data-card-press]")].find(
       (each) => each.textContent === name,
     );
+
     if (press === undefined) throw new Error(`no card for ${name}`);
+
     return press;
   };
+
   const chosen = () => page.querySelector("[data-chosen]")?.textContent;
 
   act(() => {
@@ -557,15 +590,20 @@ test("a region handed its order reaches the rows it draws no card for: ⇧-click
 
 test("a card's box and X on the card in hand each put it in and take it out, opening nothing", () => {
   const page = draw(createElement(ChoosingCards));
+
   const box = (name: string) => {
     const found = page
       .querySelector(`[data-select-key="${name}"]`)
       ?.parentElement?.querySelector<HTMLElement>('[role="checkbox"]');
+
     if (found === null || found === undefined) throw new Error(`no box for ${name}`);
+
     return found;
   };
+
   const press = (name: string) =>
     page.querySelector<HTMLButtonElement>(`[data-select-key="${name}"]`) ?? document.body;
+
   const chosen = () => page.querySelector("[data-chosen]")?.textContent;
 
   act(() => box("Tasks").click());
@@ -584,8 +622,10 @@ test("a card's box and X on the card in hand each put it in and take it out, ope
 
 test("an unavailable card offers no box to choose it by, as no other way chooses it", () => {
   const page = draw(createElement(ChoosingCards, { off: ["Board"] }));
+
   const card = (name: string) =>
     page.querySelector(`[data-select-key="${name}"]`)?.parentElement ?? document.body;
+
   expect(card("Tasks").querySelector('[role="checkbox"]')).not.toBeNull();
   expect(card("Board").querySelector('[role="checkbox"]')).toBeNull();
 });
@@ -597,12 +637,14 @@ test.each([
   "where the lists are runs%s, a ⇧-click reaches only across the run its card stands in",
   (_, undrawn) => {
     const page = draw(createElement(ChoosingCards, { runs: true, undrawn }));
+
     const press = (name: string, keys: MouseEventInit) =>
       act(() => {
         page
           .querySelector(`[data-select-key="${name}"]`)
           ?.dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
       });
+
     press("Board", { metaKey: true });
     press("Settings", { shiftKey: true });
     expect(page.querySelector("[data-chosen]")?.textContent).toBe("Board,Automations,Settings");
@@ -617,9 +659,11 @@ test("Clear in the bar over a region hands the focus to the region's first card 
   act(() => {
     cards()[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true }));
   });
+
   const clear = page.querySelector<HTMLButtonElement>(
     '[role="toolbar"] button[aria-label="Clear selection"]',
   );
+
   if (clear === null) throw new Error("no Clear in the bar");
   act(() => clear.focus());
   act(() => clear.click());
@@ -632,6 +676,7 @@ test("Clear in the bar over a region hands the focus to the region's first card 
 function ChosenRowMenu(): React.JSX.Element {
   const [heard, setHeard] = useState<string[]>([]);
   const hear = (what: string) => () => setHeard((all) => [...all, what]);
+
   const acts: SelectionAct[] = [
     { label: "Mark done", onAct: hear("done") },
     {
@@ -642,6 +687,7 @@ function ChosenRowMenu(): React.JSX.Element {
       ],
     },
   ];
+
   return createElement(
     Fragment,
     null,
@@ -659,6 +705,7 @@ function ChosenRowMenu(): React.JSX.Element {
 
 test("a chosen row's menu offers the bar's acts under its heading, each act's choices one submenu", () => {
   const page = draw(createElement(ChosenRowMenu));
+
   const openMenu = () => {
     act(() => {
       page
@@ -666,14 +713,17 @@ test("a chosen row's menu offers the bar's acts under its heading, each act's ch
         ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
   };
+
   const labels = () =>
     [...document.querySelectorAll('[role="menu"]:not([data-leaving]) .ui-menu-item-label')].map(
       (label) => label.textContent,
     );
+
   const choose = (name: string) => {
     const item = [
       ...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving]) .ui-menu-item'),
     ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === name);
+
     if (item === undefined) throw new Error(`no ${name} in the menu`);
     act(() => item.click());
   };

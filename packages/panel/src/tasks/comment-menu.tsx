@@ -22,7 +22,9 @@ export function CommentMenu({
 }): React.JSX.Element | null {
   const menu = useMenu(true);
   const trigger = menu.trigger();
+
   if (groups.length === 0) return null;
+
   return (
     <>
       <MoreButton thing={THING} size={BUTTON_SIZE.COMPACT} {...trigger} />

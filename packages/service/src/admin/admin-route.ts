@@ -60,10 +60,13 @@ function configured(name: string): boolean {
 /** Each account integration Vercel Connect grants, by whether its connector UID is set; one granted by the account's own sign-in has none. */
 function connectorPresence(): Map<(typeof INTEGRATION_PROVIDER_LIST)[number], boolean> {
   const present = new Map<(typeof INTEGRATION_PROVIDER_LIST)[number], boolean>();
+
   for (const provider of INTEGRATION_PROVIDER_LIST) {
     const { CONNECTOR_VARIABLE }: IntegrationDefinition = INTEGRATION[provider];
+
     if (CONNECTOR_VARIABLE !== undefined) present.set(provider, configured(CONNECTOR_VARIABLE));
   }
+
   return present;
 }
 
@@ -85,11 +88,15 @@ function connectorPresence(): Map<(typeof INTEGRATION_PROVIDER_LIST)[number], bo
 function sessionViewer(api: AdminSessionApi): AdminViewerResolver {
   return (request) => {
     const credential = sessionCredential(request.headers);
+
     if (credential === undefined) return Effect.succeed(undefined);
+
     return Effect.tryPromise(async (): Promise<AdminViewer | undefined> => {
       const authenticated = await api.getSession({ headers: credential });
       const account = authenticated?.user;
+
       if (!account) return undefined;
+
       return { userId: account.id, role: account.role };
     });
   };
@@ -99,6 +106,7 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
   // The sign-in clients are read as the auth service reads them, so the
   // dashboard reports the pair a GitHub sign-in would run on.
   const socialClients = authSecrets(process.env);
+
   const integrations = adminIntegrations({
     // Every variable `github/github-app.ts` builds the App from, and its webhook secret.
     githubApp: [
@@ -125,6 +133,7 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
   // The project id names which console to open, never a secret; the key
   // presence booleans above are still the only thing said about the keys.
   const projectId = (process.env[POSTHOG_ENVIRONMENT.PROJECT_ID] ?? "").trim();
+
   const analyticsConsoleUrl = projectId
     ? posthogProjectConsoleUrl(projectId, process.env[POSTHOG_ENVIRONMENT.API_HOST])
     : undefined;

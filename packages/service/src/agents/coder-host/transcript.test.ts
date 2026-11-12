@@ -54,6 +54,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
+
         const started = yield* createAgent(owner, {
           taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
           descriptionSnapshot: null,
@@ -65,6 +66,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
         });
+
         const agent = Option.getOrThrow(started).agent;
         const target = { userId: owner, conversationId: agent.conversationId };
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -72,6 +74,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
         const turn = { conversationId: sessionKey(target.conversationId), turnId };
         const answer = new AssistantMessageBuilder();
         answer.stepStart();
+
         for (const [callId, name, input] of [
           ["call-reply", "reply_inbox", { key: "k", text: "Done." }],
           ["call-close", "close_inbox_item", { key: "k", reason: "Done." }],
@@ -82,6 +85,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
             output: unparsedWire({ status: ACTION_RESULT_STATUS.ACCEPTED, inbox: [] }),
           });
         }
+
         yield* writer.enqueueTurn(target, {
           turnId,
           origin: TURN_ORIGIN.TYPED,
@@ -130,6 +134,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
+
         const started = yield* createAgent(owner, {
           taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
           descriptionSnapshot: null,
@@ -141,10 +146,12 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
         });
+
         const agent = Option.getOrThrow(started).agent;
         const target = { userId: owner, conversationId: agent.conversationId };
         // Note that the agent was made a day before the test clock's now, long past the grace it gets to start in.
         const longAgo = { createdAt: new Date(-86_400_000), blank: false };
+
         const read = transcriptPast(target, CODER_TOOL_SET, CURSOR_START, longAgo, agent).pipe(
           Effect.provide(modelCatalogOf(CATALOG)),
         );

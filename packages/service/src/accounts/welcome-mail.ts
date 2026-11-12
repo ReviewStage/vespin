@@ -71,6 +71,7 @@ export class WelcomeMail extends Context.Service<WelcomeMail, WelcomeMailValues>
  */
 export function greetingOf(name: string): string {
   const first = name.trim().split(/\s+/)[0] ?? "";
+
   return first === "" ? "Hey," : `Hey ${first},`;
 }
 
@@ -83,18 +84,23 @@ export const welcomeMailFromEnvironment: Layer.Layer<WelcomeMail, never, HttpCli
     WelcomeMail,
     Effect.gen(function* () {
       const sender = yield* readResendSender(WELCOME_MAIL_ENVIRONMENT.FROM);
+
       if (Option.isNone(sender)) {
         yield* Effect.logWarning(MAIL_UNSET);
+
         return { send: () => Effect.void };
       }
+
       const { key, from } = sender.value;
       const client = yield* HttpClient.HttpClient;
       const call = resendCall(key, REQUEST_TIMEOUT_MS);
+
       return {
         send: (letter: WelcomeLetter) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             const scheduledAt = new Date(now + SEND_DELAY_MS).toISOString();
+
             const answer = yield* call.send({
               method: HTTP_METHOD.POST,
               path: RESEND.EMAILS_PATH,
@@ -108,6 +114,7 @@ export const welcomeMailFromEnvironment: Layer.Layer<WelcomeMail, never, HttpCli
                 },
               }),
             });
+
             if (callAnswered(answer) && answer.response.ok) return;
             // Note that the status alone is logged, because the letter carries the new account's address.
             yield* Effect.logWarning(

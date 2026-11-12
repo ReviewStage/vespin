@@ -123,16 +123,21 @@ const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const { kind, taskId } = relation;
+
   if (kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF) return undefined;
   const header = yield* readTaskHeader(userId, taskId);
+
   if (Option.isNone(header) || header.value.workspaceId !== workspaceId) {
     return yield* new TaskRelationUnreached();
   }
+
   if (kind !== TASK_CREATE_RELATION_KIND.PARENT_OF) return { kind, taskId };
   const { repository } = header.value;
+
   if (repositoryAsked !== undefined && !sameRepository(repositoryAsked, repository)) {
     return yield* new TaskParentRepositoryDiffers({ repository });
   }
+
   return { kind, taskId, repository };
 });
 
@@ -157,12 +162,16 @@ const relationsAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   const confirmed: TaskCreateRelationAsked[] = [];
   let repository = repositoryAsked;
+
   for (const relation of relations) {
     const asked = yield* relationAsked(userId, workspaceId, relation, repository);
+
     if (asked === undefined) continue;
+
     if (asked.kind === TASK_CREATE_RELATION_KIND.PARENT_OF) repository = asked.repository;
     confirmed.push(asked);
   }
+
   return confirmed;
 });
 
@@ -184,10 +193,14 @@ const parentTaken = (
     // Note that the other task is held for update before its parent is read, because two starts as its
     // parent at once would each read none and the later write would take the earlier's place.
     const reached = yield* lockTasksForBlocks(userId, [otherId]);
+
     if (reached !== 1) return Option.none();
     const header = yield* readTaskHeader(userId, otherId);
+
     if (Option.isNone(header)) return Option.none();
+
     if (header.value.parentTaskId !== null) return yield* new TaskParentHeld();
+
     return Option.map(yield* setTaskParent(userId, otherId, taskId), () => undefined);
   });
 
@@ -207,6 +220,7 @@ function relationWritten(
         addTaskBlock(userId, blockPairOf(taskId, asked.taskId, asked.kind)),
         Option.map(() => undefined),
       );
+
   return Effect.flatMap(written, (related) =>
     Option.isNone(related) ? Effect.fail(new TaskRelationUnreached()) : Effect.void,
   );
@@ -223,7 +237,9 @@ function taskStarted(
   DatabaseServices
 > {
   const { id } = started;
+
   if (id !== undefined) return createTaskCommittedOnce(userId, { ...started, id }, holding);
+
   return Effect.map(createTaskCommitted(userId, started, holding), (created) => ({
     ...created,
     made: true,
@@ -255,6 +271,7 @@ function createTaskRelated(
   DatabaseServices
 > {
   if (asked.length === 0) return taskStarted(userId, started, []);
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
@@ -262,18 +279,23 @@ function createTaskRelated(
         // its parent among them, because each relation's write locks its own task in turn, and a relation
         // change between two of them locks both in id order, so the two would each hold a row the other waits on.
         const touched = asked.map((relation) => relation.taskId);
+
         const created = yield* taskStarted(
           userId,
           started,
           started.parentTaskId === undefined ? touched : [started.parentTaskId, ...touched],
         );
+
         if (!created.made) return created;
         const taskId = created.task.task.id;
+
         for (const relation of asked) yield* relationWritten(userId, taskId, relation);
         const read = yield* readTask(userId, taskId);
+
         // The row was written under this transaction, so a read that misses it is the database breaking its own contract.
         if (Option.isNone(read))
           return yield* Effect.die(new Error("the task started did not read"));
+
         return created.txid === undefined
           ? { task: read.value, made: true }
           : { task: read.value, txid: created.txid, made: true };
@@ -330,14 +352,17 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     assigneeId: assigneeAsked,
     ...fields
   } = asked;
+
   // A start as a sub-task of a task is a start under that parent, which `parentTaskId` names as well.
   const parentTaskId =
     asked.parentTaskId ??
     relations.find((relation) => relation.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF)?.taskId;
+
   const parent =
     parentTaskId === undefined
       ? undefined
       : yield* taskParentOf(userId, organizationId, parentTaskId, repository);
+
   // A task's children share its parent's repository, so a start under a parent holds them to that one.
   const beside = yield* relationsAsked(
     userId,
@@ -345,7 +370,9 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     relations,
     parent === undefined ? repository : parent.repository,
   );
+
   const childOf = beside.find((each) => each.kind === TASK_CREATE_RELATION_KIND.PARENT_OF);
+
   // A task in a tree works in the tree's repository: its parent's as a child, and its children's as a parent.
   const named =
     parent !== undefined
@@ -353,6 +380,7 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
       : childOf?.kind === TASK_CREATE_RELATION_KIND.PARENT_OF
         ? childOf.repository
         : repository;
+
   const reached =
     named === undefined || named === null
       ? { repository: null, githubAccess: GITHUB_ACCESS.APP }
@@ -360,7 +388,9 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
           repository: each.repository.fullName,
           githubAccess: each.access,
         }));
+
   const assigneeId = assigneeAsked === undefined ? parent?.assigneeId : assigneeAsked;
+
   const started = {
     ...fields,
     organizationId,
@@ -368,8 +398,10 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     ...(assigneeId === null || assigneeId === undefined ? undefined : { assigneeId }),
     ...(parent === undefined ? undefined : { parentTaskId: parent.id }),
   };
+
   const text = started.text ?? "";
   const write = createTaskRelated(userId, started, beside);
+
   // The task and its description's first revision land together, so a make run again at once makes one task.
   const created =
     text === "" || writer === undefined
@@ -391,6 +423,7 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
             ),
           ),
         );
+
   if (created.made) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_CREATE,
@@ -401,5 +434,6 @@ export const createTaskAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
     yield* taskActivityReported(userId);
   }
+
   return { ...created, ...reached };
 });

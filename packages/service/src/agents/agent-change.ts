@@ -99,27 +99,34 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
           Option.isSome(changed)
             ? Effect.succeed(changed.value)
             : Effect.fail(new AgentChangeLost());
+
         const { title, choice, pinned, position, disabledServers, permissionMode } = changes;
         let last: AgentCommitted = { agent };
+
         if (title !== undefined) {
           last = yield* kept(
             yield* renameAgentCommitted(userId, agent.id, title.length === 0 ? null : title),
           );
         }
+
         if (choice !== undefined) {
           last = yield* kept(yield* updateAgentChoiceCommitted(userId, agent.id, choice));
         }
+
         if (pinned !== undefined) {
           last = yield* kept(yield* pinAgentCommitted(userId, agent.id, pinned, position));
         }
+
         if (disabledServers !== undefined) {
           last = yield* kept(yield* updateAgentServersCommitted(userId, agent.id, disabledServers));
         }
+
         if (permissionMode !== undefined) {
           last = yield* kept(
             yield* updateAgentPermissionModeCommitted(userId, agent.id, permissionMode),
           );
         }
+
         return last;
       }),
     ),
@@ -140,9 +147,12 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.map(Option.some),
     Effect.catchTag("AgentChangeLost", () => Effect.succeed(Option.none<AgentCommitted>())),
   );
+
   const { choice } = changes;
+
   if (choice === undefined || Option.isNone(written)) return written;
   yield* runnerChoiceApplied(written.value.agent);
+
   // Counted for each of the two the change moved, under the member; a window alone counts none.
   for (const changed of settingsMoved(agent, choice)) {
     yield* recordServerEvent(
@@ -151,6 +161,7 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
       { changed },
     );
   }
+
   return written;
 });
 
@@ -172,11 +183,14 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   archivedBy: StoredArchive,
 ) {
   if (archived) yield* stoppedForGood(writer, userId, agent);
+
   const written: Option.Option<AgentArchiveCommitted> = yield* hostedStoreOrUnavailable(
     archiveAgentCommitted(userId, agent.id, archived, archivedBy),
   );
+
   if (!archived || Option.isNone(written)) return written;
   yield* archivedInBackground(reach, [agent]);
+
   // Counted only where this write archived an agent standing unarchived, under the member it archived for.
   if (written.value.archivedNow) {
     yield* recordServerEvent(
@@ -185,6 +199,7 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
       { agent_kind: agent.kind },
     );
   }
+
   return written;
 });
 
@@ -238,5 +253,6 @@ export const archivedUnmovedAgent = /* @__PURE__ */ Effect.fnUntraced(function* 
   const archivedBy = { by: AGENT_ARCHIVER.APP, userId: agent.userId, reason } as const;
   const archived = yield* archiveUnmovedAgent(agent.userId, agent.id, seenSeq, archivedBy);
   const discarded = archived ? yield* discardedOrLogged(agent) : true;
+
   return { archived, discarded };
 });

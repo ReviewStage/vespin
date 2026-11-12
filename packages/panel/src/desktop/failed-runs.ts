@@ -40,22 +40,29 @@ export function useFailedRunsMark(
   const [seen, setSeen] = useState<Seen>(() =>
     staged ? {} : readKept(STORAGE_KEY, storedSeen, {}),
   );
+
   // Note that only the listed workspace's runs are seen, because an editor left open across a switch shows no other's.
   const listed = failedRuns.filter(
     (run) => workspaceId === undefined || run.workspaceId === workspaceId,
   );
+
   const openedRun = listed.find((run) => run.automationId === opened);
   useEffect(() => {
     if (openedRun === undefined || seen[openedRun.automationId] === openedRun.id) return;
+
     // Note that only the automations still failing are kept, in every workspace, because one whose failures aged out of the read has nothing left to mark.
     const next = Object.fromEntries(
       failedRuns.flatMap((run) => {
         const runId = run.automationId === openedRun.automationId ? run.id : seen[run.automationId];
+
         return runId === undefined ? [] : [[run.automationId, runId]];
       }),
     );
+
     setSeen(next);
+
     if (!staged) writeKept(STORAGE_KEY, storedSeen, next);
   }, [openedRun, failedRuns, seen, staged]);
+
   return listed.some((run) => run.automationId !== opened && seen[run.automationId] !== run.id);
 }

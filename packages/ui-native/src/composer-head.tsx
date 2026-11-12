@@ -1,16 +1,15 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
   lineLimit,
-  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -54,13 +53,14 @@ function LineAct({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <Button
       onPress={onPress}
       modifiers={[
         buttonStyle("plain"),
         frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-        contentShape(shapes.rectangle()),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityLabel(label),
       ]}
     >
@@ -88,7 +88,9 @@ function LineAct({
  */
 export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
   const colors = useColors();
+
   if (lines.length === 0 && paused === undefined) return null;
+
   return (
     <VStack alignment="leading" spacing={0}>
       {paused === undefined ? null : (
@@ -153,6 +155,7 @@ export function AttachedPictures({
   readonly onDetach: (id: string) => void;
 }) {
   if (pictures.length === 0) return null;
+
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
@@ -202,8 +205,10 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+
   if (skills.length === 0) {
     if (empty === undefined) return null;
+
     return (
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
@@ -212,6 +217,7 @@ export function SkillSuggestions({
       </Text>
     );
   }
+
   const rows = (
     <VStack alignment="leading" spacing={0}>
       {skills.map((skill) => (
@@ -220,7 +226,7 @@ export function SkillSuggestions({
           onPress={() => onPick(skill.name)}
           modifiers={[
             buttonStyle("plain"),
-            contentShape(shapes.rectangle()),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
             accessibilityLabel(skill.word),
           ]}
         >
@@ -262,7 +268,9 @@ export function SkillSuggestions({
       ))}
     </VStack>
   );
+
   if (skills.length <= SUGGESTIONS_SHOWN) return rows;
+
   return (
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
       {rows}

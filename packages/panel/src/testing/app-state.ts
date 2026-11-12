@@ -18,6 +18,7 @@ import {
   type PullRequestPart,
   type PullRequestPartParams,
 } from "@repo/features/agent-view";
+import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
@@ -30,16 +31,17 @@ import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW, type TASK_CALL_FAILURE, type TasksView } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
+  type AppAllowedCommandList,
   type AppAutomationReads,
   type AppBrowserTabs,
   type AppChapters,
   type AppDescriptionComments,
-  type AppDevicePresence,
   type AppGitHubToken,
   type AppHolderInboxes,
   type AppHolderPages,
   type AppHostRead,
   type AppHostReads,
+  type AppHostsHeld,
   type AppInboxItems,
   type AppInboxSlice,
   type AppIntegrationTools,
@@ -136,16 +138,20 @@ const CASE_WORKSPACES: readonly { readonly id: string; readonly slug?: string }[
  */
 function withWorkspaceExperiments(view: TasksView, experiments: ExperimentChoices): TasksView {
   const chosen = WORKSPACE_EXPERIMENT_LIST.filter((experiment) => experiments[experiment] === true);
+
   if (chosen.length === 0) return view;
+
   const on = chosen.map((experiment) => ({
     experiment,
     on: true,
     changedBy: null,
     changedAt: 0,
   }));
+
   const unlisted = CASE_WORKSPACES.filter(
     ({ id }) => !view.workspaces.some((listed) => listed.id === id),
   );
+
   return {
     ...view,
     workspaces: [
@@ -209,6 +215,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_LISTS]: NO_KEYS_HELD,
     [LIVE_READ.GITHUB_TOKEN]: NO_KEYS_HELD,
+    [LIVE_READ.ALLOWED_COMMANDS]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_CHAPTERS]: NO_CHAPTERS,
     [LIVE_READ.BROWSER_TABS]: NO_BROWSER_TABS,
     [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
@@ -257,8 +264,10 @@ function inCaseWorkspaces(
   patch: Partial<AppStateSnapshot>,
 ): AppStateSnapshot {
   const tasks = withWorkspaceExperiments(snapshot.tasks, experiments);
+
   if (tasks === snapshot.tasks) return snapshot;
   const automations = Object.fromEntries(tasks.workspaces.map(({ id }) => [id, { rows: [] }]));
+
   return {
     ...snapshot,
     tasks,
@@ -281,6 +290,7 @@ function snapshotWith(experiments: ExperimentChoices): AppStateSnapshot {
 /** A document as main's push delivers it to a window that holds none of it yet: every entry. */
 export function deliveryOf(snapshot: AppStateSnapshot): AppStateDelivery {
   const { version, ...entries } = snapshot;
+
   return { version, entries };
 }
 
@@ -303,6 +313,7 @@ export function writeListedTasks(listed: Partial<TasksView>): void {
     ...snapshot,
     tasks: { ...snapshot.tasks, ...listed },
   });
+
   const calls = fakeAppBridgeCalls();
   const handed = calls.requestAppState;
   fakeAppBridge({
@@ -325,6 +336,7 @@ export function signedInAs(account: {
   readonly name: string;
 }): AppStateSnapshot {
   const snapshot = snapshotWith({});
+
   return { ...snapshot, account: { ...snapshot.account, ...account } };
 }
 
@@ -369,6 +381,7 @@ export function writeExperiments(
 /** `element` on the test's Query client (`withQueryClient`), its document holding these experiments from the first frame (`writeExperiments`). */
 export function withExperiments(experiments: ExperimentChoices, element: ReactNode): ReactElement {
   writeExperiments(experiments);
+
   return withQueryClient(element);
 }
 
@@ -401,6 +414,7 @@ export function handSettings(
     requestAppState: () => Promise.resolve(snapshot()),
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
@@ -409,7 +423,9 @@ export function handSettings(
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: (payload) => {
       view = Object.assign({ ...view }, { [payload.field]: payload.value });
       const next = deliveryOf(snapshot());
+
       for (const listener of listeners) listener(next);
+
       return Promise.resolve({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: appSettingsWire(view),
@@ -454,7 +470,9 @@ const HELD_ACCOUNT_ID = "user-held";
 /** The document with its signed-in account given an id where it names none. */
 function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
   const { account } = snapshot;
+
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id !== undefined) return snapshot;
+
   return { ...snapshot, account: { ...account, id: HELD_ACCOUNT_ID } };
 }
 
@@ -474,6 +492,7 @@ export function handHostReads(first: {
   readonly chapters?: AppChapters;
   readonly tools?: AppIntegrationTools;
   readonly keys?: AppHostRead<AppProviderKeyList>;
+  readonly allowedCommands?: AppHostRead<AppAllowedCommandList>;
   readonly preferences?: AppHostRead<AccountPreferencesLive>;
   readonly models?: AppHostRead<ModelsAnswer>;
   readonly members?: AppWorkspaceMembers;
@@ -495,9 +514,11 @@ export function handHostReads(first: {
     requestAppState: async () => {
       const asked = version;
       const snapshot = withAccountId(handed === undefined ? snapshotWith({}) : await handed());
+
       if (snapshot.account.status === ACCOUNT_STATUS.SIGNED_IN && snapshot.account.id) {
         account = snapshot.account.id;
       }
+
       return {
         ...snapshot,
         version: asked,
@@ -510,6 +531,9 @@ export function handHostReads(first: {
         ...(first.keys === undefined
           ? undefined
           : { [LIVE_READ.PROVIDER_KEYS]: { [account]: first.keys } }),
+        ...(first.allowedCommands === undefined
+          ? undefined
+          : { [LIVE_READ.ALLOWED_COMMANDS]: { [account]: first.allowedCommands } }),
         ...(first.preferences === undefined
           ? undefined
           : { [LIVE_READ.ACCOUNT_PREFERENCES]: { [account]: first.preferences } }),
@@ -533,22 +557,27 @@ export function handHostReads(first: {
     },
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       // Note that what the bridge delivered before, a test's settings among it, still reaches the window, stamped as newer than all delivered here, with what was delivered here laid over it.
       const off = earlier?.((delivery) => {
         version += 1;
         listener({ version, entries: { ...delivery.entries, ...laid } });
       });
+
       return () => {
         listeners.delete(listener);
         off?.();
       };
     },
   });
+
   const deliver = (entries: AppStateDelivery["entries"]) => {
     laid = { ...laid, ...entries };
     version += 1;
+
     for (const listener of [...listeners]) listener({ version, entries });
   };
+
   return {
     deliverItems: (next) => deliver({ [LIVE_READ.INBOX_ITEMS]: next }),
     deliverHolders: (next) => deliver({ [LIVE_READ.HOLDER_INBOX]: next }),
@@ -594,6 +623,12 @@ export interface AutomationsHold {
   closed: boolean;
 }
 
+type HoldAutomationsResult = {
+  readonly holds: readonly AutomationsHold[];
+  readonly asked: readonly AutomationFollow[];
+  readonly lay: () => void;
+};
+
 /**
  * Answers the window's holds on the automations' reads as the host does,
  * beside whatever acts the test answers by now: each key `readsOf`
@@ -608,28 +643,33 @@ export interface AutomationsHold {
 export function holdAutomations(
   deliver: HostReadsHanded["deliverAutomations"],
   readsOf: AutomationReadsOf,
-): {
-  readonly holds: readonly AutomationsHold[];
-  readonly asked: readonly AutomationFollow[];
-  readonly lay: () => void;
-} {
+): HoldAutomationsResult {
   const holds: AutomationsHold[] = [];
   const asked: AutomationFollow[] = [];
-  const laid: Record<keyof AppAutomationReads, Readonly<Record<string, object>>> = {
+
+  const laid: Record<
+    keyof AppAutomationReads,
+    Readonly<Record<string, { readonly rows?: unknown }>>
+  > = {
     [LIVE_READ.AUTOMATIONS]: {},
     [LIVE_READ.AUTOMATION_RUNS]: {},
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: {},
   };
+
   /** Lays the key's read as the test's host reads it now, answering whether it read any. */
   const layKey = ({ kind, id }: AutomationFollow) => {
     const read = readsOf[kind]?.(id);
+
     if (read === undefined) return false;
     const slice = AUTOMATIONS_READ_OF[kind];
-    const held: { readonly rows?: unknown } | undefined = laid[slice][id];
+    const held = laid[slice][id];
+
     if (read.rows === undefined && held?.rows !== undefined) return false;
     laid[slice] = { ...laid[slice], [id]: read };
+
     return true;
   };
+
   // SAFETY: each read's keys hold what its kind's `readsOf` answered, which is that read's (`AutomationReadsOf`).
   const delivered = () => deliver({ ...laid } as Partial<AppAutomationReads>);
   fakeActPort({
@@ -638,18 +678,23 @@ export function holdAutomations(
       const hold: AutomationsHold = { held, closed: false };
       holds.push(hold);
       asked.push(held);
+
       // Note that the host lays what it read once the hold is taken, never inside it.
       if (layKey(held)) void Promise.resolve().then(delivered);
+
       return heldUntilClosed(() => {
         hold.closed = true;
       });
     },
     [AUTOMATION_ACT_KIND.AUTOMATIONS_RETRY]: (held) => {
       asked.push(held);
+
       if (layKey(held)) delivered();
+
       return Promise.resolve();
     },
   });
+
   return {
     holds,
     asked,
@@ -686,6 +731,7 @@ export function holdPullRequestParts(
   answers: PullRequestPartAnswers,
 ): readonly PullRequestPartParams[] {
   const asked: PullRequestPartParams[] = [];
+
   let held: AppPullRequestParts = {
     [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
@@ -694,23 +740,30 @@ export function holdPullRequestParts(
     [LIVE_READ.PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
   };
+
   const ask = async (params: PullRequestPartParams) => {
     const answer = answers[params.part];
+
     if (answer === undefined) return;
     asked.push(params);
     const read = PULL_REQUEST_PART_READ[params.part];
     const number = params.number === undefined ? OWN_PULL_REQUEST : String(params.number);
+
     const landed: object = await answer(params.agentId, params.number).catch(() => ({
       failure: AGENT_CALL_FAILURE.UNANSWERED,
     }));
+
     const slice: Readonly<Record<string, Readonly<Record<string, AppHostRead<object>>>>> =
       held[read];
+
     const was = slice[params.agentId]?.[number]?.rows;
+
     const kept =
       params.part !== PULL_REQUEST_PART.VIEWED &&
       "failure" in landed &&
       was !== undefined &&
       !("failure" in was);
+
     if (kept) return;
     // SAFETY: what lands for a part is that part's read (`PartAnswerOf`), laid at its key's path.
     held = {
@@ -722,15 +775,18 @@ export function holdPullRequestParts(
     } as AppPullRequestParts;
     deliver(held);
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: (params) => {
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(() => ask(params));
+
       return quietHold();
     },
     [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: (params) => ask(params),
   });
+
   return asked;
 }
 
@@ -753,38 +809,47 @@ export function holdIntegrationTools(
 ): readonly string[] {
   const asked: string[] = [];
   let held: AppIntegrationTools = NO_KEYS_HELD;
+
   const ask = async (server: IntegrationServer) => {
     const name = server.connection ?? server.provider;
     asked.push(name);
     const answering = toolsOf(server);
+
     if (answering === undefined) return;
     const answer = await Promise.resolve(answering).catch(() => undefined);
     const was = held[name];
+
     const read: AppHostRead<IntegrationToolsAnswer> =
       answer !== undefined && !("failure" in answer)
         ? { rows: answer }
         : was?.rows !== undefined
           ? was
           : { failed: true };
+
     held = { ...held, [name]: read };
     deliver(held);
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: (server) => {
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(() => ask(server));
+
       return quietHold();
     },
     [INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: async (server) => {
       const name = server.connection ?? server.provider;
+
       if (held[name]?.failed === true) {
         held = { ...held, [name]: UNREAD };
         deliver(held);
       }
+
       await ask(server);
     },
   });
+
   return asked;
 }
 
@@ -797,6 +862,11 @@ export type RepositoriesRead =
 type RepositoriesAnswer = (
   workspace: string,
 ) => RepositoriesRead | Promise<RepositoriesRead> | undefined;
+
+type HoldRepositoryListsResult = {
+  readonly asked: readonly string[];
+  readonly again: () => Promise<void>;
+};
 
 /**
  * Answers the window's holds on each workspace's repositories, and its Try
@@ -811,43 +881,52 @@ type RepositoriesAnswer = (
 export function holdRepositoryLists(
   deliver: HostReadsHanded["deliverRepositoryLists"],
   listOf: RepositoriesAnswer,
-): { readonly asked: readonly string[]; readonly again: () => Promise<void> } {
+): HoldRepositoryListsResult {
   const asked: string[] = [];
   const scopes = new Map<string, { readonly workspaceId?: string }>();
   let held: AppRepositoryLists = NO_KEYS_HELD;
+
   const ask = async ({ workspaceId }: { readonly workspaceId?: string }) => {
     const key = workspaceId ?? EVERY_WORKSPACE;
     asked.push(key);
     const answering = listOf(key);
+
     if (answering === undefined) return;
     const answer = await Promise.resolve(answering).catch(() => undefined);
     const was = held[key];
+
     const read: AppHostRead<GitHubRepositoriesAnswer> =
       answer !== undefined && "repositories" in answer
         ? { rows: answer.repositories }
         : was?.rows !== undefined
           ? was
           : { failed: true };
+
     held = { ...held, [key]: read };
     deliver(held);
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [TASKS_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: (scope) => {
       scopes.set(scope.workspaceId ?? EVERY_WORKSPACE, scope);
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(() => ask(scope));
+
       return quietHold();
     },
     [TASKS_ACT_KIND.TASKS_REPOSITORIES_RETRY]: async (scope) => {
       const key = scope.workspaceId ?? EVERY_WORKSPACE;
+
       if (held[key]?.failed === true) {
         held = { ...held, [key]: UNREAD };
         deliver(held);
       }
+
       await ask(scope);
     },
   });
+
   return {
     asked,
     again: async () => {
@@ -874,15 +953,18 @@ export function holdMembers(
     [WORKSPACE_ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]: ({ workspaceId }) => {
       asked.push(workspaceId);
       const read = membersOf(workspaceId);
+
       // Note that the host pushes what it read once the hold is taken, never inside it.
       if (read !== undefined && held[workspaceId] === undefined) {
         held = { ...held, [workspaceId]: read };
         const laid = held;
         void Promise.resolve().then(() => deliver(laid));
       }
+
       return quietHold();
     },
   });
+
   return asked;
 }
 
@@ -918,15 +1000,18 @@ export function holdPages(
       const read = pagesOf(place);
       const kind = PAGE_OWNER.TASK;
       const id = place.taskId;
+
       // Note that the host pushes what it read once the hold is taken, never inside it.
       if (read !== undefined && held[kind][id] === undefined) {
         held = { ...held, [kind]: { ...held[kind], [id]: read } };
         const laid = held;
         void Promise.resolve().then(() => deliver(laid));
       }
+
       return quietHold();
     },
   });
+
   return asked;
 }
 
@@ -942,20 +1027,24 @@ export function holdBrowserTabs(
   tabsOf: (place: BrowserTabsPlace) => readonly AgentBrowserTab[],
 ): (place: BrowserTabsPlace, tabs: readonly AgentBrowserTab[]) => void {
   let held: AppBrowserTabs = NO_BROWSER_TABS;
+
   const lay = (place: BrowserTabsPlace, tabs: readonly AgentBrowserTab[]) => {
     const kind = browserTabsPlaceKind(place);
     held = { ...held, [kind]: { ...held[kind], [browserTabsPlaceId(place)]: { rows: tabs } } };
     deliver(held);
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [TASKS_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: (place) => {
       const tabs = tabsOf(place);
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(() => lay(place, tabs));
+
       return quietHold();
     },
   });
+
   return lay;
 }
 
@@ -981,22 +1070,27 @@ export function holdTranscripts(
   const asked: AgentTranscriptKey[] = [];
   const closed: AgentTranscriptKey[] = [];
   let held: AppTranscripts = NO_TRANSCRIPTS;
+
   const lay = (transcript: AgentTranscriptKey, read: AppHostRead<AppTranscript>) => {
     const { agentId } = transcript;
     const id = transcript.callId ?? OWN_TRANSCRIPT;
     held = { ...held, [agentId]: { ...held[agentId], [id]: read } };
     deliver(held);
   };
+
   fakeActPort({
     ...fakeActPortCalls(),
     [AGENT_ACT_KIND.AGENTS_TRANSCRIPT]: (transcript) => {
       asked.push(transcript);
       const read = transcriptOf(transcript);
+
       // Note that the host lays what it read once the hold is taken, never inside it.
       if (read !== undefined) void Promise.resolve().then(() => lay(transcript, read));
+
       return heldUntilClosed(() => closed.push(transcript));
     },
   });
+
   return { lay, asked, closed };
 }
 
@@ -1011,58 +1105,40 @@ export function handInboxItems(
 const BEATING_ACCOUNT_ID = "user-beating";
 
 /**
- * Lays the signed-in account's beats as the host holds them over whatever
- * document the window was handed: each device named having beat `ageMs` ago
- * on the window's clock, by a read that landed `askedAgoMs` ago (now where
- * not given), the latest ask failed after it as `stale` says, or, where none
- * are given, the read failed before it ever answered. The account
- * is given an id where the document names none, since the beats are held by
- * it.
+ * Lays the signed-in account's hosts as the host holds them over whatever
+ * document the window was handed: each device named having beat `ageMs`
+ * ago, marked away where that is past fresh, as the scheduled sweep marks
+ * it, beside the hosts given, which stand over them, or, where no ages are
+ * given, the read failed before it ever answered. The account is given an
+ * id where the document names none, since the hosts are held by it.
  */
 export function handBeats(
   ages: Readonly<Record<string, number>> | undefined,
-  {
-    askedAgoMs = 0,
-    hosts,
-    ...options
-  }: {
-    readonly stale?: true;
-    readonly askedAgoMs?: number;
-    /** The account's hosts the hosts read answers beside the beats, where given. */
-    readonly hosts?: readonly HostLine[];
-  } = {},
+  { hosts = [] }: { readonly hosts?: readonly HostLine[] } = {},
 ): void {
   const handed = fakeAppBridgeCalls().requestAppState;
-  const now = Date.now();
-  const read: AppHostRead<AppDevicePresence> =
+  const given = new Set(hosts.map((host) => host.id));
+
+  const beating = Object.entries(ages ?? {}).flatMap(([id, ageMs]): HostLine[] =>
+    given.has(id) ? [] : [{ id, name: id, away: ageMs > MAC_PRESENCE.FRESH_MS }],
+  );
+
+  const read: AppHostRead<AppHostsHeld> =
     ages === undefined
       ? { failed: true }
-      : {
-          rows: {
-            beats: Object.entries(ages).map(([deviceId, ageMs]) => ({
-              deviceId,
-              beatAt: now - ageMs,
-            })),
-            askedAt: now - askedAgoMs,
-            ...options,
-          },
-        };
+      : { rows: { hosts: [...beating, ...hosts], installScriptUrl: "" } };
+
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: fakeAppBridgeCalls().onAppState ?? (() => () => undefined),
     requestAppState: async () => {
       const snapshot = handed === undefined ? snapshotWith({}) : await handed();
       const { account } = snapshot;
+
       if (account.status !== ACCOUNT_STATUS.SIGNED_IN) return snapshot;
       const id = account.id ?? BEATING_ACCOUNT_ID;
-      return {
-        ...snapshot,
-        account: { ...account, id },
-        [LIVE_READ.DEVICE_PRESENCE]: { [id]: read },
-        ...(hosts === undefined
-          ? undefined
-          : { [LIVE_READ.HOSTS]: { [id]: { rows: { hosts, installScriptUrl: "" } } } }),
-      };
+
+      return { ...snapshot, account: { ...account, id }, [LIVE_READ.HOSTS]: { [id]: read } };
     },
   });
 }
@@ -1101,32 +1177,40 @@ function heldForAccount<Rows>(
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
   let accountId = HELD_FOR_ACCOUNT_ID;
   let version = 0;
+
   const laid = () => {
     const read = readOf();
+
     return sliceOf(read === undefined ? NO_KEYS_HELD : { [accountId]: read });
   };
+
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     requestAppState: async () => {
       const snapshot = handed === undefined ? snapshotWith({}) : await handed();
       version = Math.max(version, snapshot.version);
       const { account } = snapshot;
+
       if (account.status !== ACCOUNT_STATUS.SIGNED_IN) return snapshot;
       accountId = account.id ?? HELD_FOR_ACCOUNT_ID;
+
       return { ...snapshot, account: { ...account, id: accountId }, ...laid() };
     },
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       const before = listening?.((delivery) => {
         version = Math.max(version, delivery.version);
         listener(delivery);
       });
+
       return () => {
         listeners.delete(listener);
         before?.();
       };
     },
   });
+
   return () => {
     for (const listener of [...listeners]) listener({ version, entries: laid() });
   };
@@ -1149,14 +1233,17 @@ export function holdIntegrations(
     ...fakeActPortCalls(),
     [INTEGRATION_ACT_KIND.INTEGRATIONS_FOLLOW]: () => {
       holds += 1;
+
       return quietHold();
     },
     [INTEGRATION_ACT_KIND.INTEGRATIONS_RETRY]: () => {
       retries += 1;
       lay();
+
       return Promise.resolve();
     },
   });
+
   return { lay, holds: () => holds, retries: () => retries };
 }
 
@@ -1177,13 +1264,16 @@ export function holdGitHubToken(
     ...fakeActPortCalls(),
     [ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_FOLLOW]: () => {
       holds += 1;
+
       return quietHold();
     },
     [ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_RETRY]: () => {
       retries += 1;
       lay();
+
       return Promise.resolve();
     },
   });
+
   return { lay, holds: () => holds, retries: () => retries };
 }

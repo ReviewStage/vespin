@@ -114,11 +114,13 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
         const other = yield* openGithubUser();
+
         const second = {
           provider: NOTION,
           connectionName: "notion-2",
           connectSubject: "subject-2",
         };
+
         yield* beginIntegrationSignIn(
           userId,
           firstIntegrationAccount(userId, NOTION),
@@ -157,6 +159,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
+
         for (const provider of [LINEAR, NOTION]) {
           yield* beginIntegrationSignIn(
             userId,
@@ -165,6 +168,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
           );
           yield* completeIntegrationSignIn(userId, provider, `state-first-${provider}-${userId}`);
         }
+
         assert.deepEqual(
           (yield* readIntegrationConnections(userId)).map((row) => [
             row.provider,
@@ -184,8 +188,10 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
+
         const begin = (state: string) =>
           beginIntegrationSignIn(userId, firstIntegrationAccount(userId, NOTION), state);
+
         yield* begin("state-label-1");
         yield* completeIntegrationSignIn(userId, NOTION, "state-label-1", "Acme");
         assert.equal((yield* readIntegrationConnection(userId, NOTION))?.label, "Acme");
@@ -202,21 +208,25 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
+
         const named = (connectSubject: string) => ({
           provider: NOTION,
           connectionName: "notion-2",
           connectSubject,
         });
+
         const first = yield* beginIntegrationSignIn(
           userId,
           named("subject-a"),
           `state-race-a-${userId}`,
         );
+
         const second = yield* beginIntegrationSignIn(
           userId,
           named("subject-b"),
           `state-race-b-${userId}`,
         );
+
         const row = yield* readIntegrationConnection(userId, "notion-2");
         assert.deepEqual(
           [first !== undefined, second, row?.connectSubject, row?.state],
@@ -230,6 +240,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
+
         const under = (connectSubject: string, state: string) =>
           Effect.andThen(
             beginIntegrationSignIn(
@@ -239,6 +250,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
             ),
             completeIntegrationSignIn(userId, "notion-2", state),
           );
+
         yield* under("subject-old", `state-old-${userId}`);
         const old = yield* readIntegrationConnection(userId, "notion-2");
         assert.ok(old !== undefined);
@@ -255,6 +267,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
+
         const under = (connectSubject: string, state: string) =>
           Effect.andThen(
             beginIntegrationSignIn(
@@ -264,6 +277,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
             ),
             completeIntegrationSignIn(userId, "notion-2", state),
           );
+
         yield* under("subject-read", `state-read-${userId}`);
         const read = yield* readIntegrationConnection(userId, "notion-2");
         assert.ok(read !== undefined);
@@ -286,11 +300,13 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
         const userId = yield* openGithubUser();
         const integrations: readonly SyncTopic[] = [[TOPIC.ACCOUNT_INTEGRATIONS, userId]];
         const account = firstIntegrationAccount(userId, LINEAR);
+
         const fires = <A, E, R>(write: Effect.Effect<A, E, R>) =>
           expectTopicsFire(write, integrations);
 
         yield* fires(beginIntegrationSignIn(userId, account, `state-begin-${userId}`));
         yield* fires(completeIntegrationSignIn(userId, LINEAR, `state-begin-${userId}`));
+
         const grant = {
           holder: INTEGRATION_GRANT_HOLDER.ACCOUNT,
           provider: LINEAR,
@@ -298,6 +314,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
           connectionName: LINEAR,
           connectSubject: userId,
         };
+
         const listed = [{ name: "list_issues" }];
         yield* expectTopicsFire(storeTools(grant, listed, yield* DateTime.nowAsDate), []);
         assert.ok((yield* readStoredTools(grant)) !== undefined, "the listing was kept");

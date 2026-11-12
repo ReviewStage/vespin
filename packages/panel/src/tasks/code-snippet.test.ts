@@ -58,6 +58,7 @@ const ANSWER: TasksFileAnswer = {
 /** The item's code card, reading the file's lines through `ANSWER`. */
 function inboxCode(): ReactElement {
   fakeActPort({ [ACT_KIND.TASKS_FILE]: () => Promise.resolve(ANSWER) });
+
   return createElement(InboxCodeCard, {
     block: BLOCK,
     code: {
@@ -105,6 +106,7 @@ async function draw(element: ReactElement): Promise<HTMLElement> {
   roots.push(root);
   act(() => root.render(withQueryClient(onSideBundles(bundles, element))));
   await settle();
+
   return container;
 }
 
@@ -112,6 +114,7 @@ async function draw(element: ReactElement): Promise<HTMLElement> {
 function drawnRoot(container: HTMLElement): ShadowRoot {
   const root = container.querySelector(".code-snippet diffs-container")?.shadowRoot;
   assert.ok(root, "the lines are drawn by the diff bundle");
+
   return root;
 }
 

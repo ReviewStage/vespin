@@ -2,8 +2,24 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { type AgentNoticeDoorsSurface, NOTICE_KIND } from "@repo/host/agent-notices";
 import { PUSH } from "@repo/host/contract";
 import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
-import { app, Notification } from "electron";
+import { app, type Event as ElectronEvent, Notification } from "electron";
 import type { PanelManager } from "./panel-manager";
+
+/** A notification as macOS holds it once posted: shown once asked, and answering with Electron's events. */
+interface PostedNotification {
+  on(event: "click" | "close" | "show", listener: () => void): void;
+  on(event: "failed", listener: (event: ElectronEvent, error: string) => void): void;
+  show(): void;
+}
+
+/** The system's doors a notice leaves through: Electron's, unless a test stands its own in. */
+interface NoticeSystem {
+  readonly app: { setBadgeCount(count: number): void };
+  readonly Notification: {
+    isSupported(): boolean;
+    new (options: { title: string; body: string; silent: boolean }): PostedNotification;
+  };
+}
 
 /**
  * notice-doors.ts -- the doors a notice leaves this process through: Electron's `Notification`, shown once with its click handed back, which a command waiting on this Mac posts, as does an agent's finish or ask where the account turned notifications on, the Dock's badge, or a chime played in one panel window.
@@ -33,13 +49,16 @@ export function electronNoticeDoors(dependencies: {
   /** The panel windows, one of which plays each chime. */
   panels: Pick<PanelManager, "pushToOne">;
   report: (line: string) => void;
+  /** Electron's `app` and `Notification`, unless a test stands its own in. */
+  system?: NoticeSystem;
 }): AgentNoticeDoorsSurface {
-  const { onAnswered, panels, report } = dependencies;
-  const standing = new Set<Notification>();
+  const { onAnswered, panels, report, system = { app, Notification } } = dependencies;
+  const standing = new Set<PostedNotification>();
+
   const post: AgentNoticeDoorsSurface["post"] = (notice) => {
-    if (!Notification.isSupported()) return;
+    if (!system.Notification.isSupported()) return;
     const silent = notice.subject.kind !== NOTICE_KIND.MAC_COMMAND_ASK;
-    const posted = new Notification({ title: notice.title, body: notice.body, silent });
+    const posted = new system.Notification({ title: notice.title, body: notice.body, silent });
     const release = () => standing.delete(posted);
     standing.add(posted);
     posted.on("click", () => {
@@ -55,10 +74,11 @@ export function electronNoticeDoors(dependencies: {
     });
     posted.show();
   };
+
   return {
     post,
     badge: (count) => {
-      app.setBadgeCount(count);
+      system.app.setBadgeCount(count);
     },
     chime: (sound) => panels.pushToOne(PUSH.CHIME, sound),
   };

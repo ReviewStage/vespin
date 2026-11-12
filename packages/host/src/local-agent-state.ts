@@ -57,6 +57,7 @@ export const ownedAgents = (stateRoot: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     return yield* fileSystem.readDirectory(path.join(stateRoot, OWNED_FOLDER));
   }).pipe(Effect.orElseSucceed((): readonly string[] => []));
 
@@ -98,11 +99,14 @@ export const keptRunnerGroups = (stateRoot: string) =>
     const folder = path.join(stateRoot, RUNNER_GROUPS_FOLDER);
     const agents = yield* fileSystem.readDirectory(folder);
     const kept: RunnerGroup[] = [];
+
     for (const agentId of agents) {
       const text = yield* Effect.option(fileSystem.readFileString(path.join(folder, agentId)));
       const read = Option.flatMap(text, decodeRunnerGroup);
+
       if (Option.isSome(read)) kept.push(read.value);
     }
+
     return kept;
   }).pipe(Effect.orElseSucceed((): readonly RunnerGroup[] => []));
 

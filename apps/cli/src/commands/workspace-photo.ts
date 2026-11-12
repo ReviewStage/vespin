@@ -33,14 +33,18 @@ const PHOTO_REFUSAL_WORDS = {
 /** The file as the `data:` URL a photo is sent as, under the type its first bytes say, or why it could not be read. */
 const photoUrlOf = Effect.fnUntraced(function* (file: string) {
   const fileSystem = yield* FileSystem.FileSystem;
+
   const bytes = yield* Effect.mapError(
     fileSystem.readFile(file),
     () => new CommandFailed({ exit: CLI_EXIT.USAGE, message: `Could not read ${file}.` }),
   );
+
   const type = sniffImageType(bytes);
+
   if (type === undefined) {
     return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: PHOTO_WORDS });
   }
+
   return `data:${type};base64,${Base64.encode(bytes)}`;
 });
 
@@ -61,21 +65,25 @@ export const workspacePhotoCommand = Command.make(
   ({ file, remove }) =>
     Effect.gen(function* () {
       const named = Option.getOrUndefined(file);
+
       if ((named === undefined) === !remove) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Name a photo file, or pass --remove, not both.",
         });
       }
+
       const { workspace } = yield* resolveWorkspace;
       const photo = named === undefined ? null : yield* photoUrlOf(named);
       const { hosted } = yield* session;
+
       const { workspace: changed } = yield* askService(
         hosted.workspaces.setPhoto,
         { workspaceId: workspace.id, photo },
         HOSTED_DEADLINE.USUAL,
         PHOTO_REFUSAL_WORDS,
       );
+
       yield* answer({
         json: {
           workspace: {

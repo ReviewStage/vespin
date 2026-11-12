@@ -50,10 +50,12 @@ import { type ServerStanding, turnServers } from "./servers.js";
 /** An account with a coding agent on Claude Code on a task, and its conversation as the MCP door admits it. */
 const codingSession = Effect.gen(function* () {
   const userId = yield* openGithubUser();
+
   const task = yield* startTask(userId, {
     name: "Teammate invitations",
     repository: "acme/relay",
   });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -65,14 +67,17 @@ const codingSession = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   });
+
   assert.ok(Option.isSome(started));
   const agent = started.value.agent;
+
   const admitted: ConversationAdmission = Result.succeed({
     caller: userId,
     target: { userId, conversationId: agent.conversationId },
     runtimeSessionId: undefined,
     timeZone: undefined,
   });
+
   return {
     userId,
     agentId: agent.id,
@@ -140,18 +145,21 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
         Effect.gen(function* () {
           const agent = yield* codingSession;
           yield* updateAgentServers(agent.userId, agent.agentId, [LINEAR]);
+
           const deployment = (allowed: string) =>
             integrationConnectOver({
               LINEAR_CONNECTOR_UID: "oauth/linear",
               SLACK_CONNECTOR_UID: "oauth/slack",
               SLACK_ALLOWED_ACCOUNTS: allowed,
             });
+
           const handed = (allowed: string) =>
             Effect.all([
               turnServers(agent.admission, ALWAYS_ON),
               turnServers(agent.admission, ALWAYS_ON),
               turnServers(agent.admission, AGENT_SWITCHES),
             ]).pipe(Effect.provide(deployment(allowed)));
+
           const standing = (providers: readonly IntegrationProvider[]): ServerStanding =>
             bare(agent.userId, providers);
 
@@ -181,15 +189,18 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
             [LINEAR],
             Effect.succeed(true),
           );
+
           const deployment = integrationConnectOver({
             LINEAR_CONNECTOR_UID: "oauth/linear",
             SLACK_CONNECTOR_UID: "oauth/slack",
             SLACK_ALLOWED_ACCOUNTS: `${agent.userId}@app.test`,
           });
+
           const handed = (policy: typeof AGENT_SWITCHES | typeof AGENT_SWITCHES_AND_MENTIONS) =>
             turnServers(policy === AGENT_SWITCHES ? agent.admission : agent.admission, policy).pipe(
               Effect.provide(deployment),
             );
+
           const standing = (providers: readonly IntegrationProvider[]): ServerStanding =>
             bare(agent.userId, providers);
 
@@ -223,6 +234,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
       () =>
         Effect.gen(function* () {
           const agent = yield* codingSession;
+
           const account = (connectionName: string, connectSubject: string, state: string) =>
             Effect.andThen(
               beginIntegrationSignIn(
@@ -232,6 +244,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
               ),
               completeIntegrationSignIn(agent.userId, connectionName, state, undefined),
             );
+
           yield* account(NOTION, agent.userId, `state-quoted-${agent.agentId}`);
           yield* account(
             "notion-2",
@@ -244,6 +257,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
           const standing = yield* turnServers(agent.admission, ALWAYS_ON).pipe(
             Effect.provide(integrationConnectOver({ NOTION_CONNECTOR_UID: "oauth/notion" })),
           );
+
           const first = standing.on
             ? standing.connections.find(({ connectionName }) => connectionName === NOTION)
             : undefined;
@@ -259,6 +273,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
       () =>
         Effect.gen(function* () {
           const agent = yield* codingSession;
+
           const account = (connectionName: string, connectSubject: string, state: string) =>
             Effect.andThen(
               beginIntegrationSignIn(
@@ -268,6 +283,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
               ),
               completeIntegrationSignIn(agent.userId, connectionName, state, undefined),
             );
+
           const longest = "A".repeat(INTEGRATION_LABEL_MAX);
           yield* account(NOTION, agent.userId, `state-long-${agent.agentId}`);
           yield* account("notion-2", `subject-long-${agent.agentId}`, `state-l2-${agent.agentId}`);
@@ -277,6 +293,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
           const standing = yield* turnServers(agent.admission, ALWAYS_ON).pipe(
             Effect.provide(integrationConnectOver({ NOTION_CONNECTOR_UID: "oauth/notion" })),
           );
+
           const notes = standing.on
             ? standing.connections
                 .filter(({ provider }) => provider === NOTION)
@@ -293,6 +310,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
       () =>
         Effect.gen(function* () {
           const agent = yield* codingSession;
+
           const account = (connectionName: string, connectSubject: string, state: string) =>
             Effect.andThen(
               beginIntegrationSignIn(
@@ -302,6 +320,7 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
               ),
               completeIntegrationSignIn(agent.userId, connectionName, state, undefined),
             );
+
           yield* account(NOTION, agent.userId, `state-acme-${agent.agentId}`);
           yield* account("notion-2", `subject-${agent.agentId}`, `state-personal-${agent.agentId}`);
           yield* renameIntegrationConnection(agent.userId, NOTION, "Acme");
@@ -317,8 +336,10 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
             `state-pending-${agent.agentId}`,
           );
           const deployment = integrationConnectOver({ NOTION_CONNECTOR_UID: "oauth/notion" });
+
           const handed = (policy: typeof ALWAYS_ON | typeof AGENT_SWITCHES) =>
             turnServers(agent.admission, policy).pipe(Effect.provide(deployment));
+
           const notions = (standing: ServerStanding) =>
             standing.on ? standing.connections.filter(({ provider }) => provider === NOTION) : [];
 

@@ -31,13 +31,18 @@ const TRACEPARENT = "traceparent";
 /** The trace `sentry-trace` and `baggage` name, as Sentry would continue it; none where it would start one of its own or leave its sampling open. */
 function sentryParent(headers: Headers.Headers): Option.Option<Tracer.ExternalSpan> {
   const sentryTrace = headers[SENTRY_TRACE_HEADER.TRACE];
+
   if (sentryTrace === undefined) return Option.none();
   const baggage = headers[SENTRY_TRACE_HEADER.BAGGAGE];
+
   const continued = continueTrace({ sentryTrace, baggage }, () =>
     getCurrentScope().getPropagationContext(),
   );
+
   const { traceId, parentSpanId, sampled } = continued;
+
   if (parentSpanId === undefined || sampled === undefined) return Option.none();
+
   return Option.some(Tracer.externalSpan({ traceId, spanId: parentSpanId, sampled }));
 }
 
@@ -63,8 +68,10 @@ function traceparentOf({ traceId, spanId, sampled }: Tracer.ExternalSpan): strin
  */
 export function withSentryTraceparent(request: Request): Request {
   const parent = sentryParent(Headers.fromInput(request.headers));
+
   if (Option.isNone(parent)) return request;
   const headers = new globalThis.Headers(request.headers);
   headers.set(TRACEPARENT, traceparentOf(parent.value));
+
   return new Request(request, { headers });
 }

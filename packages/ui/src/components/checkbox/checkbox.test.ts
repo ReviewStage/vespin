@@ -34,6 +34,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -46,6 +47,7 @@ function Signed({
 }): React.JSX.Element {
   const [signed, setSigned] = useState(start);
   const [heard, setHeard] = useState<boolean[]>([]);
+
   return createElement(
     "div",
     null,
@@ -88,11 +90,13 @@ test("the box and its words each hand the caller the value they ask for", () => 
 
 test("Space on the box checks it and Space again unchecks it", () => {
   const page = render(createElement(Signed));
+
   const space = () =>
     act(() => {
       box(page).dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
       box(page).dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true }));
     });
+
   space();
   space();
   assert.equal(page.querySelector("output")?.textContent, "true,false");
@@ -122,6 +126,7 @@ test("a mixed box its caller holds checked still submits with its form", () => {
       }),
     ),
   );
+
   const form = page.querySelector("form") ?? assert.fail("no form");
   assert.equal(new FormData(form).get("servers"), "on");
 });
@@ -151,6 +156,7 @@ test("a read-only box stands as its caller holds it, checked or not, and hands o
 
 test("a box named by a label of its own draws no words and is pressed as any box is", () => {
   const heard: boolean[] = [];
+
   const page = render(
     createElement(Checkbox, {
       label: "Send the invite",
@@ -158,6 +164,7 @@ test("a box named by a label of its own draws no words and is pressed as any box
       onChange: (value: boolean) => heard.push(value),
     }),
   );
+
   assert.equal(box(page).getAttribute("aria-label"), "Send the invite");
   assert.equal(page.querySelector(".ui-checkbox-words"), null);
   press(page.querySelector("label"));

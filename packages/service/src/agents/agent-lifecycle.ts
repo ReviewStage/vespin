@@ -75,14 +75,18 @@ export const deletedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { userId, agent } = yield* reachedAgentById(account, id);
   const retiring = yield* retiringReach(userId);
   yield* stoppedForGood(writer, userId, agent);
+
   const deleted = yield* hostedStoreOrUnavailable(
     deleteAgent(userId, agent.id, {
       standsStopped: agentStandsStopped,
       beforeDelete: retiredBeforeDelete(retiring),
     }).pipe(Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined))),
   );
+
   if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+
   if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { deleted: true as const, txid: deleted.value.txid };
 });
 
@@ -94,6 +98,7 @@ export const clearedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices> {
   const { userId, agent } = yield* reachedAgentById(account, id);
   yield* clearedAgent(writer, userId, agent);
+
   return yield* summaryOf(userId, agent);
 });
 
@@ -110,6 +115,7 @@ export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   const { userId, agent } = yield* reachedAgentById(account, id);
   yield* rewoundAgent(userId, agent, messageId, restoreFiles);
+
   return yield* summaryOf(userId, agent);
 });
 
@@ -123,6 +129,7 @@ export const warmedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
   const { userId, agent } = yield* reachedAgentById(account, id);
+
   if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
 });
 
@@ -132,7 +139,9 @@ export const resumedAgentSandbox = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<SandboxState, HostedRefusal, DatabaseServices | AgentSandbox> {
   const { sessionId } = yield* reachedAgentSession(account, id);
+
   if (sessionId === undefined) return SANDBOX_STATE.STARTING;
   const sandbox = yield* AgentSandbox;
+
   return yield* sandboxOrUpstream(sandbox.resume(sessionId));
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { CDP_FAILURE, type CdpFailure } from "@repo/features/browser-cdp";
 import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
-import { Duration, Effect, Exit, Fiber, Stream } from "effect";
+import { Duration, Effect, Exit, Fiber, Option, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { keptAfterResponse } from "../../http/after-response.js";
 import {
@@ -50,6 +50,7 @@ function browserOver(
     sessionId: SESSION,
     ...scenario,
   });
+
   return {
     service: agentBrowserOver(sandbox.api, fakeBridgePty(peer, bridge), FAKE_IMAGE),
     ran: sandbox.ran,
@@ -98,6 +99,7 @@ it.effect("a worker's session reaches the browser in its parent's sandbox", () =
       Effect.gen(function* () {
         const browser = yield* AgentBrowser;
         const cdp = yield* browser.connect(browserSessionOf(worker));
+
         return yield* cdp.pages;
       }),
     ).pipe(Effect.provide(agentBrowserTestLayer(peer, SESSION)));
@@ -120,6 +122,7 @@ it.effect("a session lists, opens, and closes pages, and the browser's refusal s
         yield* cdp.closePage("page-blank");
         const refused = yield* Effect.flip(cdp.closePage("page-blank"));
         const unknown = yield* Effect.flip(cdp.send({ method: "Nope.nothing" }));
+
         return { opened, withOpened, after: yield* cdp.pages, refused, unknown };
       }),
     );
@@ -147,6 +150,7 @@ it.effect("a command reaches the target session it names and its result comes ba
           ? { result: { result: { value: `${command.sessionId}: ${command.params.expression}` } } }
           : undefined,
     });
+
     const { service } = browserOver(peer);
 
     const result = yield* Effect.scoped(
@@ -185,6 +189,7 @@ it.effect(
           const events = yield* Fiber.join(collecting);
           const afterEnd = yield* Effect.flip(cdp.send({ method: "Target.getTargets" }));
           const late = yield* Stream.runCollect(cdp.events);
+
           return { events, afterEnd, late };
         }),
       );
@@ -204,6 +209,7 @@ it.effect(
       const peer = yield* fakeCdpPeer({
         answer: (command) => (command.method.startsWith("Page.") ? { silent: true } : undefined),
       });
+
       const { service } = browserOver(peer);
 
       const { timedOut, closed } = yield* Effect.scoped(
@@ -215,6 +221,7 @@ it.effect(
           const hanging = yield* Effect.forkChild(Effect.flip(cdp.send({ method: "Page.reload" })));
           yield* Effect.yieldNow;
           yield* peer.hangUp;
+
           return { timedOut, closed: yield* Fiber.join(hanging) };
         }),
       );
@@ -236,6 +243,7 @@ it.effect("a stream that subscribes as the connection ends still ends", () =>
         const cdp = yield* service.connect(SESSION);
         const collecting = yield* Effect.forkChild(Stream.runCollect(cdp.events));
         yield* peer.hangUp;
+
         return yield* Fiber.join(collecting);
       }),
     );
@@ -247,6 +255,7 @@ it.effect("a stream that subscribes as the connection ends still ends", () =>
 it.effect("a browser that cannot be reached says why", () =>
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
+
     const reasons = yield* Effect.forEach(
       [
         browserOver(peer, { status: undefined }),
@@ -257,7 +266,8 @@ it.effect("a browser that cannot be reached says why", () =>
       ({ service }) =>
         Effect.map(Effect.exit(Effect.scoped(service.connect(SESSION))), (exit) => {
           const error = reasonOf(exit);
-          return error === undefined || error._tag === "None" ? undefined : error.value.reason;
+
+          return error === undefined || Option.isNone(error) ? undefined : error.value.reason;
         }),
     );
 
@@ -275,10 +285,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
+
       const stuck = browserOver(peer, {
         status: SANDBOX_STATUS.STOPPED,
         pendingResumes: Number.POSITIVE_INFINITY,
       });
+
       const silent = browserOver(peer, {}, FAKE_BRIDGE.SILENT);
       const refusing = browserOver(peer, {}, FAKE_BRIDGE.ERROR);
 
@@ -289,12 +301,15 @@ it.effect(
 
       const resuming = yield* Effect.forkChild(Effect.flip(stuck.service.ensure(SESSION)));
       const outage = yield* Effect.forkChild(Effect.flip(refused.service.ensure(SESSION)));
+
       const bridging = yield* Effect.forkChild(
         Effect.flip(Effect.scoped(silent.service.connect(SESSION))),
       );
+
       const unbridged = yield* Effect.forkChild(
         Effect.flip(Effect.scoped(refusing.service.connect(SESSION))),
       );
+
       yield* TestClock.adjust(Duration.minutes(2));
 
       assert.equal((yield* Fiber.join(resuming)).reason, BROWSER_UNREACHABLE.NOT_RESUMED);
@@ -308,6 +323,7 @@ it.effect(
 it.effect("a legacy sandbox's move whose snapshot is gone is given up on at once, saying so", () =>
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
+
     const { service } = browserOver(peer, {
       status: SANDBOX_STATUS.STOPPED,
       legacy: true,
@@ -326,17 +342,20 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
+
       const { service, sandbox } = browserOver(peer, {
         status: SANDBOX_STATUS.STOPPED,
         resumeRefusal: new ImageNotReady({}),
         resumeRefusals: 2,
       });
+
       const kept = keptAfterResponse();
 
       // Note that the clock has not moved yet, so an open that waited on the image here would never answer.
       const unreachable = yield* Effect.flip(service.ensure(SESSION)).pipe(
         Effect.provide(kept.layer),
       );
+
       const opening = yield* Effect.forkChild(kept.run);
       yield* TestClock.adjust(Duration.seconds(10));
       yield* Fiber.join(opening);
@@ -355,12 +374,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
+
       const sandbox = fakeSandboxApi({
         status: SANDBOX_STATUS.STOPPED,
         sessionId: SESSION,
         snapshotGone: true,
         vcpus: 4,
       });
+
       const [standing] = yield* sandbox.api.listTagged(SESSION_TAG, SESSION);
       const service = agentBrowserOver(sandbox.api, fakeBridgePty(peer), FAKE_IMAGE);
 
@@ -385,6 +406,7 @@ it.effect(
       const bridging = yield* Effect.forkChild(
         Effect.flip(Effect.scoped(service.connect(SESSION))),
       );
+
       yield* TestClock.adjust(Duration.seconds(20));
 
       assert.equal((yield* Fiber.join(bridging)).reason, BROWSER_UNREACHABLE.BRIDGE_FAILED);
@@ -401,6 +423,7 @@ it.effect(
       const connecting = yield* Effect.forkChild(
         Effect.scoped(Effect.flatMap(service.connect(SESSION), (cdp) => cdp.pages)),
       );
+
       yield* TestClock.adjust(Duration.seconds(1));
       const pages = yield* Fiber.join(connecting);
 

@@ -39,6 +39,7 @@ export const rendererPause = (ms: number): Promise<void> =>
  */
 export const rendererFork = (effect: Effect.Effect<void>): (() => void) => {
   const fiber = Effect.runForkWith(rendererServicesNow())(effect);
+
   return () => fiber.interruptUnsafe();
 };
 

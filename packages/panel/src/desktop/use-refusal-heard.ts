@@ -28,20 +28,24 @@ export function useRefusalHeard(
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
+
     return () => {
       mounted.current = false;
     };
   }, []);
   const { surface, about } = failure;
+
   return useCallback(
     (result) => {
       if (result.status === ACTION_RESULT_STATUS.ACCEPTED) return result;
+
       if (mounted.current && stands.current) return result;
       toast({
         words: result.reason,
         tone: STATUS_TONE.DANGER,
         failure: { surface, cause: result, about },
       });
+
       return result;
     },
     [toast, surface, about],

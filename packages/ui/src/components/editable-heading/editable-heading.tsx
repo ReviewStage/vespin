@@ -27,7 +27,9 @@ export type EditableHeadingLeave =
 /** The way out a key asks for, or none for a key that types. */
 function leaveOf(key: string): EditableHeadingLeave | undefined {
   if (key === "Escape") return EDITABLE_HEADING_LEAVE.BACK;
+
   if (key === "Enter" || key === "ArrowDown") return EDITABLE_HEADING_LEAVE.ON;
+
   return undefined;
 }
 
@@ -44,6 +46,7 @@ export function headingCaretAtEnd(element: HTMLElement): void {
 /** The words cut back to `maxLength` where they ran past it, the caret at their end. */
 function bound(element: HTMLElement, maxLength: number | undefined): void {
   const words = element.textContent;
+
   if (maxLength === undefined || words.length <= maxLength) return;
   element.textContent = words.slice(0, maxLength);
   headingCaretAtEnd(element);
@@ -74,10 +77,12 @@ export function EditableHeading({
     // leaving the heading, and its Escape cancels one.
     if (isComposingKey(event)) return;
     const way = leaveOf(event.key);
+
     if (way === undefined) return;
     event.preventDefault();
     onLeave(way, event.currentTarget);
   };
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: the words are edited in the heading's own look, which wraps as a heading does; an input cannot.
     <span

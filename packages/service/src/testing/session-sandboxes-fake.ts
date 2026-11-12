@@ -36,6 +36,7 @@ export function scriptedSessionSandboxes(
   return Effect.gen(function* () {
     const deletes = yield* Queue.unbounded<string>();
     const asked = yield* Queue.unbounded<SessionSandboxesAsked>();
+
     const layer = Layer.succeed(SessionSandboxes, {
       deleteFor: (sessionId) =>
         Queue.offer(asked, { ask: SESSION_SANDBOXES_ASK.DELETE, sessionId }).pipe(
@@ -49,6 +50,7 @@ export function scriptedSessionSandboxes(
           script: archive.script,
         }).pipe(Effect.andThen(archived(sessionId, archive))),
     });
+
     return { layer, deletes, asked };
   });
 }

@@ -91,16 +91,22 @@ export function forwardedImages(
 > {
   return Effect.gen(function* () {
     const named = [...new Set(ids)];
+
     if (named.length === 0) return Result.succeed([]);
     const files: AgentAttachment[] = [];
     let total = 0;
+
     for (const id of named) {
       const picture = yield* pictureOf(forwarder, id);
+
       if (Option.isNone(picture)) {
         return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.UNREACHED, id });
       }
+
       const { contentType, bytes } = picture.value;
+
       if (isVideoType(contentType)) return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.VIDEO, id });
+
       if (bytes.byteLength > AGENT_BOUNDS.MAX_IMAGE_BYTES) {
         return Result.fail({
           kind: FORWARDED_IMAGE_REFUSAL.TOO_LARGE,
@@ -108,6 +114,7 @@ export function forwardedImages(
           bytes: bytes.byteLength,
         });
       }
+
       total += bytes.byteLength;
       files.push({
         name: `${id}.${IMAGE_EXTENSION[contentType]}`,
@@ -115,9 +122,11 @@ export function forwardedImages(
         data: Buffer.from(bytes).toString("base64"),
       });
     }
+
     if (total > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES) {
       return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.TOO_MUCH, bytes: total });
     }
+
     return Result.succeed(files);
   });
 }

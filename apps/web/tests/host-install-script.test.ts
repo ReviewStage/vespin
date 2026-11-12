@@ -40,16 +40,19 @@ test("the install script fetched from a Preview names that Preview as the origin
     new Request(new URL(HOST_WIRE.INSTALL_SCRIPT_PATH, PREVIEW_ORIGIN)),
     new Map([["hosts/install-script", installScript]]),
   );
+
   const script = await answer.text();
   assert.equal(answer.status, 200);
   assert.doesNotMatch(script, /@@[A-Z0-9_]+@@/u);
 
   const file = join(await temporaryDirectory(t, "install-script-"), "install.sh");
   writeFileSync(file, script);
+
   // The script stops once it has defined what it carries, under the variable its own tests set.
   const origin = spawnSync("sh", ["-c", '. "$1"; printf %s "$ORIGIN"', "sh", file], {
     env: { PATH: process.env.PATH, APP_HOST_INSTALL_LIBRARY: "1" },
     encoding: "utf8",
   });
+
   assert.equal(origin.stdout, PREVIEW_ORIGIN, origin.stderr);
 });

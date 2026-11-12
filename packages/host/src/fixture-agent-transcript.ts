@@ -285,6 +285,7 @@ export function fixtureAgentOlderMessages(
   reader: { readonly userId: string; readonly name: string },
 ): readonly AgentTranscriptMessage[] {
   const asking = startedAt - DAY;
+
   return [
     asked(
       "fixture-invites-plan-ask",
@@ -336,10 +337,12 @@ export function fixtureAgentPicture(
   if (pictureId === KEPT.DIALOG || pictureId === KEPT.EMAIL) {
     return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
   }
+
   if (pictureId === KEPT.RECORDING) {
     return playable === MP4_TYPE
       ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
       : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
   }
+
   return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 }

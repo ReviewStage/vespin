@@ -118,11 +118,13 @@ function useMergeMethod(
   const [kept, , change] = useKept(KEPT.METHODS, {});
   const chosen = repository === null ? undefined : kept[repository];
   const method = chosen !== undefined && allowed.includes(chosen) ? chosen : allowed[0];
+
   const choose = (next: MergeMethod) => {
     if (repository === null) return;
     // Note that the record is read again before it is written, so another window's method for another repository is kept.
     change((held) => ({ ...held, [repository]: next }));
   };
+
   return [method, choose];
 }
 
@@ -151,12 +153,15 @@ function blockedChip(merging: PullRequestMerging | undefined): ChipFace | undefi
   if (merging?.review === REVIEW_DECISION.CHANGES_REQUESTED) {
     return chip("Changes requested", STATUS_TONE.DANGER, CHIP_GLYPHS.HELD);
   }
+
   if (merging?.review === REVIEW_DECISION.REVIEW_REQUIRED) {
     return chip("Review required", STATUS_TONE.ATTENTION, CHIP_GLYPHS.REVIEW);
   }
+
   if (merging?.checks === CHECK_SUMMARY.FAILING || merging?.checks === CHECK_SUMMARY.PENDING) {
     return undefined;
   }
+
   return chip("Blocked", STATUS_TONE.DANGER, CHIP_GLYPHS.HELD);
 }
 
@@ -172,10 +177,13 @@ function chipOf(
   action: MergeAction | undefined,
 ): ChipFace | undefined {
   const { merge, merging } = pullRequest;
+
   if ((merging?.queued ?? null) !== null) return undefined;
+
   if (pullRequest.state === PULL_REQUEST_STATE.DRAFT || merge === MERGE_STATE.DRAFT) {
     return undefined;
   }
+
   switch (merge) {
     case MERGE_STATE.UNKNOWN:
       return chip("Checking", STATUS_TONE.WORKING, CHIP_GLYPHS.CHECKING);
@@ -263,6 +271,7 @@ function MethodPress({
 }): React.JSX.Element {
   const menu = useMenu(methods.length > 1);
   const icon = variant === BUTTON_VARIANT.PRIMARY ? <GitMergeIcon aria-hidden="true" /> : undefined;
+
   if (methods.length < 2) {
     return (
       <Button
@@ -276,6 +285,7 @@ function MethodPress({
       </Button>
     );
   }
+
   return (
     <>
       <SplitButton
@@ -360,6 +370,7 @@ function BypassPress({
   // What the question was asked about; none while it asks nothing.
   const [asked, setAsked] = useState<BypassAsked | undefined>(undefined);
   const standing = asked !== undefined && asked.head === headSha && asked.base === base;
+
   const confirm = useConfirmDialog(
     { subject: standing, surfaceOpen: shown },
     writes.confirmAct({
@@ -369,7 +380,9 @@ function BypassPress({
     }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_WRITE),
   );
+
   if ((!shown || !standing) && asked !== undefined && !confirm.busy) setAsked(undefined);
+
   return (
     <>
       <MethodPress
@@ -415,7 +428,9 @@ export function MergeStatus({
   if (!isLivePullRequest(pullRequest)) return null;
   const action = mergeActionFor(pullRequest);
   const face = chipOf(pullRequest, action);
+
   if (face === undefined) return null;
+
   return <MergeChip face={face} sentence={mergeSentence(pullRequest, action)} />;
 }
 
@@ -447,11 +462,13 @@ export function MergeControl({
   // Whether Remove from queue is being asked about; the question goes once a read finds it out of the queue, so it never asks to dequeue what no longer stands in it.
   const [asked, setAsked] = useState(false);
   const inQueue = (merging?.queued ?? null) !== null;
+
   const confirm = useConfirmDialog(
     { subject: asked && inQueue, surfaceOpen: shown },
     writes.confirmAct({ action: PULL_REQUEST_ACTION.DEQUEUE }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_DEQUEUE),
   );
+
   // Note that a question left behind as its panel hides is let go whole, so the panel comes back asking nothing; one already answered finishes.
   if ((!shown || !inQueue) && asked && !confirm.busy) setAsked(false);
 
@@ -460,11 +477,14 @@ export function MergeControl({
   const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
   const busy = writes.pending !== undefined;
   const headSha = merging?.headSha ?? "";
+
   const askDequeue = () => {
     setAsked(true);
     confirm.ask();
   };
+
   const busyAs = (write: MergeWrite) => (pending === write ? MERGE_BUSY_WORDS[write] : undefined);
+
   const plain = (variant: ButtonVariant, words: string, write: MergeWrite, onPress: () => void) => (
     <Button
       variant={variant}
@@ -475,10 +495,12 @@ export function MergeControl({
       {words}
     </Button>
   );
+
   const press = (): React.JSX.Element | null => {
     switch (action) {
       case MERGE_ACTION.MERGE:
         if (method === undefined) return null;
+
         return (
           <MethodPress
             variant={BUTTON_VARIANT.PRIMARY}
@@ -496,6 +518,7 @@ export function MergeControl({
         );
       case MERGE_ACTION.ENABLE_AUTO_MERGE:
         if (method === undefined) return null;
+
         return (
           <MethodPress
             variant={BUTTON_VARIANT.OUTLINE}
@@ -531,6 +554,7 @@ export function MergeControl({
         );
       case MERGE_ACTION.BYPASS:
         if (method === undefined) return null;
+
         return (
           <BypassPress
             pullRequest={pullRequest}
@@ -548,8 +572,11 @@ export function MergeControl({
         return null;
     }
   };
+
   const drawn = press();
+
   if (drawn === null && !asked) return null;
+
   return (
     <span
       className={

@@ -152,6 +152,7 @@ export function setWorkspaceExperiment(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const rows = yield* upsertStanding({ ...change, now });
+
     return { txid: rows[0]?.txid };
   });
 }

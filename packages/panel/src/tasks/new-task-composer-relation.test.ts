@@ -92,10 +92,12 @@ async function settle(): Promise<void> {
 async function mount() {
   holdRepositoryLists(handHostReads({}).deliverRepositoryLists, LISTING);
   const control = tasksControl();
+
   const starts: {
     repository: string | null;
     relations: readonly TaskCreateRelation[] | undefined;
   }[] = [];
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -117,6 +119,7 @@ async function mount() {
               from?: NewTaskStart,
             ) => {
               starts.push({ repository, relations: from?.relations });
+
               return Promise.resolve(undefined);
             },
           },
@@ -128,6 +131,7 @@ async function mount() {
     ),
   );
   await settle();
+
   return { container, starts };
 }
 
@@ -147,6 +151,7 @@ async function openRelationSearch(container: HTMLElement): Promise<void> {
   const plus =
     container.querySelector<HTMLButtonElement>('button[aria-label="Add files and more"]') ??
     assert.fail("the card's + stands");
+
   act(() => plus.click());
   await settle();
   act(() => row("Task relation").click());
@@ -180,9 +185,11 @@ test("tasks picked from the + menu are sent with the start together, and a row's
   assert.deepEqual(docked(container), ["Blocks API rate limit", "Blocked by Ship signup"]);
   pressInComposer(container, "Enter", { metaKey: true });
   await settle();
+
   const remove =
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove relation"]') ??
     assert.fail("each row ends in its ×");
+
   act(() => remove.click());
   pressInComposer(container, "Enter", { metaKey: true });
   await settle();
@@ -234,9 +241,11 @@ test("swapping the card's one tree relation takes a task of another repository, 
   const { container, starts } = await mount();
 
   await relate(container, "Sub-task of", "Ship login");
+
   const name =
     container.querySelector<HTMLElement>(".new-task-relations-dock .ui-task-row-press") ??
     assert.fail("the row's name stands");
+
   act(() => name.click());
   await settle();
   act(() => row("API rate limit").click());

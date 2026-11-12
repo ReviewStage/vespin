@@ -52,6 +52,7 @@ const openAgent = (userId: string, organizationId: string, taskId: string) =>
       repository: "acme/api",
       idempotencyKey: randomUUID(),
     });
+
     return id;
   });
 
@@ -73,6 +74,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -88,6 +90,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
         yield* joinWorkspace(workspace, teammate);
         yield* openWorkspace(outsider);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
+
         const first = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -96,6 +99,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
             LUKE,
           ),
         );
+
         yield* writePage(
           owner,
           onTask(task.id),
@@ -138,6 +142,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
         yield* openWorkspace(outsider);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
         const agent = shownByAgent(yield* openAgent(owner, workspace, task.id));
+
         const shown = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -146,15 +151,18 @@ it.layer(getTestDB())("a page read by its id", (it) => {
             agent,
           ),
         );
+
         yield* writePage(
           owner,
           onTask(task.id),
           { pageId: shown.id, title: "Invites", html: "<h1>Two</h1>" },
           LUKE,
         );
+
         const older = Option.getOrThrow(
           yield* writePage(owner, onTask(task.id), { title: "Old", html: "<h1>Old</h1>" }, LUKE),
         );
+
         // A version shown before who showed it was kept, as the column's migration leaves it.
         const db = yield* Database;
         yield* db
@@ -192,6 +200,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
         const workspace = yield* openWorkspace(owner);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
         const onIt = yield* openAgent(owner, workspace, task.id);
+
         const shown = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -200,6 +209,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
             shownByAgent(onIt),
           ),
         );
+
         yield* writePage(
           owner,
           onTask(task.id),
@@ -219,6 +229,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
       const workspace = yield* openWorkspace(owner);
       const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
       const onIt = yield* openAgent(owner, workspace, task.id);
+
       const shown = Option.getOrThrow(
         yield* writePage(
           owner,
@@ -227,6 +238,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
           shownByAgent(onIt),
         ),
       );
+
       const db = yield* Database;
 
       yield* db.delete(agentTable).where(eq(agentTable.id, onIt));

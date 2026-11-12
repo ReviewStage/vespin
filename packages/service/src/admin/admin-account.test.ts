@@ -90,6 +90,7 @@ const openAccount = (name: string) =>
     yield* Database.use((db) =>
       db.insert(user).values({ id, name, email: `${id}@app.test`, createdAt: at(200) }),
     );
+
     return id;
   });
 
@@ -105,11 +106,14 @@ const startAgent = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [conversation] = yield* db
       .insert(conversations)
       .values({ userId, kind: CONVERSATION_KIND.AGENT, createdAt: at(daysAgo) })
       .returning({ id: conversations.id });
+
     const conversationId = conversation?.id ?? "";
+
     const [agent] = yield* db
       .insert(agentTable)
       .values({
@@ -127,6 +131,7 @@ const startAgent = (
         createdAt: at(daysAgo),
       })
       .returning({ id: agentTable.id });
+
     if (options.published !== undefined) {
       yield* db.insert(agentPullRequest).values({
         agentId: agent?.id ?? "",
@@ -136,6 +141,7 @@ const startAgent = (
         pullRequest: pullRequest(options.published),
       });
     }
+
     if (options.turn !== undefined) {
       yield* db.insert(turns).values({
         userId,
@@ -149,6 +155,7 @@ const startAgent = (
         settledAt: at(options.turn.endedDaysAgo ?? daysAgo - 0.5),
       });
     }
+
     return agent?.id ?? "";
   });
 
@@ -169,6 +176,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       createdAt: at(10),
       updatedAt: at(0.25),
     });
+
     const [named] = yield* db
       .insert(task)
       .values([
@@ -183,9 +191,11 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
         { userId, organizationId: own, name: "Older", number: 2, document: "", createdAt: at(45) },
       ])
       .returning({ id: task.id });
+
     const onOwn = { organizationId: own, taskId: named?.id ?? "" };
     // The shared workspace's agent works on a task no account started, so it counts as none of this account's.
     sharedTaskNumbers += 1;
+
     const [ofShared] = yield* db
       .insert(task)
       .values({
@@ -197,11 +207,14 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
         createdAt: at(200),
       })
       .returning({ id: task.id });
+
     const onShared = { organizationId: sharedWorkspace, taskId: ofShared?.id ?? "" };
+
     const merged = yield* startAgent(userId, onOwn, 1, {
       turn: { status: TURN_STATUS.SETTLED },
       published: PULL_REQUEST_STATE.MERGED,
     });
+
     const overflowed = yield* startAgent(userId, onShared, 2, {
       turn: {
         status: TURN_STATUS.FAILED,
@@ -210,11 +223,14 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       },
       published: PULL_REQUEST_STATE.DRAFT,
     });
+
     const neverStarted = yield* startAgent(userId, onOwn, 3, {});
+
     const older = yield* startAgent(userId, onOwn, 40, {
       turn: { status: TURN_STATUS.SETTLED },
       published: PULL_REQUEST_STATE.CLOSED,
     });
+
     const key = (
       provider: (typeof PROVIDER_KEY_PROVIDER)[keyof typeof PROVIDER_KEY_PROVIDER],
       status: (typeof PROVIDER_KEY_STATUS)[keyof typeof PROVIDER_KEY_STATUS],
@@ -231,12 +247,14 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       fastAccess: provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? FAST_ACCESS.ENABLED : null,
       createdAt: at(100),
     });
+
     yield* db
       .insert(accountProviderKey)
       .values([
         key(PROVIDER_KEY_PROVIDER.ANTHROPIC, PROVIDER_KEY_STATUS.INVALID, 5),
         key(PROVIDER_KEY_PROVIDER.OPENAI, PROVIDER_KEY_STATUS.VERIFIED, 1),
       ]);
+
     const connection = (
       provider: (typeof INTEGRATION_PROVIDER)[keyof typeof INTEGRATION_PROVIDER],
       status: IntegrationRowStatus,
@@ -251,6 +269,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       status,
       updatedAt: at(daysAgo),
     });
+
     yield* db
       .insert(integrationConnection)
       .values([
@@ -263,6 +282,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       agentEffort: "high",
       experiments: { [EXPERIMENT.MEMORY]: true, [EXPERIMENT.SKILLS]: false },
     });
+
     const [made] = yield* db
       .insert(automation)
       .values({
@@ -276,6 +296,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
         guards: AUTOMATION_DEFAULT_GUARDS,
       })
       .returning({ id: automation.id });
+
     yield* db.insert(automationRun).values({
       automationId: made?.id ?? "",
       userId,
@@ -286,6 +307,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       firedAt: at(6),
       settledAt: at(6),
     });
+
     // Started long before the window, its turn failed inside it.
     const lateFailure = yield* startAgent(userId, onOwn, 45, {
       turn: {
@@ -294,6 +316,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
         endedDaysAgo: 1,
       },
     });
+
     return { own, merged, overflowed, neverStarted, older, lateFailure };
   });
 

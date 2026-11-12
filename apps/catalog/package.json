@@ -19,6 +19,7 @@
     "@repo/settings": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/wire": "workspace:*",
+    "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
@@ -31,7 +32,7 @@
     "jsdom": "^30.0.1",
     "tailwindcss": "4.3.3",
     "typescript": "catalog:",
-    "vite": "7.3.1",
+    "vite": "7.3.8",
     "vitest": "catalog:"
   }
 }

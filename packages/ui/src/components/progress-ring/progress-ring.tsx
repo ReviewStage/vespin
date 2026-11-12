@@ -55,6 +55,7 @@ export function ProgressRing({
   readonly tone?: ProgressRingTone | undefined;
 }): React.JSX.Element {
   const filled = Math.min(1, Math.max(0, share)) * RING_LENGTH;
+
   return (
     <svg
       className="ui-progress-ring size-control-icon flex-none -rotate-90 fill-none"
@@ -102,6 +103,7 @@ export function ProgressCount({
   readonly look?: ProgressCountLook | undefined;
 }): React.JSX.Element {
   const ring = <ProgressRing share={total > 0 ? done / total : 0} />;
+
   const figures = (
     <>
       <span aria-hidden="true">
@@ -110,6 +112,7 @@ export function ProgressCount({
       <VisuallyHidden>{label}</VisuallyHidden>
     </>
   );
+
   if (look === PROGRESS_COUNT_LOOK.BADGE) {
     return (
       <span className="ui-progress-count inline-flex flex-none tabular-nums">
@@ -117,6 +120,7 @@ export function ProgressCount({
       </span>
     );
   }
+
   return (
     <span className="ui-progress-count inline-flex flex-none items-center gap-tight-gap text-caption-inline text-muted-foreground tabular-nums">
       {ring}

@@ -99,6 +99,7 @@ export function useComposerPickers({
 }): ComposerPickers {
   const dictation = useDictation({ editor, keywords, onNote });
   const openSkill = useSkillOpener();
+
   const skillPicker = useSkillPicker({
     editor,
     room,
@@ -108,11 +109,13 @@ export function useComposerPickers({
     commands,
     side,
   });
+
   // An `@` picks a mention of the page the box stands on, where it stands on one that hands them.
   const taskMentions = useTaskMentions();
   // An app address pasted whole is called by the name the window holds for what it names.
   const known = useKnownNames();
   const taskIdOf = useNumberedTaskIdOf();
+
   const mentionPicker = useMentionPicker({
     source: taskMentions,
     self,
@@ -144,10 +147,14 @@ export function useComposerPickers({
     if (dictation.onFieldKey(event) || skillPicker.onKey(event) || mentionPicker.onKey(event)) {
       return true;
     }
+
     if (event.key !== "Escape") return false;
+
     if (!escapeClimbs) event.stopPropagation();
+
     if (onLeave === undefined) editor.current?.blur();
     else onLeave();
+
     return true;
   };
 
@@ -179,6 +186,7 @@ export function useComposerPickers({
                     edit={{ node, pickDate: mentionPicker.pickDate }}
                   />
                 );
+
                 return servers === undefined ? (
                   chip
                 ) : (

@@ -45,6 +45,7 @@ export function sentrySendTracer(sdk: SendTracingSdk): SendTracer {
     sdk.startNewTrace(() =>
       sdk.startSpan({ name, op: SENTRY_SEND_OP }, () => {
         const { "sentry-trace": sentryTrace, baggage } = sdk.getTraceData();
+
         return send(
           sentryTrace === undefined
             ? undefined
@@ -57,6 +58,7 @@ export function sentrySendTracer(sdk: SendTracingSdk): SendTracer {
 /** Installs what this window traces its sends through, and answers what takes it back. */
 export function installSendTracer(installed: SendTracer): () => void {
   tracer = installed;
+
   return () => {
     if (tracer === installed) tracer = undefined;
   };
@@ -68,5 +70,6 @@ export function tracedSend<A>(
   send: (trace: SendTrace | undefined) => Promise<A>,
 ): Promise<A> {
   if (name === undefined || tracer === undefined) return send(undefined);
+
   return tracer(name, send);
 }

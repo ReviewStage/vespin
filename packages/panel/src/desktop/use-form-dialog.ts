@@ -47,10 +47,12 @@ export function useFormDialog(confirm: DialogConfirm, valid: boolean): FormDialo
   // draw one frame with nothing there before its check.
   const [wasActing, setWasActing] = useState(acting);
   const [landed, setLanded] = useState(false);
+
   if (acting !== wasActing) {
     setWasActing(acting);
     setLanded(!acting && rejection === undefined && confirm.standing);
   }
+
   if (landed && !confirm.standing) setLanded(false);
   const settling = acting || landed;
 
@@ -58,12 +60,14 @@ export function useFormDialog(confirm: DialogConfirm, valid: boolean): FormDialo
     if (!valid || settling) return;
     confirm.run();
   };
+
   return {
     open: confirm.standing && (confirmAsked(stage) || rejection !== undefined || landed),
     settling,
     refusal: acting ? undefined : rejection,
     dismiss: () => {
       if (settling) return;
+
       if (confirmWithdrawable(stage)) confirm.keep();
       confirm.clear();
     },

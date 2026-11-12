@@ -56,8 +56,11 @@ export function rankedBySearch<Item>(
   subjectOf: (item: Item) => SearchSubject,
 ): readonly Item[] {
   return items
-    .map((item) => ({ item, score: searchHit(subjectOf(item), query)?.score }))
-    .filter((each): each is { item: Item; score: number } => each.score !== undefined)
+    .flatMap((item) => {
+      const score = searchHit(subjectOf(item), query)?.score;
+
+      return score === undefined ? [] : [{ item, score }];
+    })
     .sort((first, second) => second.score - first.score)
     .map((each) => each.item);
 }
@@ -71,6 +74,7 @@ export function taskSearchSubject(
     workspaceName === undefined || task.number === undefined
       ? undefined
       : taskKey(workspaceName, task.number);
+
   return {
     label: task.name,
     lines: [task.repository, key].filter((line): line is string => line != null && line !== ""),

@@ -33,7 +33,7 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { Effect, type Scope } from "effect";
+import { Context, Effect, type Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import type { RunnerHarness, RunnerMessage, RunnerTrace } from "./protocol.js";
@@ -47,6 +47,7 @@ export const RUNNER_SPAN = {
   HANDSHAKE: "runner/handshake",
   FIRST_REQUEST: "runner/firstRequest",
 } as const;
+
 type RunnerSpan = (typeof RUNNER_SPAN)[keyof typeof RUNNER_SPAN];
 
 /** The attributes this file sets, the only ones a span keeps beside Sentry's own. */
@@ -143,16 +144,26 @@ function sentryOptions(
 /** Sentry's Node profiler, imported only for a launch handed a trace. */
 type ProfilingNode = typeof import("@sentry/profiling-node");
 
+/** How the profiler's module is imported: the installed one, or one a test stands in that cannot load. */
+export const ProfilerImport = Context.Reference<() => Promise<ProfilingNode>>(
+  "@repo/agent-runner/ProfilerImport",
+  { defaultValue: () => () => import("@sentry/profiling-node") },
+);
+
 /**
  * Sentry's Node profiler, or none where its module did not load, which says
  * why in the runner's log. Note that the module throws as it is imported
  * where its binary is missing or built for another Node, so the import's
  * failure is the profiler's absence rather than the launch's.
  */
-const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromise({
-  try: () => import("@sentry/profiling-node"),
-  catch: (cause) => (cause instanceof Error ? cause.message.split("\n", 1)[0] : String(cause)),
-}).pipe(
+const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.flatMap(
+  ProfilerImport,
+  (importProfiler) =>
+    Effect.tryPromise({
+      try: importProfiler,
+      catch: (cause) => (cause instanceof Error ? cause.message.split("\n", 1)[0] : String(cause)),
+    }),
+).pipe(
   Effect.catch((why) =>
     Effect.as(
       Effect.logWarning(`agent-runner: the startup is traced without a profile: ${why}`),
@@ -164,6 +175,7 @@ const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromi
 /** Whether a message is the harness beginning a request to the model. */
 function isModelRequest(message: RunnerMessage): boolean {
   if ("method" in message) return message.method === CODEX_TURN_STARTED;
+
   return (
     message.type === "system" &&
     message.subtype === "status" &&
@@ -211,6 +223,7 @@ function observed(startup: Startup, message: RunnerMessage): boolean {
     return false;
   startup.requested = true;
   endStartup(startup);
+
   return true;
 }
 
@@ -221,12 +234,15 @@ function begunStartup(
   profiling: ProfilingNode | undefined,
 ): Startup {
   Sentry.init(sentryOptions(trace, profiling));
+
   const attributes = {
     [ATTRIBUTE.HARNESS]: harness,
     ...(trace.path === undefined ? undefined : { [ATTRIBUTE.PATH]: trace.path }),
   };
+
   // Note that Node's time origin is the instant the process started.
   const processStart = performance.timeOrigin;
+
   const span = Sentry.continueTrace(
     { sentryTrace: trace.sentryTrace, baggage: trace.baggage },
     () =>
@@ -238,13 +254,16 @@ function begunStartup(
         }),
       ),
   );
+
   const startup: Startup = {
     span,
     attributes,
     firstRequest: undefined,
     requested: false,
   };
+
   childSpan(startup, RUNNER_SPAN.CONFIG, span, processStart).end();
+
   return startup;
 }
 
@@ -254,11 +273,13 @@ const flushed = Effect.asVoid(Effect.promise(() => Sentry.flush(FLUSH_MS)));
 /** A launch's tracing on the trace it was handed. */
 function tracedLaunch(startup: Startup): LaunchTrace {
   const headers: Record<string, string> = {};
+
   for (const [name, value] of Object.entries(
     Sentry.getTraceData({ span: startup.span, propagateTraceparent: true }),
   )) {
     if (value !== undefined) headers[name] = value;
   }
+
   return {
     traced: (effect) =>
       effect.pipe(
@@ -272,6 +293,7 @@ function tracedLaunch(startup: Startup): LaunchTrace {
     step: (name, effect) =>
       Effect.suspend(() => {
         const span = childSpan(startup, name);
+
         return Effect.ensuring(
           effect,
           Effect.sync(() => span.end()),

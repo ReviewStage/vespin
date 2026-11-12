@@ -60,10 +60,12 @@ function dock(threads: readonly InboxItem[], posted: readonly InboxItem[] = thre
     ),
   );
   const row = container.querySelector<HTMLElement>('[role="button"], button');
+
   const press = () => {
     assert.ok(row, "the dock presses");
     act(() => row.click());
   };
+
   return { words: container.textContent, press, opened };
 }
 
@@ -105,12 +107,14 @@ test("with Done and follow-ups on, the bar says Needs you, lists each ask waitin
       },
     ],
   };
+
   const other = waiting(2, "Add RESEND_API_KEY to the workspace");
   const chosen: string[] = [];
   const opened: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (sending: ReadonlySet<string>) =>
     act(() =>
       root.render(
@@ -126,8 +130,10 @@ test("with Done and follow-ups on, the bar says Needs you, lists each ask waitin
         }),
       ),
     );
+
   const never = () =>
     [...container.querySelectorAll("button")].find((each) => each.textContent === "Never");
+
   draw(new Set());
 
   const text = container.textContent ?? "";

@@ -30,9 +30,11 @@ function openedRow(
   ring: Redacted.Redacted | undefined,
 ): Redacted.Redacted | undefined {
   const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
   if (parsed === undefined || Result.isFailure(parsed)) return undefined;
   const owner = { userId, provider: row.provider, kind: PROVIDER_KEY_KIND.API_KEY };
   const opened = openProviderKey(parsed.success, owner, row);
+
   return Result.isFailure(opened) ? undefined : opened.success;
 }
 
@@ -52,22 +54,29 @@ export function ownKeysOf(
 ): TaskStoreEffect<readonly OwnKey[]> {
   return Effect.gen(function* () {
     const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY);
+
     const order = [
       preferred,
       ...Object.values(PROVIDER_KEY_PROVIDER).filter((other) => other !== preferred),
     ];
+
     const own = order.flatMap((provider) => {
       const row = rows.find((each) => each.provider === provider);
+
       const key =
         row === undefined
           ? undefined
           : openedRow(userId, row, environment.providerKeyEncryptionKeys);
+
       return key === undefined ? [] : [{ provider, key }];
     });
+
     if (own.length > 0) return own;
     const standIns = yield* previewKeysOf(userId, environment);
+
     return order.flatMap((provider) => {
       const key = standIns[provider];
+
       return key === undefined ? [] : [{ provider, key }];
     });
   });

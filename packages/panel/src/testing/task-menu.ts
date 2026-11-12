@@ -7,7 +7,9 @@ import { act } from "react";
 /** The task's name in its topbar, the press that opens its details and whose right-click is its menu. */
 export function taskName(container: ParentNode): HTMLButtonElement {
   const name = container.querySelector(".task-topbar h1 button");
+
   if (!(name instanceof HTMLButtonElement)) throw new Error("the task's name stands in its topbar");
+
   return name;
 }
 

@@ -48,6 +48,7 @@ const openNamedUser = (name: string) =>
     const db = yield* Database;
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name, email: `${userId}@app.test` });
+
     return userId;
   });
 
@@ -59,6 +60,7 @@ const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
 const openTask = Effect.gen(function* () {
   const userId = yield* openUser;
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   return { userId, taskId: task.id, workspaceId: task.workspaceId };
 });
 
@@ -86,7 +88,7 @@ const revisionsOf = (userId: string, taskId: string) =>
   Effect.map(listRevisions(userId, taskId), (page) => page.revisions);
 
 /** Each revision as the history lists it, without the instants a test's clock decides. */
-function shapeOf(revisions: readonly DescriptionRevisionLine[]) {
+function outlineOf(revisions: readonly DescriptionRevisionLine[]) {
   return revisions.map(({ seq, lastEdit, changes }) => ({
     seq,
     actor: lastEdit.actor,
@@ -109,7 +111,7 @@ it.layer(getTestDB())("a description's history", (it) => {
           { actor: DESCRIPTION_ACTOR.AGENT, agentId },
         );
 
-        assert.deepEqual(shapeOf(yield* revisionsOf(userId, taskId)), [
+        assert.deepEqual(outlineOf(yield* revisionsOf(userId, taskId)), [
           { seq: 2, actor: DESCRIPTION_ACTOR.AGENT, label: AGENT_TITLE, changes: 1 },
           {
             seq: 1,
@@ -143,6 +145,7 @@ it.layer(getTestDB())("a description's history", (it) => {
       assert.equal((yield* revisionsOf(userId, taskId)).length, 1);
     }),
   );
+
   /**
    * The notetaker's notes, each a revision of its own: the saves stand further apart than
    * any join.
@@ -244,6 +247,7 @@ it.layer(getTestDB())("a description's history", (it) => {
 
         const DEAN = { userId: dean, name: "Dean Stratakos" };
         const CHARLES = { userId: charles, name: "Charles Pan" };
+
         for (const reader of [dean, charles]) {
           const lines = yield* revisionsOf(reader, taskId);
           assert.deepEqual(
@@ -252,9 +256,11 @@ it.layer(getTestDB())("a description's history", (it) => {
           );
           const stored = Option.getOrThrow(yield* readTask(reader, taskId));
           assert.deepEqual(stored.task.lastEdit?.by, CHARLES);
+
           const bySection = new Map(
             stored.task.sectionEdits?.map((edit) => [edit.section, edit.by]),
           );
+
           assert.deepEqual(bySection.get("Goal"), DEAN);
           assert.deepEqual(bySection.get("Approach"), CHARLES);
         }

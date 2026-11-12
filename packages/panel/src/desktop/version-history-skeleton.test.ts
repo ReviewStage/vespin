@@ -44,12 +44,14 @@ function drawn(
   room: ShellRoom = SHELL_ROOM.WIDE,
 ): HTMLElement {
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     history: { ...base.history, open: true, list, selected: undefined },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -88,6 +90,7 @@ function drawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -95,6 +98,7 @@ test("in a narrow room the page's bar is led by the way back to the list, which 
   const page = drawn({ kind: HISTORY_READ.READING }, SHELL_ROOM.NARROW).querySelector(
     ".version-page",
   );
+
   const banner = page?.querySelector("header.ui-toolbar");
   assert.ok(banner?.querySelector(".ui-toolbar-lead button"), "the way back leads the bar");
 });

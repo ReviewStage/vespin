@@ -36,6 +36,7 @@ interface Landing {
 
 function landingFromAddress(): Landing {
   const query = new URLSearchParams(window.location.search);
+
   return {
     provider: integrationProviderFromWire(query.get(INTEGRATION_LANDING.PROVIDER_PARAM)),
     status:
@@ -51,14 +52,17 @@ function landingFromAddress(): Landing {
  */
 function IntegrationConnected(): React.JSX.Element {
   const [landing] = useState(landingFromAddress);
+
   const words = landingWords(
     INTEGRATION_LANDING_OUTCOME[landing.status],
     landing.provider === undefined ? undefined : INTEGRATION_NAME[landing.provider],
   );
+
   const { back, open } = useConnectReturn({
     landed: true,
     settled: words.tone === LANDING_TONE.COMPLETE,
   });
+
   return (
     <AuthPage
       mark={<AuthMark provider={landing.provider} tone={words.tone} />}

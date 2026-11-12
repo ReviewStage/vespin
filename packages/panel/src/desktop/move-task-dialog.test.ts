@@ -41,6 +41,7 @@ const STUDIO: Workspace = {
   github: null,
   memberCount: 3,
 };
+
 const NORTHWIND: Workspace = {
   id: "ws-northwind",
   name: "Northwind",
@@ -48,6 +49,7 @@ const NORTHWIND: Workspace = {
   github: null,
   memberCount: 4,
 };
+
 const OCTO: Workspace = {
   id: "ws-octo",
   name: "Octo",
@@ -55,6 +57,7 @@ const OCTO: Workspace = {
   github: { login: "octo", active: true },
   memberCount: 1,
 };
+
 const ACME: Workspace = {
   id: "ws-acme",
   name: "Acme",
@@ -167,6 +170,7 @@ function menuItem(words: string): HTMLButtonElement | undefined {
 /** Opens the menu's Move to, where the task's sections and Another workspace stand beside it. */
 function openMoveTo(): void {
   const moveTo = menuItem("Move to");
+
   if (moveTo !== undefined) act(() => moveTo.click());
 }
 
@@ -175,6 +179,7 @@ function chooseMove(): HTMLElement {
   openMoveTo();
   const item = menuItem("Another workspace") ?? menuItem("Move to workspace");
   act(() => (item ?? assert.fail("the menu offers the move to another workspace")).click());
+
   return dialog() ?? assert.fail("the move opens a dialog");
 }
 
@@ -190,8 +195,10 @@ function button(within: HTMLElement, words: string): HTMLButtonElement {
 test("the ⋯'s Move to offers Another workspace on the reader's own plan while the account has another workspace, and on no teammate's plan nor with one workspace", () => {
   const offered = () => {
     openMoveTo();
+
     return menuLabels();
   };
+
   openMenu(openTab(TASK, [STUDIO, ACME]));
   const own = offered();
   unmountAll();
@@ -200,6 +207,7 @@ test("the ⋯'s Move to offers Another workspace on the reader's own plan while 
   unmountAll();
   openMenu(openTab(TASK, [STUDIO]));
   const alone = offered();
+
   const moves = (labels: string[]) =>
     labels.includes("Another workspace") || labels.includes("Move to workspace");
 
@@ -214,6 +222,7 @@ test("the dialog lists the other workspaces, disables one whose GitHub cannot re
   openMenu(
     openTab(TASK, [STUDIO, NORTHWIND, OCTO, ACME], (taskId, workspaceId) => {
       moves.push([taskId, workspaceId]);
+
       return Promise.resolve(true);
     }),
   );
@@ -221,11 +230,13 @@ test("the dialog lists the other workspaces, disables one whose GitHub cannot re
 
   const title = document.getElementById(moving.getAttribute("aria-labelledby") ?? "");
   assert.equal(title?.textContent, "Move “Checkout retries” to another workspace");
+
   const rows = [...moving.querySelectorAll<HTMLButtonElement>('[role="radio"]')].map((row) => ({
     words: row.textContent,
     disabled: row.disabled,
     checked: row.getAttribute("aria-checked"),
   }));
+
   assert.deepEqual(rows, [
     {
       words: "NNorthwindNo GitHub connected · cannot reach acme-corp/relay",
@@ -247,6 +258,7 @@ test("the dialog lists the other workspaces, disables one whose GitHub cannot re
       "Its agents keep running, now in Acme.",
     ],
   );
+
   // The recording masks text alone, so no name may stand in an attribute.
   for (const element of [moving, ...moving.querySelectorAll("*")]) {
     for (const attribute of element.attributes) {
@@ -302,12 +314,14 @@ function openTask(tasks: TasksControl): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
 /** The task-wide banner over a stranded task, where one stands: the region its words name. */
 function strandedBanner(within: HTMLElement): HTMLElement | null {
   const regions = [...within.querySelectorAll<HTMLElement>("section[aria-labelledby]")];
+
   return (
     regions.find((region) =>
       document
@@ -320,7 +334,9 @@ function strandedBanner(within: HTMLElement): HTMLElement | null {
 /** The words a reader hears in an element: its text but for a mark hidden from a screen reader, a workspace's tile's letter among them. */
 function heard(node: Node): string {
   if (node instanceof Element && node.getAttribute("aria-hidden") === "true") return "";
+
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+
   return [...node.childNodes].map(heard).join("");
 }
 
@@ -340,19 +356,23 @@ function onTab(
 
 test("a plan whose repository its workspace cannot reach and another of the account's can names that workspace by its tile and name, and its press moves it there through the move's dialog", async () => {
   const moves: [string, string][] = [];
+
   const page = openTask(
     openTab(TASK, [STUDIO, NORTHWIND, ACME], (taskId, workspaceId) => {
       moves.push([taskId, workspaceId]);
+
       return Promise.resolve(true);
     }),
   );
+
   const banner = strandedBanner(page) ?? assert.fail("the stranded plan says so");
   const words = document.getElementById(banner.getAttribute("aria-labelledby") ?? "");
   assert.equal(words === null ? undefined : heard(words), "This task's repository belongs to Acme");
   assert.equal(
-    banner.querySelector(".workspace-ref .ui-avatar[data-shape='tile']")?.textContent,
+    banner.querySelector(".workspace-ref .ui-avatar[data-outline='tile']")?.textContent,
     "A",
   );
+
   for (const element of [banner, ...banner.querySelectorAll("*")]) {
     for (const attribute of element.attributes) {
       assert.doesNotMatch(attribute.value, /Acme|Studio|acme-corp/u, attribute.name);
@@ -375,6 +395,7 @@ test("a plan whose repository its workspace cannot reach and another of the acco
 test("a stranded plan's banner stands over every tab of the plan: an agent's beside the plan, and over the side panel filling the window", () => {
   const tasks = openTab(TASK, [STUDIO, ACME]);
   const agent = openTask(onTab(tasks, AGENT_TAB, { open: true, tab: SIDE_PANEL_TAB.DESCRIPTION }));
+
   const full = openTask(
     onTab(tasks, undefined, { open: true, fullScreen: true, tab: SIDE_PANEL_TAB.DESCRIPTION }),
   );
@@ -383,6 +404,7 @@ test("a stranded plan's banner stands over every tab of the plan: an agent's bes
     [agent, full].map((page) => {
       const banner = strandedBanner(page);
       const region = banner?.closest(".desktop-task-main, .side-panel");
+
       return [
         banner === null ? undefined : heard(banner),
         ["desktop-task-main", "side-panel"].find((name) => region?.classList.contains(name)),
@@ -397,6 +419,7 @@ test("a stranded plan's banner stands over every tab of the plan: an agent's bes
 
 test("no banner stands over any tab of a plan its own workspace reaches, one no other workspace's active GitHub reaches, one with no repository, or a teammate's", () => {
   const suspended = { ...ACME, github: { login: "acme-corp", active: false } };
+
   const cases: [Task, readonly Workspace[]][] = [
     [{ ...TASK, workspaceId: ACME.id }, [STUDIO, ACME]],
     [TASK, [STUDIO, NORTHWIND, OCTO]],
@@ -404,11 +427,13 @@ test("no banner stands over any tab of a plan its own workspace reaches, one no 
     [{ ...TASK, repository: null }, [STUDIO, ACME]],
     [{ ...TASK, ownerId: SAM }, [STUDIO, ACME]],
   ];
+
   const banners = cases.flatMap(([task, workspaces]) =>
     [undefined, AGENT_TAB].map((tab) => {
       const page = openTask(onTab(openTab(task, workspaces), tab));
       const found = strandedBanner(page) !== null;
       unmountAll();
+
       return found;
     }),
   );

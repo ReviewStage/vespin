@@ -59,19 +59,23 @@ function readOnce<View>(
         Effect.tryPromise({ try: open, catch: () => new StreamUnheard() }),
         letGo,
       );
+
       let heard = false;
+
       const next = Effect.tryPromise({
         try: () => stream.next(),
         catch: () => new StreamUnheard(),
       }).pipe(
         Effect.flatMap((word) => {
           if (word.done === true) return Effect.fail(new StreamUnheard());
+
           return Effect.sync(() => {
             heard = true;
             take(word.value);
           });
         }),
       );
+
       yield* Effect.forever(next).pipe(
         Effect.catch((unheard) => (heard ? Effect.void : Effect.fail(unheard))),
       );

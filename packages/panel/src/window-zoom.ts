@@ -47,6 +47,7 @@ export function useWindowZoom(
 ): void {
   // The size a press asked for that the settings do not say yet.
   const asked = useRef<ZoomPercent | undefined>(undefined);
+
   const desktopApp =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
     true;
@@ -54,8 +55,10 @@ export function useWindowZoom(
   /** A write of the size `next` steps to from the latest size asked for, or nothing at that size already. */
   const offerOf = (next: (from: ZoomPercent) => ZoomPercent): (() => void) | undefined => {
     if (!desktopApp || zoom === undefined || next(zoom) === zoom) return undefined;
+
     return () => {
       const target = next(asked.current ?? zoom);
+
       if (target === (asked.current ?? zoom)) return;
       asked.current = target;
       void write(target).then((result) => {
@@ -65,12 +68,14 @@ export function useWindowZoom(
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.WINDOW_ZOOM, cause: result },
         });
+
         // Note that a refused size is forgotten, because no snapshot will
         // ever arrive saying it.
         if (asked.current === target) asked.current = undefined;
       });
     };
   };
+
   useAppCommand(
     APP_COMMAND.ZOOM_IN,
     offerOf((from) => zoomStepped(from, ZOOM_STEP.IN)),

@@ -66,6 +66,7 @@ const skillChangesCounted = (userId: string) =>
     .filter((event) => event.userId === userId && event.name === SERVER_EVENT.SKILL_CHANGE)
     .map((event) => {
       assert.equal(event.workspaceId, undefined);
+
       return "action" in event.properties ? event.properties.action : undefined;
     });
 
@@ -91,6 +92,7 @@ function commitTo(repository: FakeRepository, branch: string, files: Commit): st
   const sha = sha1(`${repository.commits.size}:${JSON.stringify(files)}`);
   repository.commits.set(sha, files);
   repository.branches.set(branch, sha);
+
   return sha;
 }
 
@@ -117,6 +119,7 @@ function tarHeader(name: string, type: string, size: number): Uint8Array {
   put(124, `${size.toString(8).padStart(11, "0")}\0`);
   put(156, type);
   put(257, "ustar\0");
+
   return header;
 }
 
@@ -124,8 +127,10 @@ function tarHeader(name: string, type: string, size: number): Uint8Array {
 function archiveOf(repository: FakeRepository, sha: string): Uint8Array<ArrayBuffer> {
   const tail = ` comment=${sha}\n`;
   let length = tail.length + 1;
+
   while (String(length).length + tail.length !== length)
     length = String(length).length + tail.length;
+
   const entries: [string, string, string][] = [
     ["pax_global_header", "g", `${length}${tail}`],
     ...Object.entries(repository.commits.get(sha) ?? {}).map(
@@ -136,14 +141,17 @@ function archiveOf(repository: FakeRepository, sha: string): Uint8Array<ArrayBuf
       ],
     ),
   ];
+
   const blocks = entries.flatMap(([name, type, content]) => {
     const body = Buffer.from(content);
+
     return [
       tarHeader(name, type, body.byteLength),
       body,
       new Uint8Array((512 - (body.byteLength % 512)) % 512),
     ];
   });
+
   return new Uint8Array(gzipSync(Buffer.concat([...blocks, new Uint8Array(1024)])));
 }
 
@@ -157,19 +165,26 @@ function repositoryScript(repository: FakeRepository) {
   return (sent: SentToGitHub): Response | undefined => {
     const url = new URL(sent.url);
     const codeload = `/${repository.owner}/${repository.name}/tar.gz/`;
+
     if (url.host === "codeload.github.com" && url.pathname.startsWith(codeload)) {
       const sha = commitOf(repository, decodeURIComponent(url.pathname.slice(codeload.length)));
+
       return !repository.private && sha !== undefined
         ? new Response(archiveOf(repository, sha))
         : notFound();
     }
+
     const base = `/repos/${repository.owner}/${repository.name}`;
+
     if (!url.pathname.startsWith(base)) return undefined;
+
     const reached =
       !repository.private ||
       sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`;
+
     if (!reached) return notFound();
     const rest = url.pathname.slice(base.length);
+
     if (rest === "") {
       return Response.json({
         id: repositoryIdOf(repository),
@@ -181,9 +196,12 @@ function repositoryScript(repository: FakeRepository) {
         updated_at: null,
       });
     }
+
     const tarball = /^\/tarball\/(.+)$/u.exec(rest);
+
     const sha =
       tarball === null ? undefined : commitOf(repository, decodeURIComponent(tarball[1] ?? ""));
+
     return sha === undefined ? notFound() : new Response(archiveOf(repository, sha));
   };
 }
@@ -197,6 +215,7 @@ let installationsMade = 0;
 /** An installation of its own for a test, on the repository's owner. */
 function installationFor(repository: FakeRepository): InstallationFixture {
   installationsMade += 1;
+
   return {
     id: 9_000 + installationsMade,
     login: repository.owner,
@@ -226,8 +245,10 @@ const routes = (github: FakeGitHub) =>
         ),
       ),
     );
+
     // SAFETY: the procedures yield the database, the clock, GitHub, and its HTTP client alone, which is all this provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       installedSkills: installedSkillsProcedures({
         resolveUserId: (incoming) =>
@@ -238,9 +259,11 @@ const routes = (github: FakeGitHub) =>
           ),
       }),
     });
+
     return (path: string, userId: string, init: { method?: string; body?: unknown } = {}) =>
       Effect.gen(function* () {
         const sent = init.body === undefined ? undefined : JSON.stringify(init.body);
+
         const response = yield* Effect.promise(() =>
           handle(
             new Request(`${ORIGIN}${path}`, {
@@ -251,9 +274,11 @@ const routes = (github: FakeGitHub) =>
             webServices,
           ),
         );
+
         const text = yield* Effect.promise(() => response.text());
         // SAFETY: the router answers JSON; the test reads it as the wire value it is.
         const body = (text.length === 0 ? text : JSON.parse(text)) as WireBoundaryInput;
+
         return { status: response.status, body } satisfies Answer;
       });
   });
@@ -266,11 +291,14 @@ function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answer.status, status, JSON.stringify(answer.body));
   const read = readEither(schema)(unparsedWire(answer.body));
+
   if (Result.isFailure(read)) assert.fail(`not the answer: ${JSON.stringify(answer.body)}`);
+
   return read.success;
 }
 
-const install = (body: Record<string, unknown>) => ({ method: "POST", body });
+const install = (body: Readonly<Record<string, WireBoundaryInput>>) => ({ method: "POST", body });
+
 const preview = (workspaceId: string, text: string) => ({
   method: "POST",
   body: { workspaceId, text },
@@ -279,7 +307,9 @@ const preview = (workspaceId: string, text: string) => ({
 /** The source preview read from an answer, failing the test where it is another kind. */
 function sourcePreview(answer: Answer) {
   const previewed = readAnswer(installedSkillPreviewSchema, HOSTED_HTTP_STATUS.OK, answer);
+
   if (previewed.kind !== SKILL_PASTE_KIND.SOURCE) assert.fail(`not a source: ${previewed.kind}`);
+
   return previewed;
 }
 
@@ -290,6 +320,7 @@ const FAKE_GITHUB_TOKEN = ["gh", "p_", "x".repeat(36)].join("");
 const storedText = (userId: string, id: string, path: string) =>
   Effect.map(sessionInstalledSkills(userId, null), (skills) => {
     const file = skills.find((one) => one.id === id)?.files.find((one) => one.path === path);
+
     return file === undefined ? undefined : new TextDecoder().decode(file.bytes);
   });
 
@@ -300,6 +331,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
       Effect.gen(function* () {
         const kit = fakeRepository("acme", "kit");
         const review = skillFile("review", "Review a pull request.");
+
         const sha = commitTo(kit, "main", {
           "README.md": "# kit",
           "skills/review/SKILL.md": review,
@@ -309,6 +341,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
           "vendor/review/SKILL.md": skillFile("review", "A second copy."),
           "node_modules/dep/SKILL.md": skillFile("dep", "A dependency's own."),
         });
+
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         const ask = yield* routes(githubReaching([], undefined, {}, repositoryScript(kit)));
@@ -317,6 +350,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const previewed = sourcePreview(
           yield* ask(`${SKILLS}/preview`, owner, preview(workspace, paste)),
         );
+
         assert.equal(previewed.sha, sha);
         assert.deepEqual(
           previewed.skills.map(({ name, description, path, selected }) => ({
@@ -346,6 +380,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
           ...kit.commits.get(sha),
           "skills/review/SKILL.md": skillFile("review", "Review a pull request, carefully."),
         });
+
         const [made] = readAnswer(
           installedSkillInstallAnswerSchema,
           201,
@@ -361,6 +396,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
             }),
           ),
         ).skills;
+
         assert.ok(made);
         assert.equal(made.description, "Review a pull request.");
         assert.deepEqual(made.source, {
@@ -391,6 +427,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         const ask = yield* routes(githubReaching([], undefined, {}, repositoryScript(kit)));
+
         const installing = (skills: readonly string[]) =>
           ask(
             SKILLS,
@@ -415,6 +452,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(`${SKILLS}?workspaceId=${workspace}`, owner),
         );
+
         assert.deepEqual(
           listed.skills.map((skill) => skill.name),
           ["beta"],
@@ -433,14 +471,17 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const connected = yield* openWorkspace(owner);
         yield* connectWorkspaceGitHub(connected, installation);
         const bare = yield* openWorkspace(owner);
+
         const ask = yield* routes(
           githubReaching([installation], undefined, {}, repositoryScript(vault)),
         );
+
         const paste = "https://github.com/acme/vault";
 
         const reached = sourcePreview(
           yield* ask(`${SKILLS}/preview`, owner, preview(connected, paste)),
         );
+
         assert.equal(reached.ref, "main");
         assert.deepEqual(
           reached.skills.map(({ name, path, selected }) => ({ name, path, selected })),
@@ -468,22 +509,27 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const owner = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
         const ask = yield* routes(githubReaching([]));
-        const installText = (body: Record<string, unknown>) =>
+
+        const installText = (body: Readonly<Record<string, WireBoundaryInput>>) =>
           ask(
             SKILLS,
             owner,
             install({ workspaceId: workspace, scope: INSTALLED_SKILL_SCOPE.PERSONAL, ...body }),
           );
-        const madeText = (body: Record<string, unknown>) =>
+
+        const madeText = (body: Readonly<Record<string, WireBoundaryInput>>) =>
           Effect.gen(function* () {
             const [made] = readAnswer(
               installedSkillInstallAnswerSchema,
               201,
               yield* installText(body),
             ).skills;
+
             assert.ok(made);
+
             return { made, stored: yield* storedText(owner, made.id, "SKILL.md") };
           });
+
         const bare = "# My PR style\n\nLead with the change a user sees.";
 
         assert.deepEqual(
@@ -519,6 +565,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         // A name the text declares gives way to the one given, the rest of its frontmatter kept.
         const declared =
           "---\nname: declared\nuser-invocable: false\ndescription: >\n  Says its\n  own name.\n---\n\nBody.";
+
         const renamed = yield* madeText({ text: declared, name: "renamed" });
         assert.equal(renamed.made.userInvocable, false);
         assert.equal(
@@ -558,6 +605,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
             .values({ userId: owner, organizationId: personal, createdAt: new Date(0) }),
         );
         const ask = yield* routes(githubReaching([]));
+
         const shared = (by: string, workspaceId: string, name: string) =>
           ask(
             SKILLS,
@@ -568,10 +616,12 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
               text: skillFile(name, "Shared with everyone."),
             }),
           );
+
         const installedBy = (by: string, name: string) =>
           Effect.map(shared(by, workspace, name), (answer) => {
             const [made] = readAnswer(installedSkillInstallAnswerSchema, 201, answer).skills;
             assert.ok(made);
+
             return made;
           });
 
@@ -599,6 +649,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
               ({ name, manageable }) => ({ name, manageable }),
             ),
           );
+
         assert.deepEqual(yield* seenBy(member), [
           { name: "member-notes", manageable: true },
           { name: "team-style", manageable: false },
@@ -618,12 +669,15 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
 
         const removing = (userId: string, id: string) =>
           ask(installedSkillPath(id), userId, { method: "DELETE" });
+
         assert.equal((yield* removing(peer, notes.id)).status, HOSTED_HTTP_STATUS.FORBIDDEN);
+
         const removed = readAnswer(
           installedSkillRemovedAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* removing(admin, notes.id),
         );
+
         assert.equal(removed.id, notes.id);
         assert.deepEqual(yield* seenBy(peer), [{ name: "team-style", manageable: false }]);
         assert.equal(
@@ -655,20 +709,25 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const workspace = yield* openWorkspace(owner);
         yield* joinWorkspace(workspace, teammate, WORKSPACE_ROLE.MEMBER);
         const ask = yield* routes(githubReaching([], undefined, {}, repositoryScript(kit)));
+
         const installedAs = (scope: string, text: string, skills?: readonly string[]) =>
           Effect.map(
             ask(SKILLS, owner, install({ workspaceId: workspace, scope, text, skills })),
             (answer) => {
               const [made] = readAnswer(installedSkillInstallAnswerSchema, 201, answer).skills;
               assert.ok(made);
+
               return made.id;
             },
           );
+
         const own = yield* installedAs(INSTALLED_SKILL_SCOPE.PERSONAL, "acme/readable", ["review"]);
+
         const team = yield* installedAs(
           INSTALLED_SKILL_SCOPE.WORKSPACE,
           skillFile("team-style", "Shared with everyone."),
         );
+
         const read = (userId: string, id: string) => ask(installedSkillPath(id), userId);
 
         assert.deepEqual(

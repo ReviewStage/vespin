@@ -18,6 +18,7 @@ export const SLASH_COMMAND = {
   CLEAR: "clear",
   NEW: "new",
 } as const;
+
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
 
 /** A message's leading command: its name, without the slash, and the words after it. */
@@ -33,11 +34,13 @@ const LEADING_COMMAND = /^\/([A-Za-z][\w.:-]*)(?:\s+([\s\S]*))?$/;
 export function leadingCommand(text: string): LeadingCommand | undefined {
   const match = LEADING_COMMAND.exec(text.trim());
   const name = match?.[1];
+
   if (match === null || name === undefined) return undefined;
+
   return { name, words: (match[2] ?? "").trim() };
 }
 
 /** Whether a name is one of the box's own commands, as typed. */
 export function isSlashCommand(name: string): name is SlashCommand {
-  return (Object.values(SLASH_COMMAND) as readonly string[]).includes(name);
+  return Object.values(SLASH_COMMAND).some((command) => command === name);
 }

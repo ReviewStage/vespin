@@ -42,9 +42,11 @@ test("signed out, the panel draws its sign-in; a return after another tab signed
   await vi.waitFor(() =>
     assert.ok(root.querySelector("section.ui-auth-card") !== null, "the panel draws its sign-in"),
   );
+
   const toMac = [...root.querySelectorAll("a")].find(
     (link) => link.textContent === "Open in the Mac app",
   );
+
   assert.match(toMac?.getAttribute("href") ?? "", /^vespin:/u);
 
   // The launch reads the session again once the host stands; that read must

@@ -56,6 +56,7 @@ export const workspaceMembersRead = Effect.fn("web/workspaceMembersRead")(functi
   const workspace = yield* answeredWorkspace(userId, workspaceId);
   const members = yield* hostedStoreOrUnavailable(listMembers(workspace.id));
   const former = yield* hostedStoreOrUnavailable(listFormerMembers(workspace.id));
+
   // Note that nobody who left says nothing, so an answer is as it was before anyone could leave.
   return former.length === 0 ? { members } : { members, former };
 });
@@ -73,14 +74,18 @@ export const workspaceSlugSet = Effect.fn("web/workspaceSlugSet")(function* (
 ) {
   const workspace = yield* ownedWorkspace(userId, workspaceId);
   const problem = workspaceSlugProblemOf(slug);
+
   if (problem !== undefined) return yield* Effect.fail(SLUG_REFUSAL[problem]);
+
   const set = yield* hostedStoreOrUnavailable(
     setWorkspaceSlug(workspace.id, slug).pipe(
       Effect.as(true),
       Effect.catchTag("WorkspaceSlugTaken", () => Effect.succeed(false)),
     ),
   );
+
   if (!set) return yield* Effect.fail(SLUG_REFUSAL[WORKSPACE_SLUG_PROBLEM.TAKEN]);
+
   return { workspace: yield* answeredWorkspace(userId, workspace.id) };
 });
 
@@ -91,10 +96,12 @@ export const workspaceRename = Effect.fn("web/workspaceRename")(function* (
   name: string,
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
+
   if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* hostedStoreOrUnavailable(renameWorkspace(workspace.id, name));
   yield* workspaceRenamed(userId, workspace.id);
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.RENAME);
+
   return { workspace: yield* answeredWorkspace(userId, workspace.id) };
 });
 
@@ -111,5 +118,6 @@ export const workspacePhotoSet = Effect.fn("web/workspacePhotoSet")(function* (
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   yield* hostedStoreOrUnavailable(setWorkspaceLogo(workspace.id, photo));
+
   return { workspace: yield* answeredWorkspace(userId, workspace.id) };
 });

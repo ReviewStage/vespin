@@ -125,9 +125,11 @@ function viewOf(
     initialExpansion: expansion,
     renderRowDecoration: decorate,
   });
+
   const frame = document.createElement("div");
   frame.className = "file-tree-view";
   tree.render({ containerWrapper: frame });
+
   return { tree, frame };
 }
 
@@ -136,7 +138,9 @@ function entriesOf(read: ReadFolder, onCut: () => void) {
   return (path: string) =>
     read(path).then((listed) => {
       if (!("entries" in listed)) return undefined;
+
       if (listed.truncated) onCut();
+
       return listed.entries;
     });
 }
@@ -144,9 +148,12 @@ function entriesOf(read: ReadFolder, onCut: () => void) {
 /** Whether two standings say the same, so the tab is told only of a change. */
 function sameStanding(told: TreeStanding, standing: TreeStanding): boolean {
   if (told.kind !== standing.kind) return false;
+
   if (told.kind === TREE_STANDING.FAILED && standing.kind === TREE_STANDING.FAILED)
     return told.notice === standing.notice && told.retry === standing.retry;
+
   if ("cut" in told && "cut" in standing) return told.cut === standing.cut;
+
   return true;
 }
 
@@ -171,8 +178,10 @@ function fileIcon(name: string): FileTypeIcon {
     spriteSheet.style.overflow = "hidden";
     spriteSheet.innerHTML = getBuiltInSpriteSheet(TREE_LOOK.icons);
   }
+
   if (!spriteSheet.isConnected) document.body.append(spriteSheet);
   const icon = iconResolver.resolveIcon(FILE_ICON.SLOT, name);
+
   return { symbol: icon.name, type: icon.token ?? FILE_ICON.DEFAULT_TYPE };
 }
 
@@ -214,30 +223,40 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
   // words saying the search matches nothing.
   const standing = (): View | undefined => {
     if (browse === undefined) return undefined;
+
     if (only !== undefined) {
       shown ??= framed(viewOf(only, "open", decorate));
+
       return shown;
     }
+
     if (query.trim() === "" || everything === undefined) return browse;
     whole ??= framed(viewOf(everything, "closed", decorate));
+
     return whole;
   };
+
   // A view made after the tree was drawn joins it, the tab's file marked.
   const framed = (view: View): View => {
     if (marked !== undefined) markAlone(view.tree, marked, false);
     view.tree.setGitStatus(marks);
     host.append(view.frame);
     dress(view.tree);
+
     return view;
   };
+
   const present = () => {
     const view = standing();
+
     if (view === undefined) return;
     view.tree.setSearch(query === "" ? null : query);
     const matchless = query.trim() !== "" && view.tree.getSearchMatchingPaths().length === 0;
+
     for (const each of [browse, shown, whole]) {
       if (each !== undefined) each.frame.hidden = each !== view || matchless;
     }
+
     tell({ kind: matchless ? TREE_STANDING.NO_MATCH : TREE_STANDING.DRAWN, cut });
   };
 
@@ -251,6 +270,7 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
     const tree = browse.tree;
     unheard = tree.subscribe(() => {
       props.onRows?.(tree.getVisibleCount());
+
       if (query.trim() !== "") present();
     });
     browser = browseFolders(
@@ -260,6 +280,7 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
         present();
       }),
     );
+
     if (waiting !== undefined) browser.reveal(waiting.path, waiting.options).catch(() => undefined);
     waiting = undefined;
     present();
@@ -271,7 +292,9 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
     tell({ kind: TREE_STANDING.READING });
     props.readFolder("").then((root) => {
       listing = false;
+
       if (taken) return;
+
       if ("notice" in root)
         tell({ kind: TREE_STANDING.FAILED, notice: root.notice, retry: root.retry });
       else draw();
@@ -284,30 +307,41 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
     const apart = event.metaKey || event.ctrlKey;
     // Note that a ⌘-press leaves the tab's own file the one marked open.
     const view = standing();
+
     if (apart && view !== undefined) keepMarked(view.tree, marked);
+
     if (row?.dataset.itemType !== ROW.FILE || path === undefined) return;
     props.onOpen(repositoryPath(path), apart);
   };
+
   // Note that a press on a Viewed toggle is heard on its way down, before
   // the row it stands in, so it goes no further: the row neither opens nor
   // takes the keyboard.
   const onToggle = (event: MouseEvent) => {
     const path = pressedToggle(event);
+
     if (path === undefined || props.onViewed === undefined) return;
     event.preventDefault();
     event.stopPropagation();
+
     if (event.type === "click") props.onViewed(repositoryPath(path));
   };
+
   // Note that V on a row whose toggle is drawn is that row's toggle, as
   // the list's own V is its file's, so it goes no further than the tree.
   const onKey = (event: KeyboardEvent) => {
     const path = standing()?.tree.getFocusedPath() ?? null;
+
     if (path === null || path.endsWith("/")) return;
+
     if (event.key === "Enter")
       return props.onOpen(repositoryPath(path), event.metaKey || event.ctrlKey);
+
     const plain =
       !event.isComposing && !(event.metaKey || event.ctrlKey || event.altKey || event.shiftKey);
+
     const toggles = markOf.get(repositoryPath(path))?.viewed !== undefined;
+
     if (
       !plain ||
       event.key.toLowerCase() !== VIEWED_KEY ||
@@ -316,10 +350,12 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
     ) {
       return;
     }
+
     event.preventDefault();
     event.stopPropagation();
     props.onViewed(repositoryPath(path));
   };
+
   host.addEventListener("mousedown", onToggle, true);
   host.addEventListener("click", onToggle, true);
   host.addEventListener("click", onClick);
@@ -329,7 +365,9 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
   return {
     reveal: (path, options) => {
       marked = path;
+
       for (const view of [shown, whole]) if (view !== undefined) markAlone(view.tree, path, false);
+
       if (browser === undefined) waiting = { path, options };
       else browser.reveal(path, options).catch(() => undefined);
     },
@@ -354,6 +392,7 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
     mark: (asked) => {
       marks = asked;
       markOf = new Map(asked.map((mark) => [mark.path, mark]));
+
       // Note that Pierre draws its rows again for a change of status alone,
       // so a change to what else a mark carries is drawn by asking it to.
       for (const view of [browse, shown, whole]) {
@@ -375,6 +414,7 @@ function mount(host: HTMLElement, props: FileTreeProps): FileTreeHandle {
       host.removeEventListener("keydown", onKey);
       unheard?.();
       browser?.dispose();
+
       for (const view of [browse, shown, whole]) view?.tree.cleanUp();
     },
   };

@@ -30,9 +30,11 @@ const USAGE = {
 /** A model that calls `read_file` once, then replies in words once it has read the call's result. */
 function modelCallingReadFile() {
   let calls = 0;
+
   return new MockLanguageModelV4({
     doGenerate: async () => {
       calls += 1;
+
       return {
         content:
           calls === 1
@@ -59,6 +61,7 @@ function modelCallingReadFile() {
 it.effect("an agent's turn sends its spans to Sentry without the model's inputs or outputs", () =>
   Effect.gen(function* () {
     const sentry = recordingEveSentry();
+
     const answer = yield* Effect.gen(function* () {
       const result = yield* Effect.promise(() =>
         generateText({
@@ -80,15 +83,20 @@ it.effect("an agent's turn sends its spans to Sentry without the model's inputs 
           },
         }),
       );
+
       yield* Effect.promise(() => Sentry.flush(1_000));
+
       return result.text;
     }).pipe(Effect.provide(sentry.layer));
+
     assert.equal(answer, CONTENT.REPLY);
     const spans = sentOfType(sentry.sent, "span").map((item) => item.text);
     assert.ok(spans.some((text) => text.includes("read_file")));
+
     const leaked = Object.values(CONTENT).filter((words) =>
       sentry.sent.some((item) => item.text.includes(words)),
     );
+
     assert.deepEqual(leaked, []);
   }),
 );

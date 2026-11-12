@@ -33,6 +33,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -44,6 +45,7 @@ const openSharedWorkspace = Effect.gen(function* () {
   yield* joinWorkspace(workspace, charles);
   const { id: first } = yield* createTask(dean, { name: "Invites", organizationId: workspace });
   const { id: second } = yield* createTask(dean, { name: "Billing", organizationId: workspace });
+
   return { dean, charles, workspace, first, second };
 });
 
@@ -127,6 +129,7 @@ it.layer(getTestDB())("an account's task sections", (it) => {
         title: "Ship it",
         icon: null,
       });
+
       assert.equal(cleared.sections[0]?.icon, undefined);
     }),
   );
@@ -272,22 +275,27 @@ it.layer(getTestDB())("an account's task sections", (it) => {
     () =>
       Effect.gen(function* () {
         const { dean, workspace, first } = yield* openSharedWorkspace;
+
         const txidOf = (write: TaskSectionWrite) =>
           Effect.map(writtenWithTxid(dean, write), (answer) => answer.txid);
+
         const isTxid = (txid: string | undefined) => txid !== undefined && /^\d+$/u.test(txid);
         const launch = randomUUID();
         const icon = { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph: TASK_SECTION_GLYPH.ROCKET };
+
         const edit: TaskSectionWrite = {
           kind: TASK_SECTION_WRITE.EDIT,
           id: launch,
           title: "Ship",
           icon,
         };
+
         const move: TaskSectionWrite = {
           kind: TASK_SECTION_WRITE.MOVE,
           id: launch,
           position: "a0",
         };
+
         const remove: TaskSectionWrite = { kind: TASK_SECTION_WRITE.DELETE, id: launch };
 
         const made = yield* txidOf(create(workspace, "Launch", launch));
@@ -328,9 +336,11 @@ it.layer(getTestDB())("an account's task sections", (it) => {
         const pinnedAgain = yield* setRepositoryPin(dean, "acme/relay", true);
         const unpinned = yield* setRepositoryPin(dean, "acme/relay", false);
         const unpinnedAgain = yield* setRepositoryPin(dean, "acme/relay", false);
+
         const txids = [pinned, pinnedAgain, unpinned, unpinnedAgain].map(
           (answer) => Option.getOrThrow(answer).txid,
         );
+
         assert.ok(isTxid(txids[0]) && isTxid(txids[2]) && txids[0] !== txids[2]);
         assert.deepEqual([txids[1], txids[3]], [undefined, undefined]);
         assert.deepEqual(

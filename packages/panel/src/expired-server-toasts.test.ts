@@ -31,10 +31,13 @@ import { ToastHost } from "./toast.js";
 
 /** Where each offered provider stands at the service; every other is not offered. */
 let standing: Partial<Record<IntegrationProvider, IntegrationStatus>> = {};
+
 /** The accounts the host's read names, past a provider's own word. */
 let accounts: IntegrationAccount[] = [];
+
 /** Whether the next Connect is refused, as a service that does not answer refuses it. */
 let refuseConnect = false;
+
 /** Every provider a Connect was asked for, in order. */
 let connects: IntegrationProvider[] = [];
 let integrations: IntegrationsHeld;
@@ -54,9 +57,11 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.INTEGRATIONS_CONNECT]: (payload) => {
       connects.push(payload.provider);
+
       if (refuseConnect) return Promise.reject(new Error("Not now."));
       standing = { ...standing, [payload.provider]: INTEGRATION_STATUS.PENDING };
       integrations.lay();
+
       return Promise.resolve({ opened: true });
     },
   });
@@ -83,6 +88,7 @@ async function settle(): Promise<void> {
 
 function Toasts(): null {
   useExpiredServerToasts();
+
   return null;
 }
 
@@ -111,8 +117,10 @@ async function press(words: string, label: string): Promise<void> {
     const card = [...document.querySelectorAll(STANDING_TOAST)].find(
       (each) => each.querySelector(".ui-toast-words")?.textContent === words,
     );
+
     return [...(card?.querySelectorAll("button") ?? [])].find((each) => each.textContent === label);
   };
+
   await vi.waitFor(() => assert.equal(offered() !== undefined, true));
   const button = offered() ?? assert.fail(`"${words}" offers ${label}`);
   act(() => button.click());

@@ -13,7 +13,7 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { INTEGRATION_STATUS, type IntegrationStatus } from "@repo/features/integration-wire";
-import { Clock, Effect, Result } from "effect";
+import { Clock, Effect, Predicate, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import {
   GitHubApp,
@@ -44,8 +44,12 @@ const STATUS_OF_REFUSAL = {
 
 /** The refusal a failed token read amounts to. */
 function refusalOf(failure: GitHubUserReadFailure): GitHubGrantRefusal {
-  if (failure._tag === "GitHubAppNotConfigured") return GITHUB_GRANT_REFUSAL.NOT_CONFIGURED;
-  if (failure._tag === "GitHubSignInRequired") return GITHUB_GRANT_REFUSAL.SIGN_IN_REQUIRED;
+  if (Predicate.isTagged(failure, "GitHubAppNotConfigured"))
+    return GITHUB_GRANT_REFUSAL.NOT_CONFIGURED;
+
+  if (Predicate.isTagged(failure, "GitHubSignInRequired"))
+    return GITHUB_GRANT_REFUSAL.SIGN_IN_REQUIRED;
+
   // GitHub that did not answer, and a store that could not be read.
   return GITHUB_GRANT_REFUSAL.UNREACHABLE;
 }
@@ -64,8 +68,10 @@ export const githubSignInGrant = /* @__PURE__ */ Effect.fnUntraced(function* (
   GitHubApp | HttpClient.HttpClient | DatabaseServices
 > {
   const read = yield* Effect.result((yield* GitHubApp).userToken(userId));
+
   if (Result.isFailure(read)) return Result.fail(refusalOf(read.failure));
   const now = yield* Clock.currentTimeMillis;
+
   return Result.succeed({ token: read.success, expiresAt: now + USER_TOKEN_REFRESH_MARGIN_MS });
 });
 

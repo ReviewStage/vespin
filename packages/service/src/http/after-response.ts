@@ -33,6 +33,7 @@ export function afterResponse<E, R>(
 ): Effect.Effect<void, never, R> {
   return Effect.gen(function* () {
     const context = yield* Effect.context<R>();
+
     const settled = work.pipe(
       Effect.provideContext(context),
       Effect.catchCause((cause) =>
@@ -41,7 +42,9 @@ export function afterResponse<E, R>(
           : Effect.logWarning(`${label} failed after the answer: ${Cause.pretty(cause)}`),
       ),
     );
+
     const after = yield* Effect.serviceOption(AfterResponse);
+
     if (Option.isNone(after)) return yield* settled;
     yield* after.value.keep(settled);
   });
@@ -54,11 +57,14 @@ export function afterResponse<E, R>(
  */
 export function keptAfterResponse() {
   const kept: Effect.Effect<void>[] = [];
+
   const layer = Layer.succeed(AfterResponse, {
     keep: (work) => Effect.sync(() => void kept.push(work)),
   });
+
   const run = Effect.suspend(() =>
     Effect.forEach(kept.splice(0), (work) => work, { discard: true }),
   );
+
   return { layer, run };
 }

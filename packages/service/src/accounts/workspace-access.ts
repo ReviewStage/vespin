@@ -37,22 +37,26 @@ const MANAGING_ROLES: ReadonlySet<string> = new Set([WORKSPACE_ROLE.OWNER, WORKS
 export function pluginCallOrRefused<A, R>(
   write: Effect.Effect<A, OrganizationRefused | Cause.UnknownError, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(write, (failure): Effect.Effect<never, HostedRefusal> => {
-    if (failure._tag === "UnknownError") {
-      return Effect.andThen(
+  return Effect.catchTag(
+    write,
+    "UnknownError",
+    () =>
+      Effect.andThen(
         Effect.logWarning("Member write failed: UnknownError"),
         Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+      ),
+    (refused): Effect.Effect<never, HostedRefusal> => {
+      if (refused.status === HOSTED_HTTP_STATUS.UNAUTHORIZED) {
+        return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+      }
+
+      return Effect.fail(
+        refused.code !== undefined && ALREADY_INVITED_CODES.has(refused.code)
+          ? HOSTED_REFUSAL.ALREADY_INVITED
+          : HOSTED_REFUSAL.NOT_PERMITTED,
       );
-    }
-    if (failure.status === HOSTED_HTTP_STATUS.UNAUTHORIZED) {
-      return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-    }
-    return Effect.fail(
-      failure.code !== undefined && ALREADY_INVITED_CODES.has(failure.code)
-        ? HOSTED_REFUSAL.ALREADY_INVITED
-        : HOSTED_REFUSAL.NOT_PERMITTED,
-    );
-  });
+    },
+  );
 }
 
 /** The workspace as the account now sees it; one it is not in, or one that vanished between a write and this read, is not found. */
@@ -61,7 +65,9 @@ export const answeredWorkspace = Effect.fn("web/answeredWorkspace")(function* (
   organizationId: string,
 ): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
   const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, organizationId));
+
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return workspace.value;
 });
 
@@ -71,9 +77,11 @@ export const ownedWorkspace = Effect.fn("web/ownedWorkspace")(function* (
   organizationId: string,
 ): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
   const workspace = yield* answeredWorkspace(userId, organizationId);
+
   if (workspace.role !== WORKSPACE_ROLE.OWNER) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
+
   return workspace;
 });
 
@@ -83,6 +91,8 @@ export const managedWorkspace = Effect.fn("web/managedWorkspace")(function* (
   organizationId: string,
 ): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
   const workspace = yield* answeredWorkspace(userId, organizationId);
+
   if (!MANAGING_ROLES.has(workspace.role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   return workspace;
 });

@@ -37,7 +37,9 @@ function withMeta(
   const tag = new RegExp(
     `(<meta\\s+${attribute}="${key.replaceAll(".", "\\.")}"\\s+content=")[^"]*(")`,
   );
+
   if (!tag.test(html)) throw new Error(`the page template has no <meta ${attribute}="${key}">`);
+
   // A replacer function, because a string replacement would read any `$` in the content as a back-reference.
   return html.replace(
     tag,
@@ -48,7 +50,9 @@ function withMeta(
 /** The `<link rel="canonical">` a search engine files the page under, rewritten to the route's own address. */
 function withCanonical(html: string, url: string): string {
   const tag = /(<link\s+rel="canonical"\s+href=")[^"]*(")/;
+
   if (!tag.test(html)) throw new Error('the page template has no <link rel="canonical">');
+
   return html.replace(
     tag,
     (_, open: string, close: string) => `${open}${escapeAttribute(url)}${close}`,
@@ -65,6 +69,7 @@ export function withPageHead(
   imageSize: ImageSize | undefined,
 ): string {
   const title = /<title>[^<]*<\/title>/;
+
   if (!title.test(html)) throw new Error("the page template has no <title>");
   let rewritten = html.replace(title, () => `<title>${escapeText(head.title)}</title>`);
   rewritten = withMeta(rewritten, "name", "description", head.description);
@@ -74,13 +79,16 @@ export function withPageHead(
   rewritten = withMeta(rewritten, "name", "twitter:description", head.description);
   rewritten = withMeta(rewritten, "property", "og:url", head.url);
   rewritten = withCanonical(rewritten, head.url);
+
   if (head.image === undefined) return rewritten;
   const origin = new URL(head.url).origin;
   rewritten = withMeta(rewritten, "property", "og:image", `${origin}${head.image.src}`);
   rewritten = withMeta(rewritten, "name", "twitter:image", `${origin}${head.image.src}`);
   rewritten = withMeta(rewritten, "property", "og:image:alt", head.image.alt);
   rewritten = withMeta(rewritten, "name", "twitter:image:alt", head.image.alt);
+
   if (imageSize === undefined) return rewritten;
   rewritten = withMeta(rewritten, "property", "og:image:width", String(imageSize.width));
+
   return withMeta(rewritten, "property", "og:image:height", String(imageSize.height));
 }

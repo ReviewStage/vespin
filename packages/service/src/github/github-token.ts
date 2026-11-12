@@ -49,6 +49,7 @@ export function memberGitHubToken(
 > {
   return Effect.gen(function* () {
     const environment = yield* HostedEnvironment;
+
     return yield* openMemberGitHubToken(environment.providerKeyEncryptionKeys, userId);
   });
 }
@@ -64,15 +65,21 @@ export function openMemberGitHubToken(
 > {
   return Effect.gen(function* () {
     const row = yield* readGitHubTokenRow(userId);
+
     if (row === undefined) return Result.fail(GITHUB_TOKEN_ABSENCE.NONE);
+
     if (row.status === GITHUB_TOKEN_STATUS.INVALID)
       return Result.fail(GITHUB_TOKEN_ABSENCE.INVALID);
     const ring = configured === undefined ? undefined : parseKeyRing(configured);
+
     if (ring === undefined || Result.isFailure(ring)) {
       return Result.fail(GITHUB_TOKEN_ABSENCE.UNREADABLE);
     }
+
     const opened = openGitHubToken(ring.success, userId, row);
+
     if (Result.isFailure(opened)) return Result.fail(GITHUB_TOKEN_ABSENCE.UNREADABLE);
+
     return Result.succeed({
       token: opened.success,
       githubUserId: row.githubUserId,

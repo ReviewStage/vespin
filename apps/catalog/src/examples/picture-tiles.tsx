@@ -43,6 +43,7 @@ const WINDOW = screenshot(1200, 760, "#b37af4", "#5a3dc8");
 /** Counts its presses, and says how many under the tiles it draws. */
 function useOpened(): [number, () => void] {
   const [opened, setOpened] = useState(0);
+
   return [opened, () => setOpened((was) => was + 1)];
 }
 
@@ -68,6 +69,7 @@ function OpenPicture({
   const titleId = useId();
   const zoom = useImageZoom(words, url);
   const expand = usePictureExpand(true);
+
   // Note that the card stands while it is mounted, because its exit is the flight back into its tile, which `expand.close` plays before the owner unmounts it.
   return (
     <Dialog
@@ -90,6 +92,7 @@ function OpenPicture({
 /** A tile that opens its picture over the window, and the picture while it is open. */
 function ExpandingTile(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return (
     <>
       <div className="catalog-picture-row">
@@ -112,6 +115,7 @@ function ExpandingTile(): React.JSX.Element {
 function PictureTiles(): React.JSX.Element {
   const [hugged, openHugged] = useOpened();
   const [set, openSet] = useOpened();
+
   return (
     <>
       <CatalogSection id="picture-tiles-hug" title="Hugging its picture, named or not">

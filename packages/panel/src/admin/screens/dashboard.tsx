@@ -179,12 +179,14 @@ function DashboardSections({
   onOpenDay: (day: string) => void;
 }): React.JSX.Element {
   const overview = metrics?.overview;
+
   const topAccounts = {
     windowDays: metrics?.windowDays ?? windowDays,
     minWidth: ACCOUNTS_TABLE_MIN_WIDTH.ROSTER,
     onOpen: onOpenAccount,
     trailingColumns: OVERVIEW_ACCOUNT_COLUMNS,
   };
+
   return (
     <>
       <AdminSection title="This week">
@@ -290,12 +292,15 @@ export function DashboardScreen({
   frame: (content: React.JSX.Element) => React.JSX.Element;
 }): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
+
   const read = useQuery({
     ...adminMetricsQuery(reads, windowedReadQuery(hideAdmins, windowDays)),
     enabled: !gate.heldAtGate(),
   });
+
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
+
   const controls = (
     <>
       <AdminViewOptions

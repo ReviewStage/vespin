@@ -99,6 +99,7 @@ test("the Inbox draws each task held whole by the account's feed from it, follow
     rows.some((row) => row.endsWith(EXPIRY.title)),
     "the invites task's items are drawn",
   );
+
   for (const task of [BILLING, INVITES]) {
     assert.equal(
       world.main.isFollowed({ kind: INBOX_SCOPE_KIND.PLAN, id: task.id }),
@@ -149,6 +150,7 @@ test("a link to an item the account's feed leaves out waits for its task's own r
 test("an Inbox whose account feed refused before it ever answered reads it again on Retry", async () => {
   world.feedRefused = true;
   const { page } = mount();
+
   // Note that the refusal, and then the feed read again, stand once they reach the feed's query.
   const retry = await vi.waitFor(
     () =>
@@ -370,9 +372,11 @@ test("an item's row offers Copy link on a right-click, copying the item's link b
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
     );
   });
+
   const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (each) => each.textContent === "Copy link",
   );
+
   assert.ok(item, "the row's menu offers Copy link");
   await act(async () => item.click());
 
@@ -421,9 +425,11 @@ test("an item a link names is not found though another task's read failed, and i
 
   assert.match(pane?.textContent ?? "", /Not found/u);
   assert.equal(pane?.hidden, false);
+
   const back = [...(pane?.querySelectorAll("button") ?? [])].find(
     (each) => each.textContent === "Back to inbox",
   );
+
   assert.ok(back, "the notice leads back to the list");
   act(() => back.click());
   assert.equal(page.querySelector<HTMLElement>(".inbox-view-items")?.hidden, true);
@@ -546,6 +552,7 @@ test("an item the feed holds opens whole, with no failure under its thread, thou
   const taskReads: string[] = [];
   world.startRead = (taskId) => {
     taskReads.push(taskId);
+
     return taskId === BILLING.id
       ? Promise.resolve({
           status: FAKE_ANSWER.DONE,
@@ -553,6 +560,7 @@ test("an item the feed holds opens whole, with no failure under its thread, thou
         })
       : undefined;
   };
+
   const { page } = mount();
   await settle();
   act(() => world.chooseFromOutside({ taskId: BILLING.id, itemId: THRESHOLD.id, opened: true }));
@@ -579,23 +587,29 @@ test("on a phone the Inbox's list is headed by one ⋯, its title centered befor
     "the places bar holds New task",
   );
   assert.match(head.querySelector("h1")?.textContent ?? "", /^Inbox/);
+
   const field = page.querySelector<HTMLInputElement>(
     '.inbox-tasks input[aria-label="Search inbox"]',
   );
+
   assert.ok(field, "the search stands under the head");
   assert.equal(head.contains(field), false, "outside the head, which keeps its title");
 
   const more = () =>
     head.querySelector<HTMLButtonElement>('[aria-label="Inbox actions"]') ??
     assert.fail("the ⋯ stands");
+
   const pick = (name: string) => {
     act(() => more().click());
+
     const item = [
       ...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
     ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === name);
+
     assert.ok(item, `the ⋯ offers ${name}`);
     act(() => item.click());
   };
+
   act(() => more().click());
   assert.deepEqual(
     [...document.querySelectorAll('[role="menu"] .ui-menu-item-label')].map(
@@ -642,9 +656,11 @@ function heldStarts(): AgentInboxStartParams[] {
       sent.push(request.payload);
       world.inboxes.set(BILLING.id, [STARTED, ...(world.inboxes.get(BILLING.id) ?? [])]);
       pushAgain();
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { item: STARTED } });
     },
   });
+
   return sent;
 }
 
@@ -669,9 +685,9 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
     "the bar names the item's task, not the title its thread is headed by under it",
   );
   assert.deepEqual(
-    [...page.querySelectorAll("h1")]
-      .filter((each) => each.closest("[hidden]") === null)
-      .map((each) => each.textContent),
+    [...page.querySelectorAll("h1")].flatMap((each) =>
+      each.closest("[hidden]") === null ? [each.textContent] : [],
+    ),
     ["Expire after 7 days?"],
     "the thread's title is the page's one top heading",
   );
@@ -681,6 +697,7 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
   assert.ok(menu, "the ⋯ opens");
   assert.match(menu.textContent ?? "", /\d of \d/, "it says where the item stands");
   const labels = [...menu.querySelectorAll(".ui-menu-item-label")].map((each) => each.textContent);
+
   for (const offered of [
     "Previous inbox item",
     "Next inbox item",
@@ -692,18 +709,22 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
   ]) {
     assert.ok(labels.includes(offered), `the ⋯ offers ${offered}`);
   }
+
   const openTask = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === "Open task",
   );
+
   act(() => openTask?.click());
   assert.deepEqual(
     asked.shownTasks,
     [INVITES.id],
     "Open task opens the item's task, as its crumb did",
   );
+
   const task = [...head.querySelectorAll("button")].find(
     (each) => each.textContent?.trim() === INVITES.name,
   );
+
   act(() => task?.click());
   assert.deepEqual(asked.shownTasks, [INVITES.id, INVITES.id], "the task's name opens it too");
 
@@ -713,6 +734,7 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
 
 test("on a phone the panel open over an item heads itself: the way back to the item, what it shows centered, and one ⋯ listing its tabs, in place of its bar", async () => {
   let shut = 0;
+
   const panel: SidePanelControl = {
     ...tasksControl().sidePanel,
     open: true,
@@ -722,6 +744,7 @@ test("on a phone the panel open over an item heads itself: the way back to the i
       shut += 1;
     },
   };
+
   const { page } = mount({ room: SHELL_ROOM.NARROW, panel });
   await settle();
   layOut(page, 390);
@@ -807,6 +830,7 @@ test("ticking the box's checkbox under an open question sets its options aside a
   const box = () =>
     itemPane(page).querySelector<HTMLElement>('[role="checkbox"]') ??
     assert.fail("the box offers a new thread");
+
   assert.equal(
     box().closest("label")?.textContent,
     "Send as a new thread to Alerts",
@@ -818,9 +842,11 @@ test("ticking the box's checkbox under an open question sets its options aside a
   assert.equal(options(), 0, "ticked, the box sets the question's options aside");
   const pane = itemPane(page);
   typeInComposer(pane, "Draft the annual plan's line too.");
+
   const send =
     pane.querySelector<HTMLButtonElement>("form.inbox-answer button[type='submit']") ??
     assert.fail("the box has a Send");
+
   assert.equal(send.textContent, "Start thread");
   act(() => send.click());
   await settle();

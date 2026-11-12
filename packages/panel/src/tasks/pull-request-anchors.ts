@@ -44,6 +44,7 @@ function fragmentOf(href: string): string {
 function samePullRequest(href: string, pullRequestUrl: string): boolean {
   const there = pullRequestAddressOf(href);
   const here = pullRequestAddressOf(pullRequestUrl);
+
   return (
     there !== undefined &&
     here !== undefined &&
@@ -65,14 +66,19 @@ export function anchorIn(
   if (!samePullRequest(href, pullRequestUrl)) return undefined;
   const fragment = fragmentOf(href);
   const line = LINE_COMMENT.exec(fragment)?.[1];
+
   if (line !== undefined) {
     const named = `#discussion_r${line}`;
+
     const thread = conversation
       .flatMap((entry) => entry.threads ?? [])
       .find((each) => each.comments.some((comment) => fragmentOf(comment.url) === named));
+
     return thread === undefined ? undefined : { kind: ANCHOR_KIND.THREAD, thread };
   }
+
   if (!ENTRY_FRAGMENT.test(fragment)) return undefined;
   const entry = conversation.find((each) => fragmentOf(each.url) === fragment);
+
   return entry === undefined ? undefined : { kind: ANCHOR_KIND.ENTRY, entry };
 }

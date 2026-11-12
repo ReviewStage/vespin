@@ -57,13 +57,18 @@ type AgentFound =
 function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
   const listed = tasks.liveAgents?.find((each) => each.id === agentId);
   const read = useQuery({ ...agentPageQueryOptions(agentId), enabled: listed === undefined });
+
   if (listed !== undefined) return { taskId: listed.planId };
+
   if (read.isPending) return { reading: true };
   const answer = read.data;
+
   if (answer !== undefined && !("failure" in answer)) return { taskId: answer.agent.planId };
+
   if (answer !== undefined && answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) {
     return { missing: true };
   }
+
   return { failed: true, onRetry: () => void read.refetch() };
 }
 
@@ -85,6 +90,7 @@ export function AgentRoutePage({
     if (taskId !== undefined) onShowAgent(taskId, agentId);
   }, [onShowAgent, taskId, agentId]);
   const back = away === undefined ? undefined : <PhoneBack back={away} />;
+
   if ("missing" in found) {
     return (
       <NotFound
@@ -93,6 +99,7 @@ export function AgentRoutePage({
       />
     );
   }
+
   // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (
     <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">

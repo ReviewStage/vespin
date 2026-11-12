@@ -100,9 +100,10 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       }),
       // Note that a live follow's slice is written whole as it is told, as each read's own was, and only a slice a follow declares.
       gateway.host.onLiveReadChanged(({ read, held }) => {
-        // SAFETY: a followed slice is told whole as the host holds it (`liveTold`), so `held` is that slice's own.
-        if (FOLLOWED_SLICES.has(read))
+        if (FOLLOWED_SLICES.has(read)) {
+          // SAFETY: a followed slice is told whole as the host holds it (`liveTold`), so `held` is that slice's own.
           state.update({ [read]: held } as Parameters<AppStateStore["update"]>[0]);
+        }
       }),
       gateway.host.onAccountPreferencesChanged((held) => {
         state.update({ [LIVE_READ.ACCOUNT_PREFERENCES]: held });
@@ -141,16 +142,21 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       ensureSettings: () =>
         Effect.gen(function* () {
           const held = state.snapshot().settings;
+
           if (held) return held;
           const settings = yield* gateway.host.settingsSnapshot();
+
           if (Option.isSome(settings)) state.update({ settings: settings.value });
+
           return Option.getOrUndefined(settings);
         }),
       signedIn: () => state.snapshot().account.status === ACCOUNT_STATUS.SIGNED_IN,
       readBootstrap: () =>
         Effect.gen(function* () {
           const boot = yield* gateway.host.bootstrap();
+
           if (Option.isSome(boot)) adoptBootstrap(boot.value);
+
           return Option.getOrUndefined(boot);
         }),
       haltSessionReplay: () => setSessionReplayHalted(true),
@@ -159,6 +165,7 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       start: () =>
         Effect.gen(function* () {
           const boot = yield* gateway.host.bootstrap();
+
           if (Option.isNone(boot))
             return yield* Effect.die(new Error("the host answered no bootstrap"));
           adoptBootstrap(boot.value);

@@ -30,11 +30,14 @@ type UsageShare = RunUsage & { readonly model?: string };
 /** The turn's counts by model: the breakdown its row keeps, or the whole at the row's model, which is nothing to price where the row names none; a fast version's at its base model where a fast step was refused. */
 function sharesOf(row: TurnUsageRow): readonly UsageShare[] {
   const { byModel, ...whole } = row.usage;
+
   const shares: readonly UsageShare[] =
     byModel !== undefined && byModel.length > 0
       ? byModel
       : [row.model === null ? whole : { model: row.model, ...whole }];
+
   if (!row.fastRefused) return shares;
+
   return shares.map((share) =>
     share.model === undefined ? share : { ...share, model: standardModelIdOf(share.model) },
   );
@@ -50,13 +53,16 @@ export function costOfTurns(
   offered: readonly OfferedModel[],
 ): number | undefined {
   let costUsd = 0;
+
   for (const row of rows) {
     for (const share of sharesOf(row)) {
       const pricing = offered.find((model) => model.id === share.model)?.pricing;
+
       if (pricing === undefined) return undefined;
       costUsd += tokensCostUsd(pricing, share);
     }
   }
+
   return costUsd;
 }
 
@@ -69,12 +75,15 @@ export function usageOfTurns(
   let inputTokens = 0;
   let outputTokens = 0;
   let cachedInputTokens = 0;
+
   for (const row of rows) {
     inputTokens += row.usage.inputTokens;
     outputTokens += row.usage.outputTokens;
     cachedInputTokens += row.usage.cachedInputTokens;
   }
+
   const costUsd = costOfTurns(rows, offered);
+
   return {
     inputTokens,
     outputTokens,

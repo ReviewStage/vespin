@@ -135,7 +135,9 @@ export function useAdminDoorsIfAny(): AdminDoors | undefined {
 /** The doors the mount above handed in; a screen drawn under none is a wiring fault. */
 export function useAdminDoors(): AdminDoors {
   const doors = useContext(AdminDoorsContext);
+
   if (doors === undefined)
     throw new Error("An admin screen was drawn with no AdminDoorsProvider above it.");
+
   return doors;
 }

@@ -136,6 +136,7 @@ const upsertRow = SqlSchema.void({
       statusAt: write.now,
       createdAt: write.now,
     };
+
     return Database.use((db) =>
       db
         .insert(githubPersonalToken)

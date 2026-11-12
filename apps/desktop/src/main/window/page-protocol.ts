@@ -38,7 +38,9 @@ export function pageResponse(
   readPage: (page: TasksPageParams) => Effect.Effect<TasksPageAnswer>,
 ): Effect.Effect<Response> {
   const framed = framedPageOf(url);
+
   if (framed === undefined) return Effect.succeed(new Response(null, { status: NOT_FOUND }));
+
   return Effect.map(readPage(framed), (answer) =>
     "page" in answer
       ? new Response(withPageScripts(answer.page.html), { headers: PAGE_RESPONSE_HEADERS })

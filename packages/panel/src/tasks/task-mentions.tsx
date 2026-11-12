@@ -127,6 +127,7 @@ export function TaskMentions({
 }): React.JSX.Element {
   const [box, stand] = useState<MentionBox | undefined>(undefined);
   const boxes = useMemo<MentionBoxes>(() => ({ box, stand }), [box]);
+
   return (
     <TaskMentionsContext.Provider value={value}>
       <MentionBoxContext.Provider value={boxes}>{children}</MentionBoxContext.Provider>
@@ -165,6 +166,7 @@ export function tasklessMentions(
   readAgents?: MentionAgentsReader,
 ): TaskMentionsValue {
   const { workspace, workspaceId, repository } = place;
+
   return {
     holder: undefined,
     taskName: "",
@@ -219,6 +221,7 @@ export function heldTaskMentions(
 ): TaskMentionsValue {
   const holder = { taskId: task.id };
   const { repository } = task;
+
   return {
     holder,
     taskName: task.name,
@@ -228,6 +231,7 @@ export function heldTaskMentions(
     pages,
     agents: (agents.agents ?? NO_AGENTS_HELD).map((agent) => {
       const name = agentName(agent, agents.models);
+
       return { id: agent.id, name, actor: agentActor(agent, name), summary: agent };
     }),
     readAgents,
@@ -264,10 +268,13 @@ function newestRevisionQueryOptions(taskId: string | undefined, savedAt: number 
 /** The words of the task's newest revision; none where a read was refused, and no words where it has no revision yet. */
 async function newestRevisionText(taskId: string): Promise<string | null> {
   const page = await askAct(ACT_KIND.TASKS_REVISIONS, { taskId });
+
   if (!("revisions" in page)) return null;
   const newest = page.revisions[0];
+
   if (newest === undefined) return "";
   const answer = await askAct(ACT_KIND.TASKS_REVISION, { taskId, seq: newest.seq });
+
   return "revision" in answer ? answer.revision.document.body : null;
 }
 
@@ -286,13 +293,16 @@ export function useSavedDescriptionText(
   const openText = held !== undefined && "task" in held ? held.task.document.body : undefined;
   const reading = openText === undefined ? task?.id : undefined;
   const savedAt = task?.updatedAt;
+
   const revision = useQuery({
     ...newestRevisionQueryOptions(reading, savedAt),
     // Note that the words last read stand while a save's are read, and only the same task's.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === reading ? previous : undefined,
   });
+
   if (openText !== undefined) return openText;
+
   return reading === undefined ? undefined : (revision.data ?? undefined);
 }
 
@@ -308,10 +318,13 @@ export function mentionablePullRequests(
 ): readonly MentionablePullRequest[] {
   const held = [...(agents.agents ?? []), ...(agents.archived ?? [])];
   const offered = new Set<string>();
+
   return held.flatMap((agent) => {
     const pullRequest = agents.pullRequests.get(agent.id);
+
     if (pullRequest === undefined || offered.has(pullRequest.url)) return [];
     offered.add(pullRequest.url);
+
     return [{ ...pullRequest, agent: agentName(agent, agents.models) }];
   });
 }
@@ -323,6 +336,7 @@ export function mentionableAgent(
   models: readonly CatalogModel[] | undefined,
 ): MentionableAgent {
   const name = agentName(agent, models);
+
   return {
     id: agent.id,
     name,
@@ -364,30 +378,39 @@ export function useMentionAgentsReader(
     models,
     newest: newest !== undefined && "agents" in newest ? newest.agents : NO_AGENTS_HELD,
   };
+
   const read = useCallback<MentionAgentsReader>(
     (words) => {
       if (workspaceId === undefined) return Promise.resolve(NO_AGENTS);
+
       const offered = (agents: readonly AgentSummary[]) => {
         const names = new Map(naming.current.tasks.map((task) => [task.id, task.name]));
+
         return agents.map((agent) => mentionableAgent(agent, names, naming.current.models));
       };
+
       if (words === undefined) {
         if (listFailed) {
           // Note that the refresh is quiet whatever comes back, since no person pressed for it, and needs no invalidation: the lists it reads again land through app state.
           refreshTasks();
+
           return Promise.reject(new Error(TASKS_READ.FAILED));
         }
+
         return Promise.resolve(carried ? offered(naming.current.newest) : NO_AGENTS);
       }
+
       return queryClient
         .fetchQuery(workspaceAgentSearchQueryOptions(workspaceId, words, { includeArchived: true }))
         .then((answer) => {
           if ("failure" in answer) throw new Error(answer.failure);
+
           return offered(answer.agents);
         });
     },
     [queryClient, refreshTasks, workspaceId, listFailed, carried],
   );
+
   return workspaceId === undefined ? undefined : read;
 }
 
@@ -412,6 +435,7 @@ export interface MentionedTask {
 export function useMentionDoors(task?: MentionedTask): MentionDoors {
   const page = useContext(TaskMentionsContext)?.doors;
   const openTask = useOpenTask();
+
   const windowDoors = useMemo<MentionDoors>(
     () => ({
       holder: task === undefined ? undefined : { taskId: task.taskId },
@@ -422,12 +446,14 @@ export function useMentionDoors(task?: MentionedTask): MentionDoors {
     }),
     [openTask, task],
   );
+
   return page ?? windowDoors;
 }
 
 /** What draws a link in Markdown drawn here as its mention's chip, through the doors `useMentionDoors` hands for the task given. */
 export function useMentionLink(task?: MentionedTask): LinkDrawer {
   const doors = useMentionDoors(task);
+
   return useMemo(() => mentionLinkDrawer(doors), [doors]);
 }
 
@@ -442,6 +468,7 @@ export function useMentionBox(receive: MentionBox | undefined): void {
     const taking: MentionBox = (mention) => latest.current?.(mention);
     // Note that a box is set as a function's answer, since the box is itself a function.
     stand(() => taking);
+
     return () => stand((standing) => (standing === taking ? undefined : standing));
   }, [stand, takes]);
 }

@@ -165,6 +165,7 @@ function cardOn(row: HTMLElement | null): readonly (string | boolean | null | un
   focusRestOn(row);
   const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
   assert.ok(card, "the row hangs its agent's card");
+
   return [
     card.querySelector(".ui-hover-card-name")?.textContent,
     card.querySelector(".ui-hover-card-corner")?.textContent,
@@ -182,10 +183,12 @@ function runningTab() {
   );
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const controlOf = (otherTitle: string) =>
     agentsControl({
       agents: [AGENT, listed("agent-7", otherTitle)],
     });
+
   const cardsOf = (control: ReturnType<typeof controlOf>, task?: BriefTask) =>
     taskCards({
       agents: control,
@@ -194,6 +197,7 @@ function runningTab() {
       pages: undefined,
       task,
     }).agent(AGENT_ID);
+
   const draw = (control: ReturnType<typeof controlOf>, cards: TranscriptCards) => {
     root?.render(
       withQueryClient(
@@ -210,6 +214,7 @@ function runningTab() {
       ),
     );
   };
+
   return {
     container,
     controlOf,
@@ -224,6 +229,7 @@ function runningTab() {
     async answer(next: AgentMessagesAnswerView) {
       await act(async () => {
         telling.tell(TRANSCRIPT, next);
+
         for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
       });
       await settleQueries();
@@ -232,6 +238,7 @@ function runningTab() {
       const fold = container.querySelector<HTMLElement>(
         '[data-message-id="earlier"] [data-turn-fold] > summary',
       );
+
       assert.ok(fold, "the finished turn folds its calls");
       act(() => fold.click());
     },
@@ -240,21 +247,28 @@ function runningTab() {
 
 test("a message a page did not touch hangs the card the window hands now, and its worker's row says where the worker stands as the newest page reads it", async () => {
   const tab = runningTab();
+
   const drawOver = (otherTitle: string) => {
     const control = tab.controlOf(otherTitle);
     tab.draw(control, tab.cardsOf(control));
   };
+
   act(() => drawOver("Invoice export"));
   await tab.settle();
   tab.openEarlierFold();
+
   const row = (callId: string) =>
     tab.container.querySelector<HTMLElement>(`button[data-call-id="${callId}"]`);
+
   // A message folds its words open, so its card hangs from its chip, the row's way to the agent.
   const messageChip = () =>
     tab.container.querySelector<HTMLElement>('[data-call-id="call-message"] [data-tool-agent-ref]');
+
   assert.equal(cardOn(messageChip())[0], "Invoice export");
+
   const refused = () =>
     tab.container.querySelector<HTMLElement>('[data-call-id="call-refused"]')?.textContent ?? "";
+
   assert.match(refused(), /Invoice export/u);
   assert.equal(cardOn(row(DELEGATE_CALL))[2], true, "the worker's tile wears the working mark");
 
@@ -279,24 +293,31 @@ test("a message a page did not touch hangs the card the window hands now, and it
 test("a task renamed while its agent's tab stands names the description's sender anew, hanging the task's new card", async () => {
   const tab = runningTab();
   const control = tab.controlOf("Invoice export");
+
   const task = (name: string): BriefTask => ({
     name,
     status: undefined,
     card: createElement("span", { "data-task-card-probe": "" }, `${name}, its card`),
   });
+
   act(() => tab.draw(control, tab.cardsOf(control, task("First draft"))));
   await tab.settle();
+
   const sender = () => {
     const ref = tab.container.querySelector<HTMLElement>(".agent-origin [data-task-ref]");
     assert.ok(ref, "the description's card names its task");
+
     return ref;
   };
+
   const cardOf = (ref: HTMLElement) => {
     document.documentElement.dataset.keyboard = "true";
     act(() => ref.blur());
     focusRestOn(ref);
+
     return document.querySelector(".ui-tooltip-card [data-task-card-probe]")?.textContent;
   };
+
   assert.match(sender().textContent ?? "", /First draft/u);
   assert.equal(cardOf(sender()), "First draft, its card");
 
@@ -307,6 +328,7 @@ test("a task renamed while its agent's tab stands names the description's sender
 
 test("a page that adds a call to a running turn draws that call alone, the calls before it standing as drawn", async () => {
   fakeAppBridge({});
+
   const messaged = (count: number): AgentTranscriptMessage => ({
     id: "newest",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -321,17 +343,21 @@ test("a page that adds a call to a running turn draws that call alone, the calls
     ]).flat(),
     startedAt: 3_000,
   });
+
   const telling = tellingTranscripts();
   telling.tell(TRANSCRIPT, page([DESCRIPTION, messaged(5)], AGENT_STATUS.RUNNING, "1:1"));
   // Each call about an agent asks for that agent's card as its row is drawn, so the cards asked for are the rows drawn.
   const asked: string[] = [];
+
   const cards: TranscriptCards = {
     target: (target) => {
       if (target.kind === TOOL_TARGET.AGENT) asked.push(target.agent);
+
       return null;
     },
     worker: () => null,
   };
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -358,6 +384,7 @@ test("a page that adds a call to a running turn draws that call alone, the calls
   asked.length = 0;
   await act(async () => {
     telling.tell(TRANSCRIPT, page([messaged(6)], AGENT_STATUS.RUNNING, "1:2"));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();

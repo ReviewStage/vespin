@@ -48,6 +48,7 @@ export function InboxItemRows({
 }): React.JSX.Element {
   const drafts = useInboxRowDrafts();
   const rows = useInboxRowPresses();
+
   // Note that the picker opens beside a row, so the rows themselves are the room it needs standing, there being no box of the list's own.
   const [room] = useState(
     (): RefObject<HTMLElement | null> => ({
@@ -56,8 +57,10 @@ export function InboxItemRows({
       },
     }),
   );
+
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   const resolve = useInboxResolver();
+
   const acts = useInboxRowActs({
     doors: {
       onMark: (each, unread, saying) => marks.onMark(each.item, unread, saying),
@@ -69,9 +72,11 @@ export function InboxItemRows({
     chosen: undefined,
     shown: tasks.shown,
   });
+
   // Note that the press stands across draws, as the acts' doors do, so a row is drawn again only where its item moves.
   const inbox = useInboxDoor(tasks);
   const open = useSteadyDoor((each: InboxListed) => inbox.openItem(choiceOf(each)));
+
   return (
     <>
       <ReplayMask>

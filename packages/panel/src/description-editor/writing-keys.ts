@@ -100,18 +100,22 @@ export function inTableCell($at: ResolvedPos): boolean {
   for (let depth = $at.depth; depth > 0; depth -= 1) {
     if (CELL_ROLES.has($at.node(depth).type.spec.tableRole)) return true;
   }
+
   return false;
 }
 
 /** Whether the selection touches a table's cell: the caret stands in one, either end does, or a cell lies between them. */
 export function selectionTouchesCell(state: EditorState): boolean {
   const { $from, $to, from, to } = state.selection;
+
   if (inTableCell($from) || inTableCell($to)) return true;
   let touched = false;
   state.doc.nodesBetween(from, to, (node) => {
     if (CELL_ROLES.has(node.type.spec.tableRole)) touched = true;
+
     return !touched;
   });
+
   return touched;
 }
 
@@ -129,9 +133,11 @@ export function keymapName(chord: ShortcutChord): string {
  */
 function chordless(extension: AnyExtension): AnyExtension {
   if (!WRITING_EXTENSIONS.has(extension.name)) return extension;
+
   return extension.extend({
     addKeyboardShortcuts() {
       const own = this.parent?.() ?? {};
+
       return Object.fromEntries(Object.entries(own).filter(([keys]) => !keys.startsWith("Mod-")));
     },
   });
@@ -140,7 +146,9 @@ function chordless(extension: AnyExtension): AnyExtension {
 /** StarterKit, or any extension that adds others, with each writing extension in it chordless; a writing extension itself made chordless. */
 export function withoutTipTapChords(extension: AnyExtension): AnyExtension {
   const own = chordless(extension);
+
   if (extension.config.addExtensions === undefined) return own;
+
   return own.extend({
     addExtensions() {
       return (this.parent?.() ?? []).map(withoutTipTapChords);
@@ -151,6 +159,7 @@ export function withoutTipTapChords(extension: AnyExtension): AnyExtension {
 /** The extension with each Markdown rule it has that makes a block doing nothing in a table's cell, where it is one that has such rules. */
 function blockRulesOutOfCell(extension: AnyExtension): AnyExtension {
   if (!BLOCK_RULE_EXTENSIONS.has(extension.name)) return extension;
+
   return extension.extend({
     addInputRules() {
       return (this.parent?.() ?? []).map(
@@ -168,7 +177,9 @@ function blockRulesOutOfCell(extension: AnyExtension): AnyExtension {
 /** StarterKit, or any extension that adds others, with each Markdown rule in it that makes a block doing nothing in a table's cell. */
 export function blockRulesOutOfCells(extension: AnyExtension): AnyExtension {
   const own = blockRulesOutOfCell(extension);
+
   if (extension.config.addExtensions === undefined) return own;
+
   return own.extend({
     addExtensions() {
       return (this.parent?.() ?? []).map(blockRulesOutOfCells);
@@ -190,14 +201,18 @@ export const writingKeys = Extension.create<{ actions: readonly WritingAction[] 
   },
   addProseMirrorPlugins() {
     const bound: Record<string, () => boolean> = {};
+
     for (const action of this.options.actions) {
       const shortcut: WritingShortcut = WRITING_SHORTCUTS[action];
+
       if (shortcut.chord === undefined || !runsHere(action)) continue;
       const block = BLOCK_ACTIONS.has(action);
       bound[keymapName(shortcut.chord)] = () =>
         (block && selectionTouchesCell(this.editor.state)) || WRITING_RUN[action](this.editor);
     }
+
     const answer = keydownHandler(bound);
+
     return [
       new Plugin({
         key: new PluginKey("writingKeys"),
@@ -205,6 +220,7 @@ export const writingKeys = Extension.create<{ actions: readonly WritingAction[] 
           handleKeyDown: (view, event) => {
             if (!answer(view, event)) return false;
             event.stopPropagation();
+
             return true;
           },
         },

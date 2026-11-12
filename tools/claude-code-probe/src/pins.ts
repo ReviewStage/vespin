@@ -75,6 +75,7 @@ const REPOSITORY_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/
 /** Whether the text names exactly one repository as `owner/name`, so the clone URL and the firewall's path reach that one and no other. */
 export function isRepositoryName(text: string): boolean {
   const name = text.split("/")[1] ?? "";
+
   return REPOSITORY_NAME.test(text) && name !== "." && name !== ".." && !name.endsWith(".git");
 }
 

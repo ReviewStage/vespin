@@ -52,7 +52,7 @@ import {
   hostedRefusing,
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
-import { makeRateBrake, type RateBrake } from "../../http/rate-brake.js";
+import { createRateBrake, type RateBrake } from "../../http/rate-brake.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { CODEX_TOKEN_MARGIN } from "../coder-host/codex-sessions.js";
 import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
@@ -90,40 +90,54 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
   HttpServerRequest.HttpServerRequest | DatabaseServices | HostedEnvironment | HttpClient.HttpClient
 > {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.POST) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const bearer = presentedBearer(request);
+
   if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
   const admitted = yield* hostedStoreOrUnavailable(
     admitRunnerBearer(bearer, presentedLaunch(request)),
   );
+
   if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const { target } = admitted.value;
+
   const agent = yield* hostedStoreOrUnavailable(
     readAgentHeaderOfConversation(target.userId, target.conversationId),
   );
+
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(target.userId, agent.value.id));
+
   // Note that only a cloud agent its starter's plan pays for, on Codex, is handed the plan's token: one
   // whose latest launch chose the plan (`launchPayerOf`); a local agent runs on its machine's own login.
   const codex = Option.getOrUndefined(
     Option.filter(routing, (row) => row.runtime === CONVERSATION_RUNTIME.CODEX),
   );
+
   const onPlan =
     agent.value.machine !== AGENT_MACHINE.DEVICE &&
     codex?.payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION;
+
   if (!onPlan) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   if (!(yield* brake.check(agent.value.id))) {
     return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
   }
+
   const environment = yield* HostedEnvironment;
   const keys = environment.providerKeyEncryptionKeys;
   const ring = keys === undefined ? undefined : parseKeyRing(keys);
+
   if (ring === undefined || Result.isFailure(ring)) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   const access = yield* hostedStoreOrUnavailable(
     refreshChatGptAccess(
       target.userId,
@@ -132,14 +146,18 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
       codex?.subscriptionId ?? undefined,
     ),
   );
+
   if (access.outcome !== CHATGPT_ACCESS.READY) {
     return yield* Effect.fail(REFUSAL_OF_ACCESS[access.outcome]);
   }
+
   const { chatgptAccountId } = access.plan;
+
   const answer: RunnerTokenAnswer = {
     accessToken: Redacted.value(access.accessToken),
     ...(chatgptAccountId === undefined ? undefined : { chatgptAccountId }),
   };
+
   return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, answer);
 });
 
@@ -147,7 +165,8 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
 export function runnerTokenApp(): WebRoutes<
   DatabaseServices | HostedEnvironment | HttpClient.HttpClient
 > {
-  const endpoint = runnerTokenEndpoint(makeRateBrake(RUNNER_TOKEN_BRAKE));
+  const endpoint = runnerTokenEndpoint(createRateBrake(RUNNER_TOKEN_BRAKE));
+
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_TOKEN_PATH, hostedRefusing(endpoint)),
     hostedNotFoundRoute,

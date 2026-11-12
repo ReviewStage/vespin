@@ -22,6 +22,7 @@ function drawn(props: Parameters<typeof MessageLine>[0]): HTMLElement | null {
     renderToStaticMarkup(createElement(MessageLine, props)),
     "text/html",
   );
+
   return page.querySelector<HTMLElement>(".ui-message-line");
 }
 

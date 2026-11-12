@@ -61,6 +61,7 @@ test("a push leaves out a link part a Mac has not changed since it synced, so th
     { linkOpen: LINK_OPEN.MAC_APP },
     { linkOpen: LINK_OPEN.MAC_APP },
   );
+
   assert.deepEqual(accountPreferencesParts(pushed), { preferences: {} });
 });
 
@@ -69,6 +70,7 @@ test("a push carries a link choice changed or cleared since the last sync", () =
     { linkOpen: LINK_OPEN.BROWSER },
     { linkOpen: LINK_OPEN.MAC_APP },
   );
+
   assert.equal(accountPreferencesParts(changed).linkOpen, LINK_OPEN.BROWSER);
 
   const first = accountPreferencesToPush({ linkOpen: LINK_OPEN.MAC_APP }, undefined);
@@ -95,6 +97,7 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     turnNotifications: true,
     onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
   } satisfies Required<AccountPreferences>;
+
   const shared = Object.keys(accountPreferencesParts(everything).preferences);
   assert.deepEqual(
     shared.filter((key) => !V0_18_0_PREFERENCE_KEYS.includes(key)),

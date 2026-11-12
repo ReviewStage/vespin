@@ -92,6 +92,7 @@ export function UnreadPageCard({ glyph, name }: { glyph: ReactNode; name: string
 export function useSectionHeading(taskId: string | undefined, anchor: string): string | undefined {
   const page = useTaskMentions();
   const held = useQuery({ ...descriptionDocumentQuery(taskId), enabled: false }).data;
+
   const text =
     taskId === undefined
       ? undefined
@@ -100,8 +101,10 @@ export function useSectionHeading(taskId: string | undefined, anchor: string): s
         : held !== undefined && "task" in held
           ? held.task.document.body
           : undefined;
+
   if (text === undefined) return undefined;
   const headings = descriptionSections(text).map((section) => section.heading);
+
   return headings[sectionAnchors(headings).indexOf(anchor)];
 }
 
@@ -125,6 +128,7 @@ export function useTaskCard(
 ): ReactNode | undefined {
   const place = useContext(ChipCardsContext);
   const now = useMinute();
+
   return taskId === undefined ? undefined : place?.taskCard(taskId, now, focus);
 }
 
@@ -145,6 +149,7 @@ export function SectionChipCard({
 }): ReactNode {
   const heading = useSectionHeading(taskId, anchor) ?? name;
   const words = gone === undefined ? heading : `${heading} · ${gone}`;
+
   return (
     <TaskChipCard
       taskId={taskId}
@@ -195,15 +200,19 @@ export function PageChipCard({
   fallback: ReactNode;
 }): ReactNode {
   const read = useQuery(pagesQuery(place));
+
   if (read.isPending) return reading ?? fallback;
   const page = read.data?.find((each) => each.id === pageId);
+
   if (page === undefined) return fallback;
+
   return <PageCard place={place} page={page} />;
 }
 
 /** The workspace a link was written under, by its slug, one it stood under before, or its id where it has none, as the account holds it; none where it holds no such workspace. */
 function useLinkWorkspace(written: string): Workspace | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+
   return workspaces === undefined ? undefined : workspaceOfSlug(workspaces, written);
 }
 
@@ -222,7 +231,9 @@ export function WorkspaceDirectory({
 }): ReactNode {
   const around = useMemberDirectory();
   const reader = useMentionedReader();
+
   if (around.workspaceId === workspace.id) return children;
+
   return (
     <MemberDirectory workspace={workspace} readerId={around.readerId ?? reader}>
       {children}
@@ -244,7 +255,9 @@ function MemberCard({
   const { members, former } = directory;
   const name = [...(members ?? []), ...(former ?? [])].find((each) => each.userId === userId)?.name;
   const actor = usePerson({ userId, name: name ?? "" });
+
   if (name === undefined) return directory.reading ? reading : fallback;
+
   return actorCard(actor) ?? fallback;
 }
 
@@ -268,7 +281,9 @@ export function PersonChipCard({
   fallback: ReactNode;
 }): ReactNode {
   const named = useLinkWorkspace(workspace);
+
   if (named === undefined) return fallback;
+
   return (
     <WorkspaceDirectory workspace={named}>
       <MemberCard userId={userId} reading={reading} fallback={fallback} />
@@ -288,7 +303,9 @@ function KnownAutomationCard({
 }): ReactNode {
   const known = useAutomation(automationId);
   const landed = useAutomationsLanded();
+
   if (known === undefined) return landed ? fallback : reading;
+
   return <AutomationCard automation={known.automation} workspaceName={known.workspaceName} />;
 }
 
@@ -308,7 +325,9 @@ export function LinkAutomations({
   children: ReactNode;
 }): ReactNode {
   const workspace = useLinkWorkspace(slug);
+
   if (workspace === undefined) return children;
+
   return (
     <AutomationDirectory workspace={workspace} wanted onOpen={OPEN_NOTHING}>
       {children}
@@ -340,11 +359,15 @@ export function AutomationChipCard({
   fallback: ReactNode;
 }): ReactNode {
   const named = useLinkWorkspace(slug);
+
   const words = useQuery({ ...appStateQuery, select: selectWorkspaces }).data?.find(
     (each) => each.id === wordsWorkspaceId,
   );
+
   const workspace = named ?? words;
+
   if (workspace === undefined) return fallback;
+
   // Note that its maker is named by the members of its own workspace, as a member's chip under the link is.
   return (
     <WorkspaceDirectory workspace={workspace}>

@@ -18,6 +18,7 @@ import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
+import { type RunTabLook, runActionGlyph } from "./run-action-shells.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { SIDE_PANEL_TAB_KIND } from "./use-side-panel.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -109,8 +110,10 @@ export type TabSubject =
     }
   | {
       readonly kind: typeof TAB_KIND.TERMINAL;
-      /** The terminal's name ("Cloud 1"), which names the tab. */
+      /** The terminal's name ("Cloud 1"), or its run action's label, which names the tab. */
       readonly title: string;
+      /** Where the terminal is a run action's, whose icon the tab wears; none for a developer's own shell. */
+      readonly action?: RunTabLook | undefined;
     }
   | {
       readonly kind: typeof TAB_KIND.LOCAL;
@@ -155,14 +158,18 @@ export function openPlanStanding(
   tasks: Pick<TasksControl, "region" | "tasks" | "activeTaskId">,
 ): PlanStanding | undefined {
   const { region } = tasks;
+
   // Note that while its description is read, the tab wears the task as the list holds it.
   if (region.kind === DOCUMENT_REGION.READING) {
     const listed = tasks.tasks.find((each) => each.id === tasks.activeTaskId);
+
     return listed === undefined ? undefined : { name: listed.name, status: listed.status };
   }
+
   if (region.kind !== DOCUMENT_REGION.READY) return undefined;
   const { task } = region;
   const listed = tasks.tasks.find((each) => each.id === task.id) ?? task;
+
   return { name: task.name, status: listed.status };
 }
 
@@ -186,6 +193,7 @@ export function AgentMark({ provider }: { provider: ModelProvider | undefined })
  */
 export function SubagentMark({ model }: { model: string | undefined }) {
   const provider = model === undefined ? undefined : providerOf(model);
+
   return provider === undefined ? (
     <EntityGlyph kind={ENTITY_KIND.WORKER} />
   ) : (
@@ -205,6 +213,7 @@ export function SubagentMark({ model }: { model: string | undefined }) {
 export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
   const provider = agent === undefined ? undefined : providerOf(agent.model);
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
+
   return <StateGlyph glyph={<AgentMark provider={provider} />} state={state} />;
 }
 
@@ -220,6 +229,7 @@ export function agentEndMark(
 ): React.JSX.Element | undefined {
   // An agent its plan's usage limit stopped failed for no fault of its own, so it wears no failed mark.
   if (agent.turn?.failure === AGENT_FAILURE.PLAN_LIMIT) return undefined;
+
   return stateEndMark(agentGlyphState(agent.status), hinted);
 }
 
@@ -228,15 +238,20 @@ export function tabLook(subject: TabSubject): KindLook {
   switch (subject.kind) {
     case TAB_KIND.PANEL: {
       const { tab, plan } = subject;
+
       if (tab === SIDE_PANEL_TAB.DESCRIPTION && plan !== undefined) {
         return { icon: <PlanGlyph status={plan.status} />, label: plan.name };
       }
+
       if (tab === SIDE_PANEL_TAB.INBOX && subject.thread === true) {
         return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />, label: TAB_WORDS.THREAD };
       }
+
       const { label, icon: Icon } = SIDE_PANEL_TAB_KIND[tab];
+
       return { icon: <Icon />, label };
     }
+
     case TAB_KIND.PLAN:
       return { icon: <PlanGlyph status={subject.status} />, label: subject.name };
     case TAB_KIND.INBOX:
@@ -270,14 +285,29 @@ export function tabLook(subject: TabSubject): KindLook {
       };
     // Note that a terminal wears the terminal's own still glyph rather than its agent's, which
     // moves while the agent works, and is named by its terminal; each place drawing it names the agent beside it.
+    // A run action's wears the action's icon, giving way to a spinner while its process runs.
     case TAB_KIND.TERMINAL:
+      return {
+        icon:
+          subject.action === undefined ? (
+            <GLYPH.TERMINAL />
+          ) : (
+            <StateGlyph
+              glyph={runActionGlyph(subject.action.action.icon)}
+              state={subject.action.running === true ? GLYPH_STATE.WORKING : GLYPH_STATE.REST}
+            />
+          ),
+        label: subject.title,
+      };
     case TAB_KIND.LOCAL:
       return { icon: <GLYPH.TERMINAL />, label: subject.title };
     case TAB_KIND.FILE: {
       // A file's tab is named as every place names a file (`file-ref.tsx`).
       const { icon, label } = fileLook(subject.path);
+
       return { icon, label };
     }
+
     case TAB_KIND.PAGE:
       return { icon: <EntityGlyph kind={ENTITY_KIND.PAGE} />, label: subject.title };
     case TAB_KIND.BROWSER:

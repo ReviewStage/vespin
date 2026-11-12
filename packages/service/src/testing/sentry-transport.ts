@@ -101,6 +101,7 @@ export interface RecordingSentry {
 function itemsOf(body: string): SentItem[] {
   const [, ...lines] = body.split("\n").filter((line) => line.length > 0);
   const items: SentItem[] = [];
+
   for (let at = 0; at + 1 < lines.length; at += 2) {
     const text = lines[at + 1] ?? "{}";
     items.push({
@@ -109,6 +110,7 @@ function itemsOf(body: string): SentItem[] {
       payload: decodeSentPayload(text),
     });
   }
+
   return items;
 }
 
@@ -119,7 +121,9 @@ function recordingTransport(sent: SentItem[], delivered?: () => Promise<void>): 
       const body = Predicate.isString(request.body)
         ? request.body
         : new TextDecoder().decode(request.body);
+
       sent.push(...itemsOf(body));
+
       return (delivered?.() ?? Promise.resolve()).then(() => ({}));
     });
 }
@@ -142,8 +146,10 @@ function fixtureOptions(transport: Transport): SentryOptions {
  */
 function recording(sent: SentItem[], started: Layer.Layer<never>): RecordingSentry {
   let standing = processHandlers();
+
   const added = <Handler>(handlers: readonly Handler[]): Handler[] =>
     handlers.filter((handler) => !standing.has(handler));
+
   const closed = Layer.effectDiscard(
     Effect.sync(() => {
       standing = processHandlers();
@@ -155,6 +161,7 @@ function recording(sent: SentItem[], started: Layer.Layer<never>): RecordingSent
             for (const handler of added(process.listeners("uncaughtException"))) {
               process.removeListener("uncaughtException", handler);
             }
+
             for (const handler of added(process.listeners("unhandledRejection"))) {
               process.removeListener("unhandledRejection", handler);
             }
@@ -163,6 +170,7 @@ function recording(sent: SentItem[], started: Layer.Layer<never>): RecordingSent
       ),
     ),
   );
+
   return {
     sent,
     // Note that `closed` is built first, so it reads the handlers that stood before Sentry started.
@@ -188,6 +196,7 @@ function recording(sent: SentItem[], started: Layer.Layer<never>): RecordingSent
  */
 export function recordingSentry(delivered?: () => Promise<void>): RecordingSentry {
   const sent: SentItem[] = [];
+
   return recording(sent, sentryLayer(fixtureOptions(recordingTransport(sent, delivered))));
 }
 
@@ -200,10 +209,12 @@ export function recordingSentry(delivered?: () => Promise<void>): RecordingSentr
 export function recordingEveSentry(): RecordingSentry {
   const sent: SentItem[] = [];
   const options = fixtureOptions(recordingTransport(sent));
+
   const started = Layer.merge(
     Layer.effectDiscard(Effect.sync(() => Sentry.eveInstrumentation(options).setup())),
     sentryReportingLayer,
   );
+
   return recording(sent, started);
 }
 

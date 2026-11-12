@@ -13,12 +13,14 @@
  * end so.
  */
 
+import type { WireBoundaryInput } from "@repo/wire";
+
 /** A listener on one end: a message's, handed the message as an event's data, or the close's. */
-type Listener = (event: { readonly data: unknown }) => void;
+type Listener = (event: { readonly data: WireBoundaryInput }) => void;
 
 /** One end of the channel, as oRPC's adapters hold a port and the app's root starts and closes it. */
 interface InProcessPort {
-  postMessage(data: unknown): void;
+  postMessage(data: WireBoundaryInput): void;
   addEventListener(type: "message" | "close", listener: Listener | (() => void)): void;
   start(): void;
   close(): void;
@@ -51,33 +53,45 @@ function sayClosed(end: EndListeners): void {
 export function inProcessChannel(): InProcessChannel {
   const ends = [endListeners(), endListeners()] as const;
   let closed = false;
+
   const portOf = (own: 0 | 1): InProcessPort => {
     const other = ends[own === 0 ? 1 : 0];
+
     return {
       postMessage: (data) => {
         if (closed) return;
         // Note that delivery waits a turn, as a channel's does, so a message posted from inside a listener reaches the other end after the listener returns.
         queueMicrotask(() => {
           if (closed) return;
+
           for (const listener of [...other.message]) listener({ data });
         });
       },
       addEventListener: (type, listener) => {
         if (closed) return;
-        if (type === "message") ends[own].message.add(listener as Listener);
-        else ends[own].close.add(listener as () => void);
+
+        if (type === "message") {
+          ends[own].message.add(listener);
+
+          return;
+        }
+
+        // SAFETY: the channel's contract pairs `close` with a listener that takes no event.
+        ends[own].close.add(listener as () => void);
       },
       start: () => undefined,
       close: () => {
         if (closed) return;
         closed = true;
+
         for (const end of ends) sayClosed(end);
       },
     };
   };
+
   // SAFETY: oRPC's adapters call `postMessage` and `addEventListener` for `message` and `close` on a port, and the app's root `start` and `close`, which each end answers; nothing reads the rest of a `MessagePort`.
   return {
-    port1: portOf(0) as unknown as MessagePort,
-    port2: portOf(1) as unknown as MessagePort,
+    port1: portOf(0) as MessagePort,
+    port2: portOf(1) as MessagePort,
   };
 }

@@ -44,7 +44,7 @@ import { leftMark } from "../draft-mark.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
-import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";
+import { AgentTab } from "../tasks/agent-tab.js";
 import { AgentTabCard } from "../tasks/agent-tab-card.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
@@ -161,6 +161,7 @@ function RenamableTab({
   const tab = useRef<HTMLButtonElement | null>(null);
   const editing = rename?.editing === true;
   const endedByKey = useRefocusAfterEdit(editing, tab);
+
   const editor =
     rename?.editing === true ? (
       <InlineEdit
@@ -175,6 +176,7 @@ function RenamableTab({
         }}
       />
     ) : undefined;
+
   return (
     <DoorsTab
       look={look}
@@ -228,6 +230,7 @@ export function AgentMenuTab({
     run,
     onDeleted: doors.onClose,
   });
+
   // The chosen agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫ while the column has the keys, over the open task's description and its delete.
   const { onCopy, deletion } = actions.doors;
   const focused = keys && doors.chosen;
@@ -247,6 +250,7 @@ export function AgentMenuTab({
     FOCUSED_OFFER,
   );
   const whole: TabDoors = { ...doors, ...actions.doors };
+
   return (
     <>
       <RenamableTab
@@ -294,25 +298,31 @@ function agentTabs(input: {
   const { main, agents, unread, views, drafted, failed, waiting } = input;
   const chosen = (tab: MainTab) => main.tab !== undefined && sameTab(tab, main.tab);
   const models = agents.models ?? [];
+
   const look = (tab: MainTab, drawn: Omit<TabLook, "selected" | "onSelect">) => ({
     ...drawn,
     unread: unread.some((each) => sameTab(each, tab)),
     selected: chosen(tab),
     onSelect: () => main.onChoose(tab),
   });
+
   // An archived agent's tab stands once opened, drawn as a live one's is.
   const open = [...(agents.agents ?? []), ...(agents.archived ?? [])].filter((agent) =>
     main.openAgents?.includes(agent.id),
   );
+
   const own = open.map((agent) => {
     const tab = agentTab(agent.id);
     const label = agentName(agent, agents.models);
     const readCard = agentCardReading(agent, label, views.held, chosen(tab), agents);
+
     // A message to it that did not go wears the failed mark in the pencil's place.
     const placeMark = chosen(tab)
       ? undefined
       : (leftMark(failed.includes(agent.id), drafted.includes(agent.id)) ?? undefined);
+
     const waits = waiting?.get(agent.id)?.length ?? 0;
+
     return {
       tab,
       agent,
@@ -328,9 +338,11 @@ function agentTabs(input: {
       close: () => main.onClose(tab),
     };
   });
+
   // A Start still making its agent stands as that agent's tab under the press's key, which nothing closes but its answer.
   const pending = agents.start.pending;
   const startingTab = pending === undefined ? undefined : agentTab(pending.key);
+
   const starting =
     startingTab === undefined || main.openAgents?.includes(startingTab.agent) !== true
       ? []
@@ -348,10 +360,13 @@ function agentTabs(input: {
             close: undefined,
           },
         ];
+
   const draft = agents.draft?.id;
+
   const draftHolds =
     agents.draft !== undefined &&
     (agents.draft.prompt !== "" || agents.draft.attachments.length > 0);
+
   const drafts =
     draft === undefined
       ? []
@@ -369,6 +384,7 @@ function agentTabs(input: {
             },
           },
         ];
+
   return [...own, ...starting, ...drafts];
 }
 
@@ -396,6 +412,7 @@ export function inboxEntries(
 ): AddEntry[] {
   // An archived agent's items still stand, so the row stands while the task holds any agent.
   if ((agents.heldIds?.length ?? 0) === 0 && waiting === 0) return [];
+
   return [inboxEntry(waiting, onPick)];
 }
 
@@ -407,6 +424,7 @@ export function inboxEntries(
 export function newAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
   if (agents.onUnarchive !== undefined) return [];
   const reason = agents.start.busy ? NEW_AGENT_STARTING : undefined;
+
   return [
     {
       label: tabLook({ kind: TAB_KIND.DRAFT }).label,
@@ -441,7 +459,9 @@ function NewAgentButton({
     onAnswered();
     onStart?.();
   }, [asked, answers, onAnswered, onStart]);
+
   if (start === undefined) return null;
+
   return (
     <Tooltip label={start.detail ?? start.label} command={APP_COMMAND.NEW_TAB}>
       <IconButton
@@ -499,11 +519,14 @@ export function TaskTopbar({
   actions?: React.ReactNode;
 }): React.JSX.Element {
   const menu = useMenu(shown);
+
   const look =
     task === undefined
       ? undefined
       : tabLook({ kind: TAB_KIND.PLAN, status: task.status, name: task.name });
+
   const renaming = task !== undefined && rename?.editing === true;
+
   return (
     <>
       <Toolbar
@@ -619,6 +642,7 @@ export function MainTabBars({
 }): React.JSX.Element {
   const drafted = useDraftedAgents();
   const failed = useFailedAgents();
+
   // The agents' and the draft's tabs in the column's order, which the
   // developer's moves and their opening set (`use-main-tabs.ts`).
   const strip = inTaskOrder(
@@ -626,22 +650,28 @@ export function MainTabBars({
     main.tabs,
     (entry) => entry.tab,
   );
+
   useStripLooks(LOOK_STRIP.COLUMN, task.id, strip);
   const linkItemsOf = useLinkItems();
+
   // Close others closes every tab but `entry` that closes, then shows it; none where no other tab closes.
   const closeOthersOf = (entry: DrawnTab): (() => void) | undefined => {
     const others = strip.flatMap((other) =>
       other === entry || other.close === undefined ? [] : [other.close],
     );
+
     if (others.length === 0) return undefined;
+
     return () => {
       for (const close of others) close();
       main.onChoose(entry.tab);
     };
   };
+
   const chosen = strip.find((entry) => entry.look.selected);
   // The chosen agent's run actions: the row's Run button, or a phone's Run › in its ⋯, which has no room for the button.
   const runAgent = chosen?.agent?.archivedAt === undefined ? chosen?.agent : undefined;
+
   const run = useRunActions(
     runAgent,
     shown,
@@ -649,6 +679,7 @@ export function MainTabBars({
       ? undefined
       : (terminal) => onShowShell(runAgent.id, terminal),
   );
+
   const phone = onShown !== undefined;
   const tabSubject = (entry: DrawnTab) => shortcutSubject(SHORTCUT_SUBJECT.TAB, tabKey(entry.tab));
   // The chosen tab is what the strip's keys act on, so its menu prints them.
@@ -658,18 +689,23 @@ export function MainTabBars({
     APP_COMMAND.CLOSE_OTHER_TABS,
     keys && chosen !== undefined ? closeOthersOf(chosen) : undefined,
   );
+
   // Note that an agent is pinned as itself, on the account, wherever it stands, so its tab's Pin is the agent's.
   const pinDoor = (agentId: string): TabPin => {
     const pinned = pins.pinned(agentId);
+
     return { pinned, onToggle: () => pins.onPin(agentId, !pinned), agent: true };
   };
+
   const doorsOf = (entry: DrawnTab): TabDoors => {
     // An agent's link is its own action (`agent-actions.tsx`).
     const linked: LinkDestination | undefined =
       entry.agent === undefined
         ? undefined
         : { kind: LINK_DESTINATION.AGENT, agentId: entry.agent.id };
+
     const { agent } = entry;
+
     return {
       chosen: entry.look.selected,
       subject: tabSubject(entry),
@@ -680,6 +716,7 @@ export function MainTabBars({
       links: linked === undefined ? undefined : linkItemsOf(linked),
     };
   };
+
   return (
     <Toolbar
       start={TOOLBAR_INSET.COLUMN}
@@ -692,6 +729,7 @@ export function MainTabBars({
             ground={TABS_GROUND.GROUND}
             onMove={(from, to) => {
               const entry = strip[from];
+
               if (entry !== undefined) main.onMove(entry.tab, to);
             }}
           >
@@ -731,7 +769,11 @@ export function MainTabBars({
       actions={
         <>
           {phone || run === undefined || chosen === undefined ? null : (
-            <RunActionsButton offer={run} agentName={chosen.look.label} />
+            <RunActionsButton
+              offer={run}
+              agentGlyph={chosen.look.icon}
+              agentName={chosen.look.label}
+            />
           )}
           <AgentHistory
             main={main}
@@ -754,6 +796,7 @@ export function mainTabLabel(tab: MainTab, agents: AgentsControl): string | unde
       const agent =
         agents.agents?.find((each) => each.id === agentId) ??
         agents.archived?.find((each) => each.id === agentId);
+
       return agent === undefined ? undefined : agentName(agent, agents.models);
     },
   });
@@ -813,8 +856,10 @@ export function MainTabContent({
       );
     case STRIP_TAB_KIND.AGENT: {
       const agentId = tab.agent;
-      // A Start still making its agent draws the agent's tab as it will land, saying it is starting.
-      if (agents.start.pending?.key === agentId) return <StartingAgentTab key={agentId} />;
+
+      // A Start still making its agent stands in the tab's placeholder, its key being no agent's to read.
+      if (agents.start.pending?.key === agentId) return <AgentTabSkeleton key={agentId} />;
+
       // The tab follows its agent's transcript by the id alone, so a task opened
       // on an agent reads it beside the task's list of agents rather than after
       // it; what needs the agent itself waits for the list in the tab's shape.
@@ -824,6 +869,7 @@ export function MainTabContent({
       const agent =
         agents.agents?.find((each) => each.id === agentId) ??
         agents.archived?.find((each) => each.id === agentId);
+
       return (
         <ForkProvider
           key={agentId}
@@ -861,6 +907,7 @@ export function MainTabContent({
         </ForkProvider>
       );
     }
+
     default:
       return absurd(tab);
   }

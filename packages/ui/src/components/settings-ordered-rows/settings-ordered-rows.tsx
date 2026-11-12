@@ -47,6 +47,7 @@ export function SettingsOrderedRows({
   gutter?: boolean | undefined;
 }): React.JSX.Element {
   const movable = onPointerDown !== undefined && rows.length > 1;
+
   return (
     <ol
       className="ui-settings-ordered-rows"

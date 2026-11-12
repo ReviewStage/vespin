@@ -93,7 +93,7 @@ import {
   type TaskRunsOnRequest,
   type TaskStartAnswer,
 } from "@repo/features/task-wire";
-import { Effect, Option } from "effect";
+import { Effect, Match, Option, Predicate } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { type StartReach, startRequestedAgent } from "../agents/coder-host/start.js";
 import { summaryOf } from "../agents/coder-host/stop.js";
@@ -144,9 +144,12 @@ const startingWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<string, HostedRefusal, DatabaseServices> {
   if (workspaceId !== undefined) {
     const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, workspaceId));
+
     if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return workspaceId;
   }
+
   const first = yield* hostedStoreOrUnavailable(
     ensurePersonalWorkspace(userId, seams.workspaces).pipe(
       Effect.catchTag("UnknownError", () =>
@@ -157,8 +160,10 @@ const startingWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
   );
+
   // Note that an account gone between its bearer and here has no workspace to start in.
   if (Option.isNone(first)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return first.value;
 });
 
@@ -175,11 +180,14 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
   organizationId: string,
 ): Effect.fn.Return<Option.Option<TaskStartAnswer>, HostedRefusal, DatabaseServices> {
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, idempotencyKey));
+
   if (Option.isNone(made)) return Option.none();
   const task = yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
+
   if (Option.isNone(task) || task.value.workspaceId !== organizationId) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return Option.some({ plan: task.value, agent: yield* summaryOf(userId, made.value) });
 });
 
@@ -192,7 +200,9 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
 const agentMadeOn = (userId: string, taskId: string, idempotencyKey: string) =>
   Effect.gen(function* () {
     const made = yield* readAgentByKey(userId, idempotencyKey);
+
     if (Option.isNone(made) || made.value.taskId !== taskId) return Option.none();
+
     return Option.some(yield* summaryOf(userId, made.value));
   }).pipe(Effect.orElseSucceed(() => Option.none()));
 
@@ -222,6 +232,7 @@ const startedAgentOn = (
   reached: StartReach | undefined,
 ) => {
   const { task } = stored;
+
   return startRequestedAgent(
     routedSessions<TypedTurn>(userId),
     userId,
@@ -244,10 +255,13 @@ const startedAgentOn = (
     Effect.catch((refusal) =>
       Effect.gen(function* () {
         const made = yield* agentMadeOn(userId, task.id, agent.idempotencyKey);
+
         if (Option.isSome(made)) {
           const plan = yield* taskAfterStart(userId, task);
+
           return { plan, agent: made.value } satisfies TaskStartAnswer;
         }
+
         // Note that the provider and the model asked for are kept beside the refusal, because a credential refused names neither in its words.
         yield* Effect.logWarning(
           `the agent a task's start asked for was refused: ${refusal.error}`,
@@ -257,6 +271,7 @@ const startedAgentOn = (
             ...(agent.model === undefined ? undefined : { model: agent.model }),
           }),
         );
+
         const agentRefusal = {
           error: refusal.error,
           ...(refusal.resetsAt === undefined ? undefined : { resetsAt: refusal.resetsAt }),
@@ -266,13 +281,8 @@ const startedAgentOn = (
           refusal.localAgentRefusal === LOCAL_AGENT_REFUSAL.NOT_OWNER
             ? undefined
             : { localAgentRefusal: refusal.localAgentRefusal }),
-          ...(refusal.extraRepositoryRefusal === undefined
-            ? undefined
-            : { extraRepositoryRefusal: refusal.extraRepositoryRefusal }),
-          ...(refusal.refusedRepository === undefined
-            ? undefined
-            : { refusedRepository: refusal.refusedRepository }),
         };
+
         return { plan: task, agentRefusal } satisfies TaskStartAnswer;
       }),
     ),
@@ -304,8 +314,10 @@ const pickKept = (userId: string, asked: TaskRunsOnRequest) =>
   Effect.gen(function* () {
     if (asked.machine === AGENT_MACHINE.DEVICE) {
       const device = (yield* devicesNamed([asked.deviceId])).get(asked.deviceId);
+
       if (device?.userId !== userId) return;
     }
+
     yield* keepRunsOnPick(userId, asked);
   }).pipe(
     Effect.catch((failure) =>
@@ -324,24 +336,21 @@ const pickKept = (userId: string, asked: TaskRunsOnRequest) =>
 function relationRefused(
   failure: TaskRelationRefused | TaskCreateRelationRefused | StoreFailure,
 ): Effect.Effect<never, HostedRefusal> {
-  switch (failure._tag) {
-    case "TaskBlockCycle":
-      return Effect.fail(HOSTED_REFUSAL.TASK_BLOCK_CYCLE);
-    case "TaskBlockSelf":
-    case "TaskBlockAcrossWorkspaces":
-      return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-    case "TaskParentCycle":
-      return Effect.fail(HOSTED_REFUSAL.TASK_PARENT_CYCLE);
-    case "TaskParentRepositoryDiffers":
-      return Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED);
-    case "TaskParentHeld":
-      return Effect.fail(HOSTED_REFUSAL.TASK_PARENT_HELD);
-    case "TaskParentUnreached":
-    case "TaskRelationUnreached":
-      return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-    default:
-      return hostedStoreOrUnavailable(Effect.fail(failure));
-  }
+  return Match.value(failure).pipe(
+    Match.tag("TaskBlockCycle", () => Effect.fail(HOSTED_REFUSAL.TASK_BLOCK_CYCLE)),
+    Match.tag("TaskBlockSelf", "TaskBlockAcrossWorkspaces", () =>
+      Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST),
+    ),
+    Match.tag("TaskParentCycle", () => Effect.fail(HOSTED_REFUSAL.TASK_PARENT_CYCLE)),
+    Match.tag("TaskParentRepositoryDiffers", () =>
+      Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+    ),
+    Match.tag("TaskParentHeld", () => Effect.fail(HOSTED_REFUSAL.TASK_PARENT_HELD)),
+    Match.tag("TaskParentUnreached", "TaskRelationUnreached", () =>
+      Effect.fail(HOSTED_REFUSAL.NOT_FOUND),
+    ),
+    Match.orElse((store) => hostedStoreOrUnavailable(Effect.fail(store))),
+  );
 }
 
 /** A make's refusal answered by name: a repository refused as its reach answered it, an assignee who is no member as invalid, an id another plan holds as not found, and a parent or a relation as `relationRefused` answers it. */
@@ -354,8 +363,12 @@ function createRefused(
     | StoreFailure,
 ): Effect.Effect<never, HostedRefusal> {
   if (!("_tag" in failure)) return Effect.fail(failure);
-  if (failure._tag === "TaskAssigneeNotMember") return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  if (failure._tag === "TaskIdTaken") return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+  if (Predicate.isTagged(failure, "TaskAssigneeNotMember"))
+    return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+  if (Predicate.isTagged(failure, "TaskIdTaken")) return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return relationRefused(failure);
 }
 
@@ -374,12 +387,14 @@ const blockWritten = (
     change.relation === TASK_BLOCK_RELATION.BLOCKED_BY
       ? { blockerTaskId: change.taskId, blockedTaskId: taskId }
       : { blockerTaskId: taskId, blockedTaskId: change.taskId };
+
   const written: TaskBlockEffect<
     Option.Option<TaskBlockWritten>,
     TaskBlockSelf | TaskBlockAcrossWorkspaces | TaskBlockCycle
   > = change.change === TASK_BLOCK_CHANGE.ADD
     ? addTaskBlock(userId, pair)
     : removeTaskBlock(userId, pair);
+
   return Effect.catch(written, relationRefused);
 };
 
@@ -387,6 +402,7 @@ const blockWritten = (
 export function tasksProcedures(seams: TasksProcedureSeams) {
   const writer: Effect.Effect<StoreWriter> = storeWriter({ tools: CODER_TOOL_SET });
   const plans = hosted.plans.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /**
      * The account's plans; a teammate's plan on their own GitHub token among
@@ -399,11 +415,13 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      */
     list: plans.list.effect(function* ({ context }) {
       yield* refreshRepositoryReads(context.userId);
+
       const tasks = yield* hostedStoreOrUnavailable(
         Effect.flatMap(listTasks(context.userId), (listed) =>
           withTaskAgents(context.userId, listed),
         ),
       );
+
       return { plans: tasks };
     }),
 
@@ -424,14 +442,17 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       const { userId } = context;
       const { agent } = input;
       const organizationId = yield* startingWorkspace(seams, userId, input.workspaceId);
+
       const before =
         agent === undefined
           ? Option.none()
           : yield* startedBefore(userId, agent.idempotencyKey, organizationId);
+
       if (Option.isSome(before)) return { status: TASK_START_STATUS.RETRIED, body: before.value };
       // A retry is answered above first, since its parent may be gone by now, or its device away, while its task stands.
       // An agent is the start, so its plan opens with no planning phase.
       const planning = agent === undefined ? input.planning : false;
+
       const {
         task: stored,
         txid,
@@ -454,12 +475,14 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
         },
         SERVER_TASK_SOURCE.SIDEBAR,
       ).pipe(Effect.catch(createRefused));
+
       // A task holds no place: the place a released desktop names on the task alone runs the agent the
       // create starts, which keeps it as the member's pick once it stands, or is kept as that pick where
       // the create starts none.
       if (input.runsOn !== undefined && agent === undefined) yield* pickKept(userId, input.runsOn);
       // The agent runs where it names, else where a released desktop named on the task alone.
       const runsOnOfAgent = agent?.runsOn ?? input.runsOn;
+
       const answer: TaskStartAnswer =
         agent === undefined
           ? { plan: stored.task }
@@ -471,8 +494,10 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
                 ? undefined
                 : { repository: reached.repository, access: reached.githubAccess },
             );
+
       // An agent's Start commits after the task's insert, so its transaction, where it has one, is the later.
       const committed = answer.txid ?? txid;
+
       return {
         status: TASK_START_STATUS.CREATED,
         body: committed === undefined ? answer : { ...answer, txid: committed },
@@ -484,7 +509,9 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       const found = yield* hostedStoreOrUnavailable(
         taskIdOfNumber(context.userId, input.workspace, input.number),
       );
+
       if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { taskId: found.value };
     }),
 
@@ -492,8 +519,10 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     open: plans.open.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const opened = yield* hostedStoreOrUnavailable(readTask(context.userId, taskId));
+
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { task, brief } = opened.value;
+
       return { plan: task, ...(brief === undefined ? undefined : { brief }) };
     }),
 
@@ -507,13 +536,16 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       // Note that a place a released desktop names (`runsOn`) is read and goes nowhere, because a task holds none.
       const { runsOn: _runsOn, ...asked } = input.body;
       const confirmed = yield* taskChangeAsked(userId, taskId, asked);
+
       const task = yield* taskChangeWritten(userId, taskId, confirmed, {
         by: AGENT_ARCHIVER.MEMBER,
         userId,
       });
+
       if (Option.isNone(task)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       yield* taskChangeSettled(seams, userId, task.value);
       const { task: plan, txid } = task.value;
+
       return txid === undefined ? { plan } : { plan, txid };
     }),
 
@@ -527,10 +559,13 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
       const written = yield* blockWritten(userId, taskId, input.body);
+
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const opened = yield* hostedStoreOrUnavailable(readTaskDescription(userId, taskId));
+
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { txid } = written.value;
+
       return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
     }),
 
@@ -543,12 +578,15 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     parent: plans.parent.effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
+
       const written = yield* Effect.catch(
         setTaskParent(userId, taskId, input.body.parentTaskId),
         relationRefused,
       );
+
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { task: plan, txid } = written.value;
+
       return txid === undefined ? { plan } : { plan, txid };
     }),
 
@@ -561,14 +599,18 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     relation: plans.relation.effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
+
       const written = yield* Effect.catch(
         moveTaskRelation(userId, taskId, input.body),
         relationRefused,
       );
+
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const opened = yield* hostedStoreOrUnavailable(readTaskDescription(userId, taskId));
+
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { txid } = written.value;
+
       return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
     }),
 
@@ -576,6 +618,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     delete: plans.delete.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const { txid } = yield* deleteTaskStoppingAgents(writer, context.userId, taskId);
+
       return { deleted: true as const, txid };
     }),
 
@@ -589,6 +632,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     editDescription: plans.editDescription.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
       const saved = yield* saveDeveloperEdit({ userId: context.userId, taskId }, input.body);
+
       switch (saved.status) {
         case DESCRIPTION_SAVE_STATUS.SAVED:
           return {
@@ -606,6 +650,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
           if (saved.reason === DESCRIPTION_SAVE_REFUSAL.TOO_LONG) {
             return { refused: DESCRIPTION_EDIT_REFUSAL.TOO_LONG };
           }
+
           return yield* Effect.fail(EDIT_REFUSAL.get(saved.reason) ?? HOSTED_REFUSAL.UNAVAILABLE);
       }
     }),
@@ -617,16 +662,20 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      */
     descriptionRevisions: plans.descriptionRevisions.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
+
       return yield* hostedStoreOrUnavailable(listRevisions(context.userId, taskId, input.before));
     }),
 
     /** One revision's content and the content before it. */
     descriptionRevision: plans.descriptionRevision.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
+
       const revision = yield* hostedStoreOrUnavailable(
         readRevision(context.userId, taskId, input.seq),
       );
+
       if (Option.isNone(revision)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { revision: revision.value };
     }),
 
@@ -640,11 +689,13 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     restoreDescription: plans.restoreDescription.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const restored = yield* restoreRevision({ userId: context.userId, taskId }, input.seq);
+
       if (restored.status !== DESCRIPTION_SAVE_STATUS.SAVED) {
         return yield* Effect.fail(
           RESTORE_REFUSAL.get(restored.reason) ?? HOSTED_REFUSAL.UNAVAILABLE,
         );
       }
+
       return {
         plan: restored.task,
         ...(restored.txid === undefined ? undefined : { txid: restored.txid }),

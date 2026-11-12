@@ -11,6 +11,7 @@ import { CatalogSection } from "../section";
 function Sliders(): React.JSX.Element {
   const [amount, setAmount] = useState(50);
   const [step, setStep] = useState(2);
+
   return (
     <>
       <CatalogSection id="slider-percent" title="Zero to a hundred">

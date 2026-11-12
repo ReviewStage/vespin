@@ -57,6 +57,7 @@ let minted = 0;
 /** A picture as a stored output names it, its id fresh, so no test reads another's from the window's cache. */
 function picture(width: number, height: number) {
   minted += 1;
+
   return {
     id: `0b7f3c11-8d2a-4e5f-9a61-${String(minted).padStart(12, "0")}`,
     mediaType: INBOX_IMAGE_TYPE.PNG,
@@ -108,13 +109,16 @@ async function drawn(
   waitForPictures = true,
 ) {
   const read: string[] = [];
+
   const door: AgentPictureDoor = {
     owner: "agent-7",
     read: (_owner, id) => {
       read.push(id);
+
       return answer(id);
     },
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -136,7 +140,9 @@ async function drawn(
       ),
     ),
   );
+
   if (waitForPictures) await landed(container);
+
   return { container, read };
 }
 
@@ -149,6 +155,7 @@ async function landed(container: HTMLElement): Promise<void> {
 
 test("a set the agent showed in a finished turn is drawn, each picture read once and drawn at its own shape", async () => {
   const pictures = [picture(1200, 720), picture(390, 700)];
+
   const { container, read } = await drawn(
     finished([
       text("Pending invites now sit in the members list."),
@@ -182,9 +189,11 @@ test("a set the agent showed in a finished turn is drawn, each picture read once
 test("two shown sets one after another are one set, and one picture alone is its own block", async () => {
   const [first, second, alone] = [picture(800, 450), picture(800, 450), picture(600, 520)];
   assert.ok(first && second && alone);
+
   const joined = await drawn(
     finished([shown("call-a", [first]), shown("call-b", [second]), text("Both.")]),
   );
+
   const single = await drawn(finished([shown("call-c", [alone]), text("One.")]));
 
   assert.equal(joined.container.querySelectorAll(SHOWN_TILES).length, 2);
@@ -202,6 +211,7 @@ test("two shown sets one after another are one set, and one picture alone is its
 
 test("an integration's call keeps its row and gains its pictures as tiles, one left out saying so with its size and opening nothing", async () => {
   const kept = picture(390, 700);
+
   const answered = await drawn({
     id: "turn",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -218,9 +228,11 @@ test("an integration's call keeps its row and gains its pictures as tiles, one l
       ]),
     ],
   });
+
   const tiles = [
     ...answered.container.querySelectorAll('ul[aria-label="Pictures the call answered"] > li'),
   ];
+
   assert.equal(tiles.length, 2);
   assert.equal(tiles[0]?.querySelector("img")?.getAttribute("alt"), "extract_images-1");
   assert.equal(tiles[1]?.textContent, "extract_images-2 · not kept · 6.4 MB");
@@ -229,12 +241,14 @@ test("an integration's call keeps its row and gains its pictures as tiles, one l
 
 test("a call draws every picture it answered in its order, so a kept one after six not kept opens and none hides behind a count", async () => {
   const kept = picture(390, 700);
+
   const omitted = {
     type: "image",
     mimeType: "image/png",
     omitted: PICTURE_OMISSION.TOO_LARGE,
     byteCount: 6_400_000,
   };
+
   const answered = await drawn({
     id: "turn",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -245,9 +259,11 @@ test("a call draws every picture it answered in its order, so a kept one after s
       ]),
     ],
   });
+
   const tiles = [
     ...answered.container.querySelectorAll('ul[aria-label="Pictures the call answered"] > li'),
   ];
+
   const open = tiles.at(-1)?.querySelector<HTMLButtonElement>("button");
 
   assert.equal(tiles.length, 7);
@@ -258,9 +274,10 @@ test("a call draws every picture it answered in its order, so a kept one after s
   assert.ok(document.querySelector('[role="dialog"] img'), "the viewer opens on the kept picture");
 });
 
-test("a browser call's screenshots are thumbnails in a strip under its row, masked from the replay, and a press opens the window's viewer walking them", async () => {
+test("a browser call's screenshots are thumbnails in a strip under its row, and a press opens the window's viewer walking them", async () => {
   const [first, second] = [picture(1280, 800), picture(1280, 800)];
   assert.ok(first && second);
+
   const screenshot = (kept: ReturnType<typeof picture>) => ({
     action: "screenshot",
     status: "done",
@@ -268,6 +285,7 @@ test("a browser call's screenshots are thumbnails in a strip under its row, mask
     image: { mime: "image/jpeg", width: 1280, height: 800 },
     picture: kept,
   });
+
   const { container, read } = await drawn({
     id: "turn",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -295,10 +313,10 @@ test("a browser call's screenshots are thumbnails in a strip under its row, mask
       ),
     ],
   });
+
   const strip = container.querySelector('ul[aria-label="Pictures the call answered"]');
   const thumbnails = [...(strip?.querySelectorAll("li img") ?? [])];
 
-  assert.ok(strip?.closest(".ph-no-capture"), "the strip is left out of the replay");
   assert.deepEqual(
     thumbnails.map((image) => [image.getAttribute("alt"), image.getAttribute("src")]),
     [
@@ -341,6 +359,7 @@ test("a refused show_image is a row where its error is read, and a picture in th
 
 test("a refused set is a row that failed, its reason read in it, and nothing waits for pictures never kept", async () => {
   const reason = "Not shown: a picture is kept up to 4 MB. Save it smaller: shots/full.png";
+
   const { container } = await drawn(
     {
       id: "turn",
@@ -358,18 +377,22 @@ test("a refused set is a row that failed, its reason read in it, and nothing wai
   );
 
   assert.equal(container.querySelectorAll(`.picture-block, ${SHOWN_TILES}`).length, 0);
+
   // The group the call stands in, then the call's own row, each opened as a reader would.
   for (let opened = 0; opened < 3; opened += 1) {
     const closed = container.querySelector<HTMLElement>("details:not([open]) > summary");
+
     if (closed === null) break;
     await act(async () => closed.click());
   }
+
   assert.match(container.textContent ?? "", /Not shown: a picture is kept up to 4 MB/u);
 });
 
 test("a tile of a set whose bytes are gone says so in its words and opens nothing, while the rest still open", async () => {
   const [kept, gone] = [picture(800, 450), picture(800, 450)];
   assert.ok(kept && gone);
+
   const { container } = await drawn(
     finished([shown("call-gone", [kept, gone]), text("Two.")]),
     false,
@@ -380,6 +403,7 @@ test("a tile of a set whose bytes are gone says so in its words and opens nothin
           : { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw==" },
       ),
   );
+
   const tiles = [...container.querySelectorAll(SHOWN_TILES)];
 
   assert.equal(tiles.length, 2);
@@ -396,6 +420,7 @@ test("a tile whose read did not land says it could not be read, and its Retry re
   const [kept, failing] = [picture(800, 450), picture(800, 450)];
   assert.ok(kept && failing);
   let refusing = true;
+
   const { container, read } = await drawn(
     finished([shown("call-failed", [kept, failing]), text("Two.")]),
     false,
@@ -404,6 +429,7 @@ test("a tile whose read did not land says it could not be read, and its Retry re
         ? Promise.reject(new Error("The host did not answer."))
         : Promise.resolve({ contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw==" }),
   );
+
   const failed = () => [...container.querySelectorAll(SHOWN_TILES)][1];
   assert.match(failed()?.textContent ?? "", /Screen 2 could not be read\./u);
   const retry = failed()?.querySelector("button");
@@ -499,9 +525,11 @@ test("a recording and a set shown after it stay out of every fold of the finishe
   // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
   URL.createObjectURL = () => "blob:recording-2";
   URL.revokeObjectURL = () => undefined;
+
   try {
     const video = { ...picture(1278, 598), mediaType: CONVERSATION_MEDIA_TYPE.WEBM };
     const still = picture(1200, 720);
+
     const { container } = await drawn(
       finished([
         toolPart("bash", "call-serve", { command: "pnpm dev" }, { exitCode: 0 }),
@@ -552,6 +580,7 @@ test("the viewer opened on the first picture to land reaches the rest as their r
   const [first] = pictures;
   assert.ok(first);
   const held: (() => void)[] = [];
+
   const { container } = await drawn(
     finished([shown("call-staggered", pictures), text("Three.")]),
     false,
@@ -563,6 +592,7 @@ test("the viewer opened on the first picture to land reaches the rest as their r
           }),
     false,
   );
+
   const tileNow = () => container.querySelector<HTMLButtonElement>(`${SHOWN_TILES} button`);
   await vi.waitFor(() => assert.equal(tileNow() === null, false));
   const tile = tileNow();
@@ -584,14 +614,18 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
   // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
   URL.createObjectURL = (blob: Blob) => {
     created.push(blob.type);
+
     return `blob:video-${String(created.length)}`;
   };
+
   URL.revokeObjectURL = (url: string) => {
     revoked.push(url);
   };
+
   try {
     const video = { ...picture(1280, 800), mediaType: CONVERSATION_MEDIA_TYPE.WEBM };
     const still = picture(1200, 720);
+
     const { container, read } = await drawn(
       finished([
         toolPart(
@@ -630,7 +664,6 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
     );
     assert.equal(inline.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(inline.getAttribute("aria-label"), "Video: Inviting a member");
-    assert.ok(inline.closest(".ph-no-capture"), "the player is left out of the replay");
     assert.deepEqual(
       [...container.querySelectorAll("img")].map((image) => image.getAttribute("src")),
       ["data:image/png;base64,iVBORw=="],
@@ -684,10 +717,12 @@ test("a call that shows a recording between two pictures draws it first, and the
   // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
   URL.createObjectURL = () => "blob:interleaved-1";
   URL.revokeObjectURL = () => undefined;
+
   try {
     const before = picture(1200, 720);
     const video = { ...picture(1280, 800), mediaType: CONVERSATION_MEDIA_TYPE.WEBM };
     const after = picture(1200, 720);
+
     const { container } = await drawn(
       finished([
         toolPart(
@@ -724,10 +759,12 @@ test("a call that shows a recording between two pictures draws it first, and the
     act(() =>
       document.querySelector('[role="dialog"] video')?.dispatchEvent(new Event("loadedmetadata")),
     );
+
     const shownNow = () => [
       document.querySelector('[role="dialog"] .attachment-viewer-title')?.textContent,
       viewerPlace(document.querySelector('[role="dialog"]') ?? document),
     ];
+
     const next = () =>
       act(() =>
         document
@@ -736,6 +773,7 @@ test("a call that shows a recording between two pictures draws it first, and the
             new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }),
           ),
       );
+
     assert.deepEqual(shownNow(), ["The flow.webm", "1 of 3"]);
     act(() =>
       document
@@ -764,8 +802,10 @@ test("a recording a finished browser call kept plays under its row, out of the t
   // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
   URL.createObjectURL = () => "blob:recording-1";
   URL.revokeObjectURL = () => undefined;
+
   try {
     const video = { ...picture(1278, 598), mediaType: CONVERSATION_MEDIA_TYPE.WEBM };
+
     const { container, read } = await drawn(
       finished([
         toolPart(
@@ -817,7 +857,6 @@ test("a recording a finished browser call kept plays under its row, out of the t
       "under Vespin's own bar, with an Expand into the viewer",
     );
     assert.equal(inline.hasAttribute("controls"), false, "and not the browser's");
-    assert.ok(inline.closest(".ph-no-capture"));
     assert.equal(
       inline.closest(".picture-block")?.querySelector(".picture-caption")?.textContent,
       "Inviting a member",
@@ -850,6 +889,7 @@ test("a recording a finished browser call kept plays under its row, out of the t
 
 test("an image a line's row names by the picture it was kept as is read through the door and drawn as its chip, and one an older row keeps the bytes of is drawn from them with no read", async () => {
   const kept = picture(2, 1);
+
   const { container, read } = await drawn({
     id: "line",
     role: MESSAGE_ROLE.USER,
@@ -902,9 +942,11 @@ test.each([
     });
 
     assert.deepEqual(
-      [...container.querySelectorAll('[aria-label^="Open Picture"]')]
-        .filter((chip) => chip.closest('ul[aria-label="Attached files"]') === null)
-        .map((chip) => chip.getAttribute("aria-label")),
+      [...container.querySelectorAll('[aria-label^="Open Picture"]')].flatMap((chip) =>
+        chip.closest('ul[aria-label="Attached files"]') === null
+          ? [chip.getAttribute("aria-label")]
+          : [],
+      ),
       inWords,
     );
     assert.deepEqual(
@@ -923,6 +965,7 @@ test("a line carrying two pictures of one name, as queued messages joined do, dr
     filename: "Picture 1",
     url,
   });
+
   const { container } = await drawn({
     id: "line",
     role: MESSAGE_ROLE.USER,
@@ -954,11 +997,14 @@ test("a line still on its way draws its files going up with no share, each takin
       },
     ],
   };
+
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
   roots.push(root);
+
   const draw = (sending: boolean) =>
     act(() => root.render(withQueryClient(createElement(MessageFileChips, { message, sending }))));
+
   draw(true);
   const meter = host.querySelector('[role="progressbar"]') ?? assert.fail("a file going up");
   assert.equal(meter.getAttribute("aria-label"), "Uploading spec.pdf");

@@ -42,6 +42,7 @@ const TASK_MENU: readonly MenuLine[] = [
   rule(488),
   { top: 493, bottom: 535, kind: MENU_LINE.NOTE },
 ];
+
 const FADE = 24;
 
 test("a room that ends over a rule with items past it cuts through the middle of the last row whose middle it reaches", () => {

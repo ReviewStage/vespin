@@ -218,6 +218,7 @@ const startQueued = SqlSchema.findAll({
   Result: IdSchema,
   execute: (row) => {
     const progressBy = new Date(row.startedAt.getTime() + TURN_DEADLINE.PROGRESS_MS);
+
     return Database.use((db) =>
       db
         .update(turns)
@@ -344,6 +345,7 @@ const stampStop = SqlSchema.findAll({
   Result: IdSchema,
   execute: (row) => {
     const stopBy = new Date(row.at.getTime() + TURN_DEADLINE.STOP_MS);
+
     return Database.use((db) =>
       db
         .update(turns)
@@ -823,6 +825,7 @@ export function awaitedTurn(
 ): TurnStateEffect<AwaitedTurn> {
   return Effect.gen(function* () {
     const open = yield* findJoinable({ conversationId: target.conversationId, at: now });
+
     if (Option.isSome(open)) return { turnId: open.value.id, queued: false };
     const turnId = mint();
     yield* insertQueued({
@@ -838,6 +841,7 @@ export function awaitedTurn(
       toolSetHash: null,
       queuedAt: now,
     });
+
     return { turnId, queued: true };
   });
 }
@@ -873,6 +877,7 @@ export function queueTurn(
       reasoningEffort: queueing.reasoningEffort,
     });
   }
+
   return insertQueued({ ...queueing, ...target, queuedAt: now });
 }
 
@@ -902,15 +907,19 @@ export function startTurn(
         startedAt: start.at,
         attempt: start.attempt,
       });
+
       return true;
     }
+
     if (standing.value.status !== TURN_STATUS.QUEUED) return false;
+
     const started = yield* startQueued({
       turnId: start.turnId,
       conversationId: target.conversationId,
       startedAt: start.at,
       attempt: start.attempt,
     });
+
     return started.length > 0;
   });
 }
@@ -956,6 +965,7 @@ export function requeueUntaken(
 ): TurnStateEffect<Option.Option<string>> {
   return Effect.gen(function* () {
     const left = yield* findUntaken({ conversationId: target.conversationId, turnId: endedTurnId });
+
     if (left.length === 0) return Option.none();
     const awaited = yield* awaitedTurn(target, now, mint);
     yield* pointLines({
@@ -963,6 +973,7 @@ export function requeueUntaken(
       ids: left.map((line) => line.id),
       turnId: awaited.turnId,
     });
+
     return Option.some(awaited.turnId);
   });
 }
@@ -991,6 +1002,7 @@ export function dropAwaitingNothing(
     (turnId) =>
       Effect.gen(function* () {
         const left = yield* findUntaken({ conversationId: target.conversationId, turnId });
+
         if (left.length === 0)
           yield* deleteQueued({ turnId, conversationId: target.conversationId });
       }),

@@ -32,9 +32,12 @@ export interface SplitBarFit {
 export function splitBarFit({ width, count, floor, gap, more }: SplitBarRoom): SplitBarFit {
   if (count === 0) return { shown: 0, segment: 0 };
   const whole = count * floor + (count - 1) * gap <= width;
+
   const shown = whole
     ? count
     : Math.min(count - 1, Math.max(1, Math.floor((width - more) / (floor + gap))));
+
   const folded = shown < count ? more + gap : 0;
+
   return { shown, segment: Math.max(0, (width - folded - (shown - 1) * gap) / shown) };
 }

@@ -9,7 +9,7 @@ import { user } from "@repo/database/schemas/auth";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
-import { inboxPushResponseOf } from "@repo/features/inbox-push-wire";
+import { inboxPushOf, inboxPushResponseOf } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
@@ -45,6 +45,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -56,7 +57,9 @@ const phoneOf = (userId: string) =>
       environment: PUSH_ENVIRONMENT.SANDBOX,
       bundleId: BUNDLE_ID,
     };
+
     yield* registerPushDevice(userId, phone);
+
     return phone;
   });
 
@@ -66,6 +69,7 @@ const openWorkspaceAgent = Effect.gen(function* () {
   const b = yield* openUser;
   const task = yield* startTask(a, { name: "Teammate invitations" });
   yield* joinWorkspace(task.workspaceId, b);
+
   const started = yield* createAgent(a, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -76,14 +80,17 @@ const openWorkspaceAgent = Effect.gen(function* () {
     prompt: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
   const { agent } = started.value;
+
   const poster = {
     userId: a,
     taskId: task.id,
     agentId: agent.id,
     organizationId: agent.organizationId,
   };
+
   return {
     poster,
     conversationId: agent.conversationId,
@@ -106,12 +113,14 @@ const phoneSetTo = (userId: string, notify: PushNotify) =>
   Effect.gen(function* () {
     const phone = yield* phoneOf(userId);
     yield* setPushDeviceNotify(userId, phone, notify);
+
     return phone;
   });
 
 /** Past the window of the member's last activity, and the sweep run then; what it took. */
 const walkAway = Effect.gen(function* () {
   yield* TestClock.adjust("2 minutes");
+
   return yield* releaseHeldPushes(yield* Clock.currentTimeMillis);
 });
 
@@ -131,6 +140,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     "a decide pushes the member it waits on alone, with its options and ids, and its answer clears it with the badge it leaves",
     () => {
       const sender = recordingApnsSender();
+
       return Effect.gen(function* () {
         const { poster, phoneOfA } = yield* openWorkspaceAgent;
         yield* postToInbox(
@@ -152,9 +162,11 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         );
         const [item] = yield* taskInboxItems(poster.userId, poster.taskId);
         assert.ok(item !== undefined);
+
         const asking = item.thread?.find(
           (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
         );
+
         assert.ok(asking !== undefined);
 
         assert.deepEqual(sender.sent, [
@@ -188,10 +200,13 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         ]);
 
         // The app reads the payload back: the second button answers with the second option.
-        assert.deepEqual(inboxPushResponseOf(sender.sent[0]?.payload, { actionId: "1" }), {
-          route: `/inbox/${item.id}`,
-          press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
-        });
+        assert.deepEqual(
+          inboxPushResponseOf(inboxPushOf(sender.sent[0]?.payload), { actionId: "1" }),
+          {
+            route: `/inbox/${item.id}`,
+            press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
+          },
+        );
 
         yield* answerInboxAsk(poster.userId, item.id, {
           answers: { ask: asking.id, reply: INBOX_REPLY.CHOSE, choices: ["Redis"] },
@@ -216,8 +231,10 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
 
   it.effect("a failed turn pushes the agent's starter once, and a stopped one nothing", () => {
     const sender = recordingApnsSender();
+
     return Effect.gen(function* () {
       const { poster, conversationId, phoneOfA } = yield* openWorkspaceAgent;
+
       const turn = {
         userId: poster.userId,
         conversationId,
@@ -225,6 +242,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         failure: null,
         ranMs: 1000,
       };
+
       yield* pushFailedTurn({ ...turn, status: TURN_STATUS.CANCELED });
       yield* pushFailedTurn({ ...turn, status: TURN_STATUS.SETTLED });
       yield* pushFailedTurn({ ...turn, status: TURN_STATUS.FAILED, failure: "timed_out" });
@@ -268,6 +286,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     "at an active client an ask goes to a phone set to always alone, and once the member has been idle two minutes the sweep sends it to one set to away",
     () => {
       const sender = recordingApnsSender();
+
       return Effect.gen(function* () {
         const { poster, phoneOfA } = yield* openWorkspaceAgent;
         const always = yield* phoneSetTo(poster.userId, PUSH_NOTIFY.ALWAYS);
@@ -291,6 +310,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
 
   it.effect("an ask answered at the desk before the member walks away is never pushed", () => {
     const sender = recordingApnsSender();
+
     return Effect.gen(function* () {
       const { poster } = yield* openWorkspaceAgent;
       yield* stampPresence(poster.userId);
@@ -313,12 +333,15 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     "a failed turn held at the desk is sent once the member walks away, and not where the agent went on past it",
     () => {
       const sender = recordingApnsSender();
+
       return Effect.gen(function* () {
         const { poster, conversationId, phoneOfA } = yield* openWorkspaceAgent;
         const db = yield* Database;
+
         const turnOf = (status: typeof TURN_STATUS.FAILED | typeof TURN_STATUS.QUEUED) =>
           Effect.gen(function* () {
             const now = new Date(yield* Clock.currentTimeMillis);
+
             const [row] = yield* db
               .insert(turns)
               .values({
@@ -329,7 +352,9 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
                 queuedAt: now,
               })
               .returning({ id: turns.id });
+
             assert.ok(row !== undefined);
+
             return {
               userId: poster.userId,
               conversationId,
@@ -339,6 +364,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               ranMs: 1000,
             };
           });
+
         yield* stampPresence(poster.userId);
 
         yield* pushFailedTurn({

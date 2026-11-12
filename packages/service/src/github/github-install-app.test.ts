@@ -43,9 +43,12 @@ interface Sent {
 /** GitHub knowing one installation of the App, every request written down. */
 function githubKnowing(installationId: number | undefined, status: number = HOSTED_HTTP_STATUS.OK) {
   const sent: Sent[] = [];
+
   const layer = fakeHttpClientLayer((url, init) => {
     sent.push({ url, authorization: new Headers(init.headers).get("authorization") });
+
     if (status !== HOSTED_HTTP_STATUS.OK) return new Response(null, { status });
+
     return url.endsWith(`/app/installations/${installationId}`)
       ? Response.json({
           id: installationId,
@@ -54,6 +57,7 @@ function githubKnowing(installationId: number | undefined, status: number = HOST
         })
       : Response.json({ message: "Not Found" }, { status: HOSTED_HTTP_STATUS.NOT_FOUND });
   });
+
   return { layer, sent };
 }
 
@@ -75,6 +79,7 @@ function answer(
     ),
     { disableLogger: true },
   );
+
   return handler(new Request(`${ORIGIN}${path}`, { redirect: "manual" }));
 }
 
@@ -84,10 +89,12 @@ function setupUrl(query: Record<string, string>): string {
 
 test("an install GitHub confirms as this App's lands as installed, asked for as the App itself", async () => {
   const github = githubKnowing(INSTALLATION_ID);
+
   const response = await answer(
     setupUrl({ installation_id: String(INSTALLATION_ID), setup_action: "install" }),
     github,
   );
+
   assert.equal(response.status, 303);
   assert.equal(response.headers.get("location"), `${LANDING}${GITHUB_INSTALL_STATUS.INSTALLED}`);
   const [read] = github.sent;

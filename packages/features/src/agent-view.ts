@@ -1,3 +1,4 @@
+import { CommandPrefixSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
@@ -7,7 +8,6 @@ import {
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
-  agentAddRepositoryRequestSchema,
   agentAnswerSchema,
   agentArchiveRequestSchema,
   agentBeforeSchema,
@@ -20,7 +20,6 @@ import {
   agentServersRequestSchema,
   agentStartRequestFields,
   agentSummarySchema,
-  extraRepositoryRefusalSchema,
   localAgentRefusalSchema,
   refusedDeviceSchema,
 } from "./agent-wire.js";
@@ -172,10 +171,6 @@ export const AGENT_DELETE_RENAMES = {
 export const AGENT_ARCHIVE_RENAMES = {
   ...AGENT_DELETE_RENAMES,
   [HOSTED_API_ERROR.ALREADY_WRITTEN]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.GITHUB_UNANSWERED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.BRANCH_NOT_FOUND]: READ_AS_UNANSWERED,
 } as const;
 
 /** How a model and effort chosen reads its refusals: the agent gone, or a choice the catalog does not offer; every other refusal of a change no answer. */
@@ -183,17 +178,6 @@ export const AGENT_CHOOSE_RENAMES = {
   ...AGENT_ARCHIVE_RENAMES,
   ...AGENT_RENAMES,
   [HOSTED_API_ERROR.AGENT_NOT_READY]: READ_AS_UNANSWERED,
-} as const;
-
-/** How a repository added reads its refusals: the agent gone, one only its starter adds to, a repository refused beside its own for why, out of reach, or not read off GitHub; every other refusal of a change no answer. */
-export const AGENT_ADD_REPOSITORY_RENAMES = {
-  [HOSTED_API_ERROR.ALREADY_WRITTEN]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.AGENT_NOT_READY]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.AGENT_RETIRED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.DEVICE_REMOVED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.BRANCH_NOT_FOUND]: READ_AS_UNANSWERED,
 } as const;
 
 /** How a Start reads its refusals: each as its own failure, a choice the catalog does not offer as one the service does not offer now, and a branch gone or an agent gone from its routing as no answer. */
@@ -242,7 +226,6 @@ export const AGENT_NOT_FOUND_RENAMES = {
   [HOSTED_API_ERROR.AGENT_RETIRED]: READ_AS_UNANSWERED,
   [HOSTED_API_ERROR.DEVICE_REMOVED]: READ_AS_UNANSWERED,
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: READ_AS_UNANSWERED,
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: READ_AS_UNANSWERED,
   [HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE]: READ_AS_UNANSWERED,
   [HOSTED_API_ERROR.GITHUB_UNANSWERED]: READ_AS_UNANSWERED,
   [HOSTED_API_ERROR.BRANCH_NOT_FOUND]: READ_AS_UNANSWERED,
@@ -344,7 +327,7 @@ const failed = EffectSchema.Struct({
   cause: EffectSchema.optionalKey(failureFactsSchema),
 });
 
-/** A failed start or message, with why the repository is out of reach where it is and the service said (`repository-reach-wire.ts`), when a plan's reached limit resets where it is that, the provider whose credential is missing where it is that, and why the task's device would not take the agent, with the device and its owner where it is another member's, where it is that, and why the repositories named beside the agent's own were refused, with the repository where one is why, where it is that. */
+/** A failed start or message, with why the repository is out of reach where it is and the service said (`repository-reach-wire.ts`), when a plan's reached limit resets where it is that, the provider whose credential is missing where it is that, and why the task's device would not take the agent, with the device and its owner where it is another member's, where it is that. */
 const failedReaching = EffectSchema.Struct({
   ...failed.fields,
   unreached: EffectSchema.optionalKey(repositoryUnreachedSchema),
@@ -352,8 +335,6 @@ const failedReaching = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
   refusedDevice: EffectSchema.optionalKey(refusedDeviceSchema),
-  extraRepositoryRefusal: EffectSchema.optionalKey(extraRepositoryRefusalSchema),
-  refusedRepository: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /**
@@ -373,6 +354,7 @@ function factsUnheard<
   >,
 ) {
   const [output, failed] = view.members;
+
   return EffectSchema.Union([
     output,
     EffectSchema.Struct({ failure: failed.fields.failure, cause: failed.fields.cause }),
@@ -617,6 +599,39 @@ export const memorySaveAnswerViewSchema = answerView(accountContract.saveMemory)
 
 export type MemorySaveAnswerView = typeof memorySaveAnswerViewSchema.Type;
 
+/** The commands the account always allows its coding agents to run, as the window hears them read: the list, the earliest added first, or why there is no answer. */
+export const allowedCommandsAnswerViewSchema = answerView(accountContract.allowedCommands);
+
+export type AllowedCommandsAnswerView = typeof allowedCommandsAnswerViewSchema.Type;
+
+/**
+ * One write of the account's always-allowed commands, as Settings asks it:
+ * a command's first words added by hand (`add`), or one removed by its
+ * first words (`remove`), which the host finds on the list it holds, so a
+ * removal taken back and asked again names the command rather than an id
+ * the take-back replaced.
+ */
+export const allowedCommandWriteParamsSchema = EffectSchema.Union([
+  EffectSchema.Struct({ add: CommandPrefixSchema }),
+  EffectSchema.Struct({ remove: CommandPrefixSchema }),
+]);
+
+export type AllowedCommandWriteParams = typeof allowedCommandWriteParamsSchema.Type;
+
+/**
+ * Why a write of the always-allowed commands changed nothing: the list
+ * holds all it may (`allowed-commands-full`), or no answer at all
+ * (`unanswered`), among the failures every account call may answer.
+ */
+export const ALLOWED_COMMANDS_WRITE_FAILURE = failureSetOf({
+  addAllowedCommand: accountContract.addAllowedCommand,
+});
+
+/** A write, as the window hears it: the list as it then stands, or why nothing changed. */
+export const allowedCommandsWriteAnswerViewSchema = answerView(accountContract.addAllowedCommand);
+
+export type AllowedCommandsWriteAnswerView = typeof allowedCommandsWriteAnswerViewSchema.Type;
+
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;
 
@@ -670,7 +685,6 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     agent: agentSummarySchema,
     txid: agentAnswerSchema.fields.txid,
-    addedCheckout: agentAnswerSchema.fields.addedCheckout,
     /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
     queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
@@ -858,12 +872,6 @@ export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentApprovalAnswerParams = typeof agentApprovalAnswerParamsSchema.Type;
-
-/** A repository added to one agent beside the ones it works in, as the window asks it of the host. */
-export const agentAddRepositoryParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  ...agentAddRepositoryRequestSchema.fields,
-});
 
 /** One agent archived or brought back, as the window asks it: the agent, and which. */
 export const agentArchiveParamsSchema = EffectSchema.Struct({

@@ -20,7 +20,7 @@ import {
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -162,8 +162,10 @@ function PlanAgentRow({
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;
+
   if (agent === undefined) return null;
   const opened = tab !== undefined && sameTab(agentTab(row.id), tab);
+
   return (
     <AgentListRow
       agent={agent}
@@ -201,7 +203,9 @@ function PlanArchivedAgents({
   const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
   const archived = agents.archived ?? [];
   const selection = useAgentsSelection(agents, archived, shown);
+
   if (archived.length === 0) return null;
+
   return (
     <div className="plan-agents-archived mt-list-gap">
       <GroupHeader
@@ -221,6 +225,7 @@ function PlanArchivedAgents({
         >
           {archived.map((agent) => {
             const subject = agentSubject(agents, agent.id, NOTHING_HELD, false);
+
             return (
               <AgentListRow
                 key={agent.id}
@@ -286,11 +291,12 @@ export function PlanAgents({
 }): React.JSX.Element | null {
   // Note that an entry's pick chooses its agent's tab, which a row hands the page as that agent's id.
   const directory = useMemberDirectory();
+
   const entries = agentEntries(
     {
       tab,
       onChoose: (chosen) => {
-        if (typeof chosen !== "string" && chosen.kind === STRIP_TAB_KIND.AGENT) {
+        if (!Predicate.isString(chosen) && chosen.kind === STRIP_TAB_KIND.AGENT) {
           onOpenAgent(chosen.agent);
         }
       },
@@ -299,6 +305,7 @@ export function PlanAgents({
     directory,
     held,
   );
+
   // Note that a phone's group stands for its archived agents too, on a task whose every agent is archived, which starts none.
   const archived = phone === undefined ? 0 : (agents.archived?.length ?? 0);
   // Note that an empty group stands only once the agents are read, so a task loading its agents does not offer New agent.
@@ -309,20 +316,25 @@ export function PlanAgents({
   // Note that a phone's Inbox row counts only what no listed agent's row marks already.
   const listed = new Set(entries.map((entry) => entry.row.id));
   let unmarked = 0;
+
   for (const [agentId, items] of waiting) if (!listed.has(agentId)) unmarked += items.length;
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
   const more = !useCoarsePointer();
+
   const ordered = inAgentListOrder(
     entries,
     (entry) => entry.agent,
     (entry) => waiting.has(entry.row.id),
   );
+
   const selection = useAgentsSelection(
     agents,
     ordered.flatMap(({ agent }) => (agent === undefined ? [] : [agent])),
     shown,
   );
+
   if (!grouped && inboxRow === undefined) return null;
+
   return (
     // Note that the group is pulled out by a row's inset on each side, so its marks stand on the title's edge and its fills hang past it.
     <div className="plan-agents -mx-row-inset mb-block-gap">

@@ -18,6 +18,15 @@ import path from "node:path";
 import { withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { app, type BrowserWindow } from "electron";
 
+/** A window opening, as Electron's `app` announces it. */
+type WindowOpened = (event: Electron.Event, window: BrowserWindow) => void;
+
+/** Where windows are announced as they open: Electron's `app`, unless a test stands one in. */
+interface WindowsOpening {
+  on(event: "browser-window-created", listener: WindowOpened): void;
+  removeListener(event: "browser-window-created", listener: WindowOpened): void;
+}
+
 /** The document a window's page is, by its file's name, such as `index.html`. */
 function documentName(url: string): string {
   return URL.canParse(url) ? path.posix.basename(new URL(url).pathname) : url;
@@ -33,14 +42,18 @@ function reportErrorsOf(
   contents.on("console-message", (details) => {
     if (details.level !== "error" || !reporting()) return;
     const page = documentName(contents.getURL());
+
     const crumb = withoutAccessTokens({
       message: details.message,
       data: { url: details.sourceId },
     });
+
     if (crumb === null) {
       report(`renderer error in ${page}, withheld because it names an access token`);
+
       return;
     }
+
     const source = `${documentName(details.sourceId)}:${details.lineNumber}`;
     report(`renderer error in ${page}: ${details.message} (${source})`);
   });
@@ -51,13 +64,16 @@ function reportErrorsOf(
  * stops it, for the windows already open as for those to come. The caller
  * decides the build: a packaged one calls nothing.
  */
-export function reportRendererErrors(report: (line: string) => void): () => void {
+export function reportRendererErrors(
+  report: (line: string) => void,
+  windows: WindowsOpening = app,
+): () => void {
   let reporting = true;
-  const opened = (_event: Electron.Event, window: BrowserWindow) =>
-    reportErrorsOf(window, report, () => reporting);
-  app.on("browser-window-created", opened);
+  const opened: WindowOpened = (_event, window) => reportErrorsOf(window, report, () => reporting);
+  windows.on("browser-window-created", opened);
+
   return () => {
     reporting = false;
-    app.removeListener("browser-window-created", opened);
+    windows.removeListener("browser-window-created", opened);
   };
 }

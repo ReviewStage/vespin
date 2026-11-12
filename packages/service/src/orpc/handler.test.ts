@@ -59,6 +59,7 @@ const whenSchema = Schema.Struct({
 const itemSchema = Schema.Struct({ name: Schema.String });
 
 const AT = new Date(Date.UTC(2026, 9, 18, 12, 30));
+
 const UNREACHED = {
   reason: REPOSITORY_UNREACHED.OTHER_OWNER,
   repository: "acme/app",
@@ -192,17 +193,21 @@ const bothAnswer = (
   Effect.gen(function* () {
     const request = () => {
       const requestInit: RequestInit = { method: init.method ?? HTTP_METHOD.GET };
+
       if (init.body !== undefined) {
         requestInit.body = init.body;
         requestInit.headers = { "content-type": "application/json" };
       }
+
       return new Request(new URL(init.path, ORIGIN), requestInit);
     };
+
     const handle = hostedFetch(testRouter);
     const orpc = yield* read(yield* Effect.promise(() => handle(request(), services)));
     const { handler, dispose } = HttpRouter.toWebHandler(oldGroup, { disableLogger: true });
     const old = yield* read(yield* Effect.promise(() => handler(request())));
     yield* Effect.promise(() => dispose());
+
     return { orpc, old };
   });
 
@@ -250,6 +255,7 @@ it.effect("an input its schema refuses is the hosted vocabulary's invalid reques
       method: HTTP_METHOD.POST,
       body: JSON.stringify({ name: 7 }),
     });
+
     assert.deepEqual(orpc, old);
     assert.equal(orpc.text, '{"error":"invalid-request"}');
   }),
@@ -260,14 +266,17 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const reported: { defect: unknown; attributes: object }[] = [];
+
       const reporter = ErrorReporter.make(({ cause, attributes }) => {
         reported.push({ defect: Cause.squash(cause), attributes });
       });
+
       // SAFETY: the test procedures yield no service but the reporters, which stand in for the web runtime's.
       const services = Context.make(
         ErrorReporter.CurrentErrorReporters,
         new Set([reporter]),
       ) as Context.Context<WebServices>;
+
       const declared = yield* bothAnswer({ path: DECLARED_PATH }, services);
       assert.deepEqual(declared.orpc, declared.old);
       assert.equal(reported.length, 0);
@@ -297,6 +306,7 @@ it.effect(
       // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
       const services = Context.empty() as Context.Context<WebServices>;
       const handle = hostedFetch(testRouter);
+
       for (const [path, status] of [
         ["/api/test/ABC/when", HOSTED_HTTP_STATUS.OK],
         [REACH_PATH, HOSTED_HTTP_STATUS.FORBIDDEN],
@@ -320,6 +330,7 @@ it.effect(
       // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
       const services = Context.empty() as Context.Context<WebServices>;
       const handle = hostedFetch(testRouter);
+
       for (const [method, path] of [
         [HTTP_METHOD.POST, "/api/plans/ABC/edit"],
         [HTTP_METHOD.GET, "/api/plans/ABC/revisions"],
@@ -329,15 +340,18 @@ it.effect(
         const answered = yield* Effect.promise(() =>
           handle(new Request(new URL(path, ORIGIN), { method }), services),
         );
+
         assert.deepEqual(
           [answered.status, (yield* Effect.promise(() => answered.json())).error],
           [HOSTED_HTTP_STATUS.UPGRADE_REQUIRED, HOSTED_API_ERROR.HOST_UPGRADE_NEEDED],
           path,
         );
       }
+
       const elsewhere = yield* Effect.promise(() =>
         handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
       );
+
       assert.equal(elsewhere.status, HOSTED_HTTP_STATUS.NOT_FOUND);
     }),
 );
@@ -349,6 +363,7 @@ it.effect(
       // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
       const services = Context.empty() as Context.Context<WebServices>;
       const handle = hostedFetch(testRouter);
+
       const below = yield* Effect.promise(() =>
         handle(
           new Request(new URL("/api/plans/ABC/edits", ORIGIN), {
@@ -357,6 +372,7 @@ it.effect(
           services,
         ),
       );
+
       assert.deepEqual(
         [below.status, yield* Effect.promise(() => below.json())],
         [
@@ -364,9 +380,11 @@ it.effect(
           { error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED, minimumVersion: "1" },
         ],
       );
+
       const unnamed = yield* Effect.promise(() =>
         handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
       );
+
       assert.equal(unnamed.status, HOSTED_HTTP_STATUS.NOT_FOUND);
     }),
 );
@@ -378,6 +396,7 @@ it.effect(
       const past = new TextEncoder().encode(
         JSON.stringify({ name: "x".repeat(HOSTED_BODY_CEILING_BYTES) }),
       );
+
       // SAFETY: Node's fetch takes a streamed body only half-duplex, which the DOM's RequestInit does not name.
       const request = new Request(new URL(ITEMS_PATH, ORIGIN), {
         method: HTTP_METHOD.POST,
@@ -390,11 +409,14 @@ it.effect(
         }),
         duplex: "half",
       } as RequestInit);
+
       // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
       const services = Context.empty() as Context.Context<WebServices>;
+
       const answered = yield* read(
         yield* Effect.promise(() => hostedFetch(testRouter)(request, services)),
       );
+
       assert.deepEqual(answered, {
         status: HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE,
         contentType: "application/json",
@@ -407,17 +429,20 @@ it.effect(
 /** A JSON body of exactly `bytes` bytes naming an item, its name padded to fit. */
 const itemBodyOf = (bytes: number): string => {
   const frame = JSON.stringify({ name: "" }).length;
+
   return JSON.stringify({ name: "x".repeat(bytes - frame) });
 };
 
 /** A body sent in chunks of at most `chunkBytes`, as a chunked upload arrives, with no length stated. */
 const chunkedBody = (text: string, chunkBytes: number): ReadableStream<Uint8Array> => {
   const bytes = new TextEncoder().encode(text);
+
   return new ReadableStream({
     start(controller) {
       for (let at = 0; at < bytes.length; at += chunkBytes) {
         controller.enqueue(bytes.subarray(at, at + chunkBytes));
       }
+
       controller.close();
     },
   });
@@ -435,10 +460,12 @@ const cappedAnswer = (
       body,
       duplex: "half",
     };
+
     // SAFETY: Node's fetch takes a streamed body only half-duplex, which the DOM's RequestInit does not name.
     const request = new Request(new URL(CAPPED_PATH, ORIGIN), init as RequestInit);
     // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
     const services = Context.empty() as Context.Context<WebServices>;
+
     return yield* read(yield* Effect.promise(() => hostedFetch(testRouter)(request, services)));
   });
 

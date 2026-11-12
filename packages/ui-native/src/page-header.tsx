@@ -38,6 +38,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
   const chips = status !== undefined || priority !== undefined || assignee !== undefined;
   // Note that at an accessibility size the chips stand one to a line, since three in a row run off a phone's screen.
   const stacked = useAccessibilitySize();
+
   const chipRow = (
     <>
       {status === undefined ? null : <StatusChip status={status} />}
@@ -49,6 +50,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
       )}
     </>
   );
+
   return (
     <VStack
       alignment="leading"

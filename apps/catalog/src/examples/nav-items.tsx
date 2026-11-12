@@ -45,10 +45,12 @@ function Chord({ keys }: { keys: string }): React.JSX.Element {
 
 function Places(): React.JSX.Element {
   const [shown, setShown] = useState("inbox");
+
   const place = (id: string) => ({
     current: shown === id ? NAV_CURRENT.PAGE : undefined,
     onClick: () => setShown(id),
   });
+
   return (
     <div className="catalog-narrow">
       <NavItem icon={<ComposeIcon />} shortcut={<Chord keys="⌘N" />} aria-keyshortcuts="Meta+N">
@@ -80,6 +82,7 @@ function Places(): React.JSX.Element {
 
 function Account(): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <div className="catalog-narrow">
       <NavItem
@@ -97,6 +100,7 @@ function Account(): React.JSX.Element {
 /** A place with acts of its own: its ⋯ stands over its count while it is hovered or reached for. */
 function WithActions(): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <div className="catalog-narrow">
       <NavItem
@@ -113,6 +117,7 @@ function WithActions(): React.JSX.Element {
 /** Places with addresses of their own: a plain press stays here, a modified one opens a tab. */
 function Links(): React.JSX.Element {
   const [shown, setShown] = useState("dashboard");
+
   const link = (id: string) => ({
     href: `#${id}`,
     current: shown === id ? NAV_CURRENT.PAGE : undefined,
@@ -123,6 +128,7 @@ function Links(): React.JSX.Element {
       setShown(id);
     },
   });
+
   return (
     <div className="catalog-narrow">
       <NavItemLink icon={<FolderIcon />} {...link("dashboard")}>
@@ -139,11 +145,13 @@ function Links(): React.JSX.Element {
 function OpenInTab(): React.JSX.Element {
   const [shown, setShown] = useState("home");
   const [tabbed, setTabbed] = useState<string | undefined>(undefined);
+
   const place = (id: string, name: string) => ({
     current: shown === id ? NAV_CURRENT.PAGE : undefined,
     onClick: () => setShown(id),
     onOpenInTab: () => setTabbed(name),
   });
+
   return (
     <div className="catalog-narrow">
       <NavItem icon={<FolderIcon />} {...place("home", "Home")}>
@@ -166,12 +174,14 @@ function OpenInTab(): React.JSX.Element {
 /** A pull request's chapters as steps: a long title on two lines, its lines and threads under it, one viewed. */
 function Steps(): React.JSX.Element {
   const [shown, setShown] = useState(0);
+
   const step = (at: number) => ({
     variant: NAV_ITEM_VARIANT.STEP,
     icon: <GLYPH.PULL_REQUEST_CHAPTERS />,
     current: shown === at ? NAV_CURRENT.PAGE : undefined,
     onClick: () => setShown(at),
   });
+
   return (
     <div className="catalog-narrow">
       <NavItem
@@ -201,10 +211,12 @@ function Steps(): React.JSX.Element {
 /** A search's finds: each page by its glyph, the rows it holds nested under it, one found row the place shown. */
 function Nested(): React.JSX.Element {
   const [shown, setShown] = useState("theme");
+
   const find = (id: string) => ({
     current: shown === id ? NAV_CURRENT.LOCATION : undefined,
     onClick: () => setShown(id),
   });
+
   return (
     <div className="catalog-narrow">
       <NavItem icon={<GearIcon />} {...find("appearance")}>

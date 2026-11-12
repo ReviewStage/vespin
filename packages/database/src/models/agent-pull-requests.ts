@@ -132,16 +132,20 @@ export function recordAgentPullRequests(
   reads: readonly AgentPullRequestRead[],
 ): AgentStoreEffect<number> {
   if (reads.length === 0) return Effect.succeed(0);
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         if (Option.isNone(yield* lockAgent({ userId, agentId }))) return 0;
         const kept = yield* findAgentPullRequests({ userId, agentId });
         let firstMerged = 0;
+
         for (const read of reads) {
           const before = kept.find((row) => sameAs(row, read));
+
           // Note that a merged pull request never moves again, so a read begun before its merge was written keeps it.
           if (before?.pullRequest.state === PULL_REQUEST_STATE.MERGED) continue;
+
           if (newlyMerged(before?.pullRequest ?? null, read.pullRequest)) firstMerged += 1;
           yield* upsertAgentPullRequest({
             agentId,
@@ -150,6 +154,7 @@ export function recordAgentPullRequests(
             pullRequest: read.pullRequest,
           });
         }
+
         return firstMerged;
       }),
     ),

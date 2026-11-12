@@ -29,6 +29,7 @@ export function taskLinkDestination(
   task: Pick<TaskSummary, "workspaceId" | "repository">,
 ): MentionPlace {
   const home = workspaces.find((each) => each.id === task.workspaceId);
+
   return { workspace: home?.slug ?? task.workspaceId, repository: task.repository };
 }
 
@@ -102,6 +103,7 @@ export function useOfferTaskRename(taskId: string | undefined, begin: () => void
     if (taskId === undefined) return;
     const offered = { taskId, begin };
     openTaskRenameStore.setState(() => offered);
+
     return () => openTaskRenameStore.setState((held) => (held === offered ? undefined : held));
   }, [taskId, begin]);
 }

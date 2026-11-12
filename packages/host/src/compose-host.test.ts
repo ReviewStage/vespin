@@ -64,6 +64,7 @@ const askedOfStandingHost = Effect.gen(function* () {
   const { gateway } = yield* HostTag;
   const terminals = yield* gateway.call(GATEWAY_METHOD.TERMINALS_LIST, { agentId: "agent" });
   const bootstrap = yield* gateway.call(GATEWAY_METHOD.CLIENT_BOOTSTRAP, {});
+
   return { concerns, terminals, bootstrapped: bootstrap.ok };
 });
 
@@ -71,6 +72,7 @@ describe("the host's platform concerns", () => {
   it.effect("left out, need no spawner or terminal socket, and refuse their methods", () =>
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("host-browser-");
+
       // Note that nothing here provides a `ChildProcessSpawner` or a
       // `TerminalSocket`. The layer's type, narrowed to the concerns chosen,
       // asks for neither, and a build that reached for one anyway would die
@@ -86,6 +88,7 @@ describe("the host's platform concerns", () => {
         ok: false,
         error: { code: GATEWAY_ERROR.REFUSED, message: NOT_ON_THIS_PLATFORM },
       };
+
       assert.deepEqual(asked.terminals, notHere);
       assert.equal(asked.concerns.has(HOST_CONCERN.MAC_COMMANDS), false);
       assert.equal(asked.concerns.has(HOST_CONCERN.TERMINALS), false);
@@ -97,6 +100,7 @@ describe("the host's platform concerns", () => {
   it.effect("all chosen, as the desktop chooses them, answer", () =>
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("host-desktop-");
+
       const desktop = hostStandingLayer.pipe(
         Layer.provideMerge(hostAssemblyLayer(ALL_HOST_PLATFORM_CONCERNS)),
         Layer.provide(
@@ -145,6 +149,7 @@ describe("the host's platform concerns", () => {
       });
       // The host answers the bootstrap itself, folded in with the composers' methods.
       assert.equal(asked.bootstrapped, true);
+
       for (const concern of ALL_HOST_PLATFORM_CONCERNS)
         assert.equal(asked.concerns.has(concern), true);
       assert.deepEqual(hostCapabilities(asked.concerns, CLIENT), [
@@ -174,11 +179,13 @@ describe("the host's account source", () => {
   it.effect("another source than the desktop's stands with no sign-in consent or cipher", () =>
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("host-account-source-");
+
       const account = {
         status: ACCOUNT_STATUS.SIGNED_IN,
         email: "dev@example.com",
         provider: ACCOUNT_PROVIDER.GITHUB,
       } as const;
+
       // Note that nothing here provides a `SignInConsent` or a `SecretCipher`:
       // they are the desktop's source's own requirements, so the assembly's
       // type asks for neither, and a build that reached for one would die here.
@@ -204,12 +211,15 @@ describe("the account's lists kept on disk", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const file = (yield* Path.Path).join(stateRoot, ENTITY_STORE_FILE_NAME);
       yield* fileSystem.writeFileString(file, "sealed lists");
+
       const account = {
         status: ACCOUNT_STATUS.SIGNED_IN,
         email: "dev@example.com",
         provider: ACCOUNT_PROVIDER.GITHUB,
       } as const;
+
       let gate: AccountSourceHost | undefined;
+
       const host = hostStandingLayer.pipe(
         Layer.provideMerge(hostAssemblyLayer([])),
         Layer.provide(

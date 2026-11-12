@@ -93,6 +93,7 @@ test("a thread started with no subject is titled by its message's first line tha
     }),
     "Read the guide before merging",
   );
+
   for (const rule of ["---", "***", "_ _ _"]) {
     assert.equal(
       inboxStartTitle({ text: `${rule}\nPlease review the pricing change` }),
@@ -100,6 +101,7 @@ test("a thread started with no subject is titled by its message's first line tha
       `a ${rule} break is no title`,
     );
   }
+
   assert.equal(
     inboxStartTitle({ text: "_Why_ does get_user_id return null in __init__.py?" }),
     "Why does get_user_id return null in init.py?",

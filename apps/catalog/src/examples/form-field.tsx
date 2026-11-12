@@ -17,6 +17,7 @@ const NAME_LIMIT = 24;
 /** A name a few characters short of its limit, so its count already stands. */
 function CountedField(): React.JSX.Element {
   const [name, setName] = useState("Acme design systems");
+
   return (
     <FormField
       label="Workspace name"
@@ -33,6 +34,7 @@ function CountedField(): React.JSX.Element {
 /** A text field standing in for whichever control a field holds. */
 function SampleInput({ control }: { control: FieldControl }): React.JSX.Element {
   const [name, setName] = useState("Acme");
+
   return <TextField field={control} value={name} onChange={setName} />;
 }
 

@@ -20,8 +20,10 @@ function isWebSocketReachable(protocol: string): protocol is keyof typeof WEB_SO
 export function webSocketOrigin(address: string): string | undefined {
   try {
     const url = new URL(address);
+
     if (!isWebSocketReachable(url.protocol)) return undefined;
     url.protocol = WEB_SOCKET_SCHEME[url.protocol];
+
     return url.origin === "null" ? undefined : url.origin;
   } catch {
     return undefined;

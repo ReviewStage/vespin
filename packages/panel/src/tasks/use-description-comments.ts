@@ -71,6 +71,7 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 /** What a comment's answer says of the agents its mentions asked who could not take the thread; nothing where every one did. */
 function unsentWords(answer: TasksCommentAnswer): string | undefined {
   const unsent = "thread" in answer ? (answer.unsent ?? []) : [];
+
   return unsent.length === 0 ? undefined : COMMENT_NOTE.AGENT_AWAY;
 }
 
@@ -145,8 +146,10 @@ export function useDescriptionComments(
   const note = useCallback((threadId: string, words: string | undefined) => {
     setNotes((was) => {
       const next = new Map(was);
+
       if (words === undefined) next.delete(threadId);
       else next.set(threadId, words);
+
       return next;
     });
   }, []);
@@ -154,15 +157,20 @@ export function useDescriptionComments(
   const start = useCallback(
     async (begun: DescriptionCommentStart) => {
       if (planId === undefined) return { note: COMMENT_NOTE.NOT_POSTED };
+
       const answer = await sendStart({ planId, start: begun }).catch(
         (): TasksCommentAnswer => UNANSWERED,
       );
+
       if (!("thread" in answer)) {
         const words = "refused" in answer ? refusalWords(answer.refused) : COMMENT_NOTE.NOT_POSTED;
         takenBack(words, FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND, answer);
+
         return { note: words };
       }
+
       note(answer.thread.id, unsentWords(answer));
+
       return { thread: answer.thread };
     },
     [planId, sendStart, note, takenBack],
@@ -172,23 +180,30 @@ export function useDescriptionComments(
     async (threadId: string, action: DescriptionCommentActionRequest): Promise<boolean> => {
       if (planId === undefined) return false;
       note(threadId, undefined);
+
       const answer = await sendCommentAct({ planId, threadId, action }).catch(
         (): TasksCommentAnswer => UNANSWERED,
       );
+
       if ("thread" in answer || "deleted" in answer) {
         note(threadId, unsentWords(answer));
+
         return true;
       }
+
       const reply = action.action === DESCRIPTION_COMMENT_ACTION.REPLY;
+
       const words =
         "refused" in answer
           ? refusalWords(answer.refused)
           : reply
             ? COMMENT_NOTE.NOT_POSTED
             : COMMENT_NOTE.NOT_CHANGED;
+
       // Note that a reply's refusal is said under its field, which its words go back into.
       if (reply) note(threadId, words);
       else takenBack(words, surfaceOf(action.action), answer);
+
       // Note that an edit's field closed as it was sent, so its words go back to its draft, which Edit opens on.
       if (action.action === DESCRIPTION_COMMENT_ACTION.EDIT) {
         drafts.update(
@@ -200,6 +215,7 @@ export function useDescriptionComments(
           (was) => ({ ...was, text: action.words }),
         );
       }
+
       return false;
     },
     [planId, sendCommentAct, note, takenBack, drafts],
@@ -209,10 +225,12 @@ export function useDescriptionComments(
   const { isSuccess, isError } = read;
   // Note that Try again moves with the subject alone, as the read's own did, since a render builds it anew.
   const pageId = subject?.pageId;
+
   const retry = useCallback(() => {
     if (planId === undefined) return;
     retryComments(pageId === undefined ? { taskId: planId } : { taskId: planId, pageId });
   }, [retryComments, planId, pageId]);
+
   return useMemo(
     () =>
       planId === undefined

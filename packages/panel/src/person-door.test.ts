@@ -27,21 +27,26 @@ const DANA: Actor = {
   name: "Dana Reyes",
   you: false,
 };
+
 const LEE: Actor = {
   kind: ACTOR_KIND.SOMEONE,
   reason: SOMEONE_REASON.FORMER,
   name: "Lee Park",
   userId: "user-lee",
 };
+
 const OCTOCAT: Actor = { kind: ACTOR_KIND.GITHUB, login: "octocat", bot: false };
 const DEPENDABOT: Actor = { kind: ACTOR_KIND.GITHUB, login: "dependabot[bot]", bot: true };
 const NOBODY: Actor = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
 
 let root: Root | undefined;
+
 /** Every page the window was asked to open, and every address handed to GitHub. */
 let opened: string[] = [];
+
 /** The name each page was opened with, where the place knew one. */
 let names: (string | undefined)[] = [];
+
 /** The workspace each page was opened in, where the place named one. */
 let workspaces: (string | undefined)[] = [];
 let github: string[] = [];
@@ -55,6 +60,7 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.GITHUB_OPEN]: ({ url }) => {
       github.push(url);
+
       return Promise.resolve();
     },
   });
@@ -69,6 +75,7 @@ afterEach(() => {
 function draw(element: ReactElement, inWindow = true): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const provided = inWindow
     ? createElement(
         OpenPersonProvider,
@@ -82,7 +89,9 @@ function draw(element: ReactElement, inWindow = true): HTMLElement {
         element,
       )
     : element;
+
   act(() => root?.render(withQueryClient(provided)));
+
   return container;
 }
 
@@ -90,6 +99,7 @@ function draw(element: ReactElement, inWindow = true): HTMLElement {
 function cardOf(view: HTMLElement): Element {
   const named = view.querySelector("[data-actor-ref]") ?? assert.fail("the actor is named");
   restOn(named);
+
   return document.querySelector(".ui-tooltip-card .ui-hover-card") ?? assert.fail("a card hangs");
 }
 

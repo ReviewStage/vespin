@@ -64,6 +64,7 @@ export interface StageBox {
 /** Whether a stage this size is narrow, given whether it was, so the width's line it crosses depends on the way it is crossed. */
 export function narrowStage(stage: StageBox, was: boolean): boolean {
   if (stage.width < (was ? SHELL_ROOM_NARROW.LEAVE : SHELL_ROOM_NARROW.ENTER)) return true;
+
   return stage.coarse && stage.screenSide > 0 && stage.screenSide < PHONE_SCREEN_SIDE;
 }
 
@@ -83,5 +84,6 @@ export interface HiddenColumns {
  */
 export function hiddenColumns(room: ShellRoom, listed: boolean): HiddenColumns {
   const narrow = room === SHELL_ROOM.NARROW;
+
   return { list: narrow && !listed, item: narrow && listed };
 }

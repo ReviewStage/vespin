@@ -49,12 +49,15 @@ export function LengthCounter({
   const shown = useDisclosure(length >= limit * COUNTER_FROM);
   const [was, setWas] = useState(length);
   const [move, setMove] = useState<CountMove | undefined>(undefined);
+
   // Note that the move is taken in the render that sees it, so the tick starts on that frame.
   if (length !== was) {
     setWas(length);
     setMove(length > was ? COUNT_MOVE.UP : COUNT_MOVE.DOWN);
   }
+
   if (!shown.mounted) return null;
+
   return (
     <span
       ref={shown.ref}

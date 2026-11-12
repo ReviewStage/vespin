@@ -52,6 +52,7 @@ const FOLDED_ALL = -2;
 
 /** A row of the tree as the compact density draws it, which the box's height is counted in. */
 const ROW_HEIGHT = 24;
+
 /** The tallest a crumb's tree stands before it scrolls, and the inset around its rows. */
 const TREE_BOUNDS = { MAX_HEIGHT: 360, INSET: 4 } as const;
 
@@ -72,6 +73,7 @@ function folderOf(segments: readonly string[], count: number): string {
 /** A path in a crumb's tree, from the folder it is rooted at, as the repository's from its root; the empty path is the folder itself. */
 function fromRoot(folder: string, path: string): string {
   if (folder === "" || path === "") return folder === "" ? path : folder;
+
   return `${folder}/${path}`;
 }
 
@@ -113,6 +115,7 @@ function CrumbTree({
   const latest = useRef({ listFolder, onOpen, onClose });
   latest.current = { listFolder, onOpen, onClose };
   const { folder, file, opener } = opened;
+
   // Note that the box stands as tall as its words until the tree counts its rows.
   const height =
     rows === undefined
@@ -124,13 +127,16 @@ function CrumbTree({
   // it, so Escape still reaches it.
   useEffect(() => {
     const element = box.current;
+
     if (element === null || element.contains(document.activeElement)) return;
     element.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
+
     const tree = module.mount(element, {
       readFolder: (path) => latest.current.listFolder(fromRoot(folder, path)),
       onStanding: setStanding,
@@ -140,8 +146,10 @@ function CrumbTree({
       },
       onRows: setRows,
     });
+
     handle.current = tree;
     tree.reveal(file, { focus: true });
+
     return () => {
       handle.current = undefined;
       tree.unmount();
@@ -156,13 +164,16 @@ function CrumbTree({
     // reads nothing of the layout.
     const bar = opener.closest(".ui-pane-bar");
     let first = true;
+
     const folded = new ResizeObserver(() => {
       if (first) first = false;
       else leave();
     });
+
     if (bar !== null) folded.observe(bar);
     window.addEventListener("blur", leave);
     window.addEventListener("resize", leave);
+
     return () => {
       folded.disconnect();
       window.removeEventListener("blur", leave);
@@ -254,8 +265,10 @@ export function FileBreadcrumbs({
   const folders = segments.length - 1;
   const middle = Math.max(0, folders - 1);
   const deep = folders >= 6;
+
   const folded = (names: readonly string[], shownAt: BreadcrumbShown, mark: number, at: number) => {
     const named = names.join("/");
+
     return {
       label: "…",
       name: `${FOLDED_LABEL}: ${named}`,
@@ -266,6 +279,7 @@ export function FileBreadcrumbs({
       onPress: (opener: HTMLElement) => open(at, opener, mark),
     } satisfies Crumb;
   };
+
   const crumb = (name: string, at: number, shownAt: BreadcrumbShown): Crumb => ({
     label: name,
     current: at === segments.length,
@@ -274,7 +288,9 @@ export function FileBreadcrumbs({
     expanded: opened?.at === at,
     onPress: (opener) => open(at, opener),
   });
+
   const crumbs: Crumb[] = [];
+
   if (folders > 0) {
     crumbs.push(
       folded(
@@ -285,16 +301,20 @@ export function FileBreadcrumbs({
       ),
     );
   }
+
   crumbs.push(
     crumb(repository, 0, folders > 0 ? BREADCRUMB_SHOWN.WIDE_OR_NARROW : BREADCRUMB_SHOWN.ALWAYS),
   );
+
   if (middle > 1) {
     const shownAt = deep ? BREADCRUMB_SHOWN.WIDE_OR_NARROW : BREADCRUMB_SHOWN.NARROW;
     crumbs.push(folded(segments.slice(0, middle), shownAt, FOLDED_MIDDLE, middle));
   }
+
   segments.forEach((name, index) => {
     const at = index + 1;
     const inMiddle = at <= middle && middle > 1;
+
     if (at === segments.length) crumbs.push(crumb(name, at, BREADCRUMB_SHOWN.ALWAYS));
     else if (!inMiddle) crumbs.push(crumb(name, at, BREADCRUMB_SHOWN.WIDE_OR_NARROW));
     else if (!deep) crumbs.push(crumb(name, at, BREADCRUMB_SHOWN.WIDE));

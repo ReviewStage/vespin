@@ -47,6 +47,7 @@ export function ViewingAsBanner({
 }): React.JSX.Element {
   const refusal = stop.busy ? undefined : (stop.refusal ?? (stop.failed ? STOP_FAILED : undefined));
   const who = member.name ? `${member.name} (${member.email})` : member.email;
+
   return (
     <Banner
       look={BANNER_LOOK.STRIP}

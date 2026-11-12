@@ -62,6 +62,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -105,6 +106,7 @@ function SortedRuns({
   leading?: typeof PINNED_FIRST;
 }): React.JSX.Element {
   const runColumns = useMemo(() => columns(heard), [heard]);
+
   return createElement(DataTable<Run>, {
     label: "Runs",
     columns: runColumns,
@@ -125,7 +127,9 @@ function heading(container: HTMLElement, label: string): HTMLElement {
   const found = [...container.querySelectorAll<HTMLElement>("th")].find((cell) =>
     cell.textContent?.startsWith(label),
   );
+
   if (found === undefined) throw new Error(`no ${label} heading`);
+
   return found;
 }
 
@@ -199,6 +203,7 @@ test("a press on a row opens it, and a press on a control in its cells is that c
 
 test("a row its caller says has nothing to open does not open", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(DataTable<Run>, {
       label: "Runs",
@@ -210,6 +215,7 @@ test("a row its caller says has nothing to open does not open", () => {
       rowPressable: (run) => run.id !== "release",
     }),
   );
+
   const [nightly, release] = [...container.querySelectorAll("tbody tr")];
 
   press(release?.querySelectorAll("td")[2]);
@@ -225,6 +231,7 @@ test("a long table draws only the rows near the view, telling a reader how many 
     minutes: at,
     pinned: false,
   }));
+
   const container = draw(
     createElement(DataTable<Run>, {
       label: "Runs",
@@ -234,6 +241,7 @@ test("a long table draws only the rows near the view, telling a reader how many 
       empty: "No runs yet.",
     }),
   );
+
   const drawn = [...container.querySelectorAll("tbody tr[aria-rowindex]")];
 
   expect(drawn.length).toBeGreaterThan(0);
@@ -265,8 +273,10 @@ test("no rows show the empty line in place of the table", () => {
 
 test("a row's menu opens from its ⋯ and from a right-click anywhere on the row", () => {
   const heard: string[] = [];
+
   function Menus(): React.JSX.Element {
     const runColumns = useMemo(() => columns(heard), []);
+
     return createElement(DataTable<Run>, {
       label: "Runs",
       columns: runColumns,
@@ -279,8 +289,10 @@ test("a row's menu opens from its ⋯ and from a right-click anywhere on the row
       }),
     });
   }
+
   const container = draw(createElement(Menus));
   const [nightly, release] = [...container.querySelectorAll("tbody tr")];
+
   const item = (label: string) =>
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((each) =>
       each.textContent?.includes(label),

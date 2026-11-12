@@ -86,6 +86,7 @@ function Held({
 }): React.JSX.Element {
   const [typed, setTyped] = useState("");
   const [chips, setChips] = useState(start);
+
   return (
     <EmailChipsField
       chips={chips}

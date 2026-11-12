@@ -7,6 +7,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListSection,
+  MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
   WorkspaceSwitcherMenu,
@@ -84,6 +85,13 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
   return PLACES.find((place) => place.id === id);
 }
 
+type UseAppSidebarResult = {
+  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
+  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
+  readonly listLook: ListLook;
+  readonly ask: ReactNode;
+};
+
 /**
  * A tab's first columns in a regular window. Where the window is wide enough
  * for three, an iPad's in landscape, the app sidebar stands where the
@@ -104,12 +112,7 @@ export function useAppSidebar(
   place: SidebarPlace,
   tasks: SidebarTasks,
   openTask?: string | undefined,
-): {
-  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
-  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-  readonly listLook: ListLook;
-  readonly ask: ReactNode;
-} {
+): UseAppSidebarResult {
   const router = useRouter();
   const waiting = useInboxBadge();
   const openSettings = useOpenSettings();
@@ -119,23 +122,33 @@ export function useAppSidebar(
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+
   const pick = (id: string) => {
     const picked = placeOf(id);
+
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
   };
+
   const columns = (list?: ListColumn | undefined): SidebarColumns => {
     const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
+
     if (!threeColumns && list !== undefined) {
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
         switcher !== undefined ? (
-          <WorkspaceSwitcherMenu {...switcher} look={SWITCHER_LOOK.TILE} />
+          <WorkspaceSwitcherMenu
+            {...switcher}
+            look={SWITCHER_LOOK.TILE}
+            tileSize={MARK_SIZE.COLUMN_BAR_FACE}
+          />
         ) : account === undefined ? undefined : (
           <AccountBarItem {...account} />
         );
+
       return { sidebar: list.view, sidebarBar: { ...list.bar, leading }, ...visibility };
     }
+
     return {
       sidebar: (
         <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
@@ -164,5 +177,6 @@ export function useAppSidebar(
       ...visibility,
     };
   };
+
   return { columns, listLook: threeColumns ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR, ask: tasks.ask };
 }

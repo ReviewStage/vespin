@@ -125,8 +125,11 @@ const findNewestGitHubAccount = SqlSchema.findOneOption({
  */
 function usableAt(row: GitHubAccountTokens, now: Date): boolean {
   if (row.accessToken === null || row.refreshToken === null) return false;
+
   if (row.accessTokenExpiresAt === null) return false;
+
   if (row.accessTokenExpiresAt > now) return true;
+
   return row.refreshTokenExpiresAt === null || row.refreshTokenExpiresAt > now;
 }
 
@@ -138,6 +141,7 @@ export function openGitHubConnectIntent(userId: string): TaskStoreEffect<string>
     const expiresAt = DateTime.toDate(DateTime.addDuration(now, GITHUB_CONNECT_INTENT_LIFETIME));
     yield* deleteExpiredIntents({ userId, now: DateTime.toDate(now) });
     yield* insertIntent({ id, userId, now: DateTime.toDate(now), expiresAt });
+
     return id;
   });
 }
@@ -156,7 +160,9 @@ export function claimGitHubConnectIntent(
   return Effect.gen(function* () {
     const now = DateTime.toDate(yield* DateTime.now);
     const standing = yield* findStandingIntent({ id: intentId, now });
+
     if (Option.isNone(standing)) return GITHUB_CONNECT_CLAIM.EXPIRED;
+
     return standing.value.userId === userId
       ? GITHUB_CONNECT_CLAIM.CLAIMED
       : GITHUB_CONNECT_CLAIM.OTHER_ACCOUNT;
@@ -173,6 +179,7 @@ export function githubConnection(userId: string): TaskStoreEffect<GitHubConnecti
   return Effect.gen(function* () {
     const now = DateTime.toDate(yield* DateTime.now);
     const row = yield* findNewestGitHubAccount(userId);
+
     return { connected: Option.exists(row, (tokens) => usableAt(tokens, now)), login: null };
   });
 }

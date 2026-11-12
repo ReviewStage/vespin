@@ -38,7 +38,7 @@ import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import type { Sandbox } from "@repo/sandbox";
 import { isRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Effect, Option, Result, Schema, Struct } from "effect";
+import { Clock, Effect, Option, Predicate, Result, Schema, Struct } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   changeAutomationAs,
@@ -382,16 +382,19 @@ function refusalWords(refusal: HostedRefusal): string {
 /** The names a call's disabledServers holds that are no connection's, read off the input as sent, since the wire's own read drops them unsaid. */
 function unknownServers(input: UnparsedWireValue): readonly string[] {
   const named = isRecord(input) ? input.disabledServers : undefined;
+
   if (!Array.isArray(named)) return [];
+
   return named.filter(
     (name): name is string =>
-      typeof name === "string" && integrationConnectionOf(name) === undefined,
+      Predicate.isString(name) && integrationConnectionOf(name) === undefined,
   );
 }
 
 /** A refusal of the servers named that are no connection's, or nothing where every one is. */
 function serversRefused(input: UnparsedWireValue): WireRecord | undefined {
   const unknown = unknownServers(input);
+
   return unknown.length === 0
     ? undefined
     : agentToolRejected(`${AUTOMATION_TOOL_REFUSAL.UNKNOWN_SERVERS} ${unknown.join(", ")}.`);
@@ -427,19 +430,23 @@ function runReading(run: AutomationRunSummary): WireRecord {
 /** Where an automation's runs land, as an answer names it. */
 function landingOf(summary: AutomationSummary): WireRecord | string {
   const target = summary.target;
+
   if (target === undefined || target.kind === AUTOMATION_TARGET.NEW_AGENT) {
     return AUTOMATION_TARGET.NEW_AGENT;
   }
+
   return { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: target.agentId };
 }
 
 /** One automation as an answer names it, its prompt whole or cut to the list's length. */
 function automationReading(summary: AutomationSummary, whole: boolean): WireRecord {
   const { prompt } = summary.action;
+
   const shown =
     whole || prompt.length <= LISTED_PROMPT_CHARS
       ? prompt
       : `${prompt.slice(0, LISTED_PROMPT_CHARS)}…`;
+
   return {
     id: summary.id,
     name: summary.name,
@@ -468,11 +475,14 @@ const scheduleRefused = (
 ) =>
   Effect.map(Clock.currentTimeMillis, (now) => {
     if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return undefined;
+
     const read = readSchedule(
       { cron: trigger.cron ?? "", timezone: trigger.timezone ?? "" },
       new Date(now),
     );
+
     if (Result.isSuccess(read)) return undefined;
+
     switch (read.failure) {
       case SCHEDULE_REFUSAL.TIMEZONE:
         return AUTOMATION_TOOL_REFUSAL.TIMEZONE;
@@ -491,13 +501,16 @@ const sentryRefused = Effect.fn("agents/automationSentryRefused")(function* (
   if (trigger.kind !== AUTOMATION_TRIGGER.INTEGRATION) return undefined;
   const app = yield* SentryApp;
   const configured = yield* Effect.result(app.settings);
+
   if (Result.isFailure(configured)) return AUTOMATION_TOOL_REFUSAL.SENTRY_UNCONFIGURED;
   const installations = yield* workspaceIntegrationInstallations(workspaceId);
+
   const installed = installations.some(
     (row) =>
       row.provider === TRIGGER_PROVIDER.SENTRY &&
       row.status === INTEGRATION_INSTALLATION_STATUS.ACTIVE,
   );
+
   return installed ? undefined : AUTOMATION_TOOL_REFUSAL.SENTRY_NOT_INSTALLED;
 });
 
@@ -515,7 +528,9 @@ function namedChoice(asked: {
   readonly effort?: string;
 }): ModelChoice | undefined | null {
   if (asked.model === undefined && asked.effort === undefined) return undefined;
+
   if (asked.model === undefined || asked.effort === undefined) return null;
+
   return { model: asked.model, effort: asked.effort };
 }
 
@@ -547,8 +562,10 @@ const landingNamed = (
   DatabaseServices
 > => {
   if (agentId === undefined) return Effect.succeed(Result.succeed(undefined));
+
   if (agentId === null)
     return Effect.succeed(Result.succeed({ kind: AUTOMATION_TARGET.NEW_AGENT }));
+
   return Effect.map(workspaceAgent(userId, workspaceId, agentId, callerId), (found) =>
     Option.isNone(found)
       ? Result.fail(AUTOMATION_TOOL_REFUSAL.NO_AGENT)
@@ -568,43 +585,56 @@ export function runListAutomations(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
   const asked = readListAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_ID));
   }
+
   const { automationId } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
+
       const found =
         automationId === undefined
           ? undefined
           : yield* workspaceAutomation(userId, workspace.value, automationId);
+
       if (found !== undefined && Option.isNone(found)) {
         return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
       }
+
       const read = yield* Effect.gen(function* () {
         if (found === undefined || automationId === undefined) {
           const listed = yield* hostedStoreOrUnavailable(
             listAutomations(userId, { organizationId: workspace.value }),
           );
+
           const summaries = yield* Effect.forEach(listed, (each) => summaryOf(userId, each));
+
           return {
             status: ACTION_RESULT_STATUS.ACCEPTED,
             automations: summaries.map((summary) => automationReading(summary, false)),
           };
         }
+
         const summary = yield* summaryOf(userId, found.value);
+
         const runs = yield* hostedStoreOrUnavailable(
           listAutomationRuns(userId, automationId, RUNS_READ),
         );
+
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           automation: automationReading(summary, true),
           runs: (yield* runSummaries(userId, runs)).map(runReading),
         };
       }).pipe(Effect.result);
+
       return Result.isSuccess(read) ? read.success : agentToolRejected(refusalWords(read.failure));
     }),
   );
@@ -617,22 +647,29 @@ export function runCreateAutomation(
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
   const asked = readCreateAsked(input);
   const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
+
   if (Result.isFailure(asked) || choice === null) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_CREATE));
   }
+
   const made = asked.success;
   const servers = serversRefused(input);
+
   if (servers !== undefined) return Effect.succeed(servers);
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
       // A call run again finds the automation it made first, as it was made.
       const already = yield* workspaceAutomation(userId, workspace.value, id);
+
       if (Option.isSome(already)) {
         const kept = yield* summaryOf(userId, already.value).pipe(Effect.result);
+
         return Result.isSuccess(kept)
           ? {
               status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -640,23 +677,31 @@ export function runCreateAutomation(
             }
           : agentToolRejected(refusalWords(kept.failure));
       }
+
       const schedule = yield* scheduleRefused(made.trigger);
+
       if (schedule !== undefined) return agentToolRejected(schedule);
       const sentry = yield* sentryRefused(workspace.value, made.trigger);
+
       if (sentry !== undefined) return agentToolRejected(sentry);
       const slack = yield* slackRefused(workspace.value, made.slackDelivery);
+
       if (slack !== undefined) return agentToolRejected(slack);
       const model = yield* choiceRefused(userId, choice, "Not made");
+
       if (model !== undefined) return agentToolRejected(model);
+
       const landing = yield* landingNamed(
         userId,
         workspace.value,
         made.agentId,
         callerAgent(call.caller)?.id,
       );
+
       if (Result.isFailure(landing)) return agentToolRejected(landing.failure);
       const worked = yield* workedRepository(call.caller);
       const repositories = made.repositories ?? (worked === null ? [] : [worked]);
+
       const action: AutomationAction = {
         kind: AUTOMATION_ACTION.AGENT,
         prompt: made.prompt,
@@ -665,6 +710,7 @@ export function runCreateAutomation(
           ? undefined
           : { disabledServers: made.disabledServers }),
       };
+
       const written = yield* createAutomationAs(
         userId,
         {
@@ -684,8 +730,10 @@ export function runCreateAutomation(
         },
         SERVER_AUTOMATION_SOURCE.AGENT,
       ).pipe(Effect.result);
+
       if (Result.isFailure(written)) {
         const refusal = written.failure;
+
         // Note that a workspace scope is refused alike in the personal workspace, which the model can act on.
         if (
           refusal.error === HOSTED_API_ERROR.INVALID_REQUEST &&
@@ -693,12 +741,15 @@ export function runCreateAutomation(
         ) {
           return agentToolRejected(AUTOMATION_TOOL_REFUSAL.WORKSPACE_SCOPE);
         }
+
         return agentToolRejected(refusalWords(refusal));
       }
+
       // A make run again beside the one that wrote answers that automation, which must be this workspace's.
       if (written.success.automation.workspaceId !== workspace.value) {
         return agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNAVAILABLE);
       }
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         automation: automationReading(written.success.automation, false),
@@ -714,9 +765,11 @@ export function runUpdateAutomation(
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
   const asked = readUpdateAsked(input);
   const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
+
   if (Result.isFailure(asked) || choice === null) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE));
   }
+
   const {
     automationId,
     model: _model,
@@ -726,38 +779,54 @@ export function runUpdateAutomation(
     disabledServers,
     ...rest
   } = asked.success;
+
   const servers = serversRefused(input);
+
   if (servers !== undefined) return Effect.succeed(servers);
+
   const changesAction =
     prompt !== undefined || choice !== undefined || disabledServers !== undefined;
+
   if (!changesAction && agentId === undefined && Object.keys(rest).length === 0) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
+
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
       const standing = found.value;
+
       if (rest.trigger !== undefined) {
         const schedule = yield* scheduleRefused(rest.trigger);
+
         if (schedule !== undefined) return agentToolRejected(schedule);
         const sentry = yield* sentryRefused(workspace.value, rest.trigger);
+
         if (sentry !== undefined) return agentToolRejected(sentry);
       }
+
       const slack = yield* slackRefused(workspace.value, rest.slackDelivery);
+
       if (slack !== undefined) return agentToolRejected(slack);
       const model = yield* choiceRefused(userId, choice, "Not changed");
+
       if (model !== undefined) return agentToolRejected(model);
+
       const landing = yield* landingNamed(
         userId,
         workspace.value,
         agentId,
         callerAgent(call.caller)?.id,
       );
+
       if (Result.isFailure(landing)) return agentToolRejected(landing.failure);
+
       const action: AutomationAction | undefined = changesAction
         ? {
             ...standing.action,
@@ -766,6 +835,7 @@ export function runUpdateAutomation(
             ...(disabledServers === undefined ? undefined : { disabledServers }),
           }
         : undefined;
+
       const written = yield* changeAutomationAs(
         userId,
         standing,
@@ -776,16 +846,20 @@ export function runUpdateAutomation(
         },
         SERVER_AUTOMATION_SOURCE.AGENT,
       ).pipe(Effect.result);
+
       if (Result.isFailure(written)) {
         const refusal = written.failure;
+
         if (
           refusal.error === HOSTED_API_ERROR.INVALID_REQUEST &&
           rest.scope === AUTOMATION_SCOPE.WORKSPACE
         ) {
           return agentToolRejected(AUTOMATION_TOOL_REFUSAL.WORKSPACE_SCOPE);
         }
+
         return agentToolRejected(refusalWords(refusal));
       }
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         automation: automationReading(written.success.automation, false),
@@ -800,17 +874,23 @@ export function runDeleteAutomation(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
   const asked = readDeleteAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_ID));
   }
+
   const { automationId } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
+
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
+
       const deleted = yield* removeAutomationAs(
         userId,
         found.value,
@@ -822,6 +902,7 @@ export function runDeleteAutomation(
         }),
         Effect.result,
       );
+
       return Result.isSuccess(deleted)
         ? deleted.success
         : agentToolRejected(refusalWords(deleted.failure));
@@ -835,20 +916,27 @@ export function runRunAutomation(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
   const asked = readRunAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_ID));
   }
+
   const { automationId } = asked.success;
   const { agentSessionsAs } = call;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
+
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
       const runnable = yield* readAutomation(userId, automationId, AUTOMATION_ACCESS.RUN);
+
       if (Option.isNone(runnable)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NOT_RUNNABLE);
+
       // Note that the run reaches the agent's sessions as the deployment acting for the account it starts as, its creator, whoever fired it, as the sweep's runs do.
       const ran = yield* runAutomationNowAs(
         userId,
@@ -856,7 +944,9 @@ export function runRunAutomation(
         calledId(userId, call.clientKey),
         (account) => Effect.succeed(agentSessionsAs(account)),
       ).pipe(Effect.result);
+
       if (Result.isFailure(ran)) return agentToolRejected(refusalWords(ran.failure));
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         automation: { id: runnable.value.id, name: runnable.value.name },

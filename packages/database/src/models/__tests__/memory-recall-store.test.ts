@@ -24,12 +24,14 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
 /** The id of the memory a keep wrote. */
 function keptId(outcome: MemoryOutcome): string {
   assert.ok("memory" in outcome, `nothing was written: ${outcome.kind}`);
+
   return outcome.memory.id;
 }
 
@@ -38,12 +40,15 @@ const openRecalling = Effect.gen(function* () {
   const owner = yield* openAccount;
   const workspaceId = yield* openWorkspace(owner);
   const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+
   const deploys = keptId(
     yield* rememberMemory(workspaceId, owner, "Deployments go out from main.", undefined),
   );
+
   const tests = keptId(
     yield* rememberMemory(workspaceId, owner, "Store tests run on PGlite.", undefined),
   );
+
   return { owner, workspaceId, source: { agentId, messageId: randomUUID() }, deploys, tests };
 });
 

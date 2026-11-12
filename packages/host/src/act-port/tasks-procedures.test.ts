@@ -168,6 +168,8 @@ afterEach(() => {
   for (const port of ports.splice(0)) port.close();
 });
 
+type Script = { connectPage: string | undefined };
+
 /**
  * A window's act port serving the task procedures alone, opened as the bridge opens one, over a fake host:
  * the window standing as `actor`, trusted or not.
@@ -179,12 +181,15 @@ function windowPort(
   const asked: string[] = [];
   const browsed: string[] = [];
   /** The page the host names to connect the account's own GitHub, or none. */
-  const script: { connectPage: string | undefined } = { connectPage: CONNECT_PAGE };
+  const script: Script = { connectPage: CONNECT_PAGE };
+
   const ask = <A>(line: string, answer: () => A) =>
     Effect.sync(() => {
       asked.push(line);
+
       return answer();
     });
+
   const port = testActPort(
     tasksProcedures({
       acts: {
@@ -200,13 +205,16 @@ function windowPort(
       colorCode: highlightSnippet,
       openExternal: (url) => {
         browsed.push(url);
+
         return Promise.resolve();
       },
       serviceBaseUrl: options.serviceBaseUrl ?? SERVICE,
     }),
   );
+
   ports.push(port);
   const client = port.as(actor, options);
+
   return { client, asked, browsed, script };
 }
 
@@ -217,33 +225,39 @@ type PortCall = (payload: PortActPayload<PortActKind>) => Promise<PortActResult<
 async function settled(client: ActPortClient, kind: TasksKind, payload: AnyPayload) {
   // SAFETY: each test pairs a kind with the payload its own procedure takes, or one it refuses on purpose.
   const call = client[kind] as PortCall;
+
   try {
     return { answer: await call(payload) };
   } catch (error) {
     assert.ok(error instanceof ORPCError);
     assert.equal(error.code, ACT_ERROR.REFUSED);
+
     return { refused: error.message };
   }
 }
 
 it("a window that is not a panel is refused every hand-written task act in the kind's own words, and the host is not asked", async () => {
   const { client, asked, browsed } = windowPort(OTHER_WINDOW);
+
   for (const act of ACTS) {
     assert.deepEqual(await settled(client, act.kind, act.payload), {
       refused: REFUSAL[act.kind],
     });
   }
+
   assert.deepEqual(asked, []);
   assert.deepEqual(browsed, []);
 });
 
 it("a frame this build does not trust is refused every hand-written task act, even as a panel, and the host is not asked", async () => {
   const { client, asked, browsed } = windowPort(PANEL, { trusted: false });
+
   for (const act of ACTS) {
     assert.deepEqual(await settled(client, act.kind, act.payload), {
       refused: REFUSAL[act.kind],
     });
   }
+
   assert.deepEqual(asked, []);
   assert.deepEqual(browsed, []);
 });
@@ -263,6 +277,7 @@ it.effect.each(DECLARED)(
 
 it("a web link opens an http, https, or mail address outside the window, and no other scheme nor an address past the cap", async () => {
   const { client, browsed } = windowPort(PANEL);
+
   const refused = [
     "javascript:alert(1)",
     "file:///etc/passwd",
@@ -271,14 +286,17 @@ it("a web link opens an http, https, or mail address outside the window, and no 
     "https://",
     `https://example.com/docs?q=${"a".repeat(2_048)}`,
   ];
+
   const open = (url: string) => settled(client, TASKS_ACT_KIND.WEB_OPEN, { url });
 
   assert.deepEqual(await open("https://example.com/docs"), { answer: undefined });
   assert.deepEqual(await open("http://localhost:3000/"), { answer: undefined });
   assert.deepEqual(await open("mailto:dean@example.com"), { answer: undefined });
+
   for (const url of refused) {
     assert.deepEqual(await open(url), { refused: REFUSAL[TASKS_ACT_KIND.WEB_OPEN] });
   }
+
   assert.deepEqual(browsed, [
     "https://example.com/docs",
     "http://localhost:3000/",
@@ -310,6 +328,7 @@ it("a GitHub page the host names off the service's own origin is refused and not
       refused: REFUSAL[TASKS_ACT_KIND.GITHUB_CONNECT],
     });
   }
+
   assert.deepEqual(browsed, []);
 });
 
@@ -319,6 +338,7 @@ it("the admin dashboard opens the service's own page in the browser, and an addr
   assert.deepEqual(await settled(client, TASKS_ACT_KIND.ADMIN_OPEN, undefined), {
     answer: undefined,
   });
+
   for (const url of ["https://evil.test/admin", "file:///etc/passwd", `${SERVICE}/admin`]) {
     assert.deepEqual(await settled(client, TASKS_ACT_KIND.ADMIN_OPEN, { url }), {
       refused: REFUSAL[TASKS_ACT_KIND.ADMIN_OPEN],
@@ -353,6 +373,7 @@ it("a fenced block is colored for a panel, its lines answered as the highlighter
   assert.ok(Array.isArray(line));
   assert.equal(line.map((run) => run.text).join(""), "const a = 1;");
   assert.ok(line.some((run) => run.color !== undefined));
+
   for (const block of [
     { language: "ts", code: "a".repeat(20_001) },
     { language: "  ", code: "a" },

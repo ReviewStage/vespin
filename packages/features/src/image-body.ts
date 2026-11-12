@@ -27,9 +27,10 @@ export type ImageBodyUnread = Exclude<CallAnswer, { readonly response: Response 
  * named (`account-call.ts`): the platform's beneath the HTTP client's that
  * wraps it, where there is one, never its words.
  */
-function endedWith(error: unknown): string | undefined {
-  if (!(error instanceof Error)) return undefined;
-  return error.cause instanceof Error ? error.cause.name : error.name;
+function endedWith(cause: unknown): string | undefined {
+  if (!(cause instanceof Error)) return undefined;
+
+  return cause.cause instanceof Error ? cause.cause.name : cause.name;
 }
 
 /** Whether an image's read ended as its body cut, rather than its bytes or a type refused. */
@@ -53,15 +54,18 @@ export function imageBodyOf<Type extends string>(
   const contentType = Result.getOrUndefined(
     readEither(types)(unparsedWire(response.headers.get("content-type"))),
   );
+
   if (contentType === undefined) return Effect.succeed(undefined);
+
   return Effect.promise(() =>
     response
       .arrayBuffer()
       .then(
         (bytes): ImageBody<Type> => ({ contentType, base64: Base64.encode(new Uint8Array(bytes)) }),
       )
-      .catch((error: unknown): ImageBodyUnread => {
-        const name = endedWith(error);
+      .catch((cause: unknown): ImageBodyUnread => {
+        const name = endedWith(cause);
+
         return {
           fault: CALL_FAULT.NETWORK,
           ...(name === undefined ? undefined : { errorName: name }),

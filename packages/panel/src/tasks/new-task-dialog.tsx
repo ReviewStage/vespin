@@ -68,6 +68,7 @@ function NewTaskCard({
   const dialog = useRef<DialogHandle>(null);
   const titleId = useId();
   const body = useRef<HTMLDivElement>(null);
+
   // Note that the field is the editor the composer mounts once its bundle
   // has landed, so the card hands focus to it by where it stands rather than
   // by a ref of its own; before it lands the card holds focus, and the field
@@ -76,11 +77,13 @@ function NewTaskCard({
     (): RefObject<HTMLElement | null> => ({
       get current() {
         const card = body.current?.closest<HTMLElement>(CARD_SELECTOR) ?? null;
+
         return body.current?.querySelector<HTMLElement>(FIELD_SELECTOR) ?? card;
       },
     }),
     [],
   );
+
   const close = () => {
     if (!starting) newTask.onClose();
   };
@@ -128,13 +131,17 @@ export function NewTaskDialog({
   const [openings, setOpenings] = useState(0);
   const [wasOpen, setWasOpen] = useState(newTask.open);
   const [wasPreset, setWasPreset] = useState(newTask.preset);
+
   if (wasOpen !== newTask.open || wasPreset !== newTask.preset) {
     if (newTask.open && (!wasOpen || wasPreset !== newTask.preset)) {
       setOpenings((count) => count + 1);
     }
+
     setWasOpen(newTask.open);
     setWasPreset(newTask.preset);
   }
+
   if (!drawn) return null;
+
   return <NewTaskCard key={openings} open={newTask.open} newTask={newTask} onExited={onExited} />;
 }

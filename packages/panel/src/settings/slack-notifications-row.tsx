@@ -31,7 +31,9 @@ function useSlackWorkspaceId(workspaces: readonly Workspace[]): string | undefin
   const reads = useQueries({
     queries: workspaces.map((workspace) => workspaceIntegrationsQuery(workspace.id)),
   });
+
   const at = reads.findIndex((read) => read.data?.slack.team !== undefined);
+
   return at === -1 ? undefined : workspaces[at]?.id;
 }
 
@@ -41,12 +43,16 @@ export function SlackNotificationsRow({
   workspaces: readonly Workspace[];
 }): React.JSX.Element | null {
   const workspaceId = useSlackWorkspaceId(workspaces);
+
   const mutation = useMutation({
     ...actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_NOTIFICATIONS),
     onSettled: refusalToast(answeredAll),
   });
+
   const on = useAccountPreferences().data?.slackNotifications;
+
   if (workspaceId === undefined || on === undefined) return null;
+
   return (
     <SwitchRow
       label="Slack notifications"

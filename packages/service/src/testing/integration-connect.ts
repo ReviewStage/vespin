@@ -41,6 +41,7 @@ export function integrationConnectOf(
   const service = Object.fromEntries(
     INTEGRATION_PROVIDER_LIST.map((provider) => [provider, connectorOf(provider)]),
   ) as IntegrationConnectService;
+
   return Layer.succeed(IntegrationConnect, service);
 }
 
@@ -88,6 +89,7 @@ export function integrationConnectOver(
 ): Layer.Layer<IntegrationConnect, Config.ConfigError> {
   // How many tokens the granting Connect below has issued, which `grantsOnce` refuses past the first.
   let issued = 0;
+
   const granting = (connector: ConnectorService): ConnectorService =>
     connector.configured
       ? {
@@ -97,6 +99,7 @@ export function integrationConnectOver(
             if (declines || (grantsOnce && issued > 0)) return Effect.fail(NOT_AUTHORIZED);
             issued += 1;
             const accountName = names(subject);
+
             return Effect.succeed({
               token: Redacted.make(`token_${subject}`),
               expiresAt: Infinity,
@@ -106,13 +109,16 @@ export function integrationConnectOver(
           revoke: () => Effect.void,
         }
       : connector;
+
   const providers = Effect.gen(function* () {
     const deployment = yield* IntegrationConnect;
+
     // SAFETY: one entry per provider of INTEGRATION_PROVIDER_LIST, which is every provider.
     return Object.fromEntries(
       INTEGRATION_PROVIDER_LIST.map((provider) => [provider, granting(deployment[provider])]),
     ) as IntegrationConnectService;
   });
+
   return Layer.effect(IntegrationConnect, providers).pipe(
     Layer.provide(integrationConnectFromEnvironment),
     Layer.provide(

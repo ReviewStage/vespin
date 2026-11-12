@@ -31,6 +31,7 @@ const panelOf = (): ActSender<WebContents> => ({
 
 function fixture(standing: ReadonlySet<string> = new Set()) {
   const terminalOpenedIn: string[] = [];
+
   const actPort = testActPort(
     macTerminalProcedures({
       home: "/home",
@@ -38,7 +39,9 @@ function fixture(standing: ReadonlySet<string> = new Set()) {
       exists: (folder) => standing.has(folder),
     }),
   );
+
   ports.push(actPort);
+
   return { actPort, terminalOpenedIn };
 }
 

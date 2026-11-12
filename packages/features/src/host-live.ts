@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { DEVICE_PLATFORM, DEVICE_SETUP, HOST_UPDATE } from "./device-agent-wire.js";
 import type { Host } from "./host-wire.js";
 import {
@@ -55,6 +55,8 @@ export const HOSTS_READ = liveRead({
         calledIn: Schema.optionalKey(Schema.Boolean),
         /** When it joined, in epoch milliseconds. Absent from a service that answers none. */
         joinedAt: Schema.optionalKey(Schema.Number),
+        /** Whether its beat went past fresh since it last beat, as the scheduled sweep found it. Absent from a service that answers none. */
+        away: Schema.optionalKey(Schema.Boolean),
       }),
       key: "id",
       order: [
@@ -75,7 +77,7 @@ export type HostLiveRow = LiveRowOf<typeof HOSTS_READ.parts.hosts>;
 export type HostLine = Pick<
   Host,
   "id" | "name" | "platform" | "machineId" | "model" | "update" | "setup" | "calledIn"
-> & { readonly joinedAt?: number };
+> & { readonly joinedAt?: number; readonly away?: boolean };
 
 const readPlatform = Schema.decodeUnknownOption(Schema.Literals(Object.values(DEVICE_PLATFORM)));
 const readUpdate = Schema.decodeUnknownOption(Schema.Literals(Object.values(HOST_UPDATE)));
@@ -90,21 +92,24 @@ function lapseOf(row: HostLiveRow): number | undefined {
 export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): readonly HostLine[] {
   return orderedLiveRows(HOSTS_READ.parts.hosts, rows).flatMap((row) => {
     const lapse = lapseOf(row);
+
     if (lapse !== undefined && lapse <= now) return [];
     const platform = readPlatform(row.platform);
     const update = readUpdate(row.update);
     const setup = readSetup(row.setup);
+
     return [
       {
         id: row.id,
         name: row.name,
-        ...(platform._tag === "Some" ? { platform: platform.value } : undefined),
+        ...(Option.isSome(platform) ? { platform: platform.value } : undefined),
         ...(row.machineId === null ? undefined : { machineId: row.machineId }),
         ...(row.model === null ? undefined : { model: row.model }),
-        ...(update._tag === "Some" ? { update: update.value } : undefined),
-        ...(setup._tag === "Some" ? { setup: setup.value } : undefined),
+        ...(Option.isSome(update) ? { update: update.value } : undefined),
+        ...(Option.isSome(setup) ? { setup: setup.value } : undefined),
         ...(row.calledIn === undefined ? undefined : { calledIn: row.calledIn }),
         ...(row.joinedAt === undefined ? undefined : { joinedAt: row.joinedAt }),
+        ...(row.away === undefined ? undefined : { away: row.away }),
       },
     ];
   });
@@ -118,7 +123,9 @@ export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): read
 export function nextHostLapse(rows: readonly HostLiveRow[], now: number): number | undefined {
   const lapsing = rows.flatMap((row) => {
     const lapse = lapseOf(row);
+
     return lapse !== undefined && lapse > now ? [lapse] : [];
   });
+
   return lapsing.length === 0 ? undefined : Math.min(...lapsing);
 }

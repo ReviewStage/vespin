@@ -84,10 +84,12 @@ function mount(
   const toggled: Array<[string, boolean]> = [];
   const table = document.createElement("div");
   document.body.append(table);
+
   const favorite = {
     starred: (row: AccountsTableRow) => row.id === ZED.id,
     onToggle: (id: string, favorite: boolean) => toggled.push([id, favorite]),
   };
+
   const props: Parameters<typeof AccountsTable<AccountsTableRow>>[0] = {
     rows,
     windowDays: 30,
@@ -96,6 +98,7 @@ function mount(
     onOpen: (id) => opened.push(id),
     sortable,
   };
+
   if (starred) props.favorite = favorite;
   root = createRoot(table);
   act(() =>
@@ -107,12 +110,14 @@ function mount(
       ),
     ),
   );
+
   return { table, opened, toggled };
 }
 
 function remount(rows: readonly AccountsTableRow[], options: { sortable: boolean }): Mounted {
   act(() => root?.unmount());
   document.body.replaceChildren();
+
   return mount(rows, options);
 }
 
@@ -130,7 +135,9 @@ function header(table: HTMLElement, label: string): HTMLElement {
   const found = [...table.querySelectorAll<HTMLElement>("th")].find((cell) =>
     cell.textContent?.startsWith(label),
   );
+
   if (found === undefined) throw new Error(`no ${label} header`);
+
   return found;
 }
 
@@ -138,6 +145,7 @@ function press(element: Element | null | undefined, init: MouseEventInit = {}): 
   if (!element) throw new Error("nothing to press");
   const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init });
   act(() => element.dispatchEvent(event));
+
   return event;
 }
 

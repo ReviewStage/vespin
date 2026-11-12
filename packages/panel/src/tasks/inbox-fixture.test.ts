@@ -39,6 +39,7 @@ afterEach(() => {});
 /** Main's document for a fixture run on `profile`: signed out, nothing read, nothing waiting. */
 function fixtureRun(profile: string): AppStateSnapshot {
   const { run } = stateWith({}, {});
+
   return stateWith(
     {},
     {
@@ -65,6 +66,7 @@ function standFixtureRun(profile: string): Effect.Effect<void> {
 function fedItems(state: AppStateSnapshot, taskId: string): readonly InboxItem[] {
   const items = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.PLAN][taskId];
   assert.ok(items !== undefined, `the feed holds ${taskId}`);
+
   return items;
 }
 
@@ -80,6 +82,7 @@ it.effect(
       assert.ok(state.inbox.tasks.length > 0, "main's read names tasks holding items");
 
       const items: InboxItem[] = [];
+
       for (const holding of state.inbox.tasks) {
         const held = fedItems(state, holding.taskId);
         assert.equal(held.length, holding.items, `${holding.taskId} holds what main counts`);
@@ -91,9 +94,11 @@ it.effect(
       const uncarried = items.filter(
         (each) => !Result.isSuccess(Schema.encodeUnknownResult(inboxItemSchema)(each)),
       );
+
       const asks = items.flatMap((each) =>
         (each.thread ?? []).flatMap((message) => message.ask ?? []),
       );
+
       const kinds = new Set(asks.map((ask) => ask.type));
       const longest = Math.max(...items.map((each) => each.thread?.length ?? 0));
       const words = items.flatMap((each) => (each.thread ?? []).map((message) => message.text));

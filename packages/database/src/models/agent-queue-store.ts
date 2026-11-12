@@ -166,6 +166,7 @@ const PAUSES: readonly QueuePause[] = Object.values(QUEUE_PAUSE);
 function messageOf(row: typeof QueuedRowSchema.Type): QueuedMessageRow {
   // SAFETY: the column is written only by `filesColumn`, from a queue change's files, which their schema read.
   const attachments = (row.attachments ?? []) as readonly QueuedFile[];
+
   return {
     ...row,
     attachments,
@@ -581,6 +582,7 @@ export function agentQueueNow(agentId: string): AgentQueueEffect<AgentQueueRead>
   return Effect.gen(function* () {
     const [row] = yield* findQueueRow({ agentId });
     const rows = yield* findMessages({ agentId });
+
     return {
       messages: rows.map(messageOf),
       paused:
@@ -611,7 +613,9 @@ export function underAgentQueueLock<A>(
       Effect.gen(function* () {
         yield* client`select pg_advisory_xact_lock(hashtextextended(${agentId}, 7))`;
         const answer = yield* body;
+
         if (changed(answer)) yield* bumpRevision({ agentId });
+
         return answer;
       }),
     ),
@@ -635,6 +639,7 @@ export function readQueuedFile(
     // SAFETY: the column is written only by `filesColumn`, from a queue change's files, which their schema read.
     const files = (holder?.attachments ?? []) as readonly QueuedFile[];
     const file = files.find((each) => each.id === fileId);
+
     return file === undefined
       ? Option.none()
       : Option.some({ name: file.name, mediaType: file.mediaType, data: file.data });
@@ -648,6 +653,7 @@ export function readAgentQueue(
 ): AgentQueueEffect<Option.Option<AgentQueueRead>> {
   return Effect.gen(function* () {
     if (!(yield* reaches(userId, agentId))) return Option.none();
+
     return Option.some(yield* agentQueueNow(agentId));
   });
 }
@@ -668,16 +674,20 @@ export function queueAgentMessage(
   },
 ): AgentQueueEffect<Option.Option<QueueOutcome>> {
   let inserted = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
+
       const queued = yield* queueLineInLock(agentId, userId, {
         ...message,
         sendKey: undefined,
         line: undefined,
       });
+
       inserted = queued.inserted;
+
       return Option.some(queued.outcome);
     }),
     () => inserted,
@@ -713,9 +723,11 @@ export function queueLineInLock(
 ): AgentQueueEffect<{ readonly outcome: QueueOutcome; readonly inserted: boolean }> {
   return Effect.gen(function* () {
     const [tail] = yield* findTail({ agentId });
+
     if ((tail?.size ?? 0) >= AGENT_QUEUE_BOUNDS.MAX_MESSAGES) {
       return { outcome: QUEUE_OUTCOME.FULL, inserted: false };
     }
+
     const rows = yield* insertMessage({
       agentId,
       userId,
@@ -727,6 +739,7 @@ export function queueLineInLock(
       line: message.line ?? null,
       now: yield* DateTime.nowAsDate,
     });
+
     return { outcome: QUEUE_OUTCOME.QUEUED, inserted: rows.length > 0 };
   });
 }
@@ -751,19 +764,23 @@ export function queueWhileBooting(
   },
 ): AgentQueueEffect<Option.Option<QueueOutcome>> {
   let inserted = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       const phase = yield* bootPhaseInLock(agentId);
+
       if (bootHold(phase) === BOOT_HOLD.NONE) return Option.none();
       const queued = yield* queueLineInLock(agentId, userId, message);
       inserted = queued.inserted;
+
       // Note that a boot that failed over an empty queue paused nothing, so its first line held pauses it now,
       // on the queue's row its revision's move writes.
       if (inserted && phase === BOOT_PHASE.FAILED) {
         yield* bumpRevision({ agentId });
         yield* pauseInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
       }
+
       return Option.some(queued.outcome);
     }),
     () => inserted,
@@ -786,7 +803,9 @@ export function pauseInLock(
 export function resumeInLock(agentId: string, because: QueuePause): AgentQueueEffect<boolean> {
   return Effect.gen(function* () {
     const [row] = yield* findQueueRow({ agentId });
+
     if (row?.pausedBecause !== because) return false;
+
     return (yield* deletePause({ agentId })).length > 0;
   });
 }
@@ -821,6 +840,7 @@ export function editQueuedMessage(
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
       const now = yield* DateTime.nowAsDate;
+
       const updated = yield* updateEdit({
         agentId,
         messageId,
@@ -828,6 +848,7 @@ export function editQueuedMessage(
         attachments: filesColumn(attachments),
         now,
       });
+
       return Option.some(updated.length > 0);
     }),
     changedSome,
@@ -852,6 +873,7 @@ export function holdQueuedMessage(
       if (!(yield* reaches(userId, agentId))) return Option.none();
       const now = yield* DateTime.nowAsDate;
       const updated = yield* updateHold({ agentId, messageId, editing: held, now });
+
       return Option.some(updated.length > 0);
     }),
     changedSome,
@@ -873,13 +895,16 @@ export function takeQueuedMessage(
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
       const now = yield* DateTime.nowAsDate;
+
       const [taken] = yield* deleteMessage({
         agentId,
         messageId,
         unclaimedAt: now,
         claimedAt: null,
       });
+
       yield* deletePauseIfEmpty({ agentId });
+
       return Option.some(Option.map(Option.fromNullishOr(taken), messageOf));
     }),
     (answer) => Option.isSome(Option.flatten(answer)),
@@ -905,6 +930,7 @@ export function claimQueuedMessage(
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
       const now = yield* DateTime.nowAsDate;
+
       const [claimed] = yield* updateClaim({
         agentId,
         messageId,
@@ -914,6 +940,7 @@ export function claimQueuedMessage(
             : { text: edit.text, attachments: filesColumn(edit.attachments ?? []) },
         now,
       });
+
       return Option.some(Option.map(Option.fromNullishOr(claimed), messageOf));
     }),
     (answer) => Option.isSome(Option.flatten(answer)),
@@ -940,14 +967,18 @@ export function reorderAgentQueue(
       const rows = (yield* findMessages({ agentId })).map(messageOf);
       const standing = new Set(rows.filter((row) => !claimedAt(row, now)).map((row) => row.id));
       const named = new Set(order);
+
       const same =
         named.size === order.length &&
         named.size === standing.size &&
         order.every((id) => standing.has(id));
+
       if (!same) return Option.some(false);
+
       for (const [position, messageId] of order.entries()) {
         yield* updatePosition({ agentId, messageId, position, now });
       }
+
       return Option.some(true);
     }),
     changedSome,
@@ -963,6 +994,7 @@ export function resumeAgentQueue(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
+
       return Option.some((yield* deletePause({ agentId })).length > 0);
     }),
     changedSome,
@@ -998,14 +1030,19 @@ export function claimQueueHead(agentId: string): AgentQueueEffect<Option.Option<
       if (bootHold(yield* bootPhaseInLock(agentId)) === BOOT_HOLD.DIVERT_AND_WAIT) {
         return Option.none();
       }
+
       const queue = yield* agentQueueNow(agentId);
       const now = yield* DateTime.nowAsDate;
+
       if (queue.paused !== undefined) return Option.none();
+
       if (queue.messages.some((message) => claimedAt(message, now))) return Option.none();
       // Note that the hand-off stops at a message being edited rather than passing it, so the queue keeps its order.
       const [head] = queue.messages;
+
       if (head === undefined || head.editing) return Option.none();
       const [claimed] = yield* updateClaim({ agentId, messageId: head.id, edit: null, now });
+
       return Option.map(Option.fromNullishOr(claimed), messageOf);
     }),
     Option.isSome,
@@ -1030,12 +1067,14 @@ function released(
   return Effect.gen(function* () {
     if (message.claimedAt === undefined) return false;
     const now = yield* DateTime.nowAsDate;
+
     const rows = yield* updateRelease({
       agentId,
       messageId: message.id,
       claimedAt: message.claimedAt,
       now,
     });
+
     return rows.length > 0;
   });
 }
@@ -1056,6 +1095,7 @@ export function refuseQueuedMessage(
       Effect.gen(function* () {
         const wasReleased = yield* released(agentId, message);
         const paused = yield* pauseInLock(agentId, QUEUE_PAUSE.REFUSED, refusal);
+
         return wasReleased || paused;
       }),
       (changed) => changed,
@@ -1086,7 +1126,9 @@ export function dropQueuedMessage(
           unclaimedAt: null,
           claimedAt: message.claimedAt ?? null,
         });
+
         yield* deletePauseIfEmpty({ agentId });
+
         return dropped.length > 0;
       }),
       (dropped) => dropped,

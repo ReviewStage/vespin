@@ -55,6 +55,7 @@ export function testActPort<Sender>(
   const handler = actPortHandlerOf<Sender>(procedures);
   const opened: MessagePort[] = [];
   const windows = new Map<ActSender<Sender>, Map<boolean, ActPortClient>>();
+
   const port: TestActPort<Sender> = {
     as(actor, options = {}) {
       const { port1, port2 } = new MessageChannel();
@@ -69,6 +70,7 @@ export function testActPort<Sender>(
       port1.start();
       const client: ActPortClient = createORPCClient(new RPCLink({ port: port2 }));
       port2.start();
+
       return client;
     },
     call(actor, kind, payload, options = {}) {
@@ -79,6 +81,7 @@ export function testActPort<Sender>(
       held.set(trusted, client);
       // SAFETY: a window's payload crosses as a structured-clone value, which the kind's own schema reads again.
       const procedure = client[kind] as (sent: WireBoundaryInput) => Promise<WireBoundaryInput>;
+
       return settledAct(procedure(payload));
     },
     perform(act, actor, options) {
@@ -86,9 +89,11 @@ export function testActPort<Sender>(
     },
     close() {
       windows.clear();
+
       for (const end of opened.splice(0)) end.close();
     },
   };
+
   return port;
 }
 
@@ -100,6 +105,7 @@ export async function settledAct<Answer>(call: Promise<Answer>): Promise<Settled
     if (error instanceof ORPCError && error.code === ACT_ERROR.REFUSED) {
       return { refused: error.message };
     }
+
     throw error;
   }
 }

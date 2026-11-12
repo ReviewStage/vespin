@@ -1,7 +1,7 @@
 import { GLYPH } from "../../icons/glyph-registry.js";
 import { CameraIcon, ImageUpIcon } from "../../icons/icons.js";
 import { ReplayMask } from "../../session-replay-marks.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import type { FilePicker } from "../file-picker/file-picker.js";
 import { Menu, useMenu } from "../menu/menu.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -71,6 +71,7 @@ export function PhotoPick({
   const menu = useMenu(choosing);
   const label = photo === undefined && !choosing ? PICK_WORDS.ADD : PICK_WORDS.CHANGE;
   const press = choosing ? menu.trigger() : { onClick: picker.open };
+
   return (
     <>
       <Tooltip label={label}>
@@ -92,7 +93,7 @@ export function PhotoPick({
                   {...(id === undefined ? {} : { id })}
                   src={photo}
                   size={AVATAR_SIZE.CARD}
-                  shape={AVATAR_SHAPE.TILE}
+                  outline={AVATAR_OUTLINE.TILE}
                   decorative
                 />
               </ReplayMask>

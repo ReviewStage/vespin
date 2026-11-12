@@ -15,6 +15,7 @@ const recordingApp = (
   },
   getPath: (name) => {
     steps.push(`getPath:${name}`);
+
     return path.join("/tmp", name);
   },
   setPath: (name) => {
@@ -22,8 +23,10 @@ const recordingApp = (
   },
   getVersion: () => "0.0.0-test",
 });
+
 test("the account override is read in a development run and never in a packaged one", () => {
   const steps: string[] = [];
+
   const development = bootstrapDesktop({
     app: recordingApp(steps),
     argv: [],
@@ -36,7 +39,9 @@ test("the account override is read in a development run and never in a packaged 
     initializeCrashReporting: () => undefined,
     appLinks: appLinkInbox(),
   });
+
   assert.equal(development.hostedServiceBaseUrl, "https://example.invalid");
+
   const packaged = bootstrapDesktop({
     app: recordingApp(steps, true),
     argv: [],
@@ -49,6 +54,7 @@ test("the account override is read in a development run and never in a packaged 
     initializeCrashReporting: () => undefined,
     appLinks: appLinkInbox(),
   });
+
   assert.equal(packaged.hostedServiceBaseUrl, "https://vespin.dev");
   assert.equal(packaged.runMode.sendsNetwork, true);
 });
@@ -67,6 +73,7 @@ test("a named development instance keeps its state apart, and a packaged build h
       initializeCrashReporting: () => undefined,
       appLinks: appLinkInbox(),
     });
+
   const plain = launch(false, {});
   const named = launch(false, { APP_INSTANCE: "preview" });
   assert.equal(plain.instance, undefined);

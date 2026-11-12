@@ -9,6 +9,7 @@
  * while its canvas is scrolled away.
  */
 
+import { Predicate } from "effect";
 import { motionHeld } from "../../motion-timing.js";
 
 /** A role's color as sRGB channels between 0 and 1, read through a probe laid beside `near`. */
@@ -18,13 +19,14 @@ export function roleChannels(near: HTMLElement, role: string): readonly [number,
   near.parentElement?.appendChild(probe);
   const parts = getComputedStyle(probe).color.match(/[\d.]+/g) ?? [];
   probe.remove();
+
   return [Number(parts[0] ?? 0) / 255, Number(parts[1] ?? 0) / 255, Number(parts[2] ?? 0) / 255];
 }
 
 /** Whether motion is held still, as reduced motion and a capture run hold it (`motionHeld`). */
 export function heldStill(): boolean {
   // Note that a document with no media queries, as jsdom's is, is drawn still, because it lays out no frames to play either.
-  return typeof window.matchMedia !== "function" || motionHeld();
+  return !Predicate.isFunction(window.matchMedia) || motionHeld();
 }
 
 /**
@@ -35,19 +37,26 @@ export function heldStill(): boolean {
 export function paintLoop(canvas: HTMLCanvasElement, draw: (seconds: number) => void): () => void {
   if (heldStill()) {
     draw(0);
+
     return () => undefined;
   }
+
   let shown = true;
   let frame = 0;
+
   const watch = new IntersectionObserver(([entry]) => {
     shown = entry?.isIntersecting ?? true;
   });
+
   watch.observe(canvas);
+
   const tick = (ms: number): void => {
     if (shown) draw(ms / 1000);
     frame = requestAnimationFrame(tick);
   };
+
   frame = requestAnimationFrame(tick);
+
   return () => {
     cancelAnimationFrame(frame);
     watch.disconnect();
@@ -59,9 +68,11 @@ export function fitCanvas(canvas: HTMLCanvasElement): number {
   const ratio = Math.min(2, window.devicePixelRatio || 1);
   const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
   const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
   }
+
   return ratio;
 }

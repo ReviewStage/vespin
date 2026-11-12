@@ -9,7 +9,7 @@ import {
   wireRecord,
 } from "@repo/wire";
 import { webResponseFromClientResponse } from "@repo/wire/effect";
-import { Data, Duration, Effect, type Layer } from "effect";
+import { Data, Duration, Effect, type Layer, Predicate } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
@@ -99,6 +99,7 @@ const responseRecord = /* @__PURE__ */ Effect.fnUntraced(function* (
   response: Response,
 ): Effect.fn.Return<WireRecord, AccountClientError> {
   const body = wireRecord(yield* Effect.promise(() => response.json().catch(() => undefined)));
+
   if (!response.ok) {
     return yield* Effect.fail(
       new AccountClientError({
@@ -108,11 +109,13 @@ const responseRecord = /* @__PURE__ */ Effect.fnUntraced(function* (
       }),
     );
   }
+
   if (!body) {
     return yield* Effect.fail(
       new AccountClientError({ message: "Account service returned an invalid response" }),
     );
   }
+
   return body;
 });
 
@@ -122,6 +125,7 @@ function tokensFrom(body: WireRecord): Effect.Effect<AccountTokens, AccountClien
       new AccountClientError({ message: "Account service did not return both tokens" }),
     );
   }
+
   return Effect.succeed({
     accessToken: body.access_token,
     refreshToken: body.refresh_token,
@@ -156,11 +160,13 @@ function sessionFrom(
 ): Effect.Effect<AccountSession, AccountClientError> {
   const sessionToken = response.headers.get(SESSION_TOKEN_HEADER);
   const user = wireRecord(body.user);
+
   if (!sessionToken || !isWireString(user?.id) || !user.id || !isWireString(user.email)) {
     return Effect.fail(
       new AccountClientError({ message: "Account service did not return a session" }),
     );
   }
+
   return Effect.succeed({ sessionToken, userId: user.id, email: user.email });
 }
 
@@ -227,6 +233,7 @@ export class AccountClient {
       scope: "openid profile email offline_access",
       prompt: "login",
     }).toString();
+
     return url.toString();
   }
 
@@ -279,6 +286,7 @@ export class AccountClient {
         }),
         this.#timeoutMs,
       );
+
       if (!response.ok) yield* responseRecord(response);
     });
   }
@@ -310,6 +318,7 @@ export class AccountClient {
         }),
         this.#timeoutMs,
       );
+
       return yield* sessionFrom(response, yield* responseRecord(response));
     });
   }
@@ -325,6 +334,7 @@ export class AccountClient {
         }),
         this.#timeoutMs,
       );
+
       if (!response.ok) yield* responseRecord(response);
     });
   }
@@ -349,9 +359,11 @@ export class AccountClient {
         }),
         this.#timeoutMs,
       );
+
       if (response.ok) return;
       const body = wireRecord(yield* Effect.promise(() => response.json().catch(() => undefined)));
       const code = text(body?.code);
+
       return yield* Effect.fail(
         new AccountClientError({
           message: `Account service refused the deletion: ${code ?? response.status}`,
@@ -374,13 +386,17 @@ export class AccountClient {
         }),
         this.#timeoutMs,
       );
+
       const body = yield* responseRecord(response);
+
       if (!isWireString(body.email)) {
         return yield* Effect.fail(
           new AccountClientError({ message: "Account service returned an invalid identity" }),
         );
       }
+
       const pictureUrl = accountPictureUrl(body.picture);
+
       return {
         ...(isWireString(body.sub) && body.sub ? { id: body.sub } : undefined),
         email: body.email,
@@ -428,7 +444,7 @@ type AccountFailureAction = (typeof ACCOUNT_FAILURE_ACTION)[keyof typeof ACCOUNT
 
 /** Only the OAuth server's definitive revocation answer removes a stored account. */
 export function accountFailureAction(error: AccountClientFailure): AccountFailureAction {
-  return error._tag === "AccountClientError" && error.oauthError === "invalid_grant"
+  return Predicate.isTagged(error, "AccountClientError") && error.oauthError === "invalid_grant"
     ? ACCOUNT_FAILURE_ACTION.SIGN_OUT
     : ACCOUNT_FAILURE_ACTION.KEEP_ACCOUNT;
 }
@@ -436,7 +452,7 @@ export function accountFailureAction(error: AccountClientFailure): AccountFailur
 /** Whether the pinned auth provider has definitively rejected an access token. */
 export function accessTokenNeedsRefresh(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     (error.status === 401 || error.oauthError === "invalid_scope")
   );
 }
@@ -444,7 +460,7 @@ export function accessTokenNeedsRefresh(error: AccountClientFailure): boolean {
 /** Whether the OAuth provider answered that the account a token names no longer exists. */
 export function accountNotFound(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     error.oauthError === OAUTH_USER_NOT_FOUND.ERROR &&
     error.message === OAUTH_USER_NOT_FOUND.DESCRIPTION
   );
@@ -464,7 +480,7 @@ export function accountGateOpen(
  * since the account it names still stands.
  */
 export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
-  return error._tag === "AccountClientError" && error.code === SESSION_EXPIRED;
+  return Predicate.isTagged(error, "AccountClientError") && error.code === SESSION_EXPIRED;
 }
 
 /**
@@ -476,7 +492,7 @@ export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
  */
 export function deletionSessionRefused(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     error.status === HTTP_STATUS.UNAUTHORIZED &&
     error.code !== SESSION_EXPIRED
   );
@@ -507,6 +523,7 @@ export function withIssuedAccountTokens<A, E>(options: {
 }): Effect.Effect<A, E | AccountClientFailure> {
   return Effect.gen(function* () {
     const tokens = yield* options.issue;
+
     return yield* Effect.onError(options.use(tokens), () =>
       Effect.catch(onOwnFiber(options.revoke(tokens.refreshToken)), (error) =>
         Effect.sync(() => options.onRevokeFailure?.(error)),

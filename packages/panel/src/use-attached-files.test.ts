@@ -44,6 +44,7 @@ function AgentBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
 }
 
@@ -55,10 +56,12 @@ function QueueingBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   const queued = () => {
     composer.setDraft("");
     composer.setAttachments(() => []);
   };
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer,
@@ -83,6 +86,7 @@ function RefusedEditBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer,
@@ -107,6 +111,7 @@ function KeptDraftBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   const [kept, setKept] = useState(false);
   // Note that the draft is kept once, before the box first draws, since the control's doors are new on every render.
   const seeded = useRef(false);
@@ -119,6 +124,7 @@ function KeptDraftBox(): ReactNode {
     ]);
     setKept(true);
   });
+
   return kept
     ? createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined })
     : null;
@@ -133,6 +139,7 @@ const BOXES = {
 function png(name: string, size = 8): File {
   const bytes = new Uint8Array(size);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
   return new File([bytes], name, { type: "image/png" });
 }
 
@@ -176,6 +183,7 @@ async function mounted(box: keyof typeof BOXES): Promise<HTMLElement> {
   roots.push(root);
   await act(async () => root.render(withQueryClient(BOXES[box]())));
   await settle();
+
   return container;
 }
 
@@ -198,6 +206,7 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
     composerEditor(container).dispatchEvent(event);
   });
   await read();
+
   return !event.defaultPrevented;
 }
 
@@ -215,6 +224,7 @@ function held(container: HTMLElement) {
 }
 
 test("a picture and a PDF dropped on the agent's box are held as their chips in the words, and say nothing", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("dropped.png"), pdf("spec.pdf")]);
@@ -238,6 +248,7 @@ test("two files of one name, and one whose name holds brackets, each stand in th
 });
 
 test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
@@ -355,14 +366,19 @@ test("one Backspace taking a chip the box opened on out of the words takes its p
 
 test("a file this machine cannot read says so in the agent's box and is reported with why", async () => {
   const reports: ShownFailureReport[] = [];
+
   const uninstall = installShownFailureReporter((report) => {
     reports.push(report);
+
     return undefined;
   }, testQueryClientNow());
+
   const unreadable = new DOMException("The file could not be read.", "NotReadableError");
+
   const file = Object.assign(new File(["notes"], "notes.txt", { type: "text/plain" }), {
     arrayBuffer: () => Promise.reject(unreadable),
   });
+
   const container = await mounted("agent");
 
   await drop(container, [file]);
@@ -383,6 +399,8 @@ test("pictures past the bytes a message carries together leave the last out of t
   // Note that each picture fits a message alone, kept as it is, and two of them fit together while three do not.
   const size = Math.floor(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES / 2.5);
   assert.ok(size <= AGENT_BOUNDS.MAX_IMAGE_BYTES);
+
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("one.png", size), png("two.png", size), png("three.png", size)]);

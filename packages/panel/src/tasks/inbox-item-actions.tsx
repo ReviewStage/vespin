@@ -62,19 +62,21 @@ function inboxItemPlace(item: InboxItem): LinkDestination {
   return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id };
 }
 
-/** One item's acts. */
 export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): InboxItemActions {
   const { onMark, onResolve, remind } = doors;
   const subject = inboxItemSubject(item.id);
   // Note that a row builds its menu on its draw, so it is drawn again as the keys acting on its item change.
   useShortcutTargetOn(subject);
+
   const read =
     onMark === undefined
       ? undefined
       : markReadItem({ unread: isUnread(item), onMark: (unread) => onMark(item, unread) }, subject);
+
   const links = useLinkItems()(inboxItemPlace(item));
   const openInTab = useOpenInTab()(inboxItemPlace(item));
   const resolve = resolveAction([item], onResolve, subject);
+
   const groups = (lead: readonly MenuAction[][] = []) =>
     [
       ...lead,
@@ -85,5 +87,6 @@ export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): Inb
         ...(resolve === undefined ? [] : [resolve]),
       ],
     ].filter((group) => group.length > 0);
+
   return { groups, openInTab };
 }

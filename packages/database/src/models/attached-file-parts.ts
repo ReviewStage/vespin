@@ -112,7 +112,9 @@ export function keptImageMetadata(kept: KeptImage): ProviderMetadata {
 /** What was kept of the image a file part carries, or nothing where it names none. */
 export function keptImageOf(part: FileUIPart): KeptImage | undefined {
   const kept = keptImageMetadataOf(part.providerMetadata);
+
   if (kept === undefined) return undefined;
+
   return "attachmentId" in kept ? { id: kept.attachmentId } : { omitted: kept.omitted };
 }
 
@@ -126,13 +128,17 @@ export function keptImageLine(name: string, kept: KeptImage): string {
 /** What a line the runtime was handed after the image of the name says was kept of it; nothing for any other text. */
 export function keptImageOfLine(name: string, text: string): KeptImage | undefined {
   const lead = keptImageLine(name, { id: "" });
+
   if (text.startsWith(lead)) {
     const id = text.slice(lead.length);
+
     return ATTACHMENT_ID.test(id) ? { id } : undefined;
   }
+
   const omitted = Object.values(PICTURE_OMISSION).find(
     (omission) => text === keptImageLine(name, { omitted: omission }),
   );
+
   return omitted === undefined ? undefined : { omitted };
 }
 
@@ -150,6 +156,7 @@ export function dataUrl(mediaType: string, base64: string): string {
 /** The base64 of a `data:` URL, or nothing where it is not one. */
 function base64Of(url: string): string | undefined {
   const comma = url.indexOf(",");
+
   return url.startsWith("data:") && comma >= 0 ? url.slice(comma + 1) : undefined;
 }
 
@@ -162,6 +169,7 @@ export function fileMark(filename: string | undefined, mediaType: string): strin
 export function inlinedFile(name: string, text: string): string {
   const longest = Math.max(0, ...Array.from(text.matchAll(/`+/gu), (run) => run[0].length));
   const fence = "`".repeat(Math.max(SHORTEST_FENCE, longest + 1));
+
   return `${ATTACHED_FILE_HEADING}${name}\n${fence}\n${text}\n${fence}`;
 }
 
@@ -214,20 +222,27 @@ export function receivedPartsOf(
   parts: readonly UIMessage["parts"][number][],
 ): readonly string[] | undefined {
   const [words, ...rest] = parts;
+
   if (words === undefined || !isTextUIPart(words)) return undefined;
   const files = rest.filter(isFileUIPart);
+
   const texts = files.flatMap((part) => {
     if (part.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT) return [];
     const base64 = base64Of(part.url);
+
     return base64 === undefined ? [] : [inlinedFile(part.filename ?? "", textOf(base64))];
   });
+
   const marks = files.flatMap((part) => {
     if (part.mediaType === AGENT_ATTACHMENT_TYPE.TEXT) return [];
     const kept = keptImageOf(part);
     const mark = fileMark(part.filename, part.mediaType);
+
     return kept === undefined ? [mark] : [mark, keptImageLine(part.filename ?? "", kept)];
   });
+
   const mentioned = rest.flatMap((part) => mentionedTextOf(part) ?? []);
+
   return [...(words.text === "" ? [] : [words.text]), ...mentioned, ...texts, ...marks];
 }
 
@@ -261,6 +276,7 @@ export interface LineRead {
  */
 export function lineRead(parts: readonly UIMessage["parts"][number][]): LineRead {
   const [words, ...rest] = parts;
+
   const files = rest.filter(isFileUIPart).flatMap((part): LineFileRead[] =>
     isAttachmentType(part.mediaType)
       ? [
@@ -273,6 +289,7 @@ export function lineRead(parts: readonly UIMessage["parts"][number][]): LineRead
         ]
       : [],
   );
+
   return {
     text: words !== undefined && isTextUIPart(words) ? words.text : "",
     mentioned: rest.map(mentionedTextOf).find((text) => text !== undefined),

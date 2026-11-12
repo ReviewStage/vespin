@@ -23,6 +23,7 @@ const ADA = signedInAs({ id: "user-ada", email: "ada@example.com", name: "Ada" }
 const SIGNED_OUT: AppStateSnapshot = { ...ADA, account: { status: ACCOUNT_STATUS.SIGNED_OUT } };
 
 const roots: Root[] = [];
+
 /** Each window hearing main's document, which a delivery reaches. */
 const listeners = new Set<(delivery: AppStateDelivery) => void>();
 
@@ -31,6 +32,7 @@ beforeEach(() => {
   fakeAppBridge({
     onAppState: (heard) => {
       listeners.add(heard);
+
       return () => listeners.delete(heard);
     },
     requestAppState: () => Promise.resolve(ADA),
@@ -57,14 +59,18 @@ function mount() {
   const held = windowRouter(createMemoryHistory({ initialEntries: ["/acme/automations"] }));
   let leave: PlaceLeave | undefined;
   let cards: NewWorkspace | undefined;
+
   function Probe() {
     leave = usePlaceLeave();
     cards = useNewWorkspace(leave);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
+
   return {
     leave: () => leave ?? assert.fail("the leave guard is made"),
     cards: () => cards ?? assert.fail("the cards are held"),

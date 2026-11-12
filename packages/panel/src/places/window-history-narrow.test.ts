@@ -118,6 +118,7 @@ function tasksTab(
   // A narrow room holds the panel full screen alone, so leaving full screen there shuts it.
   const narrow = room === SHELL_ROOM.NARROW;
   const onTask = at.home !== true;
+
   return tasksControl({
     page: onTask ? TASKS_PAGE.DOCUMENT : TASKS_PAGE.HOME,
     activeTaskId: onTask ? DOCUMENT_TASK.id : undefined,
@@ -149,6 +150,7 @@ function tasksTab(
     // As the real one does, a panel filling the window is the nearer layer than the task.
     back: () => {
       if (at.panel.open) shut();
+
       return true;
     },
     // As the real one does, an agent's page opens and leaves by the router.
@@ -224,6 +226,7 @@ function mount(
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
   let agent: AgentRoute | undefined;
+
   function Probe() {
     const [at, setAt] = useState(start);
     standing = at;
@@ -259,14 +262,17 @@ function mount(
     const home = useHomeRoute({ listed: () => ACME.slug });
     // Leaves the routed place standing for the task bound's own place, or Home, as the Tasks tab's door does.
     const taskRoute = useTaskRoute();
+
     const leave = () => {
       const at =
         tab.boundFor === undefined
           ? undefined
           : taskAtOf(tab.boundFor, tab.tasks, tab.workspaces, tab.workspace, undefined);
+
       if (at === undefined) home.onOpen();
       else taskRoute.onOpen(at, true);
     };
+
     const tasks: TasksControl = {
       ...tab,
       placeLeave,
@@ -274,7 +280,9 @@ function mount(
       onAutomationRuns: automations.onRuns,
       onLeaveRouted: leave,
     };
+
     const routed = useRoutedStanding();
+
     const copyLink = useCopyLink(
       tasks,
       settings.standing
@@ -285,6 +293,7 @@ function mount(
       admin.open ? admin.view : undefined,
       routed?.place,
     );
+
     history = useWindowHistory({
       known: true,
       link: copyLink.placed,
@@ -325,8 +334,10 @@ function mount(
       versions: () => backs.list(ROUTED_PLACE.VERSION_HISTORY, versionsList, versionList.onList),
       runs: () => backs.list(ROUTED_PLACE.AUTOMATIONS, setupAddress, () => onRuns(false)),
     };
+
     return null;
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -336,6 +347,7 @@ function mount(
       held.provide(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), createElement(Probe))),
     ),
   );
+
   return {
     history: () => history ?? assert.fail("the window's history stands"),
     /** The Tasks tab as the shell presses it. */
@@ -402,6 +414,7 @@ function copiedHere(): string {
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   act(() => runAppCommand(APP_COMMAND.COPY_LINK));
   const link = copied[0] ?? assert.fail("a link is copied");
+
   return new URL(link).pathname;
 }
 
@@ -450,6 +463,7 @@ test("on a narrow stage the side panel opened over the plan is a step: Back shut
 
 test("on a narrow stage the side panel's way back steps back to the plan, so Back does not open the panel again and no open and shut adds a step", () => {
   const window = mount(SHELL_ROOM.NARROW, ON_TASK);
+
   for (let round = 0; round < 2; round += 1) {
     window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, PAGE_TAB));
     window.press(() => window.back().pane());
@@ -467,6 +481,7 @@ test("on a narrow stage the side panel's way back steps back to the plan, so Bac
 
 test("on a narrow stage the way back taken as the side panel's last tab closes shuts it by a step back to the plan, so Back does not open it again and Forward opens the tab again", () => {
   const window = mount(SHELL_ROOM.NARROW, ON_TASK);
+
   for (let round = 0; round < 2; round += 1) {
     window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, PAGE_TAB));
     // The tab closes as ever, shutting the panel its strip empties, and the panel's way back follows in the same press.
@@ -479,6 +494,7 @@ test("on a narrow stage the way back taken as the side panel's last tab closes s
     assert.equal(window.standingAddress(), TASK_PATH);
     assert.equal(window.history().canGoBack, false, "Back has no panel to open");
   }
+
   act(() => window.history().onForward());
   assert.deepEqual(window.at().panel, { open: true, tab: PAGE_TAB }, "Forward opens the tab again");
 });
@@ -499,6 +515,7 @@ test("on a narrow stage a task opened from a list on its plan is one step, whose
     ...ON_TASK,
     inbox: { open: true, chosen: undefined },
   });
+
   // A task opened from a list lands on its plan, the side panel over it, in one move (`use-tasks-tab.ts`'s `onSelect`).
   window.move((held) => ({
     ...held,
@@ -526,6 +543,7 @@ test("on a narrow stage an Inbox item opened from its list is a step, and the In
     ...ON_TASK,
     inbox: { open: true, chosen: undefined },
   });
+
   // A row pressed chooses its item and stands it alone, as the Inbox's columns do.
   window.press(() => {
     window.inbox().onChoose(ITEM);
@@ -547,6 +565,7 @@ test("an Inbox narrowed to a task, showing one column, steps its item's way back
     ...ON_TASK,
     inbox: { open: false, chosen: undefined, single: true },
   });
+
   window.press(() => window.tab().onShowInbox({ taskId: DOCUMENT_TASK.id }));
   window.press(() => {
     window.inbox().onChoose(ITEM);
@@ -562,6 +581,7 @@ test("in a room still wide, as a 700px stage is, an Inbox showing one column by 
     ...ON_TASK,
     inbox: { open: true, chosen: undefined, single: true },
   });
+
   window.press(() => {
     window.inbox().onChoose(ITEM);
   });
@@ -582,6 +602,7 @@ test("on the desktop's width an Inbox item stands at its own address, which Copy
       ...ON_TASK,
       inbox: { open: true, chosen: undefined, single },
     });
+
     window.press(() => window.inbox().onChoose(ITEM));
     assert.equal(window.standingAddress(), "/acme/inbox/item-1");
     assert.equal(copiedHere(), "/acme/inbox/item-1", "Copy link names the item at hand");
@@ -648,11 +669,13 @@ test("on a narrow stage a Settings page a link opened has no list behind it, so 
 
 test("a pairing's link loaded at its own address opens Settings in that entry's place, so Back leaves the tab rather than landing on the link again", () => {
   const loaded = "/connect/pair-code";
+
   const window = mount(
     SHELL_ROOM.WIDE,
     { ...ON_TASK, home: true },
     windowRouter(createMemoryHistory({ initialEntries: [loaded] })),
   );
+
   // The link opens Settings' Hosts page, as the window's own door for it does.
   window.openSettings({ page: SETTINGS_VIEW.HOSTS });
   assert.deepEqual(window.addresses(), ["/acme/settings/hosts"]);
@@ -680,6 +703,7 @@ test("on the desktop's width none of a narrow room's panes is a step: the side p
       },
     ],
   ];
+
   for (const [start, open] of moves) {
     const window = mount(SHELL_ROOM.WIDE, start);
     open(window);
@@ -749,18 +773,21 @@ test("a reloaded window whose saved step is the Admin place opens it once the ac
 
   // The reloaded window's first document holds no access yet, as main's does until the read answers.
   let deliver: ((snapshot: AppStateSnapshot) => void) | undefined;
+
   const unread = stateWith(
     {},
     {
       access: { admin: false, pending: true },
     },
   );
+
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     requestAppState: () => Promise.resolve(unread),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
       deliver = listener;
+
       return () => undefined;
     },
   });
@@ -868,6 +895,7 @@ test("on a narrow stage a task's way out steps back past its own panes to the pa
     ...ON_TASK,
     inbox: { open: true, chosen: undefined },
   });
+
   assert.equal(window.history().away, undefined, "the Inbox's list has nothing behind it");
   window.move((held) => ({
     ...held,

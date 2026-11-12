@@ -70,6 +70,7 @@ type ToolRefusalStatus = Extract<
 >["status"];
 
 const database = await openHostedStoreTestDatabase({ at: NOW });
+
 afterAll(() => database.close());
 
 /** The envelope any call may answer with: its effect unknown. Every declared output schema admits it. */
@@ -128,6 +129,7 @@ async function conversation(
 ): Promise<ConversationTarget> {
   const userId = await database.createUser();
   const conversationId = await insertConversation(database.run, { userId, kind });
+
   return { userId, conversationId };
 }
 
@@ -138,6 +140,7 @@ class Stream {
 
   event(body: RunEventBody): RunEvent {
     this.#sequence += 1;
+
     return {
       ...body,
       conversationId: sessionKey("main"),
@@ -241,7 +244,9 @@ async function feed(
   stream: readonly RunEvent[],
 ): Promise<readonly StoreWriteResult[]> {
   const results: StoreWriteResult[] = [];
+
   for (const event of stream) results.push(await database.run(writer.consume(target, event)));
+
   return results;
 }
 
@@ -270,6 +275,7 @@ async function counters(target: ConversationTarget) {
         .where(eq(conversations.id, target.conversationId)),
     ),
   );
+
   return row === undefined ? undefined : Schema.decodeUnknownSync(CountersRowSchema)(row);
 }
 
@@ -380,6 +386,7 @@ test("a developer turn leaves its ask, its journal closed as the answer told, an
       TOOLS,
     ),
   );
+
   assert.equal(read.ok, true);
 });
 
@@ -389,10 +396,12 @@ test("every event delivered twice, and the whole stream replayed, writes one row
   const turn = developerTurn(stream, randomUUID(), randomUUID());
   const first: StoreWriteResult[] = [];
   const second: StoreWriteResult[] = [];
+
   for (const event of turn) {
     first.push(await database.run(writer.consume(target, event)));
     second.push(await database.run(writer.consume(target, event)));
   }
+
   assert.equal(
     first.every(
       (result) => Result.isSuccess(result) && result.success === STORE_WRITE_EFFECT.WRITTEN,
@@ -420,9 +429,11 @@ test("a deleted conversation is written by nothing, like one that never was", as
   const target = await conversation();
   await database.run(deleteConversations([target.conversationId]));
   const stream = new Stream();
+
   const started = await database.run(
     writer.consume(target, stream.started(RUN_TURN_ORIGIN.TYPED, TURN_TRIGGER.ASK)),
   );
+
   assert.deepEqual(started, Result.fail({ refusal: STORE_WRITE_REFUSAL.NO_CONVERSATION }));
   const queued = await database.run(writer.enqueueTurn(target, { origin: TURN_ORIGIN.TYPED }));
   assert.deepEqual(queued, Result.fail({ refusal: STORE_WRITE_REFUSAL.NO_CONVERSATION }));

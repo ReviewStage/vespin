@@ -14,6 +14,7 @@
  * consumer's own wait where it names one, else once its lease runs out.
  */
 
+import type { WireValue } from "@repo/wire";
 import { handleCallback } from "@vercel/queue";
 import { Cause, type Context, Data, Duration, Effect, Exit } from "effect";
 
@@ -43,15 +44,17 @@ function secondsOf(wait: Duration.Duration): number {
  */
 export function queueConsumer<R>(
   services: Context.Context<R>,
-  consume: (message: unknown, deliveryCount: number) => Effect.Effect<QueueAnswer, unknown, R>,
+  consume: (message: WireValue, deliveryCount: number) => Effect.Effect<QueueAnswer, unknown, R>,
   failedAgain?: Duration.Duration,
 ): (request: Request) => Promise<Response> {
-  return handleCallback(
+  return handleCallback<WireValue>(
     async (message, metadata) => {
       const exit = await Effect.runPromiseExitWith(services)(
         consume(message, metadata.deliveryCount),
       );
+
       if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
       if (!exit.value.acknowledged) {
         throw new DeliveredAgain({ afterSeconds: secondsOf(exit.value.again) });
       }
@@ -59,6 +62,7 @@ export function queueConsumer<R>(
     {
       retry: (error) => {
         if (error instanceof DeliveredAgain) return { afterSeconds: error.afterSeconds };
+
         return failedAgain === undefined ? undefined : { afterSeconds: secondsOf(failedAgain) };
       },
     },

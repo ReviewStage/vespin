@@ -48,6 +48,8 @@ export const FAILURE_SURFACE = {
   ACCOUNT_TOKEN_READ: "account_token.read",
   /** An act a person pressed for, whose answer nothing else read (`pressAct`). */
   ACT: "act",
+  ALLOWED_COMMANDS_READ: "allowed_commands.read",
+  ALLOWED_COMMANDS_WRITE: "allowed_commands.write",
   ADMIN_GATE: "admin.gate",
   ADMIN_READ: "admin.read",
   ADMIN_REFRESH: "admin.refresh",
@@ -237,6 +239,7 @@ export const FAILURE_SURFACE = {
   WORKSPACE_VARIABLE_SAVE: "workspace_variable.save",
   WORKSPACE_WRITE: "workspace.write",
 } as const;
+
 export type FailureSurface = (typeof FAILURE_SURFACE)[keyof typeof FAILURE_SURFACE];
 
 /**
@@ -258,6 +261,7 @@ export const FAILURE_CONDITION = {
 
 /** Whether a failure was a refusal something named, which is expected, or anything else. */
 export const FAILURE_KIND = { REFUSED: "refused", UNEXPECTED: "unexpected" } as const;
+
 export type FailureKind = (typeof FAILURE_KIND)[keyof typeof FAILURE_KIND];
 
 /** The ids of what a failure was about, each where it is known. */
@@ -436,17 +440,19 @@ const CHAIN_BOUND = 5;
 /** The key a value's cause is read from, as `Error`'s `cause` names it. */
 const CAUSE_KEY = "cause";
 
-/** A property of `value` that is a string, or nothing. */
-function stringOf(value: unknown, key: string): string | undefined {
-  if (!Predicate.hasProperty(value, key)) return undefined;
-  const read = value[key];
+/** A property of `cause` that is a string, or nothing. */
+function stringOf(cause: unknown, key: string): string | undefined {
+  if (!Predicate.hasProperty(cause, key)) return undefined;
+  const read = cause[key];
+
   return Predicate.isString(read) ? read : undefined;
 }
 
-/** A property of `value` that is a number, or nothing. */
-function numberOf(value: unknown, key: string): number | undefined {
-  if (!Predicate.hasProperty(value, key)) return undefined;
-  const read = value[key];
+/** A property of `cause` that is a number, or nothing. */
+function numberOf(cause: unknown, key: string): number | undefined {
+  if (!Predicate.hasProperty(cause, key)) return undefined;
+  const read = cause[key];
+
   return Predicate.isNumber(read) ? read : undefined;
 }
 
@@ -458,12 +464,14 @@ function numberOf(value: unknown, key: string): number | undefined {
  */
 function sendableText(text: string): string {
   const redacted = redactCredentials(text);
+
   return redacted.length > TEXT_BOUND ? `${redacted.slice(0, TEXT_BOUND)}…` : redacted;
 }
 
 /** A string a cause holds under `key`, as it may be sent, or nothing. */
-function sendableOf(value: unknown, key: string): string | undefined {
-  const read = stringOf(value, key);
+function sendableOf(cause: unknown, key: string): string | undefined {
+  const read = stringOf(cause, key);
+
   return read === undefined ? undefined : sendableText(read);
 }
 
@@ -477,9 +485,11 @@ function sendableOf(value: unknown, key: string): string | undefined {
  */
 function factsOf(cause: unknown): CauseFacts {
   if (FAILURE_CONDITIONS.has(cause) && Predicate.isString(cause)) return { code: cause };
+
   if (Predicate.isString(cause)) return { message: sendableText(cause) };
   const code = numberOf(cause, "code")?.toString() ?? sendableOf(cause, "code");
   const message = stringOf(cause, "message") ?? stringOf(cause, "reason");
+
   return {
     name:
       sendableOf(cause, "errorName") ??
@@ -500,11 +510,14 @@ function factsOf(cause: unknown): CauseFacts {
 function chainOf(cause: unknown): readonly unknown[] {
   const chain = [cause];
   let next = cause;
+
   while (chain.length < CHAIN_BOUND && Predicate.hasProperty(next, CAUSE_KEY)) {
     next = next[CAUSE_KEY];
+
     if (next === undefined || next === null || chain.includes(next)) break;
     chain.push(next);
   }
+
   return chain;
 }
 
@@ -516,6 +529,7 @@ function chainOf(cause: unknown): readonly unknown[] {
  */
 function codeOf(chain: readonly CauseFacts[]): string {
   const named = chain.find((facts) => (facts.code ?? facts.fault ?? facts.tag) !== undefined);
+
   return named?.code ?? named?.fault ?? named?.tag ?? chain.at(-1)?.name ?? UNNAMED_CODE;
 }
 
@@ -523,22 +537,30 @@ function codeOf(chain: readonly CauseFacts[]): string {
 function factAttributes(
   facts: CauseFacts,
   names: { readonly [Key in keyof Required<CauseFacts>]: string },
-): FailureAttributes {
+) {
   const attributes: FailureAttributes = {};
+
+  // SAFETY: `names` is keyed by every key of CauseFacts, and by nothing else.
   for (const key of Object.keys(names) as (keyof CauseFacts)[]) {
     const value = facts[key];
+
     if (value !== undefined) attributes[names[key]] = value;
   }
+
   return attributes;
 }
 
 /** Each id under its attribute's name, for those that are known. */
-function aboutAttributes(about: FailureAbout): FailureAttributes {
+function aboutAttributes(about: FailureAbout) {
   const attributes: FailureAttributes = {};
+
+  // SAFETY: ABOUT_ATTRIBUTE is a literal keyed by every key of FailureAbout, and by nothing else.
   for (const key of Object.keys(ABOUT_ATTRIBUTE) as (keyof FailureAbout)[]) {
     const value = about[key];
+
     if (value !== undefined) attributes[ABOUT_ATTRIBUTE[key]] = value;
   }
+
   return attributes;
 }
 
@@ -552,8 +574,10 @@ function aboutAttributes(about: FailureAbout): FailureAttributes {
 function hostedTraceOf(chain: readonly unknown[]): string | undefined {
   for (const cause of chain) {
     const traceId = stringOf(cause, "traceId");
+
     if (traceId !== undefined && TRACE_ID_PATTERN.test(traceId)) return traceId;
   }
+
   return undefined;
 }
 
@@ -565,18 +589,19 @@ function attributesOf(
   trace: string | undefined,
 ) {
   const root = chain.length > 1 ? chain.at(-1) : undefined;
+
   return {
     [FAILURE_ATTRIBUTE.SURFACE]: report.surface,
     [FAILURE_ATTRIBUTE.KIND]: report.kind,
     [FAILURE_ATTRIBUTE.CODE]: code,
-    ...(report.act === undefined ? {} : { [FAILURE_ATTRIBUTE.ACT]: report.act }),
+    ...(report.act !== undefined && { [FAILURE_ATTRIBUTE.ACT]: report.act }),
     ...factAttributes(chain[0] ?? {}, ERROR_ATTRIBUTE),
-    ...(root === undefined ? {} : factAttributes(root, ROOT_ATTRIBUTE)),
-    ...(trace === undefined ? {} : { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
+    ...(root !== undefined && factAttributes(root, ROOT_ATTRIBUTE)),
+    ...(trace !== undefined && { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
     ...aboutAttributes(report.about),
     [FAILURE_ATTRIBUTE.ONLINE]: report.state.online,
     [FAILURE_ATTRIBUTE.ACCOUNT]: report.state.account,
-    ...(report.state.live === undefined ? {} : { [FAILURE_ATTRIBUTE.LIVE]: report.state.live }),
+    ...(report.state.live !== undefined && { [FAILURE_ATTRIBUTE.LIVE]: report.state.live }),
   } satisfies FailureAttributes;
 }
 
@@ -588,12 +613,16 @@ function attributesOf(
  */
 function sendableStack(cause: Error, sent: Error): string | undefined {
   const stack = cause.stack;
+
   if (stack === undefined) return undefined;
   const header = cause.message === "" ? cause.name : `${cause.name}: ${cause.message}`;
+
   if (!stack.startsWith(header)) {
     return cause.message !== "" && stack.includes(cause.message) ? undefined : stack;
   }
+
   const sentHeader = sent.message === "" ? sent.name : `${sent.name}: ${sent.message}`;
+
   return `${sentHeader}${stack.slice(header.length)}`;
 }
 
@@ -620,7 +649,9 @@ function sendableError(
   const sent = new Error(own?.message ?? unsaid.message, linked);
   sent.name = own?.tag ?? own?.name ?? unsaid.name;
   const stack = cause instanceof Error ? sendableStack(cause, sent) : undefined;
+
   if (stack !== undefined) sent.stack = stack;
+
   return sent;
 }
 
@@ -642,6 +673,7 @@ function readReport(report: ShownFailureReport) {
   const facts = chain.map(factsOf);
   const code = codeOf(facts);
   const trace = hostedTraceOf(chain);
+
   return { chain, facts, code, trace, attributes: attributesOf(report, facts, code, trace) };
 }
 
@@ -649,7 +681,7 @@ function readReport(report: ShownFailureReport) {
  * The ids a payload names under the keys `FailureAbout` reads, for an act
  * whose failure was shown with nothing else to say what it was about.
  */
-export function failureAboutOf(payload: unknown): FailureAbout {
+export function failureAboutOf<Payload>(payload: Payload): FailureAbout {
   return {
     workspaceId: stringOf(payload, "workspaceId"),
     taskId: stringOf(payload, "taskId"),
@@ -680,15 +712,20 @@ export function sendShownFailure(
 ): ShownFailureSent {
   const { chain, facts, code, trace, attributes } = readReport(report);
   const line = `A failure was shown on ${report.surface}: ${code}`;
+
   const traceId =
     sentry.getActiveSpan()?.spanContext().traceId ??
     sentry.getCurrentScope().getPropagationContext().traceId;
+
   if (report.kind === FAILURE_KIND.REFUSED || !report.state.online || unansweredOf(facts)) {
     sentry.logger.warn(line, attributes);
+
     return { traceId };
   }
+
   sentry.logger.error(line, attributes);
   const unsaid = { name: report.surface, message: code };
+
   const eventId = sentry.captureException(sendableError(chain, facts, unsaid), {
     mechanism: { type: SHOWN_FAILURE_MECHANISM, handled: true },
     captureContext: {
@@ -697,12 +734,13 @@ export function sendShownFailure(
       tags: {
         [FAILURE_ATTRIBUTE.SURFACE]: report.surface,
         [FAILURE_ATTRIBUTE.CODE]: code,
-        ...(trace === undefined ? {} : { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
+        ...(trace !== undefined && { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
         ...aboutAttributes(report.about),
       },
       contexts: { [SHOWN_FAILURE_CONTEXT]: attributes },
     },
   });
+
   return { eventId: eventId === "" ? undefined : eventId, traceId };
 }
 
@@ -717,15 +755,18 @@ export function sendShownFailure(
  */
 export function shownFailureDetails(report: ShownFailureReport, told: ShownFailureTold): string {
   const { attributes } = readReport(report);
-  const lines: Record<string, string | number | boolean | undefined> = {
+
+  const lines = {
     [DETAIL_KEY.TIME]: new Date(told.at).toISOString(),
     [DETAIL_KEY.VERSION]: told.version,
     ...attributes,
     [DETAIL_KEY.EVENT]: told.sent?.eventId,
     [DETAIL_KEY.TRACE]: told.sent?.traceId,
-  };
+  } satisfies Record<string, string | number | boolean | undefined>;
+
   const said = Object.entries(lines).flatMap(([key, value]) =>
     value === undefined || value === "" ? [] : [`${key}: ${value}`],
   );
+
   return [DETAILS_HEADING, ...said].join("\n");
 }

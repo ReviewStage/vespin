@@ -163,7 +163,9 @@ async function openReliability(body: AdminReliability | undefined): Promise<Open
       ),
     );
   });
+
   if (body !== undefined) await readLanded(page);
+
   return { page, heard };
 }
 
@@ -176,6 +178,7 @@ function cardOf(page: HTMLElement, label: string): string {
   const name = Array.from(page.querySelectorAll("div")).find(
     (element) => element.children.length === 0 && element.textContent === label,
   );
+
   return name?.parentElement?.parentElement?.textContent ?? "";
 }
 
@@ -205,6 +208,7 @@ test("each rate reads as a share with what it is a share of", async () => {
 
 test("a database that did not answer shows no count and no account, and says why", async () => {
   const healthy = reliability();
+
   const { page } = await openReliability(
     reliability({
       systemHealth: { ...healthy.systemHealth, database: { reachable: false, latencyMs: 9 } },
@@ -220,6 +224,7 @@ test("a database that did not answer shows no count and no account, and says why
 
 test("an account that needs attention reads what broke by status alone, and a press opens it", async () => {
   const { page, heard } = await openReliability(reliability());
+
   const row = Array.from(page.querySelectorAll("tbody tr")).find((candidate) =>
     candidate.textContent?.includes("Ada Lovelace"),
   );
@@ -235,6 +240,7 @@ test("an account that needs attention reads what broke by status alone, and a pr
 
 test("system health reads the database and every provider's configuration in words", async () => {
   const { page } = await openReliability(reliability());
+
   const states = Array.from(page.querySelectorAll("li"), (row) =>
     Array.from(row.querySelectorAll("span"))
       .filter((span) => span.children.length === 0)
@@ -250,9 +256,11 @@ test("system health reads the database and every provider's configuration in wor
 
 test("product analytics is a link only where the deployment names its console", async () => {
   const linked = await openReliability(reliability());
+
   const link = Array.from(linked.page.querySelectorAll("a")).find(
     (anchor) => anchor.textContent === "product analytics",
   );
+
   expect(link?.getAttribute("href")).toBe(CONSOLE_URL);
   act(() => root?.unmount());
 

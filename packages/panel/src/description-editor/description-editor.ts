@@ -1,9 +1,15 @@
 import { WRITING_BLOCK, WRITING_SHORTCUTS } from "@repo/settings/shortcuts";
 import { linkMarkAttributes } from "@repo/ui/link-face";
 import { MARKDOWN_CLASS } from "@repo/ui/markdown-class";
-import { type AnyExtension, Editor, Extension, type NodeViewRenderer } from "@tiptap/core";
+import {
+  type AnyExtension,
+  Editor,
+  Extension,
+  type JSONContent,
+  type NodeViewRenderer,
+} from "@tiptap/core";
 import Heading from "@tiptap/extension-heading";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import Paragraph from "@tiptap/extension-paragraph";
 import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
@@ -11,6 +17,7 @@ import { Markdown } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
@@ -113,6 +120,7 @@ const SECTION_LEVELS = new Set([1, 2]);
 const DocumentHeading = Heading.extend({
   renderHTML({ node }) {
     const level = Number(node.attrs.level);
+
     return [`h${level}`, { class: MARKDOWN_CLASS.HEADING, "data-level": String(level) }, 0];
   },
 });
@@ -127,10 +135,40 @@ const DocumentHeading = Heading.extend({
 const DocumentParagraph = Paragraph.extend({
   parseMarkdown(token, helpers) {
     const tokens = token.tokens ?? [];
+
     if (tokens.length === 1 && tokens[0]?.type === "image") {
       return helpers.createNode("paragraph", undefined, helpers.parseInline(tokens));
     }
+
     return this.parent?.(token, helpers) ?? [];
+  },
+});
+
+/** A numbered item as read, given an empty line for its words where it opens on none: holding nothing, or only a list nested under it. */
+function withWordsLine(item: JSONContent): JSONContent {
+  const content = item.content ?? [];
+  const worded = item.type !== "listItem" || content[0]?.type === "paragraph";
+
+  return worded ? item : { ...item, content: [{ type: "paragraph" }, ...content] };
+}
+
+/**
+ * A numbered list whose empty item opens as an empty line to type on. Note
+ * that TipTap's own reads an item with no words (`1.`, as an agent leaves
+ * one under a heading) as an item with no line for its words, which the
+ * schema does not allow, so the document opened invalid, with no line in the
+ * item for the caret: a click or ↓ left it on the line above, and what was
+ * typed went there. A bulleted item already opens with its empty line. This
+ * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
+ * once a TipTap carrying that fix is installed.
+ */
+const DocumentOrderedList = OrderedList.extend({
+  parseMarkdown(token, helpers) {
+    const read = this.parent?.(token, helpers) ?? [];
+
+    return Array.isArray(read)
+      ? read
+      : { ...read, content: (read.content ?? []).map(withWordsLine) };
   },
 });
 
@@ -156,6 +194,7 @@ const TASK_MARK_LENGTH = "- [ ] ".length;
 const DocumentTaskItem = blockRulesOutOfCells(TaskItem).extend({
   addOptions() {
     const parent = this.parent?.();
+
     return {
       ...parent,
       nested: true,
@@ -164,13 +203,16 @@ const DocumentTaskItem = blockRulesOutOfCells(TaskItem).extend({
   },
   parseMarkdown(token, helpers) {
     const empty = token.text === EMPTY_TASK_WORDS;
+
     return this.parent?.(empty ? { ...token, text: "", tokens: [] } : token, helpers) ?? [];
   },
   renderMarkdown(node, helpers, context) {
     const written = this.parent?.(node, helpers, context) ?? "";
     const [words] = node.content ?? [];
     const empty = words?.type === "paragraph" && (words.content ?? []).length === 0;
+
     if (!empty) return written;
+
     return written.slice(0, TASK_MARK_LENGTH) + EMPTY_TASK_WORDS + written.slice(TASK_MARK_LENGTH);
   },
 });
@@ -181,6 +223,7 @@ const UNNAMED_TASK = "Task";
 /** A task item's box as the panel draws it: its item's own words, without a list nested in it, whether it is ticked, and the door that ticks it. */
 function taskBoxOf(node: PmNode, toggle: (checked: boolean) => void) {
   const words = node.firstChild?.textContent.trim() ?? "";
+
   return {
     label: words === "" ? UNNAMED_TASK : words,
     checked: node.attrs.checked === true,
@@ -209,30 +252,37 @@ function drawnTaskView(tiptap: NodeViewRenderer, drawTaskBox: TaskBoxDrawer): No
     // Note that a press keeps the caret where it stands, as TipTap's own box does.
     box.addEventListener("mousedown", (event) => event.preventDefault());
     view.dom.firstChild?.replaceWith(box);
+
     const toggle = (checked: boolean) => {
       const at = getPos();
-      if (!editor.isEditable || typeof at !== "number") return;
+
+      if (!editor.isEditable || !Predicate.isNumber(at)) return;
       editor
         .chain()
         .focus(undefined, { scrollIntoView: false })
         .command(({ tr }) => {
           tr.setNodeMarkup(at, undefined, { ...tr.doc.nodeAt(at)?.attrs, checked });
+
           return true;
         })
         .run();
     };
+
     let drawn = taskBoxOf(props.node, toggle);
     let undraw = drawTaskBox(box, drawn);
+
     return {
       ...view,
       update: (node, decorations, inner) => {
         if (view.update?.(node, decorations, inner) !== true) return false;
         const next = taskBoxOf(node, toggle);
+
         if (next.label !== drawn.label || next.checked !== drawn.checked) {
           undraw();
           drawn = next;
           undraw = drawTaskBox(box, drawn);
         }
+
         return true;
       },
       stopEvent: (event) => event.target instanceof Node && box.contains(event.target),
@@ -248,10 +298,12 @@ function drawnTaskView(tiptap: NodeViewRenderer, drawTaskBox: TaskBoxDrawer): No
 /** The task item, its box drawn by the panel where it draws one (`drawnTaskView`), and TipTap's own elsewhere. */
 function drawnTaskItem(drawTaskBox: TaskBoxDrawer | undefined) {
   if (drawTaskBox === undefined) return DocumentTaskItem;
+
   return DocumentTaskItem.extend({
     // Note that `this` is named, because `extend` infers its config from this method, which then cannot infer `this` from the config.
     addNodeView(this: { parent?: (() => NodeViewRenderer | null) | undefined }) {
       const tiptap = this.parent?.();
+
       return tiptap == null ? null : drawnTaskView(tiptap, drawTaskBox);
     },
   });
@@ -271,7 +323,7 @@ const MENTION_LINK_CLASS = "description-mention-link";
  * the link's look are added, never the target in an attribute of its own, and that the
  * attribute is drawn alone and never read or written as markdown.
  */
-function linkLook(namesMention: ((target: string) => boolean) | undefined) {
+function linkLook(namesChip: ((target: string) => boolean) | undefined) {
   return Extension.create({
     name: "linkLook",
     addGlobalAttributes() {
@@ -284,7 +336,8 @@ function linkLook(namesMention: ((target: string) => boolean) | undefined) {
               parseHTML: () => null,
               renderHTML: (attributes) => {
                 const href = String(attributes.href ?? "");
-                return namesMention?.(href) === true
+
+                return namesChip?.(href) === true
                   ? { class: MENTION_LINK_CLASS }
                   : linkMarkAttributes(href);
               },
@@ -305,7 +358,7 @@ function linkLook(namesMention: ((target: string) => boolean) | undefined) {
  */
 export function markdownExtensions(
   drawMention?: MentionDrawer | undefined,
-  namesMention?: ((target: string) => boolean) | undefined,
+  namesChip?: ((target: string) => boolean) | undefined,
   pictures?: DescriptionEditorPictures | undefined,
   drawTaskBox?: TaskBoxDrawer | undefined,
   drawCodeHeader?: CodeHeaderDrawer | undefined,
@@ -313,16 +366,19 @@ export function markdownExtensions(
   const kit = StarterKit.configure({
     blockquote: false,
     heading: false,
+    orderedList: false,
     paragraph: false,
     underline: false,
     trailingNode: false,
     link: { openOnClick: false },
   });
+
   return [
     blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader))),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
     blockRulesOutOfCells(withoutTipTapChords(DocumentHeading)),
+    blockRulesOutOfCells(withoutTipTapChords(DocumentOrderedList)),
     Markdown,
     withoutTipTapChords(TaskList),
     drawnTaskItem(drawTaskBox),
@@ -330,7 +386,7 @@ export function markdownExtensions(
     pictureNode(pictures),
     RawBlock,
     mentionNode(drawMention),
-    linkLook(namesMention),
+    linkLook(namesChip),
     writingKeys,
     dividerLines,
   ];
@@ -347,7 +403,9 @@ function placeholderOf(description: string, offersBlocks: boolean) {
   return ({ editor, node }: { editor: Editor; node: PmNode }): string => {
     if (node.type.name === "heading")
       return HEADING_PLACEHOLDERS.get(Number(node.attrs.level)) ?? "";
+
     if (editor.isEmpty) return description;
+
     return offersBlocks && node.type.name === "paragraph" ? LINE_PLACEHOLDER : "";
   };
 }
@@ -363,12 +421,14 @@ function sectionStarts(doc: PmNode): number[] {
   doc.forEach((node, _offset, index) => {
     if (index > 0 && opensSection(node)) starts.push(index);
   });
+
   return starts;
 }
 
 /** The section the caret stands in. */
 function caretSection(editor: Editor): number {
   const index = editor.state.selection.$from.index(0);
+
   return sectionStarts(editor.state.doc).filter((start) => start <= index).length - 1;
 }
 
@@ -376,6 +436,7 @@ function caretSection(editor: Editor): number {
 function sectionBlocks(doc: PmNode, section: number): { first: number; next: number } | undefined {
   const starts = sectionStarts(doc);
   const first = starts[section];
+
   return first === undefined ? undefined : { first, next: starts[section + 1] ?? doc.childCount };
 }
 
@@ -392,34 +453,42 @@ function inCode(text: Node): boolean {
 function wordsAt(editor: Editor, words: PlacedWords): number | undefined {
   const { view } = editor;
   const blocks = sectionBlocks(view.state.doc, words.section);
+
   if (blocks === undefined) return undefined;
   let seen = 0;
   let found: number | undefined;
   view.state.doc.forEach((_node: PmNode, offset: number, index: number) => {
     const dom = view.nodeDOM(offset);
+
     if (found !== undefined || index < blocks.first || index >= blocks.next || dom === null) return;
     const walker = document.createTreeWalker(dom, NodeFilter.SHOW_TEXT);
+
     for (
       let text = walker.nextNode();
       text !== null && found === undefined;
       text = walker.nextNode()
     ) {
       if (text.textContent !== words.text || inCode(text) !== words.code) continue;
+
       if (seen === words.occurrence)
         found = view.posAtDOM(text, Math.min(words.offset, words.text.length));
       seen += 1;
     }
   });
+
   return found;
 }
 
 /** The text node and offset the caret stands at, where it stands in one; none where it stands between blocks. */
 function caretText(editor: Editor): { text: Text; offset: number } | undefined {
   const { node, offset } = editor.view.domAtPos(editor.state.selection.head);
+
   if (node instanceof Text) return { text: node, offset };
   const after = node.childNodes[offset];
+
   if (after instanceof Text) return { text: after, offset: 0 };
   const before = node.childNodes[offset - 1];
+
   return before instanceof Text ? { text: before, offset: before.data.length } : undefined;
 }
 
@@ -433,22 +502,28 @@ function caretWords(editor: Editor): PlacedWords | undefined {
   const at = caretText(editor);
   const section = caretSection(editor);
   const blocks = sectionBlocks(view.state.doc, section);
+
   if (at === undefined || blocks === undefined) return undefined;
   const code = inCode(at.text);
   let occurrence = 0;
   let found = false;
   view.state.doc.forEach((_node: PmNode, offset: number, index: number) => {
     const dom = view.nodeDOM(offset);
+
     if (found || index < blocks.first || index >= blocks.next || dom === null) return;
     const walker = document.createTreeWalker(dom, NodeFilter.SHOW_TEXT);
+
     for (let text = walker.nextNode(); text !== null && !found; text = walker.nextNode()) {
       if (text === at.text) found = true;
       else if (text.textContent === at.text.data && inCode(text) === code) occurrence += 1;
     }
   });
+
   if (!found) return undefined;
+
   try {
     const { top } = view.coordsAtPos(view.state.selection.head);
+
     return { section, text: at.text.data, occurrence, offset: at.offset, code, top };
   } catch {
     // Note that a view with no layout, as a test's page is, measures nothing.
@@ -467,9 +542,11 @@ function placedOnWords(
 ): Selection | undefined {
   const click = placement !== undefined && "x" in placement ? placement : undefined;
   const at = click?.words === undefined ? undefined : wordsAt(editor, click.words);
+
   if (at === undefined) return undefined;
   const from = click?.from === undefined ? undefined : wordsAt(editor, click.from);
   const { doc } = editor.state;
+
   return from === undefined || from === at
     ? TextSelection.near(doc.resolve(at))
     : TextSelection.between(doc.resolve(from), doc.resolve(at));
@@ -478,21 +555,28 @@ function placedOnWords(
 /** Where the caret goes as the editor opens, the words a click landed on aside. */
 function placed(editor: Editor, placement: DescriptionEditorPlacement | undefined): Selection {
   const { doc } = editor.state;
+
   if (placement === undefined) return Selection.atStart(doc);
+
   if ("end" in placement) return Selection.atEnd(doc);
+
   if ("x" in placement) {
     const point = editor.view.posAtCoords({ left: placement.x, top: placement.y });
+
     return point === null ? Selection.atStart(doc) : TextSelection.near(doc.resolve(point.pos));
   }
+
   const starts = sectionStarts(doc);
   const next = starts[placement.section + 1];
   let end = doc.content.size;
+
   if (next !== undefined) {
     end = 0;
     doc.forEach((_node, offset, index) => {
       if (index === next) end = offset;
     });
   }
+
   return TextSelection.near(doc.resolve(end), -1);
 }
 
@@ -507,8 +591,10 @@ function heldAcrossMarks(before: PmNode, after: PmNode, held: HeldSources): Held
   const sources = new Map<PmNode, string>();
   after.forEach((node, _offset, index) => {
     const source = held.sources.get(before.child(index));
+
     if (source !== undefined) sources.set(node, source);
   });
+
   return { ...held, sources };
 }
 
@@ -540,31 +626,38 @@ export function mountDescriptionEditor(
     format,
     blocks,
   } = props;
+
   const extensions = markdownExtensions(
     mentions?.drawMention,
-    mentions?.namesMention,
+    mentions?.namesChip,
     pictures,
     drawTaskBox,
     drawCodeHeader,
   );
+
   const manager = documentManager(extensions);
   // Filled once the editor is built, since a block's source is known by the node it opened as.
   let held: HeldSources = { sources: new Map(), lead: "", ending: "" };
+
   const picking =
     mentions === undefined
       ? undefined
       : descriptionMentions(manager, (node) => held.sources.get(node), mentions);
+
   const slash =
     blocks === undefined
       ? undefined
       : descriptionSlash(blocks, (markdown) => manager.parse(markdown).content ?? []);
+
   // Note that the text is read with LF line endings and written back with its own, so a body saved with CRLF comes back as it was.
   const ending = lineEndingOf(markdown);
   const source = withLf(markdown);
   // Note that a message box's send drops the blank lines at its two ends, where a document keeps them.
   const ends = sendsOnEnter ? BLANK_ENDS.DROPPED : BLANK_ENDS.KEPT;
+
   const written = () =>
     withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
+
   const opened = documentOpened(manager, source);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
@@ -574,6 +667,7 @@ export function mountDescriptionEditor(
   let breaking = false;
   // What ties the text to the `@` list or the `/` menu over it, which the panel hands over as either opens and closes.
   let aria: EditorAria = {};
+
   const editor: Editor = new Editor({
     element: host,
     // Note that TipTap's own base rules would go in as an inline `<style>`, which the panel's policy (`style-src 'self'`: the desktop's `renderer/index.html` and the web's `vercel.json`) refuses; `planning.css` styles the text instead.
@@ -597,6 +691,7 @@ export function mountDescriptionEditor(
       // Note that image files pasted are laid in as pictures, and an address of our own or a page of an integration's pasted whole as its mention, as the box lays it in.
       handlePaste: (view, event) => {
         if (pictures !== undefined && pastedPictures(view, event, pictures)) return true;
+
         return mentions === undefined ? false : pastedMention(view, event, mentions.pasted);
       },
       handleDrop: (view, event, _slice, moved) =>
@@ -613,29 +708,41 @@ export function mountDescriptionEditor(
         ) {
           return false;
         }
+
         // The keys a mention's list or the block menu takes are its own first, Escape among them, which closes it.
         if (mentions?.onKey(event) === true) return true;
+
         if (blocks?.onKey(event) === true) return true;
+
         if (event.key === "Escape") {
           onFinish(caretSection(editor), FINISH.ESCAPE);
+
           return true;
         }
+
         if (sendsOnEnter ? enterSends(event) : modEnterSends(event)) {
           onFinish(caretSection(editor), FINISH.SUBMIT);
+
           return true;
         }
+
         // Note that a message box's Shift+Enter lays in what Enter does in a document, a paragraph, a list's next item or a code block's line, rather than the line break TipTap gives it.
         if (sendsOnEnter && event.key === "Enter" && event.shiftKey) {
           breaking = true;
           editor.commands.keyboardShortcut("Enter");
           breaking = false;
+
           return true;
         }
+
         const { selection } = view.state;
         const first = selection.empty && selection.$from.index(0) === 0;
+
         if (onLeaveUp === undefined || event.key !== "ArrowUp" || !first) return false;
+
         if (!view.endOfTextblock("up")) return false;
         onLeaveUp();
+
         return true;
       },
     },
@@ -650,6 +757,7 @@ export function mountDescriptionEditor(
       );
     },
   });
+
   // Note that the threads' marks are laid on before each block's source is known by its node, so a block marked as it opens still writes its source.
   laying = true;
   carried =
@@ -657,7 +765,9 @@ export function mountDescriptionEditor(
       ? []
       : anchorsLaidIn(editor, markdown, anchors, new Set(anchors.map(({ thread }) => thread)), []);
   laying = false;
+
   if (picking !== undefined) editor.registerPlugin(picking.plugin);
+
   if (slash !== undefined) editor.registerPlugin(slash.plugin);
   held = sourcesOf(editor.state.doc, opened);
   const onWords = placedOnWords(editor, placement);
@@ -666,12 +776,15 @@ export function mountDescriptionEditor(
   // which stand for those words only until either changes: a merged answer
   // laid in, a word typed, or the caret moved.
   let onWordsAs = onWords === undefined ? undefined : editor.state;
+
   if (focus) editor.view.focus();
+
   return {
     ...editorFormatting(editor),
     take: (sent, merged) => {
       const answer = documentTook(editor, manager, held, withLf(sent), withLf(merged));
       held = answer.held;
+
       return { base: withLineEnding(answer.base, ending), text: written() };
     },
     chooseMention: (mention) => picking?.choose(editor, mention),
@@ -688,6 +801,7 @@ export function mountDescriptionEditor(
     setAria: (next) => {
       if (sameAria(aria, next) || editor.isDestroyed) return;
       aria = next;
+
       // Note that an input method's words are never redrawn under it: the next change it makes names the list.
       if (!editor.view.composing) editor.view.updateState(editor.state);
     },
@@ -699,9 +813,11 @@ export function mountDescriptionEditor(
     },
     wordsTop: () => {
       const { doc, selection } = editor.state;
+
       if (onWordsAs === undefined || doc !== onWordsAs.doc || !selection.eq(onWordsAs.selection)) {
         return undefined;
       }
+
       try {
         return editor.view.coordsAtPos(editor.state.selection.head).top;
       } catch {
@@ -717,22 +833,28 @@ export function mountDescriptionEditor(
     removePicture: (upload) => removedPicture(editor.view, upload),
     selectionSpan: () => {
       const { from, to, empty } = editor.state.selection;
+
       return empty ? undefined : editorSpan(editor, written(), from, to);
     },
     blockSpan: (element) => {
       const { doc } = editor.state;
       const at = editor.view.posAtDOM(element, 0);
       const resolved = doc.resolve(Math.min(Math.max(at, 0), doc.content.size));
+
       if (resolved.depth < 1) return undefined;
+
       // A bullet is its own words, up to any list nested under it, as the read view comments on one.
       for (let depth = resolved.depth; depth >= 1; depth -= 1) {
         const node = resolved.node(depth);
+
         if (LIST_ITEMS.has(node.type.name)) {
           const start = resolved.start(depth);
           const own = node.firstChild?.nodeSize ?? node.content.size;
+
           return editorSpan(editor, written(), start, start + own);
         }
       }
+
       return editorSpan(editor, written(), resolved.before(1), resolved.after(1));
     },
     destroy: () => editor.destroy(),
@@ -752,5 +874,6 @@ function editorSpan(
   const { doc } = editor.state;
   const span = spanIn(doc, text, from, to);
   const quote = doc.textBetween(from, to, "\n", "\uFFFC").trim();
+
   return span === undefined || quote === "" ? undefined : { ...span, quote, text };
 }

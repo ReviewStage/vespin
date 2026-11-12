@@ -82,16 +82,20 @@ export function descriptionAttachmentAddress(
     TASK_STEP.WRITTEN,
     encodedStep(ref.taskId),
   ].join("/");
+
   return `${task}/${FILES_STEP}/${ref.attachmentId}`;
 }
 
 /** The picture an address names, by either scheme; nothing for any other address, a description's or a section's among them. */
 export function descriptionAttachmentOf(address: string): DescriptionAttachmentRef | undefined {
   const url = address.length > MAX_ADDRESS_CHARS ? undefined : parsedUrl(address);
+
   if (url === undefined || !isLinkHome(url)) return undefined;
+
   if (url.search !== "" || url.hash !== "") return undefined;
   const [first, workspace, step, taskId, files, attachmentId, ...rest] = url.pathname.split("/");
-  const shaped =
+
+  const wellFormed =
     first === "" &&
     workspace !== undefined &&
     workspace !== "" &&
@@ -99,17 +103,22 @@ export function descriptionAttachmentOf(address: string): DescriptionAttachmentR
     TASK_STEPS.has(step) &&
     files === FILES_STEP &&
     rest.length === 0;
-  if (!shaped || taskId === undefined || attachmentId === undefined) return undefined;
+
+  if (!wellFormed || taskId === undefined || attachmentId === undefined) return undefined;
+
   if (!UUID.test(taskId) || !UUID.test(attachmentId)) return undefined;
+
   return { taskId, attachmentId };
 }
 
 /** The ids of the description's own pictures its text names, in the order first named, each once. */
 export function descriptionAttachmentIdsIn(text: string, taskId: string): readonly string[] {
   const named = new Set<string>();
+
   for (const [, task, attachment] of text.matchAll(ADDRESS_IN_TEXT)) {
     if (task === taskId && attachment !== undefined && UUID.test(attachment)) named.add(attachment);
   }
+
   return [...named];
 }
 
@@ -131,6 +140,7 @@ export function taskPictureMarkdown(
 ): string {
   const altText = oneLine(alt).replace(/[\\[\]]/gu, "\\$&");
   const title = caption === undefined ? "" : ` "${oneLine(caption).replace(/[\\"]/gu, "\\$&")}"`;
+
   return `![${altText}](${address}${title})`;
 }
 
@@ -143,6 +153,7 @@ export function taskPictureMarkdown(
 export function taskPicturesIn(text: string): readonly string[] {
   return [...text.matchAll(PICTURE_IN_TEXT)].flatMap((match) => {
     const address = match[1];
+
     return address === undefined || insideCode(text, match.index) ? [] : [address];
   });
 }

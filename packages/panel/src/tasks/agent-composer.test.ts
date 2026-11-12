@@ -39,6 +39,7 @@ import { AgentComposer } from "./agent-composer.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+import type { AgentModelControl } from "./use-agent-model.js";
 
 /**
  * The agent's message box as the developer works it, on the editor bundle's
@@ -66,6 +67,13 @@ const SKILLS: readonly SkillOption[] = [
 ];
 
 const reading: SkillSource = () => Promise.resolve({ skills: SKILLS });
+
+/** A model chip's control, its choice changed nowhere. */
+const MODEL: AgentModelControl = {
+  choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+  note: undefined,
+  choose: () => undefined,
+};
 
 const ignore = () => undefined;
 
@@ -99,11 +107,14 @@ function Box({
   messages = [],
   skills = reading,
   onClear,
+  model,
 }: {
   sender: MessageSender;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
+  /** The model chip's control, which `/model` opens; none where the box draws no chip. */
+  model?: AgentModelControl;
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
@@ -113,6 +124,7 @@ function Box({
     messages,
     send: sender,
   });
+
   return createElement(
     "div",
     null,
@@ -121,6 +133,7 @@ function Box({
       composer,
       skills,
       onClear,
+      model,
     }),
     // What Continue would carry, as the tab hands it on.
     createElement("output", { "data-unsent": composer.unsent.words }),
@@ -130,19 +143,27 @@ function Box({
 /** The box mounted, every message it sends written down and answered by `answer`. */
 async function mounted(
   answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore),
-  options: { readonly skills?: SkillSource; readonly onClear?: () => Promise<boolean> } = {},
+  options: {
+    readonly skills?: SkillSource;
+    readonly onClear?: () => Promise<boolean>;
+    readonly model?: AgentModelControl;
+  } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
+
   const sender: MessageSender = (_agentId, text, clientKey) => {
     sent.push({ text, clientKey });
+
     return answer();
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(Box, { sender, ...options }))));
   await settle();
+
   return {
     container,
     sent,
@@ -232,12 +253,15 @@ test("words selected raise the format toolbar, its marks alone, and a message bo
   act(() => {
     editor.commands.setTextSelection({ from: 1 + "Ship ".length, to: 1 + "Ship it".length });
   });
+
   const toolbar =
     box.container.querySelector<HTMLElement>('[role="toolbar"][aria-label="Formatting"]') ??
     assert.fail("the toolbar stands over the words");
+
   const presses = [...toolbar.querySelectorAll("button")].map((each) =>
     each.getAttribute("aria-label"),
   );
+
   assert.deepEqual(presses, ["Bold", "Italic", "Strikethrough", "Code", "Link"]);
 
   act(() => toolbar.querySelector<HTMLButtonElement>('button[aria-label="Bold"]')?.click());
@@ -267,24 +291,28 @@ const TAKEN: AgentAgentAnswer = {
 /** The box mounted, its one send answered only as the test lets it. */
 async function answeredLater() {
   let answer: (answered: AgentAgentAnswer) => void = ignore;
+
   const box = await mounted(
     () =>
       new Promise<AgentAgentAnswer>((resolve) => {
         answer = resolve;
       }),
   );
+
   return { ...box, answer: (answered: AgentAgentAnswer) => answer(answered) };
 }
 
 /** The box mounted, each send answered only as the test lets it, in the order they went. */
 async function answeredInTurn() {
   const answers: ((answered: AgentAgentAnswer) => void)[] = [];
+
   const box = await mounted(
     () =>
       new Promise<AgentAgentAnswer>((resolve) => {
         answers.push(resolve);
       }),
   );
+
   return {
     ...box,
     answer: async (index: number, answered: AgentAgentAnswer) => {
@@ -350,9 +378,11 @@ test("a box that opens again after a send leaves the caret on a press of its own
   typeInComposer(box.container, "Fix the bug");
   pressInComposer(box.container, "Enter");
   await settle();
+
   const plus = box.container.querySelector<HTMLButtonElement>(
     'button[aria-label="Add files and more"]',
   );
+
   assert.ok(plus);
   plus.focus();
 
@@ -409,11 +439,13 @@ test("a / opens the repository's skills over the caret, the keys move through th
   const box = await mounted();
   typeInComposer(box.container, "Ship it with /");
   await settle();
+
   const rows = () =>
     [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map((row) => ({
       name: row.querySelector(".ui-combobox-option-label")?.textContent,
       chosen: row.getAttribute("aria-selected"),
     }));
+
   assert.deepEqual(rows(), [
     { name: "/release", chosen: "true" },
     { name: "/deploy", chosen: "false" },
@@ -447,7 +479,9 @@ test("a / opens the repository's skills over the caret, the keys move through th
 test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, the box held until a /clear is answered, but /compact, which goes as a message", async () => {
   let cleared = 0;
   let answerClear: (took: boolean) => void = ignore;
+
   const box = await mounted(undefined, {
+    model: MODEL,
     skills: () =>
       Promise.resolve({
         skills: [
@@ -462,15 +496,18 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
       }),
     onClear: () => {
       cleared += 1;
+
       return new Promise((resolve) => {
         answerClear = resolve;
       });
     },
   });
+
   const names = () =>
     [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
       (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
     );
+
   typeInComposer(box.container, "/");
   await settle();
   assert.deepEqual(names(), ["/model", "/compact", "/clear", "/release", "/deploy"]);
@@ -505,6 +542,70 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
     ["/compact keep the plan"],
   );
   assert.equal(cleared, 1);
+});
+
+test("a box with a model chip and no session, as New task's, lists /model alone where there are no skills, and runs it, chosen or typed, by opening the model menu", async () => {
+  const box = await mounted(undefined, {
+    model: MODEL,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const rows = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  const menuOpen = () =>
+    box.container.querySelector(".agent-model-chip button")?.getAttribute("aria-expanded");
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(rows(), ["/model"]);
+
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.equal(menuOpen(), "true");
+  assert.equal(box.shown(), "");
+  pressInComposer(box.container, "Escape");
+  await settle();
+
+  // A session's commands run nowhere here, so a /clear typed goes as the words it is.
+  typeInComposer(box.container, "/clear");
+  await settle();
+  assert.deepEqual(rows(), []);
+  pressInComposer(box.container, "Escape");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.deepEqual(
+    box.sent.map((each) => each.text),
+    ["/clear"],
+  );
+});
+
+test("a skill named as a command the box does not run, as /compact in New task's, is still offered under its name", async () => {
+  const box = await mounted(undefined, {
+    model: MODEL,
+    skills: () =>
+      Promise.resolve({
+        skills: [
+          {
+            name: "compact",
+            description: "Use to squash commits.",
+            source: TASK_SKILL_SOURCE.REPOSITORY,
+            path: ".agents/skills/compact/SKILL.md",
+          },
+        ],
+      }),
+  });
+
+  typeInComposer(box.container, "/compact");
+  await settle();
+
+  const rows = [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+    (row) => row.querySelector(".ui-combobox-option-detail")?.textContent,
+  );
+
+  assert.deepEqual(rows, ["Use to squash commits."]);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {
@@ -669,11 +770,13 @@ async function mountedForDictation(transcribed: () => Promise<{ text: string }>)
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(Box, { sender }))));
   await settle();
+
   const press = (label: string) => {
     const found = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
     assert.ok(found, `${label} is offered`);
     act(() => found.click());
   };
+
   return { container, press };
 }
 
@@ -694,8 +797,10 @@ test('a clip sent for reading draws its ring and its "Transcribing" together, th
 async function mountedRefusedForMove() {
   const sent: { text: string; clientKey: string }[] = [];
   const moves: { resolve: (moved: boolean) => void }[] = [];
+
   const sender: MessageSender = (_agentId, text, clientKey) => {
     sent.push({ text, clientKey });
+
     return Promise.resolve(
       sent.length === 1
         ? {
@@ -709,12 +814,14 @@ async function mountedRefusedForMove() {
         : { failure: AGENT_CALL_FAILURE.UNANSWERED },
     );
   };
+
   const doors: RepositoryRemedyDoors = {
     openWorkspaceGitHub: ignore,
     openGitHub: ignore,
     chooseRepository: ignore,
     moveTask: () => new Promise<boolean>((resolve) => moves.push({ resolve })),
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -730,12 +837,15 @@ async function mountedRefusedForMove() {
   typeInComposer(container, "Rebase on main");
   pressInComposer(container, "Enter");
   await settle();
+
   const move =
     [...container.querySelectorAll("button")].find(
       (each) => each.textContent === "Move task to Acme Team",
     ) ?? assert.fail("the note offers the move");
+
   act(() => move.click());
   await settle();
+
   return {
     container,
     sent,
@@ -768,14 +878,17 @@ interface OpenedByRemedy {
 /** The box under the window's doors and Settings opener, its one message refused for `unreached`; answers what each press opened. */
 async function mountedRefusedOnToken(unreached: RepositoryUnreached) {
   const opened: OpenedByRemedy = { github: [], settings: [] };
+
   const sender: MessageSender = () =>
     Promise.resolve({ failure: AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE, unreached });
+
   const doors: RepositoryRemedyDoors = {
     openWorkspaceGitHub: ignore,
     openGitHub: (url) => opened.github.push(url),
     chooseRepository: ignore,
     moveTask: () => Promise.resolve(false),
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -795,6 +908,7 @@ async function mountedRefusedOnToken(unreached: RepositoryUnreached) {
   typeInComposer(container, "Rebase on main");
   pressInComposer(container, "Enter");
   await settle();
+
   const press = (label: string) =>
     act(() =>
       (
@@ -802,6 +916,7 @@ async function mountedRefusedOnToken(unreached: RepositoryUnreached) {
         assert.fail(`the note offers ${label}`)
       ).click(),
     );
+
   return { container, opened, press };
 }
 
@@ -820,6 +935,7 @@ test("a message refused because GitHub refused the member's own token offers Upd
 
 test("a message refused because the member's token is not authorized for the organization's SAML SSO offers to authorize it, which opens GitHub's page", async () => {
   const authorizeUrl = "https://github.com/orgs/acme/sso?authorization_request=fixture";
+
   const box = await mountedRefusedOnToken({
     reason: REPOSITORY_UNREACHED.TOKEN_SSO,
     repository: "acme/relay",
@@ -833,11 +949,13 @@ test("a message refused because the member's token is not authorized for the org
 });
 
 test("a message refused for want of a connected credential is reported as the service's refusal, by its word, and opens no issue", async () => {
-  const reported: [string, Readonly<Record<string, unknown>>][] = [];
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[] = [];
   let issues = 0;
+
   const recording: ShownFailureSentry = {
     captureException: () => {
       issues += 1;
+
       return "";
     },
     logger: {
@@ -849,10 +967,12 @@ test("a message refused for want of a connected credential is reported as the se
       getPropagationContext: () => ({ traceId: "0af7651916cd43dd8448eb211c80319c" }),
     }),
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
   );
+
   try {
     const box = await mounted(() =>
       Promise.resolve({
@@ -860,6 +980,7 @@ test("a message refused for want of a connected credential is reported as the se
         provider: MODEL_PROVIDER.ANTHROPIC,
       }),
     );
+
     typeInComposer(box.container, "Rebase on main");
     pressInComposer(box.container, "Enter");
     await settle();
@@ -926,6 +1047,7 @@ test("while the agent's turn is starting, its status not yet running, a box that
       messages: [],
       send: () => new Promise(ignore),
     });
+
     return createElement(AgentComposer, {
       ...QUIET_COMPOSER,
       composer,
@@ -940,6 +1062,7 @@ test("while the agent's turn is starting, its status not yet running, a box that
       },
     });
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -955,6 +1078,7 @@ test("while the agent's turn is starting, its status not yet running, a box that
 
 test("while the agent's turn runs, a touch held on Send sends the other way: a box whose Enter steers queues", async () => {
   const done: string[] = [];
+
   /** The box while a turn runs, Enter steering, each way a message leaves recorded. */
   function Running(): ReactNode {
     const composer = useAgentComposer({
@@ -963,9 +1087,11 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
       messages: [],
       send: (_agentId, text) => {
         done.push(`sent ${text}`);
+
         return new Promise(ignore);
       },
     });
+
     return createElement(AgentComposer, {
       ...QUIET_COMPOSER,
       composer,
@@ -980,6 +1106,7 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
       },
     });
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -988,11 +1115,13 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   await settle();
   typeInComposer(container, "Then open the pull request.");
   await settle();
+
   const send =
     container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("Send is drawn");
 
   vi.useFakeTimers();
+
   try {
     act(() => {
       send.dispatchEvent(

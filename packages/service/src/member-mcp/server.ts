@@ -83,6 +83,7 @@ const isRefusal = Schema.is(
 
 function toolResult(result: MemberMcpToolResult): CallToolResult {
   const content: CallToolResult["content"] = [{ type: "text", text: JSON.stringify(result) }];
+
   return isRefusal(result) ? { content, isError: true } : { content };
 }
 
@@ -112,8 +113,11 @@ async function throughDoor(
     Effect.provideService(WorkspacePlugin, workspaces),
     Effect.provideService(AdmittedMember, member),
   );
+
   const exit = await Effect.runPromiseExitWith(services)(answered);
+
   if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
   return exit.value;
 }
 
@@ -126,6 +130,7 @@ export function memberMcpServer(
   experimentsOn: ReadonlySet<WorkspaceExperiment>,
 ): McpServer {
   const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
+
   for (const tool of MEMBER_MCP_TOOLS) {
     if (tool.experiment !== undefined && !experimentsOn.has(tool.experiment)) continue;
     server.registerTool(
@@ -135,5 +140,6 @@ export function memberMcpServer(
         throughDoor(services, agentSandbox, workspaces, member, tool.name, tool.run(input)),
     );
   }
+
   return server;
 }

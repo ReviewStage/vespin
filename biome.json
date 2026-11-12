@@ -16,7 +16,8 @@
       "!packages/agent-runner/src/codex-protocol",
       "!packages/features/fixtures",
       "!packages/service/fixtures",
-      "!packages/wire/fixtures"
+      "!packages/wire/fixtures",
+      "!tools/oxlint/anti-slop"
     ]
   },
   "formatter": {

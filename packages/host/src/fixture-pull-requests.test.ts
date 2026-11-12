@@ -24,6 +24,7 @@ test("each part is laid as its own read where the launch holds every part as one
     version: 1,
     window: { fullScreen: false },
   };
+
   const staged = pullRequestPartsAppState(launched, new Map());
   const ready = String(FIXTURE_PULL_REQUEST.READY);
   const conversation = staged[LIVE_READ.PULL_REQUEST_CONVERSATION][INVITES_AGENT]?.[ready]?.rows;

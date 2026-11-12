@@ -31,16 +31,19 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
 /** A call in a workspace of its own, as the member who owns it. */
 const openCall = Effect.gen(function* () {
   const userId = yield* openAccount;
+
   const call: MemoryCall = {
     workspaceId: yield* openWorkspace(userId),
     userId,
   };
+
   return call;
 });
 
@@ -52,6 +55,7 @@ const DEPLOYS_CORRECTED = "Deployments go out from the release branch through Ve
 function recalledWords(answer: WireRecord): readonly unknown[] {
   assert.equal(answer.status, ACTION_RESULT_STATUS.ACCEPTED);
   assert.ok(Array.isArray(answer.memories));
+
   return answer.memories.map((memory) => (isRecord(memory) ? memory.text : memory));
 }
 
@@ -66,6 +70,7 @@ function keptId(answer: WireRecord): string {
   assert.equal(answer.status, ACTION_RESULT_STATUS.ACCEPTED);
   const kept = answer.memory;
   assert.ok(isRecord(kept) && isWireString(kept.id));
+
   return kept.id;
 }
 
@@ -139,6 +144,7 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
   it.effect("words that look like a credential are never kept, and the fact without it is", () =>
     Effect.gen(function* () {
       const call = yield* openCall;
+
       const credentials = [
         // Note that the token-shaped samples are built here rather than written whole, so no tracked line holds a credential's shape.
         `The staging key is ${["sk", "proj", "AbCdEfGh1234567890IjKlMnOp"].join("-")}.`,
@@ -153,8 +159,10 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
         const answer = yield* runRemember(call, { text });
         assert.equal(answer.status, ACTION_RESULT_STATUS.REJECTED, text);
       }
+
       const fact =
         "Staging credentials live in the team's 1Password vault, commit 3f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39.";
+
       assert.equal((yield* runRemember(call, { text: fact })).outcome, MEMORY_OUTCOME.KEPT);
 
       assert.deepEqual(

@@ -13,6 +13,7 @@ import { functionPublicPath, webFunctions } from "../server/function-layout";
 import {
   generatedRewrites,
   readVercelConfig,
+  type VercelConfig,
   vercelConfigSource,
 } from "../server/function-rewrites";
 import { changelogRoutes } from "../src/changelog-releases";
@@ -30,7 +31,9 @@ const WEB = fileURLToPath(new URL("..", import.meta.url));
 const vercel = await readVercelConfig(WEB);
 
 /** Whether a route or a top-level rewrite is held to one host, as the sandbox's are. */
-const heldToAHost = (route: object) => "has" in route;
+const heldToAHost = (
+  route: VercelConfig["services"]["web"]["routes"][number] | VercelConfig["rewrites"][number],
+) => "has" in route;
 
 test("the /api/ rewrites are generated into the web service's routes, ahead of its other routes but the sandbox host's", async () => {
   const generated = generatedRewrites(await webFunctions(WEB));
@@ -51,6 +54,7 @@ function deploys(branch: string): boolean {
   const refused = Object.entries(vercel.git.deploymentEnabled).some(
     ([glob, enabled]) => !enabled && matchesGlob(branch, glob),
   );
+
   return !refused;
 }
 
@@ -66,6 +70,7 @@ test("a GitHub merge-queue branch, an agent's branch, a PR media branch, or an e
   ]) {
     assert.equal(deploys(branch), false, branch);
   }
+
   for (const branch of [
     "main",
     "ci/vercel-no-merge-queue-deploys",
@@ -100,15 +105,19 @@ test("no workspace's slug can be the first step of a page the web app serves und
       .map((route) => route.src),
     ...vercel.rewrites.filter((rewrite) => !heldToAHost(rewrite)).map((rewrite) => rewrite.source),
   ];
+
   const pages = readdirSync(WEB)
     .filter((name) => name.endsWith(".html"))
     .map((name) => `/${name.slice(0, -".html".length)}`);
+
   const published = readdirSync(`${WEB}/public`, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => `/${entry.name}`);
+
   const steps = new Set(
     [...routed, ...pages, ...published].flatMap((path) => FIRST_STEP.exec(path)?.[1] ?? []),
   );
+
   steps.delete("index");
 
   assert.deepEqual(
@@ -203,31 +212,40 @@ const WEB_ROUTES: readonly WebRoute[] = vercel.services[SERVICE.WEB].routes;
 function servedBy(path: string, host = APP_HOST): Served {
   const headers = new Map<string, string>();
   const named = new Map<string, string[]>();
+
   for (const route of WEB_ROUTES) {
     const pattern = new RegExp(`^${route.src}$`, "u");
+
     if (!heldTo(route, host) || !pattern.test(path)) continue;
+
     for (const [name, value] of Object.entries(route.headers ?? {})) {
       const key = name.toLowerCase();
       headers.set(key, value);
       named.set(key, [...(named.get(key) ?? []), value]);
     }
+
     if (route.continue) continue;
+
     if (route.dest !== undefined) {
       const file = path.replace(pattern, route.dest);
+
       return route.status === undefined
         ? { file, headers, named }
         : { file, forced: route.status, headers, named };
     }
+
     return {
       status: route.status ?? 0,
       location: path.replace(pattern, route.headers?.Location ?? ""),
     };
   }
+
   return { file: undefined, headers, named };
 }
 
 const servedFile = (path: string, host = APP_HOST) => {
   const served = servedBy(path, host);
+
   return "file" in served ? served.file : undefined;
 };
 
@@ -235,6 +253,7 @@ const servedFile = (path: string, host = APP_HOST) => {
 function answeredHeaders(path: string): AnswerHeaders {
   const served = servedBy(path);
   assert.ok("headers" in served, `${path} is answered, not redirected`);
+
   return served;
 }
 
@@ -254,6 +273,7 @@ function directivesOf(policy: string): ReadonlyMap<string, readonly string[]> {
   return new Map(
     policy.split(";").map((directive) => {
       const [name = "", ...sources] = directive.trim().split(/\s+/u);
+
       return [name, sources];
     }),
   );
@@ -289,6 +309,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
   ]) {
     assert.equal(servedFile(path), "/app.html", path);
   }
+
   // The build's file name is never an address: it sends the browser to the app's own, for good, and the browser keeps the fragment.
   assert.deepEqual(servedBy("/app.html"), { status: 308, location: "/app" });
   assert.equal(servedFile("/about"), "/about.html");
@@ -296,6 +317,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
   assert.equal(servedFile("/changelog"), "/changelog.html");
   assert.equal(servedFile("/changelog/page/2"), "/changelog/page/2.html");
   assert.equal(servedFile("/admin"), "/admin.html");
+
   // A page of the site written with a slash after it is sent to its bare address for good, and the changelog's first page, which no file is built for, to the changelog.
   for (const [path, location] of [
     ["/about/", "/about"],
@@ -308,6 +330,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
   ] as const) {
     assert.deepEqual(servedBy(path), { status: 308, location }, path);
   }
+
   // An API path still reaches the oRPC route with the whole path it names, and an exception its own route with the id.
   for (const path of [
     "/api/plans/x/description/revisions",
@@ -320,6 +343,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
     assert.equal(served.searchParams.get("route"), "orpc", path);
     assert.equal(served.searchParams.get("route-path"), path.slice("/api/".length), path);
   }
+
   for (const [path, route] of [
     ["/api/workspaces/w1/photo", "workspaces/photo"],
     ["/api/automations/x1/webhook", "automations/webhook"],
@@ -329,6 +353,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
     assert.equal(served.searchParams.get("route"), route, path);
     assert.equal(served.searchParams.get("id"), path.split("/")[3], path);
   }
+
   // The landing page, the sign-in, a static file, and a path naming no place, an old issue's among them, are the build's own files.
   for (const path of [
     "/",
@@ -346,11 +371,13 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
 test("no page of Vespin's own, by any first step a workspace's slug may not take, nor a file of the site's, is served the web app as a workspace's Home", () => {
   // `/app` is the app's own path, which serves it by a rule of its own.
   const reserved = [...RESERVED_WORKSPACE_SLUGS].filter((step) => step !== "app");
+
   for (const step of reserved) {
     for (const path of [`/${step}`, `/${step}/`, `/${step}.html`]) {
       assert.notEqual(servedFile(path), "/app.html", path);
     }
   }
+
   for (const path of [
     "/robots.txt",
     "/favicon.ico",
@@ -368,6 +395,7 @@ test("a first step no workspace's slug or id could be is answered the site's not
     const served = servedBy(path);
     assert.ok("file" in served && served.file === "/404.html" && served.forced === 404, path);
   }
+
   for (const path of [
     "/xyz",
     "/Xq3vT9bLmN2pRw7sYk4dHc6fJg8aZe1u",
@@ -434,26 +462,31 @@ const SANDBOX_NOT_FOUND = "/sandbox-not-found.txt";
 
 test("the sandbox's host, spelled with a trailing dot or without, reaches the page route alone, by a link's address, and answers every other path, the app's, the API's, and auth's among them, not found from a static file", async () => {
   const pageRoute = PAGE_LINK_ROUTE.PATH.slice("/api/".length);
+
   const pages = (await webFunctions(WEB)).find((definition) =>
     definition.routes.includes(pageRoute),
   );
+
   assert.ok(pages !== undefined);
   // The function a link lands in holds no other route, so no `route` a caller's query names reaches the API.
   assert.deepEqual(pages.routes, [pageRoute]);
   const pagesPath = `/${functionPublicPath(pages)}`;
   const linkPath = `/${PAGE_LINK_ROUTE.STEP}/${LINK_TOKEN}`;
   assert.ok(readdirSync(join(WEB, "public")).includes(SANDBOX_NOT_FOUND.slice(1)));
+
   for (const host of SANDBOX_HOSTS) {
     // Every path of the host enters the web service, whose routes hold it.
     for (const path of [linkPath, ...APP_PATHS]) {
       assert.equal(serviceFor(path, host), SERVICE.WEB, `${host}${path}`);
     }
+
     const link = servedBy(linkPath, host);
     assert.ok("file" in link && link.file !== undefined && link.forced === undefined, host);
     const landed = new URL(link.file, PAGE_SANDBOX_ORIGIN);
     assert.equal(landed.pathname, pagesPath, host);
     assert.equal(landed.searchParams.get("route"), pageRoute, host);
     assert.equal(landed.searchParams.get(PAGE_LINK_ROUTE.TOKEN_QUERY), LINK_TOKEN, host);
+
     // Every other path is a file of the build's own, answered not found, so no function is woken by it.
     for (const path of APP_PATHS) {
       const refused = servedBy(path, host);
@@ -475,6 +508,7 @@ test("the sandbox's host, spelled with a trailing dot or without, reaches the pa
 
 test("on any host but the sandbox's, a link's address reaches no route, and the app is routed as before", () => {
   const linkPath = `/${PAGE_LINK_ROUTE.STEP}/${LINK_TOKEN}`;
+
   // A host that holds the sandbox's name within it is no spelling of the sandbox's.
   for (const host of [
     APP_HOST,
@@ -493,6 +527,7 @@ test("on any host but the sandbox's, a link's address reaches no route, and the 
 test("every path the web app is served at sends its own Content Security Policy and no other, refuses to be framed, keeps the connect tabs it opens, and is never sniffed", () => {
   const app = WEB_ROUTES.filter((route) => route.dest === "/app.html");
   assert.ok(app.length > 0);
+
   for (const path of ["/app", "/app/", "/acme/plan/p1", "/acme/inbox", "/acme/settings/agents"]) {
     const answer = answeredHeaders(path);
     const { headers } = answer;
@@ -531,6 +566,7 @@ test("every path the web app is served at sends its own Content Security Policy 
       path,
     );
   }
+
   // An API answer's headers are its handler's own; no page's route reaches it.
   for (const path of [
     "/api/plans/x/description/revisions",
@@ -556,10 +592,12 @@ test("PostHog's path passes what the browser sends on to PostHog, without this o
   ] as const) {
     assert.equal(servedFile(path), upstream, path);
     assert.equal(answeredHeaders(path).headers.size, 0, path);
+
     const route = WEB_ROUTES.find(
       (each) =>
         !each.continue && heldTo(each, APP_HOST) && new RegExp(`^${each.src}$`, "iu").test(path),
     );
+
     // The session cookie is this origin's, and Vercel passes on every header a rewrite does not take off.
     assert.ok(
       route?.transforms?.some(
@@ -586,6 +624,7 @@ test("a content-hashed build asset is cached for a year, and nothing unhashed un
       path,
     );
   }
+
   for (const path of [
     "/assets/charles-pan.jpeg",
     "/assets/dean-stratakos.jpeg",
@@ -614,19 +653,25 @@ const ENTRY_PAGES = readdirSync(WEB).filter((name) => name.endsWith(".html"));
  */
 function emittedPages(): ReadonlyMap<string, readonly string[]> {
   const pages = new Map<string, readonly string[]>();
+
   const add = (file: string, ...addresses: readonly string[]) =>
     pages.set(file, [...(pages.get(file) ?? []), `/${file}`, ...addresses]);
+
   for (const file of ENTRY_PAGES) {
     add(file, `/${file.slice(0, -".html".length)}`, ...(file === "index.html" ? ["/"] : []));
   }
+
   for (const file of readdirSync(join(WEB, "public"), { recursive: true, encoding: "utf8" })) {
     if (file.endsWith(".html")) add(file.split(sep).join("/"));
   }
+
   const changelog = readFileSync(
     fileURLToPath(new URL("../../../CHANGELOG.md", import.meta.url)),
     "utf8",
   );
+
   for (const route of changelogRoutes(parseReleases(changelog))) add(route.file, route.path);
+
   return pages;
 }
 
@@ -634,8 +679,11 @@ function emittedPages(): ReadonlyMap<string, readonly string[]> {
 function addressesServing(file: string, candidates: readonly string[]): readonly string[] {
   return [...new Set(candidates)].filter((address) => {
     const served = servedBy(address);
+
     if (!("file" in served)) return false;
+
     if (served.file !== undefined) return served.file === `/${file}`;
+
     return address === `/${file}` || (file === "index.html" && address === "/");
   });
 }
@@ -645,6 +693,7 @@ function pageAnswers(): readonly { file: string; address: string; answer: Answer
   return [...emittedPages()].flatMap(([file, candidates]) => {
     const addresses = addressesServing(file, candidates);
     assert.ok(addresses.length > 0, `${file} is served at an address`);
+
     return addresses.map((address) => ({ file, address, answer: answeredHeaders(address) }));
   });
 }
@@ -657,6 +706,7 @@ function sourcesOf(directives: ReadonlyMap<string, readonly string[]>, name: str
 test("every HTML page the build emits is served at every address under one Content Security Policy that runs no inline script, framed by no other site, and never sniffed", () => {
   const answers = pageAnswers();
   assert.ok(answers.some(({ file }) => file.startsWith("changelog/page/")));
+
   for (const { file, address, answer } of answers) {
     const { headers } = answer;
     // No page is sent two policies to be enforced together.
@@ -664,9 +714,11 @@ test("every HTML page the build emits is served at every address under one Conte
     const directives = directivesOf(headers.get("content-security-policy") ?? "");
     const scripts = sourcesOf(directives, "script-src");
     assert.ok(scripts.length > 0, `${address} names where its scripts may come from`);
+
     for (const unsafe of ["'unsafe-inline'", "'unsafe-eval'", "*", "data:", "blob:", "https:"]) {
       assert.ok(!scripts.includes(unsafe), `${address} runs no script from ${unsafe}`);
     }
+
     assert.deepEqual(sourcesOf(directives, "object-src"), ["'none'"], address);
     assert.equal(directives.get("base-uri")?.length, 1, address);
     assert.ok(["'self'", "'none'"].includes(directives.get("base-uri")?.[0] ?? ""), address);
@@ -677,6 +729,7 @@ test("every HTML page the build emits is served at every address under one Conte
     assert.equal(headers.get("x-content-type-options"), "nosniff", address);
     assert.equal(headers.get("referrer-policy"), "strict-origin-when-cross-origin", address);
     const permissions = headers.get("permissions-policy")?.split(/,\s*/u) ?? [];
+
     for (const denied of ["camera=()", "geolocation=()", "payment=()", "usb=()"]) {
       assert.ok(permissions.includes(denied), `${address} denies ${denied}`);
     }
@@ -687,7 +740,9 @@ test("the site's pages run scripts from this origin alone, connect to it alone, 
   const site = pageAnswers().filter(
     ({ file }) => file !== "app.html" && file !== ADMIN_PAGE && !FRAMED_BY_THE_APP.has(file),
   );
+
   assert.ok(site.length > 0);
+
   for (const { address, answer } of site) {
     const directives = directivesOf(answer.headers.get("content-security-policy") ?? "");
     assert.deepEqual(directives.get("default-src"), ["'self'"], address);
@@ -707,6 +762,7 @@ test("the maintainers' dashboard runs scripts from this origin alone and connect
     const directives = directivesOf(
       answeredHeaders(address).headers.get("content-security-policy") ?? "",
     );
+
     assert.deepEqual(directives.get("script-src"), ["'self'"], address);
     assert.deepEqual(directives.get("connect-src"), ["'self'"], address);
     // A chart's colors are an inline sheet `@repo/ui`'s chart writes (`ChartStyle`).
@@ -730,6 +786,7 @@ const CONNECT_LANDINGS = ENTRY_PAGES.filter((file) => {
   const entry = /<script type="module" src="\/(src\/[^"]+)"/u.exec(
     readFileSync(join(WEB, file), "utf8"),
   )?.[1];
+
   return (
     entry !== undefined && readFileSync(join(WEB, entry), "utf8").includes('"./connect-return"')
   );
@@ -737,6 +794,7 @@ const CONNECT_LANDINGS = ENTRY_PAGES.filter((file) => {
 
 test("a page a connect lands on keeps the opener policy its tab came with, so it can close it; every other page of the site cuts a cross-origin opener", () => {
   assert.ok(CONNECT_LANDINGS.length > 0);
+
   for (const { file, address, answer } of pageAnswers()) {
     if (file === "app.html" || FRAMED_BY_THE_APP.has(file)) continue;
     const policy = answer.headers.get("cross-origin-opener-policy");

@@ -53,6 +53,7 @@ const alertVariants = cva("ui-banner flex-none @container/ui-banner", {
 });
 
 type AlertLook = NonNullable<VariantProps<typeof alertVariants>["look"]>;
+
 type AlertTone = StatusTone;
 
 const alertRowVariants = cva("ui-banner-row flex", {
@@ -182,4 +183,5 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 export type { AlertLook, AlertTone };
+
 export { Alert, AlertAction, AlertDescription, AlertGlyph, AlertRow };

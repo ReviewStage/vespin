@@ -56,6 +56,7 @@ function standTerminal(relay: RelayServer): void {
           resolveUserId: resolveRelayUserId,
           dependencies,
         });
+
         return yield* Effect.never;
       }),
     ),
@@ -74,6 +75,7 @@ function standTunnelOn(tunnel: RelayServer): void {
           resolveUserId: resolveRelayUserId,
           dependencies,
         });
+
         return yield* Effect.never;
       }),
     ),
@@ -92,6 +94,7 @@ function standBrowser(live: RelayServer): void {
           resolveUserId: resolveRelayUserId,
           dependencies,
         });
+
         return yield* Effect.never;
       }),
     ),
@@ -116,6 +119,7 @@ function standLive(live: RelayServer): void {
           }),
           origin: new URL(deployment.baseURL).origin,
         });
+
         return yield* Effect.never;
       }),
     ),
@@ -128,6 +132,7 @@ export function terminalFunctionServer() {
     standingTerminal = terminalRelayServer();
     standTerminal(standingTerminal);
   }
+
   return standingTerminal.server;
 }
 
@@ -137,6 +142,7 @@ export function tunnelFunctionServer() {
     standingTunnel = tunnelServer();
     standTunnelOn(standingTunnel);
   }
+
   return standingTunnel.server;
 }
 
@@ -146,6 +152,7 @@ export function browserLiveFunctionServer() {
     standingBrowser = browserLiveServer();
     standBrowser(standingBrowser);
   }
+
   return standingBrowser.server;
 }
 
@@ -155,5 +162,6 @@ export function liveSocketFunctionServer() {
     standingLive = liveSocketServer();
     standLive(standingLive);
   }
+
   return standingLive.server;
 }

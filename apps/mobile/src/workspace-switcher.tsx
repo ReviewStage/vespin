@@ -22,7 +22,7 @@ import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-
 export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
 
 /** Each workspace's photo as the host holds it, by the workspace. */
-function selectPhotos(
+export function selectPhotos(
   state: AppStateSnapshot,
 ): AppStateSnapshot[typeof LIVE_READ.WORKSPACE_PHOTOS] {
   return state[LIVE_READ.WORKSPACE_PHOTOS];
@@ -35,16 +35,18 @@ function selectPhotos(
  * where it has no photo, else its letter; and who shares it, the account's
  * first workspace said as its own while no one else is in it.
  */
-function switcherWorkspace(
+export function switcherWorkspace(
   workspace: Workspace,
   first: boolean,
   photos: AppStateSnapshot[typeof LIVE_READ.WORKSPACE_PHOTOS] | undefined,
 ): SwitcherWorkspace {
   const held = photos?.[workspace.id]?.rows;
+
   const photo =
     workspace.photoVersion !== undefined && held?.version === workspace.photoVersion
       ? held.url
       : undefined;
+
   return {
     id: workspace.id,
     name: workspace.name,
@@ -70,11 +72,14 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
+
   if (chosen === undefined) return undefined;
   const first = workspaces[0]?.id;
+
   const drawn = workspaces.map((workspace) =>
     switcherWorkspace(workspace, workspace.id === first, photos),
   );
+
   return {
     workspaces: drawn,
     chosen: switcherWorkspace(chosen, chosen.id === first, photos),

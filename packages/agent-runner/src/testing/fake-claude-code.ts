@@ -39,7 +39,9 @@ interface CliRecord {
 /** The runner's Stop hook, as the CLI calls it. */
 function stopHookOf(options: Options) {
   const hook = options.hooks?.Stop?.[0]?.hooks[0];
+
   if (hook === undefined) throw new Error("the runner registered no Stop hook");
+
   return hook;
 }
 
@@ -64,6 +66,7 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
   const released = yield* Deferred.make<void>();
   const interrupted = yield* Deferred.make<void>();
   const closing = yield* Deferred.make<void>();
+
   const record: CliRecord = {
     options: undefined,
     prompts: [],
@@ -95,8 +98,10 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
       ),
       Stream.drain,
     );
+
     const runHook = (report: StopReport) => {
       const hook = stopHookOf(params.options);
+
       return Effect.promise((signal) =>
         hook(
           {
@@ -112,6 +117,7 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
         ),
       );
     };
+
     // The CLI asks its host where its mode would, through the callback it was handed, and goes
     // on once the host answers. A stop withdraws the ask, as the CLI cancels its request on an
     // interrupt, aborting the call's signal; the host's answer is still awaited, so a test reads it.
@@ -119,72 +125,93 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
       Effect.gen(function* () {
         if (params.options.permissionMode === "bypassPermissions") return;
         const canUseTool = params.options.canUseTool;
+
         if (canUseTool === undefined)
           return yield* Effect.die("canUseTool callback is not provided.");
         const answer = yield* Deferred.make<PermissionResult | null>();
+
         const asked = Effect.callback<void>((resume, signal) => {
           void canUseTool(ask.toolName, { ...ask.input }, { ...ask, signal }).then((result) => {
             Deferred.doneUnsafe(answer, Exit.succeed(result));
             resume(Effect.void);
           });
         });
+
         yield* Effect.raceFirst(asked, Deferred.await(interrupted));
         record.permissions.push(yield* Deferred.await(answer));
       });
+
     const play = (step: Step): Stream.Stream<SDKMessage> => {
       if ("askPermission" in step)
         return Stream.drain(Stream.fromEffect(askHost(step.askPermission)));
+
       if ("emit" in step) {
         // Note that the message crosses as a line of JSON, which the SDK takes
         // as an `SDKMessage` unchecked, just as it reads the CLI's stdout.
         const message: SDKMessage = JSON.parse(JSON.stringify(step.emit));
+
         if (message.type === "result" && step.namesNoPrompt !== true) {
           message.user_message_uuids = taken.splice(0);
         }
+
         return Stream.make(message);
       }
+
       if ("awaitPrompt" in step) {
         return Stream.drain(
           Stream.fromEffect(Effect.map(Queue.take(unread), (uuid) => taken.push(uuid))),
         );
       }
+
       if ("untilInterrupted" in step)
         return Stream.drain(Stream.fromEffect(Deferred.await(interrupted)));
+
       if ("untilReleased" in step) return Stream.drain(Stream.fromEffect(Deferred.await(released)));
+
       return Stream.drain(Stream.fromEffect(runHook(step.stopHook)));
     };
+
     // The CLI starts its first turn on the service's first message.
     const script = Stream.fromIterable<Step>([{ awaitPrompt: true }, ...steps]).pipe(
       Stream.flatMap(play),
     );
+
     const messages = Stream.toAsyncIterable(
       Stream.merge(script, prompts).pipe(Stream.interruptWhen(Deferred.await(closing))),
     );
+
     // Note that the SDK hands out its own generator, whose return waits on the read under way,
     // which a quiet CLI answers only once it writes again or is closed; so does this one.
     async function* read() {
       for await (const message of messages) yield message;
     }
+
     const sdkMessages = read();
 
     // A request recorded, then answered, or held for good by a CLI that stopped answering: a race
     // of nothing never settles.
     const answer = (): Promise<undefined> =>
       answering ? Promise.resolve(undefined) : Promise.race([]);
+
     return {
       [Symbol.asyncIterator]: () => sdkMessages,
       interrupt: () => {
         record.interrupts += 1;
+
         if (answering) Deferred.doneUnsafe(interrupted, Exit.void);
+
         return answer();
       },
       setModel: (model) => {
         record.models.push(model);
+
         return answer();
       },
       applyFlagSettings: (settings) => {
         if ("effortLevel" in settings) record.efforts.push(settings.effortLevel);
+
         if ("fastMode" in settings) record.fastModes.push(settings.fastMode);
+
         return answer();
       },
       close: () => {
@@ -197,15 +224,19 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
   // Started as the SDK starts the CLI: on its options, then handed its prompts once.
   const startup = async (options: Options): Promise<StartedClaudeCode> => {
     record.options = options;
+
     return { query: (prompt) => query({ prompt, options }) };
   };
 
   /** Lets a script held at `untilReleased` go on. */
   const release = Deferred.succeed(released, undefined);
+
   const sessionChain = async () => {
     if (chain === null) throw new Error("the session could not be read");
+
     return chain;
   };
+
   return {
     layer: Layer.succeed(ClaudeCode, { startup, sessionChain }),
     record,

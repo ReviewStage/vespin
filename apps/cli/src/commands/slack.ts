@@ -36,12 +36,15 @@ function slackBotJson({ txid: _txid, ...slackBot }: WorkspaceSlackBot) {
 /** The bot as a person reads it. */
 function slackBotLines(slackBot: WorkspaceSlackBot): string[] {
   if (!slackBot.configured) return ["This service holds no Slack bot."];
+
   if (slackBot.team === undefined) {
     return [
       "The Slack bot is not connected to this workspace; an owner or admin connects it in Settings.",
     ];
   }
+
   const channels = slackBot.channels ?? [];
+
   return [
     `Connected to ${slackBot.team.name} (${slackBot.team.id}).`,
     `  Notifications: ${slackBot.notifications === false ? "off" : "on"}`,
@@ -66,9 +69,11 @@ const showCommand = Command.make("show", {}, () =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const slackBot = yield* askService(hosted.workspaceSlackBot.read, {
       workspaceId: workspace.id,
     });
+
     yield* answer({
       json: slackBotJson(slackBot),
       lines: slackBotLines(slackBot),
@@ -90,7 +95,9 @@ function channelIdOf(slackBot: WorkspaceSlackBot, named: string) {
     const channels = slackBot.channels ?? [];
     const name = named.replace(/^#/, "");
     const found = channels.find((channel) => channel.id === named || channel.name === name);
+
     if (found !== undefined) return found.id;
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message:
@@ -136,49 +143,58 @@ const setCommand = Command.make(
           message: "--join and --leave name a channel with --channel.",
         });
       }
+
       if (join && leave) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Name one of --join and --leave.",
         });
       }
+
       if (Option.isSome(channel) && !join && !leave && Option.isNone(repo)) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Name a change to the channel: --join, --leave, or --repo.",
         });
       }
+
       if (Option.isNone(notifications) && Option.isNone(repo) && Option.isNone(channel)) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Name a change: --notifications, --repo, or --channel.",
         });
       }
+
       const { workspace } = yield* resolveWorkspace;
       const workspaceId = workspace.id;
       const { hosted } = yield* session;
       const repository = Option.map(repo, (named) => (named === NONE_WORD ? null : named));
+
       // Note that each change is its own request, as the Settings rows' are, and the bot as the last one answers is the one printed.
       // Note that a channel is resolved before any change is made, so a name that matches none changes nothing.
       let slackBot = Option.isSome(channel)
         ? yield* askService(hosted.workspaceSlackBot.read, { workspaceId })
         : undefined;
+
       const channelId =
         slackBot !== undefined && Option.isSome(channel)
           ? yield* channelIdOf(slackBot, channel.value)
           : undefined;
+
       if (Option.isSome(notifications)) {
         slackBot = yield* askService(hosted.workspaceSlackBot.notifications, {
           workspaceId,
           notifications: NOTIFICATIONS_WORD[notifications.value],
         });
       }
+
       if (channelId === undefined && Option.isSome(repository)) {
         slackBot = yield* askService(hosted.workspaceSlackBot.repository, {
           workspaceId,
           repository: repository.value,
         });
       }
+
       if (channelId !== undefined) {
         slackBot = yield* askService(hosted.workspaceSlackBot.channel, {
           workspaceId,
@@ -187,6 +203,7 @@ const setCommand = Command.make(
           ...(Option.isSome(repository) ? { repository: repository.value } : undefined),
         });
       }
+
       slackBot ??= yield* askService(hosted.workspaceSlackBot.read, { workspaceId });
       yield* answer({
         json: slackBotJson(slackBot),
@@ -226,9 +243,11 @@ const disconnectCommand = Command.make(
         yes,
       );
       const { hosted } = yield* session;
+
       const slackBot = yield* askService(hosted.workspaceSlackBot.disconnect, {
         workspaceId: workspace.id,
       });
+
       yield* answer({
         json: slackBotJson(slackBot),
         lines: slackBotLines(slackBot),

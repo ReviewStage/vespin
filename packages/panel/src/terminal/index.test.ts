@@ -73,16 +73,20 @@ function mountTerminal() {
   mounted.attach(host);
   const keyboard = host.querySelector("textarea");
   assert.ok(keyboard, "the terminal takes the keyboard through its own field");
+
   const press = (key: Press): KeyboardEvent => {
     const event = new KeyboardEvent("keydown", { ...key, bubbles: true, cancelable: true });
     keyboard.dispatchEvent(event);
+
     if (!event.defaultPrevented) {
       keyboard.dispatchEvent(
         new KeyboardEvent("keypress", { ...key, bubbles: true, cancelable: true }),
       );
     }
+
     return event;
   };
+
   return {
     host,
     sent,
@@ -159,9 +163,11 @@ test("without WebGL a palette color is drawn by its class, never by a style attr
   // The default palette's black on its black ground, a pair that falls short of any contrast asked for.
   await new Promise<void>((resolve) => mounted?.write("\x1b[30mshadow\x1b[0m", resolve));
   await new Promise((resolve) => requestAnimationFrame(resolve));
+
   const cell = [...terminal.host.querySelectorAll(".xterm-rows span")].find(
     (span) => span.textContent === "shadow",
   );
+
   assert.ok(cell, "the line is drawn");
   assert.equal(cell.getAttribute("style"), null);
 });
@@ -170,6 +176,7 @@ test("without WebGL a palette color is drawn by its class, never by a style attr
 function drawnFace(host: HTMLElement): string | undefined {
   const rules = [...host.querySelectorAll("style")].map((style) => style.textContent ?? "");
   const rows = rules.find((text) => text.includes(".xterm-rows {"));
+
   return rows?.match(/font-family: ([^;]+);/)?.[1];
 }
 
@@ -178,6 +185,7 @@ function webFontHost(): HTMLElement {
   const host = document.createElement("div");
   host.style.setProperty("--ui-font-mono", '"JetBrains Mono Variable", monospace');
   document.body.append(host);
+
   return host;
 }
 
@@ -192,6 +200,7 @@ test("a face the page is still fetching is stood in for by the system's monospac
       check: () => false,
       load: (face: string) => {
         asked.push(face);
+
         return landed.promise;
       },
     },
@@ -218,6 +227,7 @@ test("a face already loaded is drawn in at once, and nothing is fetched", () => 
       check: () => true,
       load: (face: string) => {
         asked.push(face);
+
         return Promise.resolve([]);
       },
     },
@@ -253,9 +263,11 @@ test("a screen fitted again says its new size as columns and rows alone, the sha
   // jsdom lays out no box and measures no cell, so the window's layout is staged: a box with room, and the cells it fits.
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(400);
+
   const fits = vi
     .spyOn(FitAddon.prototype, "proposeDimensions")
     .mockReturnValue({ cols: 80, rows: 24 });
+
   const terminal = mountTerminal();
   terminal.done();
   const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));

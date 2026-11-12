@@ -11,7 +11,6 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
-import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
   DESCRIPTION_ATTACHMENT_REFUSAL,
@@ -21,6 +20,7 @@ import {
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_SCOPE,
 } from "@repo/features/description-comment-wire";
+import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "@repo/service/http/http";
 import type { UserIdResolver } from "@repo/service/http/http-effect";
 import { hostedFetch } from "@repo/service/orpc/handler";
@@ -81,6 +81,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -95,24 +96,31 @@ const ask = (request: Request) =>
       modelCatalogOf([]),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
     );
+
     const resolveUserId: UserIdResolver = (incoming) =>
       Effect.succeed(
         Option.fromNullishOr(incoming.headers.get("authorization")?.replace("Bearer ", "")),
       );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       tasksApp({ resolveUserId }).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const keep = hostedFetch({ taskFiles: taskFilesProcedures({ resolveUserId }) });
+
     // SAFETY: the upload yields the services provided above alone, which is all a test provides of the web runtime's services.
     const webServices = (yield* Effect.scoped(
       Layer.build(services),
     )) as Context.Context<WebServices>;
+
     const response = yield* Effect.promise(() =>
       request.method === "POST" ? keep(request, webServices) : handler(request),
     );
+
     const bytes = new Uint8Array(yield* Effect.promise(() => response.arrayBuffer()));
     yield* Effect.promise(() => dispose());
+
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
@@ -149,6 +157,7 @@ function read(taskId: string, attachmentId: string, userId: string): Request {
   const url = new URL(ATTACHMENT, ORIGIN);
   url.searchParams.set("id", taskId);
   url.searchParams.set("attachment", attachmentId);
+
   return new Request(url, { headers: { authorization: `Bearer ${userId}` } });
 }
 
@@ -157,7 +166,9 @@ function uploaded(answered: Answered) {
   const answer = readEither(descriptionAttachmentAnswerSchema)(
     unparsedWire(JSON.parse(new TextDecoder().decode(answered.bytes))),
   );
+
   if (Result.isFailure(answer)) return assert.fail(answer.failure.refusal);
+
   return answer.success;
 }
 
@@ -169,6 +180,7 @@ const openSharedTask = Effect.gen(function* () {
   const workspace = yield* openWorkspace(owner);
   yield* joinWorkspace(workspace, teammate);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
+
   return { owner, teammate, outsider, planId: taskId };
 });
 
@@ -182,6 +194,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         yield* saveDescriptionText(owner, taskId, text);
         const pdf = new TextEncoder().encode("%PDF-1.4\n");
         const from = text.indexOf("seven days");
+
         const started = yield* startDescriptionCommentThread(
           { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: teammate },
           taskId,
@@ -201,6 +214,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
             ],
           },
         );
+
         assert.ok(
           started.status === DESCRIPTION_COMMENT_OUTCOME.DONE && "thread" in started.answer,
         );
@@ -269,12 +283,14 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, planId: taskId } = yield* openSharedTask;
+
         const bare = (answered: Answered) => ({
           status: answered.status,
           contentType: answered.contentType,
           cache: answered.cache,
           text: new TextDecoder().decode(answered.bytes),
         });
+
         const json = "application/json";
 
         assert.deepEqual(bare(yield* ask(upload(taskId, undefined, '{"picture":7}'))), {
@@ -346,6 +362,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, planId: taskId } = yield* openSharedTask;
         const recording = webmBytes(1280, 800);
+
         const videoUrl = (bytes: Uint8Array) =>
           `data:${PICTURE_MEDIA_TYPE.WEBM};base64,${Buffer.from(bytes).toString("base64")}`;
 

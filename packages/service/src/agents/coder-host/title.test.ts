@@ -114,6 +114,7 @@ function anthropicAnswering(title: string) {
     readonly model: string;
     readonly thinking: string | undefined;
   }[] = [];
+
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const request = new Request(input, init);
     const body = readRequestBody(await request.text());
@@ -123,6 +124,7 @@ function anthropicAnswering(title: string) {
       model: body.model,
       thinking: body.thinking?.type,
     });
+
     return Response.json({
       id: "msg_fixture",
       type: "message",
@@ -133,15 +135,18 @@ function anthropicAnswering(title: string) {
       usage: { input_tokens: 1, output_tokens: 1 },
     });
   });
+
   return { asked };
 }
 
 /** A model answering every call with `title`, keeping each prompt it was asked. */
 function scriptedTitleModel(title: string) {
   const asked: string[] = [];
+
   const model = new MockLanguageModelV4({
     doGenerate: async (options) => {
       asked.push(JSON.stringify(options.prompt));
+
       return {
         content: [{ type: "text", text: title }],
         finishReason: { unified: "stop", raw: "stop" },
@@ -153,6 +158,7 @@ function scriptedTitleModel(title: string) {
       };
     },
   });
+
   return { model, asked };
 }
 
@@ -172,6 +178,7 @@ const openedOn = (owner: string, agent: Agent, prompt: string) =>
         placedAt,
       }),
     );
+
     return agent;
   });
 
@@ -190,6 +197,7 @@ const startOnTask = (owner: string, taskId: string, prompt: string) =>
         runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       }),
     );
+
     return yield* openedOn(owner, started.agent, prompt);
   });
 
@@ -240,11 +248,13 @@ it.layer(getTestDB())("an untitled task's name", (it) => {
         const owner = yield* openGithubUser();
         const organizationId = yield* openWorkspace(owner);
         const task = yield* createTask(owner, { organizationId });
+
         const first = yield* startOnTask(
           owner,
           task.id,
           "Expire teammate invitations after a week.",
         );
+
         const second = yield* startOnTask(owner, task.id, "Send a reminder the day before.");
 
         yield* titledAs(owner, first, answer);
@@ -292,16 +302,19 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const owner = yield* openGithubUser();
         const organizationId = yield* openWorkspace(owner);
         const task = yield* createTask(owner, { organizationId });
+
         const prompted = yield* startOnTask(
           owner,
           task.id,
           "Expire teammate invitations after one week, and email the inviter.",
         );
+
         const planned = yield* startOnTask(
           owner,
           task.id,
           "\n# Teammate [invitations](https://example.test/plan) by **email**\n\n## Goal\n\nInvite a teammate.",
         );
+
         const lowered = yield* startOnTask(
           owner,
           task.id,
@@ -318,6 +331,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
 
         const titleOf = (agent: Agent) =>
           Effect.map(readAgent(owner, agent.id), (read) => Option.getOrThrow(read).title);
+
         assert.equal(yield* titleOf(prompted), "Expire teammate invitations after one week");
         assert.equal(yield* titleOf(planned), "Teammate invitations by email");
         assert.equal(yield* titleOf(lowered), "Fix the invite link in README");
@@ -332,11 +346,13 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const owner = yield* openGithubUser();
         const organizationId = yield* openWorkspace(owner);
         const task = yield* createTask(owner, { organizationId });
+
         const agent = yield* startOnTask(
           owner,
           task.id,
           "Retry [the invite email](https://example.test/mail_(draft)) when the provider times out.",
         );
+
         const anthropic = anthropicAnswering("Retry invite email on timeout");
 
         yield* titleNativeAgent(
@@ -361,6 +377,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
         const organizationId = yield* openWorkspace(owner);
+
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: (yield* createTask(owner, { organizationId })).id,
@@ -383,6 +400,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         );
+
         // The session opened on the handed prompt, as the store records an agent's first message.
         yield* Database.use((db) =>
           db.insert(messages).values({
@@ -418,6 +436,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const owner = yield* openGithubUser();
         const words = "Fix the flaky invite test";
         const handed = `${words}\n\n---\n\nA member wrote this to Vespin's Slack bot in a Slack thread.\n\n<slack-thread>\n<@U01>: the billing export is broken too\n</slack-thread>`;
+
         const { agent } = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
@@ -430,6 +449,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         );
+
         // The opening carries the Slack line the bot wrote, as a Start from Slack does.
         yield* Database.use((db) =>
           db.insert(messages).values({
@@ -458,6 +478,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
         const organizationId = yield* openWorkspace(owner);
+
         const handed = firstMessageText(
           "Expire teammate invitations after a week.",
           {
@@ -474,6 +495,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
           },
           "Also send a reminder the day before.",
         );
+
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: (yield* createTask(owner, { organizationId })).id,
@@ -486,6 +508,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         );
+
         yield* Database.use((db) =>
           db.insert(messages).values({
             userId: owner,
@@ -539,6 +562,7 @@ const MESSAGE_SENDING_AGENT = {
 const journaledAgent = Effect.gen(function* () {
   const owner = yield* openGithubUser();
   const organizationId = yield* openWorkspace(owner);
+
   const started = yield* createAgent(owner, {
     taskId: (yield* createTask(owner, { organizationId })).id,
     descriptionSnapshot: null,
@@ -550,21 +574,26 @@ const journaledAgent = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   });
+
   const agent = Option.getOrThrow(started).agent;
   const target = { userId: owner, conversationId: agent.conversationId };
   const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
   let lines = 0;
   const sequences = new Map<string, number>();
+
   const next = (turnId: string) => {
     const sequence = (sequences.get(turnId) ?? 0) + 1;
     sequences.set(turnId, sequence);
+
     return { conversationId: sessionKey(target.conversationId), turnId, sequence };
   };
+
   /** A line written awaiting its turn, the developer's or another agent's message: its id. */
   const line = (sender: "developer" | "agent") =>
     Effect.gen(function* () {
       lines += 1;
       const clientKey = `line-${lines}`;
+
       const written = yield* writer.writeAwaitingLine(
         target,
         sender === "developer"
@@ -581,9 +610,12 @@ const journaledAgent = Effect.gen(function* () {
             },
         Effect.succeed(true),
       );
+
       assert.ok(Result.isSuccess(written) && Option.isSome(written.success));
+
       return sentLineId(clientKey);
     });
+
   /** A turn opened, taking the line given first, which opens it. */
   const opened = (turnId: string, lineId: string) =>
     Effect.gen(function* () {
@@ -601,19 +633,23 @@ const journaledAgent = Effect.gen(function* () {
       });
       yield* taken(turnId, lineId);
     });
+
   /** A line taken by the turn under way. */
   const taken = (turnId: string, lineId: string) =>
     Effect.map(writer.takeAwaitingLine(target, { clientId: lineId, turnId }), (took) =>
       assert.equal(Result.getOrUndefined(took)?.length, 1),
     );
+
   /** The turn's answer, a step for each of the words given, and its end. */
   const answered = (turnId: string, words: readonly string[]) =>
     Effect.gen(function* () {
       const answer = new AssistantMessageBuilder();
+
       for (const said of words) {
         answer.stepStart();
         answer.text(said);
       }
+
       yield* writer.consume(target, {
         ...next(turnId),
         kind: RUN_EVENT.MESSAGE_COMPLETED,
@@ -627,6 +663,7 @@ const journaledAgent = Effect.gen(function* () {
         at: 0,
       });
     });
+
   /** The agent's first turn: the developer's description, read and answered. */
   const firstTurn = Effect.gen(function* () {
     const turnId = randomUUID();
@@ -636,12 +673,15 @@ const journaledAgent = Effect.gen(function* () {
       "The guide is read; the plan fits the code.",
     ]);
   });
+
   /** What a title model was asked when it named the agent. */
   const askedTitling = Effect.gen(function* () {
     const { model, asked } = scriptedTitleModel("Teammate invitations by email");
     yield* titleAgent(model, target, agent);
+
     return asked.join("\n");
   });
+
   return { owner, agent, line, opened, taken, answered, firstTurn, askedTitling };
 });
 
@@ -690,10 +730,12 @@ it.layer(getTestDB())("a title named from the recent exchange", (it) => {
         const journal = yield* journaledAgent;
         const turnId = randomUUID();
         yield* journal.opened(turnId, yield* journal.line("developer"));
+
         // Eight messages steered in leave the developer's line before the recent window of eight.
         for (let at = 0; at < 8; at += 1) {
           yield* journal.taken(turnId, yield* journal.line("agent"));
         }
+
         yield* journal.answered(turnId, ["The guide is read; the plan fits the code."]);
 
         const asked = yield* journal.askedTitling;
@@ -711,9 +753,11 @@ it.layer(getTestDB())("a title named from the recent exchange", (it) => {
         // The second turn takes five messages in, the third one more, so the recent window of eight opens on a message.
         const second = randomUUID();
         yield* journal.opened(second, yield* journal.line("agent"));
+
         for (let at = 0; at < 4; at += 1) {
           yield* journal.taken(second, yield* journal.line("agent"));
         }
+
         yield* journal.answered(second, ["Understood."]);
         const third = randomUUID();
         yield* journal.opened(third, yield* journal.line("agent"));
@@ -735,9 +779,11 @@ it.layer(getTestDB())("a title named from the recent exchange", (it) => {
         // A message opens the second turn, and the eight it takes in mid-run leave it before the recent window of eight.
         const second = randomUUID();
         yield* journal.opened(second, yield* journal.line("agent"));
+
         for (let at = 0; at < 8; at += 1) {
           yield* journal.taken(second, yield* journal.line("agent"));
         }
+
         yield* journal.answered(second, ["Understood."]);
 
         const asked = yield* journal.askedTitling;

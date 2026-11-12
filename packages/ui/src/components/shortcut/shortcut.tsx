@@ -66,6 +66,7 @@ export function Shortcut(
 ): React.JSX.Element {
   const accelerator =
     props.accelerator === undefined ? shortcutAccelerator(props.chord) : props.accelerator;
+
   return (
     <KbdGroup
       className={cn(CHORD, props.className)}

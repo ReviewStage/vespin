@@ -131,6 +131,7 @@ function PlanCard({
   standing: PlanStanding;
 }): React.JSX.Element {
   const { icon, label } = tabLook({ kind: TAB_KIND.PLAN, ...standing });
+
   return <TaskChipCard taskId={taskId} fallback={<NamedCard glyph={icon} name={label} />} />;
 }
 
@@ -142,6 +143,7 @@ function PlanCard({
 function InboxCard({ inbox }: { inbox: InboxBoardView }): React.JSX.Element {
   const waiting = inbox.waiting.length;
   const latest = waiting > 0 ? inbox.waiting.at(-1) : inbox.settled[0];
+
   return (
     <HoverCard data-inbox-card="">
       <HoverCardHead
@@ -212,7 +214,9 @@ export function tabCard(subject: CardSubject): React.JSX.Element | null {
     // Note that a pull request not yet read hangs none, its tab naming it Pull request until it is.
     case TAB_KIND.CHANGES: {
       const { pullRequest, people } = subject;
+
       if (pullRequest === undefined || subject.subject.agent === undefined) return null;
+
       // Note that the agent's own read of who opened it stands in wherever the tab's names no one, as before its read or where its read of the people failed, since GitHub names a deleted account as its ghost rather than no one.
       return (
         <PullRequestCard
@@ -226,6 +230,7 @@ export function tabCard(subject: CardSubject): React.JSX.Element | null {
         />
       );
     }
+
     // A cloud terminal tab hangs its agent's card, saying at its foot whose sandbox its shell runs in.
     case TAB_KIND.TERMINAL:
       return (

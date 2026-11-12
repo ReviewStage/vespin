@@ -12,14 +12,18 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** What a Tasks page group's + names, to a reader, for the task it adds: one in a status, priority, or repository, or for a person. */
 export function groupNewTaskWords(head: TasksGroupHead, words: string): string {
   if (head.kind !== TASKS_GROUP.ASSIGNEE) return `New task in ${words}`;
+
   return head.assigneeId === null ? "New unassigned task" : `New task for ${words}`;
 }
 
 /** What a task dropped on a group, or started from its +, is sent: the group's status or priority, or its assignee, null for No assignee's; nothing for a group that stands for none of them. */
 export function groupStanding(head: TasksGroupHead): TaskStanding | undefined {
   if (head.kind === TASKS_GROUP.STATUS) return { status: head.status };
+
   if (head.kind === TASKS_GROUP.PRIORITY) return { priority: head.priority };
+
   if (head.kind === TASKS_GROUP.ASSIGNEE) return { assigneeId: head.assigneeId };
+
   return undefined;
 }
 
@@ -75,6 +79,8 @@ export function quickAddInto(head: TasksGroupHead): QuickAddInto | undefined {
   if (head.kind === TASKS_GROUP.REPOSITORY) {
     return head.repository === null ? undefined : { repository: head.repository };
   }
+
   const standing = groupStanding(head);
+
   return standing === undefined ? undefined : { standing };
 }

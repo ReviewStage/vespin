@@ -120,6 +120,7 @@ function mount(
   // kept from it still reaches the root's own listeners.
   const page = document.body.appendChild(document.createElement("div"));
   const container = page.appendChild(document.createElement("div"));
+
   if (options.room === true) page.dataset.popoverRoom = "";
   page.addEventListener("keydown", (event) => {
     if (event.key === "Escape") asked.escapedPast.push("Escape");
@@ -146,6 +147,7 @@ function mount(
       }),
     ),
   );
+
   return asked;
 }
 
@@ -166,7 +168,8 @@ function press(init: KeyboardEventInit): void {
 
 /** `words` typed into the field, as an input event hands them. */
 function type(words: string): void {
-  const field = keys() as HTMLInputElement;
+  const field = keys();
+  assert.ok(field instanceof HTMLInputElement);
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setter?.call(field, words);
@@ -178,6 +181,7 @@ function type(words: string): void {
 function announced(): string | undefined {
   const id = keys().getAttribute("aria-activedescendant");
   const row = id === null ? null : document.getElementById(id);
+
   return row?.textContent ?? undefined;
 }
 
@@ -198,6 +202,7 @@ test("typing keeps the rows every word matches, and the first that may be picked
       { id: "haiku", label: "Haiku", terms: ["Anthropic"] },
     ],
   });
+
   type("anthropic");
   const anthropic = listed();
   type("anthropic ha");
@@ -231,6 +236,7 @@ test("a row's name marks the letters the words typed found, and a row found by i
   type("the");
   const marked = [...document.querySelectorAll("mark")].map((mark) => mark.textContent);
   type("theme");
+
   const darkMode = [...document.querySelectorAll('[role="option"]')].find(
     (option) => option.textContent === "Dark mode",
   );
@@ -257,6 +263,7 @@ test("a section's rows stay together under its one heading when a search ranks t
     ],
   });
   type("model");
+
   const headings = [...document.querySelectorAll('[role="group"]')].map((group) =>
     group.getAttribute("aria-label"),
   );
@@ -303,9 +310,11 @@ test("a read that failed says so in the list's place with Retry, and never that 
     }),
   });
   const list = document.querySelector('[role="listbox"]') ?? assert.fail("the list stands");
+
   const retry =
     [...list.querySelectorAll("button")].find((button) => button.textContent === "Retry") ??
     assert.fail("Retry stands in the note");
+
   act(() => retry.click());
 
   assert.match(list.textContent ?? "", /Your repositories could not be read\./u);
@@ -329,9 +338,11 @@ test("the arrows go on into the pinned rows, whose submenu Right opens, Left clo
   const effort = announced();
   press({ key: "ArrowRight" });
   const inside = announced();
+
   const expanded = document
     .querySelector('[aria-haspopup="listbox"]')
     ?.getAttribute("aria-expanded");
+
   press({ key: "ArrowLeft" });
   const closed = document.querySelector('[aria-label="Effort"][role="listbox"]');
   press({ key: "ArrowRight" });
@@ -383,6 +394,7 @@ test("a listed row with a submenu opens it on Enter or Right rather than being p
 
 test("a listed row's ⋯ opens its acts beside it, and a press on the row still picks it", () => {
   const said: string[] = [];
+
   const asked = mount({
     placeholder: "Search sounds",
     rows: [
@@ -400,9 +412,11 @@ test("a listed row's ⋯ opens its acts beside it, and a press on the row still 
       },
     ],
   });
+
   const more =
     document.querySelector<HTMLElement>('[role="option"] button[aria-label="Sound actions"]') ??
     assert.fail("the row draws its ⋯");
+
   act(() => more.click());
   const acts = document.querySelector('[aria-label="Sound actions"][role="listbox"]')?.textContent;
   press({ key: "ArrowDown" });
@@ -489,25 +503,32 @@ function submenuIn(
     this: HTMLElement,
   ) {
     if (this.dataset.popoverRoom !== undefined) return new DOMRect(0, 0, room, 800);
+
     if (this.classList.contains("ui-searchable-menu-branch")) {
       return new DOMRect(rowLeft, 100, rowRight - rowLeft, 32);
     }
+
     if (this.classList.contains("ui-searchable-menu-submenu")) {
       return new DOMRect(rowRight + 9, 100, 200, 100);
     }
+
     return new DOMRect(0, 0, 0, 0);
   });
   mount({ placeholder: "Search models", foot: true, room: true, bounds });
   press({ key: "ArrowUp" });
   press({ key: "ArrowUp" });
   press({ key: "ArrowRight" });
+
   if (pressed) {
     const effort =
       document.querySelector<HTMLElement>('[aria-haspopup="listbox"]') ?? assert.fail("Effort");
+
     act(() => effort.click());
   }
+
   const submenu =
     document.querySelector<HTMLElement>(".ui-searchable-menu-submenu") ?? assert.fail("it opens");
+
   return {
     side: submenu.dataset.side,
     shift: Number.parseFloat(submenu.style.getPropertyValue("--ui-submenu-shift")),
@@ -559,6 +580,7 @@ test("the pointer crossing a pinned row on its way into the submenu beside anoth
   mount({ placeholder: "Search models", foot: true });
   const effortOpen = () => document.querySelector('[aria-label="Effort"][role="listbox"]') !== null;
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     mouseOver(pinned("Effort"), 300, 116);
     const opened = effortOpen();
@@ -588,8 +610,10 @@ test("a row's own end marks stand at its end, after why it cannot be picked now,
       { id: "plain", label: "Plain" },
     ],
   });
+
   const ends = [...document.querySelectorAll('[role="option"]')].map((option) => {
     const end = option.querySelector(".ui-combobox-option-hint");
+
     return end === null
       ? null
       : [...end.childNodes].map((node) =>
@@ -603,6 +627,7 @@ test("a row's own end marks stand at its end, after why it cannot be picked now,
 /** The pointer arriving on `target` and resting there past the hint's wait. */
 function restOn(target: Element): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -661,6 +686,7 @@ test("rows drawn in place wear their end marks and hang their cards while the po
     [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
       button.textContent?.includes(label),
     ) ?? assert.fail(`${label} is drawn`);
+
   restOn(named("Alerts"));
   assert.equal(document.querySelector(".ui-tooltip-card [data-card]")?.textContent, "Alerts card");
   restOn(named("Sweep"));
@@ -699,6 +725,7 @@ function pressNamed(name: string): void {
     [...sheet().querySelectorAll<HTMLElement>("button")].find(
       (button) => (button.getAttribute("aria-label") ?? button.textContent) === name,
     ) ?? assert.fail(`${name} is drawn`);
+
   act(() => named.click());
 }
 
@@ -732,8 +759,10 @@ test("in a sheet a pinned row's submenu stands in its place with a way back, and
   pressNamed("Model");
   const back = sheetLists();
   pressNamed("Effort");
+
   const low =
     sheet().querySelector<HTMLElement>('[role="option"]') ?? assert.fail("Effort lists Low");
+
   act(() => low.click());
 
   assert.deepEqual(paged, { name: "Effort", lists: ["Effort"] });
@@ -746,8 +775,10 @@ test("in a sheet a pick in a submenu that stays is handed on and puts the list b
   inPhoneLayout();
   const asked = mount({ placeholder: "Search models", foot: true, staying: true });
   pressNamed("Effort");
+
   const low =
     sheet().querySelector<HTMLElement>('[role="option"]') ?? assert.fail("Effort lists Low");
+
   act(() => low.click());
 
   assert.deepEqual(asked.said, ["effort low"]);
@@ -758,8 +789,10 @@ test("a finger dragging the sheet from its field types rather than swiping it aw
   inPhoneLayout();
   const asked = mount({ placeholder: "Search models" });
   const field = sheet().querySelector<HTMLElement>('[role="combobox"]') ?? assert.fail("a field");
+
   const finger = (type: string, y: number) =>
     new PointerEvent(type, { bubbles: true, pointerId: 1, pointerType: "touch", clientY: y });
+
   act(() => {
     field.dispatchEvent(finger("pointerdown", 100));
     field.dispatchEvent(finger("pointermove", 400));

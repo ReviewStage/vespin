@@ -52,5 +52,6 @@ const WRITING_GLYPH = {
 /** The glyph `action` is drawn with wherever it is offered. */
 export function WritingGlyph({ action }: { action: WritingAction }): React.JSX.Element {
   const Glyph = WRITING_GLYPH[action];
+
   return <Glyph />;
 }

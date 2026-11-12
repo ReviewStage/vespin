@@ -4,7 +4,7 @@ import {
   type DiagramDrawing,
   type DiagramModule,
 } from "@repo/ui/diagram-contract";
-import { writeWithheldSheet } from "@repo/ui/session-replay-marks";
+import { REPLAY_LEFT_OUT, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import mermaid, { type MermaidConfig } from "mermaid";
 import { diagramThemeVariables } from "./diagram-theme.js";
 
@@ -30,7 +30,7 @@ import { diagramThemeVariables } from "./diagram-theme.js";
  * appearance must not land between a draw's two layouts.
  *
  * Neither layout reaches the screen recording. Each is drawn in a box of
- * its own under the recorder's `ph-no-capture`, in the page, where
+ * its own under the recorder's block (`REPLAY_LEFT_OUT`), in the page, where
  * Mermaid's renderers look their drawing up, rather than loose in its
  * body: the drawing names the diagram's participants, nodes, and links in
  * its attributes, and its `<style>`, which the recording copies unmasked,
@@ -74,7 +74,9 @@ let laidOut = 0;
 /** Text as base64, by its UTF-8 bytes, as a `data:` address carries it. */
 function base64(text: string): string {
   let binary = "";
+
   for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+
   return btoa(binary);
 }
 
@@ -85,6 +87,7 @@ function base64(text: string): string {
  */
 function parsedSvg(svg: string): SVGSVGElement | undefined {
   const root = new DOMParser().parseFromString(svg, "text/html").body.firstElementChild;
+
   return root instanceof SVGSVGElement ? root : undefined;
 }
 
@@ -95,10 +98,12 @@ function parsedSvg(svg: string): SVGSVGElement | undefined {
  */
 function pictureOf(svg: SVGSVGElement): string {
   const [, , width, height] = (svg.getAttribute("viewBox") ?? "").split(/[\s,]+/u).map(Number);
+
   if (width !== undefined && height !== undefined && width > 0 && height > 0) {
     svg.setAttribute("width", String(width));
     svg.setAttribute("height", String(height));
   }
+
   return `data:image/svg+xml;base64,${base64(new XMLSerializer().serializeToString(svg))}`;
 }
 
@@ -108,8 +113,10 @@ async function laidOutIn(scratch: HTMLElement, id: string, code: string): Promis
   const sheet = new CSSStyleSheet();
   writeWithheldSheet(sheet, first?.querySelector("style")?.textContent ?? "");
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+
   try {
     const drawn = parsedSvg((await mermaid.render(id, code, scratch)).svg);
+
     return drawn === undefined ? REFUSED : { kind: DIAGRAM_DRAWING.DRAWN, url: pictureOf(drawn) };
   } finally {
     document.adoptedStyleSheets = document.adoptedStyleSheets.filter((each) => each !== sheet);
@@ -119,11 +126,13 @@ async function laidOutIn(scratch: HTMLElement, id: string, code: string): Promis
 /** One fence drawn out of the recording: laid out in a box under the recorder's block, which goes once the picture is taken. */
 async function drawnNow(code: string, appearance: DiagramAppearance): Promise<DiagramDrawing> {
   mermaid.initialize(configIn(appearance));
+
   if ((await mermaid.parse(code, { suppressErrors: true })) === false) return REFUSED;
   laidOut += 1;
   const scratch = document.createElement("div");
-  scratch.className = "ph-no-capture";
+  scratch.className = REPLAY_LEFT_OUT;
   document.body.append(scratch);
+
   try {
     return await laidOutIn(scratch, `description-diagram-${laidOut}`, code);
   } finally {
@@ -135,6 +144,7 @@ async function drawnNow(code: string, appearance: DiagramAppearance): Promise<Di
 function draw(code: string, appearance: DiagramAppearance): Promise<DiagramDrawing> {
   const drawn = drawing.then(() => drawnNow(code, appearance)).catch(() => REFUSED);
   drawing = drawn;
+
   return drawn;
 }
 

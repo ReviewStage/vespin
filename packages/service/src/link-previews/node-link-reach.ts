@@ -37,6 +37,7 @@ function boundedBody(
   const chunks: Buffer[] = [];
   let total = 0;
   let settled = false;
+
   const settle = (cut: boolean) => {
     if (settled) return;
     settled = true;
@@ -53,9 +54,11 @@ function boundedBody(
       cut,
     });
   };
+
   response.on("data", (chunk: Buffer) => {
     total += chunk.byteLength;
     chunks.push(chunk);
+
     if (total > maxBytes) {
       settle(true);
       response.destroy();
@@ -76,6 +79,7 @@ export const nodeLinkReach: HopTransport = ({ url, headers, maxBytes }) =>
     const sent = request(url, { method: "GET", headers, agent }, (response) =>
       boundedBody(response, maxBytes, (answer) => resume(Effect.succeed(answer))),
     );
+
     sent.on("error", (error: Error) =>
       resume(
         Effect.succeed(
@@ -84,5 +88,6 @@ export const nodeLinkReach: HopTransport = ({ url, headers, maxBytes }) =>
       ),
     );
     sent.end();
+
     return Effect.sync(() => sent.destroy());
   });

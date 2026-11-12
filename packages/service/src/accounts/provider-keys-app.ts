@@ -22,6 +22,7 @@ const providerKeyRewrapEffect = /* @__PURE__ */ Effect.fn("web/providerKeyRewrap
   request: Request,
 ): Effect.fn.Return<Response, unknown, DatabaseServices | HostedEnvironment> {
   const environment = yield* HostedEnvironment;
+
   return yield* handleProviderKeyRewrap({
     request,
     cronSecret: environment.cronSecret,

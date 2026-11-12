@@ -13,6 +13,7 @@ function onFocusChange(changed: () => void): () => void {
   document.addEventListener("visibilitychange", changed);
   window.addEventListener("focus", changed);
   window.addEventListener("blur", changed);
+
   return () => {
     document.removeEventListener("visibilitychange", changed);
     window.removeEventListener("focus", changed);

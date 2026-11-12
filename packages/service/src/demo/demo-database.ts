@@ -33,18 +33,22 @@ const IPV4_LOOPBACK = /^127(\.\d{1,3}){3}$/;
 /** Whether a parsed URL's host is this machine's loopback, by its spelling alone. */
 function isLoopbackHost(url: URL): boolean {
   const host = url.hostname.toLowerCase();
+
   return LOOPBACK_NAMES.has(host) || IPV4_LOOPBACK.test(host);
 }
 
 /** The address, where it is a Postgres on loopback; refused, with why, where it is anything else. */
 export function demoDatabaseUrl(address: string): Result.Result<string, DemoDatabaseRefusal> {
   const url = URL.canParse(address) ? new URL(address) : undefined;
+
   if (url === undefined || !POSTGRES_PROTOCOLS.has(url.protocol)) {
     return Result.fail(DEMO_DATABASE_REFUSAL.UNREADABLE);
   }
+
   // Note that a `host` query parameter overrides the URL's host in libpq and node-postgres, so one that names a socket or another host is refused with the rest.
   if (!isLoopbackHost(url) || url.searchParams.has("host") || url.searchParams.has("hostaddr")) {
     return Result.fail(DEMO_DATABASE_REFUSAL.NOT_LOOPBACK);
   }
+
   return Result.succeed(address);
 }

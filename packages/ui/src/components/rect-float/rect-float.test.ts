@@ -74,6 +74,7 @@ function mount(anchor: () => ReturnType<typeof boxAt>, side?: PopoverSide): HTML
   );
   const layer = owner.querySelector<HTMLElement>(".ui-rect-float");
   assert.ok(layer, "the layer is drawn");
+
   return layer;
 }
 
@@ -121,6 +122,7 @@ test("a scroll that moves the box moves the layer with it", () => {
 test("a margin its owner's rule gives the layer, as one spacing a box's children does, moves it nowhere", () => {
   const style = document.head.appendChild(document.createElement("style"));
   style.textContent = ".ui-rect-float { margin-top: 6px; margin-left: 3px; }";
+
   try {
     const layer = mount(() => boxAt(200, 300));
 
@@ -137,6 +139,7 @@ function closing(told: { exited: number }) {
   owner.getBoundingClientRect = () => new DOMRect(100, 50, 600, 700);
   const root = createRoot(owner);
   roots.push(root);
+
   const draw = (shown: string | undefined) =>
     act(() =>
       root.render(
@@ -150,6 +153,7 @@ function closing(told: { exited: number }) {
         }),
       ),
     );
+
   return { draw, layer: () => owner.querySelector<HTMLElement>(".ui-rect-float") };
 }
 
@@ -161,12 +165,14 @@ test("a layer closed through open stays where it stood, inert and leaving, drawi
   const opened = layer()?.style.top;
   draw(undefined);
   const leaving = layer();
+
   const fading = {
     inert: leaving?.hasAttribute("inert"),
     words: leaving?.textContent,
     top: leaving?.style.top,
     exited: told.exited,
   };
+
   act(() => exits.finish());
 
   assert.ok(leaving, "the layer stands while it fades");
@@ -207,6 +213,7 @@ test("a fading layer hears no press away", () => {
   const owner = document.body.appendChild(document.createElement("div"));
   const root = createRoot(owner);
   roots.push(root);
+
   const draw = (open: boolean) =>
     act(() =>
       root.render(
@@ -220,6 +227,7 @@ test("a fading layer hears no press away", () => {
         }),
       ),
     );
+
   draw(true);
   document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
   draw(false);

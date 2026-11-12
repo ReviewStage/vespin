@@ -84,6 +84,7 @@ function WayOn({
   unmasked: boolean;
 }): React.JSX.Element | null {
   if (way === undefined) return null;
+
   return (
     <Button
       variant={ACTION_BUTTON[way.look ?? EMPTY_STATE_ACTION_LOOK.QUIET]}

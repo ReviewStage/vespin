@@ -74,11 +74,13 @@ export function countSignInMethods(
   const google = new Set<string>();
   const github = new Set<string>();
   const other = new Set<string>();
+
   for (const link of links) {
     if (link.providerId === SIGN_IN_PROVIDER_ID.GOOGLE) google.add(link.userId);
     else if (link.providerId === SIGN_IN_PROVIDER_ID.GITHUB) github.add(link.userId);
     else other.add(link.userId);
   }
+
   return { google: google.size, github: github.size, other: other.size };
 }
 
@@ -119,11 +121,13 @@ export function cohortRetention(
 ): AdminMetricsSource["retention"] {
   const cohortSizes = new Map(sizeRows.map((row) => [row.week, row.value]));
   const activeByCohortWeek = new Map<string, Map<string, number>>();
+
   for (const row of activeRows) {
     const byWeek = activeByCohortWeek.get(row.signupWeek) ?? new Map<string, number>();
     byWeek.set(row.activityWeek, row.value);
     activeByCohortWeek.set(row.signupWeek, byWeek);
   }
+
   return { cohortSizes, activeByCohortWeek };
 }
 
@@ -135,9 +139,11 @@ export function cohortRetention(
  */
 export function lastNDayKeys(now: number, days: number): string[] {
   const keys: string[] = [];
+
   for (let offset = days - 1; offset >= 0; offset -= 1) {
     keys.push(utcDayKey(now - offset * DAY_MS));
   }
+
   return keys;
 }
 
@@ -151,15 +157,18 @@ export function utcWeekStartKey(instant: number): string {
   const daysSinceEpoch = Math.floor(instant / DAY_MS);
   // The epoch, 1970-01-01, was a Thursday: three days past its week's Monday.
   const daysSinceMonday = (daysSinceEpoch + 3) % 7;
+
   return utcDayKey((daysSinceEpoch - daysSinceMonday) * DAY_MS);
 }
 
 /** The trailing weeks' Monday keys, oldest first and ending on `now`'s own week. */
 export function lastNWeekStartKeys(now: number, weeks: number): string[] {
   const keys: string[] = [];
+
   for (let offset = weeks - 1; offset >= 0; offset -= 1) {
     keys.push(utcWeekStartKey(now - offset * WEEK_MS));
   }
+
   return keys;
 }
 
@@ -180,8 +189,10 @@ export function buildRetentionCohorts(
   return weekKeys.map((weekStart, index) => {
     const size = retention.cohortSizes.get(weekStart) ?? 0;
     const activeByWeek = retention.activeByCohortWeek.get(weekStart);
+
     const cells = weekKeys.slice(index).map((week, offset) => {
       const activeAccounts = activeByWeek?.get(week) ?? 0;
+
       return {
         offset,
         activeAccounts,
@@ -189,6 +200,7 @@ export function buildRetentionCohorts(
         inProgress: week === currentWeek,
       };
     });
+
     return { weekStart, size, cells };
   });
 }
@@ -274,6 +286,7 @@ export function handleAdminMetrics(
   const { query } = options;
 
   const windowDays = adminMetricsWindow(query.window);
+
   if (windowDays === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_WINDOW);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

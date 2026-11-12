@@ -397,12 +397,15 @@ export interface RecordingFile {
 export function recordingBytesOf(run: CommandRun, maxBytes: number): RecordingFile | undefined {
   if (run.exitCode !== 0) return undefined;
   const lineEnd = run.stdout.indexOf("\n");
+
   if (lineEnd < 0) return undefined;
   const path = run.stdout.slice(0, lineEnd);
   const bytes = new Uint8Array(Buffer.from(run.stdout.slice(lineEnd + 1).trim(), "base64"));
+
   if (!path.startsWith("/") || bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
     return undefined;
   }
+
   return { path, bytes };
 }
 
@@ -413,6 +416,7 @@ export type RecordingStart =
 
 export function recordingStartOf(run: CommandRun): RecordingStart {
   if (run.exitCode !== 0) return { ok: false, exitCode: run.exitCode };
+
   return { ok: true, running: run.stdout.trim() === RECORDING_START_OUTPUT.RUNNING };
 }
 
@@ -437,6 +441,8 @@ const decodeRecordingStop = Schema.decodeUnknownOption(
 
 export function recordingStopOf(run: CommandRun): RecordingStop {
   const failedRun: RecordingStop = { ok: false, reason: RECORDING_FAILURE.ENCODER };
+
   if (run.exitCode !== 0) return failedRun;
+
   return Option.getOrElse(decodeRecordingStop(run.stdout.trim()), () => failedRun);
 }

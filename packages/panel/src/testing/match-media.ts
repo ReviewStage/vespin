@@ -12,6 +12,7 @@
 /** A media query's answer that never matches and never changes. */
 function unmatched(query: string): MediaQueryList {
   const ignore = () => undefined;
+
   return {
     matches: false,
     media: query,

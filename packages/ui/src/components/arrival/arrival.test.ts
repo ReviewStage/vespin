@@ -27,16 +27,21 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountResult = { container: HTMLElement; read: (now: boolean) => void };
+
 /** Draws the region at `reading` into the page and answers a way to draw it again at another. */
-function mount(reading: boolean): { container: HTMLElement; read: (now: boolean) => void } {
+function mount(reading: boolean): MountResult {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (now: boolean) =>
     act(() =>
       root.render(createElement(Arrival, { reading: now, label: LABEL, children: CONTENT })),
     );
+
   draw(reading);
+
   return { container, read: draw };
 }
 

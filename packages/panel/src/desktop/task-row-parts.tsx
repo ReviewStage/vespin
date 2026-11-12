@@ -67,9 +67,11 @@ export function taskSubject(
   key: string | undefined,
 ): MenuSubject {
   const status = statusOf(task);
+
   const detail = [repository, TASK_STATUS_WORDS[status], key].filter(
     (part): part is string => part !== undefined,
   );
+
   return { mark: <TaskStatusMark status={status} />, name: task.name, detail: detail.join(" · ") };
 }
 
@@ -79,9 +81,11 @@ type ChipTask = Pick<TaskSummary, "status" | "priority" | "assignee">;
 /** Whether a task already stands where a standing would send it. */
 export function standsAt(task: TaskSummary, standing: TaskStanding): boolean {
   if (standing.status !== undefined) return statusOf(task) === standing.status;
+
   if (standing.assigneeId !== undefined) {
     return (task.assignee?.userId ?? null) === standing.assigneeId;
   }
+
   return priorityOf(task) === standing.priority;
 }
 
@@ -108,9 +112,11 @@ export function useStandingDoor(tasks: Pick<TasksControl, "drawnTasks">): Standi
   const toast = useToast();
   const { members } = useMemberDirectory();
   const { onSetTaskStanding, dialog } = useStandingWrites(tasks.drawnTasks);
+
   const set: StandingDoor["set"] = (task, standing, onRefused) => {
     if (standsAt(task, standing)) return Promise.resolve();
     const named = members?.find((member) => member.userId === standing.assigneeId)?.name;
+
     return onSetTaskStanding(task.id, standing, named).then((kept) => {
       if (kept.kept) return;
       onRefused?.();
@@ -126,6 +132,7 @@ export function useStandingDoor(tasks: Pick<TasksControl, "drawnTasks">): Standi
       });
     });
   };
+
   return { set, dialog };
 }
 
@@ -157,6 +164,7 @@ function StandingChip<T extends string>({
   const { drawn, close, trigger } = useMenu(true);
   const name = `${label}: ${words[value]}`;
   const hidden = (each: T) => masked?.(each) === true;
+
   return (
     <>
       <Tooltip label={name} card={card}>
@@ -241,6 +249,7 @@ export function AssigneeChip({
   const rows = useAssigneeRows(task.assignee);
   const words = Object.fromEntries(rows.map((row) => [row.id, row.label]));
   const icons = new Map(rows.map((row) => [row.id, row.icon]));
+
   return (
     <StandingChip
       label="Assignee"
@@ -315,6 +324,7 @@ export function CreatorFace({
   const shown = maker?.actor ?? creator;
   // Note that the face opens the member it stands for, whoever made the task for them, since the app and an agent have no page.
   const door = useActorDoor(creator);
+
   return (
     <Tooltip label={actorName(shown)} card={actorCard(shown)}>
       <Chip

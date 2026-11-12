@@ -26,7 +26,7 @@ const NOTIFICATION_SETTINGS_URL = "app-settings:notifications";
 export function openNotificationSettings(): void {
   openURL(NOTIFICATION_SETTINGS_URL)
     .catch(() => openSettings())
-    .catch((error: unknown) => console.error("iOS's Settings did not open.", error));
+    .catch((cause: unknown) => console.error("iOS's Settings did not open.", cause));
 }
 
 /** Where the permission stands, as Settings words it. */
@@ -42,39 +42,51 @@ export type NotificationStanding =
 /** The standing a permission's answer reads as: a refusal is one iOS will not ask again, which only its Settings undoes. */
 function standingOf(answer: NotificationPermissionsStatus): NotificationStanding {
   if (answer.granted) return NOTIFICATION_STANDING.ALLOWED;
+
   if (!answer.canAskAgain) return NOTIFICATION_STANDING.REFUSED;
+
   return NOTIFICATION_STANDING.UNASKED;
 }
 
-/** Where the permission stands, none until first read, and the step toward allowing it. */
-export function useNotificationPermission(): {
+type UseNotificationPermissionResult = {
   readonly standing: NotificationStanding | undefined;
   readonly allow: () => void;
-} {
+};
+
+/** Where the permission stands, none until first read, and the step toward allowing it. */
+export function useNotificationPermission(): UseNotificationPermissionResult {
   const [standing, setStanding] = useState<NotificationStanding | undefined>(undefined);
+
   const read = useCallback(() => {
     getPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
-      (error: unknown) => console.error("The notification permission could not be read.", error),
+      (cause: unknown) => console.error("The notification permission could not be read.", cause),
     );
   }, []);
+
   useEffect(() => {
     read();
+
     // Note that a person may change it in iOS's Settings and come back, so it is read again then.
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") read();
     });
+
     return () => subscription.remove();
   }, [read]);
+
   const allow = () => {
     if (standing === NOTIFICATION_STANDING.REFUSED) {
       openNotificationSettings();
+
       return;
     }
+
     requestPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
-      (error: unknown) => console.error("The notification permission was not asked.", error),
+      (cause: unknown) => console.error("The notification permission was not asked.", cause),
     );
   };
+
   return { standing, allow };
 }

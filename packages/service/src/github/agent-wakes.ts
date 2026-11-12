@@ -28,7 +28,7 @@ import {
   type UnparsedWireValue,
 } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Duration, Effect, Option, Result, Schema } from "effect";
+import { Clock, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { isAgentBranch } from "../agents/coder-host/bounds.js";
 import { agentPullRequestReach } from "../agents/coder-host/published.js";
@@ -273,6 +273,7 @@ const FENCE_PREAMBLE =
 const AT_WORK: ReadonlySet<string> = new Set([AGENT_STATUS.STARTING, AGENT_STATUS.RUNNING]);
 
 const RepositorySchema = Schema.Struct({ full_name: Schema.String });
+
 const SenderSchema = Schema.Struct({
   login: Schema.String,
   id: Schema.optionalKey(Schema.Number),
@@ -378,6 +379,7 @@ function readDelivery<S extends Schema.ConstraintDecoder<unknown>>(
 /** An instant GitHub wrote, in epoch milliseconds, or `fallback` where it wrote none it can read. */
 function instantOf(written: string | null, fallback: number): number {
   const at = written === null ? Number.NaN : Date.parse(written);
+
   return Number.isNaN(at) ? fallback : at;
 }
 
@@ -391,6 +393,7 @@ function githubAvatarOf(author: {
   readonly avatar_url?: string | undefined;
 }): Pick<AgentWake, "byAvatar"> {
   const avatar = githubAvatarUrl(author.avatar_url);
+
   return avatar === undefined ? {} : { byAvatar: avatar };
 }
 
@@ -404,8 +407,10 @@ function appAvatarOf(
 /** A review submitted, as the agents on its pull request's branch are told of it. */
 function reviewWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
   const read = readDelivery(ReviewDeliverySchema, payload);
+
   if (Result.isFailure(read) || read.success.action !== WAKE_ACTION.SUBMITTED) return undefined;
   const { repository, sender, review, pull_request: pullRequest } = read.success;
+
   return {
     kind: AGENT_WAKE.REVIEW,
     repository: repository.full_name,
@@ -425,6 +430,7 @@ function reviewWake(payload: UnparsedWireValue, now: number): AgentWake | undefi
 /** A comment made on a pull request's conversation, as the agents whose pull request it is are told of it. */
 function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
   const read = readDelivery(CommentDeliverySchema, payload);
+
   if (
     Result.isFailure(read) ||
     read.success.action !== WAKE_ACTION.CREATED ||
@@ -432,7 +438,9 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
   ) {
     return undefined;
   }
+
   const { repository, sender, comment, issue } = read.success;
+
   return {
     kind: AGENT_WAKE.COMMENT,
     repository: repository.full_name,
@@ -444,7 +452,7 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
     ...githubAvatarOf(sender),
     at: instantOf(comment.created_at, now),
     words: comment.body,
-    ...(comment.id === undefined ? {} : { commentId: comment.id }),
+    ...(comment.id !== undefined && { commentId: comment.id }),
   };
 }
 
@@ -455,8 +463,10 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
  */
 function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
   const read = readDelivery(DequeuedDeliverySchema, payload);
+
   if (Result.isFailure(read)) return undefined;
   const { action, reason, repository, sender, pull_request: pullRequest } = read.success;
+
   if (
     action !== WAKE_ACTION.DEQUEUED ||
     pullRequest.state !== OPEN_STATE ||
@@ -466,6 +476,7 @@ function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | unde
   ) {
     return undefined;
   }
+
   return {
     kind: AGENT_WAKE.DEQUEUED,
     repository: repository.full_name,
@@ -476,16 +487,18 @@ function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | unde
     ...githubIdOf(sender),
     ...githubAvatarOf(sender),
     at: now,
-    ...(reason === undefined || reason === "" ? {} : { reason }),
+    ...(reason !== undefined && reason !== "" && { reason }),
   };
 }
 
 /** A check suite that completed without passing on an agent's branch, as the agent standing on it is told of it. */
 function checkFailedWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
   const read = readDelivery(CheckSuiteDeliverySchema, payload);
+
   if (Result.isFailure(read)) return undefined;
   const { action, repository, check_suite: suite } = read.success;
   const branch = suite.head_branch;
+
   if (
     action !== WAKE_ACTION.COMPLETED ||
     !FAILED_CONCLUSIONS.has(suite.conclusion ?? "") ||
@@ -494,6 +507,7 @@ function checkFailedWake(payload: UnparsedWireValue, now: number): AgentWake | u
   ) {
     return undefined;
   }
+
   return {
     kind: AGENT_WAKE.CHECK_FAILED,
     repository: repository.full_name,
@@ -511,10 +525,13 @@ function checkFailedWake(payload: UnparsedWireValue, now: number): AgentWake | u
 /** A commit status that failed on agents' branches, every agent's branch at the commit, told as a failed check is: by who set it, on the failed commit's checks. */
 function statusFailedWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
   const read = readDelivery(StatusDeliverySchema, payload);
+
   if (Result.isFailure(read) || !FAILED_STATES.has(read.success.state)) return undefined;
   const { repository, sender, sha, branches } = read.success;
   const agentBranches = branches.map((each) => each.name).filter(isAgentBranch);
+
   if (agentBranches.length === 0) return undefined;
+
   return {
     kind: AGENT_WAKE.CHECK_FAILED,
     repository: repository.full_name,
@@ -531,7 +548,7 @@ function statusFailedWake(payload: UnparsedWireValue, now: number): AgentWake | 
 /** The agent branches of those named, the null a detached head or a fork's branch leaves dropped. */
 function agentBranchesOf(named: readonly (string | null | undefined)[]): readonly string[] {
   return named.filter(
-    (branch): branch is string => typeof branch === "string" && isAgentBranch(branch),
+    (branch): branch is string => Predicate.isString(branch) && isAgentBranch(branch),
   );
 }
 
@@ -545,6 +562,7 @@ function checksMovedWake(
   at: number,
 ): AgentWake | undefined {
   if (branches.length === 0) return undefined;
+
   return {
     kind: AGENT_WAKE.CHECKS_COMPLETED,
     repository: repository.full_name,
@@ -571,8 +589,10 @@ export function checksCompletedWakeOf(
   switch (event) {
     case WAKE_EVENT.CHECK_SUITE: {
       const read = readDelivery(CheckSuiteDeliverySchema, payload);
+
       if (Result.isFailure(read) || read.success.action !== WAKE_ACTION.COMPLETED) return undefined;
       const { repository, check_suite: suite } = read.success;
+
       return checksMovedWake(
         repository,
         agentBranchesOf([suite.head_branch]),
@@ -582,10 +602,13 @@ export function checksCompletedWakeOf(
         instantOf(suite.updated_at, now),
       );
     }
+
     case WAKE_EVENT.CHECK_RUN: {
       const read = readDelivery(CheckRunDeliverySchema, payload);
+
       if (Result.isFailure(read) || read.success.action !== WAKE_ACTION.COMPLETED) return undefined;
       const { repository, check_run: run } = read.success;
+
       return checksMovedWake(
         repository,
         // The suite's branch and every head branch of the pull requests the run names.
@@ -601,10 +624,13 @@ export function checksCompletedWakeOf(
         instantOf(run.completed_at, now),
       );
     }
+
     case WAKE_EVENT.STATUS: {
       const read = readDelivery(StatusDeliverySchema, payload);
+
       if (Result.isFailure(read) || read.success.state === PENDING_STATE) return undefined;
       const { repository, sender, sha, branches } = read.success;
+
       return checksMovedWake(
         repository,
         agentBranchesOf(branches.map((each) => each.name)),
@@ -614,6 +640,7 @@ export function checksCompletedWakeOf(
         instantOf(read.success.updated_at, now),
       );
     }
+
     default:
       return undefined;
   }
@@ -658,6 +685,7 @@ function pullRequestWords(wake: AgentWake): string {
 /** One inline comment as the review's words carry it: where it is, its page, and what it says. */
 function lineCommentWords(comment: GitHubReviewLineComment): string {
   const where = comment.line === undefined ? comment.path : `${comment.path}:${comment.line}`;
+
   return `On ${where} (${comment.url}):\n${comment.body.trim()}`;
 }
 
@@ -671,6 +699,7 @@ function withWords(head: string, tag: string, said: string, close: string, reade
   const open = `${head}\n\n${FENCE_PREAMBLE}\n<${tag}>\n`;
   const end = `\n</${tag}>\n\n${close}`;
   const room = AGENT_BOUNDS.MAX_MESSAGE_CHARS - open.length - end.length;
+
   return `${open}${fencedWithin(said, room, cutMark(reader))}${end}`;
 }
 
@@ -688,15 +717,19 @@ function failedChecksWords(failed: readonly HeadCheck[], room: number, reader: s
   // Note that a name or a page spelled long still fits, because each line is counted against what the message has left.
   let left = room - opening.length - UNNAMED_CHECKS_ROOM;
   const named: string[] = [];
+
   for (const check of failed.filter((each) => each.kind === HEAD_CHECK_KIND.RUN)) {
     const line = check.url === null ? `- ${check.name}` : `- ${check.name} (${check.url})`;
+
     if (line.length + 1 > left) break;
     named.push(line);
     left -= line.length + 1;
   }
+
   if (named.length === 0) return "";
   const unnamed = failed.length - named.length;
   const more = unnamed === 0 ? "" : `\n- ${unnamed} more, to read with ${reader}`;
+
   return `${opening}${named.join("\n")}${more}`;
 }
 
@@ -718,25 +751,31 @@ function agentWakeText(
   access: GitHubAccess,
 ): string {
   const reader = GITHUB_READER[access];
+
   const failed = Option.match(checks, {
     onNone: () => [],
     onSome: (read) => read.checks.filter(headCheckFailed),
   });
+
   switch (wake.kind) {
     case AGENT_WAKE.REVIEW: {
       const verdict = VERDICT_WORDS.get(wake.verdict ?? "") ?? REVIEWED;
       const head = `@${wake.by} ${verdict} ${pullRequestWords(wake)}`;
+
       const said = [
         wake.words?.trim() ?? "",
         ...Option.getOrElse(inline, () => []).map(lineCommentWords),
       ]
         .filter((part) => part !== "")
         .join("\n\n");
+
       const close = Option.isNone(inline)
         ? `Its inline comments could not be read here, so read them with ${reader}, and act on the review as you judge best.`
         : `Act on it as you judge best, and read with ${reader} anything cut short or the rest of a thread.`;
+
       return withWords(head, FENCE_TAG[AGENT_WAKE.REVIEW], said, close, reader);
     }
+
     case AGENT_WAKE.COMMENT:
       return withWords(
         `@${wake.by} commented on ${pullRequestWords(wake)}`,
@@ -749,20 +788,26 @@ function agentWakeText(
       const head = `A check failed on your branch \`${branch ?? ""}\`: ${wake.url}`;
       const close = `Read why with ${reader}, fix the cause, and push, then wait on your checks as your instructions say.`;
       const named = failedChecksWords(failed, roomBetween(head, close), reader);
+
       return [head, named, close].filter((part) => part !== "").join("\n\n");
     }
+
     case AGENT_WAKE.CHECKS_COMPLETED: {
       const sha = (wake.sha ?? "").slice(0, SHORT_SHA_CHARS);
       const head = `Every check finished on \`${sha}\`, the head of ${pullRequestWords(wake)}`;
+
       if (!Option.exists(checks, (read) => read.failing)) return `${head}\n\nNone failed.`;
       const close = `Read why with ${reader}, fix the cause, and push.`;
       const named = failedChecksWords(failed, roomBetween(head, close), reader);
+
       return named === ""
         ? `${head}\n\nAt least one failed: read why with ${reader}, fix the cause, and push.`
         : `${head}\n\n${named}\n\n${close}`;
     }
+
     case AGENT_WAKE.DEQUEUED: {
       const why = wake.reason === undefined ? "" : `GitHub's reason: \`${wake.reason}\`. `;
+
       return [
         `The merge queue took out ${pullRequestWords(wake)} ${why}It is still open, and no longer queued.`,
         `Read why with ${reader}: where a check the queue ran failed, it ran on the queue's own \`gh-readonly-queue/\` branch, under the \`merge_group\` event, rather than on yours. Fix the cause and push, bringing your branch up to date with its base only where the cause is a change there, then queue it again with \`gh pr merge --auto\`. Where it needs the developer instead, leave it unqueued and say so.`,
@@ -796,9 +841,11 @@ function lineChecks(read: HeadChecks): NonNullable<GitHubLineMetadata["checks"]>
     .flatMap((check) => {
       const name = check.name.trim().slice(0, GITHUB_LINE_BOUNDS.NAME_CHARS);
       const url = check.url?.trim() ?? "";
+
       if (check.conclusion === null || name === "") return [];
       const fits = url !== "" && url.length <= GITHUB_LINE_BOUNDS.URL_CHARS;
-      return [{ name, conclusion: check.conclusion, ...(fits ? { url } : {}) }];
+
+      return [{ name, conclusion: check.conclusion, ...(fits && { url }) }];
     })
     .slice(0, GITHUB_LINE_BOUNDS.CHECKS);
 }
@@ -822,42 +869,49 @@ function githubLine(
 ): GitHubLineMetadata {
   const words = boundWords(wake.words ?? "");
   const html = words === "" ? undefined : boundRendering(Option.getOrUndefined(rendering));
+
   const comments = Option.getOrElse(inline, () => [])
     .slice(0, GITHUB_LINE_BOUNDS.COMMENTS)
     .map((comment) => {
       const body = boundWords(comment.body);
       const bodyHtml = body === "" ? undefined : boundRendering(comment.html);
+
       return {
         path: comment.path,
-        ...(comment.line === undefined ? {} : { line: comment.line }),
+        ...(comment.line !== undefined && { line: comment.line }),
         url: comment.url,
         body,
-        ...(bodyHtml === undefined ? {} : { body_html: bodyHtml }),
+        ...(bodyHtml !== undefined && { body_html: bodyHtml }),
       };
     });
+
   const checkLine =
     wake.kind === AGENT_WAKE.CHECK_FAILED || wake.kind === AGENT_WAKE.CHECKS_COMPLETED;
+
   const failing =
     wake.kind === AGENT_WAKE.CHECK_FAILED || Option.exists(checks, (read) => read.failing);
+
   const finished = Option.match(checks, { onNone: () => [], onSome: lineChecks });
+
   return {
     channel: MESSAGE_CHANNEL.GITHUB,
     event: LINE_EVENT_OF_WAKE[wake.kind],
     repository: wake.repository,
-    ...(wake.pullRequest === undefined ? {} : { number: wake.pullRequest }),
+    ...(wake.pullRequest !== undefined && { number: wake.pullRequest }),
     url: wake.url,
     by: wake.by,
-    ...(wake.byAvatar === undefined || wake.byAvatar.length > GITHUB_LINE_BOUNDS.URL_CHARS
-      ? {}
-      : { by_avatar: wake.byAvatar }),
-    ...(wake.verdict === undefined || wake.verdict === "" ? {} : { verdict: wake.verdict }),
-    ...(words === "" ? {} : { words }),
-    ...(html === undefined ? {} : { words_html: html }),
-    ...(comments.length === 0 ? {} : { comments }),
-    ...(wake.sha === undefined ? {} : { sha: wake.sha }),
+    ...(wake.byAvatar !== undefined &&
+      wake.byAvatar.length <= GITHUB_LINE_BOUNDS.URL_CHARS && {
+        by_avatar: wake.byAvatar,
+      }),
+    ...(wake.verdict !== undefined && wake.verdict !== "" && { verdict: wake.verdict }),
+    ...(words !== "" && { words }),
+    ...(html !== undefined && { words_html: html }),
+    ...(comments.length !== 0 && { comments }),
+    ...(wake.sha !== undefined && { sha: wake.sha }),
     outside_words: outsideWords,
-    ...(checkLine ? { failing } : {}),
-    ...(finished.length === 0 ? {} : { checks: finished }),
+    ...(checkLine && { failing }),
+    ...(finished.length !== 0 && { checks: finished }),
   };
 }
 
@@ -873,6 +927,7 @@ function carriesWords(
 ): boolean {
   if (wake.kind !== AGENT_WAKE.REVIEW && wake.kind !== AGENT_WAKE.COMMENT) return false;
   const said = (wake.words?.trim() ?? "") !== "";
+
   return (
     said || Option.match(inline, { onNone: () => true, onSome: (comments) => comments.length > 0 })
   );
@@ -890,10 +945,13 @@ function outsideWordsFor(
   userId: string,
 ): TaskStoreEffect<boolean> {
   const { byId } = wake;
+
   if (!carriesWords(wake, inline) || wake.by.endsWith(BOT_LOGIN_SUFFIX)) {
     return Effect.succeed(false);
   }
+
   if (byId === undefined) return Effect.succeed(true);
+
   return Effect.map(linkedGitHubUserIds(userId), (linked) => !linked.includes(byId));
 }
 
@@ -912,6 +970,7 @@ function inlineCommentsOf(
   DatabaseServices | HttpClient.HttpClient | GitHubApp
 > {
   const { reviewId, pullRequest } = wake;
+
   if (
     wake.kind !== AGENT_WAKE.REVIEW ||
     told === undefined ||
@@ -921,7 +980,9 @@ function inlineCommentsOf(
   ) {
     return Effect.succeed(Option.some([]));
   }
+
   const { repository } = told.on;
+
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
     Effect.flatMap(({ token }) => reviewLineComments(token, repository, pullRequest, reviewId)),
     Effect.map(Option.some),
@@ -940,10 +1001,13 @@ function inlineCommentsOf(
 /** The comment or review whose rendering a wake reads, by the ids its delivery named; none for a wake that says nothing. */
 function renderedBodyOf(wake: AgentWake): RenderedBody | undefined {
   if ((wake.words?.trim() ?? "") === "") return undefined;
+
   if (wake.kind === AGENT_WAKE.COMMENT && wake.commentId !== undefined) {
     return { kind: RENDERED_BODY.ISSUE_COMMENT, commentId: wake.commentId };
   }
+
   const { reviewId, pullRequest } = wake;
+
   return wake.kind === AGENT_WAKE.REVIEW && reviewId !== undefined && pullRequest !== undefined
     ? { kind: RENDERED_BODY.REVIEW, number: pullRequest, reviewId }
     : undefined;
@@ -966,10 +1030,13 @@ function renderingOfWake(
   DatabaseServices | HttpClient.HttpClient | GitHubApp
 > {
   const body = renderedBodyOf(wake);
+
   if (body === undefined || told === undefined || !hasRepository(told.agent)) {
     return Effect.succeed(Option.none());
   }
+
   const { repository } = told.on;
+
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
     Effect.flatMap(({ token }) => renderedBody(token, repository, body)),
     // The kind alone: nothing of the words or the token rides the line.
@@ -1005,10 +1072,13 @@ export function agentIsWoken(
 ): boolean {
   if (agent.archivedAt !== null) return false;
   const atWork = AT_WORK.has(agentStatusOf(turn, { createdAt: agent.createdAt, now }));
+
   if (wake.kind === AGENT_WAKE.CHECKS_COMPLETED) return atWork;
   const byApp = appLogin !== undefined && wake.by.toLowerCase() === appLogin.toLowerCase();
+
   if (wake.kind !== AGENT_WAKE.CHECK_FAILED && !byApp) return true;
   const settledAt = turn?.settledAt?.getTime();
+
   return !atWork && (settledAt === undefined || settledAt < wake.at);
 }
 
@@ -1024,6 +1094,7 @@ function headChecksFor(
 ): Effect.Effect<Option.Option<HeadChecks>, never, WakeServices> {
   if (!hasRepository(told.agent) || sha === undefined) return Effect.succeed(Option.none());
   const { repository } = told.on;
+
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
     Effect.flatMap(({ token }) => headChecksOf(token, repository, sha)),
     Effect.map(Option.some),
@@ -1051,6 +1122,7 @@ function checksOfWake(
   told: OwnedAgent | undefined,
 ): Effect.Effect<Option.Option<HeadChecks>, never, WakeServices> {
   if (told === undefined) return Effect.succeed(Option.none());
+
   switch (wake.kind) {
     case AGENT_WAKE.CHECKS_COMPLETED:
       return Effect.map(
@@ -1096,6 +1168,7 @@ const standsOnHead = (wake: AgentWake, { userId, agent, on }: OwnedAgent) =>
  */
 function checksCompletedKey(wake: AgentWake, checks: HeadChecks): string {
   const outcomes = createHash("sha256").update(JSON.stringify(checks.outcomes)).digest("hex");
+
   return JSON.stringify([AGENT_WAKE.CHECKS_COMPLETED, wake.repository, wake.sha, outcomes]);
 }
 
@@ -1104,7 +1177,9 @@ function agentsOf(wake: AgentWake) {
   if (wake.branches.length > 0) {
     return listAgentsOnBranches(wake.repository, wake.branches, MAXIMUM_AGENTS_PER_WAKE);
   }
+
   if (wake.pullRequest === undefined) return Effect.succeed<readonly OwnedAgent[]>([]);
+
   return listAgentsOnPullRequest(wake.repository, wake.pullRequest, MAXIMUM_AGENTS_PER_WAKE);
 }
 
@@ -1128,25 +1203,32 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
   if (deliveryId === "") return 0;
   const now = yield* Clock.currentTimeMillis;
   const checksCompleted = wake.kind === AGENT_WAKE.CHECKS_COMPLETED;
+
   const told = yield* Effect.gen(function* () {
     const agents = yield* agentsOf(wake);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
+
     const admitted = agents.filter(({ agent }) =>
       agentIsWoken(wake, agent, turns.get(agent.conversationId), appLogin, now),
     );
+
     // Checks finished on a commit an agent has pushed past end none of its waits.
     const woken = checksCompleted
       ? yield* Effect.filter(admitted, (owned) => standsOnHead(wake, owned))
       : admitted;
+
     // Read once for every agent told, since each is told the same review, or the same checks.
     const inline = yield* inlineCommentsOf(wake, woken[0]);
     const rendering = yield* renderingOfWake(wake, woken[0]);
     const checks = yield* checksOfWake(wake, woken[0]);
+
     if (checksCompleted && Option.isNone(checks)) return [];
+
     const clientKey =
       checksCompleted && Option.isSome(checks)
         ? checksCompletedKey(wake, checks.value)
         : deliveryId;
+
     return yield* Effect.forEach(woken, ({ userId, agent, on }) =>
       Effect.gen(function* () {
         const agentSessions = yield* sessionsFor(userId);
@@ -1157,6 +1239,7 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
           sender: { kind: MESSAGE_SENDER.GITHUB, login: wake.by },
           metadata: githubLine(wake, inline, checks, outside, rendering),
         });
+
         return true;
       }).pipe(
         // The refusal's word alone: nothing of the delivery or the agent rides the line.
@@ -1175,5 +1258,6 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
       ),
     ),
   );
+
   return told.filter(Boolean).length;
 });

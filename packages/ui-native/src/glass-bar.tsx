@@ -71,12 +71,15 @@ function useKeyboardHeight(): number {
     const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
       setHeight(endCoordinates.height),
     );
+
     const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+
     return () => {
       rising.remove();
       falling.remove();
     };
   }, []);
+
   return height;
 }
 
@@ -86,6 +89,7 @@ function useKeyboardHeight(): number {
  */
 function SolidBar({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <View
       style={[
@@ -113,6 +117,7 @@ export function BarHead({ children }: { readonly children: ReactNode }) {
   const { height: window } = useWindowDimensions();
   const [tall, setTall] = useState(0);
   const most = Math.round(window * HEAD_SHARE);
+
   const stack = (
     <VStack
       alignment="leading"
@@ -121,6 +126,7 @@ export function BarHead({ children }: { readonly children: ReactNode }) {
       {children}
     </VStack>
   );
+
   return tall > most ? (
     <ScrollView modifiers={[frame({ height: most })]}>{stack}</ScrollView>
   ) : (
@@ -154,11 +160,13 @@ export function GlassBar({
   const keyboard = useKeyboardHeight() > 0;
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
   const row = (
     <HStack spacing={BAR_ROW_SPACING} modifiers={head === undefined ? [...modifiers] : []}>
       {children}
     </HStack>
   );
+
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
       {head === undefined ? (
@@ -171,6 +179,7 @@ export function GlassBar({
       )}
     </Host>
   );
+
   const bar = solid ? (
     <SolidBar>{content}</SolidBar>
   ) : (
@@ -178,11 +187,13 @@ export function GlassBar({
       {content}
     </GlassView>
   );
+
   // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
   const onLayout =
     measure === undefined
       ? undefined
       : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
     <SafeAreaView
@@ -212,6 +223,7 @@ export function GlassDock({
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+
   return (
     <View style={styles.dock}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>

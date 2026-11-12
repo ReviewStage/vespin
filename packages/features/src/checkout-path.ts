@@ -30,11 +30,14 @@ export const DEVICE_AGENT_FOLDER = {
 function inMacCheckout(path: string): string | undefined {
   const root = `/${DEVICE_AGENT_FOLDER.ROOT}/`;
   const at = path.indexOf(root);
+
   if (at < 0) return undefined;
   const agent = path.slice(at + root.length);
   const slash = agent.indexOf("/");
   const checkout = `${DEVICE_AGENT_FOLDER.REPOSITORY}/`;
+
   if (slash <= 0 || !agent.startsWith(checkout, slash + 1)) return undefined;
+
   return agent.slice(slash + 1 + checkout.length);
 }
 
@@ -57,8 +60,11 @@ export function checkoutRelativePath(written: string): string | undefined {
   const plain = dotted ? written.slice(2) : written;
   const absolute = !dotted && plain.startsWith("/");
   const steps = plain.split("/");
+
   if ((absolute ? steps.slice(1) : steps).some(isNoStep)) return undefined;
+
   if (!absolute) return plain;
   const cloud = `${CLOUD_CHECKOUT_PATH}/`;
+
   return plain.startsWith(cloud) ? plain.slice(cloud.length) : inMacCheckout(plain);
 }

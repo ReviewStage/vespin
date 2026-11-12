@@ -70,23 +70,31 @@ export interface InboxRowPresses {
 /** The list's rows' presses, kept as each row is drawn and dropped as it goes. */
 export function useInboxRowPresses(): InboxRowPresses {
   const runs = useVirtualRuns();
+
   const [presses] = useState(() => {
     const held = new Map<string, HTMLElement>();
     const refs = new Map<string, React.RefCallback<HTMLElement>>();
+
     return {
       hold: (itemId: string) => {
         const known = refs.get(itemId);
+
         if (known !== undefined) return known;
+
         const ref = (element: HTMLElement | null) => {
           if (element !== null) {
             held.set(itemId, element);
+
             return;
           }
+
           // Note that a row gone takes its ref with it, so an Inbox left open keeps only the rows it draws.
           held.delete(itemId);
           refs.delete(itemId);
         };
+
         refs.set(itemId, ref);
+
         return ref;
       },
       find: (itemId: string) => held.get(itemId),
@@ -104,6 +112,7 @@ export function useInboxRowPresses(): InboxRowPresses {
       bringIn: runs.bringIn,
     };
   });
+
   return presses;
 }
 
@@ -158,6 +167,7 @@ export interface InboxChoosing {
 /** The box the list's rows scroll in, found by a row it draws; none where it draws none or nothing scrolls. */
 function listScroller(rows: InboxRowPresses): HTMLElement | undefined {
   const row = rows.first();
+
   return row === undefined ? undefined : scrollerOf(row);
 }
 
@@ -165,12 +175,14 @@ function listScroller(rows: InboxRowPresses): HTMLElement | undefined {
 function standsWithin(box: HTMLElement, row: HTMLElement): boolean {
   const outer = box.getBoundingClientRect();
   const inner = row.getBoundingClientRect();
+
   return inner.top >= outer.top && inner.bottom <= outer.bottom;
 }
 
 /** Which columns stand: both where split, else the item chosen, or the list while none is. */
 function shownColumns(single: boolean, chosen: string | undefined): InboxColumnsShown {
   if (!single) return INBOX_COLUMNS.BOTH;
+
   return chosen === undefined ? INBOX_COLUMNS.LIST : INBOX_COLUMNS.ITEM;
 }
 
@@ -204,13 +216,16 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
   const scrolls = useRef(new Map<string, number>());
   const chosenLast = useRef<string | undefined>(chosen);
   const rows = useInboxRowPresses();
+
   const ref = useCallback(
     (element: HTMLElement | null) => {
       view.current = element;
+
       return measure(element);
     },
     [measure],
   );
+
   const shown = shownColumns(single, chosen);
   const { onClear, onSingle } = choosing;
   useLayoutEffect(() => {
@@ -221,19 +236,28 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
   useLayoutEffect(() => {
     const was = chosenLast.current;
     chosenLast.current = chosen;
+
     if (was === chosen || shown === INBOX_COLUMNS.ITEM) return;
     const list = listScroller(rows);
+
     if (list === undefined) return;
+
     if (was !== undefined) scrolls.current.set(was, list.scrollTop);
+
     // A row's press, K, and J stand on a row in sight already; a link or Back chooses from outside the list.
     if (chosen === undefined || pressed.current || stepped.current) return;
     const kept = scrolls.current.get(chosen);
+
     if (kept !== undefined) {
       list.scrollTop = kept;
+
       return;
     }
+
     const row = rows.find(chosen);
+
     if (row !== undefined && standsWithin(list, row)) return;
+
     if (!rows.bringIn(chosen, () => undefined) && row !== undefined) centerWithin(list, row);
   }, [chosen, shown, rows]);
 
@@ -243,35 +267,47 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
     stepped.current = false;
     const from = chosen ?? left.current;
     left.current = undefined;
+
     if (held === null) return;
     const focused = document.activeElement;
+
     const stranded =
       focused instanceof HTMLElement &&
       held.contains(focused) &&
       focused.closest("[hidden]") !== null;
+
     const handed = pressed.current || stranded || showAlls > 0;
+
     if (!handed && !step) return;
     pressed.current = false;
+
     // The item's bar leads with its way back, or with its crumbs where it has none; K and J, stepping from the item, leave the keyboard there.
     if (shown === INBOX_COLUMNS.ITEM) {
       if (handed) {
         held.querySelector<HTMLElement>(".inbox-view-items:not([hidden]) header button")?.focus();
       }
+
       return;
     }
+
     // Split, a press that opens an item from outside the list, as Next does, hands the keyboard to its row, and so do K and J,
     // its row brought into view and drawn first where the list draws only the rows near the view.
     const row = from === undefined ? undefined : rows.find(from);
+
     const broughtIn =
       row === undefined && from !== undefined && rows.bringIn(from, () => rows.find(from)?.focus());
+
     if (!handed) {
       row?.focus();
+
       return;
     }
+
     // An item chosen that the list holds no row for, as a link's missing item or one its scope leaves out, hands the keyboard to the first row instead, or to View options, the list's one steady control, where no row stands.
     if (!broughtIn) {
       (row ?? rows.first() ?? listHeadControl(held.querySelector(".inbox-tasks")))?.focus();
     }
+
     setShowAlls(0);
   }, [shown, chosen, showAlls, rows]);
 
@@ -283,8 +319,10 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
           onClear();
         }
       : undefined;
+
   useAppCommand(APP_COMMAND.BACK, back);
   useAppCommand(APP_COMMAND.INBOX_LIST, back);
+
   return {
     ref,
     shown,

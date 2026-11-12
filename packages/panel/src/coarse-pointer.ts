@@ -35,7 +35,9 @@ export function useCoarsePointer(): boolean {
     const update = () => setCoarse(query.matches);
     update();
     query.addEventListener("change", update);
+
     return () => query.removeEventListener("change", update);
   }, []);
+
   return coarse;
 }

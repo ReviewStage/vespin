@@ -19,8 +19,7 @@ import { ignoredByReplay } from "../session-replay-marks.js";
  * one press cursor (`cursor-press`); none of shadcn's field-group, invalid, or dark
  * utilities, which no surface of ours sets; and none of its outline or ring
  * utilities, because the window's own focus ring (`@repo/panel`'s base.css)
- * draws the keyboard's ring and a utility would outrank it
- * (`anti-slop/no-shadcn-focus-ring`); and its hidden input kept out of the
+ * draws the keyboard's ring and a utility would outrank it; and its hidden input kept out of the
  * screen recording (`session-replay-marks.tsx`). `@repo/ui`'s `Checkbox`
  * (`components/checkbox/checkbox.tsx`) is what an app draws; this is its inside.
  */

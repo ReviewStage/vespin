@@ -43,42 +43,51 @@ const token = () => randomUUID().replaceAll("-", "").repeat(2).toUpperCase();
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   const phone = { deviceToken: token(), environment: PUSH_ENVIRONMENT.PRODUCTION };
   yield* registerPushDevice(owner, {
     token: phone.deviceToken.toLowerCase(),
     environment: phone.environment,
     bundleId: BUNDLE_ID,
   });
+
   const bearers = new Map([
     [`Bearer ${owner}`, owner],
     [`Bearer ${other}`, other],
   ]);
+
   const procedures = liveActivitiesProcedures({
     resolveUserId: (incoming) =>
       Effect.succeed(
         Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
       ),
   });
+
   const ask = (path: string, userId: string, body: WireBoundaryInput) =>
     answer(procedures, post(path, userId, body));
+
   return { owner, other, phone, ask };
 });
 
 const answer = (procedures: ReturnType<typeof liveActivitiesProcedures>, request: Request) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
     );
+
     const response = yield* hostedAnswer({ liveActivities: procedures }, services, request);
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 

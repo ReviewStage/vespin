@@ -82,7 +82,9 @@ async function openUsers(body: AdminUserList | undefined): Promise<HTMLElement> 
     body === undefined ? new Promise(() => undefined) : Promise.resolve(answer(body)),
   );
   const page = await mount();
+
   if (body !== undefined) await readLanded(page);
+
   return page;
 }
 
@@ -92,11 +94,14 @@ async function openUsersAnsweredLater(): Promise<{
   land: (body: AdminUserList) => Promise<void>;
 }> {
   let resolve: (response: Response) => void = () => undefined;
+
   const pending = new Promise<Response>((settle) => {
     resolve = settle;
   });
+
   vi.spyOn(globalThis, "fetch").mockImplementation(() => pending);
   const page = await mount();
+
   return {
     page,
     land: async (body) => {
@@ -127,6 +132,7 @@ async function mount(): Promise<HTMLElement> {
       ),
     );
   });
+
   return page;
 }
 
@@ -134,7 +140,9 @@ function searchBox(page: HTMLElement): HTMLInputElement {
   const box = page.querySelector<HTMLInputElement>(
     'input[aria-label="Search accounts by name or email"]',
   );
+
   if (box === null) throw new Error("no search box");
+
   return box;
 }
 

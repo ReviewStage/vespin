@@ -56,14 +56,17 @@ export function admitRelayUpgrade(
   ownOrigins: ReadonlySet<string>,
 ): RelayUpgrade {
   const address = new URL(url ?? "/", "http://localhost");
+
   if (address.pathname !== TERMINAL_RELAY.PATH) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
   const credential = relayCredential(headers, ownOrigins);
+
   if ("status" in credential) return credential;
   const query = (name: string) => unparsedWire(address.searchParams.get(name) ?? "");
   const agentId = readId(query(TERMINAL_RELAY.QUERY.AGENT));
   const terminalId = readId(query(TERMINAL_RELAY.QUERY.TERMINAL));
   const cols = readSize(query(TERMINAL_RELAY.QUERY.COLUMNS));
   const rows = readSize(query(TERMINAL_RELAY.QUERY.ROWS));
+
   if (
     Result.isFailure(agentId) ||
     Result.isFailure(terminalId) ||
@@ -72,6 +75,7 @@ export function admitRelayUpgrade(
   ) {
     return { status: RELAY_UPGRADE_STATUS.BAD_REQUEST };
   }
+
   return {
     credential,
     ask: {

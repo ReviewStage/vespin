@@ -54,6 +54,7 @@ function mirrorsFolder(home: string): string {
 /** A repository's owner and name as folder names, lowercased as GitHub matches them. */
 function repositoryFolders(repository: string): readonly [string, string] {
   const [owner = "", name = ""] = repository.toLowerCase().split("/");
+
   return [owner, name];
 }
 
@@ -208,6 +209,7 @@ export function agentWorktreeScript(input: {
   readonly stallSeconds?: number | undefined;
 }): string {
   const stallSeconds = input.stallSeconds ?? WORKTREE_TIMING.STALL_SECONDS;
+
   return [
     ...LOGIN_PATH,
     ...nonInteractiveGit(Math.max(1, Math.trunc(stallSeconds))),

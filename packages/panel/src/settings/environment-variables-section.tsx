@@ -21,7 +21,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SecretField,
   SettingsLine,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
   Stack,
@@ -57,15 +57,11 @@ import { MenuRow } from "./menu-row.js";
  * owner or admin adds one from the first section, and replaces or deletes
  * one from its row's ⋯, a delete asking first; a member sees the names
  * alone. Each write answers the names as they then stand, which the section
- * draws at once. A value is typed into a `SecretField`, kept out of the
- * screen recording as GitHub's token is.
+ * draws at once. A value is typed into a `SecretField`.
  */
 
-/** Keeps what a secret field holds out of the screen recording. */
-const NO_CAPTURE = "ph-no-capture";
-
 /** A variable's row while the names are read. */
-export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
+export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],
@@ -76,8 +72,8 @@ const isVariableName = Schema.is(workspaceVariableNameSchema);
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
-function rejected(error: unknown): ActionResult {
-  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+function rejected(cause: unknown): ActionResult {
+  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(cause) };
 }
 
 /** The workspace's variables by name, read as the page opens and on Try again. */
@@ -103,6 +99,7 @@ async function drawAnswer(
 /** A put, its answer drawn over the list at once. */
 function usePutVariable(workspaceId: string) {
   const queries = useQueryClient();
+
   return useMutation({
     mutationFn: (variable: { name: string; value: string }) =>
       sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_PUT, { workspaceId, ...variable }),
@@ -119,22 +116,26 @@ function useVariableDialog(workspaceId: string, name?: string) {
   const [value, setValue] = useState("");
   const putting = usePutVariable(workspaceId);
   const shownName = name ?? typedName.trim();
+
   const act = useConfirmAct(putting, {
     send: () => putting.mutateAsync({ name: shownName, value }),
     answered: () => ACCEPTED,
     failed: rejected,
   });
+
   const confirm = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     act,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_VARIABLE_SAVE),
   );
+
   const form = useFormDialog(
     confirm,
     isVariableName(shownName) &&
       value !== "" &&
       value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
   );
+
   const dialog = (
     <Dialog
       open={form.open}
@@ -175,20 +176,19 @@ function useVariableDialog(workspaceId: string, name?: string) {
             )}
           </FormField>
         ) : null}
-        <div className={NO_CAPTURE}>
-          <SecretField
-            label="Value"
-            saved={name !== undefined}
-            error={replayMaskedError(form.refusal)}
-            disabled={form.settling}
-            value={value}
-            onChange={setValue}
-            onEnter={form.submit}
-          />
-        </div>
+        <SecretField
+          label="Value"
+          saved={name !== undefined}
+          error={replayMaskedError(form.refusal)}
+          disabled={form.settling}
+          value={value}
+          onChange={setValue}
+          onEnter={form.submit}
+        />
       </Stack>
     </Dialog>
   );
+
   return { ask: confirm.ask, dialog };
 }
 
@@ -204,26 +204,31 @@ function VariableRow({
 }): React.JSX.Element {
   const queries = useQueryClient();
   const replace = useVariableDialog(workspaceId, name);
+
   const deleting = useMutation({
     mutationFn: () => sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE, { workspaceId, name }),
     onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
   });
+
   const deleteAct = useConfirmAct(deleting, {
     send: () => deleting.mutateAsync(),
     answered: () => ACCEPTED,
     failed: rejected,
   });
+
   const deletion = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     deleteAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_VARIABLE_DELETE),
   );
+
   const actions = manages
     ? [
         { label: "Replace value", icon: <GLYPH.RENAME />, onSelect: replace.ask },
         { label: "Delete", icon: <TrashIcon />, danger: true, onSelect: deletion.ask },
       ]
     : [];
+
   return (
     <>
       <MenuRow thing={name} actions={actions} row={{ label: <ReplayMask>{name}</ReplayMask> }} />
@@ -258,6 +263,7 @@ export function EnvironmentVariablesSection({
   const environment = useQuery(environmentQuery(workspace.id));
   const add = useVariableDialog(workspace.id);
   const variables = environment.data?.variables;
+
   return (
     <>
       <SettingsSection

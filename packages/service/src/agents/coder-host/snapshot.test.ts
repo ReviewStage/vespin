@@ -41,10 +41,12 @@ import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from ".
  */
 
 const SESSION = SOURCE_SANDBOX.SESSION;
+
 /** The account whose agent the source is. */
 const SOURCE_OWNER = "user-snapshot-source";
 const BRANCH = "luke/fix-invites-continued-0a1b2c3d";
 const MESSAGE = "Snapshot of Fix invites for continued agent";
+
 /** The repository's credential as the App mints it. */
 const CREDENTIAL = {
   APP: {
@@ -79,6 +81,7 @@ function copyOver(
         .values({ id: SOURCE_OWNER, name: "Test User", email: `${SOURCE_OWNER}@app.test` })
         .onConflictDoNothing(),
     );
+
     return yield* snapshotSource({
       userId: SOURCE_OWNER,
       sessionId: SESSION,
@@ -301,23 +304,28 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
     Effect.gen(function* () {
       const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
       let wakeStarted = () => {};
+
       const woken = new Promise<void>((resolve) => {
         wakeStarted = resolve;
       });
+
       const fiber = yield* Effect.forkChild(
         copyOver(async (url, init) => {
           if (new URL(url).searchParams.get("resume") !== "true") {
             return answerOf(sandbox, url, init);
           }
+
           // Vercel began bringing the sandbox up, and never answered the wake.
           sandbox.state.status = "pending";
           sandbox.state.session = SOURCE_SANDBOX.WOKEN;
           wakeStarted();
+
           return new Promise<Response>((_, reject) => {
             init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
           });
         }),
       );
+
       yield* Effect.promise(() => woken);
 
       yield* TestClock.adjust(Duration.sum(SNAPSHOT.TIMEOUT, Duration.seconds(1)));

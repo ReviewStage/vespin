@@ -71,5 +71,6 @@ export function nextBrowserTabLapse(rows: BrowserTabsLiveRows, now: number): num
   const lapses = rows.tabs.flatMap(({ driverUserId, heldUntil }) =>
     driverUserId !== null && heldUntil !== null && heldUntil > now ? [heldUntil] : [],
   );
+
   return lapses.length === 0 ? undefined : Math.min(...lapses);
 }

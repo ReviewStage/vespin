@@ -96,10 +96,13 @@ function previewApiKeysOf(
 ): PreviewApiKeys {
   if (environment !== DEPLOYMENT_ENVIRONMENT.PREVIEW) return {};
   const keys: Partial<Record<ProviderKeyProvider, Redacted.Redacted>> = {};
+
   for (const provider of Object.values(PROVIDER_KEY_PROVIDER)) {
     const key = presentRedacted(read[provider]);
+
     if (key !== undefined) keys[provider] = key;
   }
+
   return keys;
 }
 
@@ -142,6 +145,7 @@ export const hostedEnvironment = Layer.effect(
     }),
     (read) => {
       const cronSecret = presentRedacted(read.cronSecret);
+
       const values: HostedEnvironmentValues = {
         posthogPersonalApiKey: presentRedacted(read.posthogPersonalApiKey),
         posthogProjectId: present(read.posthogProjectId),
@@ -154,6 +158,7 @@ export const hostedEnvironment = Layer.effect(
         titleAnthropicApiKey: presentRedacted(read.titleAnthropicApiKey),
         previewApiKeys: previewApiKeysOf(present(read.deployment), read.previewApiKeys),
       };
+
       return Effect.succeed(values);
     },
   ).pipe(

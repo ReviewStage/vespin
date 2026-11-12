@@ -38,7 +38,7 @@ import { keptKey, useKept } from "../use-kept.js";
  *
  * Each agent runs where its Start put it, for its life (`agent-wire.ts`'s
  * `agentStartRequestFields`). New task's chip names it for the task and its
- * first agent, and while the Bring your own host experiment is on a draft
+ * first agent, and a draft
  * agent's box wears the same chip (`draft-agent-tab.tsx`), a fork's and a
  * continue's among them (`useStartRunsOn`). The chip, a toolbar chip ending
  * in its chevron as the model chip beside it is, drops a menu: Cloud first, then
@@ -62,8 +62,7 @@ import { keptKey, useKept } from "../use-kept.js";
  * still getting ready or not set up, stays picked and says so, so its start
  * is refused by name rather than sent quietly to the cloud. It stands on
  * every New task but an automation's or a child's, and lists Cloud alone
- * where the member has no device, or while the Bring your own host
- * experiment is off, which lists no device (`new-task-composer.tsx`). On
+ * where the member has no device (`new-task-composer.tsx`). On
  * the task, each agent's row in its plan's head says Cloud, or the device
  * that agent runs on, named the same way, or that the device was removed
  * (`plan-agents.tsx`).
@@ -126,32 +125,38 @@ const TAKES_NO_AGENT: ReadonlySet<DeviceStanding> = new Set([
   DEVICE_STANDING.FAILED,
 ]);
 
-/** Why a device offered takes no agent now, and its dot's tone: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
-function offerUnready(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly words: string; readonly tone: StatusTone } | undefined {
+/** Why a device offered takes no agent now: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
+function offerUnready(device: MacOffer, book: PresenceBook): string | undefined {
   const standing = offerStanding(device, book);
-  return TAKES_NO_AGENT.has(standing)
-    ? { words: STANDING_WORDS[standing], tone: STANDING_TONE[standing] }
-    : undefined;
+
+  return TAKES_NO_AGENT.has(standing) ? STANDING_WORDS[standing] : undefined;
 }
 
-/** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
-export function deviceMark(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly icon: React.JSX.Element; readonly unready: string | undefined } {
-  const unready = offerUnready(device, book);
-  const standing = offerStanding(device, book);
-  const tone = unready?.tone ?? STANDING_TONE[standing];
-  const words = unready?.words ?? STANDING_WORDS[standing];
-  const icon = (
-    <StatusGlyph tone={tone} label={words}>
+/** A device's platform glyph wearing its standing's dot, its words to a reader, and on a rest where `hinted`: as a list of places draws its row, and an agent's place chip the device it runs on (`agent-place.tsx`). */
+export function DeviceStandingGlyph({
+  device,
+  standing,
+  hinted = true,
+}: {
+  device: { readonly platform?: DevicePlatform } | undefined;
+  standing: DeviceStanding;
+  /** Whether a rest on the glyph shows its words; false where the control it stands in says them. */
+  hinted?: boolean;
+}): React.JSX.Element {
+  return (
+    <StatusGlyph tone={STANDING_TONE[standing]} label={STANDING_WORDS[standing]} hinted={hinted}>
       <DeviceGlyph device={device} />
     </StatusGlyph>
   );
-  return { icon, unready: unready?.words };
+}
+
+type DeviceMarkResult = { readonly icon: React.JSX.Element; readonly unready: string | undefined };
+
+/** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
+export function deviceMark(device: MacOffer, book: PresenceBook): DeviceMarkResult {
+  const icon = <DeviceStandingGlyph device={device} standing={offerStanding(device, book)} />;
+
+  return { icon, unready: offerUnready(device, book) };
 }
 
 /** A device's row past its name, for every device alike (`deviceMark`); one that takes no agent is dimmed and unpicked too, its dot saying why. */
@@ -160,6 +165,7 @@ function offerMarks(
   book: PresenceBook,
 ): Pick<MenuRow, "icon" | "disabled" | "why"> {
   const { icon, unready } = deviceMark(device, book);
+
   return unready === undefined ? { icon } : { icon, disabled: unready, why: MENU_ROW_WHY.MARK };
 }
 
@@ -196,6 +202,7 @@ export function useNewTaskRunsOn(
 ): readonly [MacOffer | undefined, (deviceId: string | undefined) => void, boolean] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
   const picked = devices.find((each) => each.deviceId === kept);
+
   return [
     picked,
     (deviceId: string | undefined) => keep(deviceId ?? CLOUD_ROW),
@@ -245,24 +252,29 @@ export function useStartRunsOn(
   onPick: (runsOn: AgentRunsOnRequest) => void,
 ): readonly [MacOffer | undefined, (deviceId: string | undefined) => void] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
+
   const newest = seed.agents
     .filter((agent) => seed.me !== undefined && agent.startedBy?.userId === seed.me)
     .reduce<(typeof seed.agents)[number] | undefined>(
       (was, agent) => (was === undefined || agent.createdAt > was.createdAt ? agent : was),
       undefined,
     );
+
   const seeded = seed.source ?? newest;
+
   const row =
     picked === undefined
       ? ((seeded === undefined ? undefined : placeRow(seeded)) ?? kept)
       : picked.machine === AGENT_MACHINE.DEVICE
         ? picked.deviceId
         : CLOUD_ROW;
+
   // Note that the agent names its device by its name alone, so it stands as an offer of no model, its standing unread.
   const unlisted =
     picked === undefined && seeded?.mac?.deviceId !== undefined && seeded.mac.deviceId === row
       ? { deviceId: row, name: seeded.mac.name, providers: [] }
       : undefined;
+
   return [
     devices.find((each) => each.deviceId === row) ?? unlisted,
     (deviceId: string | undefined) => {
@@ -276,8 +288,10 @@ export function useStartRunsOn(
 /** What New task's chip says of the device picked, by what the list calls it: that alone while it takes an agent, and why it does not, or that its standing cannot be told, otherwise. */
 function offerStateWords(device: MacOffer, book: PresenceBook, name: string): string {
   const unready = offerUnready(device, book);
-  if (unready !== undefined) return `${name} · ${unready.words}`;
+
+  if (unready !== undefined) return `${name} · ${unready}`;
   const standing = offerStanding(device, book);
+
   return standing === DEVICE_STANDING.ONLINE ? name : `${name} · ${STANDING_WORDS[standing]}`;
 }
 
@@ -308,6 +322,7 @@ export function NewTaskRunsOnChip({
   // Note that a chip offering Cloud alone reads no beats, because it draws no device.
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
+
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
@@ -350,13 +365,16 @@ export function RunsOnPlace({
   const thisMac = useThisMac();
   const { mac } = agent;
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+
   // Note that the agent names its device alone, so This Mac is told by its device and no name is twinned.
   const words = agentRunsOnWords(agent, (named) =>
     machineName({ deviceId: named.deviceId, name: named.name }, [], thisMac),
   );
+
   const device = devices?.find(
     (each) => mac?.deviceId !== undefined && each.deviceId === mac.deviceId,
   );
+
   return (
     <Inline gap={GAP.ICON} wrap={false}>
       <GlyphSlot size={ICON_SIZE.SMALL}>

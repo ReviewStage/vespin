@@ -44,7 +44,9 @@ const MENU_SELECTOR = '[role="menu"]';
 /** What a link field typed comes to: none where it is empty, which unlinks the words, and a web page's address where it names no scheme. */
 function linkAddress(typed: string): string | undefined {
   const address = typed.trim();
+
   if (address === "") return undefined;
+
   return SCHEME.test(address) ? address : `https://${address}`;
 }
 
@@ -105,14 +107,17 @@ export function useSelectionToolbar({
   const [pressing, setPressing] = useState(false);
   // Whether the focus stands in the editor's box, or the menu Turn into dropped.
   const [focused, setFocused] = useState(false);
+
   // The link field, where it stands, with the link the words held as it opened.
   const [linking, setLinking] = useState<{ readonly href: string | undefined } | undefined>(
     undefined,
   );
+
   const coarse = useCoarsePointer();
   const openLink = useOpenLink();
   const toolbar = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLDivElement>(null);
+
   const standing =
     format !== undefined &&
     !format.empty &&
@@ -121,11 +126,14 @@ export function useSelectionToolbar({
     !pressing &&
     !held &&
     linking === undefined;
+
   const latest = useRef({ format, standing, linking });
   latest.current = { format, standing, linking };
+
   // Note that the menu is the toolbar's only while the toolbar stands, since only its Turn into drops one with the editor's words selected.
   const holds = (target: EventTarget | null) =>
     target instanceof Element && latest.current.standing && target.closest(MENU_SELECTOR) !== null;
+
   const holdsNow = useRef(holds);
   holdsNow.current = holds;
 
@@ -133,21 +141,26 @@ export function useSelectionToolbar({
     const inRoom = (target: EventTarget | null) =>
       target instanceof Node &&
       (room.current?.contains(target) === true || holdsNow.current(target));
+
     const onFloat = (target: EventTarget | null) =>
       target instanceof Node &&
       (toolbar.current?.contains(target) === true || field.current?.contains(target) === true);
+
     // Note that the focus is read from where it is going, since the focus leaving the editor for the toolbar's menu must not take the toolbar down on the way.
     const moved = (event: FocusEvent) => {
       const to = event.type === "focusout" ? event.relatedTarget : event.target;
       const here = inRoom(to);
       setFocused(here);
+
       if (!here) setLinking(undefined);
     };
+
     const down = (event: PointerEvent) => {
       if (onFloat(event.target) || holdsNow.current(event.target)) return;
       setPressing(true);
       setLinking(undefined);
     };
+
     const up = () => setPressing(false);
     setFocused(inRoom(document.activeElement));
     document.addEventListener("focusin", moved);
@@ -157,6 +170,7 @@ export function useSelectionToolbar({
     document.addEventListener("pointercancel", up, true);
     // Note that a key pressed ends any press whose pointerup the window missed, so a selection the keyboard makes after it stands the toolbar.
     document.addEventListener("keydown", up, true);
+
     return () => {
       document.removeEventListener("focusin", moved);
       document.removeEventListener("focusout", moved);
@@ -168,21 +182,26 @@ export function useSelectionToolbar({
   }, [room]);
 
   const link = () => setLinking({ href: latest.current.format?.link });
+
   // Each of the link field's ends hands the focus back to the editor, its words still selected.
   const linked = (href: string | undefined) => {
     editor.current?.setLink(href);
     setLinking(undefined);
     editor.current?.focus();
   };
+
   const mark = (pressed: WritingMark) => {
     if (pressed === WRITING_MARK.LINK) link();
     else editor.current?.toggleMark(pressed);
   };
+
   const turn = (block: WritingBlock) => {
     editor.current?.turnInto(block);
     editor.current?.focus();
   };
+
   const words = () => editor.current?.selectionBox();
+
   const drawnToolbar = !standing ? null : (
     <RectFloat
       open
@@ -198,7 +217,9 @@ export function useSelectionToolbar({
       />
     </RectFloat>
   );
+
   const href = linking?.href;
+
   const drawnField =
     linking === undefined ? null : (
       <RectFloat open anchor={words} side={POPOVER_SIDE.BELOW}>
@@ -215,6 +236,7 @@ export function useSelectionToolbar({
         />
       </RectFloat>
     );
+
   return {
     doors: {
       onFormat: (next) => setFormat((last) => (sameFormat(last, next) ? last : next)),

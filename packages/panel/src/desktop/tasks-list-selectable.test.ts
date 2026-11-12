@@ -91,6 +91,7 @@ async function mount() {
   fakeActPort({});
   handMembers(() => ({ rows: { members: MEMBERS } }));
   const opened: string[] = [];
+
   function Page() {
     const control = useTasksTab({
       tasks: {
@@ -120,17 +121,20 @@ async function mount() {
       startStands: () => undefined,
       leaveStart: () => false,
     });
+
     return createElement(TasksPage, {
       tasks: { ...control, onSelect: (taskId: string) => opened.push(taskId) },
       room: SHELL_ROOM.WIDE,
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
   act(() => root.render(windowRouter().provide(withQueryClient(createElement(Page)))));
   // Note that the members and the list land after the first paint.
   await act(async () => undefined);
   await act(async () => undefined);
+
   return {
     root: container,
     opened: () => opened,

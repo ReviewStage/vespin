@@ -72,6 +72,7 @@ const unreads = new WeakMap<Error, PictureUnread>();
 function unreadOf(error: Error): PictureUnread {
   const unread = unreads.get(error) ?? { code: FAILURE_CONDITION.UNREAD, cause: error };
   unreads.set(error, unread);
+
   return unread;
 }
 
@@ -88,6 +89,7 @@ export function readPicture(answer: Promise<PictureAnswer>): Promise<PictureRead
         url: `data:${answered.contentType};base64,${answered.base64}`,
       };
     }
+
     if (answered.failure === NOT_FOUND_FAILURE) return { kind: PICTURE_STATE.MISSING };
     throw new Error(
       answered.failure,
@@ -112,8 +114,11 @@ export function usePicture<Key extends QueryKey>(
   failure: (unread: PictureUnread) => ReportedFailure,
 ): PictureState {
   const { data, error, isFetching, refetch } = useQuery(query);
+
   if (data !== undefined) return data;
+
   if (error === null || isFetching) return READING;
+
   return {
     kind: PICTURE_STATE.FAILED,
     retry: () => {

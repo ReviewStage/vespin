@@ -65,6 +65,7 @@ export function macCommandKindsQuery(kinds: readonly MacCommandKind[]): string {
  */
 export function macCommandKindsRead(query: string | undefined): readonly MacCommandKind[] {
   const named = (query ?? "").split(KIND_SEPARATOR).map((kind) => kind.trim());
+
   return [...new Set([MAC_COMMAND_KIND.SHELL, ...named.filter(isMacCommandKind)])];
 }
 

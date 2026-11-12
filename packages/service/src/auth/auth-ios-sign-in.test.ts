@@ -54,12 +54,15 @@ const MOST_HOPS = 3;
 const ERROR_PAGE = `${SERVICE_URL}/api/auth/error`;
 
 const decodeStarted = Schema.decodeUnknownSync(Schema.Struct({ url: Schema.String }));
+
 const decodeTokens = Schema.decodeUnknownSync(
   Schema.Struct({ access_token: Schema.String, refresh_token: Schema.String }),
 );
+
 const decodeUserInfo = Schema.decodeUnknownSync(
   Schema.Struct({ sub: Schema.String, email: Schema.String }),
 );
+
 const decodeSession = Schema.decodeUnknownSync(
   Schema.NullOr(Schema.Struct({ user: Schema.Struct({ id: Schema.String }) })),
 );
@@ -110,15 +113,19 @@ function json(body: WireValue): Response {
 /** GitHub's token endpoint and the two profile reads. */
 function fakeGitHub(input: string | URL | Request): Promise<Response> {
   const url = new URL(input instanceof Request ? input.url : input);
+
   if (url.href === "https://github.com/login/oauth/access_token") {
     return Promise.resolve(json({ access_token: GITHUB_TOKEN, token_type: "bearer" }));
   }
+
   if (url.href === "https://api.github.com/user") {
     return Promise.resolve(json({ id: 4242, login: "octocat", email: null }));
   }
+
   if (url.href === "https://api.github.com/user/emails") {
     return Promise.resolve(json([{ email: GITHUB_EMAIL, primary: true, verified: true }]));
   }
+
   throw new Error(`this test reaches no network: ${url.href}`);
 }
 
@@ -133,11 +140,13 @@ function cookiesFrom(response: Response): string {
 function location(response: Response): URL {
   const next = response.headers.get("location");
   assert.ok(next, `expected a redirect, got ${response.status}`);
+
   return new URL(next, SERVICE_URL);
 }
 
 function navigate(auth: Auth, url: URL | string, cookie?: string): Promise<Response> {
   const navigation = { accept: "text/html", "sec-fetch-mode": "navigate" };
+
   return auth.handler(
     new Request(url, { headers: cookie === undefined ? navigation : { ...navigation, cookie } }),
   );
@@ -180,6 +189,7 @@ function authorize(auth: Auth, redirectUri: string): Promise<Response> {
     code_challenge: PKCE.challenge,
     code_challenge_method: "S256",
   });
+
   return navigate(auth, `${SERVICE_URL}/api/auth/oauth2/authorize?${query}`);
 }
 
@@ -190,12 +200,14 @@ function authorize(auth: Auth, redirectUri: string): Promise<Response> {
  */
 async function signIn(auth: Auth): Promise<{ browser: string; returned: URL }> {
   const loginPage = location(await authorize(auth, IOS_OAUTH_CALLBACK_URL));
+
   const started = await post(
     auth,
     "/sign-in/social",
     { provider: "github", oauth_query: loginPage.search.slice(1) },
     { origin: SERVICE_URL },
   );
+
   const github = new URL(decodeStarted(await started.json()).url);
   const callback = new URL(github.searchParams.get("redirect_uri") ?? "");
   callback.searchParams.set("code", GITHUB_CODE);
@@ -203,10 +215,12 @@ async function signIn(auth: Auth): Promise<{ browser: string; returned: URL }> {
   const landed = await navigate(auth, callback, cookiesFrom(started));
   const browser = cookiesFrom(landed);
   let next = location(landed);
+
   // Note that the return is on the service's own origin, so the hops end at its path rather than off the origin.
   for (let hop = 0; !next.href.startsWith(IOS_OAUTH_CALLBACK_URL) && hop < MOST_HOPS; hop += 1) {
     next = location(await navigate(auth, next, browser));
   }
+
   return { browser, returned: next };
 }
 
@@ -219,7 +233,9 @@ async function exchange(auth: Auth, returned: URL) {
     client_id: IOS_OAUTH_CLIENT.id,
     code_verifier: PKCE.verifier,
   });
+
   assert.equal(tokens.status, HOSTED_HTTP_STATUS.OK);
+
   return decodeTokens(await tokens.json());
 }
 
@@ -255,8 +271,10 @@ async function signedInUserId(auth: Auth, browser: string): Promise<string> {
   const answered = await auth.handler(
     new Request(`${SERVICE_URL}/api/auth/get-session`, { headers: { cookie: browser } }),
   );
+
   const session = decodeSession(await answered.json());
   assert.ok(session);
+
   return session.user.id;
 }
 
@@ -292,20 +310,25 @@ it.effect(
       const auth = iosAuth();
       const { browser, returned } = yield* Effect.promise(() => signIn(auth));
       const tokens = yield* Effect.promise(() => exchange(auth, returned));
+
       // The auth service's own endpoint, called in process as `bearer.ts` calls it.
       const userInfo: UserInfoEndpoint = (input) =>
         Effect.tryPromise(async () => {
           // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guard reads the selected field.
           const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+
           return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
         });
+
       const write = new Request(`${SERVICE_URL}/api/inbox`, {
         method: "POST",
         headers: { authorization: `Bearer ${tokens.access_token}` },
       });
+
       const named = yield* requestUserId(write, userInfo, () =>
         Effect.die("no session is asked for under a bearer"),
       );
+
       assert.deepEqual(
         named,
         Option.some(yield* Effect.promise(() => signedInUserId(auth, browser))),
@@ -340,6 +363,7 @@ test("a refresh mints an access token that names the same account, and a revoked
 
 test("a return address the client did not register, another host on the same path or the loopback the Mac returns to, is refused on the provider's own error page rather than redirected to", async () => {
   const auth = iosAuth();
+
   for (const asked of [
     "https://evil.example/ios/oauth/callback",
     "http://127.0.0.1:54698/callback",

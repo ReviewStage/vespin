@@ -163,9 +163,12 @@ function starterOf(mine: boolean | undefined, startedBy: string | undefined) {
   if (mine === true && startedBy !== undefined) {
     return Result.fail(AGENT_LIST_FILTER_REFUSAL.BOTH_STARTERS);
   }
+
   if (mine === true) return Result.succeed<AgentListStarter>({ kind: AGENT_LIST_STARTER.MINE });
+
   if (startedBy === undefined) return Result.succeed<AgentListStarter>(undefined);
   const userId = assigneeIdOf(startedBy);
+
   return userId === undefined
     ? Result.fail(AGENT_LIST_FILTER_REFUSAL.NO_MEMBER)
     : Result.succeed<AgentListStarter>({ kind: AGENT_LIST_STARTER.MEMBER, userId });
@@ -182,16 +185,22 @@ export function listedFilter(
   ownTask: string | null,
 ): Result.Result<AgentListFilter, string> {
   const read = readFilter(input);
+
   if (Result.isFailure(read)) return Result.fail(AGENT_LIST_FILTER_REFUSAL.UNREADABLE);
   const { taskId, thisTask, words, offset, mine, startedBy, ...narrowed } = read.success;
+
   if (taskId !== undefined && thisTask === true) {
     return Result.fail(AGENT_LIST_FILTER_REFUSAL.BOTH);
   }
+
   if (thisTask === true && ownTask === null) {
     return Result.fail(AGENT_LIST_FILTER_REFUSAL.NO_OWN_TASK);
   }
+
   const starter = starterOf(mine, startedBy);
+
   if (Result.isFailure(starter)) return Result.fail(starter.failure);
+
   return Result.succeed({
     taskId: thisTask === true ? (ownTask ?? undefined) : taskId,
     words,
@@ -207,6 +216,7 @@ export function listedFilter(
 /** The store's narrowing for a list's archive, starter, automation and task's status, each left out where the filter names none. */
 function storeNarrowingOf(filter: AgentListFilter) {
   const { archived, starter, automation, automationId, taskStatus } = filter;
+
   return {
     // An archived agent is listed unless the filter asks for only those not archived.
     includeArchived: archived !== false,
@@ -270,19 +280,24 @@ export const workspaceAgentsOf = (
       // One past the bound tells whether a next page stands, without a count of its own.
       limit: WORKSPACE_AGENTS_LIST_LIMIT + 1,
     });
+
     const { page: agents, nextOffset } = listedPage(
       listed,
       filter.offset,
       WORKSPACE_AGENTS_LIST_LIMIT,
     );
+
     const names = yield* taskNamesOf(
       userId,
       agents.map((agent) => agent.taskId),
     );
+
     const taskOf = (agent: Agent): AgentTask | null => {
       const named = names.get(agent.taskId);
+
       return named === undefined ? null : { id: agent.taskId, ...named };
     };
+
     return { agents, taskOf, nextOffset };
   });
 
@@ -313,6 +328,7 @@ export const agentTaskOf = (
 ): Effect.Effect<AgentTask | null, StoreFailure, DatabaseServices> =>
   Effect.map(taskNamesOf(userId, [agent.taskId]), (names) => {
     const named = names.get(agent.taskId);
+
     return named === undefined ? null : { id: agent.taskId, ...named };
   });
 

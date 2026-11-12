@@ -54,11 +54,11 @@
     "@orpc/experimental-effect": "catalog:",
     "@orpc/publisher": "catalog:",
     "@orpc/server": "catalog:",
-    "@shikijs/langs": "4.5.0",
-    "@shikijs/themes": "4.5.0",
+    "@shikijs/langs": "4.6.0",
+    "@shikijs/themes": "4.6.0",
     "@tanstack/db": "0.15.2",
     "effect": "catalog:",
-    "shiki": "4.5.0"
+    "shiki": "4.6.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

@@ -148,6 +148,7 @@ interface PersistedAccount {
 function storedAccount(value: UnparsedWireValue): PersistedAccount | undefined {
   if (!isRecord(value)) return undefined;
   const account = value;
+
   if (
     !isWireString(account.tokenCipher) ||
     !account.tokenCipher ||
@@ -157,6 +158,7 @@ function storedAccount(value: UnparsedWireValue): PersistedAccount | undefined {
   ) {
     return undefined;
   }
+
   return {
     tokenCipher: account.tokenCipher,
     ...(isWireString(account.id) && account.id ? { id: account.id } : undefined),
@@ -194,6 +196,7 @@ function storedSettingCodecs<
       settingsField((value) => setting.guard(value).value).pipe(Schema.withDecodingDefault(ABSENT)),
     ]),
   );
+
   // SAFETY: each key's codec reads through that key's own guard, so the pairing the
   // mapped type states is the one built here; `Object.fromEntries` alone cannot say so.
   return codecs as {
@@ -208,6 +211,7 @@ const storedSettingFields = storedSettingCodecs(APP_SETTING_SCHEMA);
 
 function storedSettingsFromPersisted(persisted: PersistedSettings): StoredAppSettings {
   const entries = Object.fromEntries(APP_SETTING_FIELDS.map((field) => [field, persisted[field]]));
+
   // SAFETY: APP_SETTING_FIELDS copies every StoredAppSettings member and no persistence metadata.
   return entries as StoredAppSettings;
 }
@@ -231,6 +235,7 @@ function accountPreferencesWithLocalChanges(
   expected: AccountPreferences,
 ): AccountPreferences {
   const settings: Record<string, WireValue> = {};
+
   for (const field of ACCOUNT_PREFERENCE_FIELDS) {
     // SAFETY: AccountPreferenceField selects JSON-compatible account preference values.
     const value = accountPreferenceWithLocalChanges(
@@ -238,18 +243,23 @@ function accountPreferencesWithLocalChanges(
       current[field] as UnparsedWireValue,
       expected[field] as UnparsedWireValue,
     );
+
     if (value !== undefined) settings[field] = value;
   }
+
   return accountPreferencesFromStored(settings) ?? {};
 }
 
 function accountPreferencesFromPersisted(persisted: PersistedSettings): AccountPreferences {
   const settings: Record<string, WireValue> = {};
+
   for (const field of ACCOUNT_PREFERENCE_FIELDS) {
     // SAFETY: AccountPreferenceField selects JSON-compatible stored app settings.
     const value = persisted[field] as UnparsedWireValue;
+
     if (value !== undefined) settings[field] = value;
   }
+
   return accountPreferencesFromStored(settings) ?? {};
 }
 
@@ -269,11 +279,15 @@ function storedAccountPreferencesSync(
   value: UnparsedWireValue,
 ): PersistedAccountPreferencesSync | undefined {
   const held = readWireRecord(value);
+
   if (!held || !isWireString(held.accountEmail) || !held.accountEmail) return undefined;
   const storedPreferences = readWireRecord(held.preferences);
+
   if (!storedPreferences) return undefined;
   const preferences = accountPreferencesFromStored(storedPreferences);
+
   if (preferences === undefined) return undefined;
+
   return { accountEmail: held.accountEmail, preferences };
 }
 
@@ -291,8 +305,10 @@ interface PersistedExperiments {
 
 function storedExperiments(value: UnparsedWireValue): PersistedExperiments | undefined {
   const held = readWireRecord(value);
+
   if (!held || !isWireString(held.accountEmail) || !held.accountEmail) return undefined;
   const choices = experimentChoicesFrom(held.choices);
+
   return choices === undefined ? undefined : { accountEmail: held.accountEmail, choices };
 }
 
@@ -320,6 +336,7 @@ type ProductEventDays = Readonly<
 
 function productEventDayEntries(days: ProductEventDays | undefined): KeptProductEventDay[] {
   const entries: KeptProductEventDay[] = [];
+
   for (const [name, byDiscriminator] of Object.entries(days ?? {})) {
     for (const [discriminator, byAccount] of Object.entries(byDiscriminator)) {
       for (const [account, day] of Object.entries(byAccount)) {
@@ -327,12 +344,14 @@ function productEventDayEntries(days: ProductEventDays | undefined): KeptProduct
       }
     }
   }
+
   return entries;
 }
 
 /** The nested record of these entries, built through `Map`s so no key from the file reaches a prototype. */
 function productEventDaysFrom(entries: readonly KeptProductEventDay[]): ProductEventDays {
   const byName = new Map<string, Map<string, Map<string, string>>>();
+
   for (const { name, discriminator, account, day } of entries) {
     const byDiscriminator = byName.get(name) ?? new Map<string, Map<string, string>>();
     const byAccount = byDiscriminator.get(discriminator) ?? new Map<string, string>();
@@ -340,6 +359,7 @@ function productEventDaysFrom(entries: readonly KeptProductEventDay[]): ProductE
     byDiscriminator.set(discriminator, byAccount);
     byName.set(name, byDiscriminator);
   }
+
   return Object.fromEntries(
     [...byName].map(([name, byDiscriminator]) => [
       name,
@@ -355,6 +375,7 @@ function productEventDaysFrom(entries: readonly KeptProductEventDay[]): ProductE
 
 function storedProductEventDays(value: UnparsedWireValue): ProductEventDays | undefined {
   const kept: KeptProductEventDay[] = [];
+
   for (const [name, byDiscriminator] of Object.entries(readWireRecord(value) ?? {})) {
     for (const [discriminator, byAccount] of Object.entries(
       readWireRecord(byDiscriminator) ?? {},
@@ -364,6 +385,7 @@ function storedProductEventDays(value: UnparsedWireValue): ProductEventDays | un
       }
     }
   }
+
   return kept.length === 0 ? undefined : productEventDaysFrom(kept);
 }
 
@@ -423,8 +445,10 @@ function settledPersistedSettings(
   keepsOwnAccount = true,
 ): PersistedSettings {
   const { account, accountPreferencesSync, experiments, ...settings } = persisted;
+
   const keptFor = (section: { readonly accountEmail: string } | undefined) =>
     section !== undefined && (!keepsOwnAccount || section.accountEmail === account?.email);
+
   return {
     ...settings,
     ...(account ? { account } : undefined),
@@ -439,6 +463,7 @@ function experimentsOf(
   accountEmail: string | undefined,
 ): ExperimentChoices {
   const { experiments } = persisted;
+
   return accountEmail !== undefined && experiments?.accountEmail === accountEmail
     ? experiments.choices
     : NO_EXPERIMENTS;
@@ -462,7 +487,9 @@ const DECLARED_SETTINGS_FIELDS: ReadonlySet<string> = new Set(
  */
 function carriedSettingsFields(source: string): WireRecord {
   const parsed = Result.try(() => JSON.parse(source));
+
   if (Result.isFailure(parsed) || !isRecord(parsed.success)) return {};
+
   return Object.fromEntries(
     Object.entries(parsed.success).filter(([field]) => !DECLARED_SETTINGS_FIELDS.has(field)),
   );
@@ -497,6 +524,7 @@ function parsePersistedSettings(
   keepsOwnAccount: boolean,
 ): PersistedSettings | undefined {
   const decoded = decodePersistedSettingsFile(source);
+
   return Result.isSuccess(decoded)
     ? settledPersistedSettings(decoded.success, keepsOwnAccount)
     : undefined;
@@ -554,10 +582,13 @@ export class SettingsStore {
       yield* this.#mutate((persisted) => {
         if (persisted[field] === value) return undefined;
         const next: PersistedSettings = { ...persisted };
+
         if (value === undefined) delete next[field];
         else Object.assign(next, { [field]: value });
+
         return next;
       });
+
       return { status: ACTION_RESULT_STATUS.ACCEPTED, settings: yield* this.snapshot() };
     });
   }
@@ -578,6 +609,7 @@ export class SettingsStore {
       const signedIn = yield* this.#accountEmailOf();
       yield* this.#mutate((persisted) => {
         if (expected && signedIn(persisted) !== expected.accountEmail) return undefined;
+
         const nextSettings = expected
           ? accountPreferencesWithLocalChanges(
               settings,
@@ -585,18 +617,24 @@ export class SettingsStore {
               expected.preferences,
             )
           : settings;
+
         const next: PersistedSettings = { ...persisted };
+
         for (const field of ACCOUNT_PREFERENCE_FIELDS) {
           // SAFETY: AccountPreferences is the parsed subset of JSON-compatible stored app settings.
           const value = nextSettings[field] as UnparsedWireValue;
+
           // SAFETY: AccountPreferenceField selects the same persisted JSON-compatible setting value.
           if (!sameAccountPreferenceValue(persisted[field] as UnparsedWireValue, value)) {
             changed.push(field);
           }
+
           Object.assign(next, { [field]: value });
         }
+
         return changed.length > 0 ? next : undefined;
       });
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: yield* this.snapshot(),
@@ -623,6 +661,7 @@ export class SettingsStore {
       yield* this.#mutate((persisted) => {
         if (signedIn(persisted) !== accountEmail) return undefined;
         saved = true;
+
         if (
           persisted.accountPreferencesSync?.accountEmail === accountEmail &&
           JSON.stringify(persisted.accountPreferencesSync.preferences) ===
@@ -630,8 +669,10 @@ export class SettingsStore {
         ) {
           return undefined;
         }
+
         return { ...persisted, accountPreferencesSync: { accountEmail, preferences } };
       });
+
       return saved;
     });
   }
@@ -651,12 +692,16 @@ export class SettingsStore {
       const signedIn = yield* this.#accountEmailOf();
       yield* this.#mutate((persisted) => {
         if (signedIn(persisted) !== accountEmail) return undefined;
+
         if (JSON.stringify(experimentsOf(persisted, accountEmail)) === JSON.stringify(choices)) {
           return undefined;
         }
+
         changed = true;
+
         return { ...persisted, experiments: { accountEmail, choices } };
       });
+
       return changed;
     });
   }
@@ -671,6 +716,7 @@ export class SettingsStore {
     return Effect.sync(() => {
       if (this.#accountRead === accountEmail) return false;
       this.#accountRead = accountEmail;
+
       return true;
     });
   }
@@ -702,14 +748,17 @@ export class SettingsStore {
   keepProductEventDay(kept: KeptProductEventDay): Effect.Effect<void, PlatformError> {
     return this.#mutate((persisted) => {
       const entries = productEventDayEntries(persisted.productEventDays);
+
       const held = entries.find(
         (entry) =>
           entry.name === kept.name &&
           entry.discriminator === kept.discriminator &&
           entry.account === kept.account,
       );
+
       if (held?.day === kept.day) return undefined;
       const others = entries.filter((entry) => entry !== held && entry.day >= kept.day);
+
       return { ...persisted, productEventDays: productEventDaysFrom([...others, kept]) };
     });
   }
@@ -731,6 +780,7 @@ export class SettingsStore {
     return Effect.gen({ self: this }, function* () {
       const persisted = yield* this.#load();
       const accountEmail = (yield* this.#accountEmailOf())(persisted);
+
       return {
         stored: {
           ...storedSettingsFromPersisted(persisted),
@@ -753,7 +803,9 @@ export class SettingsStore {
     return Effect.map(this.#load(), ({ account }) => {
       if (!account) return undefined;
       const tokens = this.#decryptTokens(account.tokenCipher);
+
       if (tokens === undefined) return undefined;
+
       return {
         ...tokens,
         ...(account.id ? { id: account.id } : undefined),
@@ -786,9 +838,11 @@ export class SettingsStore {
   ): Effect.Effect<AccountSnapshot, PlatformError | EncryptedStorageUnavailable> {
     return Effect.gen({ self: this }, function* () {
       const cipher = this.#cipher;
+
       if (!cipher || !this.#secretStorageUsable()) {
         return yield* new EncryptedStorageUnavailable();
       }
+
       yield* this.#mutate((persisted) => {
         const tokenCipher = Base64.encode(
           cipher.encrypt(
@@ -799,6 +853,7 @@ export class SettingsStore {
             }),
           ),
         );
+
         const next: PersistedSettings = {
           ...persisted,
           account: {
@@ -810,13 +865,16 @@ export class SettingsStore {
             provider: account.provider,
           },
         };
+
         if (persisted.account?.email && persisted.account.email !== account.email) {
           for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
           delete next.accountPreferencesSync;
           delete next.experiments;
         }
+
         return next;
       });
+
       return yield* this.accountSnapshot();
     });
   }
@@ -828,16 +886,20 @@ export class SettingsStore {
    */
   clearAccount(): Effect.Effect<AccountSnapshot, PlatformError> {
     const keepsOwnAccount = this.#cipher !== undefined;
+
     return Effect.as(
       this.#mutate((persisted) => {
         // Note that the account's preferences go below, so a sign-in again reads them again before they stand.
         this.forgetAccountRead();
+
         if (keepsOwnAccount && !persisted.account) return undefined;
         const { account: _account, ...withoutAccount } = persisted;
         const next: PersistedSettings = { ...withoutAccount };
+
         for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
         delete next.accountPreferencesSync;
         delete next.experiments;
+
         return next;
       }),
       { status: ACCOUNT_STATUS.SIGNED_OUT },
@@ -855,14 +917,18 @@ export class SettingsStore {
    */
   settleSessionAccount(accountEmail: string): Effect.Effect<void, PlatformError> {
     if (this.#cipher !== undefined) return Effect.void;
+
     return this.#mutate((persisted) => {
       const keptFor =
         persisted.accountPreferencesSync?.accountEmail ?? persisted.experiments?.accountEmail;
+
       if (keptFor === undefined || keptFor === accountEmail) return undefined;
       const next: PersistedSettings = { ...persisted };
+
       for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
       delete next.accountPreferencesSync;
       delete next.experiments;
+
       return next;
     });
   }
@@ -877,6 +943,7 @@ export class SettingsStore {
       if (!(STORED_API_KEYS_FIELD in this.#carried)) return undefined;
       const { [STORED_API_KEYS_FIELD]: _retired, ...carried } = this.#carried;
       this.#carried = carried;
+
       return { ...persisted };
     });
   }
@@ -902,16 +969,23 @@ export class SettingsStore {
     return Effect.gen({ self: this }, function* () {
       yield* this.#mutate((persisted) => {
         const next: PersistedSettings = { ...persisted };
+
         for (const field of APP_SETTING_FIELDS) {
           const definition = APP_SETTING_SCHEMA[field];
+
           if (!("resetScope" in definition) || definition.resetScope !== scope) continue;
+
           if (kept.includes(field)) continue;
+
           if (definition.guard(undefined).valid) delete next[field];
           else Object.assign(next, { [field]: definition.default });
         }
+
         const changed = APP_SETTING_FIELDS.some((field) => next[field] !== persisted[field]);
+
         return changed ? next : undefined;
       });
+
       return { status: ACTION_RESULT_STATUS.ACCEPTED, settings: yield* this.snapshot() };
     });
   }
@@ -923,8 +997,10 @@ export class SettingsStore {
    */
   #accountEmailOf(): Effect.Effect<AccountEmailOf> {
     const read = this.#sessionAccountEmail;
+
     if (this.#cipher !== undefined || read === undefined)
       return Effect.succeed(STORED_ACCOUNT_EMAIL);
+
     return Effect.map(read(), (email) => () => email);
   }
 
@@ -949,6 +1025,7 @@ export class SettingsStore {
       Effect.gen({ self: this }, function* () {
         const persisted = yield* this.#rereadForWrite();
         const mutated = mutate(persisted);
+
         if (!mutated) return;
         const next: PersistedSettings = { ...mutated, version: SETTINGS_FILE_VERSION };
         yield* this.#write(next);
@@ -966,13 +1043,16 @@ export class SettingsStore {
   #secretStorageUsable(): boolean {
     if (this.#secretStorageAvailable === undefined) {
       let available = false;
+
       try {
         available = this.#cipher?.isAvailable() ?? false;
       } catch {
         available = false;
       }
+
       this.#secretStorageAvailable = available;
     }
+
     return this.#secretStorageAvailable;
   }
 
@@ -984,11 +1064,15 @@ export class SettingsStore {
    */
   #decryptTokens(cipherText: string): AccountTokens | undefined {
     const cipher = this.#cipher;
+
     if (!cipher) return undefined;
+
     const plain = Result.flatMap(Base64.decode(cipherText), (bytes) =>
       Result.try(() => cipher.decrypt(bytes)),
     );
+
     if (Result.isFailure(plain)) return undefined;
+
     return Result.getOrUndefined(decodeAccountTokens(plain.success));
   }
 
@@ -1025,8 +1109,10 @@ export class SettingsStore {
 
   #rereadForWrite(): Effect.Effect<PersistedSettings, PlatformError> {
     if (this.#writer !== undefined) return this.#reread();
+
     return Effect.catch(this.#reread(), (error) => {
       const held = this.#held;
+
       return held === undefined ? Effect.fail(error) : Effect.succeed(held);
     });
   }
@@ -1044,13 +1130,16 @@ export class SettingsStore {
   #readPersisted(): Effect.Effect<PersistedSettings, PlatformError> {
     return Effect.map(this.#onFileSystem(readSettingsFileText(this.#directory())), (source) => {
       this.#carried = {};
+
       if (source === undefined) return defaultPersistedSettings();
       // A corrupt settings file is replaced by the next write rather than
       // failing app start, so it falls back to defaults exactly as an absent
       // file does, and carries nothing.
       const parsed = parsePersistedSettings(source, this.#cipher !== undefined);
+
       if (parsed === undefined) return defaultPersistedSettings();
       this.#carried = carriedSettingsFields(source);
+
       return parsed;
     });
   }
@@ -1062,6 +1151,7 @@ export class SettingsStore {
    */
   #write(persisted: PersistedSettings): Effect.Effect<void, PlatformError> {
     const written = { ...encodePersistedSettings(persisted), ...this.#carried };
+
     return this.#onFileSystem(
       writeSettingsFileAtomic(
         this.#directory(),

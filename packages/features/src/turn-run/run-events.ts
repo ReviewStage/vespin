@@ -284,6 +284,7 @@ export function toolCallSettlementOf(
   status: string | undefined,
 ): ToolCallSettlement {
   const output = valueFromJsonText(outputJson);
+
   if (status === undefined || !isToolRefusalStatus(status)) {
     return {
       state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
@@ -291,7 +292,9 @@ export function toolCallSettlementOf(
       ...(status !== undefined ? { status } : undefined),
     };
   }
+
   const reason = isRecord(output) && isWireString(output.reason) ? output.reason : outputJson;
+
   return { state: TOOL_CALL_SETTLEMENT.OUTPUT_ERROR, output, errorText: reason, status };
 }
 
@@ -319,13 +322,17 @@ const OPEN_SPAN = /\*+(?=[^\s*])|(?<![\w_])_+(?=[^\s_])|~~(?=\S)|`|\[/u;
 export function finishedSentencesOf(forming: string): string {
   const lineStart = forming.lastIndexOf("\n") + 1;
   const spoken = spokenProse(forming);
+
   const ends = [...forming.slice(lineStart).matchAll(SENTENCE_BOUNDARIES)].map(
     (boundary) => lineStart + boundary.index,
   );
+
   for (const end of ends.reverse()) {
     const said = spokenProse(forming.slice(0, end));
     const line = said.slice(said.lastIndexOf("\n") + 1);
+
     if (spoken.startsWith(said) && !OPEN_SPAN.test(line)) return forming.slice(0, end);
   }
+
   return forming.slice(0, Math.max(lineStart - 1, 0));
 }

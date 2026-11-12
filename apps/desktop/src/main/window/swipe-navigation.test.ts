@@ -25,16 +25,20 @@ function swipedWindow() {
   followSwipes(window);
   const stream = windowPushes.stream(webContents, undefined);
   const swipe = (direction: string) => window.emit("swipe", {}, direction);
+
   /** Everything pushed to the page so far, the stream then ended. */
   const sent = async (): Promise<PushEvent[]> => {
     windowPushes.push(webContents, PUSH.SHOW_LINK, LINK);
     const pushed: PushEvent[] = [];
+
     for await (const event of stream) {
       if (event.push === PUSH.SHOW_LINK) break;
       pushed.push(event);
     }
+
     return pushed;
   };
+
   return { swipe, sent };
 }
 

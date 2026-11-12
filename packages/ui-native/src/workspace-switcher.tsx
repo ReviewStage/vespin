@@ -45,7 +45,7 @@ const NAME_MAX_WIDTH = 180;
 /** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
 
-/** How the switcher's button stands: the tile and the name, where a sidebar's row has room, or the tile alone, where a bar's title stands beside it. */
+/** How the switcher's button stands: the tile, the name and ⌄, where a sidebar's row has room, or the tile alone at a bar's photo size, where a bar's title stands beside it, as the App Store and Gmail stand an account's photo that opens a menu, with no ⌄. */
 export const SWITCHER_LOOK = {
   NAMED: "named",
   TILE: "tile",
@@ -100,12 +100,15 @@ type WorkspaceSwitcherProps = {
   readonly actions: readonly SwitcherAction[];
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
+  /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
+  readonly tileSize?: number | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */
 function tilePicture(workspace: SwitcherWorkspace, size: number): string | undefined {
   if (workspace.photo !== undefined) return workspace.photo;
   const pinned = pinnedPictureUrl(workspace.picture);
+
   return pinned === undefined ? undefined : accountPictureAt(pinned, size * PixelRatio.get());
 }
 
@@ -113,9 +116,10 @@ function tilePicture(workspace: SwitcherWorkspace, size: number): string | undef
  * A workspace's tile, as the panel's is: its photo, its owner's picture on a
  * personal one, or the first character of its name on one of six hues read
  * off its id, on a softened square, since a square says a team as a circle
- * says a person. Note that the letter stands under the picture, so it shows
- * while the picture loads and stays once it fails, which takes the picture
- * away. It is never heard, since the name beside it says the workspace.
+ * says a person. Note that the hue and the letter stand only until the
+ * picture has drawn, so they show while it loads and once it fails, which
+ * takes the picture away, but never through a picture's transparent pixels.
+ * It is never heard, since the name beside it says the workspace.
  */
 export function WorkspaceTile({
   workspace,
@@ -128,26 +132,34 @@ export function WorkspaceTile({
   const dark = useColorScheme() === "dark";
   const picture = tilePicture(workspace, size);
   const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const pictureDrawn = picture !== undefined && picture === drawn && picture !== failed;
   const corner = size * TILE_ROUNDING;
+
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
-      <RoundedRectangle
-        cornerRadius={corner}
-        modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
-      />
-      <Text
-        modifiers={[
-          font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
-          foregroundStyle(ON_IDENTITY),
-        ]}
-      >
-        {identityLetter(workspace.name)}
-      </Text>
+      {pictureDrawn ? null : (
+        <>
+          <RoundedRectangle
+            cornerRadius={corner}
+            modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
+          />
+          <Text
+            modifiers={[
+              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
+              foregroundStyle(ON_IDENTITY),
+            ]}
+          >
+            {identityLetter(workspace.name)}
+          </Text>
+        </>
+      )}
       {picture === undefined || picture === failed ? null : (
         <AvatarPhoto
           address={picture}
           size={size}
           corner={corner}
+          onLoad={() => setDrawn(picture)}
           onFail={() => setFailed(picture)}
         />
       )}
@@ -178,15 +190,19 @@ export function WorkspaceSwitcherMenu({
   account,
   actions,
   look = SWITCHER_LOOK.NAMED,
+  tileSize = MARK_SIZE.BAR_FACE,
 }: WorkspaceSwitcherProps) {
   const colors = useColors();
+
   return (
     <Menu
       modifiers={[accessibilityLabel(heardAs(chosen)), accessibilityIdentifier(SWITCHER_ID)]}
       label={
-        <HStack spacing={SPACE.TIGHT + 2}>
-          <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
-          {look === SWITCHER_LOOK.TILE ? null : (
+        look === SWITCHER_LOOK.TILE ? (
+          <WorkspaceTile workspace={chosen} size={tileSize} />
+        ) : (
+          <HStack spacing={SPACE.TIGHT + 2}>
+            <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
             <Text
               modifiers={[
                 font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
@@ -197,14 +213,14 @@ export function WorkspaceSwitcherMenu({
             >
               {chosen.name}
             </Text>
-          )}
-          <Image
-            systemName="chevron.down"
-            size={CHEVRON_SIZE}
-            color={colors.TEXT_BODY}
-            modifiers={[accessibilityHidden()]}
-          />
-        </HStack>
+            <Image
+              systemName="chevron.down"
+              size={CHEVRON_SIZE}
+              color={colors.TEXT_BODY}
+              modifiers={[accessibilityHidden()]}
+            />
+          </HStack>
+        )
       }
     >
       {workspaces.map((workspace) => (
@@ -242,10 +258,11 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as the one bar item at the bar's leading edge, as Linear's
- * iPhone app stands its workspace there: the tile and ⌄ alone, so the
- * screen's own title keeps its place in the bar, and the menu names the
- * workspace, checked. Note that it stands as a
+ * label, standing as the one bar item at the bar's leading edge: the tile
+ * alone, at the size the account's photo stood, in the round glass the bar
+ * stands it in, as the App Store and Gmail stand a photo that opens a menu,
+ * so the screen's own title keeps its place in the bar and the menu names
+ * the workspace, checked. Note that it stands as a
  * bar item rather than the bar's title view, because a host sized to its
  * contents drew at no size at all in the native stack's title on iOS 27.
  */

@@ -35,7 +35,9 @@ function before(first: Element, then: Element): boolean {
 /** The one element `selector` finds, which the test fails without. */
 function only(container: HTMLElement, selector: string): Element {
   const found = container.querySelector(selector);
+
   if (found === null) throw new Error(`nothing matches ${selector}`);
+
   return found;
 }
 

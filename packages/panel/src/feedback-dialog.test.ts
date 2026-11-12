@@ -31,6 +31,7 @@ const SIGNED_IN: AccountSnapshot = {
   email: "ada@example.com",
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
+
 /** What the dialog asked the main process to send, and how the next send is answered. */
 let sent: PortActPayload<typeof ACT_KIND.FEEDBACK_SEND>[] = [];
 let answer: FeedbackResult = { delivered: true };
@@ -43,6 +44,7 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.FEEDBACK_SEND]: (payload) => {
       sent.push(payload);
+
       return Promise.resolve(answer);
     },
   });
@@ -50,6 +52,7 @@ beforeEach(() => {
     ...QUIET_PANEL,
     onMenuCommand: (listener: (command: AppCommand) => void) => {
       menuListener = listener;
+
       return () => {
         menuListener = undefined;
       };
@@ -75,6 +78,7 @@ function Harness({ account }: { account: AccountSnapshot }): React.JSX.Element {
   const [kind, setKind] = useState<FeedbackKind>();
   useAppCommand(APP_COMMAND.SEND_FEEDBACK, () => setKind(FEEDBACK_KIND.FEEDBACK));
   useMenuCommands(true);
+
   return createElement(
     Fragment,
     null,
@@ -100,7 +104,9 @@ function button(name: string, within: ParentNode = document): HTMLButtonElement 
   const found = [...within.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   assert.ok(found, `a button named ${name}`);
+
   return found;
 }
 
@@ -113,14 +119,17 @@ function openFromHelp(): HTMLElement {
   act(() => menuListener?.(APP_COMMAND.SEND_FEEDBACK));
   const opened = dialog();
   assert.ok(opened, "Send feedback opens the dialog");
+
   return opened;
 }
 
 function field(): HTMLTextAreaElement {
   const found = dialog()?.querySelector("textarea");
   assert.ok(found, "the dialog draws its field");
+
   return found;
 }
+
 test("Help's item opens the feedback dialog, with the field taking the keyboard, and its head turns the note into a prompt", () => {
   mount();
 
@@ -128,7 +137,6 @@ test("Help's item opens the feedback dialog, with the field taking the keyboard,
   assert.equal(feedback.querySelector("h2")?.textContent, "Send feedback");
   assert.equal(document.activeElement, field());
   assert.equal(field().placeholder, "What happened, and what did you expect?");
-  assert.ok(field().closest(".ph-no-capture"), "the note is left out of the screen recording");
 
   act(() => button("Prompt").click());
   assert.equal(dialog()?.querySelector("h2")?.textContent, "Send feedback");
@@ -181,6 +189,7 @@ test("a note kept from one experiment's row is not sent under another place's ti
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (about: typeof EXPERIMENT.MEMORY | undefined) =>
     act(() =>
       root.render(
@@ -318,12 +327,14 @@ test("a refused send says why and keeps the note, and Enter in the note, unlike 
   assert.equal(field().value, "The board missed a plan.");
 
   answer = { delivered: true };
+
   const press = (init: KeyboardEventInit) =>
     act(async () => {
       field().dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init }),
       );
     });
+
   await press({ shiftKey: true });
   assert.equal(sent.length, 1, "Shift+Enter sends nothing");
   await press({});

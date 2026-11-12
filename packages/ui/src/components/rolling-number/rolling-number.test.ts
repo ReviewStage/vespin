@@ -26,12 +26,15 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+type DrawnResult = { view: HTMLElement; to: (next: number) => void };
+
 /** A count drawn into the page, and a way to draw it again at another value. */
-function drawn(value: number): { view: HTMLElement; to: (next: number) => void } {
+function drawn(value: number): DrawnResult {
   const view = document.body.appendChild(document.createElement("p"));
   const root = createRoot(view);
   roots.push(root);
   act(() => root.render(createElement(RollingNumber, { value })));
+
   return {
     view,
     to: (next) => act(() => root.render(createElement(RollingNumber, { value: next }))),

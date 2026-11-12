@@ -36,21 +36,27 @@ export const resolveWorkspace = Effect.gen(function* () {
   const { origin, hosted } = yield* session;
   const flag = Option.getOrUndefined(yield* WORKSPACE_FLAG);
   const variable = process.env[WORKSPACE_VARIABLE];
+
   const config = yield* Effect.mapError(
     configuredWorkspace(origin),
     (failed) => new CommandFailed({ exit: CLI_EXIT.REFUSED, message: failed.message }),
   );
+
   const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
+
   const resolved = resolveCliWorkspace(
     { flag, environment: variable === "" ? undefined : variable, config },
     workspaces,
   );
+
   if ("workspace" in resolved) return resolved;
   const listed = workspaces.map(({ id, slug, name }) => `  ${slug ?? id}  ${name}`);
+
   const why =
     resolved.unsettled === CLI_WORKSPACE_UNSETTLED.UNKNOWN && resolved.named !== undefined
       ? `${SOURCE_WORDS[resolved.named.source]} names ${resolved.named.name}, which is none of your workspaces.`
       : "Name a workspace with -w or VESPIN_WORKSPACE.";
+
   return yield* new CommandFailed({
     exit: CLI_EXIT.USAGE,
     message: [why, "Your workspaces:", ...listed].join("\n"),

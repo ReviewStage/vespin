@@ -60,6 +60,7 @@ beforeEach(() => {
 afterEach(() => {
   moves = [];
   observers = [];
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   vi.restoreAllMocks();
@@ -80,6 +81,7 @@ function Strip({
 }): ReactNode {
   const [chosen, choose] = useState(opensOn);
   const [shown, setShown] = useState(() => Array.from({ length: count }, (_, at) => at));
+
   return createElement(Tabs, {
     label: "Tabs",
     controls,
@@ -110,6 +112,7 @@ async function render(element: ReactNode): Promise<HTMLElement> {
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(element));
+
   return container;
 }
 
@@ -118,6 +121,7 @@ function pill(container: HTMLElement, label: string): HTMLElement {
   const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === label,
   );
+
   return tab?.closest<HTMLElement>(".ui-tab") ?? assert.fail(`${label}'s tab stands`);
 }
 
@@ -142,6 +146,7 @@ function layOut(width: number, count: number): void {
     this: HTMLElement,
   ) {
     const strip = this.closest(".ui-tabs");
+
     return strip === null ? 0 : [...strip.querySelectorAll(".ui-tab")].indexOf(this) * TAB_WIDTH;
   });
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
@@ -155,8 +160,10 @@ function layOut(width: number, count: number): void {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.matches(".ui-tabs")) return DOMRect.fromRect({ width, height: 30 });
     const strip = this.closest(".ui-tabs");
+
     if (!this.matches(".ui-tab") || strip === null) return DOMRect.fromRect();
     const at = [...strip.querySelectorAll(".ui-tab")].indexOf(this);
+
     return DOMRect.fromRect({ x: at * TAB_WIDTH - scrolled, width: TAB_WIDTH, height: 30 });
   });
   vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
@@ -179,6 +186,7 @@ test("a strip of many tabs, narrowed, chosen along, and scrolled, draws every ta
   const failures = vi.spyOn(console, "error");
   layOut(250, MANY);
   const container = await render(createElement(Strip, { count: MANY }));
+
   for (const label of ["Tab 2", "Tab 30", "Tab 60", "Tab 1"]) {
     act(() => {
       for (const heard of observers) heard();
@@ -186,6 +194,7 @@ test("a strip of many tabs, narrowed, chosen along, and scrolled, draws every ta
     act(() => tabOf(container, label).click());
     act(() => stripOf(container).dispatchEvent(new Event("scroll")));
   }
+
   const loops = failures.mock.calls.filter((call) => /Maximum update depth/u.test(String(call[0])));
   assert.deepEqual(loops, []);
   assert.equal(container.querySelectorAll('[role="tab"]').length, MANY);
@@ -224,8 +233,10 @@ test("the chosen tab, pinned at the strip's start after a scroll, dragged along 
     releasePointerCapture: () => undefined,
   });
   const grip = tabOf(container, "Tab 1");
+
   const at = (type: string, x: number) =>
     new PointerEvent(type, { bubbles: true, button: 0, clientX: x, pointerId: 1 });
+
   act(() => {
     grip.dispatchEvent(at("pointerdown", 10));
     window.dispatchEvent(at("pointermove", 120));
@@ -249,10 +260,12 @@ test("the arrow keys, Home, and End move the focus along the strip, wrapping at 
   assert.equal(focused(), "Tab 1");
   press(tabOf(container, "Tab 1"), "ArrowRight", { shiftKey: true, metaKey: true });
   assert.equal(focused(), "Tab 1");
+
   // Only the chosen tab is the strip's one stop for Tab.
   const stops = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].map(
     (tab) => tab.tabIndex,
   );
+
   assert.deepEqual(stops, [0, -1, -1, -1]);
 });
 
@@ -267,8 +280,10 @@ test("Delete closes the focused tab and hands focus to the tab standing in its p
   assert.equal(container.querySelectorAll('[role="tab"]').length, 2);
 });
 
+type Controls = { current: TabsControls | null };
+
 test("an owner's step moves the focused tab a place along, keeps focus on it, and says where it now stands", async () => {
-  const controls: { current: TabsControls | null } = { current: null };
+  const controls: Controls = { current: null };
   const container = await render(createElement(Strip, { count: 3, controls }));
   await render(createElement(Announcer));
   act(() => controls.current?.step(1));
@@ -289,7 +304,7 @@ test("an owner's step moves the focused tab a place along, keeps focus on it, an
 });
 
 test("an anchored tab stands out of every move: it has no place, the tabs after it are counted from the first after it, and a step takes none before it", async () => {
-  const controls: { current: TabsControls | null } = { current: null };
+  const controls: Controls = { current: null };
   const container = await render(createElement(Strip, { count: 3, controls, anchored: true }));
   assert.equal(controls.current?.placeOf(tabOf(container, "Tab 1")), undefined);
   const second = controls.current?.placeOf(tabOf(container, "Tab 2"));
@@ -303,6 +318,7 @@ test("an anchored tab stands out of every move: it has no place, the tabs after 
 
 test("a card picked on the press is picked as the press lands, and one picked on the click is not picked by a press alone but is a Tab stop Return picks", async () => {
   const picked: string[] = [];
+
   const container = await render(
     ["Held", "Clicked"].map((label) =>
       createElement(TabCard, {
@@ -316,6 +332,7 @@ test("a card picked on the press is picked as the press lands, and one picked on
       }),
     ),
   );
+
   const [held, clicked] = [...container.querySelectorAll<HTMLElement>('[role="option"]')];
   const down = () => new PointerEvent("pointerdown", { bubbles: true, button: 0 });
   act(() => {
@@ -336,6 +353,7 @@ test("a card picked on the press is picked as the press lands, and one picked on
 /** The pointer resting on `target` past the hint's wait, on a faked clock. */
 function restOn(target: Element): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));

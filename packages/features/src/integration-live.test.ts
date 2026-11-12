@@ -96,9 +96,12 @@ it.each<{
     multiple,
     INTEGRATION_STATUS.EXPIRED,
   );
+
   for (const [provider, status] of Object.entries(drawn)) {
+    // SAFETY: `drawn` is keyed by providers alone.
     assert.equal(answer.integrations[provider as IntegrationProvider], status, provider);
   }
+
   assert.deepEqual(answer.accounts, accounts);
   assert.deepEqual(answer.addable, addable);
 });

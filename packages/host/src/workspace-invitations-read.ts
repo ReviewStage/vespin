@@ -148,16 +148,20 @@ function followInvitations(
       /** The service's own origin the last seal answered, which each accept link is built on; none before one answered. */
       let origin: string | undefined;
       let told: readonly WorkspaceInvitation[] | undefined;
+
       const drawn = yield* drawnAtEdges((now) => {
         if (origin === undefined || !open) return undefined;
         const rows = { invitations: invitations.rows() };
         const pending = workspaceInvitationsOfLiveRows(rows, origin, now);
+
         if (told === undefined || !Equal.equals(told, pending)) {
           told = pending;
           answers.answered(pending);
         }
+
         return nextInvitationExpiry(rows, now);
       });
+
       const invitations: HeldRows<PooledInvitation> = yield* dependencies.pool.stand(
         WORKSPACE_INVITATION,
         {
@@ -167,27 +171,34 @@ function followInvitations(
           adopts: (row) => row.workspaceId === workspaceId,
         },
       );
+
       const waits = yield* carriedWaits(() => invitations.synced());
       yield* dependencies.stand(waits);
       // Note that the invitations kept on disk are drawn as the service last answered them, on the origin it answered, until the read answers anew.
       const kept = dependencies.entities()?.storedIn(KEPT_READ.INVITATIONS, workspaceId);
+
       if (kept !== undefined) {
         yield* invitations.answer(kept.invitations.map((row) => ({ workspaceId, ...row })));
         origin = kept.origin;
         yield* drawn;
       }
+
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           open = false;
         }),
       );
       const seal = dependencies.seal(workspaceId);
+
       const attempt = Effect.gen(function* () {
         const first = yield* seal(false);
+
         if ("failure" in first) {
           answers.unanswered();
+
           return first.gone !== true;
         }
+
         yield* followTakingRows(
           { poll: (after) => seal(true, after) },
           first,
@@ -204,8 +215,10 @@ function followInvitations(
               yield* drawn;
             }),
         ).pipe(Effect.ignore);
+
         return true;
       });
+
       yield* restarting(attempt);
     }),
   );
@@ -222,6 +235,7 @@ export function workspaceInvitationsReads(
   return Effect.gen(function* () {
     /** Each held workspace's waits on what its read carries, while its follow stands. */
     const standing = MutableHashMap.empty<string, CarriedWaits<PooledInvitation>>();
+
     const stand = (workspaceId: string) => (waits: CarriedWaits<PooledInvitation>) =>
       Effect.acquireRelease(
         Effect.sync(() => MutableHashMap.set(standing, workspaceId, waits)),
@@ -232,6 +246,7 @@ export function workspaceInvitationsReads(
             }
           }),
       );
+
     const held = yield* heldSlice<typeof LIVE_READ.WORKSPACE_INVITATIONS, string>({
       empty: NO_KEYS_HELD,
       path: (workspaceId) => [workspaceId],
@@ -245,12 +260,15 @@ export function workspaceInvitationsReads(
           stand: stand(workspaceId),
         }),
     });
+
     /** Waits until the workspace's read carries what `until` asks of its rows, at once where no read stands for it. */
     const carried = (workspaceId: string, until: (rows: readonly PooledInvitation[]) => boolean) =>
       Effect.suspend(() => {
         const waits = Option.getOrUndefined(MutableHashMap.get(standing, workspaceId));
+
         return waits === undefined ? Effect.void : waits.carried(until);
       });
+
     const cancel = <Answer>(
       send: (
         cancel: TasksWorkspaceInvitationCancelParams,
@@ -279,6 +297,7 @@ export function workspaceInvitationsReads(
                 },
         ),
     });
+
     const made = (workspaceId: string, invitation: WorkspaceInvitation) =>
       dependencies.pool.write(
         {
@@ -294,6 +313,7 @@ export function workspaceInvitationsReads(
         },
         undefined,
       );
+
     return { held, cancel, made };
   });
 }

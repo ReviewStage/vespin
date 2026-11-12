@@ -165,10 +165,12 @@ function Hung({
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   return (
     <div className="catalog-anchor" ref={root}>
       <Button
@@ -251,6 +253,7 @@ function Hung({
 /** A menu whose read failed, which reads again on Retry and then lists its rows. */
 function Failed(): React.JSX.Element {
   const [read, setRead] = useState(false);
+
   return (
     <Hung
       label="Failed read"
@@ -289,15 +292,19 @@ function Headed(): React.JSX.Element {
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     setAction(undefined);
     trigger.current?.focus();
   };
+
   const leave = (left: EventTarget | null) => {
     if (!(left instanceof Node && root.current?.contains(left))) close();
   };
+
   const back = () => setAction(undefined);
+
   return (
     <div className="catalog-anchor" ref={root}>
       <Button
@@ -354,6 +361,7 @@ function Embedded(): React.JSX.Element {
   const [chosen, setChosen] = useState<string | undefined>("acme/app");
   const menuId = useId();
   const ignore = () => undefined;
+
   return (
     <div className="catalog-anchor">
       <p>
@@ -450,10 +458,12 @@ function PhoneSheet(): React.JSX.Element {
   const [fast, setFast] = useState(true);
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   // The phone's mark comes off once the sheet is gone, so the catalog's other menus hang as they do on the desktop.
   useEffect(() => {
     if (!drawn.mounted) document.documentElement.removeAttribute(ROOM_ATTRIBUTE);
@@ -461,6 +471,7 @@ function PhoneSheet(): React.JSX.Element {
   useEffect(() => () => document.documentElement.removeAttribute(ROOM_ATTRIBUTE), []);
   const words = EFFORTS.find((each) => each.id === effort)?.label ?? effort;
   const detail = fast ? `${words} Fast` : words;
+
   return (
     <div className="catalog-anchor">
       <Button
@@ -536,10 +547,12 @@ function Toggled(): React.JSX.Element {
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   return (
     <div className="catalog-anchor" ref={root}>
       <Button
@@ -567,7 +580,9 @@ function Toggled(): React.JSX.Element {
           onPick={(id) =>
             setOn((was) => {
               const next = new Set(was);
+
               if (!next.delete(id)) next.add(id);
+
               return next;
             })
           }

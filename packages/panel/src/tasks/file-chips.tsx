@@ -1,6 +1,7 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
 import { fileMarkers, isPictureName } from "@repo/features/file-marker";
 import { AttachmentRef } from "@repo/ui";
+import { Predicate } from "effect";
 import { createContext, Fragment, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -31,6 +32,7 @@ export const WordFilesContext = createContext<WordFiles | undefined>(undefined);
 /** Whether a file is the one a marker of the name names: a picture's marker an image of a picture's name, any other the file of that name. */
 function namedBy(file: FileChip, name: string): boolean {
   if (file.name !== name) return false;
+
   return !isPictureName(name) || file.mediaType.startsWith("image/");
 }
 
@@ -49,6 +51,7 @@ export function WordFileChip({
   const open = here && onOpen !== undefined ? () => onOpen(name) : undefined;
   // Note that a file whose type is not here yet is drawn by its name, a picture's as a picture's.
   const picture = file === undefined ? isPictureName(name) : file.mediaType.startsWith("image/");
+
   return (
     <AttachmentRef
       name={name}
@@ -70,7 +73,7 @@ export function WordFileChip({
  */
 export function LineWords({ pieces }: { pieces: readonly (string | FileChip)[] }): ReactNode {
   return pieces.map((piece, at) =>
-    typeof piece === "string" ? (
+    Predicate.isString(piece) ? (
       <Fragment key={at}>{piece}</Fragment>
     ) : (
       <WordFileChip key={at} name={piece.name} file={piece} />
@@ -78,14 +81,17 @@ export function LineWords({ pieces }: { pieces: readonly (string | FileChip)[] }
   );
 }
 
-/** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */
-export function useWordFileViewer(files: readonly FileChip[]): {
+type UseWordFileViewerResult = {
   readonly open: (name: string) => void;
   readonly viewer: ReactNode;
-} {
+};
+
+/** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */
+export function useWordFileViewer(files: readonly FileChip[]): UseWordFileViewerResult {
   // The file open, by its name, so a file taken off meanwhile closes it rather than opening its neighbor.
   const [viewing, setViewing] = useState<string | undefined>(undefined);
   const at = viewing === undefined ? -1 : files.findIndex((file) => file.name === viewing);
+
   const viewer =
     at === -1 ? null : (
       <AttachmentViewer
@@ -95,14 +101,17 @@ export function useWordFileViewer(files: readonly FileChip[]): {
         onClose={() => setViewing(undefined)}
       />
     );
+
   return { open: setViewing, viewer };
 }
 
 /** The files among a message's that its words name, in the order they first name each. */
 function filesInWords(files: readonly FileChip[], words: string): readonly FileChip[] {
   const named = [...new Set(fileMarkers(words).map((marker) => marker.name))];
+
   return named.flatMap((name) => {
     const file = files.find((each) => namedBy(each, name));
+
     return file === undefined ? [] : [file];
   });
 }
@@ -127,6 +136,7 @@ export interface ShownWordFiles {
 export function useWordFiles(files: readonly FileChip[], words: string): ShownWordFiles {
   const placed = filesInWords(files, words);
   const viewer = useWordFileViewer(placed.filter((file) => file.url !== ""));
+
   const chip = (name: string) => (
     <WordFileChip
       name={name}
@@ -134,6 +144,7 @@ export function useWordFiles(files: readonly FileChip[], words: string): ShownWo
       onOpen={viewer.open}
     />
   );
+
   return {
     named:
       placed.length === 0 ? undefined : { names: new Set(placed.map((file) => file.name)), chip },

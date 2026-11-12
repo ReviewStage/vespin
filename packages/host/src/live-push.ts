@@ -46,17 +46,23 @@ export function pushLive<Part extends string, Value>(
 ): Effect.Effect<void> {
   // Note that a read that published counts the next wait from the first again.
   let fruitless = 0;
+
   // Each attempt answers whether the read is to be sealed again.
   const attempt = Effect.gen(function* () {
     const sealed = yield* dependencies.seal(false);
+
     if ("failure" in sealed) {
       yield* dependencies.publish(undefined);
+
       if (sealed.gone === true) return false;
       fruitless += 1;
       yield* waitOrRegained(resealWait(fruitless));
+
       return true;
     }
+
     let published = false;
+
     const rows = liveRows(
       {
         poll: (after) => dependencies.seal(true, after),
@@ -64,18 +70,22 @@ export function pushLive<Part extends string, Value>(
       },
       sealed,
     );
+
     yield* Stream.runForEach(rows, (read) =>
       Option.match(dependencies.decode(read), {
         onNone: () => Effect.fail(new LiveBroken({ reason: "a row did not decode" })),
         onSome: (value) => {
           published = true;
+
           return dependencies.publish(value);
         },
       }),
     ).pipe(Effect.catch(() => Effect.void));
     fruitless = published ? 0 : fruitless + 1;
     yield* waitOrRegained(resealWait(fruitless));
+
     return true;
   });
+
   return Effect.asVoid(Effect.repeat(attempt, { while: (again) => again }));
 }

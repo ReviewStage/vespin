@@ -59,6 +59,7 @@ import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 
 const ignore = () => undefined;
 const _accepted = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+
 /** A signed-in account's Settings, every press ignored. */
 const SETTINGS: SettingsPanelProps = {
   account: {
@@ -195,8 +196,10 @@ function mount(
   document.body.append(container);
   root = createRoot(container);
   const control = tasksControl();
+
   function Shell() {
     const [asked, setAsked] = useState(false);
+
     const tasks = tasksControl({
       page: TASKS_PAGE.HOME,
       // Home stands where the router stands it, on no place over it, as the window's root reads it.
@@ -209,8 +212,10 @@ function mount(
       },
       ...overrides,
     });
+
     return createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch));
   }
+
   const home =
     tab === PANEL_TAB.TASKS &&
     !inboxOpen &&
@@ -218,6 +223,7 @@ function mount(
     routedTo === undefined &&
     overrides.history?.open !== true &&
     overrides.agentView?.agentId === undefined;
+
   const at =
     routedTo ??
     (tab === PANEL_TAB.SETTINGS
@@ -227,11 +233,14 @@ function mount(
         : inboxOpen
           ? SHELL_AT.INBOX
           : undefined);
+
   const shell =
     leave === undefined
       ? createElement(Shell)
       : createElement(Fragment, null, leavingBy(leave), createElement(Shell));
+
   act(() => root?.render(withQueryClient(underRouter(shell, at))));
+
   return container;
 }
 
@@ -239,6 +248,7 @@ function mount(
 function titleBarButtons(page: HTMLElement): string[] {
   const controls = page.querySelector(".title-bar-controls:not([data-edge])");
   assert.ok(controls, "the title bar's buttons stand");
+
   return [...controls.querySelectorAll("button")].map(
     (button) => button.getAttribute("aria-label") ?? "",
   );
@@ -252,6 +262,7 @@ test("while Settings is still loading its frame stands, a page of placeholder se
     await Promise.resolve();
   });
   const placeholder = page.querySelector('section[aria-label="Settings"] [role="status"]');
+
   const bars = page.querySelectorAll(
     'section[aria-label="Settings"] :is(.desktop-drag-strip, .ui-toolbar)',
   );
@@ -278,6 +289,7 @@ async function mountSwitching(): Promise<(tab: PanelTab) => Promise<void>> {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+
   const draw = async (tab: PanelTab) => {
     act(() =>
       root?.render(
@@ -294,16 +306,20 @@ async function mountSwitching(): Promise<(tab: PanelTab) => Promise<void>> {
     // The router goes where the tab stands, Settings or the places, and draws it once its chunk is read.
     await act(() => routed().settled());
   };
+
   await draw(PANEL_TAB.TASKS);
+
   return draw;
 }
 
 test("leaving Settings gives the keyboard back to the control that held it as Settings opened", async () => {
   handState({});
   const draw = await mountSwitching();
+
   const opener = document.querySelector<HTMLElement>(
     '.title-bar-controls button[aria-label="New task"]',
   );
+
   assert.ok(opener, "the title bar's New task stands");
   opener.focus();
 
@@ -337,11 +353,14 @@ test("leaving Settings where the control that held the keyboard is gone leaves i
 test("leaving Settings hands the keyboard to no control of a name several share, as a row's Pin is, rather than to the wrong row's", async () => {
   handState({});
   const draw = await mountSwitching();
+
   const pin = () => {
     const button = document.createElement("button");
     button.setAttribute("aria-label", "Pin");
+
     return button;
   };
+
   const [first, second] = [pin(), pin()];
   document.body.append(first, second);
   second.focus();
@@ -358,11 +377,14 @@ test("leaving Settings hands the keyboard to no control of a name several share,
 test("leaving Settings does not hand the keyboard to the one control left of a name several shared as Settings opened", async () => {
   handState({});
   const draw = await mountSwitching();
+
   const pin = () => {
     const button = document.createElement("button");
     button.setAttribute("aria-label", "Pin");
+
     return button;
   };
+
   const [first, second] = [pin(), pin()];
   document.body.append(first, second);
   second.focus();
@@ -376,6 +398,8 @@ test("leaving Settings does not hand the keyboard to the one control left of a n
   assert.ok(document.activeElement === document.body, "the keyboard is with the window");
 });
 
+type DrawLoadingNarrowResult = { page: HTMLElement; went: string[] };
+
 /**
  * The shell in a narrow room on `tab` over `overrides`, Settings standing on
  * its list or its page as `listed` says, over a history whose Back goes to
@@ -387,7 +411,7 @@ function drawLoadingNarrow(
   overrides: Partial<TasksControl>,
   listed: boolean,
   at?: string,
-): { page: HTMLElement; went: string[] } {
+): DrawLoadingNarrowResult {
   const went: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -422,6 +446,7 @@ function drawLoadingNarrow(
       ),
     ),
   );
+
   return { page: container, went };
 }
 
@@ -436,6 +461,7 @@ async function mountLoadingNarrow(
   await act(async () => {
     await Promise.resolve();
   });
+
   return drawn;
 }
 
@@ -474,6 +500,7 @@ test("while the folded sidebar floats over the work, New task stands once, in it
   const page = mount(false, { workspace: ACME, workspaces: [ACME] }, PANEL_TAB.TASKS, ignore, {
     overlay: SIDEBAR_OVERLAY.OPEN,
   });
+
   assert.deepEqual(titleBarButtons(page), ["Hide sidebar"]);
   assert.equal(page.querySelectorAll('button[aria-label="New task"]').length, 1);
 });
@@ -481,10 +508,12 @@ test("while the folded sidebar floats over the work, New task stands once, in it
 test("the title bar's buttons, each wrapped in its hint, tell a reader the chord that reaches them on the button itself", () => {
   const controls = mount(false).querySelector(".title-bar-controls:not([data-edge])");
   assert.ok(controls, "the title bar's buttons stand");
+
   const chords = [...controls.querySelectorAll("button")].map((button) => [
     button.getAttribute("aria-label"),
     button.getAttribute("aria-keyshortcuts"),
   ]);
+
   assert.deepEqual(chords, [
     ["Show sidebar", "Meta+B"],
     ["New task", "Meta+N"],
@@ -493,9 +522,11 @@ test("the title bar's buttons, each wrapped in its hint, tell a reader the chord
 
 test("an account with no plan raises New task from the title bar over the window, which Escape puts away", () => {
   const page = mount(false);
+
   const newTask = page.querySelector<HTMLButtonElement>(
     '.title-bar-controls:not([data-edge]) button[aria-label="New task"]',
   );
+
   assert.ok(newTask, "the title bar offers New task");
   act(() => newTask.click());
   const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
@@ -560,16 +591,19 @@ test("a sidebar row over a page holding unsaved work moves the window only once 
   const tabs: PanelTab[] = [];
   const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
   let stand: PlaceLeave["stand"] | undefined;
+
   function Shell() {
     const placeLeave = usePlaceLeave();
     stand = placeLeave.stand;
     // Home is the router's move there, as the window's own Home door is.
     const tasks = tasksControl({ placeLeave, onGoHome: () => routed().go(SHELL_AT.PLACES) });
+
     return createElement(
       DesktopShell,
       shellProps(tasks, PANEL_TAB.TASKS, (tab) => tabs.push(tab), {}),
     );
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -621,6 +655,7 @@ test("the window is called by what stands in it: the plan on screen in its own w
     );
     const title = document.title;
     act(() => root?.unmount());
+
     return title;
   };
 
@@ -665,10 +700,12 @@ test("a plan opened with its Inbox tab shown rather than its plan is read at onc
       ignore,
       { collapsed: false },
     );
+
     const row = page.querySelector(".sidebar-tasks > li > button");
     assert.ok(row, "the plan's row stands in the sidebar");
     const unread = String(row.textContent?.includes("(unread)") === true);
     act(() => root?.unmount());
+
     return unread;
   };
 
@@ -694,6 +731,7 @@ function mountListing(listed: readonly Task[]): (open: Task | undefined) => void
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+
   return (open) => {
     const tasks = tasksControl({
       page: open === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.DOCUMENT,
@@ -704,6 +742,7 @@ function mountListing(listed: readonly Task[]): (open: Task | undefined) => void
           ? { kind: DOCUMENT_REGION.NONE }
           : { kind: DOCUMENT_REGION.READY, task: open },
     });
+
     const props = shellProps(tasks, PANEL_TAB.TASKS, ignore, { collapsed: false });
     act(() => root?.render(withQueryClient(underRouter(createElement(DesktopShell, props)))));
   };
@@ -714,7 +753,9 @@ function sidebarRow(name: string): HTMLButtonElement {
   const row = [
     ...document.querySelectorAll<HTMLButtonElement>(".sidebar-tasks > li > button"),
   ].find((each) => each.querySelector(".ui-list-row-title")?.firstChild?.textContent === name);
+
   assert.ok(row, `the sidebar lists ${name}`);
+
   return row;
 }
 
@@ -732,14 +773,17 @@ function rowReadMark(name: string, choose = false): string | undefined {
   assert.ok(menu, `${name}'s menu opens`);
   // Note that the item is read by its words, since its U is drawn beside them.
   const words = (each: Element) => each.querySelector(".ui-menu-item-label")?.textContent ?? "";
+
   const item = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((each) =>
     /^Mark as (un)?read$/u.test(words(each)),
   );
+
   act(() => {
     if (choose) item?.click();
     else menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
   assert.equal(document.querySelector('[role="menu"]') === null, true, "the menu closes");
+
   return item === undefined ? undefined : words(item);
 }
 
@@ -750,6 +794,7 @@ test("a task's row reads unread by the mark its row carries, the one open only w
       if (request.kind !== TASKS_ACT_KIND.TASKS_MARK_READ)
         return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." });
       marks.push(`${request.payload.readMark}:${request.payload.taskId}`);
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: true });
     },
   });
@@ -778,17 +823,9 @@ async function settle(): Promise<void> {
   });
 }
 
-test("⌘/ is offered in the installed app, where Keyboard shortcuts is a page, and not in a browser, where it is none", async () => {
+test("⌘/ is offered in a browser, where its own chords are listed, and opens Keyboard shortcuts in one step", async () => {
   handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));
   // Note that a command is asked once, so the document it is offered by is in the client from the first frame.
-  await writeHandedAppState();
-  mount(false);
-  await settle();
-  assert.equal(runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS), false);
-  act(() => root?.unmount());
-  document.body.innerHTML = "";
-
-  handCapabilities(DESKTOP_CAPABILITIES);
   await writeHandedAppState();
   const tabs: PanelTab[] = [];
   mount(false, {}, PANEL_TAB.TASKS, (tab) => tabs.push(tab));
@@ -826,12 +863,14 @@ test("New task, by its chord or the sidebar's glyph, which stands at the app's h
 
 test("the Tasks row pressed while the Board stands leaves nothing, the Board being the router's place it opens", async () => {
   const tabs: PanelTab[] = [];
+
   const page = mount(
     false,
     { at: SHELL_AT.BOARD, workspaces: [ACME], workspace: ACME },
     PANEL_TAB.TASKS,
     (tab) => tabs.push(tab),
   );
+
   await settle();
   const { history } = routed().router;
   const before = history.length;
@@ -846,10 +885,12 @@ test("the Tasks row pressed while the Board stands leaves nothing, the Board bei
 
 test("a press on the Automations row in a floating sidebar puts the sidebar away, as every row's does", async () => {
   const told: SidebarCollapse["overlay"][] = [];
+
   const page = mount(false, {}, PANEL_TAB.TASKS, ignore, {
     overlay: SIDEBAR_OVERLAY.OPEN,
     onOverlay: (next) => told.push(next),
   });
+
   await settle();
   const row = placeRow(page, "Automations");
   assert.ok(row);
@@ -893,6 +934,7 @@ async function mountNarrow(
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -909,17 +951,20 @@ function barName(item: HTMLButtonElement): string {
 function barItem(page: HTMLElement, name: string): HTMLButtonElement {
   const item = barItems(page).find((button) => barName(button) === name);
   assert.ok(item, `the bar offers ${name}`);
+
   return item;
 }
 
 test("on a phone the Tasks page stands over a bar of the window's places, its own marked, the bar's Inbox opening the Inbox and its New task New task", async () => {
   const asked: string[] = [];
+
   const page = await mountNarrow({
     at: SHELL_AT.BOARD,
     workspaces: [ACME],
     workspace: ACME,
     newTask: newTaskControl({ onOpen: () => asked.push("new task") }),
   });
+
   assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
   assert.equal(barItem(page, "Tasks").getAttribute("aria-current"), "page");
   assert.equal(barItem(page, "Inbox").getAttribute("aria-current"), null);
@@ -954,13 +999,17 @@ test("on a phone the places bar stands over the Tasks page though the task left 
     at: SHELL_AT.BOARD,
     sidePanel: { ...tasksControl().sidePanel, open: true, fullScreen: true, fullScreenOnly: true },
   });
+
   assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
 });
 
 /** What a reader hears an item named: its words, less what is drawn for the eye alone. */
 function spokenName(item: HTMLElement): string {
+  // SAFETY: a deep clone of an element is an element of the same kind.
   const heard = item.cloneNode(true) as HTMLElement;
+
   for (const unheard of heard.querySelectorAll('[aria-hidden="true"]')) unheard.remove();
+
   return heard.textContent ?? "";
 }
 
@@ -971,10 +1020,12 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
     waiting: [{ taskId: DOCUMENT_TASK.id, items: asks }],
     tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
   });
+
   const page = await mountNarrow(
     { at: SHELL_AT.BOARD, listed: { tasks: [DOCUMENT_TASK] } },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
+
   const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 need you");
   assert.ok(inbox, "the bar's Inbox is named with its count");
   assert.match(inbox.textContent ?? "", /3/u, "the Inbox's count is drawn");
@@ -998,13 +1049,17 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
 
 test("on a phone the Inbox's head leads with the reader's face, whose menu holds their workspaces and their account", async () => {
   const page = await mountNarrow({ at: SHELL_AT.INBOX, workspaces: [ACME], workspace: ACME });
+
   const face =
     page.querySelector<HTMLButtonElement>('.inbox-head button[aria-label="Account"]') ??
     assert.fail("the face leads the Inbox's head");
+
   act(() => face.click());
+
   const labels = [...document.querySelectorAll('[role="menu"] .ui-menu-item-label')].map(
     (each) => each.textContent,
   );
+
   for (const label of [ACME.name, "New workspace", "Settings", "Sign out"]) {
     assert.ok(labels.includes(label), `the menu offers ${label}`);
   }
@@ -1020,6 +1075,7 @@ test("the places bar stands only on a phone's lists: an open task, an Inbox item
     at: `${SHELL_AT.INBOX}/item-1`,
     held: { taskId: "task-1", itemId: "item-1" },
   });
+
   assert.deepEqual(barItems(onItem), [], "an item being read keeps the screen");
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1084,6 +1140,7 @@ test("while the Automations pages are still loading their frame stands the list 
     ignore,
     {},
   );
+
   // The router goes to the pages, whose frame stands while their chunk is read.
   await act(async () => {
     await Promise.resolve();
@@ -1124,9 +1181,11 @@ test("while a version history's chunk is still loading, its Back row and Escape 
     true,
     "its chunk has not loaded yet",
   );
+
   const back = [...versions.querySelectorAll("button")].find(
     (button) => button.textContent?.trim().startsWith("Back") === true,
   );
+
   assert.ok(back, "the Back row stands");
   act(() => back.click());
   act(() => {
@@ -1149,6 +1208,7 @@ test("while a version history's chunk is still loading, its Back row and Escape 
 
 test("the Automations page stands in the plan's place, titled for the listed workspace", async () => {
   const closed: string[] = [];
+
   const overrides = {
     workspaces: [ACME],
     workspace: ACME,
@@ -1187,10 +1247,12 @@ const DRAFT_TAB = draftTab("draft");
 /** The tab and the tasks' state that stand the window in a place. */
 function placed(place: Place) {
   const control = tasksControl();
+
   const onTask = {
     page: TASKS_PAGE.DOCUMENT,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
   } as const;
+
   const tasks = {
     [PLACE.HOME]: { page: TASKS_PAGE.HOME },
     [PLACE.OTHER_TASK]: onTask,
@@ -1217,6 +1279,7 @@ function placed(place: Place) {
     [PLACE.SETTINGS]: { page: TASKS_PAGE.HOME },
     [PLACE.VERSION_HISTORY]: { ...onTask, history: { ...control.history, open: true } },
   } satisfies Record<Place, Partial<TasksControl>>;
+
   return {
     tab: place === PLACE.SETTINGS ? PANEL_TAB.SETTINGS : PANEL_TAB.TASKS,
     tasks: tasks[place],
@@ -1235,6 +1298,7 @@ function PlacedShell({
   const placedIn = placed(place);
   const tab = placedIn.tab;
   const tasks = { ...placedIn.tasks, ...patch };
+
   return createElement(DesktopShell, {
     gates: {
       accountRequired: false,
@@ -1307,8 +1371,10 @@ async function handBridge(experiments: ExperimentChoices = {}): Promise<void> {
   });
   fakeActPortAnswering((request) => {
     sentActs.push(request.kind);
+
     // A read of the account's automations, integrations, or its coding agents, or their Inbox, an account or settings act, a task kind, and the platform's updater, Browser tab, and window acts are refused.
     if (REFUSED_ON_PORT.includes(request.kind)) return Promise.reject(refusedOnPort("Not here."));
+
     return Promise.resolve(undefined);
   });
 }
@@ -1318,11 +1384,17 @@ const PLACES = Object.values(PLACE);
 /** Where the router stands for a place it draws, Settings, a task, an agent's page, and a version history; none for Home, under the places the shell's props say. */
 function routedAt(place: Place): string | undefined {
   if (place === PLACE.SETTINGS) return SHELL_AT.SETTINGS;
+
   if (place === PLACE.OTHER_TASK || place === PLACE.SIDE_PANEL_FULL_SCREEN) return SHELL_AT.TASK;
+
   if (place === PLACE.AGENT_PAGE) return agentAt("agent-page-1");
+
   if (place === PLACE.PERSON_PAGE) return personAt("user-charles");
+
   if (place === PLACE.AUTOMATIONS) return SHELL_AT.AUTOMATIONS;
+
   if (place === PLACE.INBOX) return SHELL_AT.INBOX;
+
   return place === PLACE.VERSION_HISTORY ? SHELL_AT.VERSION_HISTORY : undefined;
 }
 
@@ -1332,6 +1404,7 @@ test("the side panel's toggle stands on a plan, and nowhere else the plan's plac
   document.body.append(container);
   root = createRoot(container);
   const toggled: Partial<Record<Place, boolean>> = {};
+
   for (const place of PLACES) {
     act(() =>
       root?.render(
@@ -1343,6 +1416,7 @@ test("the side panel's toggle stands on a plan, and nowhere else the plan's plac
       ["Show panel", "Hide panel"].includes(button.getAttribute("aria-label") ?? ""),
     );
   }
+
   assert.deepEqual(toggled, {
     [PLACE.HOME]: false,
     [PLACE.OTHER_TASK]: true,
@@ -1371,9 +1445,11 @@ test("the side panel's toggle stands for the Inbox's chosen item", async () => {
     ),
   );
   await settle();
+
   const toggled = [...container.querySelectorAll("button")].some((button) =>
     ["Show panel", "Hide panel"].includes(button.getAttribute("aria-label") ?? ""),
   );
+
   act(() => root?.unmount());
   container.remove();
   assert.ok(toggled, "the toggle stands for the Inbox's chosen item");
@@ -1382,6 +1458,7 @@ test("the side panel's toggle stands for the Inbox's chosen item", async () => {
 test("⌘F opens a find over every page that stands in the window, and Settings keeps it for its own search", async () => {
   await handBridge();
   const found: Partial<Record<Place, boolean>> = {};
+
   for (const place of PLACES) {
     const container = document.createElement("div");
     document.body.append(container);
@@ -1399,6 +1476,7 @@ test("⌘F opens a find over every page that stands in the window, and Settings 
     act(() => root?.unmount());
     container.remove();
   }
+
   assert.deepEqual(found, {
     [PLACE.HOME]: true,
     [PLACE.OTHER_TASK]: true,
@@ -1417,6 +1495,7 @@ test("⌘F opens a find over every page that stands in the window, and Settings 
 test("a plan's chip in a description's version history hangs the plan's card, as the description's own words do", async () => {
   const body = `## Rollout\n\nAs in [@the plan](https://vespin.dev/acme/plan/${DOCUMENT_TASK.id}).\n`;
   const control = tasksControl();
+
   const page = mount(false, {
     page: TASKS_PAGE.DOCUMENT,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
@@ -1436,6 +1515,7 @@ test("a plan's chip in a description's version history hangs the plan's card, as
       },
     },
   });
+
   await act(() => routed().settled());
   await settle();
   const chip = page.querySelector("[data-mention-ref]");
@@ -1469,12 +1549,14 @@ test("⌘K's Admin opens the Admin place for an admin alone, and is offered noth
 test("Admin stands in the plan's place beside the sidebar, no row of it marked, with no way back of its own, and the Inbox's row opens the Inbox by the router from it", async () => {
   handState({}, { access: { admin: true } });
   const tabs: PanelTab[] = [];
+
   const page = mount(
     false,
     { at: SHELL_AT.ADMIN, workspaces: [ACME], workspace: ACME },
     PANEL_TAB.TASKS,
     (tab) => tabs.push(tab),
   );
+
   await settle();
   assert.ok(page.querySelector("aside.desktop-sidebar"), "the sidebar stays");
   assert.equal(page.querySelector('.sidebar-places [aria-current="page"]'), null);
@@ -1519,6 +1601,7 @@ test("with the sidebar folded, the Mac offline says so in the title bar beside N
 /** What a strip right under a phone's header says, if one stands there. */
 function stripUnderPhoneHead(page: HTMLElement): string | undefined {
   const under = page.querySelector('header.ui-toolbar[data-look="phone"]')?.nextElementSibling;
+
   return under?.classList.contains("ui-banner") === true ? (under.textContent ?? "") : undefined;
 }
 
@@ -1567,13 +1650,16 @@ test("the sign-in, which needs the network, says over it when the Mac is offline
 
 test("on a phone an open task leads its own row with the way back the window's history names, in the sidebar toggle's place, and a wide window keeps the toggle", async () => {
   const left: string[] = [];
+
   const render = (away: Parameters<typeof DesktopShell>[0]["history"]["away"], room: ShellRoom) => {
     const container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
+
     const tasks = tasksControl({
       page: TASKS_PAGE.DOCUMENT,
       region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     });
+
     const props = shellProps(tasks, PANEL_TAB.TASKS, ignore, {});
     act(() =>
       root?.render(
@@ -1588,8 +1674,10 @@ test("on a phone an open task leads its own row with the way back the window's h
         ),
       ),
     );
+
     return container;
   };
+
   const back = (page: HTMLElement) =>
     page.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button") ??
     assert.fail("a way back");
@@ -1620,10 +1708,12 @@ test("on a phone an open task leads its own row with the way back the window's h
 
 test("on a phone an open task, which draws no sidebar toggle, still answers the sidebar's chord with the drawer", async () => {
   let toggled = 0;
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -1655,6 +1745,7 @@ function fingerSwipe(target: HTMLElement, from: number, to: number, pointerType 
       pointerType,
       isPrimary: true,
     });
+
   act(() => {
     target.dispatchEvent(at("pointerdown", from));
     target.dispatchEvent(at("pointermove", (from + to) / 2));
@@ -1674,6 +1765,7 @@ test("on a phone's task, which stands over no places bar, a finger swiped in fro
       removeEventListener: () => undefined,
     }),
   });
+
   const page = await mountNarrow(
     {
       page: TASKS_PAGE.DOCUMENT,
@@ -1681,6 +1773,7 @@ test("on a phone's task, which stands over no places bar, a finger swiped in fro
     },
     { onOverlay },
   );
+
   const work = page.querySelector<HTMLElement>(".desktop-main");
   assert.ok(work);
   fingerSwipe(work, 300, 500, "mouse");
@@ -1721,14 +1814,17 @@ test("a find on the Tasks page stands as it was after a visit to Admin over it",
   await import("./tasks-page.js");
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   function Shell() {
     const tasks = tasksControl({
       page: TASKS_PAGE.HOME,
       workspaces: [ACME],
       workspace: ACME,
     });
+
     return createElement(DesktopShell, shellProps(tasks, PANEL_TAB.TASKS, ignore, {}));
   }
+
   // The Board is the router's place, which the window stands at before Admin and comes back to after it.
   act(() => root?.render(withQueryClient(underRouter(createElement(Shell), SHELL_AT.BOARD))));
   await act(() => routed().settled());
@@ -1736,8 +1832,10 @@ test("a find on the Tasks page stands as it was after a visit to Admin over it",
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.FIND), "⌘F is offered on the Tasks page");
   });
+
   const field = () =>
     container.querySelector<HTMLInputElement>('[role="search"][aria-label="Find"] input');
+
   const input = field();
   assert.ok(input, "the find bar stands");
   // Note that the value goes in through the prototype's setter, because React tracks the field's own.
@@ -1760,6 +1858,7 @@ function shownToReader(element: Element): boolean {
   for (let at: Element | null = element; at !== null; at = at.parentElement) {
     if (at.hasAttribute("hidden") || getComputedStyle(at).display === "none") return false;
   }
+
   return true;
 }
 
@@ -1767,10 +1866,13 @@ test("the Inbox left stays drawn, hidden from a reader, and comes back as it sto
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+
   function Shell() {
     const tasks = tasksControl({ page: TASKS_PAGE.HOME, workspaces: [ACME], workspace: ACME });
+
     return createElement(DesktopShell, shellProps(tasks, PANEL_TAB.TASKS, ignore, {}));
   }
+
   // The Inbox and the Board are the router's places, which the window moves to as each opens and off as it is left.
   const stand = async (open: { inbox: boolean; board: boolean }) => {
     act(() => {
@@ -1779,9 +1881,12 @@ test("the Inbox left stays drawn, hidden from a reader, and comes back as it sto
     await act(() => routed().settled());
     await settle();
   };
+
   act(() => root?.render(withQueryClient(underRouter(createElement(Shell), SHELL_AT.INBOX))));
+
   const search = () =>
     container.querySelector<HTMLInputElement>('.inbox-tasks input[aria-label="Search inbox"]');
+
   const input = search();
   assert.ok(input, "the Inbox's search stands");
   // Note that the value goes in through the prototype's setter, because React tracks the field's own.
@@ -1793,10 +1898,12 @@ test("the Inbox left stays drawn, hidden from a reader, and comes back as it sto
   await stand({ inbox: false, board: true });
   assert.equal(search(), input, "the Inbox left is the same Inbox, kept");
   assert.equal(shownToReader(input), false, "and hidden from a reader while the window is away");
+
   const columns = () =>
     [...container.querySelectorAll<HTMLElement>('[aria-label="Tasks view"] [role="radio"]')].find(
       (each) => each.textContent?.trim() === "Columns",
     );
+
   act(() => columns()?.click());
   assert.equal(columns()?.getAttribute("aria-checked"), "true", "the Tasks page stands on Columns");
 

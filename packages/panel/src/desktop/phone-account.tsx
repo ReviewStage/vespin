@@ -36,6 +36,7 @@ export function PhoneAccount({
 }): React.JSX.Element {
   const menu = useMenu(tasks.shown);
   const accountGroups = useAccountMenuGroups(account, onSignOut);
+
   // The foot's two buttons, which a phone draws no foot for.
   const footGroup: MenuEntry[] = [
     { label: "Settings", icon: <GearIcon />, onSelect: onSettings },
@@ -45,10 +46,12 @@ export function PhoneAccount({
       onSelect: () => runAppCommand(APP_COMMAND.SEND_FEEDBACK),
     },
   ];
+
   const admin = useAdminDoor(tasks);
   const doors = useWorkspaceMenuDoors({ onOpen: () => admin.open(), onPreload: admin.preload });
   const listed = tasks.workspace;
   const workspaceGroups = listed === undefined ? [] : workspaceMenuGroups(listed, tasks, doors);
+
   return (
     <>
       <IconButton
