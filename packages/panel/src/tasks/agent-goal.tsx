@@ -245,7 +245,8 @@ export function GoalDock({
             hint={{ Hint: RowHint, label: goal.condition }}
             onPress={() => onBringIn(goal.messageId)}
             menu={menu}
-            more={!coarse}
+            // Note that a row whose Resume stands draws no ⋯, whose room beside it would hold Resume off the row's end; its menu stays on a right-click.
+            more={!coarse && resume === undefined}
             muted={goal.state === AGENT_GOAL_STATE.MET}
             tone={goalTone(goal)}
             // Note that a paused goal holds its Resume on its row at rest, since the agent waits on the developer's press.
