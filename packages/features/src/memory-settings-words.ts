@@ -2,7 +2,8 @@
  * memory-settings-words.ts -- what Settings › Memory says, and how it orders the workspace's memories, on the desktop, the web, and the iOS app alike.
  */
 
-import { MEMORY_RECALL_WINDOW_DAYS, type MemorySummary } from "./memory-wire.js";
+import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "./agent-view.js";
+import { MEMORY_BOUNDS, MEMORY_RECALL_WINDOW_DAYS, type MemorySummary } from "./memory-wire.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { countWords, readFailedWords, readingWords, TERM } from "./words.js";
 
@@ -23,6 +24,39 @@ export const MEMORY_ACT = {
   FORGET: "Delete",
   COPY: "Copy text",
 } as const;
+
+/** What the button that keeps a new memory says. */
+export const ADD_MEMORY = "Add memory";
+
+/** What the card or page a memory's words are written in says: its head as it edits or adds, its hint, and its send. */
+export const MEMORY_EDITOR_WORDS = {
+  EDIT: "Edit memory",
+  ADD: "New memory",
+  PLACEHOLDER: "A fact your agents should remember",
+  SAVE: "Save",
+  GONE: "This memory no longer exists.",
+  TOO_LONG: `A memory holds at most ${MEMORY_BOUNDS.MAX_CHARS.toLocaleString("en-US")} characters.`,
+} as const;
+
+/** What a save that came to no answer says. */
+export const MEMORY_SAVE_FAILED = "The memory could not be saved. Try again.";
+
+/** What a save the service refused says, by why. */
+const MEMORY_SAVE_REFUSAL = {
+  [MEMORY_SAVE_FAILURE.MEMORY_OFF]: "Turn on Memory in Settings › Experimental to save a memory.",
+  [MEMORY_SAVE_FAILURE.NOT_FOUND]: MEMORY_EDITOR_WORDS.GONE,
+  [MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL]:
+    "That looks like it holds a credential, which a memory never keeps.",
+  [MEMORY_SAVE_FAILURE.MEMORY_FULL]: `This workspace holds ${MEMORY_BOUNDS.MAX_MEMORIES.toLocaleString("en-US")} memories, the most it can. Delete one first.`,
+  [MEMORY_SAVE_FAILURE.UNANSWERED]: MEMORY_SAVE_FAILED,
+  // Note that a save is always a POST, so the method refused is never the window's; it reads as no answer.
+  [MEMORY_SAVE_FAILURE.METHOD_NOT_ALLOWED]: MEMORY_SAVE_FAILED,
+} as const satisfies Record<(typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE], string>;
+
+/** What a save's answer says of why it kept nothing; none for a save that went. */
+export function memorySaveRefusal(answer: MemorySaveAnswerView): string | undefined {
+  return "failure" in answer ? MEMORY_SAVE_REFUSAL[answer.failure] : undefined;
+}
 
 /** What a memory's recall columns say where agents were handed it in none of the window: no count, and never last. */
 export const MEMORY_UNRECALLED_WORDS = {

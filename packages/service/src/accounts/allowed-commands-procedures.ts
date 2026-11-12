@@ -1,9 +1,9 @@
 /**
- * allowed-commands-procedures.ts -- the shell commands a member always allows their coding agents to run unasked: listed, added by hand, and removed.
+ * allowed-commands-procedures.ts -- the shell commands a member always allows their coding agents to run unasked: listed, added by hand, edited, and removed.
  *
  * Each resolves the caller before it touches a row, and every row it
  * touches is the caller's own, so no member reads, adds to, or removes from
- * another's list. An add by hand names no agent and refuses one past the
+ * another's list, and an edit of another's command changes nothing. An add by hand names no agent and refuses one past the
  * list's bound (`allowed-commands-full`); a prefix already kept answers the
  * list as it stands. Every answer is the list as it then stands. Nothing of
  * a command is counted, traced, or logged here.
@@ -13,6 +13,7 @@ import {
   ALLOWED_COMMAND_ADDED,
   type AllowedCommandRow,
   addAllowedCommand,
+  editAllowedCommand,
   listAllowedCommands,
   removeAllowedCommand,
 } from "@repo/database/models/account-allowed-commands";
@@ -66,6 +67,16 @@ export function allowedCommandsProcedures(seams: AllowedCommandsProcedureSeams) 
       if (added === ALLOWED_COMMAND_ADDED.FULL) {
         return yield* Effect.fail(HOSTED_REFUSAL.ALLOWED_COMMANDS_FULL);
       }
+
+      return yield* listed(context.userId);
+    }),
+
+    editAllowedCommand: signedIn.editAllowedCommand.effect(function* ({ context, input }) {
+      const at = yield* DateTime.nowAsDate;
+
+      yield* hostedStoreOrUnavailable(
+        editAllowedCommand({ userId: context.userId, id: input.id, prefix: input.prefix, at }),
+      );
 
       return yield* listed(context.userId);
     }),

@@ -30,7 +30,7 @@ import {
   adminMetricsScope,
   adminMetricsWindow,
 } from "@repo/features/admin-wire";
-import type { AgentFailure } from "@repo/features/agent-wire";
+import type { AgentFailure, AgentRuntime } from "@repo/features/agent-wire";
 import type { AutomationRunReason } from "@repo/features/automation-wire";
 import { Clock, Effect } from "effect";
 import { lastNDayKeys, sum } from "./admin-metrics.js";
@@ -53,6 +53,11 @@ export interface AdminReliabilitySource {
     automationRuns: ReadonlyMap<string, AdminAutomationCount>;
   };
   agentFailures: ReadonlyMap<AgentFailure, number>;
+  /** Coding-agent runs that got a turn, by the harness that ran them, and their failures by class. */
+  agentHarnesses: ReadonlyMap<
+    AgentRuntime | null,
+    { readonly runs: AdminFailureCount; readonly failures: ReadonlyMap<AgentFailure, number> }
+  >;
   automationReasons: ReadonlyMap<
     AutomationRunReason | null,
     { readonly skipped: number; readonly failed: number }
@@ -77,6 +82,15 @@ function totalOf(counts: readonly AdminFailureCount[]): AdminFailureCount {
     failed: sum(counts.map((count) => count.failed)),
     total: sum(counts.map((count) => count.total)),
   };
+}
+
+/** Failure classes with a count, most first. */
+function failureClasses(
+  failures: ReadonlyMap<AgentFailure, number>,
+): { failure: AgentFailure; count: number }[] {
+  return [...failures]
+    .flatMap(([failure, count]) => (count > 0 ? [{ failure, count }] : []))
+    .sort((left, right) => right.count - left.count);
 }
 
 /** Shapes the queried source into the answer, zero-filling the window and totaling in one place. */
@@ -112,9 +126,14 @@ export function buildAdminReliability(
       agentRuns: failureShare(agentRuns[index] ?? NO_FAILURES),
       automationRuns: failureShare(automationRuns[index] ?? NO_AUTOMATION_RUNS),
     })),
-    agentFailures: [...source.agentFailures]
-      .flatMap(([failure, count]) => (count > 0 ? [{ failure, count }] : []))
-      .sort((left, right) => right.count - left.count),
+    agentFailures: failureClasses(source.agentFailures),
+    agentHarnesses: [...source.agentHarnesses]
+      .map(([runtime, harness]) => ({
+        runtime,
+        runs: harness.runs,
+        failures: failureClasses(harness.failures),
+      }))
+      .sort((left, right) => right.runs.total - left.runs.total),
     automationReasons: [...source.automationReasons]
       .flatMap(([reason, { skipped, failed }]) =>
         skipped + failed > 0 ? [{ reason, skipped, failed }] : [],

@@ -43,7 +43,7 @@
  * A member's change to a CLAIMED message finds no message and changes
  * nothing, which the route answers as not found: it has left the queue. A
  * mark left standing, a window closed mid-edit, holds the queue until any
- * of the member's windows cancels it from the row.
+ * of the windows that may change the queue cancels it from the row.
  *
  * Every write holds the agent's queue lock until it commits, so two changes
  * at once land one after the other, and each that changed anything moves

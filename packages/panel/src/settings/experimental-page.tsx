@@ -16,7 +16,7 @@ import {
   isWorkspaceExperiment,
   type WorkspaceExperiment,
 } from "@repo/settings";
-import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { EXPERIMENT_ANCHOR } from "@repo/settings/settings-anchors";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -32,7 +32,6 @@ import {
   useConfirmDialog,
   useMinute,
 } from "@repo/ui";
-import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { FlaskConicalIcon } from "lucide-react";
@@ -44,6 +43,7 @@ import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenFeedback } from "../open-feedback.js";
 import { actionRefused, refusalToast, rowWrite } from "./row-write.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
@@ -92,6 +92,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.REPLY_BUTTONS]: {
+    on: (workspace: string) =>
+      `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,
+    off: (workspace: string) =>
+      `Stops agents in ${workspace} from making suggestions, draws the ones already in replies as plain links, and stops any from being sent.`,
+  },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
       `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over an agent's tabs, with Run rows in ⌘K and a phone's ⋯ menu, that runs one when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on.`,
@@ -330,13 +336,7 @@ export function ExperimentalPage({
       {workspace === undefined || workspaceEntries.length === 0 ? null : (
         <MemberDirectory workspace={workspace} readerId={readerId}>
           <SettingsSection
-            anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_WORKSPACE}
-            title={
-              <>
-                {WORDS.WORKSPACE_TITLE}
-                <ReplayMask>{workspace.name}</ReplayMask>
-              </>
-            }
+            {...settingsSectionHead(SECTION.EXPERIMENTS_WORKSPACE, { workspace })}
             caption={WORDS.WORKSPACE_CAPTION}
           >
             {workspaceEntries.map((entry) => (
@@ -346,10 +346,7 @@ export function ExperimentalPage({
         </MemberDirectory>
       )}
       {accountEntries.length === 0 ? null : (
-        <SettingsSection
-          anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT}
-          title={WORDS.ACCOUNT_TITLE}
-        >
+        <SettingsSection {...settingsSectionHead(SECTION.EXPERIMENTS_ACCOUNT)}>
           {accountEntries.map((entry) => (
             <AccountExperimentRow
               key={entry.key}

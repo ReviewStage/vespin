@@ -30,6 +30,13 @@ export const UPDATE_FAILURE = {
    * copy, which Squirrel cannot replace; moving it to Applications mends it.
    */
   READ_ONLY_VOLUME: "read-only-volume",
+  /**
+   * The downloaded build's code signature does not satisfy the installed
+   * app's requirement, which Squirrel checks before it installs: a build
+   * signed by another team than this install accepts, which only a fresh
+   * copy from the releases page mends.
+   */
+  SIGNATURE: "signature",
 } as const;
 
 export type UpdateFailure = (typeof UPDATE_FAILURE)[keyof typeof UPDATE_FAILURE];

@@ -55,6 +55,7 @@ function reliability(overrides: Partial<AdminReliability> = {}): AdminReliabilit
       { day: "2026-10-17", appTurns: 0.02, agentRuns: null, automationRuns: null },
     ],
     agentFailures: [{ failure: AGENT_FAILURE.MODEL, count: 40 }],
+    agentHarnesses: [],
     automationReasons: [{ reason: AUTOMATION_RUN_REASON.CONCURRENCY, skipped: 90, failed: 0 }],
     attention: {
       total: 1,

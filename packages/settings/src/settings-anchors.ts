@@ -50,6 +50,10 @@ export const SETTINGS_SEARCH_ROW = {
   CLI_SIGN_IN: "cli-sign-in",
   /** Hosts' Add hosts button, under its list. */
   ADD_HOSTS: "add-hosts",
+  /** Machines' list of the account's machines. */
+  HOSTS: "hosts-list",
+  /** Skills' group of the reader's own, under the workspace's in a workspace of several members. */
+  SKILLS_PERSONAL: "skills-personal",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */
   WORKSPACE_RENAME: "workspace-rename",
   /** The Workspace page's identity row, whose ⋯ holds the owner's Change URL. */
@@ -58,6 +62,16 @@ export const SETTINGS_SEARCH_ROW = {
   EXPERIMENTS_WORKSPACE: "experiments-workspace",
   /** Settings › Experimental's group of the experiments the account chooses for itself alone. */
   EXPERIMENTS_ACCOUNT: "experiments-account",
+  /** Cloud environment's Variables, the workspace's variables its cloud agents start with. */
+  ENVIRONMENT_VARIABLES: "environment-variables",
+  /** Cloud environment's Install software, the workspace's install script. */
+  ENVIRONMENT_INSTALL: "environment-install",
+  /** Cloud environment's Setup scripts, each repository's. */
+  ENVIRONMENT_SETUP: "environment-setup",
+  /** Cloud environment's Archive scripts, each repository's. */
+  ENVIRONMENT_ARCHIVE: "environment-archive",
+  /** Cloud environment's Run actions, each repository's, drawn while the workspace has Run actions on. */
+  ENVIRONMENT_RUN_ACTIONS: "environment-run-actions",
 } as const;
 
 /**
@@ -75,4 +89,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.TURN_END]: "experiment-turn-end",
   [EXPERIMENT.RUN_ACTIONS]: "experiment-run-actions",
   [EXPERIMENT.TURN_CHANGES]: "experiment-turn-changes",
+  [EXPERIMENT.REPLY_BUTTONS]: "experiment-reply-buttons",
 } as const satisfies Record<Experiment, string>;

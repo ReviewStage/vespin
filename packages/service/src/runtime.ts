@@ -27,6 +27,7 @@ import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
 import { githubAppFromEnvironment } from "./github/github-app.js";
 import { githubRateGate } from "./github/github-rate-gate.js";
+import { githubDeliveryReadsFromEnvironment } from "./github/github-webhook-app.js";
 import { pullRequestLinksLayer } from "./github/pull-request-links.js";
 import { integrationConnectFromEnvironment } from "./integrations/integration-connect.js";
 import { sentryLogger } from "./observability/sentry.js";
@@ -188,6 +189,7 @@ export const webServices = Layer.mergeAll(
   sandboxReleasesFromEnvironment,
   agentWakeupsFromEnvironment,
   driveFillStepsFromEnvironment,
+  githubDeliveryReadsFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(

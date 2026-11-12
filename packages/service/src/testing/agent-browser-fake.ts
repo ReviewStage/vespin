@@ -403,7 +403,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
             status = SANDBOX_STATUS.RUNNING;
             current = FAKE_SANDBOX.CREATED_SESSION;
             browserUp = false;
-            await onCreate?.(listed());
+            await onCreate?.({ ...listed(), driveKept: false });
 
             return listed();
           })

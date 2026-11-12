@@ -273,6 +273,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     allowedCommands: NOT_YET_BUILT,
     // Note that an agent never widens what its member's agents run unasked; only the member does, in the app.
     addAllowedCommand: SECURITY,
+    editAllowedCommand: SECURITY,
     removeAllowedCommand: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,

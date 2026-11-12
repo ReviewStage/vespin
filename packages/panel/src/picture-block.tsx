@@ -101,6 +101,8 @@ export function PdfFile({
         detail={sizeLabel(base64)}
         onOpen={onOpen}
         state={state}
+        // Note that a failed chip says its file's name, since it hangs no card that would name it, and the failure's words stand under it.
+        failure={state === ATTACHMENT_CHIP_STATE.FAILED ? name : undefined}
         // Note that it hangs no card, because a card would cover the description's words and say only what the chip does.
         hover={ATTACHMENT_CHIP_HOVER.NONE}
       />

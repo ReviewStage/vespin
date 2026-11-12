@@ -571,6 +571,12 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
 /** The act that takes a note away, as the system draws one: its glyph, and its role, in red. */
 const NOTE_REMOVE = { SYMBOL: "trash", ROLE: "destructive" } as const;
 
+/** The glyph of the act that opens a note's words to be changed, as Notes' Edit draws it. */
+const NOTE_EDIT_SYMBOL = "pencil";
+
+/** One act of a note's: its words and what a press does. */
+type NoteAct = { readonly label: string; readonly onPress: () => void };
+
 type NoteRowProps = {
   /** The glyph before the words, an SF Symbol in the muted ink, such as a machine's kind. */
   readonly symbol?: SfSymbol | undefined;
@@ -582,21 +588,25 @@ type NoteRowProps = {
   readonly line: string;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
+  /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
+  readonly edit?: NoteAct | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
-  readonly remove?: { readonly label: string; readonly onPress: () => void } | undefined;
+  readonly remove?: NoteAct | undefined;
 };
 
 /**
  * A note of Settings, such as a memory, a machine, or a skill: its glyph
  * where it has one, its words whole in the ink, what it is under them where
  * it says, and the chevron where a press opens it, then a
- * quiet line of whose they are, and, where the reader may, the act that
- * takes it away behind a swipe from the trailing edge, as Notes' rows carry
- * Delete, and in the menu a long press opens. Note that a full swipe never
- * runs it, since it asks first. VoiceOver hears the row as one element, its
- * words then its line, and offers the act among its actions.
+ * quiet line of whose they are. Where the reader may, a press that goes
+ * nowhere else opens its words to be changed, as a note in Notes opens, and
+ * the act that takes it away stands behind a swipe from the trailing edge,
+ * as Notes' rows carry Delete; a long press opens a menu of both, Edit
+ * first. Note that a full swipe never runs Delete, since it asks first.
+ * VoiceOver hears the row as one element, its words then its line, and
+ * offers its acts among its actions.
  */
-export function NoteRow({ symbol, words, detail, line, onPress, remove }: NoteRowProps) {
+export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
   const colors = useColors();
 
   const lines = (
@@ -631,12 +641,14 @@ export function NoteRow({ symbol, words, detail, line, onPress, remove }: NoteRo
     </HStack>
   );
 
-  // Note that a row a press takes somewhere is the system's plain button, its words keeping their own ink, as `PressedRow` draws one.
+  // Note that a row a press takes somewhere, or opens to be changed, is the system's plain button, its words keeping their own ink, as `PressedRow` draws one.
+  const pressed = onPress ?? edit?.onPress;
+
   const drawn =
-    onPress === undefined ? (
+    pressed === undefined ? (
       content
     ) : (
-      <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("plain")]}>
+      <SwiftUIButton onPress={pressed} modifiers={[buttonStyle("plain")]}>
         {content}
       </SwiftUIButton>
     );
@@ -648,25 +660,39 @@ export function NoteRow({ symbol, words, detail, line, onPress, remove }: NoteRo
     accessibilityValue(detail === undefined ? line : `${detail}, ${line}`),
   ];
 
-  if (remove === undefined) return <HStack modifiers={placed}>{drawn}</HStack>;
+  if (edit === undefined && remove === undefined) {
+    return <HStack modifiers={placed}>{drawn}</HStack>;
+  }
 
-  const act = (
-    <SwiftUIButton
-      label={remove.label}
-      systemImage={NOTE_REMOVE.SYMBOL}
-      role={NOTE_REMOVE.ROLE}
-      onPress={remove.onPress}
-    />
+  const removeAct =
+    remove === undefined ? undefined : (
+      <SwiftUIButton
+        label={remove.label}
+        systemImage={NOTE_REMOVE.SYMBOL}
+        role={NOTE_REMOVE.ROLE}
+        onPress={remove.onPress}
+      />
+    );
+
+  const menu = (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {edit === undefined ? null : (
+          <SwiftUIButton label={edit.label} systemImage={NOTE_EDIT_SYMBOL} onPress={edit.onPress} />
+        )}
+        {removeAct}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
+    </ContextMenu>
   );
+
+  if (removeAct === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
 
   return (
     <SwipeActions modifiers={placed}>
-      <ContextMenu>
-        <ContextMenu.Items>{act}</ContextMenu.Items>
-        <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-      </ContextMenu>
+      {menu}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
-        {act}
+        {removeAct}
       </SwipeActions.Actions>
     </SwipeActions>
   );

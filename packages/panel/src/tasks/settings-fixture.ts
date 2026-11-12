@@ -1132,7 +1132,7 @@ let stagedCommands: readonly AllowedCommand[] = [
   },
   {
     id: "bd5a9b3c-8eaf-4fc0-9c6d-9eb03f5b7c8d",
-    prefix: ["pnpm", "test"],
+    prefix: ["pnpm", "typecheck"],
     agentId: MEMORY_AGENT.CLAUDE,
     addedAt: NOW - 2 * HOUR,
   },
@@ -1146,19 +1146,27 @@ function heldCommands(commands: readonly AllowedCommand[]): AppAllowedCommands {
 /** The staged commands as the host holds them, one object until a write moves them. */
 let stagedAllowedCommands = heldCommands(stagedCommands);
 
-/** The staged commands after one write, as the service keeps them: an add stands last, unless its words are kept already, and a removal goes. */
+/** A command added by hand now, as the service keeps one. */
+function addedByHand(prefix: readonly string[], id: string = crypto.randomUUID()): AllowedCommand {
+  return { id, prefix, agentId: null, addedAt: Date.now() };
+}
+
+/**
+ * The staged commands after one write, as the service keeps them: an add
+ * stands last, unless its words are kept already; an edit takes the new
+ * words and stands last as added by hand, or goes where they are kept; and
+ * a removal goes.
+ */
 function allowedCommandWritten(write: AllowedCommandWriteParams): AllowedCommandsWriteAnswerView {
   if ("add" in write) {
     if (!stagedCommands.some((each) => samePrefix(each.prefix, write.add))) {
-      const added = {
-        id: crypto.randomUUID(),
-        prefix: write.add,
-        agentId: null,
-        addedAt: Date.now(),
-      };
-
-      stagedCommands = [...stagedCommands, added];
+      stagedCommands = [...stagedCommands, addedByHand(write.add)];
     }
+  } else if ("edit" in write) {
+    const edited = stagedCommands.find((each) => samePrefix(each.prefix, write.edit));
+    const others = stagedCommands.filter((each) => each !== edited);
+    const kept = others.some((each) => samePrefix(each.prefix, write.to));
+    stagedCommands = kept ? others : [...others, addedByHand(write.to, edited?.id)];
   } else {
     stagedCommands = stagedCommands.filter((each) => !samePrefix(each.prefix, write.remove));
   }

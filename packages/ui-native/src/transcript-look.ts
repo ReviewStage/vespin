@@ -35,6 +35,7 @@ export const CALL_SYMBOL = {
   [CALL_KIND.READ_AGENT]: "scroll",
   [CALL_KIND.MESSAGE_AGENT]: "paperplane",
   [CALL_KIND.START_AGENT]: "play",
+  [CALL_KIND.ADD_SUGGESTION]: "arrow.turn.down.right",
   [CALL_KIND.ARCHIVE_AGENT]: "archivebox",
   [CALL_KIND.UNARCHIVE_AGENT]: "tray.and.arrow.up",
   [CALL_KIND.LIST_MODELS]: "cpu",

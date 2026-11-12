@@ -116,7 +116,6 @@ const IOS = {
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
-  COMPOSER: notYet("iOS's New task and New agent sheets offer no skills or warm-keeping yet"),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
@@ -139,9 +138,6 @@ const IOS = {
   ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
-  ),
-  SKILL_INSTALL: notYet(
-    "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
   ),
   INTEGRATION_EXTRAS: notYet(
     "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
@@ -213,9 +209,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MEMORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.MEMORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.MEMORIES_FORGET]: EVERYWHERE,
-  [PORT_ACT_KIND.MEMORIES_SAVE]: panel(
-    notYet("iOS's Memory page reads, searches, and deletes; it adds and edits none yet"),
-  ),
+  [PORT_ACT_KIND.MEMORIES_SAVE]: EVERYWHERE,
   [PORT_ACT_KIND.SOUND_READ]: panel(IOS.SOUNDS),
   [PORT_ACT_KIND.SOUND_ADD]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
@@ -267,7 +261,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
-  [PORT_ACT_KIND.AGENTS_WARM]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARE]: EVERYWHERE,
@@ -326,8 +320,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SKILL_INSTALL),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,

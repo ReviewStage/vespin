@@ -24,6 +24,8 @@ export const EXPERIMENT = {
   RUN_ACTIONS: "run-actions",
   /** Turn changes: the files a turn changed, drawn under its words, and the Turn changes tab a file there opens, the diff of the checkouts the runner records before each turn. */
   TURN_CHANGES: "turn-changes",
+  /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
+  REPLY_BUTTONS: "reply-buttons",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -84,6 +86,16 @@ export const EXPERIMENTS = [
       "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
     owner: "Dean",
     since: "2026-11-12",
+  },
+  {
+    key: EXPERIMENT.REPLY_BUTTONS,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    name: "Suggestions",
+    detail:
+      "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
+      "which you open filled in, edit, and send.",
+    owner: "Dean",
+    since: "2026-11-10",
   },
   {
     key: EXPERIMENT.REWIND_FILES,

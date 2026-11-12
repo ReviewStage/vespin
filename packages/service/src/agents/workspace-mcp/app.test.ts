@@ -414,6 +414,7 @@ const AGENT_TOOLS = [
   "list_agents",
   "read_agent",
   "message_agent",
+  "add_suggestion",
   "update_agent",
   "list_models",
   "list_tasks",
@@ -696,6 +697,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* writeAccountPreferences(agent.userId, {
           experiments: { [EXPERIMENT.TURN_END]: true },
         });
+        yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.REPLY_BUTTONS);
         yield* descriptionsOn(agent.userId);
         const client = yield* connected(fetch, agent.bearer);
 
@@ -710,7 +712,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
-          experiments: { descriptionsOn: true, memoryOn: true, turnEndOn: true },
+          experiments: {
+            descriptionsOn: true,
+            memoryOn: true,
+            turnEndOn: true,
+            replyButtonsOn: true,
+          },
         };
 
         for (const tool of listed.tools) {
@@ -760,7 +767,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, and the turn's end tools where its starter has Memory, Task descriptions, and Done and follow-ups off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, and the reply buttons' tools where its starter has Memory, Task descriptions, Done and follow-ups, and Reply buttons off",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -778,6 +785,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "forget_memory",
           "edit_description",
           "end_turn",
+          "add_suggestion",
         ];
 
         assert.deepEqual(

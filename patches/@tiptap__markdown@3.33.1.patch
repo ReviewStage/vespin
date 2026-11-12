@@ -1,0 +1,92 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 6f3600b5f409e5b0439cafbbdb9edf08a68673f0..e64fee287fed6f88e2f1f963f231ae26c9880c61 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1163,6 +1163,31 @@ var MarkdownManager = class {
+ 				let currentMarks = new Map((node.marks || []).map((mark) => [mark.type, mark]));
+ 				let marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);
+ 				let marksToClose = findMarksToClose(currentMarks, nextNode);
++				// ueberdosis/tiptap#8662: keep a code span innermost, and close it where a non-code mark opens or closes while code goes on.
++				const codeOpenIdx = marksToOpen.findIndex(({ type }) => type === "code");
++				if (codeOpenIdx > 0) {
++					const [codeMark] = marksToOpen.splice(codeOpenIdx, 1);
++					marksToOpen.unshift(codeMark);
++				}
++				const codeIsActive = activeMarks.has("code");
++				const openingNonCode = marksToOpen.some(({ type }) => type !== "code");
++				const closingNonCodeWhileCodeContinues = codeIsActive && currentMarks.has("code") && marksToClose.some((markType) => markType !== "code" && activeMarks.has(markType));
++				if (codeIsActive && (openingNonCode || closingNonCodeWhileCodeContinues)) {
++					const codeMark = activeMarks.get("code");
++					const closeCode = this.getMarkClosing("code", codeMark, markOpeningModes.get("code"), markSpanTexts[i - 1]?.get("code") ?? markSpanTexts[i]?.get("code"));
++					if (closeCode) if (result.length > 0) result[result.length - 1] += closeCode;
++					else textContent = closeCode + textContent;
++					activeMarks.delete("code");
++					markOpeningModes.delete("code");
++					marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);
++					marksToClose = findMarksToClose(currentMarks, nextNode);
++					// The code reopened here stays innermost, inside the mark that opens with it.
++					const reopenedCodeIdx = marksToOpen.findIndex(({ type }) => type === "code");
++					if (reopenedCodeIdx > 0) {
++						const [reopenedCode] = marksToOpen.splice(reopenedCodeIdx, 1);
++						marksToOpen.unshift(reopenedCode);
++					}
++				}
+ 				if (textContent.length > 0 && textContent.trim().length === 0 && currentMarks.size > 0) {
+ 					const transientMarks = new Set(marksToClose.filter((markType) => !activeMarks.has(markType)));
+ 					if (transientMarks.size > 0) {
+@@ -1222,6 +1247,9 @@ var MarkdownManager = class {
+ 					const activeMarksClosingHereLifo = activeMarksClosingHere.slice().sort((a, b) => activeMarkKeys.indexOf(b) - activeMarkKeys.indexOf(a));
+ 					marksToCloseAtEnd = [...marksToOpen.map((m) => m.type), ...activeMarksClosingHereLifo];
+ 				} else marksToCloseAtEnd = findMarksToCloseAtEnd(activeMarks, currentMarks, nextNode, this.markSetsEqual.bind(this));
++				// ueberdosis/tiptap#8662: a non-code mark closing on a node whose code goes on into the next closes the code first.
++				const nextHasCode = !!nextNode?.marks?.some((mark) => mark.type === "code");
++				if (activeMarks.has("code") && currentMarks.has("code") && nextHasCode && marksToCloseAtEnd.some((markType) => markType !== "code") && !marksToCloseAtEnd.includes("code")) marksToCloseAtEnd = ["code", ...marksToCloseAtEnd];
+ 				let trailingWhitespace = "";
+ 				if (marksToCloseAtEnd.length > 0) {
+ 					const trailingMatch = textContent.match(/(\s+)$/);
+diff --git a/dist/index.js b/dist/index.js
+index 8ba62a7921c6ba5fbfd9544d6e0aa56d13c02d2f..3e58ecfc246a225cdddbb04b2b8b1f17ad6a3bae 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1162,6 +1162,31 @@ var MarkdownManager = class {
+ 				let currentMarks = new Map((node.marks || []).map((mark) => [mark.type, mark]));
+ 				let marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);
+ 				let marksToClose = findMarksToClose(currentMarks, nextNode);
++				// ueberdosis/tiptap#8662: keep a code span innermost, and close it where a non-code mark opens or closes while code goes on.
++				const codeOpenIdx = marksToOpen.findIndex(({ type }) => type === "code");
++				if (codeOpenIdx > 0) {
++					const [codeMark] = marksToOpen.splice(codeOpenIdx, 1);
++					marksToOpen.unshift(codeMark);
++				}
++				const codeIsActive = activeMarks.has("code");
++				const openingNonCode = marksToOpen.some(({ type }) => type !== "code");
++				const closingNonCodeWhileCodeContinues = codeIsActive && currentMarks.has("code") && marksToClose.some((markType) => markType !== "code" && activeMarks.has(markType));
++				if (codeIsActive && (openingNonCode || closingNonCodeWhileCodeContinues)) {
++					const codeMark = activeMarks.get("code");
++					const closeCode = this.getMarkClosing("code", codeMark, markOpeningModes.get("code"), markSpanTexts[i - 1]?.get("code") ?? markSpanTexts[i]?.get("code"));
++					if (closeCode) if (result.length > 0) result[result.length - 1] += closeCode;
++					else textContent = closeCode + textContent;
++					activeMarks.delete("code");
++					markOpeningModes.delete("code");
++					marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);
++					marksToClose = findMarksToClose(currentMarks, nextNode);
++					// The code reopened here stays innermost, inside the mark that opens with it.
++					const reopenedCodeIdx = marksToOpen.findIndex(({ type }) => type === "code");
++					if (reopenedCodeIdx > 0) {
++						const [reopenedCode] = marksToOpen.splice(reopenedCodeIdx, 1);
++						marksToOpen.unshift(reopenedCode);
++					}
++				}
+ 				if (textContent.length > 0 && textContent.trim().length === 0 && currentMarks.size > 0) {
+ 					const transientMarks = new Set(marksToClose.filter((markType) => !activeMarks.has(markType)));
+ 					if (transientMarks.size > 0) {
+@@ -1221,6 +1246,9 @@ var MarkdownManager = class {
+ 					const activeMarksClosingHereLifo = activeMarksClosingHere.slice().sort((a, b) => activeMarkKeys.indexOf(b) - activeMarkKeys.indexOf(a));
+ 					marksToCloseAtEnd = [...marksToOpen.map((m) => m.type), ...activeMarksClosingHereLifo];
+ 				} else marksToCloseAtEnd = findMarksToCloseAtEnd(activeMarks, currentMarks, nextNode, this.markSetsEqual.bind(this));
++				// ueberdosis/tiptap#8662: a non-code mark closing on a node whose code goes on into the next closes the code first.
++				const nextHasCode = !!nextNode?.marks?.some((mark) => mark.type === "code");
++				if (activeMarks.has("code") && currentMarks.has("code") && nextHasCode && marksToCloseAtEnd.some((markType) => markType !== "code") && !marksToCloseAtEnd.includes("code")) marksToCloseAtEnd = ["code", ...marksToCloseAtEnd];
+ 				let trailingWhitespace = "";
+ 				if (marksToCloseAtEnd.length > 0) {
+ 					const trailingMatch = textContent.match(/(\s+)$/);

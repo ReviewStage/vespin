@@ -77,7 +77,13 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
-import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
+import {
+  type InstalledSkillCandidate,
+  type InstalledSkillPreview,
+  type InstalledSkillSummary,
+  SKILL_PASTE_KIND,
+  UNSUPPORTED_PREVIEW,
+} from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
@@ -88,7 +94,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -982,6 +988,24 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/** The id a memory the fixture is asked to keep anew is kept under. */
+export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
+
+/** A memory as the fixture keeps one: by Ada, a correction keeping its memory's id, its time and its recalls, and a new one under its own id. */
+function savedMemory(text: string, corrected: MemorySummary | undefined): MemorySummary {
+  return {
+    id: corrected?.id ?? NEW_MEMORY_ID,
+    text,
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: corrected?.createdAt ?? LANDED,
+    updatedAt: LANDED,
+    source: null,
+    recalls30d: corrected?.recalls30d ?? 0,
+    lastRecalledAt: corrected?.lastRecalledAt ?? null,
+  };
+}
+
 /**
  * The fixture workspace's memories, as Settings › Memory lists them: one an
  * agent of the account kept and agents recall often, one Grace kept this
@@ -1041,6 +1065,83 @@ const HOSTS: readonly HostLine[] = [
     away: true,
   },
 ];
+
+/** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
+const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
+  {
+    name: "frontend-design",
+    description: "Lay out a screen from the team's design tokens.",
+    path: "skills/frontend-design",
+    bytes: 2_048,
+    selected: true,
+    fileCount: 2,
+    problems: [],
+  },
+  {
+    name: "changelog",
+    description: "Write a changelog entry from the commits since the last tag.",
+    path: "skills/changelog",
+    bytes: 1_536,
+    selected: false,
+    fileCount: 1,
+    problems: [],
+  },
+];
+
+/** The repository a fixture run's Add skill reads. */
+const SKILL_SOURCE_PREVIEW: InstalledSkillPreview = {
+  kind: SKILL_PASTE_KIND.SOURCE,
+  owner: "acme",
+  repo: "agent-skills",
+  ref: "main",
+  sha: "7a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4",
+  skills: SOURCE_SKILLS,
+  missing: [],
+};
+
+/** A frontmatter line's value, such as a pasted skill's `name:`. */
+function frontmatterValue(text: string, key: string): string | undefined {
+  const line = text.split("\n").find((each) => each.startsWith(`${key}:`));
+
+  return line?.slice(key.length + 1).trim();
+}
+
+/** What a fixture run's Add skill reads a paste as: a skill's text where it opens on frontmatter, a GitHub source where it names one, and nothing we install from otherwise. */
+function skillPreviewOf(text: string): InstalledSkillPreview {
+  const pasted = text.trim();
+
+  if (!pasted.startsWith("---")) {
+    return /github\.com|^npx skills add |^[\w.-]+\/[\w.-]+$/.test(pasted)
+      ? SKILL_SOURCE_PREVIEW
+      : UNSUPPORTED_PREVIEW;
+  }
+
+  // Note that a key the frontmatter leaves out reads as empty, as the page fills an absent one.
+  return {
+    kind: SKILL_PASTE_KIND.TEXT,
+    name: frontmatterValue(pasted, "name") ?? "",
+    description: frontmatterValue(pasted, "description") ?? "",
+    bytes: pasted.length,
+    problems: [],
+  };
+}
+
+/** A skill a fixture run's Add skill installed, as the service answers it: the account's own, by Ada. */
+function installedSkill(name: string, description: string): InstalledSkillSummary {
+  return {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e59",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name,
+    description,
+    userInvocable: true,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED,
+    updatedAt: LANDED,
+  };
+}
 
 /** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
 const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
@@ -1826,6 +1927,48 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
+export type SavedMemoryWords = ReadonlyMap<string, string>;
+
+/**
+ * The fixture workspace's memories with the words a run saved: a
+ * correction over its own row, as the host draws one the moment it is sent,
+ * and a new memory at the head, as the memories' live read carries one in
+ * soon after it is kept. The document handed in where none was saved. Note
+ * that a run keeps one new memory, since every new one is answered under the
+ * same id.
+ */
+export function savedMemoriesAppState(
+  state: AppStateSnapshot,
+  words: SavedMemoryWords,
+): AppStateSnapshot {
+  const held = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const rows = held?.rows;
+
+  if (words.size === 0 || held === undefined || rows === undefined) return state;
+
+  const corrected = rows.map((memory) => {
+    const text = words.get(memory.id);
+
+    return text === undefined ? memory : { ...memory, text, updatedAt: LANDED };
+  });
+
+  const added = words.get(NEW_MEMORY_ID);
+
+  const saved =
+    added === undefined || rows.some((memory) => memory.id === NEW_MEMORY_ID)
+      ? corrected
+      : [savedMemory(added, undefined), ...corrected];
+
+  return {
+    ...state,
+    [LIVE_READ.MEMORIES]: {
+      ...state[LIVE_READ.MEMORIES],
+      [FIXTURE_IDS.WORKSPACE]: { ...held, rows: saved },
+    },
+  };
+}
+
 /**
  * What a fixture run changed of one of its agents: its model and effort, its
  * permission mode, the servers switched off, its name, and the reader's pin.
@@ -2000,6 +2143,19 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
+  [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
+  [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({
+    skills:
+      request.skills === undefined
+        ? [installedSkill(request.name ?? "", request.description ?? "")]
+        : request.skills.map((name) =>
+            installedSkill(
+              name,
+              SOURCE_SKILLS.find((each) => each.name === name)?.description ?? "",
+            ),
+          ),
+  }),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
     const read = INSTALLED_SKILL_FILES.get(skillId);
 
@@ -2053,6 +2209,15 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
   [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
+  // Note that a memory's words are kept as the service keeps them, by Ada, a correction keeping its memory's id, though nothing here moves; the mobile fixture lays the saved words over the list itself (`savedMemoriesAppState`).
+  [ACT_KIND.MEMORIES_SAVE]: ({ text, replaces }) => {
+    const corrected = MEMORIES.find((memory) => memory.id === replaces);
+
+    return {
+      outcome: corrected === undefined ? MEMORY_SAVED.KEPT : MEMORY_SAVED.CORRECTED,
+      memory: savedMemory(text, corrected),
+    };
+  },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),

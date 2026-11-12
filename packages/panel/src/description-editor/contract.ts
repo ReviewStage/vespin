@@ -96,6 +96,14 @@ export interface PlacedWords {
   readonly top: number;
 }
 
+/**
+ * Where dropped pictures land: before the text's first block, or below the
+ * caret's line at a list depth, `0` after the outermost list holding the line,
+ * a deeper one at the end of that many list items in, and the line's own
+ * depth just below the line, inside its innermost item.
+ */
+export type PictureLanding = { readonly first: true } | { readonly depth: number };
+
 /** Where the caret goes as the editor opens: where a click or a drop of pictures landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
 export type DescriptionEditorPlacement =
   | {
@@ -104,8 +112,10 @@ export type DescriptionEditorPlacement =
       readonly words?: PlacedWords | undefined;
       /** Where the words the press selected start, which the editor selects from to `words`; none where it selected nothing. */
       readonly from?: PlacedWords | undefined;
-      /** Image files dropped on the drawn text, laid in as pictures at the caret as the editor opens there; none for a click. */
+      /** Image files dropped on the text, laid in as pictures at the caret as the editor opens there or moves it there; none for a click. */
       readonly pictures?: readonly File[] | undefined;
+      /** Where the dropped pictures land around the caret's line; below it, in its innermost list item, where none is given. */
+      readonly landing?: PictureLanding | undefined;
     }
   | { readonly section: number }
   | typeof PLACEMENT_END;
@@ -425,7 +435,7 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   ) => void;
   /** The attributes that tie the text to the `@` list or the `/` menu over it (`listAria`), which name it a combobox while the list stands (`rootAria`). */
   readonly setAria: (aria: EditorAria) => void;
-  /** The caret put where the placement says and the editor focused, as a press on the text's room does while it is open. */
+  /** The caret put where the placement says and the editor focused, as a press on the text's room does while it is open, and the files a drop carries laid in there as pictures. */
   readonly focusAt: (placement: DescriptionEditorPlacement) => void;
   /** Where the line of the words a click opened the editor on stands in the window, down from its top; none where it opened elsewhere, the words not found, or the caret has since been put elsewhere, or where it cannot be measured. */
   readonly wordsTop: () => number | undefined;

@@ -1769,7 +1769,7 @@ const MessageAgentInputSchema = Schema.Struct({
       "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer " +
         "it into the turn under way: it waits unsent, and goes as the member's next message once " +
         "the turn and every message queued before it are over, at once where the agent stands " +
-        "idle. Only the agent's starter queues to it.",
+        "idle. Any member who may message the agent queues to it.",
     ),
   ),
 });
@@ -1782,11 +1782,11 @@ const MEMBER_QUEUE_DELIVERY = {
   HANDED_ON: "handed-on",
 } as const;
 
-/** Why a queued message was not queued, in the member's tool's words: another member's agent, a full queue, or the service. */
+/** Why a queued message was not queued, in the member's tool's words: an agent only its starter messages, a full queue, or the service. */
 const QUEUE_MESSAGE_REFUSAL = {
   NOT_STARTER:
-    "Not queued: only the member who started that agent queues to it; send it without queue to " +
-    "steer it into the turn instead.",
+    "Not queued: that agent runs on its starter's own GitHub token or Mac, so only the member " +
+    "who started it queues to it.",
   FULL: `Not queued: that agent's queue already holds ${AGENT_QUEUE_BOUNDS.MAX_MESSAGES} messages.`,
   UNAVAILABLE: "Not queued: the service could not take the message just now.",
 } as const;
@@ -1950,7 +1950,9 @@ type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
 
 /** Why a queue change changed nothing, in the member's tool's words. */
 const CHANGE_QUEUE_REFUSAL = {
-  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NOT_STARTER:
+    "Not changed: that agent runs on its starter's own GitHub token or Mac, so only the member " +
+    "who started it changes its queue.",
   NO_MESSAGE:
     "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
     `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
@@ -2009,13 +2011,13 @@ const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueu
 const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
   description:
-    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    "Change the queue of a coding agent the member may message, by its id, as their queue " +
     `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
     `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
     "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
     "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
-    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
-    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "under way now, which takes it out of the queue. Any member who may message the agent " +
+    "changes any message in its queue, whoever queued it. Where the agent stands idle, the change hands the next message on at once, as a " +
     "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
     `why nothing changed. ${FOLLOW_WORDS}`,
   input: ChangeAgentQueueInputSchema,
