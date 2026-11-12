@@ -72,6 +72,7 @@ import {
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useShownAgent,
   useTranscriptRetry,
   useWholeParts,
 } from "../agents/use-agent.js";
@@ -367,6 +368,8 @@ export function AgentScreen() {
   const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
+  // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
+  const shown = useShownAgent(id);
   const pullRequests = useAgentPullRequests(id);
 
   const open = useMemo(
@@ -383,10 +386,10 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, agent?.workspaceId, agent?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
-  const status = agent?.status ?? transcript?.word?.status;
+  const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
   const whole = useWholeParts(id);
 
@@ -415,18 +418,18 @@ export function AgentScreen() {
   const media = useAgentMedia(id, mediaIds);
 
   const title = cardTitle(
-    agent === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(agent),
+    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
   );
 
   useScreenActivity((workspaces) =>
-    agent === undefined
+    shown === undefined
       ? undefined
       : agentActivity(
           {
             id,
             title,
-            workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            workspaceId: shown.workspaceId,
+            taskId: shown.planId,
           },
           workspaces,
         ),
@@ -531,7 +534,11 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction
                 icon="archivebox"
                 destructive
-                onPress={() => setArchiving(true)}
+                onPress={() =>
+                  void actions.archiveAsk.ask(id).then((stands) => {
+                    if (stands) setArchiving(true);
+                  })
+                }
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -610,9 +617,9 @@ export function AgentScreen() {
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk
-        title={actions.archiveQuestion.title}
-        message={actions.archiveQuestion.message}
-        act={actions.archiveQuestion.act}
+        title={actions.archiveAsk.question.title}
+        message={actions.archiveAsk.question.message}
+        act={actions.archiveAsk.question.act}
         destructive
         presented={archiving}
         onAct={() => {
