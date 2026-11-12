@@ -201,6 +201,7 @@ import {
 import {
   AgentMachine,
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   type DeliveredCredentials,
   type FoundPlace,
   type MachineKept,
@@ -872,6 +873,18 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
           ran.exitCode === 0 ? new Uint8Array(Buffer.from(ran.stdout, "base64")) : undefined,
         ),
       ),
+
+    // Note that the API writes as the sandbox's default user, so the file's mode is what lets `agent` read it.
+    writeFile: (session, file) =>
+      Effect.gen(function* () {
+        const running = yield* runningSession(session);
+        const path = `${ATTACHMENT_DIRECTORY}/${file.name}`;
+        yield* api.writeFiles(running, [
+          { path, contents: file.contents, mode: ATTACHMENT_FILE_MODE },
+        ]);
+
+        return path;
+      }),
 
     restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
 

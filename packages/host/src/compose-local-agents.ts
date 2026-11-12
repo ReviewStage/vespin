@@ -1062,20 +1062,25 @@ export function composeLocalAgents(
             ),
           );
 
-        /** A files line's files written under the agent's own places (`agentPlaces`), each at its mode; one whose path names a place outside them is never written. */
+        /** A files line's files written under the agent's own places (`agentPlaces`), each at its mode, answering whether every one was; one whose path names a place outside them is never written, and a payload it cannot read writes none. */
         const wroteFiles = (
           agentId: string,
           files: Option.Option<typeof deviceAgentFilesPayloadSchema.Type>,
         ) =>
           Effect.gen(function* () {
-            if (Option.isNone(files)) return;
+            if (Option.isNone(files)) return false;
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
             const layout = layoutIn(folder, agentId);
+            let wroteAll = true;
 
             for (const file of files.value.files) {
               const target = path.normalize(file.path);
 
-              if (!agentPlaces(layout).some((place) => target.startsWith(`${place}/`))) continue;
+              if (!agentPlaces(layout).some((place) => target.startsWith(`${place}/`))) {
+                wroteAll = false;
+                continue;
+              }
+
               yield* fileSystem.makeDirectory(path.dirname(target), {
                 recursive: true,
                 mode: 0o700,
@@ -1083,9 +1088,15 @@ export function composeLocalAgents(
               yield* fileSystem.writeFile(target, file.contents, { mode: file.mode });
               yield* fileSystem.chmod(target, file.mode);
             }
+
+            return wroteAll;
           }).pipe(
             Effect.catch(() =>
-              Effect.sync(() => report("a local agent's files could not be written")),
+              Effect.sync(() => {
+                report("a local agent's files could not be written");
+
+                return false;
+              }),
             ),
           );
 
@@ -1182,9 +1193,12 @@ export function composeLocalAgents(
                 break;
               }
 
+              // A files line is settled 0 where every file was written and 1 otherwise, which a write waiting on it reads.
               case DEVICE_AGENT_LINE_KIND.FILES:
-                yield* wroteFiles(agentId, decodeFiles(line.payload));
-                break;
+                return yield* settle(
+                  line.id,
+                  (yield* wroteFiles(agentId, decodeFiles(line.payload))) ? 0 : 1,
+                );
               case DEVICE_AGENT_LINE_KIND.STOP:
                 yield* stopped(agentId);
                 break;

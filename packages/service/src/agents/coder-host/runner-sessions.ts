@@ -215,6 +215,7 @@ import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sent
 import {
   AgentMachine,
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -418,9 +419,6 @@ function runnerBearer(bearer: string, host: string): RunnerCredential {
   };
 }
 
-/** How a file written for the agent is kept: readable by every user, written by none but the API's. */
-const ATTACHMENT_MODE = 0o644;
-
 /** How long a written file's name may be, which a tar header holds whole. */
 const ATTACHMENT_NAME_CHARS = 80;
 
@@ -589,7 +587,7 @@ function runnerContent(
     files.push({
       path,
       contents: new Uint8Array(Buffer.from(base64, "base64")),
-      mode: ATTACHMENT_MODE,
+      mode: ATTACHMENT_FILE_MODE,
     });
 
     return [
