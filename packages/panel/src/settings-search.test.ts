@@ -312,11 +312,12 @@ test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", 
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
+  // A page's sections come before the rows that are not sections.
   assert.deepEqual(labelsFound("mcp"), [
     "Connected apps",
+    "CLI sign-in",
     "Connect an app",
     "Install the vespin command",
-    "CLI sign-in",
   ]);
 });
 
@@ -435,7 +436,7 @@ test("a page is found by its own name and leads its rows, the best page first, e
     stops.slice(0, 2).map((stop) => [stop.page, stop.entry?.label]),
     [
       [SETTINGS_VIEW.HOSTS, undefined],
-      [SETTINGS_VIEW.HOSTS, "Add a machine"],
+      [SETTINGS_VIEW.HOSTS, "Your machines"],
     ],
   );
   const throughRow = searchSettings(settingsSearchCorpus(FULL_INPUT), "how your team works");

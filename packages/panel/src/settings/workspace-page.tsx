@@ -122,8 +122,8 @@ import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
-import { WORKSPACE_CONNECTIONS } from "./pages.js";
 import { shownWorkspace } from "./settings-rows.js";
+import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 import { AddSlackChannel, SlackBotChannelRows } from "./slack-bot-channels.js";
 import { GitHubAccountRows, type ShownConnection } from "./workspace-github-accounts.js";
 import {
@@ -1922,9 +1922,8 @@ function ShownWorkspace({
         <WorkspaceIdentity workspace={workspace} />
       </SettingsSection>
       <SettingsSection
-        title="Members"
+        {...settingsSectionHead(SECTION_HEAD.MEMBERS)}
         action={managesWorkspace(workspace) ? <InviteButton workspace={workspace} /> : undefined}
-        anchor={SETTINGS_SECTION.MEMBERS}
       >
         <TeamMembers
           workspace={workspace}
@@ -1934,7 +1933,7 @@ function ShownWorkspace({
         />
         {managesWorkspace(workspace) ? <Invitations workspaceId={workspace.id} /> : null}
       </SettingsSection>
-      <SettingsSection title={WORKSPACE_CONNECTIONS} anchor={SETTINGS_SECTION.GITHUB_REPOSITORIES}>
+      <SettingsSection {...settingsSectionHead(SECTION_HEAD.WORKSPACE_CONNECTIONS)}>
         {WORKSPACE_INTEGRATIONS.map(({ service, Row }) => (
           <Row key={service} workspace={workspace} />
         ))}

@@ -62,6 +62,7 @@ import { useOpenLink } from "../tasks/use-open-link.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * mcp-clients-section.tsx -- Settings › our MCP & CLI's MCP section: the outside agents the account let in, each revoked from its row, and how to connect one.
@@ -102,7 +103,6 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION = {
-  TITLE: "MCP",
   CAPTION: `Use ${PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.`,
 } as const;
 
@@ -567,11 +567,7 @@ export function McpSection(): React.JSX.Element {
     known !== undefined && !known.has(client.clientId) && !revoked.has(client.clientId);
 
   return (
-    <SettingsSection
-      title={SECTION.TITLE}
-      caption={SECTION.CAPTION}
-      anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}
-    >
+    <SettingsSection {...settingsSectionHead(SECTION_HEAD.MCP_CLIENTS)} caption={SECTION.CAPTION}>
       {rows === undefined ? (
         <ReadFailed
           line={PAGE_LINE.READ_FAILED}
