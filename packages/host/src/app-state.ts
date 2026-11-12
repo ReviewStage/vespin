@@ -1175,10 +1175,10 @@ export interface AppStateDelivery {
 }
 
 /** A value the document holds: a record or list, a primitive, or nothing. */
-type HeldValue = object | string | number | boolean | null | undefined;
+type HeldValue = Keyed | readonly HeldValue[] | string | number | boolean | null | undefined;
 
 /** One level of a slice's keys: each id's or part's value, or, above the last level, each kind's record of ids. */
-type Keyed = Readonly<Record<string, HeldValue>>;
+type Keyed = { readonly [key: string]: HeldValue };
 
 /** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
 function isKeyed(value: unknown): value is Keyed {
