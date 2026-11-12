@@ -1,7 +1,7 @@
 // _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
 import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
-import { useColors } from "@repo/ui-native";
+import { GLYPH, useColors } from "@repo/ui-native";
 import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { Platform } from "react-native";
@@ -62,7 +62,7 @@ export default function TabsLayout() {
       badgeBackgroundColor={colors.ATTENTION_FILL}
     >
       <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
-        <NativeTabs.Trigger.Icon sf="tray" />
+        <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
         {waiting === 0 ? null : (
@@ -70,7 +70,7 @@ export default function TabsLayout() {
         )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks">
-        <NativeTabs.Trigger.Icon sf="checklist" />
+        <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       {/* Note that the Search tab carries an id of its own, since a list's round search button and a split view's search field are named Search too, and a flow taps the tab by it. */}
@@ -80,6 +80,7 @@ export default function TabsLayout() {
         accessibilityLabel="Search"
         testID="search-tab"
       >
+        {/* Note that Search keeps the system's magnifier, since a search tab is iOS's own chrome. */}
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Search</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
@@ -90,7 +91,7 @@ export default function TabsLayout() {
         accessibilityLabel="New task"
         listeners={{ tabPress: () => router.push("/start-task") }}
       >
-        <NativeTabs.Trigger.Icon sf="plus" />
+        <NativeTabs.Trigger.Icon xcasset={GLYPH.ADD} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>New task</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
