@@ -123,24 +123,29 @@ const openQueuedWorkspace = Effect.fnUntraced(function* (
   return { github, member, workspace, task };
 });
 
-/** GitHub refusing `acme/relay`'s queue to the App's token: its alias null, as a repository with no queue answers, and an error saying why. */
-function relayQueueRefused(sent: {
-  readonly url: string;
-  readonly method: string;
-}): Response | undefined {
-  if (new URL(sent.url).pathname !== "/graphql" || sent.method !== "POST") return undefined;
-
-  return Response.json({
-    data: { r0: { mergeQueue: null } },
-    errors: [
-      {
-        type: "FORBIDDEN",
-        path: ["r0", "mergeQueue"],
-        message: "Resource not accessible by integration",
-      },
-    ],
-  });
+/** The GraphQL body as GitHub answers it, and nothing for any other request. */
+function graphqlAnswering(body: object): RepositoryScript {
+  return (sent) =>
+    new URL(sent.url).pathname === "/graphql" && sent.method === "POST"
+      ? Response.json(body)
+      : undefined;
 }
+
+const REFUSED = {
+  type: "FORBIDDEN",
+  path: ["r0", "mergeQueue"],
+  message: "Resource not accessible by integration",
+};
+
+/**
+ * GitHub refusing `acme/relay`'s queue to the App's token: its alias null,
+ * as a repository with no queue answers, beside an error saying why; or the
+ * whole query refused, with no data at all.
+ */
+const REFUSALS = [
+  { refusal: "the queue", body: { data: { r0: { mergeQueue: null } }, errors: [REFUSED] } },
+  { refusal: "the whole query", body: { errors: [{ ...REFUSED, path: ["r0"] }] } },
+];
 
 it.layer(getTestDB())("a workspace's merge queues", (it) => {
   it.effect("join a queued pull request to the task whose agent opened it", () =>
@@ -197,16 +202,21 @@ it.layer(getTestDB())("a workspace's merge queues", (it) => {
     }),
   );
 
-  it.effect("fail as GitHub's refusal where it refuses a queue, never as no queue", () =>
-    Effect.gen(function* () {
-      const { github, member, workspace } = yield* openQueuedWorkspace(7813, relayQueueRefused);
+  it.effect.each(REFUSALS.map((each, index) => ({ ...each, installationId: 7813 + index })))(
+    "fail as GitHub's refusal where it refuses $refusal, never as no queue",
+    ({ body, installationId }) =>
+      Effect.gen(function* () {
+        const { github, member, workspace } = yield* openQueuedWorkspace(
+          installationId,
+          graphqlAnswering(body),
+        );
 
-      const refused = yield* readWorkspaceMergeQueue(member, workspace).pipe(
-        Effect.provide(github.layer),
-        Effect.flip,
-      );
+        const refused = yield* readWorkspaceMergeQueue(member, workspace).pipe(
+          Effect.provide(github.layer),
+          Effect.flip,
+        );
 
-      assert.deepEqual(refused, upstreamRefused(403));
-    }),
+        assert.deepEqual(refused, upstreamRefused(403));
+      }),
   );
 });

@@ -77,18 +77,21 @@ const QueueEntrySchema = Schema.Struct({
 });
 
 const QueuesAnswerSchema = Schema.Struct({
-  data: Schema.NullOr(
-    Schema.Record(
-      Schema.String,
-      Schema.NullOr(
-        Schema.Struct({
-          mergeQueue: Schema.NullOr(
-            Schema.Struct({
-              url: Schema.String,
-              entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
-            }),
-          ),
-        }),
+  // Note that GitHub leaves `data` out of a query it refuses whole, which its errors then say why.
+  data: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Record(
+        Schema.String,
+        Schema.NullOr(
+          Schema.Struct({
+            mergeQueue: Schema.NullOr(
+              Schema.Struct({
+                url: Schema.String,
+                entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
+              }),
+            ),
+          }),
+        ),
       ),
     ),
   ),
@@ -168,8 +171,11 @@ function entryOf(read: QueueEntryRead | null) {
 /**
  * The queues of the repositories given, read on one token in one request,
  * each repository that has one in the order given, and whether GitHub
- * refused any of it. Note that a refusal answers its alias null as a
- * repository with no queue does, so only its error tells the two apart.
+ * refused any of it: an error but an unresolved repository, or no data at
+ * all. Note that a refusal answers its alias null as a repository with no
+ * queue does, so only its error tells the two apart. A status GitHub
+ * answers past 2xx, a rate limit among them, is GitHub not answering, and
+ * fails as unavailable.
  */
 const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
   token: Redacted.Redacted,
@@ -197,7 +203,10 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   return {
     queues,
-    refused: (answer.errors ?? []).some((error) => error.type !== GITHUB_NOT_FOUND),
+    refused:
+      answer.data === undefined ||
+      answer.data === null ||
+      (answer.errors ?? []).some((error) => error.type !== GITHUB_NOT_FOUND),
   };
 });
 
