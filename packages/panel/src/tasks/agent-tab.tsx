@@ -2348,7 +2348,6 @@ function sameRead(
  */
 function useLogEntries(
   placing: ReturnType<typeof transcriptPlacing>,
-  working: boolean,
   standings: ReadonlyMap<string, AgentSubagentStanding> | undefined,
   arrivals: ReadonlyMap<string, readonly ArrivedLine[]>,
 ): readonly LogEntry[] {
@@ -2357,7 +2356,7 @@ function useLogEntries(
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
-    const { placed } = placing;
+    const { placed, writing } = placing;
 
     const entries = placed.flatMap((row, index): LogEntry[] => {
       const { message } = row;
@@ -2372,7 +2371,7 @@ function useLogEntries(
         return [{ key, row, index }];
       }
 
-      const moving = working && index === placed.length - 1;
+      const moving = message.id === writing;
       const place: StretchPlace = { standings, arrived };
       const was = held.get(message.id);
 
@@ -2394,7 +2393,7 @@ function useLogEntries(
     reads.current = next;
 
     return entries;
-  }, [placing, working, standings, arrivals]);
+  }, [placing, standings, arrivals]);
 }
 
 /** Whether two runs of lines are the same lines in the same order. */
@@ -2503,7 +2502,7 @@ function useReplySaid({
  * How a transcript's messages are placed, read once for the messages held
  * rather than on every draw: where the to-do lists stand, which message
  * opens it, the replay it opens on, each message with the lines that
- * reached it.
+ * reached it, and the reply a running turn is still writing.
  */
 function transcriptPlacing(
   messages: readonly AgentTranscriptMessage[],
@@ -2525,8 +2524,13 @@ function transcriptPlacing(
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
   // A line that reached a turn while it ran is drawn inside that turn, where it arrived.
   const placed = placedMessages(messages, (id) => undelivered.has(id) || unsent.has(id));
+  // Note that the reply is the newest unfinished one rather than the last row, because a line that did not go stands after it, and a finished reply is not the next turn's, whose reply has yet to land.
+  const newest = working
+    ? placed.findLast((row) => row.message.role === MESSAGE_ROLE.ASSISTANT)?.message
+    : undefined;
+  const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
 
-  return { todos, first, opening, placed };
+  return { todos, first, opening, placed, writing };
 }
 
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
@@ -2703,7 +2707,7 @@ function AgentTranscriptView({
   );
 
   // A turn too long to draw at once stands in the log as its pieces, each a row of its own.
-  const entries = useLogEntries(placing, working, delegation?.standings, arrivals);
+  const entries = useLogEntries(placing, delegation?.standings, arrivals);
 
   // Each row is keyed by the message it draws, which its measured height is kept by, a
   // developer's line by the id it was written under, so its row lands where the line was drawn.
@@ -2755,7 +2759,7 @@ function AgentTranscriptView({
   });
 
   if (!holding && messages.length > 0) {
-    const { todos, first, opening, placed } = placing;
+    const { todos, first, opening, placed, writing } = placing;
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
     // any other is, but where something sent it, an automation, when it is
@@ -2890,7 +2894,7 @@ function AgentTranscriptView({
                           description={message === description}
                           taskId={message === description ? taskId : undefined}
                           lead={lead}
-                          moving={working && index === placed.length - 1}
+                          moving={message.id === writing}
                           delegation={delegation}
                           todos={todos}
                           briefTitle={briefTitle}

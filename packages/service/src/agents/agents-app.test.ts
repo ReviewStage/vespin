@@ -997,18 +997,22 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           },
         ]);
 
-        const fork = (messageId: string) =>
+        const fork = (
+          messageId: string,
+          cut?: { messageSteps: number; messageStepParts: number },
+        ) =>
           ask(
             startAs(owner, task.id, {
               idempotencyKey: randomUUID(),
-              from: { agentId: source.id, messageId },
+              from: { agentId: source.id, messageId, ...cut },
             }),
           );
 
+        // A desktop before the cut was dropped still names one, which is taken and kept out of the fork.
         const started = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
-          yield* fork(firstTurn),
+          yield* fork(firstTurn, { messageSteps: 1, messageStepParts: 0 }),
         ).agent;
 
         const { parts } = openedParts(agentSessions);

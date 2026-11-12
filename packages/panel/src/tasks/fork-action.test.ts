@@ -290,26 +290,27 @@ async function forkedAtInTab(
   return forks.map(({ agentId: _agent, opening: _opening, ...at }) => at);
 }
 
-test("while an agent works, the newest of its replies, which the running turn may still be writing, offers no fork and every earlier one forks; once it settles, every reply forks", async () => {
+test("while an agent works, the reply it is still writing offers no fork and every finished one forks, the newest among them while the next turn has yet to begin", async () => {
   const LATEST = "6b3a4f5e-7d8c-4b9a-8c3d-4e5f6a7b8c9d";
+  const finished = reply(LATEST, "Adding the retry");
+  const { finishedAt: _finishedAt, ...writing } = finished;
 
-  const settled = [
+  const before = [
     line("task", "Queue the invite email."),
     reply(TURN, "Moved it onto the queue."),
     line("line-1", "Now add a retry."),
-    reply(LATEST, "Adding the retry"),
   ];
 
   for (const working of [AGENT_STATUS.RUNNING, AGENT_STATUS.STARTING]) {
     assert.deepEqual(
-      await forkedAtInTab(working, settled),
+      await forkedAtInTab(working, [...before, writing]),
       [{ messageId: TURN }],
-      `${working}: the newest reply offers no fork`,
+      `${working}: the reply still being written offers no fork`,
+    );
+    assert.deepEqual(
+      await forkedAtInTab(working, [...before, finished]),
+      [{ messageId: TURN }, { messageId: LATEST }],
+      `${working}: a finished reply forks while the next turn begins`,
     );
   }
-
-  assert.deepEqual(await forkedAtInTab(AGENT_STATUS.COMPLETED, settled), [
-    { messageId: TURN },
-    { messageId: LATEST },
-  ]);
 });
