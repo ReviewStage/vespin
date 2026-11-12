@@ -163,8 +163,10 @@ import {
 } from "@repo/features/workspace-invitation-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
+  WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
+  workspaceRunActionEditRequestSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import {
   WORKSPACE_BOUNDS,
@@ -296,6 +298,7 @@ import {
   SEARCH_MEMORY_TOOL,
 } from "../agents/memory-tools.js";
 import { runListPortsShared, runSharePort, SHARE_PORT_TOOL } from "../agents/port-tools.js";
+import { ranRunAction, stoppedRunAction } from "../agents/run-actions.js";
 import {
   CHANGE_TASK_RELATION_INPUT,
   FIND_TASK_INPUT,
@@ -404,6 +407,7 @@ import {
   putWorkspaceVariable,
 } from "../workspace-environment/workspace-environment.js";
 import {
+  editRunAction,
   readSandboxSetup,
   saveInstallScript,
   saveRepositorySetup,
@@ -4713,6 +4717,9 @@ const SANDBOX_SETUP_REFUSAL = {
   NOT_PERMITTED:
     "Not saved: only an owner or an admin of the workspace saves its sandbox setup, and the " +
     "member is neither.",
+  KIND_WITHOUT_REPOSITORY:
+    "Not saved: a kind names one of a repository's scripts, so name the repository as well; " +
+    "leave both out to save the install script.",
   UNAVAILABLE:
     "Not run: the service could not reach the workspace's sandbox setup just now. The call may " +
     "be made again.",
@@ -4752,14 +4759,22 @@ const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
 /** A read of the setup names its workspace. */
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
-/** A save names its workspace, at most the repository whose setup script it is, and the script. */
+/** A save names its workspace, at most the repository and which of its scripts it is, and the script. */
 const EditSandboxSetupInputSchema = Schema.Struct({
   workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
   repository: Schema.optionalKey(
     describeWire(
       githubRepositoryFullNameSchema,
-      "The repository whose setup script to save, as owner/name; leave it out to save the " +
+      "The repository whose script to save, as owner/name; leave it out to save the " +
         "workspace's install script.",
+    ),
+  ),
+  kind: Schema.optionalKey(
+    describeWire(
+      Schema.Literals(Object.values(REPOSITORY_SCRIPT_KIND)),
+      "Which of the repository's scripts to save: setup, which runs once in each new agent " +
+        "sandbox of it after its checkout, or archive, which runs once in each just before it " +
+        "is deleted for good as its agent is archived; setup where left out.",
     ),
   ),
   script: describeWire(
@@ -4773,10 +4788,14 @@ const READ_SANDBOX_SETUP_TOOL = memberMcpTool({
   description:
     "Read the cloud sandbox setup of a workspace the member belongs to, as its Settings › Cloud " +
     "environment shows it: its install script, which runs once in each build of a repository's base " +
-    "snapshot, and each repository's setup script, which runs once in each new agent sandbox " +
-    "of it after its checkout, each with when it was last saved in epoch milliseconds. " +
-    `${WORKSPACE_WORDS} Answers the install script, or install null where none is saved, and ` +
-    "the repositories' setup scripts in the order of their names, or `rejected` and why.",
+    "snapshot; each repository's setup script, which runs once in each new agent sandbox " +
+    "of it after its checkout, and archive script, which runs once in each just before it is " +
+    "deleted for good, each script with when it was last saved in epoch milliseconds and how " +
+    "it last ran where it has; and each repository's run actions, the commands a member runs " +
+    "in one of its agents' sandboxes from the Run menu, each with its id, label, command, " +
+    `icon, and whether it is the default. ${WORKSPACE_WORDS} Answers the install script, or ` +
+    "install null where none is saved, the repositories' setup scripts, archive scripts, and " +
+    "run actions, each in the order of their names, or `rejected` and why.",
   input: ReadSandboxSetupInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace }) =>
@@ -4793,29 +4812,239 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
   description:
     "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
     "admin of, as its Settings › Cloud environment would: the install script, or, naming a " +
-    "repository, that repository's setup script, under any casing of its name. The script " +
-    "given replaces the one that stood whole, so read it first with " +
+    "repository, that repository's setup or archive script, under any casing of its name. The " +
+    "script given replaces the one that stood whole, so read it first with " +
     `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
     "Sandboxes already running keep the script they ran. " +
     `${WORKSPACE_WORDS} Answers \`accepted\` with the setup as it then stands, or ` +
     "`rejected` and why.",
   input: EditSandboxSetupInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ workspace, repository, script }) =>
+  run: ({ workspace, repository, kind, script }) =>
+    repository === undefined && kind !== undefined
+      ? Effect.succeed(agentToolRejected(SANDBOX_SETUP_REFUSAL.KIND_WITHOUT_REPOSITORY))
+      : listAsMember(workspace, ({ caller }) =>
+          sandboxSetupAnswer(
+            repository === undefined
+              ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
+              : saveRepositorySetup(
+                  callerUserId(caller),
+                  callerWorkspaceId(caller),
+                  repository,
+                  script,
+                  kind ?? REPOSITORY_SCRIPT_KIND.SETUP,
+                ),
+            (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
+          ),
+        ),
+});
+
+/*
+ * A repository's run actions, one at a time, through the operation the
+ * hosted `editRunAction` runs (`editRunAction`), which reads the list as it
+ * stands and writes it back under the repository's lock; and one of them
+ * run or stopped in a coding agent's sandbox, through the operations the
+ * Run menu's procedures run (`../agents/run-actions.ts`), as the member, by
+ * the Terminal tab's rule.
+ */
+
+/** Why an edit of a run action saved nothing, in words the agent can act on. */
+const RUN_ACTION_EDIT_REFUSAL = {
+  NOT_FOUND:
+    "Not saved: the member is no longer in that workspace, or the repository has no run action " +
+    `of that id; ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} lists each repository's actions.`,
+  INVALID:
+    "Not saved: an add names a label and a command and no actionId, a repository keeps at most " +
+    `${WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS} run actions, and a remove names the ` +
+    "actionId it removes.",
+} as const;
+
+/** An edit's refusal in the agent's words: the edit's own, or a setup save's. */
+function runActionEditRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return RUN_ACTION_EDIT_REFUSAL.NOT_FOUND;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return RUN_ACTION_EDIT_REFUSAL.INVALID;
+    default:
+      return sandboxSetupRefusalWords(refusal);
+  }
+}
+
+const RUN_ACTION_FIELDS = workspaceRunActionEditRequestSchema.fields;
+
+/** An edit names the workspace, the repository, the action where it changes one, and what changes. */
+const EditRunActionInputSchema = Schema.Struct({
+  workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
+  repository: describeWire(
+    RUN_ACTION_FIELDS.repository,
+    "The repository whose run actions to edit, as owner/name, under any casing of its name.",
+  ),
+  actionId: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.actionId.schema,
+      `The action to change or remove, by the id ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} ` +
+        "answered; leave it out to add one, which then needs a label and a command.",
+    ),
+  ),
+  remove: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.remove.schema,
+      "true to remove the action actionId names; nothing else given is then read.",
+    ),
+  ),
+  label: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.label.schema,
+      "What the Run menu and the action's Terminal tab call it.",
+    ),
+  ),
+  command: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.command.schema,
+      "The bash it runs from the repository's checkout, with the workspace's environment " +
+        "variables, such as pnpm dev.",
+    ),
+  ),
+  icon: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.icon.schema,
+      "The icon it wears in the Run menu, one emoji or one Lucide icon by its kebab-case name " +
+        "in a color or none, such as rocket; null for the menu's own.",
+    ),
+  ),
+  isDefault: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.isDefault.schema,
+      "true to make it the repository's default, which the Run button runs, so no other " +
+        "action is; false to make it no longer the default.",
+    ),
+  ),
+  position: Schema.optionalKey(
+    describeWire(
+      RUN_ACTION_FIELDS.position.schema,
+      "Its place in the list after the edit, from 0, a place past the end being the last; an " +
+        "added action goes last and a changed one stays where it stood where left out.",
+    ),
+  ),
+});
+
+const EDIT_RUN_ACTION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+  description:
+    "Add, change, move, or remove one run action of a repository in a workspace the member " +
+    "is an owner or an admin of, as its Settings › Cloud environment would. A run action is a " +
+    "command a member runs in one of the repository's cloud agents' sandboxes, from the Run " +
+    "menu over the agent's tabs, each only when pressed. With no actionId an action is added " +
+    "with its label and command; with one, that action changes in only what is given, or is " +
+    "removed. The service edits the list as it stands, so an edit never undoes another made " +
+    "meanwhile, and an action keeps its id as it changes. Agents already running list the " +
+    `actions afresh. ${WORKSPACE_WORDS} Answers \`accepted\` with the setup as it then ` +
+    "stands, or `rejected` and why.",
+  input: EditRunActionInputSchema,
+  // Note that an add made twice adds two actions, so the edit is not idempotent as a save is.
+  annotations: { readOnlyHint: false, destructiveHint: true },
+  run: ({ workspace, ...edit }) =>
     listAsMember(workspace, ({ caller }) =>
-      sandboxSetupAnswer(
-        repository === undefined
-          ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
-          : saveRepositorySetup(
-              callerUserId(caller),
-              callerWorkspaceId(caller),
-              repository,
-              script,
-              REPOSITORY_SCRIPT_KIND.SETUP,
-            ),
-        (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
+      editRunAction(callerUserId(caller), callerWorkspaceId(caller), {
+        ...edit,
+        workspaceId: callerWorkspaceId(caller),
+      }).pipe(
+        Effect.map((setup): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup })),
+        Effect.catch((refusal) =>
+          Effect.succeed(agentToolRejected(runActionEditRefusalWords(refusal))),
+        ),
       ),
     ),
+});
+
+/** Why a run action was not run or stopped, in words for one acting for the member. */
+const RUN_ACTION_REFUSAL = {
+  NOT_FOUND:
+    "Not run: the member sees no such agent, or it runs on a Mac or has no repository, its " +
+    "workspace has the Run actions experiment off, or its repository has no run action of " +
+    `that id; ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} lists each repository's actions.`,
+  NOT_PERMITTED:
+    "Not run: only the agent's starter may run in its sandbox, since the agent works on their " +
+    "own GitHub token.",
+  RETIRED: "Not run: the agent is archived.",
+  NOT_READY:
+    "Not run: the agent has opened no sandbox yet, or its sandbox is starting. The call may be " +
+    "made again in a moment.",
+  STOPPED: `Not run: the agent's sandbox is stopped; ${MEMBER_MCP_TOOL.WAKE_AGENT} resumes it.`,
+  SNAPSHOT_GONE: "Not run: the agent's sandbox can no longer be resumed; its snapshot is gone.",
+  UNAVAILABLE:
+    "Not run: the agent's sandbox could not be reached just now. The call may be made again.",
+} as const;
+
+/** Each refusal of a run or a stop in the words above; any other is the sandbox unavailable. */
+const RUN_ACTION_REFUSAL_WORDS = new Map<HostedRefusal["error"], string>([
+  [HOSTED_API_ERROR.NOT_FOUND, RUN_ACTION_REFUSAL.NOT_FOUND],
+  [HOSTED_API_ERROR.NOT_PERMITTED, RUN_ACTION_REFUSAL.NOT_PERMITTED],
+  [HOSTED_API_ERROR.AGENT_RETIRED, RUN_ACTION_REFUSAL.RETIRED],
+  [HOSTED_API_ERROR.AGENT_NOT_READY, RUN_ACTION_REFUSAL.NOT_READY],
+  [HOSTED_API_ERROR.SANDBOX_STOPPED, RUN_ACTION_REFUSAL.STOPPED],
+  [HOSTED_API_ERROR.SANDBOX_SNAPSHOT_GONE, RUN_ACTION_REFUSAL.SNAPSHOT_GONE],
+]);
+
+/** A run or a stop as the member: the operation's answer as accepted, or its refusal in words. */
+const runActionAnswer = <A extends object, R>(
+  operation: (userId: string) => Effect.Effect<A, HostedRefusal, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return yield* operation(member.userId).pipe(
+      Effect.map((answer): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
+      Effect.catch((refusal) =>
+        Effect.succeed(
+          agentToolRejected(
+            RUN_ACTION_REFUSAL_WORDS.get(refusal.error) ?? RUN_ACTION_REFUSAL.UNAVAILABLE,
+          ),
+        ),
+      ),
+    );
+  });
+
+/** A run and a stop name the agent and the action. */
+const AgentRunActionInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  actionId: describeWire(
+    wireUuidSchema,
+    "The run action, by its id among the agent's repository's actions as " +
+      `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} answered them.`,
+  ),
+});
+
+const RUN_ACTION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.RUN_ACTION,
+  description:
+    "Run one of the run actions of a coding agent's repository in its cloud sandbox, by the " +
+    "agent's id and the action's, as the member's press in the agent's Run menu would: its " +
+    "command runs from the checkout with the workspace's environment variables in a Terminal " +
+    "tab of its own, and an action already running is left running rather than started twice. " +
+    "Run actions are behind the workspace's Run actions experiment, and only a cloud agent " +
+    "with a repository has them. A sandbox that is not running is refused, never woken; " +
+    `${MEMBER_MCP_TOOL.WAKE_AGENT} wakes it. Only the member who started an agent runs one on ` +
+    "their own GitHub token. Answers `accepted` with the action's shell, or `rejected` and " +
+    `why. ${MEMBER_MCP_TOOL.LIST_AGENT_PORTS} then names a server it started.`,
+  input: AgentRunActionInputSchema,
+  annotations: ADDITIVE,
+  run: ({ agentId, actionId }) =>
+    runActionAnswer((userId) => ranRunAction(userId, agentId, actionId)),
+});
+
+const STOP_RUN_ACTION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.STOP_RUN_ACTION,
+  description:
+    "Interrupt what a run action runs in a coding agent's cloud sandbox, by the agent's id " +
+    "and the action's, as the member's Stop in the agent's Run menu would; its Terminal tab " +
+    "stays open. Only the member who started an agent stops one on their own GitHub token. " +
+    "Answers `accepted` with where the sandbox stands and its shells, each with whether it is " +
+    "running, or `rejected` and why.",
+  input: AgentRunActionInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ agentId, actionId }) =>
+    runActionAnswer((userId) => stoppedRunAction(userId, agentId, actionId)),
 });
 
 /*
@@ -5653,6 +5882,9 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,
   EDIT_SANDBOX_SETUP_TOOL,
+  EDIT_RUN_ACTION_TOOL,
+  RUN_ACTION_TOOL,
+  STOP_RUN_ACTION_TOOL,
   LIST_INSTALLED_SKILLS_TOOL,
   READ_INSTALLED_SKILL_TOOL,
   PREVIEW_SKILL_INSTALL_TOOL,

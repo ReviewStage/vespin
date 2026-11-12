@@ -20,7 +20,9 @@ import { workspaceIdSchema } from "./task-wire.js";
  * when pressed, from the Run menu in the agent's message box, behind the
  * Run actions experiment; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
- * empty list removing it. Every answer is the setup as it then stands, each
+ * empty list removing it, and `PATCH /api/workspaces/sandbox-setup/run-action`
+ * adds, changes, moves, or removes one action of it, read and written
+ * under the repository's lock so two edits at once both land. Every answer is the setup as it then stands, each
  * script with how it last ran in a sandbox where it has.
  */
 
@@ -178,3 +180,34 @@ export const workspaceRunActionsPutRequestSchema = EffectSchema.Struct({
 });
 
 export type RunActionPut = typeof runActionPutSchema.Type;
+
+/**
+ * Editing one of a repository's run actions (PATCH to `/run-action`), as
+ * the service reads the list as it stands and writes it back: with no
+ * `actionId` an action is added, naming its label and command; with one,
+ * that action is changed, only in what the edit names, or removed. Making
+ * one the default makes no other the default.
+ */
+export const workspaceRunActionEditRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  repository: githubRepositoryFullNameSchema,
+  /** The action edited, by the id the setup answered; absent to add one. */
+  actionId: EffectSchema.optionalKey(wireUuidSchema),
+  /** True to remove the action `actionId` names, whatever else the edit names. */
+  remove: EffectSchema.optionalKey(EffectSchema.Boolean),
+  label: EffectSchema.optionalKey(runActionLabelSchema),
+  command: EffectSchema.optionalKey(runActionCommandSchema),
+  /** Its icon, or null for the menu's own. */
+  icon: EffectSchema.optionalKey(EffectSchema.NullOr(taskSectionIconSchema)),
+  /** True to make it the repository's default, false to make it no longer the default. */
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** Its place in the list after the edit, from 0, a place past the end being the last: an added action is last and a changed one stays where it stood where unsaid. */
+  position: EffectSchema.optionalKey(
+    EffectSchema.Int.check(
+      EffectSchema.isGreaterThanOrEqualTo(0),
+      EffectSchema.isLessThanOrEqualTo(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS - 1),
+    ),
+  ),
+});
+
+export type WorkspaceRunActionEdit = typeof workspaceRunActionEditRequestSchema.Type;

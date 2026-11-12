@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, set or remove a repository's setup or archive script, and set a repository's run actions.
+ * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, set or remove a repository's setup or archive script, and set or edit a repository's run actions.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * workspace, so no workspace reads, replaces, or removes another's scripts;
@@ -350,29 +350,31 @@ export function readRunActions(
 }
 
 /**
- * The repository's run actions set, the whole list in its order, replacing
- * the one that stood under any casing of its name; an empty list removes it.
- * An action keeps the id it is given only where that id is one of the
- * repository's actions already, and only at its first place in the list, so
- * a run going on is still known as its action; any other is named afresh, so
- * no save reaches another repository's or workspace's action. Note that the
- * old list is read, deleted, and the new one written in one transaction, so
- * a reader sees one list or the other, never a mix; and that it is held under
- * the repository's lock, so two saves of one repository land one after the
- * other, the later reading and replacing what the earlier wrote.
+ * The repository's run actions set to what `edit` makes of the list as it
+ * stands, in its order, replacing the one that stood under any casing of its
+ * name; an empty list removes it. An action keeps the id it is given only
+ * where that id is one of the repository's actions already, and only at its
+ * first place in the list, so a run going on is still known as its action;
+ * any other is named afresh, so no save reaches another repository's or
+ * workspace's action. Note that the old list is read, edited, deleted, and
+ * the new one written in one transaction, so a reader sees one list or the
+ * other, never a mix; and that it is held under the repository's lock, so
+ * two edits of one repository land one after the other, the later editing
+ * what the earlier wrote. Where `edit` fails, nothing is written.
  */
-export function setRunActions(
+export const editRunActions = <E, R>(
   organizationId: string,
   repository: string,
-  actions: readonly RunActionWrite[],
+  edit: (standing: readonly WorkspaceRunAction[]) => Effect.Effect<readonly RunActionWrite[], E, R>,
   now: Date,
-): ScriptEffect<void> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+): Effect.Effect<void, StoreFailure | E, DatabaseServices | R> =>
+  Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         // The repository's lock, its name however cased, so a save waiting on another reads the list that one wrote.
         yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
         const standing = yield* findRepositoryRunActions({ organizationId, repository });
+        const actions = yield* edit(standing);
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
         let defaulted = false;
@@ -395,4 +397,13 @@ export function setRunActions(
       }),
     ),
   );
+
+/** The repository's run actions set, the whole list in its order, as `editRunActions` writes one; an empty list removes it. */
+export function setRunActions(
+  organizationId: string,
+  repository: string,
+  actions: readonly RunActionWrite[],
+  now: Date,
+): ScriptEffect<void> {
+  return editRunActions(organizationId, repository, () => Effect.succeed(actions), now);
 }

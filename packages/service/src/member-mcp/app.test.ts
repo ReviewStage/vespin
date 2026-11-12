@@ -26,6 +26,10 @@ import { listTaskSections, writeTaskSections } from "@repo/database/models/task-
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import {
+  readRunActions,
+  setRunActions,
+} from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
@@ -785,9 +789,18 @@ it.effect(
           undefined,
         );
         assert.ok("memory" in kept);
+        yield* setRunActions(
+          elsewhere,
+          "acme/relay",
+          [{ label: "A stranger's action", command: "pnpm dev" }],
+          yield* DateTime.nowAsDate,
+        );
+        const [runAction] = yield* readRunActions(elsewhere, "acme/relay");
+        assert.ok(runAction !== undefined);
         return {
           own,
           elsewhere,
+          runActionId: runAction.id,
           text,
           taskId: task.id,
           sectionId,
@@ -867,6 +880,26 @@ it.effect(
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
           [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
+          [
+            MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            { workspace, repository: "acme/relay", actionId: rows.runActionId, remove: true },
+          ],
+          [
+            MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            { workspace, repository: "acme/relay", label: "Planted", command: "pnpm planted" },
+          ],
+          // Note that the member's own workspace holds no action of that id, so an edit of it there is refused.
+          [
+            MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            {
+              workspace: `workspace-${rows.own}`,
+              repository: "acme/relay",
+              actionId: rows.runActionId,
+              label: "Planted",
+            },
+          ],
+          [MEMBER_MCP_TOOL.RUN_ACTION, { agentId, actionId: rows.runActionId }],
+          [MEMBER_MCP_TOOL.STOP_RUN_ACTION, { agentId, actionId: rows.runActionId }],
           [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS, { workspace }],
           [MEMBER_MCP_TOOL.DISCONNECT_SENTRY, { workspace, installationId: randomUUID() }],
         ] as const,
@@ -895,6 +928,7 @@ it.effect(
           ownMemories: yield* listMemories(rows.own),
           automation: yield* readAutomation(stranger.userId, automationId),
           runs: yield* listAutomationRuns(stranger.userId, automationId),
+          runActions: yield* readRunActions(rows.elsewhere, "acme/relay"),
         };
       }).pipe(Effect.provide(services));
 
@@ -937,6 +971,10 @@ it.effect(
       assert.equal(Option.getOrThrow(after.agent).archivedAt, null);
       assert.equal(Option.getOrThrow(after.automation).name, "A stranger's automation");
       assert.deepEqual(after.runs, []);
+      assert.deepEqual(
+        after.runActions.map(({ id, label }) => [id, label]),
+        [[rows.runActionId, "A stranger's action"]],
+      );
     }),
 );
 

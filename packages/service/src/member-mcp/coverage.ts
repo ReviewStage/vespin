@@ -209,6 +209,10 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { installedSkills: ["remove"] },
   [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { workspaceSandboxSetup: ["read"] },
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
+  // Note that a whole list is saved one action at a time, so the edit also does what a put of the list does.
+  [MEMBER_MCP_TOOL.EDIT_RUN_ACTION]: { workspaceSandboxSetup: ["editRunAction", "putRunActions"] },
+  [MEMBER_MCP_TOOL.RUN_ACTION]: { agents: ["runAction"] },
+  [MEMBER_MCP_TOOL.STOP_RUN_ACTION]: { agents: ["stopRunAction"] },
   [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
   [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { integrations: ["connect"] },
   [MEMBER_MCP_TOOL.LIST_INTEGRATION_TOOLS]: { integrations: ["tools"] },
@@ -305,8 +309,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     openTerminal: SCREEN_ONLY,
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
-    runAction: NOT_YET_BUILT,
-    stopRunAction: NOT_YET_BUILT,
     clear: NOT_YET_BUILT,
   },
   dictation: { transcribe: SCREEN_ONLY },
@@ -395,7 +397,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
-  workspaceSandboxSetup: { putRunActions: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
