@@ -1,5 +1,5 @@
 {
-  "instead": "Vespin no longer draws calls; nothing replaces their controls.",
+  "instead": "Draw a call with @repo/ui's call controls and card (`components/call/`), whose classes are `ui-call-*`.",
   "classes": [
     { "class": "call-bar", "allow": [] },
     { "class": "call-controls", "allow": [] },
