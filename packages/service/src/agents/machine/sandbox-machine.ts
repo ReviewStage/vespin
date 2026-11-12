@@ -182,8 +182,10 @@ import {
 } from "../sandbox-use.js";
 import { scriptRanIn } from "../script-runs.js";
 import {
+  DRIVE_BROKEN,
   DRIVE_STATE,
   readOf,
+  reportedBroken,
   WORKSPACE_DRIVE,
   workspaceDriveName,
   workspaceFolderOf,
@@ -1133,6 +1135,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         yield* Effect.logWarning(
           `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
         );
+
+        // A workspace's drive gone sends every start of its workspace to the image until a fill makes it.
+        if (attempt.from === CREATED_FROM.WORKSPACE && checkout !== undefined) {
+          yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.GONE);
+        }
       }
 
       // The image alone is always the last attempt, and is never passed by.
@@ -1171,16 +1178,24 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const drive =
         checkout === undefined ? undefined : workspaceDriveName(checkout.read.workspaceId);
 
-      const driveReady =
-        drive !== undefined &&
-        Option.exists(
-          yield* Effect.option(
-            Effect.all([api.get(drive), Clock.currentTimeMillis]).pipe(
-              Effect.map(([found, now]) => readOf(found, now)),
-            ),
-          ),
-          (each) => each.state === DRIVE_STATE.READY,
-        );
+      const driveRead =
+        drive === undefined
+          ? Option.none()
+          : yield* Effect.option(
+              Effect.all([api.get(drive), Clock.currentTimeMillis]).pipe(
+                Effect.map(([found, now]) => readOf(found, now)),
+              ),
+            );
+
+      const driveReady = Option.exists(driveRead, (each) => each.state === DRIVE_STATE.READY);
+
+      // A fill's sandbox left past its grace means a fill failed or was cut off, which nothing retries.
+      if (
+        checkout !== undefined &&
+        Option.exists(driveRead, (each) => each.state === DRIVE_STATE.WANTED)
+      ) {
+        yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.UNFINISHED);
+      }
 
       const fromSource = (drive: SandboxDrive | undefined): CreateAttempt[] =>
         source === undefined

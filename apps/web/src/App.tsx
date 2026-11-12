@@ -1,3 +1,4 @@
+import { PANEL_ASSET_BASE } from "@repo/features/link-home";
 import {
   BUTTON_VARIANT,
   ButtonLink,
@@ -19,6 +20,13 @@ import {
   SiteNavigation,
   WEB_APP_URL,
 } from "./SiteChrome";
+
+/** Codex's mark as the panel's own files serve it, which the keys scene draws Codex's row with. */
+const CODEX_ART = {
+  oneX: `${PANEL_ASSET_BASE}marks/codex-16.png`,
+  twoX: `${PANEL_ASSET_BASE}marks/codex-32.png`,
+  threeX: `${PANEL_ASSET_BASE}marks/codex-48.png`,
+};
 
 /** Our page among Y Combinator's companies, which the hero's backing chip opens. */
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
@@ -80,6 +88,7 @@ export function App(): React.JSX.Element {
         title="Bring your own keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
+        codexArt={CODEX_ART}
       />
     </LandingPage>
   );

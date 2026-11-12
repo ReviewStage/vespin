@@ -296,6 +296,31 @@ test("over the source, View settings offers the settings its lines follow, and t
   assert.deepEqual(handed(), [["Open in browser"], ["Copy source"], ["Reload page"]]);
 });
 
+test("a page drawn larger or smaller says its size in the bar, and pressing it draws the page at actual size", async () => {
+  const { container, chooseHanded } = mount(FUNNEL);
+
+  const sized = () =>
+    [...container.querySelectorAll("button")].find((button) =>
+      /^\d+%$/.test(button.textContent ?? ""),
+    );
+
+  assert.equal(sized(), undefined, "nothing is said at actual size");
+
+  chooseHanded("Zoom in");
+
+  assert.equal(sized()?.textContent, "110%");
+
+  sized()?.focus();
+  await act(async () => sized()?.click());
+
+  assert.equal(sized(), undefined);
+  assert.equal(
+    document.activeElement?.getAttribute("aria-label"),
+    "View source",
+    "the keys move on to the bar's next press",
+  );
+});
+
 test.each([{ holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` }])(
   "Open in browser on $holder opens its own Vespin link, flagged to stay on the web, never the address it is framed from",
   ({ place, path }) => {

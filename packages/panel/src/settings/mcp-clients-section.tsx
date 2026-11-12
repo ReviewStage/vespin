@@ -196,7 +196,6 @@ const CONNECT_STEPS: Readonly<Record<ConnectAgent, ConnectStep>> = {
   },
   [CONNECT_AGENT.CHATGPT]: {
     name: "ChatGPT",
-    mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
     first: "Copy the server URL",
     inAgent:
       "In ChatGPT, open Plugins, choose + › Add custom MCP server, paste it under Connection, then choose Create as a plugin",

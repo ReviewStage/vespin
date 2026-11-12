@@ -22,8 +22,7 @@ import {
   SidebarIcon,
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
-import { HarnessMark } from "../../marks/harness-mark.js";
-import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
+import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
@@ -1125,10 +1124,14 @@ function DevicesScene(): React.JSX.Element {
   );
 }
 
+/** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
+type SceneProps = { readonly codexArt?: CodexArt | undefined };
+
 /** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
 type KeyRow = {
   readonly id: string;
   readonly name: string;
+  /** Its mark, or none for Codex's, which is drawn from the page's `codexArt`. */
   readonly mark: ReactNode;
   readonly connected: string;
   readonly at: number;
@@ -1145,7 +1148,7 @@ const KEY_ROWS: readonly KeyRow[] = [
   {
     id: "codex",
     name: "Codex",
-    mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
+    mark: null,
     connected: "OpenAI API key",
     at: 2,
   },
@@ -1156,7 +1159,7 @@ const KEY_ROWS: readonly KeyRow[] = [
  * a device makes its screen one: a reader is told what it shows, and its rows
  * are inert, since none of them is ever pressed.
  */
-function KeysScene(): React.JSX.Element {
+function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useStory(ref, 5, BEAT.KEYS);
 
@@ -1176,7 +1179,14 @@ function KeysScene(): React.JSX.Element {
             return (
               <SettingsRow
                 key={row.id}
-                leading={<SettingsRowMark>{row.mark}</SettingsRowMark>}
+                leading={
+                  <SettingsRowMark>
+                    {row.mark ??
+                      (codexArt === undefined ? null : (
+                        <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
+                      ))}
+                  </SettingsRowMark>
+                }
                 label={row.name}
                 description={
                   <SettingsRowStateLine
@@ -1200,7 +1210,7 @@ function KeysScene(): React.JSX.Element {
   );
 }
 
-const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
+const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Element>> = {
   [LANDING_SCENE.INBOX]: InboxScene,
   [LANDING_SCENE.AGENTS]: AgentsScene,
   [LANDING_SCENE.AUTOMATIONS]: AutomationsScene,
@@ -1209,8 +1219,14 @@ const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
 };
 
 /** The scene that shows `scene`'s feature. */
-export function LandingSceneView({ scene }: { scene: LandingScene }): React.JSX.Element {
+export function LandingSceneView({
+  scene,
+  codexArt,
+}: {
+  scene: LandingScene;
+  codexArt?: CodexArt | undefined;
+}): React.JSX.Element {
   const Scene = SCENES[scene];
 
-  return <Scene />;
+  return <Scene codexArt={codexArt} />;
 }

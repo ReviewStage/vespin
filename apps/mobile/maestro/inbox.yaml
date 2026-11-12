@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace switcher in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,9 +12,8 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The workspace switcher leads the bar once the workspaces are read, as they
-# are at once on the fixture: the workspace's tile, its letter standing in it,
-# and the chevron that opens its menu.
+# The workspace's one button leads the bar, its menu holding the account and
+# Settings (`workspace.yaml`).
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
@@ -50,8 +49,8 @@ appId: dev.vespin.ios
       - tapOn: "All"
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
-# a swipe opened takes the next tap to close its actions, and its files are
-# shot whatever the press below does.
+# a swipe opened takes the next tap to close its actions, and its files, the
+# PDF among them, are shot whatever the press below does.
 # Note that the list is scrolled back to its first row, rather than to the
 # first point this row shows, because the folded Duo then stands it against the
 # top edge, where a tap a point or two higher no longer opens it. Neither row
@@ -92,6 +91,29 @@ appId: dev.vespin.ios
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
 - takeScreenshot: inbox-video
+# A file that is neither a picture nor a video, the test plan's PDF, stands
+# after its message as its chip, its name over its kind and size once read; a
+# press opens it full screen, its pages drawn in a web view under a bar with
+# Done and Share. Note that the chip is scrolled to the screen's middle, since
+# the thread's last message first shows under the reply box and the tab bar,
+# where a tap lands on them instead.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "invite-test-plan.pdf, PDF.*"
+- takeScreenshot: inbox-file
+- tapOn: "invite-test-plan.pdf, PDF.*"
+# The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
+# flow waits for it rather than shooting the spinner.
+- extendedWaitUntil:
+    visible:
+      id: "file-viewer"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: inbox-pdf
+- tapOn:
+    id: "file-viewer-done"
+- waitForAnimationToEnd
 # The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
 # menu, and a regular window's detail column its own, the last "More" on
 # screen beside the sidebar's. The sheet stands over the whole thread, and a

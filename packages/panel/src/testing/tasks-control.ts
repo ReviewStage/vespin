@@ -448,7 +448,7 @@ export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 /** New task as the Tasks tab hands it, its dialog put away and every press ignored, but where `overrides` say otherwise. */
 export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
   return {
-    starting: undefined,
+    starting: false,
     onOpen: ignore,
     onOpenIn: ignore,
     onOpenRelated: ignore,

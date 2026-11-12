@@ -1,6 +1,6 @@
 import { knownTaskSectionIcon, type LooseTaskSectionIcon } from "@repo/features/task-section-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { GLYPH } from "@repo/ui/icons";
+import { PlayIcon, SPINNER_SIZE, Spinner } from "@repo/ui";
 import type { TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useCallback, useContext, useMemo } from "react";
@@ -20,7 +20,7 @@ import { useWindowAccount } from "./window-account.js";
  * the agent's shells says of each run action's whether its process runs.
  * The Run button reads that list to offer Run or Stop
  * (`run-actions-button.tsx`), and each run action's tab reads the same list
- * to wear the action's icon, giving way to a spinner while it runs, and to
+ * to wear the action's icon, with a spinner at its end while it runs, and to
  * offer Run or Stop in its header.
  */
 
@@ -38,13 +38,26 @@ export function shellsQuery(agentId: string, shown: boolean, enabled: boolean) {
   });
 }
 
-/** A run action's glyph: its own icon, or the run action's rocket where it wears none. */
+/** A run action's glyph: its own icon, or the play triangle where it wears none. */
 export function runActionGlyph(icon: LooseTaskSectionIcon | undefined): React.JSX.Element {
   return (
-    (icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(icon))) ?? (
-      <GLYPH.RUN_ACTION />
-    )
+    (icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(icon))) ?? <PlayIcon />
   );
+}
+
+/** What a run action's tab says to a reader while its process runs, its ring saying it on screen. */
+const RUNNING_WORDS = "Running";
+
+/**
+ * The mark at the end of a run action's tab, in its ×'s place: the ring a
+ * wait is drawn with while its process runs, as a pull request's chapters
+ * generating wear it, nothing otherwise. Note that it stands at once, since
+ * a process running is no read that may land in a moment.
+ */
+export function runEndMark(run: RunTabLook | undefined): React.JSX.Element | undefined {
+  if (run?.running !== true) return undefined;
+
+  return <Spinner label={RUNNING_WORDS} size={SPINNER_SIZE.SMALL} delay={false} />;
 }
 
 /** How a run action's Terminal tab looks: the action it runs, and whether its process runs once its shell is read. */

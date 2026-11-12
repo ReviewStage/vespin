@@ -198,7 +198,7 @@ import {
   useAgentApprovals,
   useCallHeld,
 } from "./agent-approvals.js";
-import { AgentBootLine, BOOT_LINE, bootLineOf } from "./agent-boot-line.js";
+import { AgentBootLine, BOOT_LINE, type BootLine, bootLineOf } from "./agent-boot-line.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
@@ -232,7 +232,6 @@ import {
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
-  type SentLine,
   slackLineOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
@@ -263,12 +262,7 @@ import { AgentQueueDock } from "./agent-queue-dock.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
-import {
-  AgentTabSkeleton,
-  type ComposerModel,
-  ComposerSkeleton,
-  TranscriptSkeleton,
-} from "./agent-tab-skeleton.js";
+import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -3210,8 +3204,14 @@ function AgentTabView({
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
   // Note that a first launch still booting says so in the empty transcript's centered line (`AgentBootLine`), so no working line or end line stands under it.
-  const booting = bootHolds(transcript.boot?.phase);
-  const bootLine = bootLineOf(transcript.boot);
+  // Note that an agent just made, before its first turn and before its first page lands, is booting by its summary, counted from when it was made as its boot's first attempt is, so Starting… stands at once rather than after a placeholder.
+  const unread = transcript.pageStatus === undefined && !transcript.failed;
+  const firstBoot = unread && agent.status === AGENT_STATUS.STARTING && agent.turnId === null;
+  const booting = firstBoot || bootHolds(transcript.boot?.phase);
+
+  const bootLine: BootLine | undefined = firstBoot
+    ? { kind: BOOT_LINE.STARTING, since: agent.createdAt }
+    : bootLineOf(transcript.boot);
 
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
@@ -3384,7 +3384,7 @@ function AgentTabView({
                               cards,
                               standings: transcript.subagents,
                             }}
-                            reading={transcript.reading || holding}
+                            reading={(transcript.reading && !firstBoot) || holding}
                             holding={holding}
                             failed={transcript.failed}
                             failedWith={transcript.failedWith}
@@ -3559,91 +3559,8 @@ type AgentTabProps = AgentTabDoors &
     | { agent: AgentSummary | undefined; agentId: string }
   );
 
-/** Nothing to retry on a tab whose agent is not made yet. */
-const NO_RETRY = () => undefined;
-
 /** No follow-up ticked. */
 const NO_TICKS: readonly number[] = [];
-
-/** A queue's controls on a tab whose agent is not made yet, which take nothing. */
-const NO_QUEUE_PRESS = () => undefined;
-const NO_QUEUE_DELETE = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED } as const);
-
-/** The transcript of an agent not made yet, which has no line. */
-const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
-
-/**
- * The tab of an agent New task or a Start is still starting, before the
- * service has made it, drawn as its own tab draws its first launch: its
- * empty transcript's centered line saying it is starting, counting from the
- * press, and the developer's words, where it was started on some, as its
- * queue's row over the composer's card, which nothing on the row acts on yet, and
- * its model's chip where the start named the model. The agent's own tab
- * takes its place once the start answers, its words still queued until its
- * first launch hands them off.
- */
-export function StartingAgentTab({
-  line,
-  model,
-}: {
-  line?: SentLine | undefined;
-  /** The model the start named, which the composer's chip draws; none where the start takes the default. */
-  model?: ComposerModel | undefined;
-}): React.JSX.Element {
-  // Note that a start on no words counts from when its tab first drew, which stands for the press.
-  const [drawnAt] = useState(Date.now);
-  const since = line?.sentAt ?? drawnAt;
-
-  const queued = useMemo(
-    () =>
-      line === undefined
-        ? []
-        : [
-            {
-              id: line.id,
-              text: line.text,
-              // Note that no row of the queue names who queued it, so the starter's id is not owed here.
-              queuedBy: "",
-              ...(line.attachments.length === 0
-                ? undefined
-                : {
-                    files: line.attachments.map(({ name, mediaType }) => ({ name, mediaType })),
-                  }),
-            },
-          ],
-    [line],
-  );
-
-  return (
-    <AgentTabFrame>
-      <AgentTranscriptView
-        messages={NO_MESSAGES}
-        brief={line === undefined ? AGENT_BRIEF.DESCRIPTION : AGENT_BRIEF.PROMPT}
-        reading={false}
-        failed={false}
-        working={false}
-        boot={<AgentBootLine line={{ kind: BOOT_LINE.STARTING, since }} retry={undefined} />}
-        onRetry={NO_RETRY}
-        overComposer
-      />
-      <AgentTabFoot>
-        <AgentQueueDock
-          messages={queued}
-          controls={false}
-          paused={undefined}
-          editing={undefined}
-          onMove={NO_QUEUE_PRESS}
-          onSteer={undefined}
-          onEdit={NO_QUEUE_PRESS}
-          onCancelEdit={NO_QUEUE_PRESS}
-          onDelete={NO_QUEUE_DELETE}
-          onResume={NO_QUEUE_PRESS}
-        />
-        <ComposerSkeleton model={model} />
-      </AgentTabFoot>
-    </AgentTabFrame>
-  );
-}
 
 /**
  * Try again on a failed end line (`endLineOffersTryAgain`), pressed once:

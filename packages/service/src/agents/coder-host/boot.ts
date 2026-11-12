@@ -146,8 +146,9 @@ export const startBoot = Effect.fn("web/startBoot")(function* (
   agent: Agent,
   first: FirstLine,
 ) {
+  // Note that the first attempt begins when the agent was made, so its tab counts Starting… from the one instant its summary and its boot both carry.
   yield* hostedStoreOrUnavailable(
-    beginAgentBoot(agent.id, yield* DateTime.nowAsDate, { userId: agent.userId, ...first }),
+    beginAgentBoot(agent.id, agent.createdAt, { userId: agent.userId, ...first }),
   );
   const boot = yield* booted(sessions, agent);
 

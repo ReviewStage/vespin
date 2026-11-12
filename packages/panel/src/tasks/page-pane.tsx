@@ -22,6 +22,7 @@ import {
 } from "@repo/features/page-pick";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import {
+  PAGE_ZOOM_ACTUAL,
   PAGE_ZOOM_KEY,
   type PageZoomKey,
   pageZoomMoves,
@@ -32,6 +33,8 @@ import type { CodeLines, TasksPageSourceAnswer } from "@repo/features/tasks-view
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  BUTTON_VARIANT,
+  Button,
   cn,
   cssCustomProperties,
   ERROR_STATE_PLACEMENT,
@@ -152,6 +155,9 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * The page is drawn at a size the tab holds (`usePageZoom`), stepped by the
  * ⋯'s Zoom in, Zoom out, and Actual size, by ⌘+, ⌘−, and ⌘0 pressed in the
  * page, and by a pinch over it, and kept across reloads and versions.
+ * While it is not the actual size, the bar says the size, and pressing it
+ * draws the page at actual size again, so a pinch never leaves a page
+ * zoomed unseen.
  *
  * ⌘F over the page itself finds in the frame: no find of this window reaches
  * the page's words, so the find bar asks the frame, whose page is served
@@ -909,6 +915,8 @@ export function PagePane({
   const frame = useRef<HTMLIFrameElement>(null);
   const room = useRef<HTMLDivElement>(null);
   const pageZoom = usePageZoom(frame);
+  // The bar's source toggle, which takes the keys from the size's press as that press goes.
+  const sourceToggle = useRef<HTMLButtonElement>(null);
   const threads = comments?.control.threads;
   // The version stepped to, none while the newest is followed.
   const [chosen, setChosen] = useState<number | undefined>(undefined);
@@ -1105,8 +1113,24 @@ export function PagePane({
                     />
                   </div>
                 ) : null}
+                {showingSource || pageZoom.zoom === PAGE_ZOOM_ACTUAL ? null : (
+                  <Tooltip label="Actual size">
+                    <Button
+                      variant={BUTTON_VARIANT.QUIET}
+                      onClick={(event) => {
+                        // Note that the press is gone once the page is at actual size, so the keys it held move on to its neighbor.
+                        if (document.activeElement === event.currentTarget)
+                          sourceToggle.current?.focus();
+                        pageZoom.press(PAGE_ZOOM_KEY.ACTUAL);
+                      }}
+                    >
+                      {pageZoomWords(pageZoom.zoom)}
+                    </Button>
+                  </Tooltip>
+                )}
                 <Tooltip label={toggleLabel}>
                   <IconButton
+                    ref={sourceToggle}
                     icon={<CodeXmlIcon aria-hidden="true" />}
                     label={toggleLabel}
                     onClick={toggleView}

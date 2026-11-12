@@ -4384,7 +4384,7 @@ test("New task's agent stands on its task before the task's agents or its transc
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
 });
 
-test("New task's agent start opens its page at once on the words as its agent's first line, before the service answers, which opens the agent's own tab in its place", async () => {
+test("New task's agent start opens its page at once, before the service answers, which opens the agent's own tab in its place", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
 
@@ -4412,12 +4412,7 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
 
   assert.equal(tab.control().newTask.open, false, "the dialog closes as Start is pressed");
-  assert.equal(
-    tab.control().newTask.starting?.line.text,
-    prompt,
-    "the page stands on the words at once",
-  );
-  assert.deepEqual(tab.control().newTask.starting?.choice, choice, "and on the model picked");
+  assert.equal(tab.control().newTask.starting, true, "the page stands at once");
 
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
@@ -4426,7 +4421,7 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
   tab.stand({ tasks: AGENT_TASK });
   await settle();
-  assert.equal(tab.control().newTask.starting, undefined, "the task's own page takes its place");
+  assert.equal(tab.control().newTask.starting, false, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
 });
 
@@ -4462,7 +4457,7 @@ test("what the developer opened while New task's agent start was out, a page and
   });
   assert.equal(views?.automations !== undefined, true, "the page stands");
   assert.equal(tab.control().newTask.open, true, "New task stands");
-  assert.equal(tab.control().newTask.starting, undefined);
+  assert.equal(tab.control().newTask.starting, false);
 });
 
 test("New task's agent start refused after its page opened opens the card again on the repository, model, and press it held, saying why, over the version history it was asked from", async () => {
@@ -4517,7 +4512,7 @@ test("New task's agent start refused after its page opened opens the card again 
     refused = await note;
   });
   assert.ok(refused !== undefined);
-  assert.equal(tab.control().newTask.starting, undefined, "the page gives way");
+  assert.equal(tab.control().newTask.starting, false, "the page gives way");
   assert.equal(tab.control().newTask.open, true, "the card opens again");
   assert.deepEqual(tab.control().newTask.preset?.refused, { card, note: refused });
   assert.equal(tab.control().history.open, true, "the version history stands behind it again");

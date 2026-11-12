@@ -285,17 +285,14 @@ export function tabLook(subject: TabSubject): KindLook {
       };
     // Note that a terminal wears the terminal's own still glyph rather than its agent's, which
     // moves while the agent works, and is named by its terminal; each place drawing it names the agent beside it.
-    // A run action's wears the action's icon, giving way to a spinner while its process runs.
+    // A run action's wears the action's icon, its tab's end saying while its process runs (`runEndMark`).
     case TAB_KIND.TERMINAL:
       return {
         icon:
           subject.action === undefined ? (
             <GLYPH.TERMINAL />
           ) : (
-            <StateGlyph
-              glyph={runActionGlyph(subject.action.action.icon)}
-              state={subject.action.running === true ? GLYPH_STATE.WORKING : GLYPH_STATE.REST}
-            />
+            runActionGlyph(subject.action.action.icon)
           ),
         label: subject.title,
       };

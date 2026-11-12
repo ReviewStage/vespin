@@ -63,10 +63,8 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import type { SentLine } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
-import { StartingAgentTab } from "../tasks/agent-tab.js";
-import { AgentTabSkeleton, type ComposerModel } from "../tasks/agent-tab-skeleton.js";
+import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { startCloudDraft, useCloudBrowserTabs } from "../tasks/cloud-browser-tabs.js";
@@ -102,7 +100,6 @@ import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
-import type { StartingTask } from "../tasks/use-new-task.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
@@ -297,11 +294,8 @@ function TaskTabsRow({
  */
 function TaskPageSkeleton({
   drawing,
-  starting,
   head,
 }: {
-  /** New task's agent start under way, the line its agent opens on and the model it names, which the column draws as the agent's tab will; none while a task is read. */
-  starting?: { readonly line: SentLine; readonly model: ComposerModel | undefined } | undefined;
   /** The side panel as it will be drawn, its panel none where it is shut. */
   drawing: SidePanelDrawing;
   /** A phone's head over the page, as the page will be headed once it lands (`TaskWaitHead`); none elsewhere. */
@@ -329,11 +323,7 @@ function TaskPageSkeleton({
           <TaskBody>
             <Fill className="desktop-task-column">
               <AgentColumn>
-                {starting === undefined ? (
-                  <AgentTabSkeleton label={TASK_LOADING_LABEL} />
-                ) : (
-                  <StartingAgentTab line={starting.line} model={starting.model} />
-                )}
+                <AgentTabSkeleton label={TASK_LOADING_LABEL} />
               </AgentColumn>
             </Fill>
           </TaskBody>
@@ -376,7 +366,7 @@ function TaskTitleSkeleton(): React.JSX.Element {
   return <Skeleton width={TASK_TITLE_SKELETON} />;
 }
 
-/** The column showing an agent's tab before its agent lands: the placeholder or the line it starts on. */
+/** The column showing an agent's tab before its agent lands: its placeholder. */
 function AgentColumn({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <Fill as={FILL_ELEMENT.SECTION} className="desktop-agent">
@@ -1733,21 +1723,16 @@ function DescriptionDocument({
 
 /**
  * The page of a task New task is still starting with its agent, before the
- * service has made either: the task's page in the shape it lands in, its
- * column standing as the agent's tab with the developer's words as its first
- * line and no side panel beside it, since the task lands on its agent alone
+ * service has made either: the task's page in the shape it lands in, with
+ * no side panel beside it, since the task lands on its agent alone
  * (`useTasksTab`'s `openAgent`), so Start opens the page at once and the
- * start's answer only fills it in. The model the start named stands as
- * itself in the composer's chip rather than a block; the task's title stays
- * a block, since the task is Untitled until its agent names it.
+ * start's answer fills it in, its agent's tab saying Starting… from then.
  */
 function StartingTaskPage({
   tasks,
-  starting,
   phoneAway,
 }: {
   tasks: TasksControl;
-  starting: StartingTask;
   /** A phone's way back, which heads the page as the task's will be (`TaskWaitHead`); none elsewhere. */
   phoneAway: TaskHeadBack | undefined;
 }): React.JSX.Element {
@@ -1756,13 +1741,6 @@ function StartingTaskPage({
   return (
     <TaskPageSkeleton
       drawing={drawing}
-      starting={{
-        line: starting.line,
-        model:
-          starting.choice === undefined
-            ? undefined
-            : { choice: starting.choice, models: tasks.agents.models ?? [] },
-      }}
       head={phoneAway === undefined ? undefined : <TaskWaitHead away={phoneAway} reading />}
     />
   );
@@ -1818,12 +1796,11 @@ function startingPage(
   room: ShellRoom,
   away: TaskHeadBack | undefined,
 ): React.JSX.Element | undefined {
-  if (tasks.newTask.starting === undefined) return undefined;
+  if (!tasks.newTask.starting) return undefined;
 
   return (
     <StartingTaskPage
       tasks={tasks}
-      starting={tasks.newTask.starting}
       phoneAway={
         room === SHELL_ROOM.NARROW
           ? (away ?? { label: HOME_BACK, onPress: tasks.onGoHome })

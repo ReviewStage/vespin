@@ -295,7 +295,9 @@ function fakeService() {
 
   // Each live read's rows, polled; every followed scope's inbox reads the one script.
   const live = {
-    transcript: polledLive(TRANSCRIPT_PARTS),
+    transcript: polledLive<(typeof TRANSCRIPT_PARTS)[number], typeof LIVE_SIGNED_OUT>(
+      TRANSCRIPT_PARTS,
+    ),
     scope: polledLive(SCOPE_PARTS),
     account: polledLive(ACCOUNT_PARTS),
     items: polledLive(ITEMS_PARTS),
@@ -1121,7 +1123,7 @@ function fakeService() {
 export const NOW = 1_800_000_100_000;
 
 /** A transcript's live read as the test scripts it. */
-export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number]>;
+export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number], typeof LIVE_SIGNED_OUT>;
 
 /** That the service answers a live read, its rows polled from the test's script (`polledLive`). */
 export const LIVE_ANSWERED = "answered";

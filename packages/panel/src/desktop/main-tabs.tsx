@@ -44,7 +44,7 @@ import { leftMark } from "../draft-mark.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
-import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";
+import { AgentTab } from "../tasks/agent-tab.js";
 import { AgentTabCard } from "../tasks/agent-tab-card.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
@@ -857,8 +857,8 @@ export function MainTabContent({
     case STRIP_TAB_KIND.AGENT: {
       const agentId = tab.agent;
 
-      // A Start still making its agent draws the agent's tab as it will land, saying it is starting.
-      if (agents.start.pending?.key === agentId) return <StartingAgentTab key={agentId} />;
+      // A Start still making its agent stands in the tab's placeholder, its key being no agent's to read.
+      if (agents.start.pending?.key === agentId) return <AgentTabSkeleton key={agentId} />;
 
       // The tab follows its agent's transcript by the id alone, so a task opened
       // on an agent reads it beside the task's list of agents rather than after

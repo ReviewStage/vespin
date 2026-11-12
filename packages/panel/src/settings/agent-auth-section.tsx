@@ -41,7 +41,6 @@ import {
   GAP,
   type Gap,
   MARK_PROVIDER,
-  type MarkProvider,
   MoreButton,
   moreLabel,
   OutsideLink,
@@ -165,7 +164,7 @@ interface Harness {
   readonly planName: string;
   readonly plan: SubscriptionKeySummary["kind"];
   /** The logo its plans' rows and its key's row lead with. */
-  readonly planMark: MarkProvider;
+  readonly planMark: React.JSX.Element;
   readonly keyName: string;
   readonly keyUrl: string;
   /** What the site a key is made on is called, which its link names. */
@@ -186,7 +185,7 @@ const HARNESS = {
     mark: MODEL_PROVIDER.ANTHROPIC,
     planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-    planMark: MARK_PROVIDER.CLAUDE,
+    planMark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
     keyName: "Anthropic",
     keyUrl: "https://console.anthropic.com/settings/keys",
     keySite: "Anthropic Console",
@@ -198,7 +197,11 @@ const HARNESS = {
     mark: MODEL_PROVIDER.OPENAI,
     planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
     plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-    planMark: MARK_PROVIDER.CHATGPT,
+    planMark: (
+      <SettingsRowMark>
+        <HarnessMark provider={MODEL_PROVIDER.OPENAI} />
+      </SettingsRowMark>
+    ),
     keyName: "OpenAI",
     keyUrl: "https://platform.openai.com/api-keys",
     keySite: "OpenAI Platform",
@@ -1171,7 +1174,7 @@ function PlanRow({
   return (
     <>
       <SettingsRow
-        leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
+        leading={harness.planMark}
         label={
           <RenamableName
             value={rename.asked ?? name}
@@ -1284,7 +1287,7 @@ function KeyRow({
   return (
     <>
       <SettingsRow
-        leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
+        leading={harness.planMark}
         label={
           <RenamableName
             value={rename.asked ?? name}
