@@ -551,7 +551,6 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
       inPullRequest,
       extras,
       messageId: from.messageId,
-      cut: transcript.cut,
     },
   };
 });
@@ -749,8 +748,7 @@ const checkoutsOn = (
  * source's own rewind still waiting where none did (`readForkCut`); a
  * continue just before that rewind, since a rewind the source never
  * relaunched after has not cut its session yet. None where it cannot be cut:
- * a fork of a reply still being written, or at a message whose next line a
- * turn under way took, which no harness cuts through, so it is replayed.
+ * a fork at a message whose next line a turn under way took, which no harness cuts through, so it is replayed.
  */
 const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
   const { source, told } = from;
@@ -762,7 +760,6 @@ const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
     return Option.some(Option.getOrUndefined(rewind));
   }
 
-  if (told.cut !== undefined) return Option.none();
   const cut = yield* hostedStoreOrUnavailable(readForkCut(target, told.messageId));
 
   return Result.isSuccess(cut) ? Option.some(cut.success) : Option.none();

@@ -22,7 +22,7 @@ import { ActorRef } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
-import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";
+import { type AgentFork, FORK_WORDS, forksOf, messageOpening } from "./fork-model.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 
@@ -42,9 +42,7 @@ import { useOpenPlace } from "./use-open-link.js";
 
 /** What an agent's tab hands its messages: the press that forks one, none where forking is not offered, the chips of the agents each was forked to, and the press that opens the agent's continue as a draft, none where no draft opens. */
 interface ForkDoors {
-  readonly onFork:
-    | ((messageId: string, words: string, cut: ForkCut | undefined) => void)
-    | undefined;
+  readonly onFork: ((messageId: string, words: string) => void) | undefined;
   readonly forkedTo: (messageId: string) => readonly ReactNode[];
   readonly onContinue?: ContinueDoor | undefined;
 }
@@ -162,8 +160,8 @@ export function agentForkDoors(input: {
 
   return {
     onFork: forkable
-      ? (messageId, words, cut) =>
-          onFork({ agentId: agent.id, messageId, opening: messageOpening(words), ...cut })
+      ? (messageId, words) =>
+          onFork({ agentId: agent.id, messageId, opening: messageOpening(words) })
       : undefined,
     onContinue:
       onContinue !== undefined && drafts
@@ -194,12 +192,9 @@ export function useForkOffered(): boolean {
 export function ForkMessageAction({
   messageId,
   words,
-  cut,
 }: {
   messageId: string;
   words: string;
-  /** Where the fork cuts the message, where it is a reply still being written (`forkCutOf`); none for a settled one, kept whole. */
-  cut?: ForkCut | undefined;
 }): ReactNode {
   const onFork = useContext(ForkContext)?.onFork;
 
@@ -209,7 +204,7 @@ export function ForkMessageAction({
     <MessageAction
       label={FORK_WORDS.ACTION}
       tooltip={FORK_WORDS.ACTION}
-      onClick={() => onFork(messageId, words, cut)}
+      onClick={() => onFork(messageId, words)}
     >
       <SplitIcon />
     </MessageAction>
