@@ -648,10 +648,14 @@ function ThreadDetail({
   );
 }
 
-/** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
-function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
-  const { refresh, refreshTasks } = useInboxActs();
-
+/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Retry, or that no such thread is the account's to read. */
+function ThreadNotDrawn({
+  feed,
+  onRetry,
+}: {
+  readonly feed: InboxFeed;
+  readonly onRetry: () => void;
+}) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
 
@@ -660,11 +664,7 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
       <EmptyState
         title={INBOX_NOT_READ}
         symbol="exclamationmark.triangle"
-        action={{
-          label: RETRY,
-          // The feed or the task list that holds the thread failed, so both are read again.
-          onPress: () => void Promise.all([refresh(), refreshTasks()]),
-        }}
+        action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
@@ -686,9 +686,9 @@ function ThreadColumn({
   readonly onRemind: (item: InboxItem) => void;
   readonly onOpen: (id: string) => void;
 }) {
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
 
-  if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+  if (listed === undefined) return <ThreadNotDrawn feed={feed} onRetry={retry} />;
 
   return (
     <ThreadDetail
@@ -873,7 +873,7 @@ export function InboxListScreen() {
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
@@ -888,7 +888,7 @@ export function InboxThreadScreen() {
         <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
       ) : (
         <Screen>
-          <ThreadNotDrawn feed={feed} />
+          <ThreadNotDrawn feed={feed} onRetry={retry} />
         </Screen>
       )}
     </>

@@ -49,6 +49,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
@@ -197,6 +198,8 @@ type UseInboxThreadResult = {
   readonly listed: InboxListed | undefined;
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
+  /** Reads again what the thread waits on where it failed: where it stands, its task's own inbox, or the feed and the task list. */
+  readonly retry: () => void;
 };
 
 /**
@@ -216,9 +219,12 @@ type UseInboxThreadResult = {
  * (`AGENTS_INBOX_ITEM_HOME`), and its task's own inbox is followed while the
  * thread is shown (`AGENTS_INBOX_FOLLOW`), the thread drawn from that read,
  * still reading until it answers, refused where it failed, and missing where
- * the service says the account may not read it.
+ * the service says the account may not read it. Its Try again reads anew
+ * whichever read failed, as the panel's Try again does.
  */
 export function useInboxThread(id: string | undefined): UseInboxThreadResult {
+  const acts = useHostActs();
+
   const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
@@ -246,22 +252,37 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const lookedFor =
     id !== undefined && inFeed === undefined && !held && answered === INBOX_FEED.ANSWERED;
 
-  const home = useItemHome(id, lookedFor);
-  const homed = useHomeGroups(lookedFor ? home : undefined);
+  const { home, again } = useItemHome(id, lookedFor);
+  const found = home === undefined || Predicate.isString(home) ? undefined : home;
+  const homed = useHomeGroups(found?.planId);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 
-  const feed = lookedFor
-    ? listed !== undefined || home === null
-      ? answered
-      : homed.read
-    : listed !== undefined || !held || tasksRead === TASKS_READ.READY
+  const feed = !lookedFor
+    ? listed !== undefined || !held || tasksRead === TASKS_READ.READY
       ? answered
       : tasksRead === TASKS_READ.FAILED
         ? INBOX_FEED.FAILED
-        : INBOX_FEED.READING;
+        : INBOX_FEED.READING
+    : listed !== undefined || home === HOME_READ.MISSING
+      ? answered
+      : home === undefined
+        ? INBOX_FEED.READING
+        : home === HOME_READ.FAILED
+          ? INBOX_FEED.FAILED
+          : homed.read;
 
-  return { listed, readerId, feed };
+  // Try again reads anew what failed: where the thread stands, its task's own inbox, or the feed and the task list that hold it.
+  const retry = () => {
+    if (lookedFor && home === HOME_READ.FAILED) again();
+    else if (lookedFor && found !== undefined) homed.again();
+    else {
+      acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again"));
+      acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again"));
+    }
+  };
+
+  return { listed, readerId, feed, retry };
 }
 
 /** The thread `id` names among `groups`, with what holds it; none where none holds it. */
@@ -284,50 +305,78 @@ function listedIn(
 /** What the read of where a thread stands is kept under, by the thread's id. */
 const ITEM_HOME_KEY = "inbox-item-home";
 
+/** Where a thread stands where the service named no place for it: not readable by the account, or not answered. */
+const HOME_READ = {
+  MISSING: "missing",
+  FAILED: "failed",
+} as const;
+
+/** Where a thread stands, as the service said: its task and agent, or that the account may not read it, or that no answer came. */
+type HomeRead = InboxItemHome | (typeof HOME_READ)[keyof typeof HOME_READ];
+
+/** Where a thread stands as read once, and how to read it again. */
+interface ItemHome {
+  /** None while it is read or not asked. */
+  readonly home: HomeRead | undefined;
+  readonly again: () => void;
+}
+
 /**
  * Where the thread `id` stands, as the service says, read once while
- * `asked`, as a link by its id alone is opened: its task and agent; null
- * where the account may not read it or no answer came; none while it is read
- * or not asked.
+ * `asked`, as a link by its id alone is opened: its task and agent, missing
+ * where the account may not read it, or failed where no answer came, which
+ * `again` reads anew.
  */
-function useItemHome(id: string | undefined, asked: boolean): InboxItemHome | null | undefined {
+function useItemHome(id: string | undefined, asked: boolean): ItemHome {
   const acts = useHostActs();
 
-  const { data } = useQuery({
+  const { data, refetch } = useQuery({
     queryKey: [ITEM_HOME_KEY, id],
     enabled: asked && id !== undefined,
-    queryFn: (): Promise<InboxItemHome | null> =>
+    queryFn: (): Promise<HomeRead> =>
       acts[ACT_KIND.AGENTS_INBOX_ITEM_HOME]({ itemId: id ?? "" }).then(
-        (answer) => ("failure" in answer ? null : answer),
+        (answer) =>
+          "failure" in answer
+            ? answer.failure === AGENT_CALL_FAILURE.NOT_FOUND
+              ? HOME_READ.MISSING
+              : HOME_READ.FAILED
+            : answer,
         (cause: unknown) => {
           console.error("Where the thread stands was not read.", cause);
 
-          return null;
+          return HOME_READ.FAILED;
         },
       ),
   });
 
-  return asked ? data : undefined;
+  return {
+    home: asked ? data : undefined,
+    again: () =>
+      void refetch().catch((cause: unknown) =>
+        console.error("Where the thread stands was not read again.", cause),
+      ),
+  };
 }
 
-/** A task's own inbox as one group, and where its read stands. */
+/** A task's own inbox as one group, where its read stands, and how to read it again. */
 interface HomeGroups {
   readonly groups: readonly InboxGroup[];
   readonly read: InboxFeed;
+  readonly again: () => void;
 }
 
 /** No group of a task's own inbox. */
 const NO_HOME_GROUPS: readonly InboxGroup[] = [];
 
 /**
- * The inbox of the task `home` names, followed while it is named, as one
- * group under that task as the task list holds it, and where its read
- * stands: still read until it answered, or refused. No group where none is
- * named, the read has not answered, or the task list holds no such task.
+ * The inbox of the task `taskId` names, followed while it is named, as one
+ * group under that task as the task list holds it, where its read stands,
+ * still read until it answered, or refused, and its Try again. No group
+ * where none is named, the read has not answered, or the task list holds no
+ * such task.
  */
-function useHomeGroups(home: InboxItemHome | null | undefined): HomeGroups {
+function useHomeGroups(taskId: string | undefined): HomeGroups {
   const acts = useHostActs();
-  const taskId = home === null || home === undefined ? undefined : home.planId;
   useLiveFollow(taskId, (id) =>
     acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.PLAN, id }),
   );
@@ -365,7 +414,16 @@ function useHomeGroups(home: InboxItemHome | null | undefined): HomeGroups {
         ? INBOX_FEED.READING
         : INBOX_FEED.ANSWERED;
 
-  return { groups, read: home === undefined ? INBOX_FEED.READING : stands };
+  return {
+    groups,
+    read: stands,
+    again: () => {
+      if (taskId === undefined) return;
+      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }).catch(
+        refused("Reading the thread's task inbox again"),
+      );
+    },
+  };
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
