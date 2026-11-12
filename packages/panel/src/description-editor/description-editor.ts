@@ -24,6 +24,7 @@ import { enterSends, modEnterSends } from "../enter-sends.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
+  type CodeColorer,
   type CodeHeaderDrawer,
   DESCRIPTION_PLACEHOLDER,
   type DescriptionEditorHandle,
@@ -68,6 +69,7 @@ import {
   settledPicture,
 } from "./picture-node.js";
 import { quoteNode } from "./quote-node.js";
+import { SoftBreak } from "./soft-break.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
@@ -443,6 +445,7 @@ export function markdownExtensions(
   pictures?: DescriptionEditorPictures | undefined,
   drawTaskBox?: TaskBoxDrawer | undefined,
   drawCodeHeader?: CodeHeaderDrawer | undefined,
+  colorCode?: CodeColorer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -456,7 +459,7 @@ export function markdownExtensions(
   });
 
   return [
-    blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader))),
+    blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader, colorCode))),
     withoutTipTapChords(DocumentCode),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
@@ -469,6 +472,7 @@ export function markdownExtensions(
     pictureNode(pictures),
     RawBlock,
     mentionNode(drawMention),
+    SoftBreak,
     linkLook(namesChip),
     writingKeys,
     dividerLines,
@@ -704,6 +708,7 @@ export function mountDescriptionEditor(
     drawDiagram,
     drawTaskBox,
     drawCodeHeader,
+    colorCode,
     pictures,
     anchors,
     format,
@@ -716,6 +721,7 @@ export function mountDescriptionEditor(
     pictures,
     drawTaskBox,
     drawCodeHeader,
+    colorCode,
   );
 
   const manager = documentManager(extensions);

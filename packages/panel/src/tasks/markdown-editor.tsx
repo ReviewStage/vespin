@@ -1,7 +1,7 @@
 import { linkChipOf } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
   type RefObject,
@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
 import { useSideBundles } from "../bundle-loader.js";
+import { heldColoring } from "../code-coloring.js";
 import { DiagramPreview } from "../description-diagram.js";
 import {
   type DescriptionEditorHandle,
@@ -257,6 +258,7 @@ export function MarkdownEditor({
   const previews = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
   const codeHeaders = useEditorDrawings<EditorCodeBlock>();
+  const queryClient = useQueryClient();
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
@@ -360,6 +362,7 @@ export function MarkdownEditor({
     drawDiagram: diagrams ? previews.draw : undefined,
     drawTaskBox: taskBoxes.draw,
     drawCodeHeader: codeHeaders.keep,
+    colorCode: (language, code) => heldColoring(queryClient, language, code),
     pictures: pictures?.pictures,
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },

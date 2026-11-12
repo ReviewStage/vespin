@@ -542,3 +542,13 @@ test("a kept line over an indented code block keeps the code apart once the head
 
   assert.equal(handedOver(), "Intro\n\n    alpha\n\n    beta\n");
 });
+
+test("a paragraph wrapped onto a second line draws as one line and keeps its wrap when its words are retyped", async () => {
+  const text = "We ship the migration\nand its rollback\n";
+  const { host, handedOver } = opened(text);
+
+  assert.equal(host.querySelector("p")?.textContent, "We ship the migration and its rollback");
+  await retype(host, "its rollback", "its rollback today");
+
+  assert.equal(handedOver(), "We ship the migration\nand its rollback today\n");
+});

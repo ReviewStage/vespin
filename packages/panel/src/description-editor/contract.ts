@@ -12,6 +12,7 @@
  * editor's libraries.
  */
 
+import type { CodeLines } from "@repo/features/tasks-view";
 import type {
   WRITING_MARK,
   WritingBlock,
@@ -215,6 +216,8 @@ export interface DescriptionEditorProps {
   readonly drawTaskBox?: TaskBoxDrawer | undefined;
   /** Draws each code block's header, as the drawn text's code card heads it, its language chosen there; a bare block where it draws none. */
   readonly drawCodeHeader?: CodeHeaderDrawer | undefined;
+  /** Colors each code block's lines as the drawn text's card colors them; lines left in the code's own ink where none colors them. */
+  readonly colorCode?: CodeColorer | undefined;
   /** What the text's pictures are drawn and taken in with; none where the text takes no pictures, as a template does not. */
   readonly pictures?: DescriptionEditorPictures | undefined;
   /** The open comment threads' words, in offsets of `markdown`, which the editor carries as its words move; none where the text has no comments. */
@@ -339,6 +342,9 @@ export type CodeHeaderDrawer = (
   element: HTMLElement,
   block: EditorCodeBlock,
 ) => EditorDrawing<EditorCodeBlock>;
+
+/** Colors a code block's lines as the drawn text's card colors them, by the host's one highlighter: each line's runs, or none where nothing colors them. */
+export type CodeColorer = (language: string, code: string) => Promise<CodeLines | null>;
 
 /**
  * What the panel may do to a mention it draws: name it anew in place, the

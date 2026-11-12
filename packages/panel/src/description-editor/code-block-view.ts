@@ -1,8 +1,10 @@
-import type { AnyExtension, NodeViewRenderer } from "@tiptap/core";
+import { CODE_CARD_CLASS, CODE_LINES_CLASS } from "@repo/ui/code-face";
+import { type AnyExtension, Extension, type NodeViewRenderer } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import { Predicate } from "effect";
-import type { CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
+import { codeColoring } from "./code-coloring.js";
+import type { CodeColorer, CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
 
 /**
  * code-block-view.ts -- a fenced block open in the editor in the drawn text's code card: the card's own header, drawn by the panel, over the block's lines.
@@ -24,12 +26,12 @@ import type { CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
 /** The node a fenced block is, as StarterKit names it. */
 const CODE_BLOCK = "codeBlock";
 
-/** The classes the block's frame and its header's element wear, which `tasks.css` styles. */
-const FRAME_CLASS = "description-code-block";
-const HEAD_CLASS = "description-code-head";
+/** The extension coloring the blocks' lines. */
+const CODE_COLORING = "codeColoring";
 
-/** The class the drawn card's lines wear (`@repo/ui`'s `CodeCard`), which the prose's bare fence leaves alone and a phone fades the edge of. */
-const BODY_CLASS = "ui-code-card-body";
+/** The classes the block's frame and its header's element wear, which `tasks.css` styles, the frame with the drawn card's own beside them (`@repo/ui/code-face`). */
+const FRAME_CLASS = `description-code-block ${CODE_CARD_CLASS}`;
+const HEAD_CLASS = "description-code-head";
 
 /** The class TipTap's own block names its language on its code with, which the editor keeps. */
 const LANGUAGE_CLASS_PREFIX = "language-";
@@ -56,7 +58,7 @@ function frameOf(node: PmNode): Frame {
   head.className = HEAD_CLASS;
   head.contentEditable = "false";
   const pre = document.createElement("pre");
-  pre.className = BODY_CLASS;
+  pre.className = CODE_LINES_CLASS;
   const code = document.createElement("code");
   code.className = languageClass(node);
   pre.append(code);
@@ -132,20 +134,37 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
   };
 }
 
-/** StarterKit with its code block drawn in the code card where the panel draws its header; as TipTap draws it where it draws none. */
+/**
+ * StarterKit with its code block drawn in the code card where the panel
+ * draws its header, its lines colored as the card colors them where the panel
+ * colors them (`./code-coloring.ts`); as TipTap draws it where it draws none.
+ */
 export function withCodeHeaders(
   kit: AnyExtension,
   drawCodeHeader: CodeHeaderDrawer | undefined,
+  colorCode: CodeColorer | undefined,
 ): AnyExtension {
   if (drawCodeHeader === undefined) return kit;
 
+  const colors =
+    colorCode === undefined
+      ? []
+      : [
+          Extension.create({
+            name: CODE_COLORING,
+            addProseMirrorPlugins: () => [codeColoring(colorCode)],
+          }),
+        ];
+
   return kit.extend({
     addExtensions() {
-      return (this.parent?.() ?? []).map((extension) =>
+      const own = (this.parent?.() ?? []).map((extension) =>
         extension.name === CODE_BLOCK
           ? extension.extend({ addNodeView: () => codeBlockView(drawCodeHeader) })
           : extension,
       );
+
+      return [...own, ...colors];
     },
   });
 }
