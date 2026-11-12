@@ -1155,7 +1155,10 @@ test("a Sentry automation's runs wear Sentry's mark, its row says its event and 
     "the row's tile wears Sentry's mark",
   );
   assert.ok(
-    says(rowOf(list, "Fix Sentry errors"), "When an alert fires in Sentry · web, api · error"),
+    says(
+      rowOf(list, "Fix Sentry errors"),
+      "When an alert fires in Sentry, for web or api, at error level",
+    ),
   );
   act(() => world.root?.unmount());
   document.body.innerHTML = "";
@@ -1196,7 +1199,7 @@ test("a new Sentry automation is made on the event, filters, levels, and cooldow
   act(() => button("Error").click());
   assert.equal(
     pickerDetail(page, "Type"),
-    "When a new issue is created in Sentry · web, api · production · error, fatal",
+    "When a new issue is created in Sentry, for web or api, in production, at error or fatal level",
   );
   assert.equal(
     page.querySelector<HTMLInputElement>("input[aria-label='Projects']")?.value,

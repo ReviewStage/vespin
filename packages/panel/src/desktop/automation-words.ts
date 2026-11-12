@@ -63,6 +63,22 @@ export function automationOwnerName(
 }
 
 /**
+ * Whom an automation is for, said after a comma in a line that names
+ * something else first, what fires it or who made it, where a dot would
+ * otherwise set the owner apart: "for Acme", "just for you", "just for its
+ * creator".
+ */
+export function automationOwnerFor(
+  owner: AutomationScope,
+  workspaceName: string | undefined,
+  mine: boolean,
+): string {
+  if (owner === AUTOMATION_SCOPE.WORKSPACE) return `for ${workspaceName ?? "the workspace"}`;
+
+  return mine ? "just for you" : "just for its creator";
+}
+
+/**
  * An automation's line under its name in a row with no room for the owner's
  * and the next run's columns, a phone's: when it runs next, where it is set
  * to, before what fires it, so the line's end is cut rather than the time.
