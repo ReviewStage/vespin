@@ -540,22 +540,27 @@ export function useQueueEditing(
       if (unsent !== undefined) add(unsent.id, unsent.text, unsent.attachments);
     },
     takeBack: (id) => {
-      const unsent = takeUnsent(id);
+      const unsent = unsentQueued.store.state.find((each) => each.id === id);
 
       if (unsent === undefined) return;
       const { text, attachments } = unsent;
-      // Its words and files come into the box ahead of what was written there since.
+      // Its words and files come into the box ahead of what was written there since, and it is let go only once they did, so one kept on a toast for want of room outlasts a reload.
       putBackRefused({
         went: { text, attachments },
         most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-        update: (next) =>
+        update: (next) => {
+          let laid = false;
           composer.updateHeld((now) => {
             const joined = next(now);
-
-            if (joined !== undefined) refused.current = { text, id };
+            laid = joined !== undefined;
 
             return joined;
-          }),
+          });
+
+          if (!laid) return;
+          refused.current = { text, id };
+          takeUnsent(id);
+        },
       });
     },
   };

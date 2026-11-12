@@ -117,8 +117,9 @@ export function AgentQueueDock({
   onResume: () => void;
   /** The messages queued from this window that did not go, drawn after the queue's own. */
   unsent: readonly UnsentQueued[];
-  onRetry: (id: string) => void;
-  onTakeBack: (id: string) => void;
+  /** Sends one again, and takes one back into the box; none while the box takes no message, as when the agent is archived. */
+  onRetry: ((id: string) => void) | undefined;
+  onTakeBack: ((id: string) => void) | undefined;
   onDrop: (id: string) => void;
 }): React.JSX.Element | null {
   const drag = useRowDrag(onMove, { handle: "[data-queue-handle]" });
@@ -279,10 +280,12 @@ export function AgentQueueDock({
                     reason={UNSENT_REASON}
                     // Note that one whose files' bytes did not outlast a relaunch is not sent again without them.
                     retry={
-                      each.attachments.length === each.files ? () => onRetry(each.id) : undefined
+                      onRetry !== undefined && each.attachments.length === each.files
+                        ? () => onRetry(each.id)
+                        : undefined
                     }
                     takeBack={
-                      hasWordsOrFiles(each.text, each.attachments)
+                      onTakeBack !== undefined && hasWordsOrFiles(each.text, each.attachments)
                         ? () => onTakeBack(each.id)
                         : undefined
                     }

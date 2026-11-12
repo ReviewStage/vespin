@@ -257,6 +257,7 @@ test("a message not delivered that would pass a message's bound beside the box's
   assert.ok(unsent !== undefined, "the message stays, not delivered");
   act(() => now().editing.takeBack(unsent.id));
   assert.equal(now().composer.draft, "And the docs");
+  assert.equal(now().queue.unsent.length, 1, "the message stays kept until it is back");
 
   act(() => now().composer.setDraft("Ok"));
 
@@ -270,6 +271,7 @@ test("a message not delivered that would pass a message's bound beside the box's
   act(() => press.click());
 
   assert.equal(now().composer.draft, `${long}\nOk`);
+  assert.deepEqual(now().queue.unsent, []);
   assert.deepEqual(
     [...document.querySelectorAll(`${STANDING_TOAST} button`)].flatMap(({ textContent: label }) =>
       label === "Put back" ? [label] : [],

@@ -3476,8 +3476,8 @@ function AgentTabView({
             onDelete={queue.remove}
             onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
             unsent={queue.unsent}
-            onRetry={queueEditing.retry}
-            onTakeBack={queueEditing.takeBack}
+            onRetry={boxOpen ? queueEditing.retry : undefined}
+            onTakeBack={boxOpen ? queueEditing.takeBack : undefined}
             onDrop={queue.drop}
           />
         </AgentPicturesProvider>
