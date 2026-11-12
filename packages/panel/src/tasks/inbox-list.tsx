@@ -1447,8 +1447,9 @@ interface RowFocus {
  * drawn, as Questions leaves out an item answered on another Mac while its
  * row is focused: the keyboard goes to View options, the control that
  * chooses what the list leaves out, as it does from a row leaving the list
- * while it fades. Note that a removed row fires no blur, so the row last focused is
- * remembered and looked for after every render.
+ * while it fades; a row drawn anew where it still stands, as one moving under
+ * Pinned is, keeps it. Note that a removed row fires no blur, so the row last
+ * focused is remembered and looked for after every render.
  */
 function useRowFocusKept(rows: InboxRowPresses): RowFocus {
   const ref = useRef<HTMLElement | null>(null);
@@ -1460,7 +1461,12 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
     if (list === null || row === undefined || list.hidden) return;
 
     // Note that a row leaving, or one in a group leaving, is drawn on, out of reach, while it fades, so the keyboard still in it is in no row.
-    if (rows.find(row)?.closest(LIST_LEAVING_SELECTOR) === null) return;
+    const found = rows.find(row);
+    if (found !== undefined && found.closest(LIST_LEAVING_SELECTOR) === null) {
+      // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page, so it is handed back.
+      if (document.activeElement === document.body) found.focus();
+      return;
+    }
     focusedRow.current = undefined;
     const active = document.activeElement;
 

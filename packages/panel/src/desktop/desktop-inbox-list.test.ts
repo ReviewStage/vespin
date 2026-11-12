@@ -881,6 +881,20 @@ test("on Needs you, a focused row whose item is answered on another Mac leaves t
   );
 });
 
+test("a focused row whose task is pinned on another Mac keeps the keyboard as it moves under Pinned", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const { page } = mount();
+  await settle();
+  rowNamed(page, "Expire after 7 days?").focus();
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+  assert.equal(page.querySelector(".inbox-tasks .ui-group-header-head")?.textContent, "Pinned");
+  assert.ok(
+    document.activeElement === rowNamed(page, "Expire after 7 days?"),
+    "the keyboard stays on the row",
+  );
+});
+
 test("on a phone, a focused row whose item is answered elsewhere leaves the keyboard on the head's ⋯, which holds View options there", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
   const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
