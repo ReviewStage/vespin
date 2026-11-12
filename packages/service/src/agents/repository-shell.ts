@@ -44,6 +44,10 @@ export const REPOSITORY_REFUSAL = {
 const REPOSITORY_SHELL_BOUNDS = {
   /** How long the checkout may take before it is given up on. */
   CHECKOUT_TIMEOUT: Duration.minutes(5),
+  /** How long a workspace drive's batch may take, its first clones among it, before it is given up on. */
+  BATCH_TIMEOUT: Duration.minutes(10),
+  /** How many repositories of a workspace drive's batch git syncs at once. */
+  BATCH_PARALLEL: 8,
   /** How many characters of the checkout's own error the model is told. */
   CHECKOUT_ERROR_MAX_CHARS: 500,
 } as const;
@@ -161,6 +165,34 @@ const WORKSPACE_SYNC_SCRIPT = [
   // The clone itself, as an extra repository's, past its own setup and its keep-what-stands guard.
   ...EXTRA_CHECKOUT_SCRIPT.split("\n").slice(4),
 ].join("\n");
+
+/**
+ * Each repository of a workspace drive's batch synced as
+ * `WORKSPACE_SYNC_SCRIPT` syncs one, `BATCH_PARALLEL` at a time: one line of
+ * the list per repository, its folder, branch, and clone address, and one
+ * line out for each that failed, `failed <folder>`. Note that a
+ * repository's own output is dropped, since only whether it failed is read,
+ * and that each line is handed over whole and split by `read`, since
+ * `xargs` would read a quote a branch's name may hold as its own.
+ */
+const WORKSPACE_BATCH_SCRIPT = [
+  `export ${SANDBOX_VARIABLE.SYNC_ONE}`,
+  "synced() {",
+  '  read -r folder branch url <<< "$1"',
+  `  ${SANDBOX_VARIABLE.FOLDER}="$folder" ${SANDBOX_VARIABLE.BRANCH}="$branch" ${SANDBOX_VARIABLE.URL}="$url" bash -c "$${SANDBOX_VARIABLE.SYNC_ONE}" >/dev/null 2>&1 || echo "failed $folder"`,
+  "}",
+  "export -f synced",
+  `printf '%s\\n' "$${SANDBOX_VARIABLE.SYNC_LIST}" | xargs -r -d '\\n' -n 1 -P ${REPOSITORY_SHELL_BOUNDS.BATCH_PARALLEL} bash -c 'synced "$1"' _`,
+].join("\n");
+
+/** One repository of a workspace drive's batch: where it goes, and the read token its sync runs on. */
+export interface WorkspaceSync {
+  readonly fullName: string;
+  readonly branch: string;
+  readonly folder: string;
+  readonly token: Redacted.Redacted;
+  readonly access: GitHubTokenAccess;
+}
 
 /**
  * The folders a workspace drive holds that it no longer keeps deleted: each
@@ -410,39 +442,71 @@ export const cloneRepository = /* @__PURE__ */ Effect.fn("web/cloneRepository")(
   yield* underCloneCredential(sandbox, confirmed.fullName, token, access, clone);
 });
 
-/**
- * One repository of a workspace drive brought to its default branch in its
- * folder (`WORKSPACE_SYNC_SCRIPT`), fetched where it stands and cloned where
- * it does not, with the token at the firewall for the run alone
- * (`underCloneCredential`), or the refusal that stopped it.
- */
-export const syncWorkspaceRepository = /* @__PURE__ */ Effect.fn("web/syncWorkspaceRepository")(
-  function* (
-    sandbox: RepositorySandbox,
-    confirmed: { readonly fullName: string; readonly branch: string; readonly folder: string },
-    token: Redacted.Redacted,
-    access: GitHubTokenAccess,
-  ): Effect.fn.Return<void, RepositoryRefusal> {
-    const sync = runInSandbox(
-      sandbox,
-      {
-        command: WORKSPACE_SYNC_SCRIPT,
-        workingDirectory: SANDBOX_PATH.WORKSPACE,
-        env: {
-          ...COMMAND_ENVIRONMENT,
-          [SANDBOX_VARIABLE.FOLDER]: confirmed.folder,
-          [SANDBOX_VARIABLE.BRANCH]: confirmed.branch,
-          [SANDBOX_VARIABLE.URL]: cloneUrl(confirmed.fullName),
-        },
-      },
-      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-    );
-
-    yield* underCloneCredential(sandbox, confirmed.fullName, token, access, sync);
-  },
-);
-
 /** Every repository folder of a workspace drive deleted but the ones named (`WORKSPACE_PRUNE_SCRIPT`), or the refusal that stopped it. */
+/**
+ * A batch of a workspace drive's repositories each brought to its default
+ * branch in its folder, in one run, every read token at the firewall at
+ * once, each for its own repository's git endpoint alone, and withdrawn as
+ * the run ends, however it ended. Answers the folders whose sync failed; a
+ * run that failed whole, or a firewall that did not take the tokens,
+ * refuses the batch.
+ */
+export const syncedWorkspaceRepositories = /* @__PURE__ */ Effect.fn(
+  "web/syncWorkspaceRepositories",
+)(function* (
+  sandbox: RepositorySandbox,
+  batch: readonly WorkspaceSync[],
+): Effect.fn.Return<readonly string[], RepositoryRefusal> {
+  const firewall = sandbox.firewall;
+
+  if (firewall === undefined) {
+    return yield* new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.NO_FIREWALL });
+  }
+
+  const refused = () => new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED });
+  const withdrawn = firewall.write({}).pipe(Effect.mapError(refused));
+
+  const run = runInSandbox(
+    sandbox,
+    {
+      command: WORKSPACE_BATCH_SCRIPT,
+      workingDirectory: SANDBOX_PATH.WORKSPACE,
+      env: {
+        ...COMMAND_ENVIRONMENT,
+        [SANDBOX_VARIABLE.SYNC_ONE]: WORKSPACE_SYNC_SCRIPT,
+        [SANDBOX_VARIABLE.SYNC_LIST]: batch
+          .map((each) => [each.folder, each.branch, cloneUrl(each.fullName)].join(" "))
+          .join("\n"),
+      },
+    },
+    REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+  ).pipe(
+    Effect.timeoutOrElse({
+      duration: REPOSITORY_SHELL_BOUNDS.BATCH_TIMEOUT,
+      orElse: () => Effect.fail(refused()),
+    }),
+  );
+
+  const clones = batch.map(({ fullName, token, access }) => ({ fullName, token, access }));
+
+  const ended = yield* firewall.write({ clones }).pipe(
+    Effect.mapError(refused),
+    Effect.andThen(run),
+    Effect.onInterrupt(() => Effect.ignore(withdrawn)),
+    Effect.exit,
+  );
+
+  yield* withdrawn;
+  const ran = yield* ended;
+
+  if (ran.exitCode !== 0) return yield* gitRefusal(ran);
+
+  return ran.stdout
+    .split("\n")
+    .filter((line) => line.startsWith("failed "))
+    .map((line) => line.slice("failed ".length));
+});
+
 export const prunedWorkspaceFolders = /* @__PURE__ */ Effect.fn("web/pruneWorkspaceFolders")(
   function* (
     sandbox: RepositorySandbox,
