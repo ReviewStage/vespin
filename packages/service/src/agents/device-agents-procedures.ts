@@ -85,6 +85,7 @@ import {
   type OwnDeviceEnrollRequest,
   shownHostUserCode,
 } from "@repo/features/host-wire";
+import { cleanMachineName } from "@repo/features/machine-name";
 import { Duration, Effect, Option } from "effect";
 import {
   admittedHostVersion,
@@ -204,10 +205,26 @@ const macRunnerStarted = (userId: string, agentId: string) =>
     yield* bootBecameReady(agent.value, boot.value.attempt);
   });
 
+/**
+ * The name a machine gave itself, as it is kept: on one line, with no
+ * control or format character (`cleanMachineName`), as a link's words are
+ * kept clean; refused as invalid where nothing is left of it. Note that a
+ * member approves a pairing over this name, so a line break or a bidi
+ * override in it would let a stranger's machine draw itself as theirs.
+ */
+const keptMachineName = (name: string) =>
+  Effect.gen(function* () {
+    const kept = cleanMachineName(name);
+
+    if (kept === "") return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+    return kept;
+  });
+
 /** The machine an own enroll names, all of its name, platform and architecture or none; refused as invalid where it names only some. */
 const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
   if (name !== undefined && platform !== undefined && arch !== undefined) {
-    return Effect.succeed({ name, platform, arch });
+    return keptMachineName(name).pipe(Effect.map((kept) => ({ name: kept, platform, arch })));
   }
 
   return name === undefined && platform === undefined && arch === undefined
@@ -262,7 +279,8 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       }
 
       const poll = mintHostSecret(HOST_WIRE.POLL_SECRET_PREFIX);
-      const { name, platform, arch } = input;
+      const { platform, arch } = input;
+      const name = yield* keptMachineName(input.name);
 
       // Note that the pairing keeps no machine the start named, since the box's first register follows its approve at once and names it again.
       const userCode = yield* openedPairing({
@@ -345,10 +363,11 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* ownDevice(context, input.deviceId);
       const { userId } = context;
       const { deviceId, ...device } = input;
+      const name = yield* keptMachineName(device.name);
 
       // Note that a host that restarts registers before its first beat, so the register carries its agents on as the beat does.
       const registered = yield* hostedStoreOrUnavailable(
-        hostWrite(userId, deviceId, registerHost(userId, { id: deviceId, ...device })),
+        hostWrite(userId, deviceId, registerHost(userId, { id: deviceId, ...device, name })),
       );
 
       if (Option.isNone(registered)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);

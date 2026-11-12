@@ -12,6 +12,24 @@
  * machine by its own name.
  */
 
+/** What no machine's name may hold: control and format characters, a line break and a bidi override among them. */
+const UNSHOWN_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+
+/** A run of white space. */
+const WHITE_RUN = /\s+/gu;
+
+/**
+ * A name a machine gave itself, as it is kept and shown: on one line, each
+ * control or format character a space, each run of white space one, and
+ * trimmed; empty where nothing else was left. Note that a machine chooses
+ * its own name, and its pairing is approved over it, so a line break would
+ * draw a facts line of its own under it and a bidi override would turn its
+ * words around.
+ */
+export function cleanMachineName(name: string): string {
+  return name.replace(UNSHOWN_CHARACTERS, " ").replace(WHITE_RUN, " ").trim();
+}
+
 /** What the machine the desktop app runs on is called. */
 export const THIS_MAC = "This Mac";
 
