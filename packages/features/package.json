@@ -12,6 +12,7 @@
     "./account-wire": "./src/account-wire.js",
     "./admin-account-wire": "./src/admin-account-wire.js",
     "./admin-answer-wire": "./src/admin-answer-wire.js",
+    "./admin-catalog-wire": "./src/admin-catalog-wire.js",
     "./admin-cost-wire": "./src/admin-cost-wire.js",
     "./admin-overview-vocabulary": "./src/admin-overview-vocabulary.js",
     "./admin-wire": "./src/admin-wire.js",

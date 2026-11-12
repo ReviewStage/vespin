@@ -76,6 +76,7 @@ async function draw(
 
   const doors: AdminDoors = {
     reads: {
+      catalog: unanswered,
       metrics: unanswered,
       cost: unanswered,
       reliability: unanswered,

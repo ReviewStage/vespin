@@ -46,6 +46,18 @@ const FAVORITE_FAILED = "The favorite could not be saved. Try again.";
 /** What every admin read asks of Query beside its key and its door. */
 const ADMIN_READ_OPTIONS = { retry: false } as const;
 
+/**
+ * The catalog's read, which the Limits, Tools, and Prompts screens share: the
+ * deploy's own code, the same for every scope and window, so one key holds it.
+ */
+export function adminCatalogQuery(reads: AdminReads) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.CATALOG],
+    queryFn: ({ signal }) => reads.catalog(signal),
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
 /** The overview's read. */
 export function adminMetricsQuery(reads: AdminReads, query: AdminWindowedQuery) {
   return queryOptions({
