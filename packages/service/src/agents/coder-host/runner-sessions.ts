@@ -543,7 +543,7 @@ function runnerContent(
   lineId: string,
   attachments: string,
 ): { readonly content: readonly ContentBlock[]; readonly files: readonly SandboxFile[] } {
-  if (typeof message === "string") return { content: [{ type: "text", text: message }], files: [] };
+  if (Predicate.isString(message)) return { content: [{ type: "text", text: message }], files: [] };
   const files: SandboxFile[] = [];
 
   const content = message.flatMap((part, at): ContentBlock[] => {
@@ -601,7 +601,7 @@ function base64Of(data: unknown): string | undefined {
   if (data instanceof Uint8Array) return Buffer.from(data).toString("base64");
 
   if (data instanceof ArrayBuffer) return Buffer.from(data).toString("base64");
-  const text = data instanceof URL ? data.href : typeof data === "string" ? data : undefined;
+  const text = data instanceof URL ? data.href : Predicate.isString(data) ? data : undefined;
 
   if (text === undefined) return undefined;
 

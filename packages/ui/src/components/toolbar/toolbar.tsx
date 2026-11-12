@@ -89,6 +89,7 @@
  * where every page has them, and says so in the room under it.
  */
 
+import { Predicate } from "effect";
 import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { NotFoundIcon } from "../../icons/lucide-glyphs.js";
 import { said } from "../../said.js";
@@ -285,7 +286,7 @@ function ToolbarTitle({
   /** The title's rename in place, while it stands (`titleEdit`). */
   edit?: ToolbarTitleEdit | undefined;
 }): React.JSX.Element {
-  if (typeof title !== "string") return <>{title}</>;
+  if (!Predicate.isString(title)) return <>{title}</>;
 
   if (edit !== undefined) {
     const field = (
@@ -512,7 +513,7 @@ export function Toolbar({
           menu={titlePress === undefined && titleEdit === undefined ? titleMenu : undefined}
           crumbs={crumbs}
         >
-          {crumbs && typeof title === "string" && title !== "" ? (
+          {crumbs && Predicate.isString(title) && title !== "" ? (
             <ReplayMask>
               <ToolbarTrail
                 trail={trail}

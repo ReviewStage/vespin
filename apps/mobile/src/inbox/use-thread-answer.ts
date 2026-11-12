@@ -52,6 +52,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -93,7 +94,7 @@ function unreadableNumber(thread: readonly InboxMessage[], draft: InboxDraft): s
 
   return ask.fields?.find(
     (field) =>
-      field.type === INBOX_FIELD.NUMBER && typeof fieldValueOf(draft, field.label) === "string",
+      field.type === INBOX_FIELD.NUMBER && Predicate.isString(fieldValueOf(draft, field.label)),
   )?.label;
 }
 

@@ -87,7 +87,7 @@ import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { isTextUIPart } from "ai";
-import { Clock, Data, Effect, Option, Result, Schema } from "effect";
+import { Clock, Data, Effect, Option, Predicate, Result, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SqlClient } from "effect/sql";
 import {
@@ -2700,7 +2700,7 @@ export function runUpdateTask(
       // The tasks the blocks name, and the parent, are locked before the task's change, so the change takes no lock first that another call's writes wait on.
       const locking = [
         ...(blocking === undefined ? [] : tasksOfWrites(blocking.success)),
-        ...(typeof parentTaskId === "string" ? [taskId, parentTaskId] : []),
+        ...(Predicate.isString(parentTaskId) ? [taskId, parentTaskId] : []),
       ];
 
       // The task's change, its place in the sidebar, its parent, and its blocks are one transaction, so a place

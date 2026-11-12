@@ -28,7 +28,7 @@ import {
   type SettingsLink,
 } from "@repo/settings/settings-views";
 import { experimentsOn } from "@repo/settings/testing";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -197,7 +197,7 @@ async function mount(
           startedIn.push(workspaceId);
 
           const refused = Promise.resolve(answer).then((said) =>
-            typeof said === "string" ? { reason: FAILURE_REASON.OTHER, text: said } : said,
+            Predicate.isString(said) ? { reason: FAILURE_REASON.OTHER, text: said } : said,
           );
 
           const card = from?.card;

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { Ref, RefCallback } from "react";
 
 /**
@@ -12,7 +13,7 @@ import type { Ref, RefCallback } from "react";
 function handTo<T>(ref: Ref<T> | undefined, element: T): () => void {
   if (ref === null || ref === undefined) return () => undefined;
 
-  if (typeof ref !== "function") {
+  if (!Predicate.isFunction(ref)) {
     ref.current = element;
 
     return () => {
@@ -22,7 +23,7 @@ function handTo<T>(ref: Ref<T> | undefined, element: T): () => void {
 
   const cleanup = ref(element);
 
-  return typeof cleanup === "function" ? cleanup : () => ref(null);
+  return Predicate.isFunction(cleanup) ? cleanup : () => ref(null);
 }
 
 /** A ref callback handing its element to each of `refs`, and taking it back from each as it goes. */

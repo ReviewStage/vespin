@@ -19,7 +19,7 @@ import {
   type HostedFailure,
   hostedClient,
 } from "@repo/features/hosted-link";
-import { Effect, type Layer } from "effect";
+import { Effect, type Layer, Predicate } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import { type AppAccessSlice, NO_ACCESS } from "./app-state.js";
@@ -65,7 +65,7 @@ export class AccountAccessClient {
             ? { admin: false }
             : {
                 admin: answer.admin,
-                ...(typeof answer.supportAccessUntil === "number"
+                ...(Predicate.isNumber(answer.supportAccessUntil)
                   ? { supportAccessUntil: answer.supportAccessUntil }
                   : undefined),
               },

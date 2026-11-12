@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { createServer, type Socket } from "node:net";
 import path from "node:path";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import { Predicate } from "effect";
 import { test } from "vitest";
 import {
   agentSnapshotScript,
@@ -121,7 +122,7 @@ test(
     });
     await new Promise<void>((resolve) => silent.listen(0, "127.0.0.1", resolve));
     const address = silent.address();
-    assert.ok(address !== null && typeof address === "object");
+    assert.ok(Predicate.isObjectKeyword(address));
     const clone = cloneFolder(state, "acme/app");
     const own = path.join(scratch, "agents", "agent", "repository");
 
@@ -300,7 +301,7 @@ test(
     });
     await new Promise<void>((resolve) => silent.listen(0, "127.0.0.1", resolve));
     const address = silent.address();
-    assert.ok(address !== null && typeof address === "object");
+    assert.ok(Predicate.isObjectKeyword(address));
     const clone = cloneFolder(state, "acme/app");
     const file = path.join(scratch, "open.sh");
     writeFileSync(

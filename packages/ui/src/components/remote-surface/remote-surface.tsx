@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -136,7 +137,7 @@ export function RemoteSurface({
     (element: HTMLCanvasElement | null) => {
       own.current = element;
 
-      if (typeof ref === "function") ref(element);
+      if (Predicate.isFunction(ref)) ref(element);
       else if (ref !== null && ref !== undefined) ref.current = element;
     },
     [ref],

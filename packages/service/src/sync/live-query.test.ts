@@ -13,7 +13,7 @@ import { LIVE_MODE, LIVE_PARAM, liveRead, liveRows, ORDER } from "@repo/features
 import { liveDigestOf } from "@repo/features/live-wire";
 import type { WireRecord } from "@repo/wire";
 import { pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { Clock, Duration, Effect, Fiber, Layer, Option, Queue, Schema } from "effect";
+import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Queue, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { liveQueryParts } from "../live/live-procedures.js";
@@ -117,7 +117,7 @@ const SUBQUERY_ROOT: ReadonlySet<unknown> = new Set(["SubPlan", "InitPlan"]);
 function nodesOf(explained: unknown, root = false): readonly PlannedNode[] {
   if (Array.isArray(explained)) return explained.flatMap((each) => nodesOf(each, root));
 
-  if (typeof explained !== "object" || explained === null) return [];
+  if (!Predicate.isObjectOrArray(explained)) return [];
   // SAFETY: the guard above admits only an object, an EXPLAIN node, whose fields PlanNode names.
   const fields = explained as PlanNode;
 
@@ -132,7 +132,7 @@ function scanOf(planned: PlannedNode): readonly Scan[] {
   const table = planned.node["Relation Name"];
   const alias = planned.node.Alias;
 
-  return typeof table === "string" && typeof alias === "string"
+  return Predicate.isString(table) && Predicate.isString(alias)
     ? [{ ...planned, table, alias }]
     : [];
 }
@@ -142,9 +142,9 @@ function ownExpressions(node: PlanNode, withoutOutput: boolean): readonly string
   return Object.entries(node).flatMap(([key, value]) => {
     if (key === "Plans" || (withoutOutput && key === "Output")) return [];
 
-    if (typeof value === "string") return [value];
+    if (Predicate.isString(value)) return [value];
 
-    return Array.isArray(value) ? value.filter((each) => typeof each === "string") : [];
+    return Array.isArray(value) ? value.filter((each) => Predicate.isString(each)) : [];
   });
 }
 
@@ -175,7 +175,7 @@ function emitsWholeRow(scan: Scan, table: SyncTable): boolean {
   const output = scan.node.Output;
 
   if (scan.root || !Array.isArray(output)) return false;
-  const named = output.filter((each) => typeof each === "string");
+  const named = output.filter((each) => Predicate.isString(each));
 
   return [...table.watched, ...table.ignored].every((column) =>
     named.some(namesColumn(scan.alias, column)),
@@ -216,7 +216,7 @@ const genericPlanOf = (statement: string) =>
         return rows.map((row) => {
           const plan = row["QUERY PLAN"];
 
-          const parsed: unknown = typeof plan === "string" ? JSON.parse(plan) : plan;
+          const parsed: unknown = Predicate.isString(plan) ? JSON.parse(plan) : plan;
 
           return parsed;
         });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { HTTP_STATUS, type JsonValue, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { accountBearer, CALL_FAULT } from "./account-call.js";
 import { FAILURE_FACT } from "./failure-facts.js";
@@ -40,10 +40,10 @@ function account(token: string | undefined) {
 
 /** An answer with the trace its cause names left out, since every call mints its own. */
 function untraced<Answer>(answer: Answer): Answer | object {
-  if (typeof answer !== "object" || answer === null || !("cause" in answer)) return answer;
+  if (!Predicate.isObjectOrArray(answer) || !("cause" in answer)) return answer;
   const { cause } = answer;
 
-  if (typeof cause !== "object" || cause === null || !("traceId" in cause)) return answer;
+  if (!Predicate.isObjectOrArray(cause) || !("traceId" in cause)) return answer;
   const { traceId: _traceId, ...facts } = cause;
 
   return { ...answer, cause: facts };

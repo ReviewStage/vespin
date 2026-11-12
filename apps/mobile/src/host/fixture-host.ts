@@ -38,6 +38,7 @@ import {
   pullRequestPartsAppState,
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
+import { Predicate } from "effect";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -249,7 +250,7 @@ export function fixtureActs(
     get(target, kind) {
       const sent = memberAt<unknown>(target, kind);
 
-      if (typeof kind !== "string" || typeof sent !== "function") return sent;
+      if (!Predicate.isString(kind) || !Predicate.isFunction(sent)) return sent;
 
       return (payload: unknown, ...rest: unknown[]) => {
         // SAFETY: the port is keyed by act kind.

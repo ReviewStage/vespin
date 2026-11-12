@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import type { TerminalSocketArrival } from "@repo/features/relay-socket";
-import { Effect, Exit, Fiber, Scope, Stream } from "effect";
+import { Effect, Exit, Fiber, Predicate, Scope, Stream } from "effect";
 import { afterEach, vi } from "vitest";
 import { openTerminalSocketFromPage } from "../src/app/web-terminal-socket";
 
@@ -75,7 +75,7 @@ const frame = (text: string) => new TextEncoder().encode(text).buffer;
 type Readable = { readonly bytes: string } | { readonly text: string } | { readonly close: number };
 
 function readable(sent: TerminalSocketArrival | string | Uint8Array): Readable {
-  if (typeof sent === "string") return { text: sent };
+  if (Predicate.isString(sent)) return { text: sent };
 
   if (ArrayBuffer.isView(sent)) return { bytes: new TextDecoder().decode(sent) };
 

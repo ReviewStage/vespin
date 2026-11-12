@@ -172,6 +172,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
       react:
         specifier: 'catalog:'
         version: 19.2.8

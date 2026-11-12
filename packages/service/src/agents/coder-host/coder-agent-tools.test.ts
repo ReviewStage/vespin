@@ -110,7 +110,7 @@ import { MESSAGE_CHANNEL, unparsedWire, type WireBoundaryInput } from "@repo/wir
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, desc, eq } from "drizzle-orm";
-import { Effect, Layer, Option, Redacted } from "effect";
+import { Effect, Layer, Option, Predicate, Redacted } from "effect";
 import { afterAll, test } from "vitest";
 import {
   ACTION_RESULT_STATUS,
@@ -624,10 +624,10 @@ async function peerCaller(
 function sentWords(body: string | undefined): string {
   const message: unknown = JSON.parse(body ?? "").message;
 
-  if (typeof message === "string") return message;
+  if (Predicate.isString(message)) return message;
   const [first] = Array.isArray(message) ? message : [];
 
-  return isRecord(first) && typeof first.text === "string" ? first.text : "";
+  return isRecord(first) && Predicate.isString(first.text) ? first.text : "";
 }
 
 /**
@@ -1085,7 +1085,7 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
 
   await answeredTurnOn(agents.teammates, long);
   const full = await call(AGENT_TOOL.READ_AGENT, { agentId });
-  const texts = tailTexts(full).map((text) => (typeof text === "string" ? text : assert.fail()));
+  const texts = tailTexts(full).map((text) => (Predicate.isString(text) ? text : assert.fail()));
   assert.deepEqual(
     texts.map((text) => [text.slice(0, "Said: 2".length), text.length, text.at(-1)]),
     ["2", "3", "4", "5"].map((each) => [`Said: ${each}`, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS, "…"]),
@@ -4566,7 +4566,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
       automation.runsLandOn,
       automation.scope,
       automation.madeByYourDeveloper,
-      typeof automation.nextRunAt,
+      Predicate.isString(automation.nextRunAt),
     ],
     [
       "Agent audit",
@@ -4576,7 +4576,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
       "new-agent",
       "personal",
       true,
-      "string",
+      true,
     ],
   );
   // The answer carries the start of the prompt, as the list does, not the whole of it.

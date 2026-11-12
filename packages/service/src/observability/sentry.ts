@@ -234,7 +234,7 @@ function namedForStatement<Span extends { name: string; attributes?: object }>(s
   const text =
     attributes !== undefined && DB_QUERY_TEXT in attributes ? attributes[DB_QUERY_TEXT] : undefined;
 
-  return typeof text === "string" && text.length > 0 ? { ...span, name: text } : span;
+  return Predicate.isString(text) && text.length > 0 ? { ...span, name: text } : span;
 }
 
 /** Attributes without any a model was handed or answered, and with their addresses scrubbed. */

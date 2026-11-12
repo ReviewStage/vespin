@@ -8,7 +8,7 @@
  * the vocabulary alone, so an input keeps a plain `Literals`.
  */
 
-import { Schema, SchemaTransformation } from "effect";
+import { Predicate, Schema, SchemaTransformation } from "effect";
 
 /**
  * A literal set that reads any word, one outside `values` as `unknown`, and
@@ -23,8 +23,8 @@ export function literalsReadingUnknown<const Values extends ReadonlyArray<string
 ) {
   const known: ReadonlySet<string> = new Set(values);
 
-  return Schema.declare(
-    (input: unknown): input is Values[number] => typeof input === "string",
+  return Schema.declare((input: unknown): input is Values[number] =>
+    Predicate.isString(input),
   ).pipe(
     Schema.decodeTo(
       Schema.Literals(values),

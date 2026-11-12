@@ -14,7 +14,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WireBoundaryInput } from "@repo/wire";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { OWN_PULL_REQUEST, OWN_TRANSCRIPT } from "../app-state.js";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -373,7 +373,7 @@ type SliceLevel = { readonly [id: string]: WireBoundaryInput };
 
 /** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
 function isSliceLevel(value: WireBoundaryInput): value is SliceLevel {
-  return typeof value === "object" && value !== null;
+  return Predicate.isObjectOrArray(value);
 }
 
 /** What `held` holds at `at`, the key's path in its slice. */

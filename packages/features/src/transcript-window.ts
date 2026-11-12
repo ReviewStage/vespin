@@ -21,7 +21,7 @@
  */
 
 import { isRecord, LEGACY_APP_WORD, MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   AGENT_SENDER,
   type AgentSender,
@@ -208,7 +208,7 @@ function windowMessageOf(
         ? undefined
         : { arrivedIn: { journalId: row.journalId, afterStep: row.afterStep } }),
       // A line that opened its turn, whose checkout its runner recorded before it, is one a rewind can put the files back at.
-      ...(row.journalId === null && typeof row.turnSnapshotCommit === "string"
+      ...(row.journalId === null && Predicate.isString(row.turnSnapshotCommit)
         ? { filesRestorable: true as const }
         : undefined),
     };

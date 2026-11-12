@@ -8,6 +8,7 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, STRIP_TAB_KIND, type StripTab } from "@repo/ui/tab-strip-model";
+import { Predicate } from "effect";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -170,7 +171,7 @@ async function mount(input: {
     /** Every tab the side panel was asked to show, in order, a terminal's by its agent and its name. */
     shown: () =>
       shown.map((tab) =>
-        typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.TERMINAL
+        !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.TERMINAL
           ? [tab.terminal, tab.title]
           : tab,
       ),

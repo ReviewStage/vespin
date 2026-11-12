@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -343,7 +344,7 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
       >,
     )) {
       // Note that a section's comment entries are strings, which carry no build settings.
-      const build = typeof settings === "string" ? undefined : settings.buildSettings;
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME)
         build.ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = ACCENT_COLOR_NAME;
@@ -421,11 +422,11 @@ const plistText = (text: string) =>
 const plistXml = (value: PlistValue, depth: number): string => {
   const indent = "\t".repeat(depth);
 
-  if (typeof value === "string") return `${indent}<string>${plistText(value)}</string>`;
+  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
 
-  if (typeof value === "boolean") return `${indent}<${value}/>`;
+  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
 
-  if (typeof value === "number") return `${indent}<integer>${value}</integer>`;
+  if (Predicate.isNumber(value)) return `${indent}<integer>${value}</integer>`;
 
   if (Array.isArray(value))
     return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
@@ -587,7 +588,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       project.pbxXCBuildConfigurationSection() as Record<string, XcodeBuildConfiguration | string>,
     )) {
       // Note that a section's comment entries are strings, which carry no build settings.
-      const build = typeof settings === "string" ? undefined : settings.buildSettings;
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME !== `"${extension.TARGET}"`) continue;
       Object.assign(build, {

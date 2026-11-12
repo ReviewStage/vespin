@@ -9,6 +9,7 @@
  * while its canvas is scrolled away.
  */
 
+import { Predicate } from "effect";
 import { motionHeld } from "../../motion-timing.js";
 
 /** A role's color as sRGB channels between 0 and 1, read through a probe laid beside `near`. */
@@ -25,7 +26,7 @@ export function roleChannels(near: HTMLElement, role: string): readonly [number,
 /** Whether motion is held still, as reduced motion and a capture run hold it (`motionHeld`). */
 export function heldStill(): boolean {
   // Note that a document with no media queries, as jsdom's is, is drawn still, because it lays out no frames to play either.
-  return typeof window.matchMedia !== "function" || motionHeld();
+  return !Predicate.isFunction(window.matchMedia) || motionHeld();
 }
 
 /**

@@ -12,6 +12,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import type { SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
+import { Predicate } from "effect";
 import type { AdminView } from "./admin/routing.js";
 import { useAppCommand } from "./app-commands.js";
 import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
@@ -180,7 +181,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   const shown = tasks.mainTabs.tab;
 
   const agentId =
-    shown !== undefined && typeof shown !== "string" && shown.kind === STRIP_TAB_KIND.AGENT
+    shown !== undefined && !Predicate.isString(shown) && shown.kind === STRIP_TAB_KIND.AGENT
       ? shown.agent
       : undefined;
 

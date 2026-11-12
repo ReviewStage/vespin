@@ -33,7 +33,7 @@ import {
   type UsageLimitNotice,
   UsageLimitNoticeSchema,
 } from "@repo/wire/ui-messages";
-import { Option, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import { recordedVideosOf } from "./agent-pictures-model.js";
 import {
   AGENT_TOOL,
@@ -224,7 +224,7 @@ const partRead = new WeakMap<object, AgentPart>();
 
 /** A stored part read for drawing, once per part. */
 function storedPartRead(part: WireValue): AgentPart {
-  if (typeof part !== "object" || part === null) return agentPart(part);
+  if (!Predicate.isObjectOrArray(part)) return agentPart(part);
   const read = partRead.get(part);
 
   if (read !== undefined) return read;

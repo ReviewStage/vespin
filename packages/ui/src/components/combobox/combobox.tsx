@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ComponentPropsWithRef, ReactNode, Ref, RefObject } from "react";
 import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
@@ -260,7 +261,7 @@ export function ComboboxOptionItem({
         )}
       >
         {/* A label drawn as a tree (marked for a recording, or a search's matches) is measured by its plain words, so its hint still says it whole. */}
-        <OneLine words={typeof option.label === "string" ? undefined : option.words}>
+        <OneLine words={Predicate.isString(option.label) ? undefined : option.words}>
           {option.label}
         </OneLine>
         {under ? <span className={COMBOBOX_ITEM_DETAIL_UNDER}>{option.detail}</span> : null}
@@ -358,7 +359,7 @@ function OptionRow({
 
   return (
     <Tooltip
-      label={option.words ?? (typeof option.label === "string" ? option.label : undefined)}
+      label={option.words ?? (Predicate.isString(option.label) ? option.label : undefined)}
       card={option.card}
       cardBeside
     >

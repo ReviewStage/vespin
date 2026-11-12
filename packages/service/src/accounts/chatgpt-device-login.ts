@@ -53,7 +53,7 @@ import {
   PROVIDER_KEY_PROVIDER,
 } from "@repo/features/provider-key-wire";
 import { HTTP_STATUS } from "@repo/wire";
-import { DateTime, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
+import { DateTime, Duration, Effect, Option, Predicate, Redacted, Result, Schema } from "effect";
 import {
   CHATGPT_ID_TOKEN,
   type ChatGptSigningKeys,
@@ -115,7 +115,7 @@ interface ChatGptDevicePoll {
 
 /** The seconds OpenAI named between polls, or the default where it named none that reads as a count. */
 function intervalOf(interval: string | number | undefined): number {
-  const seconds = typeof interval === "string" ? Number(interval.trim()) : interval;
+  const seconds = Predicate.isString(interval) ? Number(interval.trim()) : interval;
 
   if (seconds === undefined || !Number.isInteger(seconds) || seconds <= 0) {
     return POLL_INTERVAL_SECONDS.DEFAULT;

@@ -22,7 +22,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { HTTP_METHOD, unparsedWire, type WireBoundaryInput, type WireRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option, Result, type Schema } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Predicate, Result, type Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { recordMemoryRecalls, runRecall, runRemember } from "../agents/memory-tools.js";
@@ -253,7 +253,7 @@ it.layer(getTestDB())("the memories procedures", (it) => {
           Effect.provide(ANALYTICS.layer),
         );
 
-        assert.ok(isRecord(kept.memory) && typeof kept.memory.id === "string");
+        assert.ok(isRecord(kept.memory) && Predicate.isString(kept.memory.id));
         yield* recordMemoryRecalls(agents, [kept.memory.id], source).pipe(
           Effect.provide(ANALYTICS.layer),
         );

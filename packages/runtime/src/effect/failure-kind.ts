@@ -15,7 +15,7 @@
  * like an identifier, so a name that was given a sentence is not written
  * either.
  */
-import { Cause, Option, Schema } from "effect";
+import { Cause, Option, Predicate, Schema } from "effect";
 
 /** A tag as a line may carry it: one identifier, nothing shaped like a sentence or a value. */
 const KIND_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -109,7 +109,7 @@ export function failureDetail(cause: unknown): Option.Option<string> {
   const driver = sql.value.reason.cause;
 
   const code = readCode(
-    typeof driver === "object" && driver !== null && "code" in driver ? driver.code : undefined,
+    Predicate.isObjectOrArray(driver) && "code" in driver ? driver.code : undefined,
   );
 
   if (Option.isSome(code)) return Option.some(`code ${code.value}`);

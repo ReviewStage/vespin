@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type ReactNode,
   type Ref,
@@ -552,7 +553,7 @@ export function GroupHeader({
   );
 
   const leadBox = `${PART.LEAD} ${LEAD_HEIGHT[look]}`;
-  const hint = tooltip ?? (card === undefined || typeof label !== "string" ? undefined : label);
+  const hint = tooltip ?? (card === undefined || !Predicate.isString(label) ? undefined : label);
 
   // Note that only a head with a hint or a card is wrapped, because the tooltip hands its control a click handler of its own, which a head that folds nothing must not hear.
   const control = folds ? (

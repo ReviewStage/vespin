@@ -91,6 +91,7 @@ import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useIsMutating, useMutation, useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import {
   createContext,
   type ReactNode,
@@ -300,7 +301,7 @@ interface WordsNode {
 
 /** The words a node holds, its marks left out: what a row's press is named by, so a reader hears no backticks. */
 function wordsIn(node: WordsNode): string {
-  if (typeof node.value === "string") return node.value;
+  if (Predicate.isString(node.value)) return node.value;
 
   return (node.children ?? []).map((child) => wordsIn(child)).join("");
 }

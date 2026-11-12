@@ -41,6 +41,7 @@
  * editor it keeps the caret's cursor, since there it is words being written.
  */
 
+import { Predicate } from "effect";
 import type { FocusEventHandler, MouseEvent, PointerEventHandler, ReactNode } from "react";
 import { ArrowUpRightIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
@@ -142,7 +143,7 @@ const OUT_HELD = "ui-text-link-out-held whitespace-nowrap";
 
 /** A link's words with the ↗ after them, held to their last letter where the words are plain text. */
 function outWords(children: ReactNode): ReactNode {
-  if (typeof children !== "string" || children === "") {
+  if (!Predicate.isString(children) || children === "") {
     return (
       <>
         {children}

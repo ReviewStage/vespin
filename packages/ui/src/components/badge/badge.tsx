@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { CSSProperties, ReactNode } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ReplayWords } from "../../session-replay-marks.js";
@@ -199,7 +200,7 @@ export function Badge({
         data-under={marked ? hideWordsUnder : undefined}
       >
         <ReplayWords masked={replayMasked}>
-          {filled !== undefined && typeof children === "string" ? (
+          {filled !== undefined && Predicate.isString(children) ? (
             <FilledWords>{children}</FilledWords>
           ) : (
             children

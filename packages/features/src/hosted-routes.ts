@@ -11,6 +11,7 @@
 import { ProcedureContract } from "@orpc/contract";
 import { getOpenAPIMeta } from "@orpc/openapi";
 import { HTTP_METHOD, type HttpMethod } from "@repo/wire";
+import { Predicate } from "effect";
 import { hostedContract } from "./contract/index.js";
 
 /** The marks around a path parameter in a route, as the contract spells one (`/api/tasks/{id}`). */
@@ -38,7 +39,7 @@ function routesOf(node: unknown, at: readonly string[]): HostedRoute[] {
       : [];
   }
 
-  if (typeof node !== "object" || node === null) return [];
+  if (!Predicate.isObjectOrArray(node)) return [];
 
   return Object.entries(node).flatMap(([key, child]) => routesOf(child, [...at, key]));
 }

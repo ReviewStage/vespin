@@ -20,7 +20,7 @@ import {
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -296,7 +296,7 @@ export function PlanAgents({
     {
       tab,
       onChoose: (chosen) => {
-        if (typeof chosen !== "string" && chosen.kind === STRIP_TAB_KIND.AGENT) {
+        if (!Predicate.isString(chosen) && chosen.kind === STRIP_TAB_KIND.AGENT) {
           onOpenAgent(chosen.agent);
         }
       },

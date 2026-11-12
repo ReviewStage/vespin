@@ -8,6 +8,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, fileTab, pageTab, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { createMemoryHistory } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -926,7 +927,7 @@ function onTabs(input: {
       opened: input.opened ?? 0,
       onShow: (_taskId, tab) =>
         input.shown?.push(
-          `side:${typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.FILE ? tab.file : tab}`,
+          `side:${!Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.FILE ? tab.file : tab}`,
         ),
       onSetOpen: (open) => {
         if (!open) input.shown?.push("side:shut");
@@ -1108,7 +1109,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
         opened,
         onShow: (holder, tab) =>
           done.push(
-            `side:${holder}:${typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.PAGE ? tab.page : tab}`,
+            `side:${holder}:${!Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.PAGE ? tab.page : tab}`,
           ),
         onSetOpen: (open) => done.push(open ? "side:open" : "side:shut"),
       },
@@ -1279,7 +1280,7 @@ test("Back's and Forward's steps are listed the nearest first, each named as the
     const column = tasks.mainTabs.tab;
 
     return column === undefined ||
-      typeof column === "string" ||
+      Predicate.isString(column) ||
       column.kind !== STRIP_TAB_KIND.AGENT
       ? { label: "Home" }
       : { label: "Auth refactor", detail: column.agent };
@@ -1446,14 +1447,14 @@ function screenOf(step: RecentStep): string {
   const side = task.side;
 
   const columnWord =
-    column === undefined || typeof column === "string" || column.kind !== STRIP_TAB_KIND.AGENT
+    column === undefined || Predicate.isString(column) || column.kind !== STRIP_TAB_KIND.AGENT
       ? "none"
       : column.agent;
 
   const sideWord =
     side === null || side === undefined
       ? "shut"
-      : typeof side !== "string" && side.kind === STRIP_TAB_KIND.FILE
+      : !Predicate.isString(side) && side.kind === STRIP_TAB_KIND.FILE
         ? side.file
         : side;
 

@@ -53,6 +53,7 @@ import {
   Duration,
   Effect,
   Option,
+  Predicate,
   Result,
   Schedule,
   Schema,
@@ -812,7 +813,7 @@ function assertUncovered(
 
     const by = Option.getOrUndefined(covered);
 
-    if (typeof by === "string" && by !== "") {
+    if (Predicate.isString(by) && by !== "") {
       return yield* failed(
         `${ref} is covered at its middle by a ${by}, which would take the click; close or scroll past what covers it, then take a new snapshot`,
       );
@@ -1228,7 +1229,7 @@ function screenshot(cdp: CdpSession, page: Page, keep: boolean) {
     );
 
     const ratio =
-      typeof evaluated.result.value === "number" && evaluated.result.value > 0
+      Predicate.isNumber(evaluated.result.value) && evaluated.result.value > 0
         ? evaluated.result.value
         : 1;
 
@@ -1289,7 +1290,7 @@ function snapshot(cdp: CdpSession, page: Page) {
 function wordsOfArgs(args: (typeof ConsoleCallSchema.Type)["args"]): string {
   return args
     .map((arg) => {
-      if (typeof arg.value === "string") return arg.value;
+      if (Predicate.isString(arg.value)) return arg.value;
 
       if (arg.value !== undefined) return JSON.stringify(arg.value);
 

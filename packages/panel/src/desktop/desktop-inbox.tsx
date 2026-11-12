@@ -22,6 +22,7 @@ import {
   sameTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -477,7 +478,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   const panelAgent =
     sideFocused &&
     sidePanel.tab !== undefined &&
-    typeof sidePanel.tab !== "string" &&
+    !Predicate.isString(sidePanel.tab) &&
     sidePanel.tab.kind === STRIP_TAB_KIND.TRANSCRIPT
       ? sidePanel.tab.transcript
       : undefined;
@@ -900,10 +901,10 @@ function InboxSidePanel({
     agents,
     held: views.held,
     chosen: (opened) =>
-      typeof opened !== "string" &&
+      !Predicate.isString(opened) &&
       opened.kind === STRIP_TAB_KIND.AGENT &&
       panel.tab !== undefined &&
-      typeof panel.tab !== "string" &&
+      !Predicate.isString(panel.tab) &&
       panel.tab.kind === STRIP_TAB_KIND.TRANSCRIPT
         ? panel.tab.transcript === opened.agent
         : panel.tab !== undefined && sameTab(opened, panel.tab),

@@ -36,6 +36,7 @@ import {
 } from "@repo/features/link-grammar";
 import type { WireBoundaryInput } from "@repo/wire";
 import type { HistoryLocation, RegisteredRouter, RouteIds } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 
 /** A route of the panel's tree, by its id. */
@@ -85,7 +86,7 @@ export type OnStandingTask = (typeof ON_STANDING_TASK)[keyof typeof ON_STANDING_
 function commentOf(search: LinkAddress["search"]): string | undefined {
   const { comment } = search;
 
-  return typeof comment === "string" ? comment : undefined;
+  return Predicate.isString(comment) ? comment : undefined;
 }
 
 /** An agent's place as its route's params name it, under the task an address names it under or none, read through the link grammar's own schema; none where they name no such place. */

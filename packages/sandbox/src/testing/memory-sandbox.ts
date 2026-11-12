@@ -11,7 +11,7 @@
  * (`hooks.fail`), and moves a command's exit itself (`exited`).
  */
 
-import { Clock, Duration, Effect, Layer, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Predicate, Redacted, Result } from "effect";
 import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
@@ -215,12 +215,12 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
   /** The target's sandbox, up in the run it names where it names one; gone where it stands in another or none. */
   const reached = (call: SandboxCall, target: SandboxTarget) =>
     Effect.suspend(() => {
-      const name = typeof target === "string" ? target : target.name;
+      const name = Predicate.isString(target) ? target : target.name;
       const record = state.sandboxes.get(name);
 
       if (record === undefined) return Effect.fail(new SandboxGone({ call }));
 
-      if (typeof target !== "string" && target.running !== record.running) {
+      if (!Predicate.isString(target) && target.running !== record.running) {
         return Effect.fail(new SandboxGone({ call }));
       }
 
@@ -346,7 +346,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     }
   };
 
-  const nameOf = (target: SandboxTarget) => (typeof target === "string" ? target : target.name);
+  const nameOf = (target: SandboxTarget) => (Predicate.isString(target) ? target : target.name);
 
   const service: SandboxService = {
     listTagged: (tag, value) =>

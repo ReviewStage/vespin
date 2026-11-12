@@ -20,6 +20,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";
+import { Predicate } from "effect";
 import { createContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
@@ -231,7 +232,7 @@ export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): 
   return {
     regionId,
     selected,
-    setChosen: (next) => store.setState(typeof next === "function" ? next : () => next),
+    setChosen: (next) => store.setState(Predicate.isFunction(next) ? next : () => next),
     onClear: () => store.setState(() => new Set()),
   };
 }

@@ -58,6 +58,7 @@ import {
   Duration,
   Effect,
   Layer,
+  Predicate,
   Stream,
   SubscriptionRef,
 } from "effect";
@@ -979,7 +980,9 @@ it.effect(
       assert.deepEqual(said.at(-1), { update: HOST_UPDATE.WAITING });
       assert.equal(yield* current, `versions/${RUNNING}`);
       const stdin = spawned.find((each) => each.program === RUNNER)?.stdin;
-      assert.ok(typeof stdin === "object" && "stream" in stdin && Stream.isStream(stdin.stream));
+      assert.ok(
+        Predicate.isObjectKeyword(stdin) && "stream" in stdin && Stream.isStream(stdin.stream),
+      );
       const retire = JSON.stringify({ type: INPUT_LINE.RETIRE });
 
       // SAFETY: the guard above checked the stdin is a stream, of the bytes the runner is handed.

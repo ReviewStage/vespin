@@ -50,7 +50,7 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-tools";
 import { automationRun } from "@repo/features/model-label";
 import { toolPartName } from "@repo/wire/ui-messages";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./coder-host/tool-set.js";
 
@@ -99,7 +99,7 @@ function calledTool(part: {
   readonly toolName?: unknown;
 }): string | undefined {
   if (part.type === "dynamic-tool")
-    return typeof part.toolName === "string" ? part.toolName : undefined;
+    return Predicate.isString(part.toolName) ? part.toolName : undefined;
 
   return toolPartName(part.type);
 }

@@ -6,7 +6,7 @@ import {
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
 } from "@repo/wire";
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, Predicate } from "effect";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -689,7 +689,7 @@ export function recommendedLabels(choice: Recommending): readonly string[] {
 
   if (choice.recommended === undefined) return [];
 
-  return typeof choice.recommended === "string" ? [choice.recommended] : choice.recommended;
+  return Predicate.isString(choice.recommended) ? [choice.recommended] : choice.recommended;
 }
 
 /** A posted recommendation as a choice keeps it: nothing, its one label, or its first label and every label. */

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   ComponentType,
   FocusEventHandler,
@@ -173,7 +174,7 @@ export function SplitButton({
     (element: HTMLButtonElement | null) => {
       chevron.current = element;
 
-      if (typeof triggerRef === "function") triggerRef(element);
+      if (Predicate.isFunction(triggerRef)) triggerRef(element);
       else if (triggerRef !== undefined && triggerRef !== null) triggerRef.current = element;
     },
     [triggerRef],

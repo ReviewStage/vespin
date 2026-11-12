@@ -10,6 +10,7 @@
  */
 
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import { Predicate } from "effect";
 import { Platform, Settings } from "react-native";
 
 /** The launch arguments the app reads: the fixture's profile, as `-fixture <profile>`, and the account service a flow signs in against, as `-authServer stub`. */
@@ -55,14 +56,14 @@ export function launchAgent(): string | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.AGENT);
 
-  return typeof named === "string" && named !== "" ? named : undefined;
+  return Predicate.isString(named) && named !== "" ? named : undefined;
 }
 
 /** The pull request of the launch's agent this launch opens on, as `-pullRequest <number>` names it; none on any other platform, and where none is named. */
 export function launchPullRequest(): number | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.PULL_REQUEST);
-  const number = typeof named === "number" ? named : Number(named);
+  const number = Predicate.isNumber(named) ? named : Number(named);
 
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }

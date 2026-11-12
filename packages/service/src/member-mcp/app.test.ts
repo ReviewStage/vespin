@@ -71,7 +71,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
-import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
+import { Clock, DateTime, Effect, Option, Predicate, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
@@ -1545,7 +1545,7 @@ it.layer(getTestDB())("a member's start_agent on no task", (it) => {
 
         assert.notEqual(started.isError, true, started.content[0].text);
         const agentId: unknown = JSON.parse(started.content[0].text).agent?.id;
-        assert.ok(typeof agentId === "string", started.content[0].text);
+        assert.ok(Predicate.isString(agentId), started.content[0].text);
         const agent = Option.getOrThrow(yield* readAgent(owner, agentId));
         assert.ok(agent.prompt?.includes(prompt), "the prompt is handed to the agent");
         const made = Option.getOrThrow(yield* readTask(owner, agent.taskId));
@@ -2145,7 +2145,7 @@ it.effect(
         name: "Test Workspace",
       });
       assert.notEqual(photo.isError, true, photo.content[0].text);
-      assert.equal(typeof JSON.parse(photo.content[0].text).workspace.photoVersion, "string");
+      assert.ok(Predicate.isString(JSON.parse(photo.content[0].text).workspace.photoVersion));
     }),
 );
 

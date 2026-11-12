@@ -1,6 +1,7 @@
 import { searchHit } from "@repo/features/search-score";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { Command } from "cmdk";
+import { Predicate } from "effect";
 import { memo, type ReactNode, type Ref, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../../cn.js";
 import { SearchIcon } from "../../icons/lucide-glyphs.js";
@@ -172,7 +173,7 @@ const CommandRow = memo(function CommandRow({
           ...item,
           label: marked(item.label),
           detail: marked(item.detail),
-          detailWords: typeof item.detail === "string" ? item.detail : undefined,
+          detailWords: Predicate.isString(item.detail) ? item.detail : undefined,
           hint: marked(item.hint),
         }
       : item;
@@ -381,7 +382,7 @@ export function CommandDialog({
               ref={(node) => {
                 field.current = node;
 
-                if (typeof inputRef === "function") inputRef(node);
+                if (Predicate.isFunction(inputRef)) inputRef(node);
                 else if (inputRef !== undefined && inputRef !== null) inputRef.current = node;
               }}
               className={FIELD}

@@ -15,6 +15,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
 import { PICTURE_STATE, type PictureRead } from "@repo/ui/picture-read";
 import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { type ReactNode, useMemo } from "react";
 import { ActorRef, commentAuthor } from "../actor-ref.js";
 import { unreadShown } from "../failure-report.js";
@@ -220,7 +221,7 @@ export function useInboxLinePieces(
   );
 
   return inboxPreviewPieces(item, nameOf, ticked).map((piece) =>
-    typeof piece === "string" ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
+    Predicate.isString(piece) ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
   );
 }
 

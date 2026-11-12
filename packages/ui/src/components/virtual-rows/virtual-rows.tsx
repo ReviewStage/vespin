@@ -8,6 +8,7 @@ import {
   type VirtualItem,
   type Virtualizer,
 } from "@tanstack/react-virtual";
+import { Predicate } from "effect";
 import {
   type CSSProperties,
   type FocusEvent,
@@ -243,7 +244,7 @@ function rowClassOf(
   rowClassName: string | ((index: number) => string) | undefined,
   index: number,
 ): string {
-  const own = typeof rowClassName === "function" ? rowClassName(index) : rowClassName;
+  const own = Predicate.isFunction(rowClassName) ? rowClassName(index) : rowClassName;
 
   return own === undefined ? "ui-virtual-row" : `ui-virtual-row ${own}`;
 }

@@ -21,6 +21,7 @@ import {
   useComboboxField,
   writingRow,
 } from "@repo/ui";
+import { Predicate } from "effect";
 import { type ReactNode, type RefObject, useEffect, useId, useState } from "react";
 import {
   type ComposerTrigger,
@@ -178,7 +179,7 @@ function answers(entry: SlashEntry, query: string): boolean {
 
 /** Whether the text takes what a block lays in, and the document keeps its row. */
 function offered(entry: SlashEntry, offers: BlockPickerOffers, rows: BlockPickerRows): boolean {
-  if (typeof entry.block !== "string") return true;
+  if (!Predicate.isString(entry.block)) return true;
 
   if (rows.dropped.has(entry.block)) return false;
 

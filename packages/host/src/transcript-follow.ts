@@ -28,6 +28,7 @@ import {
   Effect,
   Fiber,
   Option,
+  Predicate,
   RcMap,
   Result,
   Schedule,
@@ -223,7 +224,7 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
 /** A value as JSON with every object's keys in order, so two messages alike read alike whichever read built them. */
 function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, held: unknown) =>
-    held !== null && typeof held === "object" && !Array.isArray(held)
+    Predicate.isObject(held)
       ? Object.fromEntries(
           Object.entries(held).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         )

@@ -22,7 +22,7 @@ import {
 } from "@repo/features/github-installation-wire";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import { linkInstallation, setInstallationStatus } from "../github/github-installations.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
 import { workspacesRead } from "../live/reads/workspaces.js";
@@ -195,8 +195,9 @@ it.effect(
           readonly value: Option.Option<string> | string;
           readonly txids: readonly string[];
         }) => {
-          const txid =
-            typeof fired.value === "string" ? fired.value : Option.getOrThrow(fired.value);
+          const txid = Predicate.isString(fired.value)
+            ? fired.value
+            : Option.getOrThrow(fired.value);
 
           assert.deepEqual(fired.txids, [txid]);
         };

@@ -86,7 +86,7 @@ import { useDisclosure } from "@repo/ui/use-disclosure";
 import { runHolding } from "@repo/ui/virtual-rows";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
-import { absurd } from "effect";
+import { absurd, Predicate } from "effect";
 import {
   Activity,
   Fragment,
@@ -379,7 +379,7 @@ function tabTaskOf(
   pages: readonly OpenPage[],
   files: readonly OpenFile[],
 ): string | undefined {
-  if (typeof tab === "string") return undefined;
+  if (Predicate.isString(tab)) return undefined;
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.PAGE: {
@@ -1305,7 +1305,7 @@ function stripTabs(input: {
   const cloudBrowserTabs = panel.strip
     .filter(
       (tab): tab is CloudBrowserStripTab =>
-        typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.CLOUD_BROWSER,
+        !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.CLOUD_BROWSER,
     )
     .flatMap((tab) => {
       const drawn = cloudBrowsers.find((each) => each.id === tab.cloudBrowser);
@@ -1338,7 +1338,7 @@ function stripTabs(input: {
   const transcriptTabs = panel.strip
     .filter(
       (tab): tab is TranscriptStripTab =>
-        typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.TRANSCRIPT,
+        !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.TRANSCRIPT,
     )
     .flatMap((tab) => {
       const agent = agents.agents?.find((each) => each.id === tab.transcript);
@@ -2299,7 +2299,7 @@ function TabContent({
   const directory = useMemberDirectory();
 
   // Note that no fixed kind is drawn now (`DRAWN_KINDS`): the plan's, the Inbox's, and Comments stand elsewhere.
-  if (typeof tab === "string") return null;
+  if (Predicate.isString(tab)) return null;
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.TRANSCRIPT:

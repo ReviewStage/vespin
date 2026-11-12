@@ -18,6 +18,7 @@ import {
   FiberHandle,
   Option,
   Path,
+  Predicate,
   Ref,
   Result,
   Schedule,
@@ -251,7 +252,7 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
           }),
       ).pipe(
         Effect.mapError((failure) =>
-          typeof failure === "string"
+          Predicate.isString(failure)
             ? failure
             : `${version} could not be saved beside the releases`,
         ),

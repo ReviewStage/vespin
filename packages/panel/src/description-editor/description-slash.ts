@@ -2,6 +2,7 @@ import { WRITING_BLOCK, WRITING_INSERT } from "@repo/settings/shortcuts";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import { Predicate } from "effect";
 import {
   type ComposerTrigger,
   type DescriptionEditorBlocks,
@@ -210,14 +211,14 @@ export function descriptionSlash(
     const word = state.found;
 
     if (word === undefined) {
-      if (typeof block !== "string") ownBlockAtCaret(editor, parse(block.markdown));
+      if (!Predicate.isString(block)) ownBlockAtCaret(editor, parse(block.markdown));
 
       return;
     }
 
     editor.chain().focus().deleteRange({ from: word.from, to: word.to }).run();
 
-    if (typeof block === "string") INSERTS[block](editor);
+    if (Predicate.isString(block)) INSERTS[block](editor);
     else editor.commands.insertContent([...parse(block.markdown)]);
   };
 

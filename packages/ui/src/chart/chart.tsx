@@ -14,6 +14,7 @@
  */
 
 import { formatCount } from "@repo/features/number-format";
+import { Predicate } from "effect";
 import * as React from "react";
 import type { TooltipValueType } from "recharts";
 import * as RechartsPrimitive from "recharts";
@@ -254,7 +255,7 @@ function ChartTooltipContent({
     // Recharts hands `label` over as a loose ReactNode, and a string is the
     // only form that can name a ChartConfig entry — this check is the boundary.
     const value =
-      !labelKey && typeof label === "string" ? (config[label]?.label ?? label) : itemConfig?.label;
+      !labelKey && Predicate.isString(label) ? (config[label]?.label ?? label) : itemConfig?.label;
 
     if (labelFormatter) {
       return <div className="ui-chart-tooltip-label">{labelFormatter(value, payload)}</div>;
@@ -326,25 +327,23 @@ function ChartTooltipContent({
  * repository could import, so the narrowing has to happen here at runtime.
  */
 function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key: string) {
-  if (typeof payload !== "object" || payload === null) {
+  if (!Predicate.isObject(payload)) {
     return undefined;
   }
 
   const payloadPayload =
-    "payload" in payload && typeof payload.payload === "object" && payload.payload !== null
-      ? payload.payload
-      : undefined;
+    "payload" in payload && Predicate.isObject(payload.payload) ? payload.payload : undefined;
 
   let configLabelKey: string = key;
 
   // SAFETY: each `key in` check below admits the key as one its object holds.
-  if (key in payload && typeof payload[key as keyof typeof payload] === "string") {
+  if (key in payload && Predicate.isString(payload[key as keyof typeof payload])) {
     // SAFETY: the condition above checked the key holds a string.
     configLabelKey = payload[key as keyof typeof payload] as string;
   } else if (
     payloadPayload &&
     key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
+    Predicate.isString(payloadPayload[key as keyof typeof payloadPayload])
   ) {
     // SAFETY: the condition above checked the key holds a string.
     configLabelKey = payloadPayload[key as keyof typeof payloadPayload] as string;

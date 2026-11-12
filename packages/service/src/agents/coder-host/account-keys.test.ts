@@ -13,7 +13,7 @@ import {
 import { jsonResponse } from "@repo/wire/testing";
 import { generateText, type LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
-import { Effect, Redacted, Result, Schema } from "effect";
+import { Effect, Predicate, Redacted, Result, Schema } from "effect";
 import { afterAll, test } from "vitest";
 import { USER_ROLE } from "../../admin/admin-access.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
@@ -79,7 +79,7 @@ function provider(answers: readonly Response[]) {
       headers.get("x-api-key") ?? headers.get("authorization")?.replace(/^Bearer /u, "") ?? "",
     );
     const url = new URL(input instanceof Request ? input.url : String(input));
-    const body = typeof init?.body === "string" ? readRequestModel(init.body) : {};
+    const body = Predicate.isString(init?.body) ? readRequestModel(init.body) : {};
     asked.push({ host: url.host, model: body.model });
     const answer = answers[Math.min(next, answers.length - 1)];
     next += 1;

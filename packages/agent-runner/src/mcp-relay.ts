@@ -45,7 +45,7 @@ function requestId(message: JsonRpcMessage): string | number | undefined {
   if (!("method" in message) || !("id" in message)) return undefined;
   const id: unknown = message.id;
 
-  return typeof id === "string" || typeof id === "number" ? id : undefined;
+  return Predicate.isString(id) || Predicate.isNumber(id) ? id : undefined;
 }
 
 /** Whether the service's body reads as a JSON-RPC message to hand the CLI. */

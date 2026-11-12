@@ -1,6 +1,7 @@
 import * as ui from "@repo/ui";
 import { GAP, GlyphSlot, Inline, TEXT_VARIANT, Text } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { Predicate } from "effect";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -15,7 +16,7 @@ import { CatalogSection } from "../section";
 /** Every glyph the barrel exports, which it names `…Icon`, by that name. */
 // SAFETY: the filter keeps the barrel's `…Icon` functions, every one a glyph component drawn with no props.
 const GLYPH_EXPORTS = Object.entries(ui)
-  .filter(([name, value]) => name.endsWith("Icon") && typeof value === "function")
+  .filter(([name, value]) => name.endsWith("Icon") && Predicate.isFunction(value))
   .map(([name, value]) => [name, value as () => React.JSX.Element] as const)
   .sort(([left], [right]) => left.localeCompare(right));
 

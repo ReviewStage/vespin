@@ -4,6 +4,7 @@ import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { type ReactNode, useCallback } from "react";
 import { tabCard } from "../desktop/tab-card.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
@@ -61,7 +62,7 @@ type Listed = AgentSummary | (typeof UNLISTED)[keyof typeof UNLISTED];
 
 /** The agent the list carries; none where it carries none. */
 function agentOf(listed: Listed): AgentSummary | undefined {
-  return typeof listed === "string" ? undefined : listed;
+  return Predicate.isString(listed) ? undefined : listed;
 }
 
 /**

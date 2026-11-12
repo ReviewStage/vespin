@@ -11,7 +11,7 @@ import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { Effect, Option, Predicate, Result, Schema } from "effect";
 import {
   ACTION_RESULT_STATUS,
   HOSTED_API_ERROR,
@@ -147,7 +147,7 @@ function readMessage(
   // Note that `message` is read too, because Claude Code's own messaging tools name their words so and its agents carry that name here.
   const words = input.text ?? input.message;
 
-  if (typeof words !== "string") return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
+  if (!Predicate.isString(words)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
   const agentId = readAgentId(input.agentId);
 
   if (Result.isFailure(agentId)) return Result.fail(MESSAGE_AGENT_REFUSAL.MALFORMED_ID);

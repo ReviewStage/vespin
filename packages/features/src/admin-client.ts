@@ -16,7 +16,7 @@
  */
 
 import { HTTP_METHOD } from "@repo/wire";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   accountCall,
@@ -84,9 +84,7 @@ function parsedJson(text: string): { readonly json: unknown } | undefined {
 
 /** Whether a star write's answer says the star stands as asked: the route answers `{ favorite }`. */
 function favoriteLanded(json: unknown, favorite: boolean): boolean {
-  return (
-    typeof json === "object" && json !== null && "favorite" in json && json.favorite === favorite
-  );
+  return Predicate.isObjectOrArray(json) && "favorite" in json && json.favorite === favorite;
 }
 
 export class HostedAdminClient {

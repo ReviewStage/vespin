@@ -360,7 +360,7 @@ function fakeService() {
     Effect.suspend((): Effect.Effect<unknown> => {
       if (scope === undefined) return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
 
-      if (typeof scope === "object") return Effect.succeed(scope);
+      if (!Predicate.isString(scope)) return Effect.succeed(scope);
 
       return poll === true ? live.scope.poll(after) : Effect.succeed(live.scope.first());
     });
@@ -381,7 +381,7 @@ function fakeService() {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       }
 
-      if (typeof transcript === "object") return Effect.succeed(transcript);
+      if (!Predicate.isString(transcript)) return Effect.succeed(transcript);
 
       return poll === true ? live.transcript.poll(after) : Effect.succeed(live.transcript.first());
     });
@@ -395,7 +395,7 @@ function fakeService() {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       }
 
-      if (typeof accountLive === "object") return Effect.succeed(accountLive);
+      if (!Predicate.isString(accountLive)) return Effect.succeed(accountLive);
 
       return poll === true ? live.account.poll(after) : Effect.succeed(live.account.first());
     });
@@ -576,7 +576,7 @@ function fakeService() {
         );
 
         // Note that the service answers an agent the account does not reach not found on every read alike.
-        if (typeof transcript === "object") return transcript;
+        if (Predicate.isObjectKeyword(transcript)) return transcript;
 
         return newestPage ?? { ...SAID, cursor: "1:0" };
       }),
@@ -1169,7 +1169,7 @@ function textOf(row: unknown, name: string): string | undefined {
   const value =
     Predicate.isObjectOrArray(row) && Predicate.hasProperty(row, name) ? row[name] : undefined;
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 /** The id a row of the account's items names its item by: its own, or the item its message is on. */
@@ -1210,7 +1210,7 @@ function bySyncId(
       const id = itemIdOf(stamp);
       const row = id === undefined ? undefined : items.rows.get(id);
 
-      if (id === undefined || typeof row !== "object" || row === null) return [];
+      if (id === undefined || !Predicate.isObjectOrArray(row)) return [];
 
       const unread =
         Predicate.isObjectOrArray(stamp) && Predicate.hasProperty(stamp, "unread")

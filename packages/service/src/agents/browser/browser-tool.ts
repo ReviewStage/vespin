@@ -241,7 +241,7 @@ function firstDriven(
 
     const named = action.tab ?? tab;
 
-    if (typeof named === "string" && driven.has(named)) return { index, tab: named };
+    if (Predicate.isString(named) && driven.has(named)) return { index, tab: named };
     tab = action.action === BROWSER_AGENT_ACTION.CLOSE ? undefined : named;
   }
 

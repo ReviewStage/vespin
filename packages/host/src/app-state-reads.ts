@@ -35,6 +35,7 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
+import { Predicate } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHostRead,
@@ -398,7 +399,7 @@ function isPlainArray(value: unknown): value is readonly unknown[] {
 
 /** Whether `value` is an object of any kind, which a walk may go into. */
 function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
+  return Predicate.isObjectOrArray(value);
 }
 
 /** Whether `value` is an object literal's kind: one made by `{}` or with no prototype at all. */

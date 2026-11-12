@@ -26,7 +26,7 @@
  * enough closes itself (`idleTabs`, the panel's `tasks/use-idle-tabs.ts`).
  */
 
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 
 /**
  * What each kind of tab whose name is not its subject's is called, wherever
@@ -262,7 +262,7 @@ export function cloudBrowserTab(cloudBrowser: string): CloudBrowserStripTab {
 
 /** A tab's kind: a word's for a string, and an object's own otherwise. */
 export function stripTabKind(tab: StripTab): StripTabKind {
-  return typeof tab === "string" ? STRIP_TAB_KIND.WORD : tab.kind;
+  return Predicate.isString(tab) ? STRIP_TAB_KIND.WORD : tab.kind;
 }
 
 /**
@@ -274,7 +274,7 @@ export function taggedStripTab<T extends StripTab>(tab: T | UntaggedStripTab<T>)
   // SAFETY: a tab is a StripTab or an untagged one, whatever its `T`.
   const held = tab as StripTab | UntaggedStripTab;
 
-  if (typeof held === "string" || "kind" in held) {
+  if (Predicate.isString(held) || "kind" in held) {
     // SAFETY: a word, or a tab already tagged, is the `T` it was handed as.
     return tab as T;
   }
@@ -312,7 +312,7 @@ export function followedAgent(
   return column.shown &&
     !column.covered &&
     tab !== undefined &&
-    typeof tab !== "string" &&
+    !Predicate.isString(tab) &&
     tab.kind === STRIP_TAB_KIND.AGENT
     ? tab.agent
     : undefined;

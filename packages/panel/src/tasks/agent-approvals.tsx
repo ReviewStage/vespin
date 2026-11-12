@@ -50,6 +50,7 @@ import {
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import {
   createContext,
   type ReactNode,
@@ -565,9 +566,9 @@ export function transcriptCallIds(
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (typeof part !== "object" || part === null || !("toolCallId" in part)) continue;
+      if (!Predicate.isObjectOrArray(part) || !("toolCallId" in part)) continue;
 
-      if (typeof part.toolCallId === "string") ids.add(part.toolCallId);
+      if (Predicate.isString(part.toolCallId)) ids.add(part.toolCallId);
     }
   }
 

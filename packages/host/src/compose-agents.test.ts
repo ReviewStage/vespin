@@ -33,7 +33,7 @@ import {
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Exit, Fiber, Scope, SubscriptionRef } from "effect";
+import { Deferred, Duration, Effect, Exit, Fiber, Predicate, Scope, SubscriptionRef } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppTranscript } from "./app-state.js";
 import { taskListCollections } from "./task-list-collections.js";
@@ -1674,7 +1674,7 @@ it.effect(
       deliverAccount(live, { items: [WAITING], failedRuns: [FAILED_RUN] });
       yield* settled;
       const [answered] = accountInboxes();
-      assert.ok(isRecord(answered) && typeof answered.cursor === "string");
+      assert.ok(isRecord(answered) && Predicate.isString(answered.cursor));
       assert.deepEqual(
         { ...answered, cursor: "" },
         {
@@ -1693,7 +1693,7 @@ it.effect(
       });
       yield* nextPoll;
       const moved = accountInboxes().at(-1);
-      assert.ok(isRecord(moved) && typeof moved.cursor === "string");
+      assert.ok(isRecord(moved) && Predicate.isString(moved.cursor));
       assert.notEqual(moved.cursor, answered.cursor);
       assert.deepEqual(moved.items, [{ ...WAITING, revision: 3, updatedAt: NOW }]);
 

@@ -36,7 +36,7 @@ import type { Sandbox } from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import type { HttpClient } from "effect/http";
 import type { SessionsForAccount } from "../../automations/automation-runs.js";
 import { ACTION_RESULT_STATUS, MESSAGE_CHANNEL, TURN_FAILURE } from "../../core.js";
@@ -71,17 +71,17 @@ function endTurnSummary(journal: StoredUIMessage): string | undefined {
   const output: unknown = part.output;
 
   const status =
-    typeof output === "object" && output !== null && "status" in output ? output.status : undefined;
+    Predicate.isObjectOrArray(output) && "status" in output ? output.status : undefined;
 
   const input: unknown = part.input;
 
-  if (status !== ACTION_RESULT_STATUS.ACCEPTED || typeof input !== "object" || input === null) {
+  if (status !== ACTION_RESULT_STATUS.ACCEPTED || !Predicate.isObjectOrArray(input)) {
     return undefined;
   }
 
   const summary = "summary" in input ? input.summary : undefined;
 
-  return typeof summary === "string" && summary.trim().length > 0 ? summary.trim() : undefined;
+  return Predicate.isString(summary) && summary.trim().length > 0 ? summary.trim() : undefined;
 }
 
 /**

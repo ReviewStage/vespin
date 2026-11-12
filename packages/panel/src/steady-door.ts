@@ -8,8 +8,8 @@
  */
 
 import { Predicate } from "effect";
-import { useCallback, useRef } from "react";
 import type { ReadonlyRecord } from "effect/Record";
+import { useCallback, useRef } from "react";
 
 /**
  * The door handed over, standing across draws and calling the newest one;
@@ -92,7 +92,7 @@ function keptPlace(
 ): KeptPlace {
   if (kept !== undefined && kept.handed === handed) return kept;
 
-  if (doorName && typeof handed === "function") {
+  if (doorName && Predicate.isFunction(handed)) {
     // SAFETY: `doorName` marks a door, a function the panel calls with its own arguments, which `keptDoor` passes through unread.
     return keptDoor(kept, handed as (...args: never[]) => void);
   }

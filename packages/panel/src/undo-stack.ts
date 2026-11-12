@@ -70,6 +70,7 @@ import type { PortActKind } from "@repo/host/contract";
 import { STATUS_TONE } from "@repo/ui";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { Store, useSelector } from "@tanstack/react-store";
+import { Predicate } from "effect";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
 import type { ShownFailure } from "./failure-report.js";
 import { showToast, type ToastNotice, withdrawToast } from "./toast.js";
@@ -721,7 +722,7 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
         send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
     );
 
-  const words = typeof write.words === "string" ? write.words : write.words(change);
+  const words = Predicate.isString(write.words) ? write.words : write.words(change);
 
   const toast = undoable({
     words,

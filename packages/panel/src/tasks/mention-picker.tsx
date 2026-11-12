@@ -93,7 +93,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useCreateStore, useSelector } from "@tanstack/react-store";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Predicate } from "effect";
 import { UsersIcon } from "lucide-react";
 import { type RefObject, useEffect, useId, useMemo, useState } from "react";
 import { askAct } from "../act.js";
@@ -1356,12 +1356,11 @@ function markedWords(
 
   return {
     label: <Highlighted text={row.name} ranges={hit.label} />,
-    detail:
-      typeof row.detail === "string" ? (
-        <Highlighted text={row.detail} ranges={hitRangesIn(row.detail, subject, hit)} />
-      ) : (
-        row.detail
-      ),
+    detail: Predicate.isString(row.detail) ? (
+      <Highlighted text={row.detail} ranges={hitRangesIn(row.detail, subject, hit)} />
+    ) : (
+      row.detail
+    ),
   };
 }
 

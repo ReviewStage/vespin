@@ -156,6 +156,7 @@ import {
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import {
   Fragment,
   isValidElement,
@@ -1073,7 +1074,7 @@ function agentRows(
         ? row.section
         : undefined;
 
-    const detail = typeof row.detail === "string" ? row.detail : undefined;
+    const detail = Predicate.isString(row.detail) ? row.detail : undefined;
     const named = [heading, taskName].filter((word) => word !== undefined);
 
     return {

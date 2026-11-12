@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { act } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -95,7 +96,7 @@ async function openPage(page: "consent" | "sign-in", address: string): Promise<H
     const request = input instanceof Request ? input : undefined;
     const url = new URL(request?.url ?? String(input), window.location.href);
     const text = request === undefined ? init?.body : await request.text();
-    const body = typeof text === "string" ? JSON.parse(text) : undefined;
+    const body = Predicate.isString(text) ? JSON.parse(text) : undefined;
     sent.push({ path: url.pathname, body });
 
     return answer(url.pathname, body) ?? new Promise<Response>(() => undefined);

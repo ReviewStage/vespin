@@ -16,6 +16,7 @@
  */
 
 import { inboxPushOf, PUSH_KIND } from "@repo/features/inbox-push-wire";
+import { Predicate } from "effect";
 import {
   BackgroundNotificationTaskResult,
   dismissNotificationAsync,
@@ -59,7 +60,7 @@ function badgeOf(payload: NotificationTaskPayload): number | undefined {
   if ("actionIdentifier" in payload) return undefined;
   const badge = payload.aps?.badge;
 
-  return typeof badge === "number" ? badge : undefined;
+  return Predicate.isNumber(badge) ? badge : undefined;
 }
 
 defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {

@@ -37,6 +37,7 @@
  */
 
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
+import { Predicate } from "effect";
 import type { ElementContent, Root } from "hast";
 import type { Root as MarkdownRoot, PhrasingContent, RootContent } from "mdast";
 import { memo, type ReactNode, useMemo, useRef } from "react";
@@ -316,9 +317,7 @@ export function markdownStep<Values extends readonly unknown[], Tree>(
   }
 
   const serials = values.map((value) =>
-    (typeof value === "object" && value !== null) || typeof value === "function"
-      ? serialOf(value)
-      : value,
+    Predicate.isObjectOrArray(value) || Predicate.isFunction(value) ? serialOf(value) : value,
   );
 
   // SAFETY: a step's tuple is the step, then the options it is attached with.

@@ -47,13 +47,15 @@ function sourceFileFor(directory, target) {
 
 /** The `exports` entry's file for one subpath, through its conditions where it has them. */
 function exportTarget(exportsTable, subpath) {
+  // Note that a string is told by its own string, because Metro loads this config before any library it could decode by.
   const entry =
-    typeof exportsTable === "string" && subpath === "." ? exportsTable : exportsTable?.[subpath];
+    String(exportsTable) === exportsTable && subpath === "."
+      ? exportsTable
+      : exportsTable?.[subpath];
 
-  if (typeof entry === "string") return entry;
+  if (String(entry) === entry) return entry;
 
-  if (entry && typeof entry === "object")
-    return entry["react-native"] ?? entry.import ?? entry.default;
+  if (entry instanceof Object) return entry["react-native"] ?? entry.import ?? entry.default;
 
   return undefined;
 }

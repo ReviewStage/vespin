@@ -12,7 +12,7 @@ import {
 } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { isRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Fiber } from "effect";
+import { Deferred, Duration, Effect, Fiber, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppAccountPreferences, AppModels } from "./app-state.js";
 
@@ -187,7 +187,7 @@ function memoryIdsOf(told: WireValue | undefined): readonly string[] | undefined
   const rows = isRecord(read) ? read.rows : undefined;
 
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.id === "string" ? [row.id] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.id) ? [row.id] : []))
     : undefined;
 }
 
@@ -248,7 +248,7 @@ function memoryTextsOf(told: WireValue | undefined): readonly string[] | undefin
   const rows = isRecord(read) ? read.rows : undefined;
 
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.text === "string" ? [row.text] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.text) ? [row.text] : []))
     : undefined;
 }
 
@@ -320,7 +320,7 @@ function hostIdsOf(told: WireValue | undefined): readonly string[] | undefined {
   const rows = isRecord(held) ? held.hosts : undefined;
 
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.id === "string" ? [row.id] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.id) ? [row.id] : []))
     : undefined;
 }
 

@@ -16,7 +16,7 @@ import { installActPort, installAppBridge } from "@repo/panel/app-bridge";
 import { HOST_CAPABILITY, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS, isRecord, unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { composeWeb, WebHostTag } from "../src/app/web-host";
@@ -329,7 +329,7 @@ class RelaySocket extends EventTarget {
     RelaySocket.opened.push(this);
   }
   send(data: string | Uint8Array): void {
-    this.sent.push(typeof data === "string" ? data : `bytes:${new TextDecoder().decode(data)}`);
+    this.sent.push(Predicate.isString(data) ? data : `bytes:${new TextDecoder().decode(data)}`);
     this.dispatchEvent(new Event("sent"));
   }
   close(): void {

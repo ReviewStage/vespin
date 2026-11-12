@@ -20,7 +20,7 @@ import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import * as Sentry from "@sentry/electron/main";
-import { Data, Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
+import { Data, Effect, Exit, type Layer, Option, Predicate, Scope, Stream, Tracer } from "effect";
 import {
   type CpuSummary,
   sampleProcessCpu,
@@ -117,7 +117,7 @@ const KEPT_ATTRIBUTE_PREFIXES = ["agent.", "mirror."] as const;
 function keptValue(key: string, value: unknown): string | number | boolean | undefined {
   if (!KEPT_ATTRIBUTE_PREFIXES.some((prefix) => key.startsWith(prefix))) return undefined;
 
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+  return Predicate.isString(value) || Predicate.isNumber(value) || Predicate.isBoolean(value)
     ? value
     : undefined;
 }

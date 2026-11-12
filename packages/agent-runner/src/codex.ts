@@ -475,7 +475,7 @@ function ultrafastCatalog(): string {
   const catalog = bundledCatalog();
 
   const isUltrafast = (tier: unknown) =>
-    typeof tier === "object" && tier !== null && "id" in tier && tier.id === SERVICE_TIER.ULTRAFAST;
+    Predicate.isObjectOrArray(tier) && "id" in tier && tier.id === SERVICE_TIER.ULTRAFAST;
 
   const models = catalog.models.map((model) => {
     const tiers = model.service_tiers ?? [];
@@ -942,7 +942,7 @@ function servedAsk(
   const requestId = randomUUID();
 
   const input = Object.fromEntries(
-    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => typeof value === "string"),
+    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => Predicate.isString(value)),
   );
 
   const requested: RunnerApprovalRequested = {
@@ -951,7 +951,7 @@ function servedAsk(
     toolUseId: itemId,
     toolName,
     title,
-    ...(typeof reason === "string" && reason !== "" ? { description: reason } : undefined),
+    ...(Predicate.isString(reason) && reason !== "" ? { description: reason } : undefined),
     input: cutInput(input),
   };
 

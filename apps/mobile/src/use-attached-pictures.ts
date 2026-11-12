@@ -17,6 +17,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pictureName } from "@repo/features/file-marker";
 import type { AttachedPicture } from "@repo/ui-native";
+import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
@@ -114,10 +115,10 @@ export function useAttachedPictures(
     });
 
     const unread =
-      read.find((each): each is string => typeof each === "string") ??
+      read.find((each): each is string => Predicate.isString(each)) ??
       (unreadable > 0 ? PICTURE_REFUSAL.UNREADABLE(nextName(now, read.length)) : undefined);
 
-    const next = [...now, ...read.filter((each): each is HeldPicture => typeof each !== "string")];
+    const next = [...now, ...read.filter((each): each is HeldPicture => !Predicate.isString(each))];
     held.current = next;
     setPictures(next);
     onNote(unread ?? pictureRefusal(next));

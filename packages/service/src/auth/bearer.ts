@@ -1,6 +1,6 @@
 import { isAPIError } from "better-auth/api";
 import type { Cause } from "effect";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import {
   isRecord,
   text,
@@ -58,7 +58,7 @@ function refusedToken(failure: Cause.UnknownError): boolean {
     );
   }
 
-  if (!(thrown instanceof Error) || !("code" in thrown) || typeof thrown.code !== "string") {
+  if (!(thrown instanceof Error) || !("code" in thrown) || !Predicate.isString(thrown.code)) {
     return false;
   }
 
