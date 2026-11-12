@@ -7,8 +7,8 @@
  * agents (`integrations.ts`). Its token is asked for at the moment a call is
  * made and kept in the SDK's own cache, never stored.
  *
- * A workspace's owner or admin connects the bot, which reads the team the
- * token answers for (`auth.test`) and keeps it
+ * A workspace's owner or admin who is someone in the team the token answers
+ * for (`auth.test`) connects the bot, which keeps that team
  * (`@repo/database/models/slack-installation-store`). Writing to a member
  * finds their Slack user id the first time and keeps it: through a Slack
  * account they connected themselves under Settings › Integrations, whose own
@@ -204,6 +204,11 @@ export interface SlackBotService {
     content: SlackMessageContent,
     thread?: SlackMessage,
   ) => Effect.Effect<Option.Option<SlackMessage>, never, DatabaseServices>;
+  /** Whether the account is someone in the bot's team, through a Slack account it connected itself or by its email; nothing is kept. */
+  readonly inTeam: (
+    teamId: string,
+    userId: string,
+  ) => Effect.Effect<boolean, SlackBotFailure | StoreFailure, DatabaseServices>;
   /** The member of the workspace a Slack user of its connected team is, by the id kept for them or through a Slack account a member connected themselves; nothing where neither finds one. */
   readonly memberOf: (
     organizationId: string,
@@ -369,13 +374,8 @@ function connectedSlackId(
   );
 }
 
-/** The member's Slack user id in the team through the Slack accounts they connected themselves, the first in the team taken and kept; nothing where none is. */
-const connectedMemberSlackId = Effect.fnUntraced(function* (
-  api: SlackWebApi,
-  organizationId: string,
-  teamId: string,
-  userId: string,
-) {
+/** The account's Slack user id in the team through the Slack accounts it connected itself, the first in the team taken; nothing where none is. */
+const ownSlackId = Effect.fnUntraced(function* (api: SlackWebApi, teamId: string, userId: string) {
   const connections = yield* readIntegrationConnections(userId);
 
   for (const connection of connections) {
@@ -384,13 +384,42 @@ const connectedMemberSlackId = Effect.fnUntraced(function* (
     if (connection.status !== INTEGRATION_ROW_STATUS.CONNECTED) continue;
     const found = yield* connectedSlackId(api, teamId, connection.connectSubject);
 
-    if (Option.isNone(found)) continue;
-    yield* recordSlackMemberLookup(organizationId, userId, found.value);
-
-    return found;
+    if (Option.isSome(found)) return found;
   }
 
   return Option.none<string>();
+});
+
+/** The account's Slack user id in the bot's team by its email (`users.lookupByEmail`); nothing where it holds none or Slack finds no one. */
+const emailSlackId = Effect.fnUntraced(function* (api: SlackWebApi, userId: string) {
+  const email = (yield* readAccountPerson(userId))?.email;
+
+  if (email === undefined) return Option.none<string>();
+
+  return yield* api(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, { email }).pipe(
+    Effect.flatMap((answer) =>
+      readAnswer(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, LookupSchema)(answer),
+    ),
+    Effect.map((answer) => Option.some(answer.user.id)),
+    Effect.catchIf(
+      (failure) => failure.code === SLACK_USERS_NOT_FOUND,
+      () => Effect.succeed(Option.none<string>()),
+    ),
+  );
+});
+
+/** The member's Slack user id in the team through the Slack accounts they connected themselves, the first in the team taken and kept; nothing where none is. */
+const connectedMemberSlackId = Effect.fnUntraced(function* (
+  api: SlackWebApi,
+  organizationId: string,
+  teamId: string,
+  userId: string,
+) {
+  const found = yield* ownSlackId(api, teamId, userId);
+
+  if (Option.isSome(found)) yield* recordSlackMemberLookup(organizationId, userId, found.value);
+
+  return found;
 });
 
 /**
@@ -427,21 +456,7 @@ const memberSlackId = Effect.fn("web/slackMemberId")(function* (
     if (DateTime.isLessThan(yield* DateTime.now, askedAgainAt)) return Option.none<string>();
   }
 
-  const email = (yield* readAccountPerson(userId))?.email;
-
-  if (email === undefined) return Option.none<string>();
-
-  const found = yield* api(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, { email }).pipe(
-    Effect.flatMap((answer) =>
-      readAnswer(SLACK_METHOD.USERS_LOOKUP_BY_EMAIL, LookupSchema)(answer),
-    ),
-    Effect.map((answer) => Option.some(answer.user.id)),
-    Effect.catchIf(
-      (failure) => failure.code === SLACK_USERS_NOT_FOUND,
-      () => Effect.succeed(Option.none<string>()),
-    ),
-  );
-
+  const found = yield* emailSlackId(api, userId);
   yield* recordSlackMemberLookup(organizationId, userId, Option.getOrNull(found));
 
   return found;
@@ -540,6 +555,7 @@ export function slackBotOver(
       configured: false,
       team: Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.AUTH_TEST })),
       dm: () => Effect.succeedNone,
+      inTeam: () => Effect.succeed(false),
       memberOf: slackMemberOf,
       update: () => Effect.void,
       reply: () => Effect.succeedNone,
@@ -588,6 +604,12 @@ export function slackBotOver(
 
         return Option.some<SlackMessage>({ channel: message.channel, ts: message.ts });
       }).pipe(Effect.catch(swallowed<SlackMessage>("write to a member"))),
+    inTeam: (teamId, userId) =>
+      Effect.gen(function* () {
+        if (Option.isSome(yield* ownSlackId(api, teamId, userId))) return true;
+
+        return Option.isSome(yield* emailSlackId(api, userId));
+      }),
     memberOf: (organizationId, teamId, slackUserId) =>
       memberOfSlackUser(api, organizationId, teamId, slackUserId),
     update: (channel, ts, content) =>
