@@ -85,8 +85,11 @@ export function useAgentPorts(agentId: string): AgentPorts {
 
   const view = hostedPorts(listed, linked);
 
-  /** Lays what the service now shares over the link read. */
-  const laid = (shared: AgentSharedPortAnswerView) => queries.setQueryData(sharedKey, shared);
+  /** Lays what the service now shares over the link read, a read still out let go first so it never lands over it. */
+  const laid = (shared: AgentSharedPortAnswerView) =>
+    queries
+      .cancelQueries({ queryKey: sharedKey })
+      .then(() => queries.setQueryData(sharedKey, shared));
 
   const share = (port: number | null) => {
     setNote(undefined);
@@ -94,8 +97,8 @@ export function useAgentPorts(agentId: string): AgentPorts {
     if (port === null) {
       void write(
         () =>
-          acts[ACT_KIND.AGENTS_PORT_UNSHARE]({ agentId }).then((answer) => {
-            if ("shared" in answer) laid(answer);
+          acts[ACT_KIND.AGENTS_PORT_UNSHARE]({ agentId }).then(async (answer) => {
+            if ("shared" in answer) await laid(answer);
 
             return answer;
           }),
@@ -112,8 +115,8 @@ export function useAgentPorts(agentId: string): AgentPorts {
 
     void write(
       () =>
-        acts[ACT_KIND.AGENTS_PORT_SHARE]({ agentId, port }).then((answer) => {
-          if ("url" in answer) laid({ shared: { port, url: answer.url } });
+        acts[ACT_KIND.AGENTS_PORT_SHARE]({ agentId, port }).then(async (answer) => {
+          if ("url" in answer) await laid({ shared: { port, url: answer.url } });
 
           return answer;
         }),

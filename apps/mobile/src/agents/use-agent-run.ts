@@ -13,7 +13,8 @@
  * does, then runs the action (`AGENTS_RUN_ACTION`) or stops it
  * (`AGENTS_RUN_ACTION_STOP`); the phone draws no Terminal tab, so what runs
  * is seen through its ports. A press that did not go says so in the app's
- * failure notice, in the panel's words, with Try again.
+ * failure notice, in the panel's words, a Stop with Try again; a run offers
+ * none, since one not heard back may have started.
  */
 
 import {
@@ -107,7 +108,7 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
       {
         refused: (answer) => ("terminal" in answer ? undefined : RUN_ACTION_WORDS.NOT_RUN),
         unanswered: RUN_ACTION_WORDS.NOT_RUN,
-        retry: true,
+        // Note that a run offers no Try again, as the panel's does not: one that started but was not heard back would run twice, and the next read of the shells says whether it runs.
         went: BUZZ.SUCCESS,
       },
     );

@@ -2,8 +2,11 @@
  * client-parity.test.ts -- the iOS column offers no act the iOS host refuses, so a row cannot say the app does what its port turns away.
  *
  * `compose-mobile.ts` answers every platform kind with
- * `refusedPlatformProcedures` but those `feedbackProcedures` answer, so
- * each other is a gap on iOS until the app answers it itself, and this test
+ * `refusedPlatformProcedures` but those `feedbackProcedures` answer, and an
+ * agent's shells listed and its sandbox resumed (`shellReadProcedures`),
+ * which its run actions read without a Terminal tab, so those two rows still
+ * stand as the terminal's gap. Each other is a gap on iOS until the app
+ * answers it itself, and this test
  * with it.
  */
 
