@@ -201,12 +201,12 @@ export interface DescriptionEditorProps {
   /** What the text's mentions are drawn and picked with; none where the text takes no mentions, as a template does not. */
   readonly mentions?: DescriptionEditorMentions | undefined;
   /**
-   * Draws a Mermaid code block's diagram into the element the editor stands
-   * under the block, as the panel draws it in the read view, so the panel's
-   * one copy of the diagram bundle serves both; answers what takes the
-   * drawing down. None where the text draws no diagrams.
+   * Draws a Mermaid code block as the read view's diagram card, into the
+   * element the block stands in, with the block's code card handed to stand
+   * in its code's place; drawn again as the block changes, and taken down at
+   * last. None where the text draws no diagrams.
    */
-  readonly drawDiagram?: ((element: HTMLElement, diagram: EditorDiagram) => () => void) | undefined;
+  readonly drawDiagram?: DiagramDrawer | undefined;
   /**
    * Draws a task item's box into the element the editor stands in its
    * item's gutter, as the read view draws it, the shared `Checkbox`, so the
@@ -311,7 +311,12 @@ export interface DescriptionEditorPictures {
  */
 export interface EditorDiagram {
   readonly code: string;
-  readonly previous: string | undefined;
+  /** The block's code card, the lines the editor edits, which the card stands in its code's place. */
+  readonly source: HTMLElement;
+  /** Whether the card shows the code rather than the diagram. */
+  readonly showingCode: boolean;
+  /** Shows the code, or the diagram again, as the card's Show code and Show diagram do. */
+  readonly showCode: (showing: boolean) => void;
 }
 
 /** A task item's box as the editor asks it drawn: its item's words, which name it, whether it is ticked, and the door that ticks or clears it. */
@@ -342,6 +347,12 @@ export type CodeHeaderDrawer = (
   element: HTMLElement,
   block: EditorCodeBlock,
 ) => EditorDrawing<EditorCodeBlock>;
+
+/** Draws a Mermaid code block as its diagram's card, drawn again as the block changes so the card keeps its state. */
+export type DiagramDrawer = (
+  element: HTMLElement,
+  diagram: EditorDiagram,
+) => EditorDrawing<EditorDiagram>;
 
 /** Colors a code block's lines as the drawn text's card colors them, by the host's one highlighter: each line's runs, or none where nothing colors them. */
 export type CodeColorer = (language: string, code: string) => Promise<CodeLines | null>;

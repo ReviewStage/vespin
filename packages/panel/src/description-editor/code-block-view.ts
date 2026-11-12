@@ -1,10 +1,23 @@
 import { CODE_CARD_CLASS, CODE_LINES_CLASS } from "@repo/ui/code-face";
 import { type AnyExtension, Extension, type NodeViewRenderer } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { Selection, TextSelection } from "@tiptap/pm/state";
 import { Predicate } from "effect";
 import { codeColoring } from "./code-coloring.js";
-import type { CodeColorer, CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
+import type {
+  CodeColorer,
+  CodeHeaderDrawer,
+  DiagramDrawer,
+  EditorCodeBlock,
+  EditorDiagram,
+} from "./contract.js";
+import {
+  CODE_OPENED,
+  type CodeOpened,
+  caretIn,
+  diagramCaret,
+  drawnAsDiagram,
+} from "./diagram-card.js";
 
 /**
  * code-block-view.ts -- a fenced block open in the editor in the drawn text's code card: the card's own header, drawn by the panel, over the block's lines.
@@ -67,11 +80,26 @@ function frameOf(node: PmNode): Frame {
   return { dom, head, code };
 }
 
-/** A fenced block's view, its header drawn by the panel. */
-function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
-  return ({ node, editor, getPos }) => {
-    const { dom, head, code } = frameOf(node);
+/** What the panel draws a fenced block's view with: its header, and a Mermaid block's diagram card where it draws diagrams. */
+interface CodeDrawers {
+  readonly drawCodeHeader: CodeHeaderDrawer;
+  readonly drawDiagram: DiagramDrawer | undefined;
+}
+
+/**
+ * A fenced block's view, its header drawn by the panel; a Mermaid block's
+ * standing in its diagram's card where the panel draws diagrams, its code
+ * card handed to the card for its code's place (`./diagram-card.ts`).
+ */
+function codeBlockView({ drawCodeHeader, drawDiagram }: CodeDrawers): NodeViewRenderer {
+  return ({ node, editor, getPos, decorations }) => {
+    const { dom: frame, head, code } = frameOf(node);
     let current = node;
+    // A Mermaid block's diagram card, which the panel draws, and what opened its code, if anything did.
+    let opened: CodeOpened | undefined = caretIn(decorations) ? CODE_OPENED.CARET : undefined;
+
+    const card =
+      drawDiagram !== undefined && drawnAsDiagram(node) ? document.createElement("div") : undefined;
 
     const setLanguage = (language: string) => {
       const at = getPos();
@@ -102,13 +130,44 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
       setLanguage,
     });
 
+    // Note that the diagram shown again puts a caret standing in the hidden code after the block, so no key types there.
+    const showCode = (showing: boolean) => {
+      opened = showing ? CODE_OPENED.PRESS : undefined;
+      const at = getPos();
+      const { head: caret } = editor.state.selection;
+
+      if (!showing && Predicate.isNumber(at) && caret > at && caret < at + current.nodeSize) {
+        const after = editor.state.doc.resolve(at + current.nodeSize);
+        editor.view.dispatch(editor.state.tr.setSelection(Selection.near(after)));
+      }
+
+      diagramDrawing?.redraw(diagramOf(current));
+    };
+
+    const diagramOf = (held: PmNode): EditorDiagram => ({
+      code: held.textContent,
+      source: frame,
+      showingCode: opened !== undefined,
+      showCode,
+    });
+
     const drawing = drawCodeHeader(head, blockOf(node));
+    const diagramDrawing = card === undefined ? undefined : drawDiagram?.(card, diagramOf(node));
 
     return {
-      dom,
+      dom: card ?? frame,
       contentDOM: code,
-      update: (next) => {
-        if (next.type !== current.type) return false;
+      update: (next, nextDecorations) => {
+        if (next.type !== current.type || drawnAsDiagram(next) !== (card !== undefined)) {
+          return false;
+        }
+
+        const caret = caretIn(nextDecorations);
+        const was = opened;
+
+        if (caret && opened === undefined) opened = CODE_OPENED.CARET;
+
+        if (!caret && opened === CODE_OPENED.CARET) opened = undefined;
 
         const changed =
           languageOf(next) !== languageOf(current) || next.textContent !== current.textContent;
@@ -120,16 +179,24 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
           drawing.redraw(blockOf(next));
         }
 
+        if (changed || opened !== was) diagramDrawing?.redraw(diagramOf(next));
+
         return true;
       },
-      // Note that the header's own presses, keys, and menu are its own and not the editor's.
-      stopEvent: (event) => event.target instanceof Node && head.contains(event.target),
-      // Note that the header's drawing, and the language class set on the lines' element, are no edit of the text.
+      // Note that the header's own presses, keys, and menu are its own and not the editor's, as are the card's around the code.
+      stopEvent: (event) =>
+        event.target instanceof Node &&
+        (head.contains(event.target) || (card !== undefined && !frame.contains(event.target))),
+      // Note that the header's drawing, the card's around the code, and the language class set on the lines' element, are no edit of the text.
       ignoreMutation: (mutation) =>
         mutation.type !== "selection" &&
         (head.contains(mutation.target) ||
+          (card !== undefined && !frame.contains(mutation.target)) ||
           (mutation.target === code && mutation.type === "attributes")),
-      destroy: () => drawing.undraw(),
+      destroy: () => {
+        drawing.undraw();
+        diagramDrawing?.undraw();
+      },
     };
   };
 }
@@ -137,12 +204,14 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
 /**
  * StarterKit with its code block drawn in the code card where the panel
  * draws its header, its lines colored as the card colors them where the panel
- * colors them (`./code-coloring.ts`); as TipTap draws it where it draws none.
+ * colors them (`./code-coloring.ts`), and a Mermaid block in its diagram's
+ * card where the panel draws diagrams; as TipTap draws it where it draws none.
  */
 export function withCodeHeaders(
   kit: AnyExtension,
   drawCodeHeader: CodeHeaderDrawer | undefined,
   colorCode: CodeColorer | undefined,
+  drawDiagram: DiagramDrawer | undefined,
 ): AnyExtension {
   if (drawCodeHeader === undefined) return kit;
 
@@ -156,15 +225,19 @@ export function withCodeHeaders(
           }),
         ];
 
+  const diagrams = drawDiagram === undefined ? [] : [diagramCaret];
+
   return kit.extend({
     addExtensions() {
       const own = (this.parent?.() ?? []).map((extension) =>
         extension.name === CODE_BLOCK
-          ? extension.extend({ addNodeView: () => codeBlockView(drawCodeHeader) })
+          ? extension.extend({
+              addNodeView: () => codeBlockView({ drawCodeHeader, drawDiagram }),
+            })
           : extension,
       );
 
-      return [...own, ...colors];
+      return [...own, ...colors, ...diagrams];
     },
   });
 }

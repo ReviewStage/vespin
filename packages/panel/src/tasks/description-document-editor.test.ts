@@ -410,19 +410,20 @@ test("a click into a section opens the whole text in place, the caret where the 
   assert.equal(title(container).textContent, DOCUMENT_NAME, "the title stays over the text");
 });
 
-test("the editor's preview of a Mermaid block is the picture the diagram bundle answered, drawn by the panel until the editor takes it down", async () => {
+test("the editor's card for a Mermaid block is the picture the diagram bundle answered, drawn by the panel until the editor takes it down", async () => {
   const { container } = mount();
   act(() => block(container, "Goal").click());
   const draw = open().drawDiagram;
   assert.ok(draw, "the document hands the editor its diagrams");
-  // The element the editor stands under the block, inside its own host.
+  // The element the editor stands the block in, inside its own host.
   const under = document.createElement("div");
   container.querySelector(".description-document-editor")?.append(under);
   const code = "flowchart LR\n  Invite --> Join";
 
   let takeDown: () => void = () => undefined;
   act(() => {
-    takeDown = draw(under, { code, previous: undefined });
+    const source = document.createElement("pre");
+    takeDown = draw(under, { code, source, showingCode: false, showCode: () => undefined }).undraw;
   });
   await settle();
 

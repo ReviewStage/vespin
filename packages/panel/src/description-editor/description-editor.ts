@@ -31,6 +31,7 @@ import {
   type DescriptionEditorPictures,
   type DescriptionEditorPlacement,
   type DescriptionEditorProps,
+  type DiagramDrawer,
   type EditorAria,
   type EditorSpan,
   FINISH,
@@ -42,7 +43,6 @@ import {
 } from "./contract.js";
 import { descriptionMentions } from "./description-mentions.js";
 import { descriptionSlash } from "./description-slash.js";
-import { diagramPreview } from "./diagram-preview.js";
 import { dividerLines } from "./divider-lines.js";
 import {
   BLANK_ENDS,
@@ -91,8 +91,8 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * selection and acts on it (`./writing-format.ts`), and a `/` at a line's
  * start or after a space opens the panel's block menu (`./description-slash.ts`),
  * which an empty line under the caret offers in its placeholder, as an empty
- * heading names its level. A Mermaid code block stays code, its diagram
- * previewed under it where the panel draws one (`./diagram-preview.ts`).
+ * heading names its level. A Mermaid code block stands in its diagram's
+ * card where the panel draws one, its code shown in place (`./diagram-card.ts`).
  * A document's own `/` blocks lay in the Markdown they name. Esc and the
  * send finish, naming the section the caret stood in, the send ⌘↩ in a
  * document and Enter in a message box's text (`sendsOnEnter`); ↑ on the text's first line
@@ -446,6 +446,7 @@ export function markdownExtensions(
   drawTaskBox?: TaskBoxDrawer | undefined,
   drawCodeHeader?: CodeHeaderDrawer | undefined,
   colorCode?: CodeColorer | undefined,
+  drawDiagram?: DiagramDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -459,7 +460,9 @@ export function markdownExtensions(
   });
 
   return [
-    blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader, colorCode))),
+    blockRulesOutOfCells(
+      withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader, colorCode, drawDiagram)),
+    ),
     withoutTipTapChords(DocumentCode),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
@@ -722,6 +725,7 @@ export function mountDescriptionEditor(
     drawTaskBox,
     drawCodeHeader,
     colorCode,
+    drawDiagram,
   );
 
   const manager = documentManager(extensions);
@@ -765,7 +769,6 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
-      ...(drawDiagram === undefined ? [] : [diagramPreview(drawDiagram)]),
       ...formatReports(format),
     ],
     content: opened.content,

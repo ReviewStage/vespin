@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
 import { useSideBundles } from "../bundle-loader.js";
 import { heldColoring } from "../code-coloring.js";
-import { DiagramPreview } from "../description-diagram.js";
+import { EditorDiagramCard } from "../description-diagram.js";
 import {
   type DescriptionEditorHandle,
   type DescriptionEditorModule,
@@ -186,11 +186,6 @@ function MountedEditor({
               pasted: (words) => latest.current.mentions?.pasted(words),
               namesChip: (target) => latest.current.mentions?.namesChip(target) ?? false,
             },
-      drawDiagram:
-        latest.current.drawDiagram === undefined
-          ? undefined
-          : (element, diagram) =>
-              latest.current.drawDiagram?.(element, diagram) ?? (() => undefined),
       drawTaskBox:
         latest.current.drawTaskBox === undefined
           ? undefined
@@ -255,7 +250,7 @@ export function MarkdownEditor({
   const room = givenRoom ?? ownRoom;
   const module = useQuery(useSideBundles().descriptionEditor);
   const chips = useEditorDrawings<DrawnMention>();
-  const previews = useEditorDrawings<EditorDiagram>();
+  const diagramCards = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
   const codeHeaders = useEditorDrawings<EditorCodeBlock>();
   const queryClient = useQueryClient();
@@ -359,7 +354,7 @@ export function MarkdownEditor({
             namesChip: (target) =>
               linkChipOf(target, target, mentions.doors.place.repository) !== undefined,
           },
-    drawDiagram: diagrams ? previews.draw : undefined,
+    drawDiagram: diagrams ? diagramCards.keep : undefined,
     drawTaskBox: taskBoxes.draw,
     drawCodeHeader: codeHeaders.keep,
     colorCode: (language, code) => heldColoring(queryClient, language, code),
@@ -402,12 +397,8 @@ export function MarkdownEditor({
               each.key,
             ),
           )}
-      {previews.drawn.map((each) =>
-        createPortal(
-          <DiagramPreview code={each.what.code} previous={each.what.previous} />,
-          each.element,
-          each.key,
-        ),
+      {diagramCards.drawn.map((each) =>
+        createPortal(<EditorDiagramCard diagram={each.what} />, each.element, each.key),
       )}
       {codeHeaders.drawn.map((each) =>
         createPortal(<EditorCodeHeader block={each.what} />, each.element, each.key),
