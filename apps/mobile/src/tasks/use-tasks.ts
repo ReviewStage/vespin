@@ -73,6 +73,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
 
 /** No task list read yet. */
@@ -312,8 +313,11 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
           : placeWrites(sectionOrder(state, sectionId), taskId, sectionId, 0, Date.now());
 
       if (first === undefined) return;
+      // Note that Try again sends the move as it was asked, which a newer move of the same task makes do nothing.
       void write(() => acts[ACT_KIND.TASKS_WRITE_SECTION]({ writes: [first, ...rest] }), {
         refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
         went: BUZZ.SUCCESS,
       });
     };
@@ -323,6 +327,7 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
         refused: (answer) =>
           "failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined,
         retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_REPOSITORY, id: taskId },
         went: BUZZ.SUCCESS,
       });
     };
@@ -361,6 +366,8 @@ export interface TasksListing {
   readonly glanceOf: (taskId: string) => TaskGlance;
   /** The workspace's sections and repositories, and the writes that move a task among them. */
   readonly placing: TaskPlacing;
+  /** The writes that relate a task to another, change how it stands, or take it out from under its parent. */
+  readonly relations: TaskRelationWrites;
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
@@ -416,6 +423,7 @@ export function useTasksListing(search: string): ReadListing {
   const { held, setStatus } = useStatusWrites(listed);
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
+  const relations = useTaskRelationWrites();
 
   return useMemo(() => {
     const tasks = withHeld(listed, held);
@@ -494,8 +502,22 @@ export function useTasksListing(search: string): ReadListing {
       rename,
       glanceOf,
       placing,
+      relations,
     };
-  }, [acts, write, listed, held, view, workspace, readerId, waiting, search, rename, placing]);
+  }, [
+    acts,
+    write,
+    listed,
+    held,
+    view,
+    workspace,
+    readerId,
+    waiting,
+    search,
+    rename,
+    placing,
+    relations,
+  ]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
@@ -537,6 +559,8 @@ export interface TaskOverview {
   readonly rename: TaskWrites["rename"];
   /** Its workspace's sections and repositories, and the writes that move it among them. */
   readonly placing: TaskPlacing;
+  /** The writes that relate it to another task, change how one stands to it, or take it out from under its parent. */
+  readonly relations: TaskRelationWrites;
 }
 
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
@@ -562,6 +586,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const taskId = task?.id;
   // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
   const placing = useTaskPlacing(task?.workspaceId);
+  const relations = useTaskRelationWrites();
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_DOCUMENT_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
 
@@ -598,8 +623,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       agentsWorking: agentsWorkingIn(view, listed),
       rename,
       placing,
+      relations,
     };
-  }, [task, view, waiting, held, workspace, listed, rename, placing]);
+  }, [task, view, waiting, held, workspace, listed, rename, placing, relations]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */

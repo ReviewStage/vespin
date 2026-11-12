@@ -138,7 +138,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
     [
-      "Reply buttons",
+      "Suggestions",
       "Run actions",
       "Task descriptions",
       "Memory",

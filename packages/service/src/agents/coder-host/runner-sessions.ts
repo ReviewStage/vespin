@@ -1624,7 +1624,8 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
-          (opened.turnEndOn ?? false) !== standing.turnEndOn
+          (opened.turnEndOn ?? false) !== standing.turnEndOn ||
+          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn
         );
       });
 

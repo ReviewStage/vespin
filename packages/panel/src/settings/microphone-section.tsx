@@ -20,6 +20,7 @@ import {
 import { microphoneAccessRow } from "@repo/ui/microphone-access";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
 
 /** What the System Settings door is called, for a reader and its hover. */
@@ -67,7 +68,7 @@ export function MicrophoneSection({
   const row = microphoneAccessRow(microphone.status);
 
   return (
-    <SettingsSection title="Dictation">
+    <SettingsSection {...settingsSectionHead(SECTION.DICTATION)}>
       {/* Note that the row stands in a wrapper wearing its search anchor,
           because the shared row takes no attribute of a caller's. */}
       <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.MICROPHONE)}>

@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { appStateQuery, supportAccessStanding } from "../use-app-state.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
 
 /**
@@ -78,7 +79,7 @@ export function PrivacySection({
   writes: SettingsWrites;
 }): React.JSX.Element {
   return (
-    <SettingsSection title="Privacy">
+    <SettingsSection {...settingsSectionHead(SECTION.PRIVACY)}>
       <SchemaSettingRows
         page={SCHEMA_SETTINGS_PAGE.ACCOUNT}
         section={SETTING_SECTION.PRIVACY}

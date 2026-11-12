@@ -1,4 +1,4 @@
-// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
+// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
 import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
 import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DraftCard } from "./draft-card.js";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
@@ -785,6 +786,8 @@ function BlockView({
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:
       return <CodeView text={block.text} drawing={drawing} />;
+    case MARKDOWN_BLOCK.DRAFT:
+      return <DraftCard draft={block.draft} onOpenLink={drawing.openLink} />;
     case MARKDOWN_BLOCK.RULE:
       return (
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.CHIP_EDGE }} />

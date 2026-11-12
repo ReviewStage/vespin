@@ -145,6 +145,25 @@ describe("markdownBlocks", () => {
     });
   });
 
+  it("draws a fence named for where its words go as a draft, and any other fence as code", () => {
+    expect(
+      markdownBlocks("```slack\nShip *today*\n```\n\n```ts\nconst a = 1;\n```", READING),
+    ).toEqual([
+      {
+        kind: MARKDOWN_BLOCK.DRAFT,
+        draft: {
+          kind: "slack",
+          subject: undefined,
+          runs: [
+            { kind: "text", text: "Ship " },
+            { kind: "mark", mark: "bold", runs: [{ kind: "text", text: "today" }] },
+          ],
+        },
+      },
+      { kind: MARKDOWN_BLOCK.CODE, text: "const a = 1;" },
+    ]);
+  });
+
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
