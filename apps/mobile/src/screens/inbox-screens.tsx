@@ -400,7 +400,12 @@ function useAgentHarness(agentId: string): ModelProvider | undefined {
  */
 type ThreadPlace =
   | { readonly inStack: true }
-  | { readonly inStack: false; readonly onRemind: (item: InboxItem) => void };
+  | {
+      readonly inStack: false;
+      readonly onRemind: (item: InboxItem) => void;
+      /** Selects another thread in the split view, such as one the box just started. */
+      readonly onOpen: (id: string) => void;
+    };
 
 /**
  * A thread's page from its item: its path, its subject, each message with
@@ -490,7 +495,13 @@ function ThreadDetail({
   const { sources, sizes } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
-  const answer = useThreadAnswer(listed);
+  const router = useRouter();
+
+  // A thread the box started opens in this one's place, as the panel opens it.
+  const openStarted = (id: string) =>
+    place.inStack ? router.replace(`/inbox/${encodeURIComponent(id)}`) : place.onOpen(id);
+
+  const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
@@ -597,7 +608,12 @@ function ThreadDetail({
           }}
         />
       }
-      {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+      {...(inStack
+        ? {}
+        : {
+            menu,
+            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+          })}
     />
   );
 
@@ -624,7 +640,7 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} />}>
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
       </GlassDock>
       {remind.sheet}
@@ -664,15 +680,23 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
 function ThreadColumn({
   id,
   onRemind,
+  onOpen,
 }: {
   readonly id: string;
   readonly onRemind: (item: InboxItem) => void;
+  readonly onOpen: (id: string) => void;
 }) {
   const { listed, readerId, feed } = useInboxThread(id);
 
   if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
 
-  return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
+  return (
+    <ThreadDetail
+      listed={listed}
+      readerId={readerId}
+      place={{ inStack: false, onRemind, onOpen }}
+    />
+  );
 }
 
 /** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
@@ -821,7 +845,7 @@ function InboxSplitScreen({
             selected === undefined ? (
               <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
             ) : (
-              <ThreadColumn key={selected} id={selected} onRemind={remind.open} />
+              <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
             )
           }
         />
