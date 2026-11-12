@@ -38,6 +38,7 @@ const decodeDocument = Schema.decodeUnknownSync(
       ),
     }),
     webcredentials: Schema.Struct({ apps: Schema.Array(Schema.String) }),
+    activitycontinuation: Schema.Struct({ apps: Schema.Array(Schema.String) }),
   }),
 );
 
@@ -76,6 +77,7 @@ it.effect(
           ],
         },
         webcredentials: { apps: [appId] },
+        activitycontinuation: { apps: [appId] },
       });
 
       const named = yield* answered({
@@ -85,6 +87,7 @@ it.effect(
 
       const renamed = decodeDocument(yield* Effect.promise(() => named.json()));
       assert.deepEqual(renamed.webcredentials.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
+      assert.deepEqual(renamed.activitycontinuation.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
     }),
 );
 
