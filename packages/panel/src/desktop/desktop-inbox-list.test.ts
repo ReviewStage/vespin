@@ -898,7 +898,7 @@ test("a focused row whose task is pinned on another Mac keeps the keyboard as it
   );
 });
 
-test("a run folded under its heading draws none of its rows, and opens again once a link chooses one of its items", async () => {
+test("a run folded under its heading draws none of its rows, and opens again once a link chooses one of its items, though not while that item stays chosen, and again once the choice was let go", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
   const { page } = mount();
   await settle();
@@ -911,6 +911,7 @@ test("a run folded under its heading draws none of its rows, and opens again onc
 
   const fold = heading?.querySelector<HTMLElement>("button") ?? heading;
   assert.ok(fold, "Everything else is headed");
+  const open = () => fold.getAttribute("aria-expanded");
   act(() => fold.click());
   await settle();
   assert.deepEqual(listed(page), ["*Expire after 7 days?"], "folded, its rows are drawn nowhere");
@@ -920,6 +921,21 @@ test("a run folded under its heading draws none of its rows, and opens again onc
     listed(page).some((row) => row.includes("Alert at 80%?")),
     "the link opened the run",
   );
+
+  act(() => fold.click());
+  await settle();
+  assert.equal(
+    open(),
+    "false",
+    "folded again by hand while its item stays chosen, it stays folded",
+  );
+
+  layOut(page, 800);
+  act(() => backToList(page).click());
+  await settle();
+  act(() => world.chooseFromOutside({ ...ON_THRESHOLD, opened: true }));
+  await settle();
+  assert.equal(open(), "true", "the same item linked again once let go opens its run again");
 });
 
 test("on a phone, a focused row whose item is answered elsewhere leaves the keyboard on the head's ⋯, which holds View options there", async () => {
