@@ -162,6 +162,8 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  type ConnectionLine,
+  ConnectionRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,

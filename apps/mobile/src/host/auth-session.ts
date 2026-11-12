@@ -1,5 +1,5 @@
 /**
- * auth-session.ts -- the phone's authentication session as the host's consent opens it: `ASWebAuthenticationSession` through `expo-web-browser`, caught on the app's universal-link callback.
+ * auth-session.ts -- the phone's authentication session as the host's consent opens it, and an integration's sign-in: `ASWebAuthenticationSession` through `expo-web-browser`, caught on the app's universal-link callback.
  *
  * `@repo/credentials`' `authSessionConsent` words the trip and reads the
  * address the sheet caught; this only shows the page and hands that address
@@ -29,3 +29,19 @@ export const webAuthSession: AuthSession = {
     dismissAuthSession();
   },
 };
+
+/**
+ * An integration's sign-in in the same authentication sheet, over the app
+ * rather than in Safari, closed as it lands on `landing`, the service's page
+ * a settled sign-in comes back to. Note that the open answers as the sheet
+ * stands, not as it closes: the window hears how the sign-in went from the
+ * account's integrations as they move, and offers Cancel while it waits, as
+ * the panel's row does; a sheet the person closes leaves the sign-in to that
+ * Cancel or to its wait running out.
+ */
+export function openSignInSheet(url: string, landing: string): void {
+  openAuthSessionAsync(url, landing, {
+    preferEphemeralSession: false,
+    preferUniversalLinks: true,
+  }).catch((cause: unknown) => console.error("The sign-in sheet did not open.", cause));
+}

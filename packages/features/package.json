@@ -29,6 +29,7 @@
     "./machine-name": "./src/machine-name.js",
     "./machines-settings-words": "./src/machines-settings-words.js",
     "./markdown-fence": "./src/markdown-fence.js",
+    "./integration-settings-words": "./src/integration-settings-words.js",
     "./memory-live": "./src/memory-live.js",
     "./skills-settings-words": "./src/skills-settings-words.js",
     "./memory-settings-words": "./src/memory-settings-words.js",

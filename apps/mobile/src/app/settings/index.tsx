@@ -1,4 +1,4 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, Machines, and the workspace's Memory and Skills, About with Send feedback, and the pages still kept on vespin.dev.
+// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, Integrations, Machines, and the workspace's Memory and Skills, About with Send feedback, and the pages still kept on vespin.dev.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -76,7 +76,6 @@ const NOTIFICATION_STEP = {
  */
 const WEB_PAGES = [
   SETTINGS_VIEW.ENVIRONMENT,
-  SETTINGS_VIEW.INTEGRATIONS,
   SETTINGS_VIEW.MCP,
   SETTINGS_VIEW.EXPERIMENTAL,
 ] as const satisfies readonly SettingsView[];
@@ -186,6 +185,12 @@ export default function SettingsScreen() {
               symbol="sparkles"
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
+            />
+            <PushRow
+              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS]}
+              symbol="puzzlepiece.extension"
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}

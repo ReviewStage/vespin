@@ -9,7 +9,7 @@
 import { randomUUID } from "expo-crypto";
 import { openURL } from "expo-linking";
 import { AppState } from "react-native";
-import { webAuthSession } from "./auth-session.js";
+import { openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem } from "./expo-file-system.js";
 import { keychainCipher } from "./keychain-cipher.js";
@@ -35,9 +35,15 @@ export function deviceSeams(): DeviceSeams {
   return {
     fileSystem: expoFileSystem(),
     createId: () => randomUUID(),
-    // An address outside the app opens in the system's own handler for it.
-    openExternal: async (url) => {
-      await openURL(url);
+    // An address outside the app opens in the system's own handler for it, and a sign-in in the authentication sheet (`openSignInSheet`).
+    openExternal: async (url, landing) => {
+      if (landing === undefined) {
+        await openURL(url);
+
+        return;
+      }
+
+      openSignInSheet(url, landing);
     },
     openSocket: openRelaySocket,
     onAppActiveChanged,
