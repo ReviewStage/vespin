@@ -20,6 +20,7 @@ import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
 
 /**
@@ -76,6 +77,7 @@ function AllowedApp({
 }): React.JSX.Element {
   const remove = useAsyncAction(rejectionWords);
   const label = `Remove ${app.name}`;
+
   return (
     <SettingsRow
       leading={<AppIcon src={iconAddress(app.iconPng)} size={APP_ICON_SIZE.LEAD} />}
@@ -105,10 +107,12 @@ export function ComputerUseSection({
 }): React.JSX.Element {
   const queries = useQueryClient();
   const status = useQuery(statusQuery);
+
   const { mutate: askPermissions } = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
     onSettled: () => queries.invalidateQueries({ queryKey: statusQuery.queryKey }),
   });
+
   const remove = async (bundleId: string) => {
     await writes.setting(
       APP_SETTING_SCHEMA.computerUseApps.field,
@@ -116,16 +120,19 @@ export function ComputerUseSection({
     );
     await queries.invalidateQueries({ queryKey: statusQuery.queryKey });
   };
+
   const permissions = status.data?.permissions;
   const apps = status.data?.apps ?? [];
+
   return (
     <>
       <SettingsSection
-        title="Computer use"
+        {...settingsSectionHead(SECTION.COMPUTER_USE)}
         caption={`Agents see and control the apps you allow, in the background, while you keep working. macOS lets ${PRODUCT_NAME} do it once you allow both.`}
       >
         {GRANTS.map((grant) => {
           const granted = permissions?.[grant.key];
+
           return (
             <SettingsRow
               key={grant.key}
@@ -154,7 +161,7 @@ export function ComputerUseSection({
         })}
       </SettingsSection>
       <SettingsSection
-        title="Always-allowed apps"
+        {...settingsSectionHead(SECTION.COMPUTER_USE_APPS)}
         caption={`Agents use these without asking. Terminals, password managers, System Settings, and ${PRODUCT_NAME} itself are never offered.`}
       >
         {apps.length === 0 ? (

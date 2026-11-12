@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
-import { APP_SETTING_SCHEMA, type AppSettingField } from "@repo/settings";
+import { APP_SETTING_SCHEMA, type AppSettingField, type AppSettingValue } from "@repo/settings";
 import { settingsView } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { act, createElement } from "react";
@@ -27,7 +27,7 @@ const SIMULATOR = "com.apple.iphonesimulator";
 const FIGMA = "com.figma.Desktop";
 
 let sent: AnyAct[] = [];
-let written: { field: AppSettingField; value: unknown }[] = [];
+let written: { field: AppSettingField; value: AppSettingValue<AppSettingField> }[] = [];
 const roots: Root[] = [];
 
 const done = (value: PortActResult<PortActKind>): FakeActAnswer => ({
@@ -41,6 +41,7 @@ beforeEach(() => {
   fakeActs({
     act: (request) => {
       sent.push(request);
+
       if (request.kind === ACT_KIND.COMPUTER_USE_STATUS) {
         return Promise.resolve(
           done({
@@ -52,9 +53,11 @@ beforeEach(() => {
           }),
         );
       }
+
       if (request.kind === ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS) {
         return Promise.resolve(done({ screenRecording: true, accessibility: true }));
       }
+
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
     },
   });
@@ -85,17 +88,24 @@ async function mount(): Promise<HTMLElement> {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const settings = {
     ...settingsView(),
     computerUseApps: JSON.stringify([SIMULATOR, FIGMA]),
   };
+
   const writes = {
-    setting: (field: AppSettingField, value: unknown): Promise<ActionResult> => {
+    setting: (
+      field: AppSettingField,
+      value: AppSettingValue<AppSettingField>,
+    ): Promise<ActionResult> => {
       written.push({ field, value });
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
     reset: () => Promise.reject(new Error("not reset in these tests")),
   };
+
   act(() =>
     root.render(
       withQueryClient(
@@ -107,6 +117,7 @@ async function mount(): Promise<HTMLElement> {
     ),
   );
   await settle();
+
   return container;
 }
 

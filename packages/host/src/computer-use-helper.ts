@@ -166,11 +166,13 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
   }
 
   if ("app" in line) return { described: wireApp(line.app) };
+
   if ("screen_recording" in line) {
     return {
       permissions: { screenRecording: line.screen_recording, accessibility: line.accessibility },
     };
   }
+
   return { outcome: { done: line.done } };
 }
 

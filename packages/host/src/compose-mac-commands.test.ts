@@ -106,11 +106,14 @@ function scriptedHelper(apps: readonly ComputerApp[]) {
     ask: (request) =>
       Effect.sync(() => {
         asked.push(request);
+
         if (request.op === COMPUTER_HELPER_OP.PERMISSIONS) {
           return { permissions: { screenRecording: true, accessibility: false } };
         }
+
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
         const app = apps.find((each) => each.name === request.app || each.bundleId === request.app);
+
         return app === undefined
           ? { failure: COMPUTER_HELPER_FAILURE.NOT_FOUND, message: "No such app." }
           : { described: app };
@@ -930,6 +933,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scripted = scriptedHelper([SIMULATOR]);
+
       const { composer } = yield* subject(
         scriptedService(),
         scriptedSpawner(() => ({ exitCode: 0 })),

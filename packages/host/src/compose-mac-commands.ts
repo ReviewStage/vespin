@@ -719,6 +719,7 @@ export function composeMacCommands(
       op: typeof COMPUTER_HELPER_OP.PERMISSIONS | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS,
     ): Effect.Effect<ComputerPermissions> => {
       if (computer === undefined) return Effect.succeed(NO_PERMISSIONS);
+
       return Effect.map(computer.helper.ask({ op }, DESCRIBE_WITHIN), (answer) =>
         "permissions" in answer ? answer.permissions : NO_PERMISSIONS,
       );
@@ -733,6 +734,7 @@ export function composeMacCommands(
             (named) => {
               if (!("described" in named)) return { bundleId, name: bundleId };
               const { name, iconPng } = named.described;
+
               return { bundleId, name, ...(iconPng === undefined ? undefined : { iconPng }) };
             },
           ),
