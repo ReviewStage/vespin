@@ -24,7 +24,6 @@ import {
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { momentText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn } from "@repo/settings";
@@ -58,9 +57,8 @@ import {
   STATUS_TONE,
   SuggestionCard,
   SuggestionCards,
-  TEXT_ELEMENT,
-  TEXT_VARIANT,
-  Text,
+  TIME_LOOK,
+  Time,
   TOOLBAR_INSET,
   Toolbar,
   type ToolbarProps,
@@ -370,14 +368,8 @@ function AutomationRow({
     >
       <ListRow
         leading={<ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.ROW} />}
-        title={
-          <span
-            className="automation-row-name data-[enabled=false]:text-muted-foreground"
-            data-enabled={String(automation.enabled)}
-          >
-            {automation.name}
-          </span>
-        }
+        title={<span className="automation-row-name">{automation.name}</span>}
+        muted={!automation.enabled}
         titleReplayMasked
         description={
           narrow ? (
@@ -399,19 +391,16 @@ function AutomationRow({
               next={
                 <>
                   {stateEndMark(state, true)}
-                  {nextWords === undefined ? null : (
-                    <Tooltip
-                      label={next.kind === AUTOMATION_NEXT.AT ? momentText(next.at) : undefined}
-                    >
-                      <Text
-                        as={TEXT_ELEMENT.SPAN}
-                        variant={TEXT_VARIANT.INHERIT}
-                        truncate
-                        className="automation-row-when"
-                      >
-                        <ReplayUnmask>{nextWords}</ReplayUnmask>
-                      </Text>
-                    </Tooltip>
+                  {next.kind === AUTOMATION_NEXT.AT ? (
+                    <OneLine className="automation-row-when" words={nextWords}>
+                      <ReplayUnmask>
+                        Next: <Time at={next.at} now={now} look={TIME_LOOK.SCHEDULED} hint />
+                      </ReplayUnmask>
+                    </OneLine>
+                  ) : nextWords === undefined ? null : (
+                    <OneLine className="automation-row-when" words={nextWords}>
+                      <ReplayUnmask>{nextWords}</ReplayUnmask>
+                    </OneLine>
                   )}
                 </>
               }

@@ -195,7 +195,7 @@ test("the automation's name hangs its card over the agent's: its schedule, whose
   );
   assert.equal(
     automation.querySelector(".ui-hover-card-sub")?.textContent,
-    "Weekdays at 9:00 AM · UTC · Acme",
+    "Weekdays at 9:00 AM UTC · Acme",
   );
   assert.equal(automation.querySelector(".ui-hover-card-corner"), null);
 

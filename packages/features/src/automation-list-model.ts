@@ -198,6 +198,13 @@ function zoneCity(timezone: string): string {
   return (timezone.split("/").at(-1) ?? timezone).replaceAll("_", " ");
 }
 
+/** The zone a schedule's clock is read in, said after the clock as words: "New York time", or "UTC" alone. */
+function zoneWords(timezone: string): string {
+  const city = zoneCity(timezone);
+
+  return city === "UTC" ? city : `${city} time`;
+}
+
 /** A time of day as it is typed: hour, optional minutes, optional AM or PM ("2:00 AM", "2pm", "14:30"). */
 const TYPED_CLOCK = /^(\d{1,2})(?::(\d{2}))?\s*(?:([ap])\.?m\.?)?$/iu;
 
@@ -228,24 +235,25 @@ export function parseAutomationClock(
 /** A schedule in words where the picker could have written it, and its cron otherwise. */
 function scheduleText(cron: string, timezone: string): string {
   const spelled = cron.trim();
-  const city = zoneCity(timezone);
+  const zone = zoneWords(timezone);
 
-  if (spelled === SCHEDULE_PRESET.HOURLY) return `Every hour · ${city}`;
+  // Note that an hourly schedule names no zone, since an hour starts at the same moment in nearly every zone.
+  if (spelled === SCHEDULE_PRESET.HOURLY) return "Every hour";
   const [minuteField, hourField, dayOfMonth, month, dayOfWeek] = spelled.split(/\s+/u);
   const minute = cronNumber(minuteField);
   const hour = cronNumber(hourField);
   const daily = dayOfMonth === "*" && month === "*";
 
-  if (minute === undefined || hour === undefined || !daily) return `${spelled} · ${city}`;
+  if (minute === undefined || hour === undefined || !daily) return `${spelled}, ${zone}`;
   const at = clockText(hour, minute);
 
-  if (dayOfWeek === "*") return `Every day at ${at} · ${city}`;
+  if (dayOfWeek === "*") return `Every day at ${at} ${zone}`;
 
-  if (dayOfWeek === "1-5") return `Weekdays at ${at} · ${city}`;
+  if (dayOfWeek === "1-5") return `Weekdays at ${at} ${zone}`;
   const day = cronNumber(dayOfWeek);
   const name = day === undefined ? undefined : WEEKDAY_NAMES[day % 7];
 
-  return name === undefined ? `${spelled} · ${city}` : `${name} at ${at} · ${city}`;
+  return name === undefined ? `${spelled}, ${zone}` : `${name} at ${at} ${zone}`;
 }
 
 /** Who owns an automation; one a service before scopes answered is its creator's own. */

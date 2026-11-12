@@ -12,6 +12,7 @@ import {
   playheadText,
   provenanceText,
   runSpanText,
+  scheduledText,
   sinceHeard,
   sinceText,
   untilText,
@@ -105,6 +106,14 @@ test("a moment to come is due at its time today, its weekday and time inside a w
   assert.equal(dueText(new Date(2026, 10, 9, 9, 0).getTime(), now), "Mon 9:00 AM");
   assert.equal(dueText(new Date(2026, 10, 20, 9, 0).getTime(), now), "Nov 20");
   assert.equal(dueText(new Date(2026, 10, 3, 9, 0).getTime(), now), "Nov 3");
+});
+
+test("a scheduled run always says its time: today, tomorrow, its weekday inside a week, and its date past that", () => {
+  const now = new Date(2026, 10, 6, 14, 3).getTime();
+  assert.equal(scheduledText(new Date(2026, 10, 6, 15, 0).getTime(), now), "Today 3:00 PM");
+  assert.equal(scheduledText(new Date(2026, 10, 7, 9, 0).getTime(), now), "Tomorrow 9:00 AM");
+  assert.equal(scheduledText(new Date(2026, 10, 10, 9, 0).getTime(), now), "Tue 9:00 AM");
+  assert.equal(scheduledText(new Date(2026, 10, 20, 9, 0).getTime(), now), "Nov 20, 9:00 AM");
 });
 
 test("a moment to come counts down inside a day and is due by its weekday and time past one", () => {
