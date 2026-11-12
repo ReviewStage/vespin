@@ -1,1 +1,0 @@
-ALTER TABLE "account_provider_key" ADD COLUMN "reset_credits" integer;

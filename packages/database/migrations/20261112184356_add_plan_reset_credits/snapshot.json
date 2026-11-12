@@ -1,9 +1,15 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "41e1e255-8ff8-4c37-a2b6-ba80b9e85c2a",
-  "prevIds": ["b5f65010-d564-4bcf-97ac-e3addd9a9b6c"],
+  "id": "b38327f5-cf2e-48d9-8791-032ecec7cbde",
+  "prevIds": ["73639146-8f25-43ca-a527-cefc799b774a", "f5ee580f-7683-4509-97e3-caad44a46811"],
   "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "account_allowed_command",
+      "entityType": "tables",
+      "schema": "public"
+    },
     {
       "isRlsEnabled": false,
       "name": "account_chatgpt_device_login",
@@ -647,6 +653,71 @@
       "schema": "public"
     },
     {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "prefix",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -998,7 +1069,7 @@
       "table": "account_provider_key"
     },
     {
-      "type": "integer",
+      "type": "jsonb",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -5707,6 +5778,19 @@
       "table": "automation"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "preset",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "automation"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -6872,6 +6956,19 @@
       "generated": null,
       "identity": null,
       "name": "last_seen_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "away_at",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
@@ -13144,6 +13241,45 @@
       "table": "workspace_repository_run_action"
     },
     {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "icon",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_default",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'both'",
+      "generated": null,
+      "identity": null,
+      "name": "available_in",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -17167,6 +17303,34 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"is_default\"",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_repository_run_action_repository_default",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "lower(\"repository\")",
+          "isExpression": true,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         },
         {
           "value": "kind",
@@ -17213,6 +17377,32 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "workspace_token_repository"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_allowed_command_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "account_allowed_command_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_allowed_command"
     },
     {
       "nameExplicit": false,
@@ -19968,6 +20158,14 @@
       "table": "write_receipt"
     },
     {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "account_allowed_command_pkey",
+      "schema": "public",
+      "table": "account_allowed_command",
+      "entityType": "pks"
+    },
+    {
       "columns": ["login_id"],
       "nameExplicit": false,
       "name": "account_chatgpt_device_login_pkey",
@@ -20625,6 +20823,15 @@
     },
     {
       "nameExplicit": true,
+      "columns": ["user_id", "prefix"],
+      "nullsNotDistinct": false,
+      "name": "account_allowed_command_prefix",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "nameExplicit": true,
       "columns": ["user_id", "id"],
       "nullsNotDistinct": false,
       "name": "account_sound_user_id",
@@ -20757,6 +20964,13 @@
       "schema": "public",
       "table": "personal_workspace",
       "entityType": "uniques"
+    },
+    {
+      "value": "cardinality(\"prefix\") between 1 and 8",
+      "name": "account_allowed_command_prefix_bound",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "account_allowed_command"
     },
     {
       "value": "octet_length(\"bytes\") <= 3300000 and octet_length(\"bytes\") = \"byte_count\"",

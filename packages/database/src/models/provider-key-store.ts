@@ -12,7 +12,11 @@ import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseClient, type DatabaseServices } from "../core/query.js";
-import { accountProviderKey, type StoredUsageWindow } from "../schemas/account-provider-key.js";
+import {
+  accountProviderKey,
+  type StoredResetCredits,
+  type StoredUsageWindow,
+} from "../schemas/account-provider-key.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { SealedProviderKey } from "./provider-key-seal.js";
 import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
@@ -57,6 +61,15 @@ const UsageWindowSchema = Schema.Struct({
   resetsAt: Schema.optionalKey(Schema.Number),
 });
 
+const ResetCreditsSchema = Schema.Struct({
+  count: Schema.Int,
+  credits: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ id: Schema.String, expiresAt: Schema.optionalKey(Schema.Number) }),
+    ),
+  ),
+});
+
 const SealedRowSchema = Schema.Struct({
   id: Schema.String,
   provider: ProviderSchema,
@@ -74,7 +87,7 @@ const SealedRowSchema = Schema.Struct({
   usageWindows: Schema.NullOr(Schema.Array(UsageWindowSchema)),
   usageHeardAt: Schema.NullOr(InstantColumnSchema),
   usageAskedAt: Schema.NullOr(InstantColumnSchema),
-  resetCredits: Schema.NullOr(Schema.Int),
+  resetCredits: Schema.NullOr(ResetCreditsSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -517,7 +530,7 @@ const replacePlanUsage = SqlSchema.void({
     userId: Schema.String,
     subscriptionId: Schema.String,
     windows: Schema.Array(UsageWindowSchema),
-    resetCredits: Schema.NullOr(Schema.Int),
+    resetCredits: Schema.NullOr(ResetCreditsSchema),
     askedAt: Schema.Date,
   }),
   execute: (write) =>
@@ -971,7 +984,7 @@ export function setPlanUsageWindows(
   subscriptionId: string,
   windows: readonly StoredUsageWindow[],
   askedAt: Date,
-  resetCredits: number | null = null,
+  resetCredits: StoredResetCredits | null = null,
 ): TaskStoreEffect<void> {
   return replacePlanUsage({ userId, subscriptionId, windows, resetCredits, askedAt });
 }
