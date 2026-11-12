@@ -4252,6 +4252,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
         const kept = keptAfterResponse();
+
         const reported: Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"][] =
           [];
 
