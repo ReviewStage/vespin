@@ -5,7 +5,6 @@ import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
 import { AGENT_WAKEUP } from "@repo/service/agents/coder-host/agent-wakeup-bounds";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
 import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
-import { WORKSPACE_DRIVE_FILL } from "@repo/service/agents/workspace-drive-fill-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -136,8 +135,7 @@ const STANDALONE_ROUTES: readonly string[] = [
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
  * Fluid default a Start's function runs under, the sandbox-releases
- * consumer, under its own short bound, the workspace-drive-fills
- * consumer, under the platform's longest, and the github-delivery-reads
+ * consumer, under its own short bound, and the github-delivery-reads
  * consumer, under the Fluid default.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
@@ -168,13 +166,6 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(SANDBOX_RELEASE.PATH)],
     dispatches: false,
     queueTopic: SANDBOX_RELEASE.TOPIC,
-  },
-  {
-    file: routeKeyOf(WORKSPACE_DRIVE_FILL.PATH),
-    maxDuration: WORKSPACE_DRIVE_FILL.MAX_DURATION_SECONDS,
-    routes: [routeKeyOf(WORKSPACE_DRIVE_FILL.PATH)],
-    dispatches: false,
-    queueTopic: WORKSPACE_DRIVE_FILL.TOPIC,
   },
   {
     file: routeKeyOf(GITHUB_DELIVERY_READ.PATH),
