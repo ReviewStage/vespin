@@ -548,6 +548,59 @@ test("a fork's draft names its source and the message over the box, starts on th
   assert.equal(dropped, 1);
 });
 
+test("a suggestion's draft names the agent that suggested it over the box, sends its words through the suggestion rather than as a Start, and its × lets the suggestion go", async () => {
+  const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+  const suggestion = {
+    agentId: SOURCE,
+    buttonId: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
+    label: "Wire up the invite email",
+  };
+  const source: AgentSummary = {
+    id: SOURCE,
+    planId: TASK_ID,
+    model: "openai/gpt-6.1-sol",
+    effort: "xhigh",
+    title: "Add teammate invitations",
+    createdAt: 1,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+  };
+  const sent: unknown[] = [];
+  let dropped = 0;
+  const tab = mount(
+    [],
+    { ...DRAFT, prompt: "Send the invite email, and retry a bounce once.", suggestion },
+    {
+      agents: [source],
+      startSuggestion: (draftId, through, words) => {
+        sent.push({ draftId, button: through.buttonId, words });
+        return Promise.resolve(undefined);
+      },
+      onDropFork: () => {
+        dropped += 1;
+      },
+    },
+  );
+  await settle();
+
+  assert.equal(
+    document.querySelector("[data-suggestion-chip]")?.textContent?.replace(/\s+/gu, " "),
+    "Suggested byAdd teammate invitations:“Wire up the invite email”",
+  );
+  await tab.send();
+  assert.deepEqual(sent, [
+    {
+      draftId: DRAFT.id,
+      button: suggestion.buttonId,
+      words: "Send the invite email, and retry a bounce once.",
+    },
+  ]);
+  assert.deepEqual(tab.starts, [], "a suggestion is never started as a prompt");
+
+  await tab.press("Drop the suggestion");
+  assert.equal(dropped, 1);
+});
+
 test("a continue's draft names its source alone over the box, stands on a working line copying the source's work while its Start is out, and gives way to the new agent as it lands, or to the note and Retry with the words kept", async () => {
   const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
   const fork = { agentId: SOURCE, opening: "" };

@@ -1,5 +1,7 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import type { ModelChoice } from "@repo/features/models-wire";
+import { SUGGESTION_LEAD } from "@repo/features/reply-button-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   CARD_CORNER,
@@ -20,6 +22,7 @@ import { ArrowRightIcon, SplitIcon, XIcon } from "lucide-react";
 import { createContext, Fragment, type ReactNode, useContext } from "react";
 import { ActorRef } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
+import type { DraftSuggestion } from "../composer-drafts.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";
@@ -47,10 +50,18 @@ interface ForkDoors {
     | undefined;
   readonly forkedTo: (messageId: string) => readonly ReactNode[];
   readonly onContinue?: ContinueDoor | undefined;
+  readonly onSuggest?: SuggestDoor | undefined;
 }
 
 /** Opens the task's draft as a continue of the agent, prefilled with the words and files given. */
 export type ContinueDoor = (words: string, attachments: readonly AgentAttachment[]) => void;
+
+/** Opens the task's draft from a suggestion in another agent's reply, filled in with its brief and on the model it named. */
+export type SuggestDoor = (
+  suggestion: DraftSuggestion,
+  words: string,
+  choice: ModelChoice | undefined,
+) => void;
 
 const ForkContext = createContext<ForkDoors | undefined>(undefined);
 
@@ -81,6 +92,11 @@ export function ForkProvider({
 /** The press that opens the agent's continue as the task's draft, where its tab hands one. */
 export function useContinueDoor(): ContinueDoor | undefined {
   return useContext(ForkContext)?.onContinue;
+}
+
+/** The press that opens the task's draft from a suggestion, where the tab hands one; none where no draft opens, as on a worker's tab or an archived agent's. */
+export function useSuggestDoor(): SuggestDoor | undefined {
+  return useContext(ForkContext)?.onSuggest;
 }
 
 /** An agent as its chip wears it where the place hands no cards: by its tab's name where the task lists it, else by the title its source's summary names, and else as a coding agent. */
@@ -134,10 +150,12 @@ export function agentForkDoors(input: {
   onContinue?:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  /** Opens the draft, the task's or the agent page's, from a suggestion in an agent's reply; none where no draft opens. */
+  onSuggest?: SuggestDoor | undefined;
   cards: TranscriptCards | undefined;
   onOpenTarget: ((target: ToolTarget) => void) | undefined;
 }): ForkDoors {
-  const { agent, control, onFork, onContinue, cards, onOpenTarget } = input;
+  const { agent, control, onFork, onContinue, onSuggest, cards, onOpenTarget } = input;
   const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
   const listedIds = new Set(listed.map((each) => each.id));
   const forks = new Map(forksOf(listed, agent.id));
@@ -169,6 +187,7 @@ export function agentForkDoors(input: {
       onContinue !== undefined && drafts
         ? (words, attachments) => onContinue(agent.id, words, attachments)
         : undefined,
+    onSuggest: drafts ? onSuggest : undefined,
     forkedTo: (messageId) =>
       (forks.get(messageId) ?? []).map((agentId) => (
         <Fragment key={agentId}>
@@ -236,6 +255,45 @@ export function ForkedToLine({ messageId }: { messageId: string }): ReactNode {
   );
 }
 
+/** What a suggestion's chip says of letting it go, its × and the × hint alike. */
+const DROP_SUGGESTION = "Drop the suggestion";
+
+/** The card a draft's chip stands in over its box: the glyph it wears where it wears one, what it names, and the × that lets it go. */
+function DraftStarterCard({
+  glyph,
+  marks,
+  drop,
+  onDrop,
+  children,
+}: {
+  glyph?: ReactNode;
+  /** The marks a test or a style finds the chip by. */
+  marks: Readonly<Record<`data-${string}`, string | undefined>>;
+  drop: string;
+  onDrop: () => void;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="draft-fork-dock">
+      <Card
+        look={CARD_LOOK.TINT}
+        corner={CARD_CORNER.CONTROL}
+        padding={CARD_PADDING.NONE}
+        className="draft-fork-chip"
+        {...marks}
+      >
+        {glyph}
+        {children}
+        <span className="draft-fork-drop">
+          <Tooltip label={drop}>
+            <IconButton icon={<XIcon />} label={drop} onClick={onDrop} />
+          </Tooltip>
+        </span>
+      </Card>
+    </div>
+  );
+}
+
 /**
  * The draft's chip over its box naming what it forks: the source's chip and
  * the message's opening words, either opening the source's tab at that
@@ -275,48 +333,82 @@ export function ForkChip({
   const drop = messageId === undefined ? FORK_WORDS.DROP_CONTINUE : FORK_WORDS.DROP;
 
   return (
-    <div className="draft-fork-dock">
-      <Card
-        look={CARD_LOOK.TINT}
-        corner={CARD_CORNER.CONTROL}
-        padding={CARD_PADDING.NONE}
-        className="draft-fork-chip"
-        data-fork-chip=""
-        data-continue={messageId === undefined ? "" : undefined}
-      >
-        {messageId === undefined ? (
+    <DraftStarterCard
+      glyph={
+        messageId === undefined ? (
           <ArrowRightIcon className="draft-fork-glyph" aria-hidden="true" />
         ) : (
           <SplitIcon className="draft-fork-glyph" aria-hidden="true" />
-        )}
-        <span className="draft-fork-lead">
-          {messageId === undefined ? FORK_WORDS.CONTINUE_OF : FORK_WORDS.OF}
-        </span>
-        {agentChip(agentId, source, cards, open === undefined ? undefined : () => open())}
-        {messageId === undefined ? null : (
-          <>
-            <span>{FORK_WORDS.AT}</span>
-            {open === undefined ? (
-              <OneLine end={ONE_LINE_END.ELLIPSIS} className="draft-fork-quote">
-                {quote}
-              </OneLine>
-            ) : (
-              <OneLine
-                end={ONE_LINE_END.ELLIPSIS}
-                hint={(line) => <Tooltip label={FORK_WORDS.OPEN_SOURCE}>{line}</Tooltip>}
-                className="draft-fork-quote"
-              >
-                <TextButton onClick={open}>{quote}</TextButton>
-              </OneLine>
-            )}
-          </>
-        )}
-        <span className="draft-fork-drop">
-          <Tooltip label={drop}>
-            <IconButton icon={<XIcon />} label={drop} onClick={onDrop} />
-          </Tooltip>
-        </span>
-      </Card>
-    </div>
+        )
+      }
+      marks={{ "data-fork-chip": "", "data-continue": messageId === undefined ? "" : undefined }}
+      drop={drop}
+      onDrop={onDrop}
+    >
+      <span className="draft-fork-lead">
+        {messageId === undefined ? FORK_WORDS.CONTINUE_OF : FORK_WORDS.OF}
+      </span>
+      {agentChip(agentId, source, cards, open === undefined ? undefined : () => open())}
+      {messageId === undefined ? null : (
+        <>
+          <span>{FORK_WORDS.AT}</span>
+          {open === undefined ? (
+            <OneLine end={ONE_LINE_END.ELLIPSIS} className="draft-fork-quote">
+              {quote}
+            </OneLine>
+          ) : (
+            <OneLine
+              end={ONE_LINE_END.ELLIPSIS}
+              hint={(line) => <Tooltip label={FORK_WORDS.OPEN_SOURCE}>{line}</Tooltip>}
+              className="draft-fork-quote"
+            >
+              <TextButton onClick={open}>{quote}</TextButton>
+            </OneLine>
+          )}
+        </>
+      )}
+    </DraftStarterCard>
+  );
+}
+
+/**
+ * The draft's chip over its box naming the suggestion it was opened from:
+ * Suggested by the chip of the agent whose reply holds it, which opens that
+ * agent, and the suggestion's label, and an × that lets the suggestion go,
+ * leaving an ordinary draft with its words. It wears no glyph of its own,
+ * since the tab under it, a new agent's or a running one's, says what a send
+ * does.
+ */
+export function SuggestionChip({
+  suggestion,
+  source,
+  cards,
+  onDrop,
+}: {
+  suggestion: DraftSuggestion;
+  /** The agent whose reply holds the suggestion as the task lists it; none where the list does not hold it. */
+  source: AgentSummary | undefined;
+  cards: TranscriptCards | undefined;
+  onDrop: () => void;
+}): React.JSX.Element {
+  const openPlace = useOpenPlace();
+  const { agentId } = suggestion;
+  // A source the list does not hold is opened on its own page.
+  const task = source === undefined ? undefined : { planId: source.planId };
+  const open =
+    openPlace === undefined
+      ? undefined
+      : () => openPlace({ kind: LINK_DESTINATION.AGENT, ...task, agentId });
+  return (
+    <DraftStarterCard marks={{ "data-suggestion-chip": "" }} drop={DROP_SUGGESTION} onDrop={onDrop}>
+      <span className="draft-fork-lead">{SUGGESTION_LEAD}</span>
+      <span className="inline-flex items-center">
+        {agentChip(agentId, source, cards, open)}
+        <span aria-hidden="true">:</span>
+      </span>
+      <OneLine end={ONE_LINE_END.ELLIPSIS} className="draft-fork-quote">
+        {`“${suggestion.label}”`}
+      </OneLine>
+    </DraftStarterCard>
   );
 }

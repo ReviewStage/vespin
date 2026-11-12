@@ -1133,7 +1133,11 @@ const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
         text: "Invitations now stand apart from members: count a pending invite as an invite, not a member.",
       },
       repository: "ada/relay",
-      sendTo: { id: FIXTURE_BUTTON.DIGEST_AGENT, title: "Send the weekly digest" },
+      sendTo: {
+        id: FIXTURE_BUTTON.DIGEST_AGENT,
+        taskId: FIXTURE_IDS.TASK,
+        title: "Send the weekly digest",
+      },
       pressed: null,
     },
   ],
@@ -1143,9 +1147,12 @@ const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
 function pressedButton(button: ReplyButtonView): ReplyButtonView {
   const reached =
     button.action.kind === REPLY_BUTTON_ACTION.START
-      ? { id: FIXTURE_BUTTON.STARTED, title: button.label }
+      ? { id: FIXTURE_BUTTON.STARTED, taskId: FIXTURE_IDS.TASK, title: button.label }
       : button.sendTo;
-  return { ...button, pressed: { at: Date.now(), by: "Ada Lovelace", agent: reached } };
+  return {
+    ...button,
+    pressed: { at: Date.now(), by: "Ada Lovelace", byReader: true, agent: reached },
+  };
 }
 
 /** One kind's answer, from its payload and the profile's stage. */

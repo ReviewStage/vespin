@@ -108,7 +108,6 @@ import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
-import { REPLY_BUTTONS_EXAMPLE } from "./examples/reply-buttons";
 import { REPOSITORIES_EXAMPLE } from "./examples/repositories";
 import { RESIZE_EDGES_EXAMPLE } from "./examples/resize-edges";
 import { RESOURCES_POPOVERS_EXAMPLE } from "./examples/resources-popovers";
@@ -138,6 +137,7 @@ import { SPLIT_BARS_EXAMPLE } from "./examples/split-bars";
 import { SPLIT_BUTTONS_EXAMPLE } from "./examples/split-buttons";
 import { STEPS_EXAMPLE } from "./examples/steps";
 import { SUGGESTION_CARDS_EXAMPLE } from "./examples/suggestion-cards";
+import { SUGGESTIONS_EXAMPLE } from "./examples/suggestions";
 import { SWATCHES_EXAMPLE } from "./examples/swatches";
 import { SWITCHES_EXAMPLE } from "./examples/switches";
 import { TAB_NOTICES_EXAMPLE } from "./examples/tab-notices";
@@ -177,7 +177,7 @@ export const EXAMPLES: readonly Example[] = [
   WRITING_GLYPHS_EXAMPLE,
   ATTACHMENT_CHIPS_EXAMPLE,
   AVATARS_EXAMPLE,
-  REPLY_BUTTONS_EXAMPLE,
+  SUGGESTIONS_EXAMPLE,
   REPOSITORIES_EXAMPLE,
   TASK_MARKS_EXAMPLE,
   TASK_ROWS_EXAMPLE,

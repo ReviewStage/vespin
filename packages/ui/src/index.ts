@@ -289,7 +289,6 @@ export * from "./components/readable-controls/readable-controls.js";
 export * from "./components/rect-float/rect-float.js";
 
 export * from "./components/remote-surface/remote-surface.js";
-export * from "./components/reply-button/reply-button.js";
 export * from "./components/repository/repository.js";
 
 export * from "./components/resize-edge/resize-edge.js";
@@ -371,6 +370,8 @@ export * from "./components/stepped-back/stepped-back.js";
 export * from "./components/steps/steps.js";
 
 export * from "./components/subject-line/subject-line.js";
+
+export * from "./components/suggestion/suggestion.js";
 
 export * from "./components/suggestion-card/suggestion-card.js";
 

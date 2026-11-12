@@ -99,6 +99,23 @@ const descriptionCommentKind = Schema.Literals([
   ),
 );
 
+/**
+ * The suggestion in another agent's reply a draft was opened from: the agent
+ * whose reply holds it, the button, its label, and, for a new agent, the
+ * title and branch it named, which the draft sends as they were since no
+ * chip edits them (`reply-button-link.tsx`). Its send goes through the
+ * suggestion, once, rather than starting or sending afresh.
+ */
+const draftSuggestionSchema = Schema.Struct({
+  agentId: Schema.String,
+  buttonId: Schema.String,
+  label: Schema.String,
+  title: Schema.optionalKey(Schema.String),
+  branch: Schema.optionalKey(Schema.String),
+});
+
+export type DraftSuggestion = typeof draftSuggestionSchema.Type;
+
 const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.AGENT),
@@ -121,6 +138,8 @@ const draftPlaceSchema = Schema.Union([
         messageStepParts: Schema.optionalKey(Schema.Number),
       }),
     ),
+    /** The suggestion the draft was opened from, which a relaunch keeps beside its words; none for any other draft. */
+    suggestion: Schema.optionalKey(draftSuggestionSchema),
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.INBOX),
@@ -287,6 +306,7 @@ const storedDrafts = Schema.fromJsonString(
       dropped: Schema.optionalKey(Schema.Array(Schema.String)),
       revision: Schema.optionalKey(Schema.Number),
       element: Schema.optionalKey(pageElementSchema),
+      suggestion: Schema.optionalKey(draftSuggestionSchema),
     }),
   ),
 );
@@ -310,6 +330,8 @@ export interface Draft {
   readonly revision?: number | undefined;
   /** The element of a page a thread being started there is on, so the page pins the draft where it was started; none on the page as a whole (`description-comments.tsx`). */
   readonly element?: DraftPageElement | undefined;
+  /** The suggestion in another agent's reply an agent's box was filled in from, whose send goes through it; none for any other draft. */
+  readonly suggestion?: DraftSuggestion | undefined;
 }
 
 /** One place's draft. */
@@ -349,7 +371,8 @@ function stored(draft: Draft): boolean {
     draft.values.length > 0 ||
     (draft.steps ?? []).length > 0 ||
     draft.press !== undefined ||
-    (draft.dropped ?? []).length > 0
+    (draft.dropped ?? []).length > 0 ||
+    draft.suggestion !== undefined
   );
 }
 
@@ -371,7 +394,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
       const read = placeOf(storedPlace);
 
       if (read === undefined) return [];
-      const { steps, press, dropped, element } = rest;
+      const { steps, press, dropped, element, suggestion } = rest;
       const revision = rest.revision ?? read.revision;
 
       return [
@@ -386,6 +409,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
           ...(dropped === undefined ? undefined : { dropped }),
           ...(revision === undefined ? undefined : { revision }),
           ...(element === undefined ? undefined : { element }),
+          ...(suggestion === undefined ? undefined : { suggestion }),
         },
       ];
     })
@@ -409,14 +433,26 @@ function storedAs(owner: Owner, kept: KeptDraft, entry: StoredDraft): boolean {
     entry.press === kept.press &&
     Equal.equals(entry.dropped ?? [], kept.dropped ?? []) &&
     entry.revision === kept.revision &&
-    Equal.equals(entry.element, kept.element)
+    Equal.equals(entry.element, kept.element) &&
+    Equal.equals(entry.suggestion, kept.suggestion)
   );
 }
 
 /** A draft as storage keeps it, a card's picks only where it holds some. */
 function entryOf(
   owner: Owner,
-  { place, text, choices, values, steps = [], press, dropped = [], revision, element }: KeptDraft,
+  {
+    place,
+    text,
+    choices,
+    values,
+    steps = [],
+    press,
+    dropped = [],
+    revision,
+    element,
+    suggestion,
+  }: KeptDraft,
 ): StoredDraft {
   return {
     accountId: owner,
@@ -429,6 +465,7 @@ function entryOf(
     ...(dropped.length === 0 ? undefined : { dropped }),
     ...(revision === undefined ? undefined : { revision }),
     ...(element === undefined ? undefined : { element }),
+    ...(suggestion === undefined ? undefined : { suggestion }),
   };
 }
 

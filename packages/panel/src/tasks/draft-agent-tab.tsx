@@ -14,7 +14,7 @@ import type { TranscriptCards } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
-import { ForkChip } from "./fork-action.js";
+import { ForkChip, SuggestionChip } from "./fork-action.js";
 import { forkChoice, startingWords } from "./fork-model.js";
 import { NewTaskRunsOnChip, useStartRunsOn } from "./runs-on.js";
 import type { AgentComposerControl, ComposerNote } from "./use-agent-composer.js";
@@ -132,14 +132,11 @@ export function DraftAgentTab({
   const latest = useRef(control);
   latest.current = control;
 
-  const { fork } = draft;
-
-  const source =
-    fork === undefined
-      ? undefined
-      : [...(control.agents ?? []), ...(control.archived ?? [])].find(
-          (agent) => agent.id === fork.agentId,
-        );
+  const { fork, suggestion } = draft;
+  const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
+  const source = fork === undefined ? undefined : listed.find((agent) => agent.id === fork.agentId);
+  const suggester =
+    suggestion === undefined ? undefined : listed.find((agent) => agent.id === suggestion.agentId);
 
   // A fork runs on its source's model and effort until the developer picks another.
   const choice = draft.choice ?? (source === undefined ? fallback : forkChoice(source));
@@ -180,6 +177,18 @@ export function DraftAgentTab({
     if (unpaid !== undefined) return;
 
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
+    if (suggestion !== undefined) {
+      void starting.run(() =>
+        latest.current.startSuggestion(
+          draft.id,
+          suggestion,
+          prompt,
+          draft.choice,
+          draft.attachments,
+        ),
+      );
+      return;
+    }
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
       const { id, choice, attachments, disabledServers, permissionMode } = draft;
@@ -251,6 +260,14 @@ export function DraftAgentTab({
         {fork === undefined ? null : (
           <ForkChip fork={fork} source={source} cards={cards} onDrop={control.onDropFork} />
         )}
+        {suggestion === undefined ? null : (
+          <SuggestionChip
+            suggestion={suggestion}
+            source={suggester}
+            cards={cards}
+            onDrop={control.onDropFork}
+          />
+        )}
         {unpaid === undefined || control.models === undefined ? null : (
           <div className={COMPOSER_DOCK_CLASS}>
             <ConnectAgentBanner models={control.models} unpaid={unpaid} />
@@ -284,15 +301,19 @@ export function DraftAgentTab({
           followsUp={false}
           keywords={control.keywords}
           skills={control.readSkills}
-          tools={(narrow) => (
-            <NewTaskRunsOnChip
-              devices={devices}
-              device={device}
-              disabled={sending}
-              narrow={narrow}
-              onChoose={choosePlace}
-            />
-          )}
+          tools={
+            suggestion === undefined
+              ? (narrow) => (
+                  <NewTaskRunsOnChip
+                    devices={devices}
+                    device={device}
+                    disabled={sending}
+                    narrow={narrow}
+                    onChoose={choosePlace}
+                  />
+                )
+              : undefined
+          }
         />
       </AgentTabFoot>
     </AgentTabFrame>

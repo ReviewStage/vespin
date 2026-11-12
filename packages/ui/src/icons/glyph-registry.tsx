@@ -50,7 +50,6 @@ import {
   Pin,
   PinOff,
   RotateCcw,
-  Send,
   Server,
   ShieldUser,
   Split,
@@ -126,8 +125,6 @@ export const GLYPH = {
   // A task under another, its parent, wherever sub-tasks are named, counted, or added.
   SUB_TASK: lucideGlyph(ListTree),
   AGENT: lucideGlyph(Bot),
-  // Words sent to an agent already running, which a reply button that sends them is led by.
-  SEND: lucideGlyph(Send),
   PULL_REQUEST: lucideGlyph(GitPullRequest),
   BRANCH: lucideGlyph(GitBranch),
   PULL_REQUEST_STACK: lucideGlyph(Layers),

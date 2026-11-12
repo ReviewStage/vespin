@@ -53,6 +53,7 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { suggestionWords } from "@repo/features/reply-button-wire";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -137,6 +138,7 @@ import {
   type CarryOnReason,
   type GitHubLineMetadata,
   MESSAGE_ROLE,
+  type SuggestedBy,
   type WireValue,
 } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
@@ -234,6 +236,7 @@ import {
   providerOf,
   SENT_LINE_STATE,
   slackLineOf,
+  suggestedByOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
   tabTurnOf,
@@ -277,13 +280,14 @@ import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
-import { ForkedToLine, useForkOffered } from "./fork-action.js";
+import { ForkedToLine, SuggestionChip, useForkOffered } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import {
   CommentLineHead,
   GitHubLineCard,
   SlackLineHead,
+  SuggestionLineHead,
   ThreadLineHead,
   TranscriptAgent,
 } from "./line-cards.js";
@@ -304,6 +308,7 @@ import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
+import { sentOf, useSuggestionSender } from "./suggestion-send.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock, type TurnDone } from "./threads-dock.js";
@@ -475,6 +480,13 @@ const WORKER_LEAD: TranscriptLead = {
 const AUTOMATION_LEAD: TranscriptLead = {
   label: "Prompt",
   icon: <ZapIcon />,
+  startingLine: "The agent is starting.",
+};
+
+/** A suggestion in another agent's reply a member started the agent from: its brief, as the member sent it, and the agent starting. */
+const SUGGESTION_LEAD_CARD: TranscriptLead = {
+  label: "Suggestion",
+  icon: <GLYPH.STEER />,
   startingLine: "The agent is starting.",
 };
 
@@ -1408,6 +1420,49 @@ function TaskSender({
 }
 
 /**
+ * The line under a suggestion's card on the agent it started: Suggested by
+ * the chip of the agent whose reply held it, then who started it, the
+ * reader where it is their own, as a task's card says who started its agent.
+ */
+function SuggestionSender({
+  suggestedBy,
+  starter,
+}: {
+  suggestedBy: SuggestedBy;
+  /** Who started the agent from it; none where it is the reader. */
+  starter: Actor | undefined;
+}): React.JSX.Element {
+  return (
+    <ActorLine>
+      <SuggestionLineHead suggestedBy={suggestedBy} />
+      <ActorLine>
+        {starter === undefined ? ", started by you" : ", started by "}
+        {starter === undefined ? null : <ActorRef actor={starter} sentence />}
+      </ActorLine>
+    </ActorLine>
+  );
+}
+
+/**
+ * The card an agent opens on where a member started it from a suggestion in
+ * another agent's reply: its brief as they sent it, without the lead that
+ * names the suggesting agent to the agent reading it, under who suggested it
+ * and who started it; none for any other first line.
+ */
+function suggestionOrigin(
+  first: AgentTranscriptMessage | undefined,
+  starter: Actor | undefined,
+): TranscriptOrigin | undefined {
+  const suggestedBy = first === undefined ? undefined : suggestedByOf(first);
+  if (first === undefined || suggestedBy === undefined) return undefined;
+  return {
+    lead: SUGGESTION_LEAD_CARD,
+    sender: <SuggestionSender suggestedBy={suggestedBy} starter={starter} />,
+    text: suggestionWords(messageWords(first)),
+  };
+}
+
+/**
  * The issue or pull request an automation's GitHub event named, by number
  * and title: where the event gave its address, its chip, as the transcript
  * draws a link to it, wearing GitHub's mark for where it stands, called by
@@ -1811,14 +1866,18 @@ export function AgentMessage({
     const comment = commentLineOf(message);
     const slack = slackLineOf(message);
 
+    // A line sent from a suggestion is headed by the agent that suggested it, its words without the lead that names that agent to the agent reading them.
+    const suggested = suggestedByOf(message);
     const shown =
       comment !== undefined
         ? commentLineWords(comment)
         : slack !== undefined
           ? slack.words
-          : thread === undefined
-            ? words
-            : threadLineWords(words, thread.event);
+          : suggested !== undefined
+            ? suggestionWords(words)
+            : thread === undefined
+              ? words
+              : threadLineWords(words, thread.event);
 
     // A line open for writing again is written where it stands.
     if (drawnEditor !== undefined) {
@@ -1844,6 +1903,8 @@ export function AgentMessage({
         <CommentLineHead line={comment} received={received} fit={SUBJECT_FIT.OWN} />
       ) : slack !== undefined ? (
         <SlackLineHead line={slack} received={received} />
+      ) : suggested !== undefined ? (
+        <SuggestionLineHead suggestedBy={suggested} fit={SUBJECT_FIT.OWN} />
       ) : thread === undefined ? null : (
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
@@ -2765,14 +2826,21 @@ function AgentTranscriptView({
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, open } = placing;
+    // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
+    const drawnOrigin =
+      origin ??
+      suggestionOrigin(
+        first,
+        first === undefined ? undefined : messageSender(first, readerId, members, former),
+      );
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
     // any other is, but where something sent it, an automation, when it is
     // that sender's card; the rest the developer sent since. An agent
     // started blank was handed nothing, so its first line, typed or spoken,
     // is a line as any other is, under whoever sent it.
-    const blank = brief === AGENT_BRIEF.BLANK && origin === undefined;
-    const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
+    const blank = brief === AGENT_BRIEF.BLANK && drawnOrigin === undefined;
+    const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || drawnOrigin !== undefined);
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
@@ -2904,7 +2972,7 @@ function AgentTranscriptView({
                           delegation={delegation}
                           todos={todos}
                           briefTitle={briefTitle}
-                          origin={message === description ? origin : undefined}
+                          origin={message === description ? drawnOrigin : undefined}
                           sender={
                             message === task
                               ? briefSender
@@ -3499,40 +3567,50 @@ function AgentTabView({
         ) : continuedNote !== undefined ? (
           continuedNote
         ) : (
-          <AgentComposer
-            {...box}
-            composer={composer}
-            usage={transcript.usage}
-            payer={transcript.payer}
-            payerSubscriptionId={transcript.payerSubscriptionId}
-            // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
-            approvalsWaiting={approvals.waiting}
-            context={transcript.context}
-            brief={agent.brief}
-            onStop={onStop}
-            // Note that a started agent's conversation always opens on its description or
-            // task, so the box takes a follow up even before the transcript is read.
-            followsUp
-            keywords={keywords}
-            skills={skills}
-            replyDoor={replyDoor}
-            closedRemedy={closedRemedy}
-            sendsEmpty={sendsEmpty}
-            onContinueInCloud={onMoveToCloud}
-            queueing={
-              agent.runtime === undefined || !controlsQueue
-                ? undefined
-                : {
-                    working: standing.working,
-                    enterQueues,
-                    onQueue: queueEditing.queue,
-                    editing: queueEditing.editing !== undefined,
-                    onSave: queueEditing.save,
-                    onSteer: queueEditing.steer,
-                    onCancel: queueEditing.cancel,
-                  }
-            }
-          />
+          <>
+            {composer.suggestion === undefined ? null : (
+              <SuggestionChip
+                suggestion={composer.suggestion}
+                source={undefined}
+                cards={cards}
+                onDrop={composer.dropSuggestion}
+              />
+            )}
+            <AgentComposer
+              {...box}
+              composer={composer}
+              usage={transcript.usage}
+              payer={transcript.payer}
+              payerSubscriptionId={transcript.payerSubscriptionId}
+              // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
+              approvalsWaiting={approvals.waiting}
+              context={transcript.context}
+              brief={agent.brief}
+              onStop={onStop}
+              // Note that a started agent's conversation always opens on its description or
+              // task, so the box takes a follow up even before the transcript is read.
+              followsUp
+              keywords={keywords}
+              skills={skills}
+              replyDoor={replyDoor}
+              closedRemedy={closedRemedy}
+              sendsEmpty={sendsEmpty}
+              onContinueInCloud={onMoveToCloud}
+              queueing={
+                agent.runtime === undefined || !controlsQueue
+                  ? undefined
+                  : {
+                      working: standing.working,
+                      enterQueues,
+                      onQueue: queueEditing.queue,
+                      editing: queueEditing.editing !== undefined,
+                      onSave: queueEditing.save,
+                      onSteer: queueEditing.steer,
+                      onCancel: queueEditing.cancel,
+                    }
+              }
+            />
+          </>
         )}
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
@@ -3700,6 +3778,7 @@ function AgentTabBody({
       ? undefined
       : followUpsWords(turnEnding.followUps.filter((_, at) => ticked.includes(at)));
 
+  const sendSuggestion = useSuggestionSender();
   const composer = useAgentComposer({
     lead,
     onLeadSent: () => setTicks(undefined),
@@ -3716,6 +3795,16 @@ function AgentTabBody({
       onOpenTarget === undefined
         ? undefined
         : () => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent: agent.id }),
+    sendSuggestion: (suggestion, words, attachments) =>
+      sendSuggestion(
+        {
+          agentId: suggestion.agentId,
+          buttonId: suggestion.buttonId,
+          sent: sentOf(suggestion, words, attachments),
+        },
+        false,
+        agent.planId,
+      ),
   });
 
   const box = useAgentBox({ agentId: agent.id, agent, agents: control });
