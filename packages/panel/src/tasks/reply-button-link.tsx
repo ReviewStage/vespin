@@ -12,6 +12,7 @@ import {
   RepositoryPicture,
   SUGGESTION_KIND,
   Suggestion,
+  SuggestionSent,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -48,12 +49,6 @@ import { useOpenPlace } from "./use-open-link.js";
  * hanging its card, with Started or Sent after it. Off, or unread, it is the
  * plain link it is written as, to the agent whose reply holds it.
  */
-
-/** What stands after the reached agent's name: what the suggestion did to it. */
-const SENT_WORDS = {
-  [REPLY_BUTTON_ACTION.START]: "Started",
-  [REPLY_BUTTON_ACTION.SEND]: "Sent",
-} as const;
 
 /** What a draft's words become as a suggestion is laid in: those already written, a blank line, and the suggestion's. */
 function joinedWords(written: string, suggested: string): string {
@@ -134,10 +129,11 @@ export function ReplyButtonLink({
   if (reached !== undefined && reached !== null) {
     const href = linkOf({ kind: LINK_DESTINATION.AGENT, agentId: reached.id }, workspace);
     const after = (
-      <ReplayUnmask>
-        <GLYPH.STEER />
-        {SENT_WORDS[action.kind]}
-      </ReplayUnmask>
+      <SuggestionSent
+        kind={
+          action.kind === REPLY_BUTTON_ACTION.START ? SUGGESTION_KIND.START : SUGGESTION_KIND.SEND
+        }
+      />
     );
     return linkChip(href, reached.title, doors, undefined, after) ?? plain(href);
   }

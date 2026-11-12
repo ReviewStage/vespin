@@ -120,3 +120,25 @@ export function Suggestion({
     />
   );
 }
+
+/** What a sent suggestion says it did to the agent it reached, after that agent's name. */
+const SENT_WORDS = {
+  [SUGGESTION_KIND.START]: "Started",
+  [SUGGESTION_KIND.SEND]: "Sent",
+} as const satisfies Record<SuggestionKind, string>;
+
+/**
+ * What stands after the name of the agent a sent suggestion reached, in its
+ * chip's standing: the steer arrow, a line of words tall, and Started or
+ * Sent, so the chip reads as the suggestion it was rather than a mention.
+ */
+export function SuggestionSent({ kind }: { kind: SuggestionKind }): React.JSX.Element {
+  return (
+    <ReplayUnmask>
+      <span className="ui-suggestion-sent inline-flex items-baseline gap-ui-4 [&>svg]:size-[1em] [&>svg]:self-center">
+        <GLYPH.STEER />
+        {SENT_WORDS[kind]}
+      </span>
+    </ReplayUnmask>
+  );
+}

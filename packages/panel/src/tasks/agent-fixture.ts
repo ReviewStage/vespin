@@ -1143,6 +1143,9 @@ const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
   ],
 ]);
 
+/** The suggestions sent so far, which every later read answers as sent, as the service keeps a send. */
+const SENT_BUTTONS = new Map<string, ReplyButtonView>();
+
 /** A button pressed as the service answers one: run once by the account, reaching a new agent for a start and the digest's for a send. */
 function pressedButton(button: ReplyButtonView): ReplyButtonView {
   const reached =
@@ -1179,10 +1182,14 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   // The last reply's buttons; a press is taken as the service takes one, though nothing here moves, so a reload draws them unpressed again.
   [ACT_KIND.AGENTS_REPLY_BUTTON]: ({ buttonId }) =>
+    SENT_BUTTONS.get(buttonId) ??
     FIXTURE_BUTTONS.get(buttonId) ?? { failure: AGENT_CALL_FAILURE.NOT_FOUND },
   [ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: ({ buttonId }) => {
     const button = FIXTURE_BUTTONS.get(buttonId);
-    return button === undefined ? { failure: AGENT_CALL_FAILURE.NOT_FOUND } : pressedButton(button);
+    if (button === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const sent = SENT_BUTTONS.get(buttonId) ?? pressedButton(button);
+    SENT_BUTTONS.set(buttonId, sent);
+    return sent;
   },
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
   [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
