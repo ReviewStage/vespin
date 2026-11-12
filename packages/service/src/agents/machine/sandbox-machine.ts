@@ -351,6 +351,14 @@ const CHECKOUT_CONFIG_PATH = `${CHECKOUT_GIT_PATH}/config`;
 const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not be read";
 
 /**
+ * The mark a launch's readying leaves on the sandbox's own disk, which a
+ * sandbox made again starts without: one that stands up without it was made
+ * by a caller that launches nothing (the Terminal, the agent's browser, a
+ * preview's wake), so the next launch sets it up as one it made itself.
+ */
+const READIED_MARK = "/var/lib/vespin/readied";
+
+/**
  * The launch's readying, run by bash as root through `sudo`, waited on before the runner starts:
  * `agent` put in the `docker` group, the deploy's runner unit the launch
  * uploaded copied whole over the one the sandbox's disk holds, root's and
@@ -367,7 +375,8 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
  * `agent`'s already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s on its own drive and readable by the default user the service
- * reads as, the shared folder a link to it (`LINK_SHARED_FILES`). Note that the checkout's git config is written
+ * reads as, the shared folder a link to it (`LINK_SHARED_FILES`), and the
+ * disk marked readied (`READIED_MARK`). Note that the checkout's git config is written
  * only where it does not already say so, because a `config.lock` an agent's
  * git left behind when its runner was killed would otherwise fail every
  * relaunch after it.
@@ -384,6 +393,7 @@ function readyScript(): string {
     OPEN_DRIVE_STORE,
     HAND_INSTALL_TO_AGENT,
     ...LINK_SHARED_FILES,
+    `install -d -m 0755 $(dirname ${READIED_MARK}) && : > ${READIED_MARK}`,
   ].join("\n");
 }
 
@@ -1398,12 +1408,19 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         if (Result.isFailure(opened)) return yield* opened.failure;
         const { name, running, created, driveKept, from } = opened.success;
 
+        // A sandbox up that no launch readied was made again by a caller that launches nothing, so it
+        // is set up as one made here, its installed skills written again (`READIED_MARK`).
+        const remade =
+          !created &&
+          (yield* api.run({ name, running }, { command: "test", args: ["-e", READIED_MARK] }))
+            .exitCode !== 0;
+
         // A sandbox made again on the checkout its drive kept is set up now; one on an empty drive, once its checkout is cloned (`checkOutMissing`).
-        if (created && driveKept) yield* setUpAgain(agent, { name, running }, setup);
+        if ((created && driveKept) || remade) yield* setUpAgain(agent, { name, running }, setup);
 
         return {
           place: sandboxPlace(found.session, name, running),
-          created: created && from === CREATED_FROM.IMAGE,
+          created: (created && from === CREATED_FROM.IMAGE) || remade,
         };
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(found.session)))),
 

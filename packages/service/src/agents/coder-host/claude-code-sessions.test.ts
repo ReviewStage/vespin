@@ -88,7 +88,7 @@ import {
   REPOSITORY_SCRIPT_KIND,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
@@ -148,7 +148,14 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
-import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
+import {
+  AGENT_TAG,
+  agentSandboxName,
+  openAgentSandboxPromptly,
+  reopenedOf,
+  SANDBOX_NAME,
+  SESSION_TAG,
+} from "../agent-sandbox-open.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -4559,6 +4566,55 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       return { api, drive, source, own: sandboxOfAgent(api, continued) };
     });
 
+  it.effect(
+    "a message after another caller woke a drive agent's stopped sandbox, made again with no launch, writes its installed skills again rather than relaunching on a disk without them",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        filledWorkspaceDrive(api, agent);
+        yield* writeAccountPreferences(userId, { experiments: { [EXPERIMENT.SKILLS]: true } });
+        yield* installSkill(userId, {
+          owner: { scope: INSTALLED_SKILL_SCOPE.PERSONAL },
+          name: "incident-notes",
+          description: "Write incident notes.",
+          userInvocable: false,
+          source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+          files: [{ path: "SKILL.md", bytes: new TextEncoder().encode("Write them.\n") }],
+        });
+
+        const skillUploads = () =>
+          api.uploads.filter((upload) =>
+            [...upload.keys()].some((path) => path.startsWith("/tmp/agent-installed-skills/")),
+          ).length;
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        yield* runnerEnded({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 0,
+        }).pipe(Effect.provide(api.layer));
+        api.idleStop();
+
+        // The Terminal wakes it as it does (`reopenedOf`), making it again from the image on its drive.
+        yield* Effect.gen(function* () {
+          const standing = yield* (yield* Sandbox).get(agentSandboxName(opened.sessionId));
+          assert.ok(standing !== undefined);
+          yield* openAgentSandboxPromptly(yield* reopenedOf(opened.sessionId, standing));
+        }).pipe(Effect.provide(Layer.merge(api.layer, FIXTURE_IMAGE)));
+
+        // Its fresh disk holds no mark of a launch's readying.
+        api.hooks.runExit = (args) => (args.includes("/var/lib/vespin/readied") ? 1 : 0);
+
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(skillUploads(), 2);
+      }),
+  );
   it.effect(
     "an agent continued from one on a drive is created from the image with a fork of the source's drive, and clones, fetches, and installs nothing",
     () =>
