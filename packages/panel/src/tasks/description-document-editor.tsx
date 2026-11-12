@@ -1434,7 +1434,8 @@ export function DescriptionDocumentEditor({
     },
   });
   // Note that the words a click opened the editor on are kept where they
-  // stood, since the editor may draw what stands above them at another
+  // stood, and the change a step through the history opened it on is kept
+  // in view, since the editor may draw what stands above them at another
   // height than the text did, a picture, a table or a diagram's preview say,
   // and again each time the editor's height changes as what it draws later
   // lands, a diagram's preview or a chip, until the developer scrolls,
@@ -1444,15 +1445,27 @@ export function DescriptionDocumentEditor({
     // Note that a press on the room while the bundle loaded is where the editor opens, which keeps no words.
     const place = pending ?? editing.placement;
     const target = place !== undefined && "words" in place ? place.words?.top : undefined;
+    const stepped = editing.step !== undefined;
     const column = scroller?.current;
     const text = room.current;
 
-    if (target === undefined || column == null || text === null) return;
+    if ((target === undefined && !stepped) || column == null || text === null) return;
 
+    // Note that the change a step took back or put back is brought to the column's middle only where it stands out of view, since it most often stands where the developer just left it.
     const keep = () => {
       const top = handle.current?.wordsTop();
 
-      if (top !== undefined) column.scrollTop += top - target;
+      if (top === undefined) return;
+
+      if (target !== undefined) {
+        column.scrollTop += top - target;
+
+        return;
+      }
+
+      const box = column.getBoundingClientRect();
+
+      if (top < box.top || top > box.bottom) column.scrollTop += top - (box.top + box.height / 2);
     };
 
     keep();
@@ -1512,6 +1525,10 @@ export function DescriptionDocumentEditor({
       anchors={commentAnchors}
       onComment={onComment}
       diagrams
+      history={
+        editing.history === undefined ? undefined : { kept: editing.history, step: editing.step }
+      }
+      onClosed={editing.keepHistory}
     >
       <DocumentNote editor={editor} editing={editing} />
     </MarkdownEditor>
