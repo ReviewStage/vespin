@@ -227,7 +227,13 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
     <>
       <Screen>
         <SettingsForm>
-          <ListSection footer={rename.refusal ?? photo.refusal}>
+          <ListSection
+            footer={
+              [rename.refusal, photo.refusal]
+                .filter((refusal) => refusal !== undefined)
+                .join(" ") || undefined
+            }
+          >
             <WorkspaceRow
               workspace={switcherWorkspace(workspace, false, photos)}
               role={WORKSPACE_ROLE_WORDS[workspace.role]}
@@ -242,6 +248,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               <ActionRow
                 label={hasPhoto ? PHOTO_WORDS.CHANGE : PHOTO_WORDS.ADD}
                 symbol="photo"
+                disabled={photo.running}
                 onPress={pickPhoto}
               />
             ) : null}
@@ -249,6 +256,8 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               <ActionRow
                 label={PHOTO_WORDS.DELETE}
                 destructive
+                // Note that both photo rows wait while a pick or delete is out, since a second act would be dropped unseen.
+                disabled={photo.running}
                 onPress={() => setAsking({ kind: ASKING.PHOTO_REMOVE })}
               />
             ) : null}
