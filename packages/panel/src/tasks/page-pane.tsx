@@ -42,7 +42,6 @@ import {
   FILL_ELEMENT,
   Fill,
   IconButton,
-  MENU_DETAIL,
   PaneBar,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
@@ -58,9 +57,9 @@ import {
   CodeXmlIcon,
   GLYPH,
   MessageSquarePlusIcon,
+  MinusIcon,
+  PlusIcon,
   RotateCwIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
 } from "@repo/ui/icons";
 import { pageTab } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -153,7 +152,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * The tab stays on the source or the page while its versions are stepped.
  *
  * The page is drawn at a size the tab holds (`usePageZoom`), stepped by the
- * ⋯'s Zoom in, Zoom out, and Actual size, by ⌘+, ⌘−, and ⌘0 pressed in the
+ * ⋯'s Zoom row, − 125% +, by ⌘+, ⌘−, and ⌘0 pressed in the
  * page, and by a pinch over it, and kept across reloads and versions.
  * While it is not the actual size, the bar says the size, and pressing it
  * draws the page at actual size again, so a pinch never leaves a page
@@ -690,35 +689,42 @@ function versionStepAction(
   };
 }
 
+/** The row the tab's ⋯ sizes the page in. */
+const ZOOM_ROW = "Zoom";
+
 /**
- * The tab's ⋯ items that size the page: Zoom in and Zoom out, which leave
- * the menu standing so a size is stepped to press by press, and Actual size,
- * the size shown beside it; each dimmed where it would change nothing. Note
- * that no item prints ⌘+, ⌘−, or ⌘0, because those size the page only
+ * The tab's ⋯ items that size the page, as one row, Zoom − 125% +, as a
+ * browser's menu sizes its page: Zoom out, the size, which draws the page at
+ * actual size, and Zoom in, each leaving the menu standing so a size is
+ * stepped to press by press, and each dimmed where it would change nothing.
+ * Note that no item prints ⌘+, ⌘−, or ⌘0, because those size the page only
  * pressed in it, and the window anywhere else.
  */
 function zoomActions(zoom: number, press: (key: PageZoomKey) => void): MenuAction[] {
   return [
     {
-      label: "Zoom in",
-      icon: <ZoomInIcon aria-hidden="true" />,
-      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.IN),
-      stays: true,
-      onSelect: () => press(PAGE_ZOOM_KEY.IN),
-    },
-    {
       label: "Zoom out",
-      icon: <ZoomOutIcon aria-hidden="true" />,
+      row: ZOOM_ROW,
+      icon: <MinusIcon aria-hidden="true" />,
       disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.OUT),
       stays: true,
       onSelect: () => press(PAGE_ZOOM_KEY.OUT),
     },
     {
       label: "Actual size",
+      row: ZOOM_ROW,
       detail: pageZoomWords(zoom),
-      detailPlace: MENU_DETAIL.BESIDE,
       disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.ACTUAL),
+      stays: true,
       onSelect: () => press(PAGE_ZOOM_KEY.ACTUAL),
+    },
+    {
+      label: "Zoom in",
+      row: ZOOM_ROW,
+      icon: <PlusIcon aria-hidden="true" />,
+      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.IN),
+      stays: true,
+      onSelect: () => press(PAGE_ZOOM_KEY.IN),
     },
   ];
 }
