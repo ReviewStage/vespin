@@ -90,8 +90,14 @@ import {
   OWN_TRANSCRIPT,
   READ_KEYS,
 } from "@repo/host/app-state";
-import { type Query, type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
-import { Effect, Schema } from "effect";
+import {
+  type Query,
+  type QueryClient,
+  type QueryMeta,
+  queryOptions,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { Effect, Predicate, Schema } from "effect";
 import { useEffect } from "react";
 import { askAct } from "./act.js";
 import { actMutation } from "./act-mutations.js";
@@ -129,7 +135,7 @@ const readHolder = Schema.decodeUnknownSync(agentInboxScopeSchema);
 /** A follow, a stream on the act port that carries nothing and that the host keeps the read followed for, by the read's ids and what its query carries on `meta`. */
 type LiveFollow = (
   ids: readonly LiveReadId[],
-  meta: Readonly<Record<string, unknown>> | undefined,
+  meta: QueryMeta | undefined,
 ) => Promise<AsyncIteratorObject<unknown, unknown, unknown>>;
 
 /** Whose comments a surface reads: a task's plan's own, or one of its pages', by the task and the page. */
@@ -140,7 +146,7 @@ const readCommentSubject = Schema.decodeUnknownSync(tasksCommentsFollowSchema);
 
 /** The pull request a key of one of its parts names: the agent, and its number where the key names one rather than the agent's own. */
 function pullRequestAskedOf([agentId, number]: readonly LiveReadId[]): AgentPullRequestReadParams {
-  return typeof number === "number"
+  return Predicate.isNumber(number)
     ? { agentId: String(agentId), number }
     : { agentId: String(agentId) };
 }
@@ -157,7 +163,9 @@ export type IntegrationServer = Pick<IntegrationProviderParams, "provider" | "co
 /** The server a connection's name stands for, as its tools read is held and tried again; none for a name this build cannot read. */
 export function integrationServerOf(name: string): IntegrationServer | undefined {
   const provider = integrationConnectionOf(name)?.provider;
+
   if (provider === undefined) return undefined;
+
   return name === provider ? { provider } : { provider, connection: name };
 }
 
@@ -174,6 +182,7 @@ function automationsFollow(kind: AutomationFollow["kind"]): LiveFollow {
 /** The follow of an integration server's tools, by its connection's name; none for a name this build cannot read, which the host holds no read under. */
 function integrationToolsFollow(name: string): ReturnType<LiveFollow> {
   const server = integrationServerOf(name);
+
   return server === undefined
     ? Promise.reject(new Error(`No integration server is named ${name}.`))
     : askAct(ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW, server);
@@ -187,7 +196,7 @@ function integrationToolsFollow(name: string): ReturnType<LiveFollow> {
  * Mac's host, and the workspaces' photos the host holds for the session, so
  * they take none.
  */
-const LIVE_FOLLOWS: { readonly [Read in LiveReadName]?: LiveFollow } = {
+const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.MODELS]: () => askAct(ACT_KIND.AGENTS_MODELS_FOLLOW),
   [LIVE_READ.PROVIDER_KEYS]: () => askAct(ACT_KIND.PROVIDER_KEYS_FOLLOW),
   [LIVE_READ.GITHUB_TOKEN]: () => askAct(ACT_KIND.GITHUB_TOKEN_FOLLOW),
@@ -265,9 +274,9 @@ function pullRequestPartIds([agentId = "", number = ""]: readonly string[]): rea
  * slice, whose every segment is a string; a read keyed by strings alone
  * declares none, its path being its ids.
  */
-const LIVE_KEY_IDS: {
-  readonly [Read in LiveReadName]?: (path: readonly string[]) => readonly LiveReadId[];
-} = {
+const LIVE_KEY_IDS: Readonly<
+  Partial<Record<LiveReadName, (path: readonly string[]) => readonly LiveReadId[]>>
+> = {
   [LIVE_READ.PULL_REQUEST]: pullRequestPartIds,
   [LIVE_READ.PULL_REQUEST_CHECKS]: pullRequestPartIds,
   [LIVE_READ.PULL_REQUEST_CONVERSATION]: pullRequestPartIds,
@@ -280,6 +289,7 @@ const LIVE_KEY_IDS: {
 /** The transcript a transcript's ids name: the agent's own, or its worker's by the call that started it. */
 function transcriptOf(agentId: string, callId: string | undefined): AgentTranscriptKey {
   const kind = TRANSCRIPT_KIND.AGENT;
+
   return callId === undefined || callId === OWN_TRANSCRIPT
     ? { kind, agentId }
     : { kind, agentId, callId };
@@ -336,7 +346,9 @@ const MOVED: ReadonlySet<string> = new Set<LiveReadName>(LIVE_QUERY_READS);
 /** How many ids a key of `read` names: none for a read whose slice is one read, as the feed's is, else one per id its slice is keyed by (`HOST_READ_SLICE`). */
 function depthOf(read: LiveReadName): number {
   const slice = HOST_READ_SLICE[read];
+
   if (slice.on === KEYS_ON.ROWS) return 0;
+
   return slice.keys === READ_KEYS.TWO ? 2 : 1;
 }
 
@@ -346,46 +358,46 @@ function idsOf(read: LiveReadName, path: readonly string[]): readonly LiveReadId
 }
 
 /** Every read `held` holds `depth` segments deep, each with its path. */
-function readsIn(
-  held: unknown,
+function readsIn<Held>(
+  held: Held,
   depth: number,
   ids: readonly string[] = [],
 ): readonly { readonly ids: readonly string[]; readonly held: unknown }[] {
   if (depth === 0) return held === undefined ? [] : [{ ids, held }];
-  if (typeof held !== "object" || held === null) return [];
+
+  if (!Predicate.isObjectOrArray(held)) return [];
+
   return Object.entries(held).flatMap(([id, below]) => readsIn(below, depth - 1, [...ids, id]));
 }
 
 /** Whether `id` can be an id of a live read's key. */
 function isLiveReadId(id: unknown): id is LiveReadId {
-  return typeof id === "string" || typeof id === "number";
+  return Predicate.isString(id) || Predicate.isNumber(id);
 }
 
-/** A record of a read's document: its fields by name, each a record below or a value. */
-type DocumentRecord = Readonly<Record<string, unknown>>;
-
-/** Whether `value` is a record whose fields can be read by name, rather than a primitive or nothing. */
-function isDocumentRecord(value: unknown): value is DocumentRecord {
-  return typeof value === "object" && value !== null;
-}
-
-/** What `value` holds at `path`, record by record; none where it holds none. */
-function valueAt(value: unknown, path: readonly string[]): unknown {
-  let at = value;
-  for (const segment of path) {
-    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
-  }
-  return at;
-}
-
-/** What the document holds of `read` at `ids`; none before the first read, or where it holds nothing there. */
+/**
+ * What the document holds of `read` at `ids`, record by record; none before
+ * the first read, or where it holds nothing there.
+ */
 function heldAt<Read extends LiveReadName>(
   document: AppStateSnapshot | undefined,
   read: Read,
   ids: readonly LiveReadId[],
 ): AppHostRead<AppHostReads[Read]> | undefined {
+  let at: unknown = document?.[read];
+
+  for (const segment of ids.map(String)) {
+    // Note that a record of the document is an object or an array (`Predicate.isObjectOrArray`), read by its own field alone.
+    at =
+      Predicate.isObjectOrArray(at) &&
+      Object.hasOwn(at, segment) &&
+      Predicate.hasProperty(at, segment)
+        ? at[segment]
+        : undefined;
+  }
+
   // SAFETY: what a read's slice holds at its whole path of ids is that read (`@repo/host`'s `HOST_READ_SLICE`).
-  return valueAt(document?.[read], ids.map(String)) as AppHostRead<AppHostReads[Read]> | undefined;
+  return at as AppHostRead<AppHostReads[Read]> | undefined;
 }
 
 /** Whether `query` is the app-state document's. */
@@ -398,11 +410,15 @@ function liveReadOf(
   query: Query,
 ): { readonly read: LiveReadName; readonly ids: readonly LiveReadId[] } | undefined {
   const [name, ...ids] = query.queryKey;
-  if (typeof name !== "string" || !MOVED.has(name)) return undefined;
+
+  if (!Predicate.isString(name) || !MOVED.has(name)) return undefined;
   // SAFETY: `MOVED` holds live read names alone.
   const read = name as LiveReadName;
+
   if (ids.length !== depthOf(read)) return undefined;
+
   if (!ids.every(isLiveReadId)) return undefined;
+
   return { read, ids };
 }
 
@@ -421,8 +437,10 @@ function firstAnswer<Read extends LiveReadName>(
   return Effect.callback<AppHostReads[Read], LiveReadFailed>((resume) => {
     let stop: (() => void) | undefined;
     let answered = false;
+
     const settle = (): void => {
       const held = heldAt(client.getQueryData(appStateQuery.queryKey), read, ids);
+
       if (answered || (held?.rows === undefined && held?.failed !== true)) return;
       answered = true;
       stop?.();
@@ -430,12 +448,15 @@ function firstAnswer<Read extends LiveReadName>(
         held.rows === undefined ? Effect.fail(new LiveReadFailed(read)) : Effect.succeed(held.rows),
       );
     };
+
     settle();
+
     if (answered) return;
     // Note that only a write of the document is heard, because every observer of it reports each write again (`observerResultsUpdated`), a thousand times a push in a long transcript.
     stop = client.getQueryCache().subscribe((event) => {
       if (isAppState(event.query) && event.type === "updated") settle();
     });
+
     return Effect.sync(() => stop());
   });
 }
@@ -452,12 +473,13 @@ function firstAnswer<Read extends LiveReadName>(
 function liveReadQuery<Read extends LiveReadName>(
   read: Read,
   ids: readonly LiveReadId[] | undefined,
-  meta?: Readonly<Record<string, unknown>>,
+  meta?: QueryMeta,
 ) {
   const queryKey: LiveReadKey<Read> = ids === undefined ? [read] : [read, ...ids];
+
   return queryOptions({
     queryKey,
-    ...(meta === undefined ? {} : { meta }),
+    ...(meta !== undefined && { meta }),
     queryFn: ({ client, signal }) =>
       rendererPromise(firstAnswer(client, read, ids ?? []), signal).then(
         (answered) =>
@@ -522,6 +544,7 @@ export const linkStandingQuery = (link: LinkStandingKey | undefined) =>
     LIVE_READ.LINK_STANDINGS,
     link === undefined ? undefined : [link.workspaceId, link.address],
   );
+
 /** One agent's or worker's transcript, by the agent and then the worker's call or the agent's own, which its tab holds while it shows. */
 export const transcriptQuery = (transcript: AgentTranscriptKey | undefined) =>
   liveReadQuery(
@@ -697,6 +720,7 @@ export const inboxItemsRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_I
 
 /** Try again on one holder's own inbox. */
 export const holderInboxRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_RETRY);
+
 /** Try again on a plan's or a page's comments, by the subject. */
 export const descriptionCommentsRetryMutation = () => actMutation(ACT_KIND.TASKS_COMMENTS_RETRY);
 
@@ -763,23 +787,29 @@ export const automationsRetryMutation = () => actMutation(ACT_KIND.AUTOMATIONS_R
  */
 function writeLiveReads(client: QueryClient): void {
   const document = client.getQueryData(appStateQuery.queryKey);
+
   if (document === undefined) return;
+
   for (const read of LIVE_QUERY_READS) {
     for (const { ids, held } of readsIn(document[read], depthOf(read))) {
       // SAFETY: what a read's slice holds at its whole path of ids is that read (`@repo/host`'s `HOST_READ_SLICE`).
       const rows = (held as AppHostRead<AppHostReads[typeof read]>).rows;
       const queryKey = [read, ...idsOf(read, ids)];
+
       if (rows !== undefined && rows !== client.getQueryData(queryKey)) {
         client.setQueryData(queryKey, rows);
       }
     }
   }
+
   for (const query of client.getQueryCache().getAll()) {
     const live = liveReadOf(query);
+
     if (live === undefined) continue;
     const held = heldAt(document, live.read, live.ids);
     const cleared = query.state.status === "success" && held?.rows === undefined;
     const recovered = query.state.status === "error" && held?.failed !== true;
+
     if (cleared || recovered) {
       void client.resetQueries({ queryKey: query.queryKey, exact: true });
     }
@@ -798,15 +828,19 @@ function useLiveReadSubscription(): void {
   useEffect(() => {
     const cache = client.getQueryCache();
     const follows = new Map<Query, () => void>();
+
     const letGo = (query: Query): void => {
       follows.get(query)?.();
       follows.delete(query);
     };
+
     const hold = (query: Query): void => {
       const live = liveReadOf(query);
       const follow = live === undefined ? undefined : LIVE_FOLLOWS[live.read];
+
       if (live === undefined || follow === undefined) return;
       const followed = follows.has(query);
+
       if (query.isActive() && !followed) {
         follows.set(
           query,
@@ -816,14 +850,19 @@ function useLiveReadSubscription(): void {
           ),
         );
       }
+
       if (!query.isActive() && followed) letGo(query);
     };
+
     const unsubscribe = cache.subscribe((event) => {
       if (isAppState(event.query)) {
         if (event.type === "updated") writeLiveReads(client);
+
         return;
       }
+
       if (event.type === "removed") letGo(event.query);
+
       if (
         event.type === "observerAdded" ||
         event.type === "observerRemoved" ||
@@ -832,11 +871,15 @@ function useLiveReadSubscription(): void {
         hold(event.query);
       }
     });
+
     // Note that what the document held, and a query observed, before this mounted are written and held now, since their events came first.
     writeLiveReads(client);
+
     for (const query of cache.getAll()) hold(query);
+
     return () => {
       unsubscribe();
+
       for (const release of follows.values()) release();
     };
   }, [client]);
@@ -845,5 +888,6 @@ function useLiveReadSubscription(): void {
 /** `useLiveReadSubscription` as an element, for a root to mount beside the surface it draws. */
 export function LiveReadSubscription(): null {
   useLiveReadSubscription();
+
   return null;
 }

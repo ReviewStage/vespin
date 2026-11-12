@@ -61,7 +61,6 @@ const PAGE_CAPABILITY = {
  * Settings shows, the page is not listed, found, or drawn.
  */
 const PAGE_EXPERIMENT: Partial<Record<SettingsView, Experiment>> = {
-  [SETTINGS_VIEW.HOSTS]: EXPERIMENT.BRING_YOUR_OWN_HOST,
   [SETTINGS_VIEW.SKILLS]: EXPERIMENT.SKILLS,
   [SETTINGS_VIEW.MEMORY]: EXPERIMENT.MEMORY,
 };
@@ -72,12 +71,14 @@ export function settingsPageExperimentStands(
   experiments: ExperimentChoices,
 ): boolean {
   const experiment = PAGE_EXPERIMENT[view];
+
   return experiment === undefined || experimentOn(experiments, experiment);
 }
 
 /** Whether a page is held by a workspace's experiment, which stands only once the reader's workspaces are read. */
 export function settingsPageWaitsOnWorkspaces(view: SettingsView): boolean {
   const experiment = PAGE_EXPERIMENT[view];
+
   return experiment !== undefined && isWorkspaceExperiment(experiment);
 }
 
@@ -93,6 +94,7 @@ export function settingsPageShown(
   experiments: ExperimentChoices,
 ): boolean {
   const capability: HostCapability | null = PAGE_CAPABILITY[view];
+
   return (
     (capability === null || capabilities.includes(capability)) &&
     settingsPageExperimentStands(view, experiments)
@@ -155,6 +157,7 @@ export function settingsRowsInput({
   if (!settings) return undefined;
   const accountDrawn = account.status === ACCOUNT_STATUS.SIGNED_IN;
   const shown = accountDrawn && workspace ? shownWorkspace(workspace) : undefined;
+
   return {
     settings: { ...settings, experiments: experimentsShown(settings.experiments, shown) },
     accountDrawn,

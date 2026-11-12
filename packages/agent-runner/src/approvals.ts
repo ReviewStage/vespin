@@ -24,7 +24,7 @@ import type {
   PermissionResult,
   PermissionUpdate,
 } from "@anthropic-ai/claude-agent-sdk";
-import { type CommandPrefix, CommandPrefixSchema } from "@repo/wire";
+import { type CommandPrefix, CommandPrefixSchema, type WireBoundaryInput } from "@repo/wire";
 import { Deferred, Effect, Option, Predicate, Ref, Schema, Stream } from "effect";
 import type { EventSink } from "./events.js";
 import {
@@ -64,19 +64,25 @@ export interface Approvals {
 /** What the SDK hands `canUseTool` beside the call. */
 type AskOptions = Parameters<CanUseTool>[2];
 
+/** A call's input as the CLI hands it over. */
+type ToolInput = Parameters<CanUseTool>[1];
+
 /** A call's input as its ask is posted: each string and list in it cut to `APPROVAL_INPUT`'s bounds. */
-export function cutInput(input: Readonly<Record<string, unknown>>): Record<string, unknown> {
+export function cutInput(input: Readonly<ToolInput>): Record<string, WireBoundaryInput> {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, cut(value)]));
 }
 
-function cut(value: unknown): unknown {
+function cut<Value>(value: Value): WireBoundaryInput {
   if (Predicate.isString(value)) {
     return value.length > APPROVAL_INPUT.TEXT_MAX
       ? `${value.slice(0, APPROVAL_INPUT.TEXT_MAX)}…`
       : value;
   }
+
   if (Array.isArray(value)) return value.slice(0, APPROVAL_INPUT.ITEMS_MAX).map(cut);
-  return Predicate.isObject(value) ? cutInput(value) : value;
+
+  // SAFETY: a call's input is the JSON its tool was called with, so what is left is a JSON scalar.
+  return Predicate.isObject(value) ? cutInput(value) : (value as WireBoundaryInput);
 }
 
 /** The trailing wildcards a Bash rule names a command prefix with, the space-separated form first: `Bash(pnpm test *)` and `Bash(pnpm test:*)` alike. */
@@ -94,25 +100,31 @@ function suggestedPrefix(
   suggestions: readonly PermissionUpdate[],
 ): CommandPrefix | undefined {
   if (toolName !== BASH_TOOL) return undefined;
+
   const rules = suggestions.flatMap((update) =>
     update.type === "addRules" && update.behavior === "allow" ? update.rules : [],
   );
+
   const [rule, ...others] = rules;
+
   if (rule === undefined || others.length > 0 || rule.toolName !== BASH_TOOL) return undefined;
   const content = rule.ruleContent ?? "";
   const wildcard = PREFIX_WILDCARDS.find((each) => content.endsWith(each));
+
   if (wildcard === undefined) return undefined;
   const words = content.slice(0, -wildcard.length).trim().split(/ +/u);
+
   return Option.getOrUndefined(readPrefix(words));
 }
 
 /** The ask as the service is told of it. */
 function requested(
   toolName: string,
-  input: Record<string, unknown>,
+  input: ToolInput,
   options: AskOptions,
 ): RunnerApprovalRequested {
   const prefix = suggestedPrefix(toolName, options.suggestions ?? []);
+
   return {
     type: RUNNER_EVENT.APPROVAL_REQUESTED,
     requestId: options.requestId,
@@ -133,7 +145,7 @@ function requested(
  * checkout's settings would outlive the agent and could be committed.
  */
 function answerOf(
-  input: Record<string, unknown>,
+  input: ToolInput,
   suggestions: readonly PermissionUpdate[],
   decision: ApprovalDecision,
   message: string | undefined,
@@ -158,6 +170,7 @@ function abortOf(signal: AbortSignal): Effect.Effect<void> {
     if (signal.aborted) return resume(Effect.void);
     const aborted = () => resume(Effect.void);
     signal.addEventListener("abort", aborted, { once: true });
+
     return Effect.sync(() => signal.removeEventListener("abort", aborted));
   });
 }
@@ -165,6 +178,7 @@ function abortOf(signal: AbortSignal): Effect.Effect<void> {
 /** The launch's asks, none waiting yet. */
 export const openApprovals = Effect.fn("agent-runner/openApprovals")(function* (sink: EventSink) {
   const waiting = yield* Ref.make<Waiting>(new Map());
+
   return { sink, waiting } satisfies Approvals;
 });
 
@@ -190,16 +204,20 @@ export const settleAsk = Effect.fn("agent-runner/settleAsk")(function* (
         approvals.waiting,
         (waiting): readonly [Settle | undefined, Waiting] => {
           const found = waiting.get(requestId);
+
           if (found === undefined) return [undefined, waiting];
           const left = new Map(waiting);
           left.delete(requestId);
+
           return [found, left];
         },
       );
+
       if (settle === undefined) return false;
       const resolved = { type: RUNNER_EVENT.APPROVAL_RESOLVED, requestId, decision, by } as const;
       yield* approvals.sink.emit(resolved);
       yield* settle(decision, by, message);
+
       return true;
     }),
   );
@@ -225,6 +243,7 @@ export const denyForMessage = Effect.fn("agent-runner/denyForMessage")(function*
     .flatMap((block) => (block.type === "text" ? [block.text] : []))
     .join("\n\n")
     .trim();
+
   yield* denyWaiting(approvals, APPROVAL_BY.MESSAGE, words === "" ? undefined : words);
 });
 
@@ -242,17 +261,22 @@ export function holdAsk<A>(
   return Effect.gen(function* () {
     const { requestId } = requested;
     const answered = yield* Deferred.make<A>();
+
     const settle: Settle = (decision, by, message) =>
       Deferred.succeed(answered, answer(decision, by, message)).pipe(Effect.asVoid);
+
     yield* Ref.update(approvals.waiting, (waiting) => new Map(waiting).set(requestId, settle));
     yield* approvals.sink.emit(requested);
+
     if (withdrawn !== undefined) {
       const gone = yield* Effect.raceFirst(
         Effect.as(Deferred.await(answered), false),
         Effect.as(withdrawn, true),
       );
+
       if (gone) yield* settleAsk(approvals, requestId, APPROVAL_DECISION.DENY, APPROVAL_BY.ABORTED);
     }
+
     return yield* Deferred.await(answered);
   });
 }
@@ -261,10 +285,11 @@ export function holdAsk<A>(
 const ask = Effect.fn("agent-runner/ask")(function* (
   approvals: Approvals,
   toolName: string,
-  input: Record<string, unknown>,
+  input: ToolInput,
   options: AskOptions,
 ) {
   const suggestions = options.suggestions ?? [];
+
   return yield* holdAsk(
     approvals,
     requested(toolName, input, options),
@@ -285,7 +310,9 @@ export function canUseToolOf(approvals: Approvals): CanUseTool {
     const answers = Stream.toAsyncIterable(
       Stream.fromEffect(ask(approvals, toolName, input, options)),
     );
+
     for await (const answer of answers) return answer;
+
     return { behavior: "deny", message: DENIED };
   };
 }

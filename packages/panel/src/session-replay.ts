@@ -249,8 +249,11 @@ const MOUNT_ID = "root";
 /** Whether an attribute's value lays the replay out, and leaves as it stands. */
 function laysOut(name: string, value: string, element: Element | undefined): boolean {
   const tag = element?.localName.toLowerCase() ?? "";
+
   if (name === "href") return LAYOUT_HREFS.has(tag);
+
   if (name === "id") return value === MOUNT_ID || SVG_RESOURCES.has(tag);
+
   return LAYOUT.has(name);
 }
 
@@ -341,6 +344,24 @@ declare global {
   }
 }
 
+/** What the controller calls on the client, all a stand-in client answers; it reads nothing `init` answers. */
+type ReplayClient = {
+  readonly init: (...args: Parameters<PostHog["init"]>) => void;
+} & Pick<
+  PostHog,
+  | "group"
+  | "identify"
+  | "opt_in_capturing"
+  | "opt_out_capturing"
+  | "register"
+  | "reset"
+  | "resetGroups"
+  | "setPersonProperties"
+  | "startSessionRecording"
+  | "stopSessionRecording"
+  | "unsetPersonProperties"
+>;
+
 /** What a shell that records answers for itself; everything else is decided here. */
 export interface SessionReplayShell {
   /**
@@ -376,7 +397,7 @@ export interface SessionReplayShell {
    * The client's bundle, the library's "no-external" build unless a test
    * stands its own client in.
    */
-  readonly importClient?: BundleImporter<PostHog>;
+  readonly importClient?: BundleImporter<ReplayClient>;
   /**
    * Where the client keeps its person and its consent in the window's
    * storage, in place of the library's names for them, which are its
@@ -393,6 +414,7 @@ type SignedInBootstrap = SessionReplayWord & { accountId: string };
 /** The word as one that names a signed-in account, or none while signed out. */
 function signedIn(bootstrap: SessionReplayWord): SignedInBootstrap | undefined {
   const accountId = bootstrap.accountId;
+
   return accountId ? { ...bootstrap, accountId } : undefined;
 }
 
@@ -437,11 +459,16 @@ function addressless(
   shell: Pick<SessionReplayShell, "address" | "namesOwnAddress">,
 ): WireValue {
   const asText = text(value);
+
   if (asText !== undefined) return shell.namesOwnAddress(asText) ? shell.address : value;
+
   if (Array.isArray(value)) return value.map((entry) => addressless(entry, shell));
+
   if (!isRecord(value)) return value;
   const scrubbed: Record<string, WireValue> = {};
+
   for (const [key, entry] of Object.entries(value)) scrubbed[key] = addressless(entry, shell);
+
   return scrubbed;
 }
 
@@ -459,21 +486,29 @@ function addressless(
  */
 function withoutWithheldSheets(value: WireValue): WireValue {
   const asText = text(value);
+
   if (asText !== undefined) return opensWithheldSheet(asText) ? "" : value;
+
   if (Array.isArray(value)) return value.map(withoutWithheldSheets);
+
   if (!isRecord(value)) return value;
   const rules = value.rules;
+
   if (Array.isArray(rules) && rules.some((each) => isRecord(each) && withheldRule(each.rule))) {
     return { ...value, rules: [] };
   }
+
   const scrubbed: Record<string, WireValue> = {};
+
   for (const [key, entry] of Object.entries(value)) scrubbed[key] = withoutWithheldSheets(entry);
+
   return scrubbed;
 }
 
 /** Whether a rule, as the recorder copied it, is a withheld sheet's mark. */
 function withheldRule(rule: UnparsedWireValue): boolean {
   const asText = rule === undefined ? undefined : text(rule);
+
   return asText !== undefined && opensWithheldSheet(asText);
 }
 
@@ -484,12 +519,14 @@ function withheldRule(rule: UnparsedWireValue): boolean {
  */
 function scrubbedProperties(properties: Properties, shell: SessionReplayShell): Properties {
   const scrubbed: Properties = {};
+
   for (const [key, value] of Object.entries(properties)) {
     // SAFETY: the library built this bag, so its values are unvalidated wire
     // values by construction; the parsers establish any shape they act on.
     const addressless = withoutOwnAddress(value as UnparsedWireValue, shell);
     scrubbed[key] = addressless === undefined ? undefined : withoutWithheldSheets(addressless);
   }
+
   return scrubbed;
 }
 
@@ -526,7 +563,7 @@ function preloadRemoteConfig(key: string): void {
  * The opt-in names no event: `$opt_in` counts a consent moving, and nothing
  * here moves one.
  */
-function optIn(posthog: PostHog): void {
+function optIn(posthog: ReplayClient): void {
   posthog.opt_in_capturing({ captureEventName: false });
 }
 
@@ -540,7 +577,7 @@ function optIn(posthog: PostHog): void {
  * recordings made before it were filed by.
  */
 function registerBuild(
-  posthog: PostHog,
+  posthog: ReplayClient,
   bootstrap: SessionReplayBootstrap,
   platform: ProductPlatform,
 ): void {
@@ -583,13 +620,14 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   let initialized = false;
   let loading = false;
   /** The client, once its module has landed after the recorder. */
-  let client: PostHog | undefined;
+  let client: ReplayClient | undefined;
   /** The run's latest word asking for a recording, which a recorder that finishes loading starts under. */
   let latest: SignedInBootstrap | undefined;
   /** The account the running recording is filed under, as last identified, cleared with the person on a stop. */
   let identified: SignedInBootstrap | undefined;
   /** The workspace the running recording is filed under, as last grouped, cleared with the person by every `reset`. */
   let grouped: string | undefined;
+
   // The "no-external" client: the full build without the surveys, product
   // tours, web vitals, and the rest we never turn on, and without the
   // recorder, which is a bundle of its own.
@@ -602,9 +640,10 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * by its id and nothing else, or under none once it lists none. A workspace
    * already grouped is not grouped again, since most words move nothing.
    */
-  const followWorkspace = (posthog: PostHog, workspaceId: string | undefined): void => {
+  const followWorkspace = (posthog: ReplayClient, workspaceId: string | undefined): void => {
     if (grouped === workspaceId) return;
     grouped = workspaceId;
+
     if (workspaceId === undefined) posthog.resetGroups();
     else posthog.group(WORKSPACE_GROUP_TYPE, workspaceId);
   };
@@ -628,34 +667,38 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * a tab comes back), only the person's properties are set again, so the
    * recording stays findable by what the account is called now.
    */
-  const followAccount = (posthog: PostHog, bootstrap: SignedInBootstrap): void => {
+  const followAccount = (posthog: ReplayClient, bootstrap: SignedInBootstrap): void => {
     const before = identified;
     identified = bootstrap;
+
     if (before?.accountId === bootstrap.accountId) {
       if (before.name !== bootstrap.name || before.email !== bootstrap.email) {
         // A name taken away is unset, since setting only what is there would leave the old one standing.
         if (before.name && !bootstrap.name) posthog.unsetPersonProperties(["name"]);
         posthog.setPersonProperties(personProperties(bootstrap, shell.platform));
       }
+
       return;
     }
+
     if (before !== undefined) {
       // The reset takes the workspace's group with the person, so the next account's is set afresh.
       posthog.reset();
       grouped = undefined;
       registerBuild(posthog, bootstrap, shell.platform);
     }
+
     posthog.identify(bootstrap.accountId, personProperties(bootstrap, shell.platform));
   };
 
   /** Files the recording under the word's account, and then under its workspace. */
-  const follow = (posthog: PostHog, bootstrap: SignedInBootstrap): void => {
+  const follow = (posthog: ReplayClient, bootstrap: SignedInBootstrap): void => {
     followAccount(posthog, bootstrap);
     followWorkspace(posthog, bootstrap.workspaceId);
   };
 
   /** Starts the client over a recorder already loaded: built once per window, resumed after that. */
-  const record = (posthog: PostHog, key: string, bootstrap: SignedInBootstrap): void => {
+  const record = (posthog: ReplayClient, key: string, bootstrap: SignedInBootstrap): void => {
     if (initialized) {
       // The client is built once per window. A second `init` would not rebuild
       // it, so a recording resumed after an account change is started rather
@@ -665,8 +708,10 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
       registerBuild(posthog, bootstrap, shell.platform);
       follow(posthog, bootstrap);
       posthog.startSessionRecording();
+
       return;
     }
+
     initialized = true;
     preloadRemoteConfig(key);
     posthog.init(key, {
@@ -697,6 +742,7 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
       get_current_url: () => shell.address,
       before_send: (event) => {
         if (!event) return event;
+
         // `$set` and `$set_once` carry the address too, as the person's
         // first-seen properties, where it would outlive every event holding it.
         return {
@@ -732,28 +778,36 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   const loadRecording = (key: string, importRecorder: BundleImporter<unknown>): void => {
     if (loading) return;
     loading = true;
+
     const failed = () => {
       loading = false;
       started = false;
     };
+
     const loadClient = () => {
       if (!sessionRecorderLoaded()) {
         failed();
+
         return;
       }
+
       void importClient().then((loaded) => {
         loading = false;
         client = loaded;
+
         if (started && latest) record(client, key, latest);
       }, failed);
     };
+
     void importRecorder().then(loadClient, failed);
   };
 
   const start = (bootstrap: SignedInBootstrap, importRecorder: BundleImporter<unknown>) => {
     const key = shell.projectApiKey();
+
     if (!key) return;
     started = true;
+
     if (client !== undefined) record(client, key, bootstrap);
     else loadRecording(key, importRecorder);
   };
@@ -763,6 +817,7 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
     identified = undefined;
     grouped = undefined;
     const posthog = initialized ? client : undefined;
+
     if (posthog === undefined) return;
     posthog.stopSessionRecording();
     // The person goes with the recording. Without this the client keeps the
@@ -777,15 +832,21 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   return (bootstrap, importRecorder = shell.importRecorder) => {
     // Whether recording should be running: the host's word, and an account to file it under.
     const wanted = bootstrap.permitted ? signedIn(bootstrap) : undefined;
+
     if (wanted === undefined) {
       if (started) stop();
+
       return;
     }
+
     latest = wanted;
+
     if (!started) {
       start(wanted, importRecorder);
+
       return;
     }
+
     // A client still loading starts under `latest`, which already names the account.
     if (initialized && client !== undefined) follow(client, wanted);
   };

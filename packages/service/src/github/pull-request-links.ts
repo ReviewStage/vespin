@@ -67,11 +67,15 @@ export class PullRequestLinkKey extends Data.Class<{
 function keptFor(exit: Exit.Exit<unknown, GitHubWorkspaceReadFailure>): Duration.Duration {
   if (Exit.isSuccess(exit)) return KEPT_LINK.ANSWER_TTL;
   const failure = Option.getOrUndefined(Exit.findErrorOption(exit));
+
   if (!(failure instanceof GitHubUnavailable)) return Duration.zero;
+
   const refused =
     failure.status === GITHUB_HTTP_STATUS.FORBIDDEN ||
     failure.status === GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS;
+
   if (!refused) return Duration.zero;
+
   return Duration.min(failure.retryAfter ?? KEPT_LINK.REFUSAL_HOLD, KEPT_LINK.REFUSAL_HOLD_MAX);
 }
 
@@ -85,23 +89,29 @@ const pullRequestOfLink = /* @__PURE__ */ Effect.fnUntraced(function* (
   key: PullRequestLinkKey,
 ): Effect.fn.Return<GitHubPullRequestSummary | null, GitHubWorkspaceReadFailure, LinkServices> {
   const app = yield* GitHubApp;
+
   const reached = yield* app.repositoryPullRequestToken(
     key.workspaceId,
     key.repository,
     key.member,
   );
+
   if (Option.isNone(reached)) return null;
+
   const found = yield* pullRequestByNumber(reached.value.token, key.repository, key.number).pipe(
     markRefusedToken(reached.value.access),
   );
+
   if (Option.isNone(found)) return null;
   const pull = found.value;
+
   // Note that a queue read GitHub could not answer draws the link as open rather than failing it.
   const queued =
     pull.state === PULL_REQUEST_STATE.OPEN &&
     (yield* pullRequestQueued(reached.value.token, key.repository, key.number).pipe(
       Effect.catch(() => Effect.succeed(false)),
     ));
+
   return {
     number: pull.number,
     title: pull.title,
@@ -145,16 +155,20 @@ export const pullRequestLinksLayer: Layer.Layer<PullRequestLinks> = Layer.effect
         pullRequestOfLink(key).pipe(Effect.tapError(logWorkspaceReadFailure)),
       { capacity: KEPT_LINK.CAPACITY, requireServicesAt: "lookup", timeToLive: keptFor },
     );
+
     return {
       read: (key) =>
         Effect.gen(function* () {
           // Note that a held refusal is answered before the reach is read, because a hold may outlast the reach `GitHubApp` keeps, and a refusal shows nothing of the pull request.
           yield* Cache.getOption(kept, key);
           const app = yield* GitHubApp;
+
           const reached = yield* app
             .repositoryPullRequestToken(key.workspaceId, key.repository, key.member)
             .pipe(Effect.tapError(logWorkspaceReadFailure));
+
           if (Option.isNone(reached)) return null;
+
           return yield* Cache.get(kept, key);
         }),
     };

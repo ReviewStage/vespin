@@ -114,6 +114,7 @@ test("a page of one of Google's apps is that app's, by its host or, on the Docs 
   ] as const) {
     assert.equal(site(href), expected, href);
   }
+
   assert.equal(site("https://docs.google.com/"), undefined);
   assert.equal(site("https://docs.example.com/document/d/1AbC"), undefined);
 });
@@ -141,6 +142,7 @@ test("a YouTube page, on its own host or a short link, is YouTube's, a channel c
   ]) {
     assert.equal(site(href), LINK_SITE.YOUTUBE, href);
   }
+
   assert.equal(site("https://notyoutube.com/watch"), undefined);
   const named = (href: string) => linkSiteName(LINK_SITE.YOUTUBE, href);
   assert.equal(named("https://www.youtube.com/@acme"), "@acme");
@@ -158,6 +160,7 @@ test("an X page, under its old name too, is X's, an account called by its handle
   ]) {
     assert.equal(site(href), LINK_SITE.X, href);
   }
+
   assert.equal(site("https://xx.com/acme"), undefined);
   const named = (href: string) => linkSiteName(LINK_SITE.X, href);
   assert.equal(named("https://x.com/acme/status/1850000000000000000"), "Post by @acme");
@@ -166,6 +169,7 @@ test("an X page, under its old name too, is X's, an account called by its handle
   assert.equal(named("https://x.com/home"), "X");
   assert.equal(named("https://x.com/search?q=luke"), "X");
   assert.equal(named("https://x.com/i/spaces/1AbC"), "X");
+
   for (const page of ["premium", "jobs", "communities", "grok"]) {
     assert.equal(named(`https://x.com/${page}`), "X", page);
   }

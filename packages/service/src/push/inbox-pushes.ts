@@ -146,10 +146,13 @@ function clipped(words: string, bound: number): string {
 /** The first line of the words that says anything, trimmed, each mention said by its label. */
 function firstLine(text: string): string {
   let plain = text;
+
   for (const link of [...mentionLinksIn(text)].reverse()) {
     plain = `${plain.slice(0, link.start)}${link.label}${plain.slice(link.end)}`;
   }
+
   const line = plain.split("\n").find((each) => each.trim() !== "") ?? "";
+
   return clipped(line.trim(), ALERT_BOUND.BODY_CHARS);
 }
 
@@ -165,20 +168,25 @@ function alertOf(title: string, body: string) {
 function postedMessage(item: InboxItem, asked: boolean): InboxMessage | undefined {
   const thread = item.thread ?? [];
   const latest = thread.findLast((message) => message.author === INBOX_MESSAGE_AUTHOR.AGENT);
+
   if (!asked) return latest;
+
   return thread.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN) ?? latest;
 }
 
 /** What a post's alert offers: a decide that takes one option, its options as buttons; anything else, a reply. */
 function actionsOf(message: InboxMessage) {
   const ask = message.ask === undefined ? undefined : knownAsk(message.ask);
+
   if (ask?.type !== INBOX_ASK.DECIDE || ask.multiple === true) {
     return {
       category: PUSH_CATEGORY.REPLY,
       ...(ask === undefined ? undefined : { ask: ask.type }),
     };
   }
+
   const recommended = recommendedLabels(ask);
+
   return {
     category: PUSH_CATEGORY.DECIDE,
     ask: ask.type,
@@ -195,6 +203,7 @@ function sendToDevices(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const sender = yield* Effect.serviceOption(ApnsSender);
+
     if (Option.isNone(sender) || devices.length === 0) return;
     const notification = compose(yield* inboxWaitingCount(userId, yield* Clock.currentTimeMillis));
     yield* Effect.forEach(
@@ -238,17 +247,23 @@ function pushToMember(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const sender = yield* Effect.serviceOption(ApnsSender);
+
     if (Option.isNone(sender)) return;
+
     const devices = (yield* listPushDevices(userId)).filter(
       (device) => device.notify !== PUSH_NOTIFY.NEVER,
     );
+
     if (devices.length === 0) return;
+
     if (hold === undefined || !(yield* memberPresent(userId, yield* Clock.currentTimeMillis))) {
       return yield* sendToDevices(userId, devices, compose);
     }
+
     if (devices.some((device) => device.notify === PUSH_NOTIFY.AWAY)) {
       yield* holdFor(userId, hold);
     }
+
     yield* sendToDevices(
       userId,
       devices.filter((device) => device.notify === PUSH_NOTIFY.ALWAYS),
@@ -263,7 +278,9 @@ function threadPostNotification(
 ): ((badge: number) => MemberNotification) | undefined {
   const { item, asked, taskId } = post;
   const message = postedMessage(item, asked);
+
   if (message === undefined) return undefined;
+
   const ids: InboxPushIds = {
     itemId: item.id,
     messageId: message.id,
@@ -271,8 +288,10 @@ function threadPostNotification(
     taskId,
     revision: item.revision,
   };
+
   const { category, ...actions } = actionsOf(message);
   const kind = message.ask?.status === INBOX_ASK_STATUS.OPEN ? PUSH_KIND.ASK : PUSH_KIND.POST;
+
   return (badge) => ({
     pushType: APNS_PUSH_TYPE.ALERT,
     collapseId: item.id,
@@ -329,7 +348,9 @@ export function pushThreadPost(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   const compose = threadPostNotification(post);
   const recipient = post.item.waitsOn?.userId;
+
   if (compose === undefined || recipient === undefined) return Effect.void;
+
   return Effect.andThen(
     pushToMember(recipient, compose, { itemId: post.item.id }),
     refreshLiveActivity(
@@ -349,6 +370,7 @@ export function pushThreadSettled(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const recipient = yield* inboxItemWaitsOn(itemId);
+
     if (Option.isNone(recipient)) return;
     yield* pushToMember(recipient.value, (badge) => ({
       pushType: APNS_PUSH_TYPE.BACKGROUND,
@@ -368,8 +390,10 @@ export function pushFailedTurn(
   turn: SettledAgentTurn,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   if (turn.status !== TURN_STATUS.FAILED) return Effect.void;
+
   return Effect.gen(function* () {
     const found = yield* readAgentOfConversation(turn.userId, turn.conversationId);
+
     if (Option.isNone(found)) return;
     const agent = found.value;
     yield* pushToMember(agent.userId, failedTurnNotification(agent, turn.turnId, turn.failure), {
@@ -388,15 +412,19 @@ export function pushFailedTurn(
 function stillWaitingPost(userId: string, itemId: string) {
   return Effect.gen(function* () {
     const stored = yield* readInboxItem(userId, itemId);
+
     if (Option.isNone(stored)) return Option.none<ThreadPushPost>();
     const { item } = stored.value;
     const asks = openAskOf(item.thread ?? []) !== undefined && !inboxAgentsTurn(item);
+
     const waiting =
       item.status === INBOX_STATUS.OPEN &&
       item.waitsOn?.userId === userId &&
       (asks || item.unread === true);
+
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
+
     return Option.map(home, ({ planId }) => ({ item, asked: asks, taskId: planId }));
   });
 }
@@ -405,10 +433,13 @@ function stillWaitingPost(userId: string, itemId: string) {
 function stillFailedAgent(userId: string, agentId: string, turnId: string) {
   return Effect.gen(function* () {
     const agent = yield* readAgent(userId, agentId);
+
     if (Option.isNone(agent)) return Option.none<{ agent: Agent; failure: string | null }>();
+
     const latest = (yield* latestTurnsOf(userId, [agent.value.conversationId])).get(
       agent.value.conversationId,
     );
+
     return latest?.id === turnId && latest.status === TURN_STATUS.FAILED
       ? Option.some({ agent: agent.value, failure: latest.failure })
       : Option.none<{ agent: Agent; failure: string | null }>();
@@ -419,12 +450,16 @@ function stillFailedAgent(userId: string, agentId: string, turnId: string) {
 function heldNotification(hold: TakenHold) {
   return Effect.gen(function* () {
     const { userId, inboxItemId, agentId, turnId } = hold;
+
     if (inboxItemId !== null) {
       const post = yield* stillWaitingPost(userId, inboxItemId);
+
       return Option.flatMap(post, (each) => Option.fromUndefinedOr(threadPostNotification(each)));
     }
+
     if (agentId === null || turnId === null) return Option.none();
     const failed = yield* stillFailedAgent(userId, agentId, turnId);
+
     return Option.map(failed, ({ agent, failure }) =>
       failedTurnNotification(agent, turnId, failure),
     );
@@ -435,11 +470,14 @@ function heldNotification(hold: TakenHold) {
 function releaseHold(hold: TakenHold): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const compose = yield* heldNotification(hold);
+
     if (Option.isNone(compose)) return;
+
     // Note that a phone set to always had the alert when it was due, so only those set to away wait for it.
     const away = (yield* listPushDevices(hold.userId)).filter(
       (device) => device.notify === PUSH_NOTIFY.AWAY,
     );
+
     yield* sendToDevices(hold.userId, away, compose.value);
   });
 }
@@ -464,6 +502,7 @@ export function releaseHeldPushes(
         ),
       { concurrency: HELD_PUSH_SWEEP.CONCURRENCY, discard: true },
     );
+
     return taken.length;
   });
 }

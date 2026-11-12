@@ -64,6 +64,7 @@ function finishedStatuses(agents: readonly FinishedAgentRead[], now: number) {
   return Effect.gen(function* () {
     const conversations = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(conversations);
+
     return new Map(
       agents.map((agent) => [
         agent.agentId,
@@ -84,16 +85,19 @@ function archiveAsRead<A extends FinishedAgentRead>(
       const status = statuses.get(agent.agentId) ?? AGENT_STATUS.RUNNING;
       const finishedWell = agent.archivedAt === null && status === AGENT_STATUS.COMPLETED;
       const read = { id: agent.agentId, userId: agent.userId };
+
       // Note that the archive takes only while the agent's lines stand where they were read, so
       // one woken since, or whose starter left, stands and is read again later; one archived is let go of on its device.
       const written = finishedWell
         ? yield* archivedUnmovedAgent(read, agent.conversationSeq, reason)
         : { archived: false, discarded: true };
+
       // A local agent archived before is let go of on its device as well, as an archive by hand lets it go.
       const discarded =
         !written.archived && agent.archivedAt !== null
           ? yield* discardedOrLogged(read)
           : written.discarded;
+
       return { agent, status, ...written, discarded } satisfies FinishedAgentArchive<A>;
     }),
   );
@@ -136,22 +140,27 @@ const archiveRunAsRead = Effect.fnUntraced(function* (
   now: number,
 ) {
   const [first] = run;
+
   if (first === undefined || run.length !== first.runAgents) return;
   const statuses = yield* finishedStatuses(run, now);
+
   if (!run.every((agent) => doneWith(agent, statuses.get(agent.agentId) ?? AGENT_STATUS.RUNNING)))
     return;
   const outcomes = yield* archiveAsRead(run, statuses, AUTOMATIC_ARCHIVE_REASON.RUN_FINISHED);
+
   // A run stays unsettled until every agent's discard is queued, so the next moment asks again.
   const settled = outcomes.every(
     ({ agent, status, archived, discarded }) =>
       discarded && (archived || agent.archivedAt !== null || ENDED_UNWELL.has(status)),
   );
+
   if (settled) yield* settleRunArchive(first.runId);
 });
 
 /** The run the agent belongs to archived where it finished well and holds nothing open, as `reconsiderRunArchive` says, failing as its reads fail. */
 const archivedRunOf = Effect.fnUntraced(function* (agentId: string) {
   const run = yield* runArchivableAgentsOf(agentId);
+
   if (run.length === 0) return;
   yield* archiveRunAsRead(run, yield* Clock.currentTimeMillis);
 });

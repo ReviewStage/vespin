@@ -112,6 +112,7 @@ export function AgentModelChip({
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   // Note that we hand focus back to the chip, as a native menu returns it to
   // its trigger, because closing takes the focused field away with it.
   const close = () => {
@@ -123,8 +124,10 @@ export function AgentModelChip({
   const shown = modeShown(permissions);
   const ModeGlyph = shown === undefined ? undefined : MODE_GLYPH[shown];
   const modelWords = choiceLabel(model.choice, models ?? []).trim();
+
   const label =
     shown === undefined ? modelWords : `${modelWords} · ${PERMISSION_MODE_LABEL[shown]}`;
+
   // Note that who pays decides Fast on Codex, which runs a fast version on an OpenAI API key alone.
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);

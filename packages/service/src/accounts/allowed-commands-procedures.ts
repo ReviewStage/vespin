@@ -47,8 +47,10 @@ function answerOf(rows: readonly AllowedCommandRow[]): AllowedCommandsAnswer {
 
 export function allowedCommandsProcedures(seams: AllowedCommandsProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
+
   const listed = (userId: string) =>
     Effect.map(hostedStoreOrUnavailable(listAllowedCommands(userId)), answerOf);
+
   return {
     allowedCommands: signedIn.allowedCommands.effect(function* ({ context }) {
       return yield* listed(context.userId);
@@ -56,12 +58,15 @@ export function allowedCommandsProcedures(seams: AllowedCommandsProcedureSeams) 
 
     addAllowedCommand: signedIn.addAllowedCommand.effect(function* ({ context, input }) {
       const at = yield* DateTime.nowAsDate;
+
       const added = yield* hostedStoreOrUnavailable(
         addAllowedCommand({ userId: context.userId, prefix: input.prefix, agentId: null, at }),
       );
+
       if (added === ALLOWED_COMMAND_ADDED.FULL) {
         return yield* Effect.fail(HOSTED_REFUSAL.ALLOWED_COMMANDS_FULL);
       }
+
       return yield* listed(context.userId);
     }),
 
@@ -69,6 +74,7 @@ export function allowedCommandsProcedures(seams: AllowedCommandsProcedureSeams) 
       yield* hostedStoreOrUnavailable(
         removeAllowedCommand(context.userId, input.query[ALLOWED_COMMAND_QUERY.ID]),
       );
+
       return yield* listed(context.userId);
     }),
   };

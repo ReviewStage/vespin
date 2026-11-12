@@ -135,6 +135,7 @@ const FOOT_ROW = {
 function modelRows(models: readonly CatalogModel[], chosen: ModelChoice | undefined): MenuRow[] {
   const read = chosen === undefined ? undefined : readModelChoice(models, chosen.model);
   const unsearched = unsearchedModels(models, read?.base);
+
   return offeredModels(models).map(({ model }) => ({
     id: model.id,
     label: modelLabel(model.id, models),
@@ -162,6 +163,7 @@ export function settledChoice(
 ): ModelChoice | undefined {
   if (models === undefined || choice === undefined) return undefined;
   const effort = effortFor(effortsOf(models, choice.model), choice.effort);
+
   return effort === undefined
     ? undefined
     : choiceOn(models, { model: choice.model, effort }, choice.contextWindow);
@@ -205,16 +207,20 @@ export function ModelMenu(props: {
 }): React.JSX.Element {
   const { models, chosen, onChoose, onClose } = props;
   const remedy = useRepositoryRemedy();
+
   const read =
     models !== undefined && chosen !== undefined
       ? readModelChoice(models, chosen.model)
       : undefined;
+
   const offered =
     models !== undefined && read !== undefined
       ? offeredModels(models).find((each) => each.model.id === read.base)
       : undefined;
+
   const efforts =
     models !== undefined && chosen !== undefined ? effortsOf(models, chosen.model) : [];
+
   const windows =
     models !== undefined && chosen !== undefined
       ? contextWindowsOf(models, chosen.model)
@@ -224,6 +230,7 @@ export function ModelMenu(props: {
   const choiceAt = (modelId: string, wanted: string | undefined): ModelChoice | undefined => {
     if (models === undefined) return undefined;
     const next = effortFor(effortsOf(models, modelId), wanted);
+
     return next === undefined
       ? undefined
       : choiceOn(models, { model: modelId, effort: next }, chosen?.contextWindow);
@@ -232,6 +239,7 @@ export function ModelMenu(props: {
   const contextRow = (choice: ModelChoice, offered: readonly CatalogModel[]): FootRow[] => {
     if (windows === undefined) return [];
     const standard = windowOf(offered, choice) === CONTEXT_WINDOW.STANDARD;
+
     return [
       {
         id: FOOT_ROW.CONTEXT,
@@ -259,11 +267,15 @@ export function ModelMenu(props: {
   const chooseSpeed = (speed: ModelSpeed, effort: string): void => {
     if (offered === undefined) return;
     const missing = modelConnectFailure(offered.model);
+
     if (missing !== undefined) {
       connect(missing);
+
       return;
     }
+
     const next = choiceAt(choiceModelId(offered, speed), effort);
+
     if (next !== undefined) onChoose(next);
   };
 
@@ -273,6 +285,7 @@ export function ModelMenu(props: {
    */
   const speedRow = (read: ModelChoiceRead, chosen: ModelChoice): FootRow[] => {
     if (props.offersFast === false || models === undefined) return [];
+
     if (offered?.ultrafast !== undefined) {
       return [
         {
@@ -285,6 +298,7 @@ export function ModelMenu(props: {
             value: read.speed,
             onPick: (picked) => {
               const speed = speedsOf(offered).find((each) => each === picked);
+
               if (speed === undefined) return;
               onClose();
               chooseSpeed(speed, chosen.effort);
@@ -293,7 +307,9 @@ export function ModelMenu(props: {
         },
       ];
     }
+
     const fast = read.speed === MODEL_SPEED.FAST;
+
     return [
       {
         id: FOOT_ROW.FAST,
@@ -311,8 +327,10 @@ export function ModelMenu(props: {
   /** The Permissions row, naming the agent's mode and opening the three, each with its hint. */
   const permissionsRow = (): FootRow[] => {
     const control = props.permissions;
+
     if (control === undefined) return [];
     const Glyph = MODE_GLYPH[control.mode];
+
     return [
       {
         id: FOOT_ROW.PERMISSIONS,
@@ -327,6 +345,7 @@ export function ModelMenu(props: {
           note: control.applies,
           onPick: (picked) => {
             const mode = MODES.find((each) => each === picked);
+
             if (mode === undefined) return;
             onClose();
             control.choose(mode);
@@ -350,6 +369,7 @@ export function ModelMenu(props: {
   /** The Connect row that heads the pinned rows where the choice standing cannot run. */
   const connectRow = (): FootRow[] => {
     if (unrunnable === undefined) return [];
+
     return [
       {
         id: FOOT_ROW.CONNECT,
@@ -415,14 +435,18 @@ export function ModelMenu(props: {
       onPick={(base) => {
         // The pick keeps the speed chosen where the model has a version at it, and drops to standard where it has none.
         const picked = offeredModels(models ?? []).find((each) => each.model.id === base);
+
         if (picked === undefined) return;
         // A model nothing pays for is never chosen: its pick goes to connect it.
         const missing = modelConnectFailure(picked.model);
+
         if (missing !== undefined) return connect(missing);
+
         const next = choiceAt(
           choiceModelId(picked, read?.speed ?? MODEL_SPEED.STANDARD),
           chosen?.effort,
         );
+
         if (next === undefined) return;
         onClose();
         onChoose(next);

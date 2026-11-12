@@ -215,6 +215,7 @@ function RowLabel({
       </span>
     );
   }
+
   return (
     <label className={LABEL_CLASS[density]} id={id} htmlFor={control}>
       {children}
@@ -274,22 +275,27 @@ export function SettingsRow({
   const failed = error !== undefined && said(error.words);
   const described = said(description);
   const led = said(leading);
+
   const describedBy = [described ? descriptionId : undefined, failed ? errorId : undefined]
     .filter((part) => part !== undefined)
     .join(" ");
+
   const control: SettingsRowControl = {
     labelId,
     controlId,
     "aria-describedby": describedBy === "" ? undefined : describedBy,
     "aria-invalid": failed ? true : undefined,
   };
+
   const name = (
     <RowLabel id={labelId} control={labelsControl ? controlId : undefined} density={density}>
       {label}
     </RowLabel>
   );
+
   // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
   const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+
   const words = (
     <>
       <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
@@ -313,6 +319,7 @@ export function SettingsRow({
       <ItemActions>{children?.(control)}</ItemActions>
     </>
   );
+
   return (
     <div
       className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"

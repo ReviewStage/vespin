@@ -44,7 +44,7 @@ import {
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken } from "@repo/sandbox/vercel/testing";
-import { TURN_STATUS, type WireRecord } from "@repo/wire";
+import { TURN_STATUS, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -58,8 +58,10 @@ import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import {
   type FakeCommand,
   launchBearer,
-  linesOf,
+  readInputLine,
+  readRunnerConfig,
   runnerSandboxApi,
+  stdinRead,
 } from "../../testing/runner-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -94,6 +96,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 const ORIGIN = "https://app.test";
 const SERVICE_HOST = "app.test";
+
 /** The query a runner's URLs name its launch by. */
 const LAUNCH_QUERY = "runnerLaunch";
 const SESSION = "00000000-0000-4000-8000-000000000001";
@@ -124,11 +127,13 @@ const FALLBACK = {
   NEXT_KEY: "next_key",
   NONE: "none",
 } as const;
+
 type Fallback = (typeof FALLBACK)[keyof typeof FALLBACK];
 
 const keyRing = () => {
   const ring = parseKeyRing(Redacted.make(RING));
   assert.ok(Result.isSuccess(ring));
+
   return ring.success;
 };
 
@@ -157,6 +162,7 @@ const HARNESS = {
         provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
         kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
       };
+
       return saveProviderKey(
         userId,
         owner.provider,
@@ -234,6 +240,7 @@ const HARNESS = {
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
         const accessExpiresAt = new Date(now.getTime() + Duration.toMillis(Duration.hours(3)));
+
         const { sealed, hint } = sealCodexDeviceCredentials(keyRing(), userId, {
           accessToken: `access-${randomUUID()}`,
           refreshToken: "refresh-0",
@@ -242,6 +249,7 @@ const HARNESS = {
           chatgptAccountId: "chatgpt-workspace",
           accessExpiresAt,
         });
+
         return yield* saveProviderKey(
           userId,
           PROVIDER_KEY_PROVIDER.OPENAI,
@@ -308,6 +316,7 @@ const HARNESS = {
     ],
   },
 } as const;
+
 type Harness = keyof typeof HARNESS;
 
 /** A launch's runner as a case reads it: how it reaches the events route, where it numbers its events from, the developer's words of each message it is handed, and whether each of those it is handed first was resent. */
@@ -340,15 +349,18 @@ const sandboxLaunch = (
   command: FakeCommand,
 ) =>
   Effect.gen(function* () {
-    const [config] = linesOf(command) as [RunnerConfig];
+    const { config } = stdinRead(command, readRunnerConfig);
     const bearer = launchBearer(api, command, SERVICE_HOST);
     assert.ok(bearer !== undefined && command.agentId !== undefined);
+
     const read = yield* runnerLinesPast(userId, command.agentId, {
       launch: config.firstSequence,
       after: 0,
       limit: 50,
     });
-    const lines = read.map((row) => JSON.parse(row.text) as InputLine);
+
+    const lines = read.map((row) => readInputLine(JSON.parse(row.text)));
+
     const launched: Launched = {
       bearer,
       launch: launchNamed(config),
@@ -356,6 +368,7 @@ const sandboxLaunch = (
       texts: lines.flatMap(wordsOf),
       resent: lines.flatMap(resentOf),
     };
+
     return launched;
   });
 
@@ -367,12 +380,18 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
         Effect.provide(Layer.succeed(HostedEnvironment, ENVIRONMENT)),
       ),
     );
+
     assert.ok("secrets" in claimed);
     const secrets = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
-    const [config, ...lines] = secrets.stdin
+
+    const [first, ...rest] = secrets.stdin
       .trimEnd()
       .split("\n")
-      .map((line): unknown => JSON.parse(line)) as [RunnerConfig, ...InputLine[]];
+      .map((line): WireValue => JSON.parse(line));
+
+    const config = readRunnerConfig(first);
+    const lines = rest.map(readInputLine);
+
     const launched: Launched = {
       bearer: secrets.env[RUNNER_ENV.BEARER] ?? "",
       launch: launchNamed(config),
@@ -380,6 +399,7 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
       texts: lines.flatMap(wordsOf),
       resent: lines.flatMap(resentOf),
     };
+
     return launched;
   });
 
@@ -391,8 +411,10 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
     yield* Effect.flatMap(Database, (db) =>
       db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
     );
+
     const saveKey = () => {
       const owner = { userId, provider: spec.keyProvider, kind: PROVIDER_KEY_KIND.API_KEY };
+
       return saveProviderKey(
         userId,
         owner.provider,
@@ -403,14 +425,20 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
         new Date(0),
       );
     };
+
     if (fallback !== FALLBACK.NEXT_KEY) yield* spec.savePlan(userId, false);
+
     if (fallback === FALLBACK.NEXT_PLAN) yield* spec.savePlan(userId, true);
+
     if (fallback === FALLBACK.API_KEY) yield* saveKey();
+
     if (fallback === FALLBACK.NEXT_KEY) {
       yield* saveKey();
       yield* saveKey();
     }
+
     const deviceId = randomUUID();
+
     if (onMac) {
       yield* registerDevice(userId, {
         id: deviceId,
@@ -419,7 +447,9 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
         codexExecutable: CODEX_EXECUTABLE,
       });
     }
+
     const task = yield* startTask(userId, { name: "Teammate invitations" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -431,10 +461,12 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       runtime: harness,
       ...(onMac ? { machine: AGENT_MACHINE.DEVICE, deviceId } : undefined),
     });
+
     const agent = Option.getOrThrow(started).agent;
 
     const api = runnerSandboxApi();
     const sequence = { next: 1 };
+
     const options: RunnerSessionsOptions = {
       userId,
       eventsUrl: `${ORIGIN}/api/agents/runner/events`,
@@ -445,11 +477,14 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       instructions: () => Effect.succeed("You are a Vespin coding agent."),
       nextSequence: () => Effect.sync(() => sequence.next),
     };
+
     const built =
       harness === CONVERSATION_RUNTIME.CODEX
         ? codexSessions({ ...options, tokenUrl: `${ORIGIN}/api/agents/runner-token` })
         : claudeCodeSessions(options);
+
     const environment = Layer.succeed(HostedEnvironment, ENVIRONMENT);
+
     const sessions = yield* built.pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -471,29 +506,35 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
     // with the messages written to its runner after it, which its Mac's lines keep until they are taken.
     const claimed: Launched[] = [];
     const writtenTo = new Map<string, number>();
+
     const launches = onMac
       ? Effect.gen(function* () {
           const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
           const after: string[][] = claimed.map(() => []);
+
           for (const line of waiting) {
             if (line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH) {
               claimed.push(yield* macLaunch(userId, deviceId, line.id));
               after.push([]);
             }
+
             if (line.kind !== DEVICE_AGENT_LINE_KIND.MESSAGE) continue;
             const into = writtenTo.get(line.id) ?? claimed.length - 1;
             writtenTo.set(line.id, into);
             const lines = String(line.payload.text).trimEnd().split("\n");
-            after[into]?.push(...lines.flatMap((each) => wordsOf(JSON.parse(each) as InputLine)));
+            after[into]?.push(...lines.flatMap((each) => wordsOf(readInputLine(JSON.parse(each)))));
           }
+
           return claimed.map((launch, index) => ({
             ...launch,
             texts: [...launch.texts, ...(after[index] ?? [])],
           }));
         })
       : Effect.forEach(api.commands, (command) => sandboxLaunch(api, userId, command));
+
     // A Mac beats on while it waits for the agent's next launch; a sandbox has nothing to beat.
     const beat = onMac ? Effect.asVoid(beatDevice(userId, deviceId)) : Effect.void;
+
     return { userId, agent, api, sessions, sequence, launches, beat };
   });
 
@@ -509,7 +550,7 @@ const reaching = (userId: string, sessions: Sessions) =>
 /** The events route over the test's store, its limited turns handed on to the harnesses given, as a fetch answering its status; past its answer where `after` keeps that work for the case to run. */
 const eventsRoute = (
   reached: Layer.Layer<NativeAgentSessions>,
-  after: Layer.Layer<AfterResponse> = Layer.empty as Layer.Layer<AfterResponse>,
+  after: Layer.Layer<AfterResponse> | Layer.Layer<never> = Layer.empty,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -522,11 +563,14 @@ const eventsRoute = (
       after,
       NO_GITHUB,
     );
+
     const web = HttpRouter.toWebHandler(
       runnerEventsApp({}).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
     return (runner: Launched, events: readonly RunnerEvent[]) =>
       Effect.promise(async () => {
         const response = await web.handler(
@@ -539,6 +583,7 @@ const eventsRoute = (
             body: JSON.stringify({ events }),
           }),
         );
+
         return response.status;
       });
   });
@@ -553,6 +598,7 @@ const writtenLine = (agent: Agent, text: string) =>
       { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
       Effect.succeed(true),
     );
+
     return {
       conversationId: agent.conversationId,
       turn: "typed" as const,
@@ -561,29 +607,41 @@ const writtenLine = (agent: Agent, text: string) =>
     };
   });
 
+/** A case of the fallback: its harness, where it runs, the fallback it is past, and who its relaunch runs on. */
+interface FallbackCase {
+  readonly name: string;
+  readonly harness: keyof typeof HARNESS;
+  readonly onMac: boolean;
+  readonly fallback: Fallback;
+  readonly payer: AgentPayer;
+}
+
 /**
  * Each harness on each machine, past each fallback, and who its relaunch
  * must run on: in the cloud, past each fallback; on a Mac, which runs on
  * its own login whatever the account saved, only at the reset.
  */
-const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap((harness) => [
-  ...Object.values(FALLBACK).map((fallback) => ({
-    name: `${harness} in the cloud, ${fallback}`,
-    harness,
-    onMac: false,
-    fallback,
-    payer: (fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
-      ? AGENT_PAYER.API_KEY
-      : HARNESS[harness].planPayer) as AgentPayer,
-  })),
-  {
-    name: `${harness} on a Mac, ${FALLBACK.NONE}`,
-    harness,
-    onMac: true,
-    fallback: FALLBACK.NONE,
-    payer: AGENT_PAYER.MAC_SIGN_IN as AgentPayer,
-  },
-]);
+const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap(
+  (harness): FallbackCase[] => [
+    ...Object.values(FALLBACK).map((fallback) => ({
+      name: `${harness} in the cloud, ${fallback}`,
+      harness,
+      onMac: false,
+      fallback,
+      payer:
+        fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
+          ? AGENT_PAYER.API_KEY
+          : HARNESS[harness].planPayer,
+    })),
+    {
+      name: `${harness} on a Mac, ${FALLBACK.NONE}`,
+      harness,
+      onMac: true,
+      fallback: FALLBACK.NONE,
+      payer: AGENT_PAYER.MAC_SIGN_IN,
+    },
+  ],
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -596,11 +654,13 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const spec = HARNESS[harness];
+
         const { userId, agent, sessions, sequence, launches, beat } = yield* accountWith(
           harness,
           onMac,
           fallback,
         );
+
         const reached = reaching(userId, sessions);
         const post = yield* eventsRoute(reached);
 
@@ -614,14 +674,17 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
 
         // The first launch's turn meets its subscription's limit, which the route writes and hands the turn on past.
         const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
+
         const limited = numbered(
           first.firstSequence,
           fallback === FALLBACK.NEXT_KEY
             ? spec.outOfQuota(sent.lineId)
             : spec.limited(sent.lineId, resetsAt),
         );
+
         sequence.next = first.firstSequence + limited.length;
         assert.equal(yield* post(first, limited), 200);
+
         // Where no payer has room, the turn waits for the reset, which the sweep hands on.
         if (fallback === FALLBACK.NONE) {
           assert.equal((yield* launches).length, 1);
@@ -645,9 +708,11 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
 
         const finished = numbered(second.firstSequence, spec.finished(sent.lineId));
         assert.equal(yield* post(second, finished), 200);
+
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
         );
+
         assert.deepEqual([turn?.status, agentFailureOf(turn)], [TURN_STATUS.SETTLED, undefined]);
       }),
   );
@@ -658,11 +723,13 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const spec = HARNESS[harness];
+
         const { userId, agent, sessions, sequence, launches } = yield* accountWith(
           harness,
           onMac,
           fallback,
         );
+
         const reached = reaching(userId, sessions);
         const kept = keptAfterResponse();
         const post = yield* eventsRoute(reached, kept.layer);
@@ -674,12 +741,14 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         const [first] = yield* launches;
         assert.ok(first !== undefined);
         const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
+
         const limited = numbered(
           first.firstSequence,
           fallback === FALLBACK.NEXT_KEY
             ? spec.outOfQuota(sent.lineId)
             : spec.limited(sent.lineId, resetsAt),
         );
+
         sequence.next = first.firstSequence + limited.length;
         assert.equal(yield* post(first, limited), 200);
 
@@ -688,6 +757,7 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
           opened.sessionId,
           yield* writtenLine(agent, "Also the emails."),
         );
+
         yield* kept.run;
 
         assert.equal(steer.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -702,11 +772,13 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const spec = HARNESS[CONVERSATION_RUNTIME.CLAUDE_CODE];
+
         const { userId, agent, api, sessions, sequence, launches } = yield* accountWith(
           CONVERSATION_RUNTIME.CLAUDE_CODE,
           false,
           FALLBACK.API_KEY,
         );
+
         const post = yield* eventsRoute(reaching(userId, sessions));
         const sent = yield* writtenLine(agent, "Fix the invitations.");
         const opened = yield* sessions.open(sent);
@@ -729,6 +801,7 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
         );
+
         assert.deepEqual(
           [turn?.status, agentFailureOf(turn)],
           [TURN_STATUS.FAILED, AGENT_FAILURE.PLAN_LIMIT],
@@ -742,11 +815,13 @@ it.layer(SUITE)("a queued turn whose launch its plan's limit refuses", (it) => {
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
       const spec = HARNESS[CONVERSATION_RUNTIME.CLAUDE_CODE];
+
       const { userId, agent, sessions, sequence, launches } = yield* accountWith(
         CONVERSATION_RUNTIME.CLAUDE_CODE,
         false,
         FALLBACK.NONE,
       );
+
       const reached = reaching(userId, sessions);
       const post = yield* eventsRoute(reached);
       const sent = yield* writtenLine(agent, "Fix the invitations.");
@@ -766,9 +841,11 @@ it.layer(SUITE)("a queued turn whose launch its plan's limit refuses", (it) => {
         now,
       );
       yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+
       const waiting = (yield* latestTurnsOfReached([agent.conversationId])).get(
         agent.conversationId,
       );
+
       assert.ok(waiting !== undefined);
       assert.deepEqual(
         [waiting.status, waiting.waitsUntil?.getTime(), (yield* launches).length],

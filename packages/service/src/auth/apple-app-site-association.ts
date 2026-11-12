@@ -78,6 +78,7 @@ function appId(app: AssociatedApp): string {
 /** The document naming the app: the sign-in's callback and the links the app draws as its universal links, and the app as the one the host's credentials go to. */
 function appleAppSiteAssociation(app: AssociatedApp): AppleAppSiteAssociation {
   const id = appId(app);
+
   return {
     applinks: {
       details: [
@@ -99,7 +100,9 @@ const associatedApp: Effect.Effect<Option.Option<AssociatedApp>> = Config.all({
   Effect.orElseSucceed(() => ({ teamId: Option.none<string>(), bundleId: Option.none<string>() })),
   Effect.map(({ teamId, bundleId }) => {
     const team = text(Option.getOrUndefined(teamId));
+
     if (team === undefined) return Option.none();
+
     return Option.some({
       teamId: team,
       bundleId: text(Option.getOrUndefined(bundleId)) ?? IOS_BUNDLE_ID_DEFAULT,
@@ -110,11 +113,15 @@ const associatedApp: Effect.Effect<Option.Option<AssociatedApp>> = Config.all({
 /** GET: the document naming the deployment's app, or not found where it names none. */
 const associationEndpoint = Effect.gen(function* () {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const app = yield* associatedApp;
+
   if (Option.isNone(app)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return HttpServerResponse.text(JSON.stringify(appleAppSiteAssociation(app.value)), {
     contentType: ASSOCIATION_CONTENT_TYPE,
     headers: ASSOCIATION_HEADERS,

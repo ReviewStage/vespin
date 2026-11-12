@@ -1,6 +1,7 @@
 import type { FeedbackImage } from "@repo/features/feedback";
 import { FEEDBACK_IMAGE_TYPE, FEEDBACK_LIMITS, isFeedbackImageType } from "@repo/features/feedback";
 import { ACT_KIND } from "@repo/host/acts";
+import { Predicate } from "effect";
 import { askAct } from "./act.js";
 import { isHeicFile, isPictureFile } from "./picture-files.js";
 import { base64Of } from "./tasks/attached-files.js";
@@ -59,12 +60,14 @@ function imageIntake(
   if (square !== undefined) {
     return isPictureFile(file) ? IMAGE_INTAKE.RECODE : IMAGE_INTAKE.REFUSE;
   }
+
   // A format the submission carries natively rides untouched while it fits;
   // past the cap it is re-encoded rather than refused, because the cap exists
   // for a request-body limit the user should never have to think about.
   if (isFeedbackImageType(file.type)) {
     return file.size <= maxBytes ? IMAGE_INTAKE.KEEP : IMAGE_INTAKE.RECODE;
   }
+
   // Anything else the platform can decode — HEIC off a phone, a GIF — still
   // comes, as a re-encode. Only a file that is not an image at all is refused.
   return isPictureFile(file) ? IMAGE_INTAKE.RECODE : IMAGE_INTAKE.REFUSE;
@@ -73,6 +76,7 @@ function imageIntake(
 /** A picture written again in another format, named for it, so the name stops promising the old one. */
 function renamedImage(name: string, extension: string): string {
   const stem = name.replace(/\.[^.]*$/, "");
+
   return `${stem || "screenshot"}.${extension}`;
 }
 
@@ -81,9 +85,11 @@ function base64FromBlob(blob: Blob): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const url = reader.result;
-      if (typeof url === "string") resolve(url.slice(url.indexOf(",") + 1));
+
+      if (Predicate.isString(url)) resolve(url.slice(url.indexOf(",") + 1));
       else reject(new TypeError("FileReader read a data URL as no string"));
     };
+
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
@@ -111,8 +117,10 @@ function recodeRegion(
   square: number | undefined,
 ): RecodeRegion {
   const { width, height } = bitmap;
+
   if (square === undefined) {
     const scale = Math.min(1, maxEdge / Math.max(width, height));
+
     return {
       sourceX: 0,
       sourceY: 0,
@@ -122,7 +130,9 @@ function recodeRegion(
       height: Math.max(1, Math.round(height * scale)),
     };
   }
+
   const shorter = Math.min(width, height);
+
   return {
     sourceX: (width - shorter) / 2,
     sourceY: (height - shorter) / 2,
@@ -139,6 +149,7 @@ async function recodedImage(
   square: number | undefined,
 ): Promise<FeedbackImage | undefined> {
   const bitmap = await createImageBitmap(file);
+
   try {
     for (const round of RECODE_ROUNDS) {
       const region = recodeRegion(bitmap, round.maxEdge, square);
@@ -146,6 +157,7 @@ async function recodedImage(
       canvas.width = region.width;
       canvas.height = region.height;
       const context = canvas.getContext("2d");
+
       if (!context) return undefined;
       context.drawImage(
         bitmap,
@@ -158,17 +170,22 @@ async function recodedImage(
         canvas.width,
         canvas.height,
       );
+
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, FEEDBACK_IMAGE_TYPE.WEBP, round.quality),
       );
+
       if (!blob) return undefined;
+
       if (blob.size > maxBytes) continue;
+
       return {
         name: renamedImage(file.name, "webp"),
         mediaType: FEEDBACK_IMAGE_TYPE.WEBP,
         base64: await base64FromBlob(blob),
       };
     }
+
     return undefined;
   } finally {
     bitmap.close();
@@ -190,6 +207,7 @@ async function jpegOfHeic(file: File): Promise<File | undefined> {
   try {
     const photo = base64Of(new Uint8Array(await file.arrayBuffer()));
     const { base64 } = await askAct(ACT_KIND.MAC_PHOTO_TO_JPEG, { base64: photo });
+
     return new File([bytesOfBase64(base64)], renamedImage(file.name, "jpg"), {
       type: FEEDBACK_IMAGE_TYPE.JPEG,
     });
@@ -206,11 +224,14 @@ async function encodedImage(
   square: number | undefined,
 ): Promise<FeedbackImage | undefined> {
   const intake = imageIntake(file, maxBytes, square);
+
   if (intake === IMAGE_INTAKE.REFUSE) return undefined;
+
   try {
     if (intake === IMAGE_INTAKE.KEEP && isFeedbackImageType(file.type)) {
       return { name: file.name, mediaType: file.type, base64: await base64FromBlob(file) };
     }
+
     return await recodedImage(file, maxBytes, square);
   } catch {
     // A file the decoder refused — a corrupt image, a format Chromium cannot
@@ -239,7 +260,9 @@ export async function encodeImage(
   const heic = isHeicFile(file);
   const jpeg = heic ? await jpegOfHeic(file) : undefined;
   const image = await encodedImage(jpeg ?? file, maxBytes, square);
+
   if (image !== undefined) return { image };
+
   // Note that a JPEG the Mac wrote is a picture like any other, so one that would not fit is said as the caller says any.
   return { unreadable: heic && jpeg === undefined ? IMAGE_UNREADABLE.HEIC(file.name) : undefined };
 }

@@ -30,6 +30,7 @@ const KILL_GRACE = Duration.seconds(3);
 function signaled(group: number, signal: NodeJS.Signals | 0): boolean {
   try {
     process.kill(-group, signal);
+
     return true;
   } catch {
     return false;
@@ -47,20 +48,25 @@ export const hostRunnersLeftStopped = Effect.fnUntraced(function* (
 ) {
   const { report } = yield* Reporter;
   const kept = yield* keptRunnerGroups(stateRoot);
+
   // Note that a record from before the boot names a group id the machine may since have handed to anything.
   const alive = kept
     .filter((record) => record.startedAt >= bootedAt && record.group !== process.pid)
     .map((record) => record.group)
     .filter((group) => signaled(group, 0));
+
   if (alive.length > 0) {
     report(
       `${PRODUCT_NAME} host: ending ${alive.length} agent runner${alive.length === 1 ? "" : "s"} a daemon before this one left running.`,
     );
+
     for (const group of alive) signaled(group, "SIGTERM");
     yield* Effect.sleep(KILL_GRACE);
+
     for (const group of alive) {
       if (signaled(group, 0)) signaled(group, "SIGKILL");
     }
   }
+
   yield* forgetRunnerGroups(stateRoot);
 });

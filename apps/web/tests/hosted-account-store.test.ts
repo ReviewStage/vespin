@@ -32,6 +32,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -57,6 +58,7 @@ it.layer(getTestDB())("the account group's seams over effect/sql", (it) => {
   it.effect("a written snapshot reads back whole, at the instant it was written", () =>
     Effect.gen(function* () {
       const userId = yield* openUser;
+
       // Note that a write answers the transaction it committed in beside the snapshot, which a read carries none of.
       const { txid: _committedIn, ...written } = yield* writeAccountPreferences(userId, {
         preferences: {},

@@ -80,6 +80,7 @@ export function SelectRow<Value extends string | number>({
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
   const chosen = options.find((option) => option.value === value);
+
   return (
     <PickerRow
       label={label}
@@ -115,6 +116,7 @@ export function SelectRow<Value extends string | number>({
       onPick={(id) => {
         if (pickOther?.(id) === true) return;
         const next = parse(id);
+
         if (next !== undefined) run(next);
       }}
     />

@@ -173,6 +173,7 @@ const WRITING_WORDS = "format formatting markdown editor text";
 function inContextEntry(key: InContextKey, group: string): SettingsSearchEntry {
   const { label } = IN_CONTEXT_SHORTCUTS[key];
   const leaving = key === IN_CONTEXT_KEY.STEP_BACK ? ESCAPE_WORDS : "";
+
   return {
     id: key,
     label,
@@ -503,6 +504,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     // The writing chords and Markdown rules, listed under the window's, found by the rule typed too.
     ...WRITING_ACTIONS_LISTED.map((action) => {
       const { label, markdown }: WritingShortcut = WRITING_SHORTCUTS[action];
+
       return {
         id: action,
         label,
@@ -539,6 +541,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
       haystack: [CHAPTERS_SHORTCUTS[key].label, WINDOW_SHORTCUT_WORDS, CHAPTERS_GROUP_TITLE],
     })),
   ];
+
   return entries.filter((entry): entry is SettingsSearchEntry => entry !== undefined);
 }
 
@@ -551,11 +554,14 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
 export function settingsSearchEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[] {
   const described = describedSettings(input.settings).flatMap((setting): SettingsSearchEntry[] => {
     const field = settingFieldForId(setting.id);
+
     if (!field) return [];
+
     if (!settingIdVisible(setting.id, input)) return [];
     // A choice is found by what it offers as well as by its name, so "dark"
     // finds the theme its row no longer has to describe.
     const offered = APP_SETTING_SCHEMA[field].control?.options(input) ?? [];
+
     return [
       {
         id: setting.id,
@@ -569,10 +575,13 @@ export function settingsSearchEntries(input: SettingsSearchInput): readonly Sett
       },
     ];
   });
+
   const fixed = fixedEntries(input);
+
   const pages = SETTINGS_PAGE_LIST.filter((page) =>
     settingsPageShown(page, input.capabilities, input.settings.experiments),
   );
+
   return pages
     .flatMap((page) => [
       ...described.filter((entry) => entry.page === page),
@@ -642,20 +651,27 @@ export function searchSettings(
   query: string,
 ): SettingsSearchOutcome | undefined {
   if (searchTokens(query).length === 0) return undefined;
+
   const kept = corpus.entries.flatMap((entry): { entry: SettingsSearchResult; score: number }[] => {
     const hit = searchHit({ label: entry.label, keywords: entry.haystack }, query);
+
     return hit === undefined ? [] : [{ entry: { ...entry, marks: hit.label }, score: hit.score }];
   });
+
   const scored = corpus.pages.flatMap((page): { group: SettingsSearchGroup; score: number }[] => {
     const named = searchHit({ label: resultPageWord(page) }, query);
     const held = kept.filter(({ entry }) => entry.page === page).sort((a, b) => b.score - a.score);
     const score = Math.max(named?.score ?? -Infinity, held[0]?.score ?? -Infinity);
+
     if (score === -Infinity) return [];
     const group = { page, marks: named?.label, items: held.map(({ entry }) => entry) };
+
     return [{ group, score }];
   });
+
   const groups = scored.sort((a, b) => b.score - a.score).map(({ group }) => group);
   const pagesNamed = groups.filter((group) => group.marks !== undefined).length;
+
   return { groups, matched: kept.length + pagesNamed };
 }
 
@@ -681,6 +697,7 @@ export function settingsSearchStops(search: SettingsSearchOutcome): readonly Set
  */
 export function bestSettingsStop(search: SettingsSearchOutcome): number {
   const first = search.groups[0];
+
   return first === undefined || first.marks !== undefined || first.items.length === 0 ? 0 : 1;
 }
 
@@ -708,6 +725,7 @@ export function landOnSettingsRow(id: string, keyboard = true): () => void {
     ready: drawnVisibly,
     act: (element) => {
       element.scrollIntoView({ block: "start" });
+
       // A row with one control anchors the control itself, which takes the
       // keyboard; a row of several anchors the row and takes none, since
       // choosing among its buttons is not the landing's to do.
@@ -784,6 +802,7 @@ export function SettingsSearchField({
     find
       ? () => {
           setPlaced(false);
+
           if (onFind === undefined) focusSearchField(SETTINGS_SEARCH_INPUT_ID);
           else {
             onFind();
@@ -800,12 +819,14 @@ export function SettingsSearchField({
     // Note that under a finger Settings opens with the caret nowhere, because a phone raises no
     // keyboard for a caret it was not tapped into, and a focused field puts the places bar aside.
     if (coarsePointerNow()) return undefined;
+
     return focusSeek({
       find: () => field.current,
       act: (input) => {
         // Note that a caret already in the window keeps it, because a link
         // or a palette result that landed on a row put it there on purpose.
         const held = document.activeElement;
+
         if (held !== null && held !== document.body) return;
         setPlaced(true);
         input.focus({ preventScroll: true });
@@ -815,6 +836,7 @@ export function SettingsSearchField({
   // The caret Settings placed on its own holds no layer, so its Escape is
   // left to fall through to the window and leave Settings.
   const untouched = placed && query.length === 0;
+
   const steering = useComboboxField({
     open: results.count > 0,
     active: results.active,
@@ -832,15 +854,20 @@ export function SettingsSearchField({
         event.preventDefault();
         const toward = event.shiftKey ? "ArrowUp" : "ArrowDown";
         const to = rovingStep(toward, ROVING_ORIENTATION.VERTICAL, results.active, results.count);
+
         if (to !== undefined) results.onStep(to);
+
         return;
       }
+
       if (event.key !== "Escape" || untouched) return;
       event.stopPropagation();
+
       if (query.length > 0) onQueryChange("");
       else field.current?.blur();
     },
   });
+
   return (
     <search
       className="settings-search mb-section-gap flex-none"
@@ -881,19 +908,20 @@ export function SettingsSearchField({
 
 /** The marks of `ranges` that fall in `from`..`to`, counted from `from`. */
 function rangesWithin(ranges: readonly MatchRange[], from: number, to: number): MatchRange[] {
-  return ranges
-    .filter((range) => range.end > from && range.start < to)
-    .map((range) => ({
-      start: Math.max(range.start, from) - from,
-      end: Math.min(range.end, to) - from,
-    }));
+  return ranges.flatMap((range) =>
+    range.end > from && range.start < to
+      ? [{ start: Math.max(range.start, from) - from, end: Math.min(range.end, to) - from }]
+      : [],
+  );
 }
 
 /** A result's name, its matches marked, and a person's words in it masked in a screen recording. */
 function ResultLabel({ entry }: { entry: SettingsSearchResult }): React.JSX.Element {
   const from = entry.replayMaskedFrom;
+
   if (from === undefined) return <Highlighted text={entry.label} ranges={entry.marks} />;
   const end = entry.label.length;
+
   return (
     <>
       <Highlighted text={entry.label.slice(0, from)} ranges={rangesWithin(entry.marks, 0, from)} />
@@ -908,6 +936,7 @@ function ResultLabel({ entry }: { entry: SettingsSearchResult }): React.JSX.Elem
 function resultIcon(entry: SettingsSearchResult): React.JSX.Element | undefined {
   if (entry.page !== SETTINGS_VIEW.INTEGRATIONS) return undefined;
   const provider = INTEGRATION_PROVIDER_LIST.find((each) => each === entry.id);
+
   return provider === undefined ? undefined : <ProviderMark provider={provider} />;
 }
 
@@ -950,11 +979,14 @@ export function SettingsSearchResults({
       </NoteLine>
     );
   }
+
   // Each row's index among the stops, counted as they are drawn: each page, then its rows.
   let at = -1;
+
   const stop = (page: SettingsView) => {
     at += 1;
     const index = at;
+
     return {
       id: settingsSearchStopId(listId, index),
       current: index === active && page === shown ? NAV_CURRENT.LOCATION : undefined,
@@ -962,10 +994,12 @@ export function SettingsSearchResults({
       onClick: () => onOpen(index),
     };
   };
+
   return (
     <div id={listId} className="settings-search-results flex flex-col gap-tight-gap">
       {search.groups.map((group) => {
         const page = settingsPageOf(group.page);
+
         return (
           <section key={group.page} aria-label={resultPageWord(group.page)}>
             <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW}>

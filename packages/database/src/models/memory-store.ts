@@ -338,25 +338,33 @@ export function rememberMemory(
     agentId: source?.agentId ?? null,
     messageId: source?.messageId ?? null,
   };
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const workspace = yield* lockWorkspace(organizationId);
+
         if (Option.isNone(workspace)) return { kind: MEMORY_OUTCOME.NOT_FOUND } as const;
         const every = (yield* findMemories(organizationId)).map(storedOf);
         const now = yield* DateTime.nowAsDate;
         const same = every.find((kept) => sameWords(kept.text) === sameWords(text));
+
         if (replaces !== undefined) {
           const target = every.find((kept) => kept.id === replaces.toLowerCase());
+
           if (target === undefined) return { kind: MEMORY_OUTCOME.NOT_FOUND } as const;
+
           // Note that a correction to words another memory already holds folds the two, because keeping both would hold one fact twice.
           if (same !== undefined && same.id !== target.id) {
             yield* deleteMemory({ organizationId, id: target.id });
           }
+
           const id = same?.id ?? target.id;
           const kept = yield* updateMemory({ organizationId, id, ...writer, text, now });
+
           return outcomeOf(MEMORY_OUTCOME.CORRECTED, kept);
         }
+
         if (same !== undefined) {
           // Note that the same words kept again stay the words of whoever kept them first, from where they first came.
           const kept = yield* updateMemory({
@@ -368,12 +376,16 @@ export function rememberMemory(
             text,
             now,
           });
+
           return outcomeOf(MEMORY_OUTCOME.ALREADY_KEPT, kept);
         }
+
         if (every.length >= MEMORY_BOUNDS.MAX_MEMORIES) {
           return { kind: MEMORY_OUTCOME.FULL } as const;
         }
+
         const kept = yield* insertMemory({ organizationId, ...writer, text, now });
+
         return outcomeOf(MEMORY_OUTCOME.KEPT, kept);
       }),
     ),
@@ -393,6 +405,7 @@ export function readMemorySources(
   ids: readonly string[],
 ): MemoryStoreEffect<ReadonlyMap<string, MemorySourceRead>> {
   if (ids.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findMemorySources({ readerId, organizationId, ids }),
     (rows) => new Map(rows.map(({ id, ...source }) => [id, source])),
@@ -417,11 +430,15 @@ export function forgetMemory(
     // Note that an id that is no UUID is never bound, because Postgres refuses any other text against a `uuid` column.
     if (!isWireUuid(id)) return { outcome: MEMORY_FORGET.FORGOTTEN };
     const found = yield* findMemory({ organizationId, id });
+
     if (Option.isNone(found)) return { outcome: MEMORY_FORGET.FORGOTTEN };
+
     if (found.value.userId !== by.userId && !by.manages) {
       return { outcome: MEMORY_FORGET.NOT_PERMITTED };
     }
+
     const [deleted] = yield* deleteMemory({ organizationId, id });
+
     return deleted === undefined
       ? { outcome: MEMORY_FORGET.FORGOTTEN }
       : { outcome: MEMORY_FORGET.FORGOTTEN, txid: deleted.txid };

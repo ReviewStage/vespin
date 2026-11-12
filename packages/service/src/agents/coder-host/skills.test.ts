@@ -62,10 +62,12 @@ const startAgent = (repository: string | null, skillsOn = true) =>
   Effect.gen(function* () {
     const userId = yield* openGithubUser();
     yield* writeAccountPreferences(userId, { experiments: { [EXPERIMENT.SKILLS]: skillsOn } });
+
     const task = yield* startTask(userId, {
       name: "Teammate invitations",
-      ...(repository === null ? {} : { repository }),
+      ...(repository !== null && { repository }),
     });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: `start-${task.id}`,
@@ -76,12 +78,15 @@ const startAgent = (repository: string | null, skillsOn = true) =>
       repository,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const { agent } = Option.getOrThrow(started);
     const target: ConversationTarget = { userId, conversationId: agent.conversationId };
+
     const workspace: InstalledSkillOwner = {
       scope: INSTALLED_SKILL_SCOPE.WORKSPACE,
       organizationId: task.workspaceId,
     };
+
     return { userId, agent, target, workspace };
   });
 

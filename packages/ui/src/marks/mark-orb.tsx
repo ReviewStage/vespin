@@ -107,9 +107,11 @@ interface Lean {
 /** The ball's five flat tones from the page's roles: the ground, deep copper, the accent, the link copper, the ink. */
 function paletteOf(canvas: HTMLCanvasElement): Float32Array {
   const [ground, accent, link, ink] = TONE_ROLES.map((role) => roleChannels(canvas, role));
+
   const deep = (accent ?? [0, 0, 0]).map(
     (c, i) => c * (1 - DEEP_MIX) + (ground?.[i] ?? 0) * DEEP_MIX,
   );
+
   return new Float32Array([
     ...(ground ?? []),
     ...deep,
@@ -125,6 +127,7 @@ function markTexture(gl: WebGL2RenderingContext): void {
   canvas.width = MASK.SIZE;
   canvas.height = MASK.SIZE;
   const context = canvas.getContext("2d");
+
   if (!context) return;
   const path = new Path2D(MARK_ART.PATH);
   context.scale(MASK.SIZE / 100, MASK.SIZE / 100);
@@ -145,28 +148,34 @@ function markTexture(gl: WebGL2RenderingContext): void {
 /** The ball's program, compiled, linked, and in use; whether it linked is the caller's to ask. */
 function ballProgram(gl: WebGL2RenderingContext): WebGLProgram {
   const program = gl.createProgram();
+
   for (const [kind, source] of [
     [gl.VERTEX_SHADER, VERTEX],
     [gl.FRAGMENT_SHADER, FRAGMENT],
   ] as const) {
     const shader = gl.createShader(kind);
+
     if (shader) {
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
       gl.attachShader(program, shader);
     }
   }
+
   gl.linkProgram(program);
   // Note that the program is put in use through `call`, because its method's name reads to the linter as a React hook.
   gl.useProgram.call(gl, program);
+
   return program;
 }
 
 /** A drawer for the ball on `canvas`, or none where WebGL 2 is missing. */
 function ballDrawer(canvas: HTMLCanvasElement): ((t: number, lean: Lean) => void) | undefined {
   const gl = canvas.getContext("webgl2");
+
   if (!gl) return undefined;
   const program = ballProgram(gl);
+
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return undefined;
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -176,6 +185,7 @@ function ballDrawer(canvas: HTMLCanvasElement): ((t: number, lean: Lean) => void
   const at = (name: string) => gl.getUniformLocation(program, name);
   gl.uniform3fv(at("pal"), paletteOf(canvas));
   gl.uniform1i(at("mark"), 0);
+
   return (t, lean) => {
     fitCanvas(canvas);
     const { width, height } = canvas;
@@ -204,11 +214,14 @@ export function MarkOrb(): React.JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
+
     if (!canvas) return undefined;
     const draw = ballDrawer(canvas);
+
     if (!draw) return undefined;
     const lean: Lean = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, near: 0, want: 0 };
     let previous = 0;
+
     // Note that the pointer is read on the window, because the ball's reach runs past its own box.
     const onMove = (event: PointerEvent): void => {
       const box = canvas.getBoundingClientRect();
@@ -218,16 +231,20 @@ export function MarkOrb(): React.JSX.Element {
       const reach = Math.hypot(lean.tx, lean.ty);
       lean.want = Math.max(0, Math.min(1, (REACH.START - reach) / (REACH.START - REACH.FULL)));
     };
+
     window.addEventListener("pointermove", onMove, { passive: true });
+
     const stop = paintLoop(canvas, (t) => {
       stepLean(lean, Math.min(SPRING.MAX_STEP, t - previous || SPRING.MAX_STEP));
       previous = t;
       draw(t, lean);
     });
+
     return () => {
       stop();
       window.removeEventListener("pointermove", onMove);
     };
   }, []);
+
   return <canvas ref={ref} className="ui-landing-orb" />;
 }

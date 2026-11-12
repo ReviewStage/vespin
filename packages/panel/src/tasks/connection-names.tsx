@@ -23,14 +23,18 @@ const ConnectionNamesContext = createContext<ConnectionNameOf | undefined>(undef
 function ConnectionNamesReading({ children }: { children: ReactNode }): ReactNode {
   const statuses = useIntegrationStatuses();
   const { accountsOf } = statuses;
+
   const nameOf = useCallback<ConnectionNameOf>(
     (connection) => {
       const held = integrationConnectionOf(connection);
+
       if (held === undefined) return undefined;
       const { provider, place } = held;
+
       // Note that a workspace's own Linear runs under the bare `linear` connection (`turnServers`), the id of an account's first, so that id names a grant and no account, and keeps the provider's name.
       if (provider === INTEGRATION_PROVIDER.LINEAR && place === 1) return undefined;
       const accounts = accountsOf(provider);
+
       // Note that an account the window does not hold keeps the name its id gives, since a provider's name alone would lose its place.
       return accounts.some((account) => account.connection === connection)
         ? serverName(provider, connection, accounts)
@@ -38,6 +42,7 @@ function ConnectionNamesReading({ children }: { children: ReactNode }): ReactNod
     },
     [accountsOf],
   );
+
   return (
     <ConnectionNamesContext.Provider value={nameOf}>{children}</ConnectionNamesContext.Provider>
   );
@@ -59,5 +64,6 @@ export function useServerName(
   view: Pick<ToolCallView, "server" | "connection">,
 ): string | undefined {
   const nameOf = useContext(ConnectionNamesContext);
+
   return (view.connection === undefined ? undefined : nameOf?.(view.connection)) ?? view.server;
 }

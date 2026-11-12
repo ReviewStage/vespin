@@ -41,10 +41,12 @@ export function openPtySocket(
       Effect.mapError(() => new SandboxUnavailable({ call: SANDBOX_CALL.INTERACTIVE })),
     );
     address.searchParams.set("token", Redacted.value(shell.token));
+
     const socket = yield* Effect.acquireRelease(
       Effect.sync(() => new WebSocket(address)),
       (open) => Effect.sync(() => open.close()),
     );
+
     yield* Effect.callback<void, SandboxUnavailable>((resume) => {
       socket.once("open", () => resume(Effect.void));
       socket.once("error", () =>
@@ -56,6 +58,7 @@ export function openPtySocket(
         orElse: () => Effect.fail(new SandboxUnavailable({ call: SANDBOX_CALL.INTERACTIVE })),
       }),
     );
+
     return socket;
   });
 }

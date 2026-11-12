@@ -53,6 +53,7 @@ function MenuAct({
   menu: readonly (readonly MenuAction[])[];
 }): React.JSX.Element {
   const drop = useMenu(true);
+
   return (
     <>
       <Button roving icon={act.icon} {...drop.trigger()}>
@@ -89,7 +90,9 @@ export function SelectionBar({
 }): React.JSX.Element | null {
   const countId = useId();
   const keys = useSelectionKeys({ count, controls, onClear });
+
   if (count <= 0) return null;
+
   return (
     <div
       {...keys}

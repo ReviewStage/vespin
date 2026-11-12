@@ -18,6 +18,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { isVideoDataUrl, STATUS_TONE } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { ImagePlusIcon } from "lucide-react";
 import { useMemo } from "react";
 import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
@@ -74,6 +75,7 @@ const EDIT_TRIES = 3;
 function fileOf(chip: FileChip): File {
   const base64 = chip.url.slice(chip.url.indexOf(",") + 1);
   const bytes = Uint8Array.from(atob(base64), (letter) => letter.charCodeAt(0));
+
   return new File([bytes], chip.name, { type: chip.mediaType });
 }
 
@@ -96,14 +98,18 @@ async function keptUrlOf(chip: FileChip): Promise<{ url: string } | { refused: s
       ? { refused: ADD_WORDS.VIDEO_TOO_LARGE }
       : { url: chip.url };
   }
+
   const read = await encodeImage(fileOf(chip), PICTURE_BOUNDS.MAX_BYTES);
+
   if ("unreadable" in read) return { refused: read.unreadable ?? ADD_WORDS.NOT_A_PICTURE };
+
   return { url: `data:${read.image.mediaType};base64,${read.image.base64}` };
 }
 
 /** A picture's words: the name the viewer saves it by, without its extension. */
 function wordsOf(chip: FileChip): string {
   const dot = chip.name.lastIndexOf(".");
+
   return dot > 0 ? chip.name.slice(0, dot) : chip.name;
 }
 
@@ -114,14 +120,19 @@ async function edited(
   known: string,
 ): Promise<string | { readonly refused: unknown }> {
   let base = known;
+
   for (let tried = 0; tried < EDIT_TRIES; tried += 1) {
     const value = change(base);
+
     if (value === undefined) return { refused: FAILURE_CONDITION.NOT_KEPT };
     const answer = await save(base, value);
+
     if ("saved" in answer) return value;
+
     if (!("conflict" in answer)) return { refused: answer };
     base = answer.conflict.current;
   }
+
   return { refused: FAILURE_CONDITION.CONFLICT };
 }
 
@@ -170,17 +181,22 @@ async function lineEdited(
   // Note that what was added is kept from the edit that saved, since a
   // retry on a moved text may add other line breaks than the first try.
   let written: PictureAddition | undefined;
+
   const saved = await edited(
     saver(send, taskId),
     (text) => {
       written = change(text);
+
       return written?.text;
     },
     known.text,
   );
-  if (typeof saved !== "string") return { refused: saved.refused, words };
+
+  if (!Predicate.isString(saved)) return { refused: saved.refused, words };
   known.text = saved;
+
   if (written !== undefined) known.added = written.added;
+
   return { saved };
 }
 
@@ -209,6 +225,7 @@ const PICTURE_ADD = {
       change,
       (text) => {
         const without = withoutPictureLine(text, change.known.added);
+
         return without === undefined ? undefined : { text: without, added: change.known.added };
       },
       ADD_WORDS.NOT_UNDONE,
@@ -233,23 +250,30 @@ export function useAddToDescription(): ViewerAction | undefined {
   const page = useTaskMentions();
   // The task's workspace, which its page names by its slug.
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+
   const descriptionsOn = useWorkspaceExperiment(
     page?.workspaceId ??
       (page === undefined ? undefined : workspaceOfSlug(workspaces, page.workspace)?.id),
     EXPERIMENT.DESCRIPTIONS,
   );
+
   const { mutateAsync: sendEdit } = useMutation(actMutation(ACT_KIND.TASKS_EDIT));
   const { mutateAsync: sendKeep } = useMutation(actMutation(ACT_KIND.TASKS_PICTURE_KEEP));
   const queryClient = useQueryClient();
   const working = useWorkingToast();
+
   return useMemo(() => {
     const taskId = page?.holder?.taskId;
+
     if (!descriptionsOn || page === undefined || taskId === undefined || page.workspace === "") {
       return undefined;
     }
+
     const { workspace } = page;
+
     const add = async (chip: FileChip) => {
       const settle = working(ADD_WORDS.ADDING);
+
       const failed = (words: string, cause: unknown, refused?: true) =>
         settle({
           words,
@@ -258,21 +282,27 @@ export function useAddToDescription(): ViewerAction | undefined {
             surface: FAILURE_SURFACE.DESCRIPTION_ADD,
             cause,
             about: { taskId },
-            ...(refused === undefined ? {} : { refused }),
+            ...(refused !== undefined && { refused }),
           },
         });
+
       const keeping = await keptUrlOf(chip);
+
       if ("refused" in keeping) return failed(keeping.refused, keeping.refused, true);
       const { url } = keeping;
+
       const kept = await sendKeep({ planId: taskId, picture: url }).catch(
         unreachedAs(PICTURE_KEEP_FAILURE.UNANSWERED),
       );
+
       if ("failure" in kept) return failed(KEEP_FAILED_WORDS[kept.failure], kept);
       keepPictureRead(queryClient, taskId, kept.id, url);
+
       const address = descriptionAttachmentAddress(
         { taskId: taskId, attachmentId: kept.id },
         workspace,
       );
+
       const line = taskPictureLine(wordsOf(chip), address);
       // Note that the edit is written on the description's words as the page last read
       // them, and a conflict answers the text as it stands for the next.
@@ -284,6 +314,7 @@ export function useAddToDescription(): ViewerAction | undefined {
         settle,
       );
     };
+
     return {
       label: ADD_LABEL,
       icon: <ImagePlusIcon aria-hidden="true" />,

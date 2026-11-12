@@ -67,7 +67,7 @@ export class AgentWakeupNotPublished extends Data.TaggedError("AgentWakeupNotPub
   readonly reason: string;
 }> {}
 
-interface AgentWakeupsShape {
+interface AgentWakeupsService {
   /** The booking's message published, delayed until it comes due, or why the queue did not take it. */
   readonly publish: (
     wakeup: PublishedAgentWakeup,
@@ -96,9 +96,11 @@ function retentionOf(delay: Duration.Duration): Duration.Duration {
 export const consumeAgentWakeup = (sessionsFor: SessionsForAccount, wakeupId: string) =>
   Effect.gen(function* () {
     const standing = yield* standingAgentWakeup(wakeupId);
+
     if (Option.isNone(standing)) return;
     const { userId, agentId, prompt } = standing.value;
     const agent = yield* readAgent(userId, agentId);
+
     // An agent gone since is no one's to tell, and its wakeup goes with it.
     if (Option.isNone(agent)) return yield* deleteAgentWakeup(wakeupId);
     yield* steerAgent(
@@ -147,6 +149,7 @@ const deliveredInProcess = ({ wakeupId, delay }: PublishedAgentWakeup) =>
   Effect.gen(function* () {
     const until = (yield* Clock.currentTimeMillis) + Duration.toMillis(retentionOf(delay));
     yield* Effect.sleep(delay);
+
     while (true) {
       const failed = yield* consumeAgentWakeup(routedSessions, wakeupId).pipe(
         Effect.as(false),
@@ -159,8 +162,10 @@ const deliveredInProcess = ({ wakeupId, delay }: PublishedAgentWakeup) =>
               ),
         ),
       );
+
       if (!failed) return;
       yield* Effect.sleep(AGENT_WAKEUP.FAILED_AGAIN);
+
       if ((yield* Clock.currentTimeMillis) >= until) return;
     }
   });
@@ -175,7 +180,7 @@ const inProcessPublish = (
   });
 
 /** The queue one runtime publishes wakeups to: this process's by default, as a test or a local run has it. */
-export const AgentWakeups = Context.Reference<AgentWakeupsShape>("@repo/service/AgentWakeups", {
+export const AgentWakeups = Context.Reference<AgentWakeupsService>("@repo/service/AgentWakeups", {
   defaultValue: () => ({ publish: inProcessPublish }),
 });
 
@@ -184,7 +189,7 @@ export const agentWakeupsFromEnvironment = Layer.effect(
   AgentWakeups,
   Effect.map(
     Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
-    (deployment): AgentWakeupsShape => ({
+    (deployment): AgentWakeupsService => ({
       publish: Option.exists(
         deployment,
         (named) =>
@@ -217,15 +222,19 @@ export function agentWakeupsHandler(
         const decoded = yield* Effect.option(
           Schema.decodeUnknownEffect(WakeupMessageSchema)(message),
         );
+
         if (Option.isNone(decoded)) {
           yield* Effect.logError("an agent-wakeups message did not decode; it is dropped");
+
           return QUEUE_ACKNOWLEDGED;
         }
+
         yield* consumeAgentWakeup(routedSessions, decoded.value.wakeupId).pipe(
           Effect.tapCause((cause) =>
             Effect.logWarning(`an agent's wakeup will be delivered again: ${causeKind(cause)}`),
           ),
         );
+
         return QUEUE_ACKNOWLEDGED;
       }),
     AGENT_WAKEUP.FAILED_AGAIN,

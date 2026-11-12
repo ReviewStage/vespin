@@ -46,12 +46,15 @@ function foldersUpTo(last: string) {
     const fileSystem = yield* FileSystem;
     const path = yield* Path;
     const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-vocabulary-" });
+
     const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
       (name) => name.localeCompare(last) < 0,
     );
+
     for (const name of names) {
       yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
     }
+
     return folder;
   });
 }
@@ -70,6 +73,7 @@ const openEarlierAgent = (workspaceId: string) =>
     yield* sql`insert into conversations (id, user_id, kind) values (${conversationId}, 'dean', 'coding_agent')`;
     yield* sql`insert into coding_agent (id, organization_id, user_id, conversation_id, model, effort, idempotency_key)
       values (${id}, ${workspaceId}, 'dean', ${conversationId}, 'anthropic/claude-opus-5.5', 'high', ${randomUUID()})`;
+
     return id;
   });
 
@@ -154,14 +158,18 @@ it.effect(
         const workspaceId = yield* openWorkspace("dean");
         const agentId = yield* openEarlierAgent(workspaceId);
         const itemId = yield* openInboxItem("dean", workspaceId, null, agentId, true);
+
         const [thread] = yield* sql<{
           readonly key: string;
         }>`select key from inbox_item where id = ${itemId}`;
+
         const [agent] = yield* sql<{
           readonly conversationId: string;
         }>`select conversation_id as "conversationId" from coding_agent where id = ${agentId}`;
+
         const key = thread?.key ?? assert.fail("the thread was not written");
         const conversationId = agent?.conversationId ?? assert.fail("the agent was not written");
+
         for (const [seq, row] of BEFORE.entries()) {
           const text = "text" in row ? row.text.replace("KEY", key) : "Rebase before you push.";
           const sender = "sender" in row ? row.sender : null;
@@ -169,6 +177,7 @@ it.effect(
           yield* sql`insert into messages (user_id, conversation_id, seq, client_id, role, parts, metadata, placed_at, sender, sender_name)
             values ('dean', ${conversationId}, ${seq}, ${`row-${seq}`}, ${row.role}, ${JSON.stringify([{ type: "text", text }])}::jsonb, ${JSON.stringify(row.metadata)}::jsonb, now(), ${sender}, ${senderName})`;
         }
+
         const stored = sql<{
           readonly id: string;
           readonly role: string;
@@ -190,6 +199,7 @@ it.effect(
             ...rest,
           ]),
         );
+
         // The write door's own read refuses any key the vocabulary does not name, so every row is in it.
         const read = yield* readStoredUIMessages(
           unparsedWire(
@@ -197,14 +207,17 @@ it.effect(
           ),
           {},
         );
+
         assert.equal(read.ok, true);
 
         // A second run, as a deploy that ran it before recording it would, changes nothing.
         const fileSystem = yield* FileSystem;
         const path = yield* Path;
+
         const statements = (yield* fileSystem.readFileString(
           path.join(MIGRATIONS_FOLDER, MIGRATION, "migration.sql"),
         )).split("--> statement-breakpoint");
+
         for (const statement of statements) yield* sql.unsafe(statement);
         assert.deepEqual(yield* stored, rows);
       }),
@@ -278,16 +291,20 @@ it.effect(
         yield* sql`insert into "user" (id, name, email) values ('dean', 'dean', 'dean@app.test')`;
         const workspaceId = yield* openWorkspace("dean");
         const agentId = yield* openEarlierAgent(workspaceId);
+
         const [agent] = yield* sql<{
           readonly conversationId: string;
         }>`select conversation_id as "conversationId" from coding_agent where id = ${agentId}`;
+
         const conversationId = agent?.conversationId ?? assert.fail("the agent was not written");
+
         for (const [seq, row] of STRAGGLERS_BEFORE.entries()) {
           const sender = "sender" in row ? row.sender : null;
           const senderName = "senderName" in row ? row.senderName : null;
           yield* sql`insert into messages (user_id, conversation_id, seq, client_id, role, parts, metadata, placed_at, sender, sender_name)
             values ('dean', ${conversationId}, ${seq}, ${`row-${seq}`}, ${row.role}, ${JSON.stringify([{ type: "text", text: "Rebase before you push." }])}::jsonb, ${JSON.stringify(row.metadata)}::jsonb, now(), ${sender}, ${senderName})`;
         }
+
         const stored = sql<{
           readonly id: string;
           readonly role: string;
@@ -306,20 +323,24 @@ it.effect(
           rows.map((row) => [row.metadata, row.sender, row.senderName]),
           STRAGGLERS_AFTER,
         );
+
         const read = yield* readStoredUIMessages(
           unparsedWire(
             rows.map(({ id, role, parts, metadata }) => ({ id, role, parts, metadata })),
           ),
           {},
         );
+
         assert.equal(read.ok, true);
 
         // A second run, as a deploy that ran it before recording it would, changes nothing.
         const fileSystem = yield* FileSystem;
         const path = yield* Path;
+
         const statements = (yield* fileSystem.readFileString(
           path.join(MIGRATIONS_FOLDER, STRAGGLERS, "migration.sql"),
         )).split("--> statement-breakpoint");
+
         for (const statement of statements) yield* sql.unsafe(statement);
         assert.deepEqual(yield* stored, rows);
       }),

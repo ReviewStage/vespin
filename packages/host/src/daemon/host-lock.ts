@@ -89,15 +89,19 @@ export const hostLockTaken = Effect.fnUntraced(function* (stateRoot: string) {
   const path = yield* Path.Path;
   const lock = path.join(stateRoot, LOCK_NAME);
   const own = path.join(stateRoot, `daemon-${randomBytes(6).toString("hex")}.sock`);
+
   const inode = (at: string) =>
     Effect.map(Effect.option(fileSystem.stat(at)), (info) =>
       Option.getOrUndefined(Option.flatMap(info, (read) => read.ino)),
     );
+
   const unlocked = (why: string) =>
     Effect.sync(() => {
       report(`${PRODUCT_NAME} host: could not lock ${stateRoot} (${why}), so it runs without it.`);
+
       return HOST_LOCK.UNLOCKED;
     });
+
   if (
     Option.isNone(
       yield* Effect.option(fileSystem.makeDirectory(stateRoot, { recursive: true, mode: 0o700 })),
@@ -105,18 +109,25 @@ export const hostLockTaken = Effect.fnUntraced(function* (stateRoot: string) {
   ) {
     return yield* unlocked("its folder could not be made");
   }
+
   const server = yield* listening(own);
+
   if (Option.isNone(server)) return yield* unlocked("no socket could be made there");
   const ownInode = yield* inode(own);
+
   if (ownInode === undefined) return yield* unlocked("its socket could not be read");
+
   for (let tried = 0; tried < TRIES; tried += 1) {
     const linked = yield* Effect.option(fileSystem.link(own, lock));
+
     if (Option.isNone(linked)) {
       if (yield* answers(lock)) return HOST_LOCK.HELD;
       yield* Effect.ignore(fileSystem.remove(lock, { force: true }));
       continue;
     }
+
     yield* Effect.sleep(SETTLE);
+
     if ((yield* inode(lock)) === ownInode) {
       // Note that the name is removed before the socket closes, and only while it is still this daemon's.
       yield* Effect.addFinalizer(() =>
@@ -126,18 +137,23 @@ export const hostLockTaken = Effect.fnUntraced(function* (stateRoot: string) {
           }
         }),
       );
+
       // Note that the sockets of daemons that died are removed once the lock is this daemon's, a starting one's own answering and kept.
       for (const name of yield* Effect.orElseSucceed(
         fileSystem.readDirectory(stateRoot),
         () => [],
       )) {
         const at = path.join(stateRoot, name);
+
         if (!SOCKET_NAME.test(name) || at === own || (yield* answers(at))) continue;
         yield* Effect.ignore(fileSystem.remove(at, { force: true }));
       }
+
       return HOST_LOCK.TAKEN;
     }
+
     if (yield* answers(lock)) return HOST_LOCK.HELD;
   }
+
   return HOST_LOCK.HELD;
 });

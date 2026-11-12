@@ -71,8 +71,10 @@ export const TERMINAL_CONNECTION = {
 export type TerminalConnection = (typeof TERMINAL_CONNECTION)[keyof typeof TERMINAL_CONNECTION];
 
 const id = EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(64));
+
 const size = (maximum: number) =>
   EffectSchema.Int.check(EffectSchema.isBetween({ minimum: 1, maximum }));
+
 const title = EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(60));
 
 /**
@@ -158,7 +160,9 @@ export const terminalResumedActAnswerSchema = answerView(agentsContract.sandboxR
 });
 
 export type TerminalsActAnswer = typeof terminalsActAnswerSchema.Type;
+
 export type TerminalCreatedActAnswer = typeof terminalCreatedActAnswerSchema.Type;
+
 export type TerminalResumedActAnswer = typeof terminalResumedActAnswerSchema.Type;
 
 /** What a connection's shell printed, its bytes in base64, as the host's event carries it. */

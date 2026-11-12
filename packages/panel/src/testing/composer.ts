@@ -50,11 +50,14 @@ export function installEditorLayout(): void {
 
 /** The box's editor inside the container, or the container where it is the editor: the element the words are typed into. */
 export function composerEditor(container: ParentNode): TiptapEditorHTMLElement {
+  // SAFETY: only Tiptap's editor root carries the editor's class.
   const element =
     container instanceof Element && container.matches(EDITOR_CLASS)
       ? (container as TiptapEditorHTMLElement)
       : container.querySelector<TiptapEditorHTMLElement>(EDITOR_CLASS);
+
   if (element === null) throw new Error("the box's editor is mounted");
+
   return element;
 }
 
@@ -62,11 +65,13 @@ export function composerEditor(container: ParentNode): TiptapEditorHTMLElement {
 export function typeInComposer(container: ParentNode, text: string): void {
   const element = composerEditor(container);
   const editor = element.editor;
+
   if (editor === undefined) throw new Error("the box's editor is running");
   act(() => {
     editor.view.focus();
     text.split("\n").forEach((line, index) => {
       if (index > 0) pressInComposer(container, "Enter", { shiftKey: true });
+
       if (line !== "") editor.view.dispatch(editor.state.tr.insertText(line).scrollIntoView());
     });
   });
@@ -75,6 +80,7 @@ export function typeInComposer(container: ParentNode, text: string): void {
 /** The box's words replaced by `text`, as words selected whole and typed over are; nothing empties it. */
 export function writeInComposer(container: ParentNode, text: string): void {
   const editor = composerEditor(container).editor;
+
   if (editor === undefined) throw new Error("the box's editor is running");
   act(() => {
     editor.view.focus();
@@ -114,5 +120,6 @@ export function pressInComposer(
   act(() => {
     composerEditor(container).dispatchEvent(event);
   });
+
   return event;
 }

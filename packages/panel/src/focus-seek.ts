@@ -47,15 +47,21 @@ export function focusSeek<Target extends HTMLElement>({
 }): () => void {
   let frame = 0;
   let waited = 0;
+
   const seek = () => {
     const target = find();
+
     if (target && ready(target)) {
       act(target);
+
       return;
     }
+
     if (waited++ > limit) return;
     frame = requestAnimationFrame(seek);
   };
+
   seek();
+
   return () => cancelAnimationFrame(frame);
 }

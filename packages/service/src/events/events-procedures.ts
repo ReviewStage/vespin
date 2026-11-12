@@ -32,12 +32,15 @@ const recordingConfigured = middlewareGen<HostedContext, { recording: EventsOpti
   next,
 }) {
   const environment = yield* HostedEnvironment;
+
   const projectApiKey = trimmedText(
     environment.posthogProjectApiKey === undefined
       ? undefined
       : Redacted.value(environment.posthogProjectApiKey),
   );
+
   if (!projectApiKey) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   const recording: EventsOptions = {
     projectApiKey,
     // Vercel's own variable, read where Sentry reads it for the same name.
@@ -46,7 +49,9 @@ const recordingConfigured = middlewareGen<HostedContext, { recording: EventsOpti
     // the desktop still sends nothing that names anybody.
     readPerson: readAccountPerson,
   };
+
   if (environment.posthogIngestHost) recording.host = environment.posthogIngestHost;
+
   return yield* next({ context: { recording } });
 });
 
@@ -59,6 +64,7 @@ export function eventsProcedures(seams: EventsProcedureSeams) {
       .record.effect(function* ({ context, input }) {
         // SAFETY: the handler parsed the body from JSON text; the batch reader is the parser.
         const payload = input as UnparsedWireValue;
+
         return yield* recordEvents(context.userId, payload, context.recording);
       }),
   };

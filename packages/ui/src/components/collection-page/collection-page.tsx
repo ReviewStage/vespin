@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { type ReactNode, type Ref, useCallback, useId, useRef, useState } from "react";
 import { said } from "../../said.js";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../page-frame/page-frame.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { PageHeader } from "../page-header/page-header.js";
-import { SKELETON_SHAPE, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 
 /**
  * collection-page.tsx -- the page a collection is drawn on: its title and acts, the filters under them, and the collection itself, or what stands in its place while it is read, empty, or failed.
@@ -109,10 +110,10 @@ function CollectionPageRowsSkeleton(): React.JSX.Element {
       {Array.from({ length: LOADING_ROWS }, (_, row) => (
         <div key={row} className="ui-collection-page-skeleton-row">
           <span className="ui-collection-page-skeleton-title">
-            <Skeleton shape={SKELETON_SHAPE.LINE} width="40%" />
+            <Skeleton kind={SKELETON_KIND.LINE} width="40%" />
           </span>
           <span className="ui-collection-page-skeleton-description">
-            <Skeleton shape={SKELETON_SHAPE.LINE} width="65%" />
+            <Skeleton kind={SKELETON_KIND.LINE} width="65%" />
           </span>
         </div>
       ))}
@@ -168,19 +169,23 @@ export function CollectionPage({
   const titleId = `${useId()}title`;
   // The one scroller, held for what the content draws only in view (`PageScrollContext`) and handed on to the caller's own ref.
   const scroll = useRef<HTMLDivElement | null>(null);
+
   const holdScroll = useCallback(
     (element: HTMLDivElement | null) => {
       scroll.current = element;
-      if (typeof scrollRef === "function") scrollRef(element);
+
+      if (Predicate.isFunction(scrollRef)) scrollRef(element);
       else if (scrollRef !== undefined && scrollRef !== null) scrollRef.current = element;
     },
     [scrollRef],
   );
+
   const content = useRef<HTMLDivElement>(null);
   const [pageScroll] = useState((): PageScroll => ({ scroller: scroll, shiftedBy: content }));
   const underToolbar = heading.frame === PAGE_FRAME.TOOLBAR;
   const width = heading.width ?? PAGE_WIDTH.MEASURE;
   const sized = WIDTH_CLASS[width];
+
   const filterLine = said(filters) ? (
     <div
       className={`ui-collection-page-filters ${COLUMN_CLASS} ${sized.measure} flex-wrap items-center gap-control-gap pt-section-gap`}
@@ -188,8 +193,10 @@ export function CollectionPage({
       {filters}
     </div>
   ) : null;
+
   // Note that under a toolbar with no filters the content opens the filters' gap below the toolbar's hairline, as its padding rather than the scroll's, because a sticky head sticks inside its scroller's padding and would leave what scrolls under it showing above it.
   const toolbarGap = underToolbar && filterLine === null ? "pt-section-gap" : "";
+
   return (
     <section
       className="ui-collection-page @container flex flex-1 flex-col min-w-0 h-full min-h-0 text-foreground font-ui text-body"

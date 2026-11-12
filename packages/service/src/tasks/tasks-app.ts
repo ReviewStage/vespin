@@ -62,21 +62,27 @@ const attachmentEndpoint = /* @__PURE__ */ Effect.fn("web/descriptionAttachmentE
     seams: TasksAppSeams,
   ): Effect.fn.Return<HttpServerResponse.HttpServerResponse, HostedRefusal, TasksServices> {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.GET) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
     const taskId = yield* uuidOf(request, TASK_ID_QUERY);
     const attachmentId = yield* uuidOf(request, ATTACHMENT_QUERY);
     const userId = yield* resolvedUserId(seams, request);
+
     const picture = yield* hostedStoreOrUnavailable(
       readServedDescriptionAttachment(userId, taskId, attachmentId, playableVideoOf(request)),
     );
+
     const found: Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }> =
       Option.isSome(picture)
         ? picture
         : yield* hostedStoreOrUnavailable(readDescriptionCommentFile(userId, taskId, attachmentId));
+
     if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return HttpServerResponse.uint8Array(found.value.bytes, {
       status: HOSTED_HTTP_STATUS.OK,
       contentType: found.value.contentType,

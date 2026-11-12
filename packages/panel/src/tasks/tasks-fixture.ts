@@ -116,6 +116,7 @@ const FIXTURE_FIRST: Workspace = {
     chosen(EXPERIMENT.REWIND_FILES, true, FIXTURE_PERSON.ADA, "2026-11-10T09:00:00Z"),
   ],
 };
+
 const FIXTURE_TEAM: Workspace = {
   id: "workspace-acme",
   name: "Acme",
@@ -127,6 +128,7 @@ const FIXTURE_TEAM: Workspace = {
     chosen(EXPERIMENT.MEMORY, true, FIXTURE_PERSON.ADA, "2026-10-23T15:00:00Z"),
   ],
 };
+
 const FIXTURE_WORKSPACES: readonly Workspace[] = [FIXTURE_FIRST, FIXTURE_TEAM];
 
 /** The fixture's workspaces by id, which their automations' reads are held by. */
@@ -301,8 +303,8 @@ const FIXTURE_HISTORY: readonly {
 /** A page of the fixture task's history, newest first, before the revision `before` names where it names one. */
 function historyPage(before: number | undefined): DescriptionRevisionsAnswer {
   return {
-    revisions: FIXTURE_HISTORY.filter(({ line }) => before === undefined || line.seq < before).map(
-      ({ line }) => line,
+    revisions: FIXTURE_HISTORY.flatMap(({ line }) =>
+      before === undefined || line.seq < before ? [line] : [],
     ),
   };
 }
@@ -319,22 +321,34 @@ function historyActAnswer(
   payload: PortActPayload<PortActKind>,
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   if (kind === ACT_KIND.TASKS_REVISIONS) {
+    // SAFETY: the guard above names this payload's kind.
     const page = payload as PortActPayload<typeof ACT_KIND.TASKS_REVISIONS>;
+
     if (page.taskId !== FIXTURE_TASK_ID) return undefined;
+
+    // SAFETY: a page of revisions is what this kind answers.
     return { answer: historyPage(page.before) as PortActResult<PortActKind> };
   }
+
   if (kind !== ACT_KIND.TASKS_REVISION) return undefined;
+  // SAFETY: the guard above names this payload's kind.
   const { taskId, seq } = payload as PortActPayload<typeof ACT_KIND.TASKS_REVISION>;
+
   if (taskId !== FIXTURE_TASK_ID) return undefined;
   const at = FIXTURE_HISTORY.findIndex(({ line }) => line.seq === seq);
+
   if (at === -1) {
+    // SAFETY: an unanswered failure is what this kind answers for a revision it does not hold.
     return { answer: { failure: TASK_CALL_FAILURE.UNANSWERED } as PortActResult<PortActKind> };
   }
+
   const revision = {
     seq,
     document: FIXTURE_HISTORY[at]?.document ?? draftOf(0),
     previous: FIXTURE_HISTORY[at + 1]?.document ?? null,
   };
+
+  // SAFETY: a revision is what this kind answers.
   return { answer: { revision } as PortActResult<PortActKind> };
 }
 
@@ -406,6 +420,7 @@ function repositoriesAppState(state: AppStateSnapshot): AppStateSnapshot {
   const held = state[LIVE_READ.REPOSITORY_LISTS];
   const staged = STAGED_LISTS.get(held) ?? { ...FIXTURE_REPOSITORY_LISTS, ...held };
   STAGED_LISTS.set(held, staged);
+
   return { ...state, [LIVE_READ.REPOSITORY_LISTS]: staged };
 }
 
@@ -469,8 +484,10 @@ function thread(input: {
   readonly entries: readonly DescriptionCommentEntry[];
 }): DescriptionCommentThread {
   const from = FIXTURE_TASK.document.body.indexOf(input.quote);
+
   if (from < 0) throw new Error(`The fixture's description holds no "${input.quote}"`);
   const times = input.entries.map((entry) => entry.at);
+
   return {
     ...input,
     anchor: { from, to: from + input.quote.length },
@@ -589,6 +606,7 @@ function commentsAppState(state: AppStateSnapshot): AppStateSnapshot {
   if (state.run.profile !== RUN_PROFILE.TASKS_COMMENTS) return state;
   const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
   let staged = STAGED_COMMENTS.get(held);
+
   if (staged === undefined) {
     staged = {
       ...held,
@@ -599,6 +617,7 @@ function commentsAppState(state: AppStateSnapshot): AppStateSnapshot {
     };
     STAGED_COMMENTS.set(held, staged);
   }
+
   return { ...state, [LIVE_READ.DESCRIPTION_COMMENTS]: staged };
 }
 
@@ -608,6 +627,7 @@ const FIXTURE_OPEN_PANEL: SidePanelState = {
   tabs: SIDE_PANEL_TABS,
   width: SIDE_PANEL_WIDTH.DEFAULT,
 };
+
 const FIXTURE_CLOSED_PANEL: SidePanelState = { ...FIXTURE_OPEN_PANEL, open: false };
 
 /**
@@ -624,10 +644,15 @@ export function fixtureTasksView(run: {
 }): TasksView | undefined {
   if (!run.fixtureMode) return undefined;
   const agent = agentTasksView(run.profile, FIXTURE_OPEN_TASK);
+
   if (agent !== undefined) return agent;
+
   if (run.profile === RUN_PROFILE.TASKS) return FIXTURE_OPEN_TASK;
+
   if (run.profile === RUN_PROFILE.TASKS_TRANSCRIPT) return FIXTURE_OPEN_TASK;
+
   if (run.profile === RUN_PROFILE.TASKS_WORK) return FIXTURE_OPEN_TASK;
+
   return settingsTasksView(run.profile, FIXTURE_TASK_LIST) ?? FIXTURE_TASK_LIST;
 }
 
@@ -642,6 +667,7 @@ export function fixtureSidePanel(run: {
   readonly profile: string;
 }): StagedSidePanel | undefined {
   if (!run.fixtureMode) return undefined;
+
   return agentSidePanel(run.profile, FIXTURE_OPEN_PANEL, FIXTURE_TASK_ID) ?? FIXTURE_CLOSED_PANEL;
 }
 
@@ -667,6 +693,7 @@ function emptyTaskAnswer(
   kind: PortActKind,
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   if (kind === ACT_KIND.AGENTS_LIST) return { answer: { agents: [] } };
+
   return undefined;
 }
 
@@ -694,6 +721,7 @@ export function fixtureActAnswer(
 
 /** Main's held descriptions with the fixture's task's description held, one object for each of main's. */
 const STAGED_DESCRIPTIONS = new WeakMap<AppDescriptionDocuments, AppDescriptionDocuments>();
+
 /** Main's held histories with the fixture's task's history held, one object for each of main's. */
 const STAGED_HISTORIES = new WeakMap<AppHistories, AppHistories>();
 
@@ -704,9 +732,11 @@ function stagedOn<Rows>(
   rows: Rows,
 ): AppHeldById<Rows> {
   const kept = staged.get(held);
+
   if (kept !== undefined) return kept;
   const laid = { ...held, [FIXTURE_TASK_ID]: { rows } };
   staged.set(held, laid);
+
   return laid;
 }
 
@@ -719,6 +749,7 @@ function stagedOn<Rows>(
  */
 function plannedAppState(state: AppStateSnapshot): AppStateSnapshot {
   if (fixtureTasksView(state.run)?.activeTaskId !== FIXTURE_TASK_ID) return state;
+
   return {
     ...state,
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedOn(
@@ -774,11 +805,14 @@ const STAGED_WORKSPACES = new WeakMap<TasksView, TasksView>();
  */
 function workspacesAppState(state: AppStateSnapshot): AppStateSnapshot {
   const fixture = fixtureTasksView(state.run);
+
   if (fixture === undefined) return state;
   const held = STAGED_WORKSPACES.get(state.tasks);
+
   if (held !== undefined) return { ...state, tasks: held };
   const laid = { ...state.tasks, workspaces: fixture.workspaces };
   STAGED_WORKSPACES.set(state.tasks, laid);
+
   return { ...state, tasks: laid };
 }
 
@@ -797,9 +831,12 @@ export function fixturePlace(run: {
   readonly profile: string;
 }): FixturePlace | undefined {
   if (!run.fixtureMode) return undefined;
+
   if (run.profile === RUN_PROFILE.ADMIN) return { admin: true };
   const settings = settingsLaunchLink(run.profile);
+
   if (settings !== undefined) return { settings };
   const automations = automationsLaunchPlace(run.profile);
+
   return automations === undefined ? undefined : { automations };
 }

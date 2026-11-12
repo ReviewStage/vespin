@@ -5,6 +5,7 @@ import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import {
   DEVICE_AGENT_REQUEST_KIND,
   type DeviceAgentLayout,
+  type DeviceAgentRequest,
   deviceAgentAttachmentsFolder,
   deviceAgentLayoutIn,
   deviceAgentsFolder,
@@ -51,14 +52,17 @@ const staged = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const root = yield* temporaryDirectoryScoped("local-agent-");
   const layout = layoutUnder(root);
+
   for (const place of [layout.checkoutPath, layout.attachments, layout.sharedFiles]) {
     yield* fileSystem.makeDirectory(place, { recursive: true });
     yield* fileSystem.writeFileString(`${place}/notes.txt`, "the agent's own");
   }
+
   yield* fileSystem.writeFileString(`${root}/secret.txt`, "the developer's own");
   yield* fileSystem.makeDirectory(`${root}/tmp/vespin/${OTHER_AGENT}`, { recursive: true });
   yield* fileSystem.writeFileString(`${root}/tmp/vespin/${OTHER_AGENT}/notes.txt`, "another's");
   yield* fileSystem.symlink(`${root}/secret.txt`, `${layout.checkoutPath}/escape.txt`);
+
   return { root, layout };
 });
 
@@ -68,7 +72,7 @@ const read = (layout: DeviceAgentLayout, path: string) =>
     args: { path, maxBytes: 1_024 },
   });
 
-const diff = (layout: DeviceAgentLayout, args: Record<string, unknown>) =>
+const diff = (layout: DeviceAgentLayout, args: DeviceAgentRequest["args"]) =>
   answeredLocalAgentRequest(layout, BOX, { kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, args });
 
 /** A home with one agent's worktree as a git repository: one file committed, then changed, and another left untracked; answers the commit. */
@@ -78,12 +82,14 @@ const stagedRepository = Effect.gen(function* () {
   const layout = layoutUnder(root);
   yield* fileSystem.makeDirectory(layout.checkoutPath, { recursive: true });
   const env = { ...BOX.env, HOME: root, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@test" };
+
   const git = (args: readonly string[]) =>
     execFileSync("git", args, {
       cwd: layout.checkoutPath,
       env: { ...env, GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@test" },
       encoding: "utf8",
     }).trim();
+
   git(["init", "--quiet"]);
   yield* fileSystem.writeFileString(`${layout.checkoutPath}/notes.txt`, "one\n");
   git(["add", "-A"]);
@@ -92,6 +98,7 @@ const stagedRepository = Effect.gen(function* () {
   // Note that the change is a different size, because git trusts a file whose size and times match its index entry, and an edit of the same size in the same second as the commit can match them.
   yield* fileSystem.writeFileString(`${layout.checkoutPath}/notes.txt`, "one\ntwo\n");
   yield* fileSystem.writeFileString(`${layout.checkoutPath}/fresh.txt`, "new\n");
+
   return { layout, commit };
 });
 
@@ -158,6 +165,7 @@ describe("answeredLocalAgentRequest", () => {
         const unread = yield* diff(layout, { commit });
 
         assert.equal(diffed.kind, DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT);
+
         if (diffed.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return;
         assert.equal(diffed.exit, 0);
         assert.ok(diffed.diff.includes("diff --git a/notes.txt b/notes.txt"), diffed.diff);

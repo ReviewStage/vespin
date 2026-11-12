@@ -240,6 +240,7 @@ export class ProductEventSender {
   ): Effect.Effect<ProductEventSender, never, Scope.Scope> {
     return Effect.gen(function* () {
       const sender = new ProductEventSender(options);
+
       // The day is marked on the tick rather than at launch alone, because an
       // app left running crosses midnight without relaunching — which is the
       // whole case this event exists for, and marking it only at launch would
@@ -252,6 +253,7 @@ export class ProductEventSender {
           Effect.repeat(sender.#tick, Schedule.spaced(Duration.millis(sender.#flushIntervalMs))),
         );
       }
+
       return sender;
     });
   }
@@ -302,15 +304,19 @@ export class ProductEventSender {
     return Effect.gen({ self: this }, function* () {
       if (!this.#allowed()) return;
       const account = yield* this.#readHolder();
+
       if (account === undefined) return;
       const day = utcDay(this.#now());
       const accounts = this.#recordedDaysOf(name, discriminator);
+
       if (accounts.get(account) === day) return;
       const kept = yield* this.#keptDays.lastRecordedDay(name, discriminator, account);
+
       // Note that we look again after the read, because another mark may have
       // queued this day while it was under way.
       if (accounts.get(account) === day) return;
       accounts.set(account, day);
+
       // Note that only the very day counts as kept, because a clock that was
       // wrong must never hide a real day: it costs one count at most instead.
       if (kept === day) return;
@@ -351,6 +357,7 @@ export class ProductEventSender {
   ): void {
     if (!this.#allowed()) return;
     const event = productEventFromWire({ name, at: this.#now(), properties });
+
     if (!event) return;
     this.#queue.push(recorded ? { event, recorded } : { event });
     this.#trimQueue();
@@ -359,15 +366,19 @@ export class ProductEventSender {
   /** This run's guard for one event and discriminator, by account. */
   #recordedDaysOf(name: ProductEventName, discriminator: string): Map<string, string> {
     let byDiscriminator = this.#recordedDays.get(name);
+
     if (!byDiscriminator) {
       byDiscriminator = new Map();
       this.#recordedDays.set(name, byDiscriminator);
     }
+
     let byAccount = byDiscriminator.get(discriminator);
+
     if (!byAccount) {
       byAccount = new Map();
       byDiscriminator.set(discriminator, byAccount);
     }
+
     return byAccount;
   }
 
@@ -379,6 +390,7 @@ export class ProductEventSender {
       // Gone whatever becomes of the request, save for the one end that never
       // authenticated at all.
       const queued = this.#ownDays(this.#queue.splice(0, PRODUCT_EVENT_BATCH_LIMIT), holder);
+
       if (queued.length > 0) yield* this.#send(queued);
     });
   }
@@ -393,9 +405,11 @@ export class ProductEventSender {
    */
   #ownDays(queued: QueuedEvent[], holder: string | undefined): QueuedEvent[] {
     if (holder === undefined) return queued;
+
     return queued.filter(({ recorded }) => {
       if (!recorded || recorded.account === holder) return true;
       this.#recordedDaysOf(recorded.name, recorded.discriminator).delete(recorded.account);
+
       return false;
     });
   }
@@ -422,6 +436,7 @@ export class ProductEventSender {
           // The service answered, so whatever it made of the batch, a day it
           // carried is not to be sent again: kept for the next launch.
           if (fault === undefined) return this.#keepRecordedDays(queued);
+
           // Signed out is temporary and nobody's fault, and nothing was asked
           // of the service, so the batch waits rather than being spent. An
           // account that changed under a refreshed token is not that case:
@@ -431,6 +446,7 @@ export class ProductEventSender {
             this.#queue.unshift(...queued);
             this.#trimQueue();
           }
+
           return Effect.void;
         },
       ),

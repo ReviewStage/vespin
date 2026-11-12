@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "vitest";
 import { installEditorLayout } from "../testing/composer.js";
 import {
-  PLACEMENT_END,
   type DescriptionEditorHandle,
   type DescriptionEditorPlacement,
+  PLACEMENT_END,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
@@ -37,6 +37,7 @@ function mount(
 ) {
   const host = document.body.appendChild(document.createElement("div"));
   const finished: number[] = [];
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement,
@@ -48,8 +49,10 @@ function mount(
     onFinish: (section) => finished.push(section),
     onLeaveUp: () => undefined,
   });
+
   mounted.push(handle);
   const element = host.querySelector<HTMLElement>("[role=textbox]") ?? assert.fail("the editor");
+
   return { finished, handle, element };
 }
 
@@ -103,6 +106,7 @@ test("an editor opened on the words a click landed on stands its caret in them, 
 
 test("an editor opened on words a press selected selects them again, from where the selection started to where it ended", () => {
   const text = "## Goal\n\nShip it.\n\nShip the invite flow.\n";
+
   const at = (said: string, offset: number) => ({
     section: 0,
     text: said,
@@ -111,6 +115,7 @@ test("an editor opened on words a press selected selects them again, from where 
     code: false,
     top: 0,
   });
+
   // Selected backwards, from the second line's "invite" up into the first line's "it".
   const { element } = mount(text, {
     x: 0,
@@ -118,6 +123,7 @@ test("an editor opened on words a press selected selects them again, from where 
     from: at("Ship the invite flow.", 15),
     words: at("Ship it.", 5),
   });
+
   const selection = window.getSelection();
 
   assert.equal(selection?.toString(), "it.Ship the invite");
@@ -141,13 +147,16 @@ test("words a click landed on outside code are not found in a diagram's code of 
 
 test("an editor opened on words it cannot find, in their section, an empty one, or one past the text's, falls back to the click's point and keeps no words", () => {
   const text = "## Goal\n\nShip it.\n\n## Empty\n";
+
   const words = (section: number, said: string) => ({
     x: 0,
     y: 0,
     words: { section, text: said, occurrence: 0, offset: 2, code: false, top: 0 },
   });
+
   // Note that the click's point stands on nothing, as jsdom lays nothing out, so it puts the caret at the text's start.
   Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => null });
+
   try {
     for (const placement of [words(0, "Not here."), words(1, "Ship it."), words(5, "Ship it.")]) {
       const { handle, element } = mount(text, placement);

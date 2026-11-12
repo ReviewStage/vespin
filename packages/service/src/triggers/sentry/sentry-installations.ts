@@ -33,6 +33,7 @@ const workspaceSentry = Effect.fn("web/workspaceSentry")(function* (
   const app = yield* SentryApp;
   const configured = Result.isSuccess(yield* Effect.result(app.settings));
   const rows = yield* hostedStoreOrUnavailable(workspaceIntegrationInstallations(workspaceId));
+
   const installations = rows
     .filter(
       (row) =>
@@ -44,6 +45,7 @@ const workspaceSentry = Effect.fn("web/workspaceSentry")(function* (
         ? { installationId: row.externalId }
         : { installationId: row.externalId, account: row.accountLabel },
     );
+
   return { configured, installations };
 });
 
@@ -53,6 +55,7 @@ export const readWorkspaceSentry = Effect.fn("web/readWorkspaceSentry")(function
   workspaceId: string,
 ) {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
+
   return yield* workspaceSentry(workspace.id);
 });
 
@@ -75,13 +78,17 @@ export const disconnectWorkspaceSentry = Effect.fn("web/disconnectWorkspaceSentr
 > {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const before = yield* workspaceSentry(workspace.id);
+
   if (!before.installations.some((one) => one.installationId === installationId)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const marked = yield* hostedStoreOrUnavailable(
     markIntegrationInstallationDeleted(TRIGGER_PROVIDER.SENTRY, installationId, workspace.id),
   );
+
   const sentry = yield* workspaceSentry(workspace.id);
+
   return Option.match(marked, {
     onNone: () => sentry,
     onSome: (txid) => ({ ...sentry, txid }),

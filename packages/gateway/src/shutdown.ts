@@ -53,10 +53,12 @@ export function shutdownGatewayEffect(
   options: GatewayShutdownOptions = {},
 ): Effect.Effect<GatewayShutdownReport> {
   const deadlineMs = options.deadlineMs ?? GATEWAY_SHUTDOWN_DEFAULTS.DEADLINE_MS;
+
   return Effect.gen(function* () {
     yield* steps.closeAdmissions;
     const canceledRef = yield* Ref.make<readonly string[]>([]);
     const settledRef = yield* Ref.make(false);
+
     const work = Effect.gen(function* () {
       // A step that died is the coordinator's to absorb rather than to carry
       // out of the quit: a cancellation nobody counted and a settling nobody
@@ -64,13 +66,17 @@ export function shutdownGatewayEffect(
       const canceled = yield* steps.cancelActive.pipe(
         Effect.catchDefect(() => Effect.succeed<readonly string[]>([])),
       );
+
       yield* Ref.set(canceledRef, canceled);
+
       const settled = yield* steps.awaitSettled.pipe(
         Effect.as(true),
         Effect.catchDefect(() => Effect.succeed(false)),
       );
+
       yield* Ref.set(settledRef, settled);
     });
+
     const timedOut = yield* work.pipe(
       Effect.as(false),
       Effect.timeoutOrElse({
@@ -78,9 +84,11 @@ export function shutdownGatewayEffect(
         orElse: () => Effect.succeed(true),
       }),
     );
+
     const canceled = yield* Ref.get(canceledRef);
     const settled = timedOut ? false : yield* Ref.get(settledRef);
     const unresolved = yield* steps.persistUnresolved;
+
     return { settled, canceled, unresolved };
   });
 }

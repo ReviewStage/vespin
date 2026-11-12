@@ -360,6 +360,7 @@ const READ = {
  */
 function unreadFor(readerId: string): SQL<boolean> {
   const noMarker = sql`${ITEM_UPDATED_AT} > coalesce(${ITEM_READ_THROUGH}, '-infinity'::timestamptz)`;
+
   return sql<boolean>`coalesce((select ${READ.markedUnread} or ${ITEM_UPDATED_AT} > coalesce(greatest(${READ.readThrough}, ${ITEM_READ_THROUGH}), '-infinity'::timestamptz) from ${inboxItemRead} where ${READ.itemId} = ${ITEM_ID} and ${READ.userId} = ${readerId}), ${noMarker})`;
 }
 
@@ -388,12 +389,14 @@ function remindAtMillisFor(readerId: string): SQL<number | null> {
   return sql<number | null>`floor(extract(epoch from ${remindAtFor(readerId)}) * 1000)::float8`;
 }
 
+type LiveReminderForResult = { remindAt: SQL; snoozedUntil: SQL };
+
 /**
  * The reader's reminder as a live read carries it: under `remindAt`, and
  * under `snoozedUntil`, the key a desktop from before the rename reads,
  * which goes with the minimum supported desktop version.
  */
-function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL } {
+function liveReminderFor(readerId: string): LiveReminderForResult {
   return { remindAt: remindAtFor(readerId), snoozedUntil: remindAtFor(readerId) };
 }
 
@@ -559,6 +562,7 @@ type InboxRow = typeof InboxRowSchema.Type;
  */
 function storedItem(row: InboxRow, keysFor?: string): StoredInboxItem {
   const message = (each: MessageRow) => storedMessage(each, row, keysFor);
+
   return {
     item: {
       id: row.id,
@@ -611,6 +615,7 @@ function itemAgentSeenBy(userId: string): SQL {
       .from(agentTable)
       .where(and(eq(agentTable.id, inboxItem.agentId), agentSeenBy(userId))),
   );
+
   return sql`(${isNull(inboxItem.agentId)} or ${seen})`;
 }
 
@@ -635,6 +640,7 @@ function itemVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, inboxItem.taskId), taskReachableBy(userId))),
   );
+
   return sql`(${itemReachableBy(userId)} and ${taskReached})`;
 }
 
@@ -814,6 +820,7 @@ function askStanding({
   withdrawnBy = null,
 }: typeof AskStandingSchema.Type): SQL {
   const standing = sql`jsonb_strip_nulls(jsonb_build_object('status', ${status}::text, 'withdrawnReason', ${withdrawnReason}::text, 'withdrawnAt', ${withdrawnAt}::bigint, 'withdrawnBy', ${withdrawnBy}::text))`;
+
   return sql`(${inboxMessage.ask} - 'withdrawnAt' - 'withdrawnBy') || ${standing}`;
 }
 
@@ -1031,6 +1038,7 @@ const upsertItem = SqlSchema.findOne({
       openAskMessageId: null,
       addresseeId: write.addresseeId,
     };
+
     return Database.use((db) =>
       db
         .insert(inboxItem)
@@ -1116,6 +1124,7 @@ type InboxScope = typeof ScopeSchema.Type;
 /** The rows a scope names, kept to its workspace where it names one. */
 function inScope(scope: InboxScope) {
   const named = scopeRows(scope);
+
   return scope.workspaceId === undefined
     ? named
     : and(named, eq(inboxItem.organizationId, scope.workspaceId));
@@ -1277,10 +1286,12 @@ function accountUnreadSettled(userId: string) {
         and(eq(member.organizationId, task.organizationId), eq(member.userId, task.assigneeId)),
       ),
   );
+
   const derived = or(
     and(eq(inboxItem.userId, userId), or(isNull(task.assigneeId), assigneeLeft)),
     eq(task.assigneeId, userId),
   );
+
   return and(
     itemVisibleTo(userId),
     or(eq(inboxItem.addresseeId, userId), and(isNull(inboxItem.addresseeId), derived)),
@@ -1406,6 +1417,7 @@ const findTasksWithItems = SqlSchema.findAll({
  */
 export function accountInboxLiveStatements(userId: string) {
   const { parts } = ACCOUNT_INBOX_READ;
+
   const items = liveRowsStatement(
     parts.items,
     {
@@ -1437,6 +1449,7 @@ export function accountInboxLiveStatements(userId: string) {
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
         .where(accountWaiting(userId)),
   );
+
   const planless = liveRowsStatement(
     parts.planless,
     {
@@ -1471,6 +1484,7 @@ export function accountInboxLiveStatements(userId: string) {
         .leftJoin(automation, eq(automation.id, agentTable.automationId))
         .where(sql`false`),
   );
+
   const plans = liveRowsStatement(
     parts.plans,
     {
@@ -1490,6 +1504,7 @@ export function accountInboxLiveStatements(userId: string) {
         .where(and(isNotNull(inboxItem.taskId), itemVisibleTo(userId)))
         .groupBy(inboxItem.taskId),
   );
+
   const automations = liveRowsStatement(
     parts.automations,
     {
@@ -1506,6 +1521,7 @@ export function accountInboxLiveStatements(userId: string) {
         .where(sql`false`)
         .groupBy(automation.id),
   );
+
   const agents = liveRowsStatement(
     parts.agents,
     {
@@ -1532,6 +1548,7 @@ export function accountInboxLiveStatements(userId: string) {
         .where(sql`false`)
         .groupBy(agentTable.id, automation.id),
   );
+
   return { items, planless, plans, automations, agents };
 }
 
@@ -1564,6 +1581,7 @@ function scopeLiveStatements(scope: InboxScope) {
     .where(and(inScope(scope), ne(inboxItem.status, INBOX_STATUS.OPEN)))
     .orderBy(...LATEST_FIRST)
     .limit(INBOX_BOUNDS.MAX_ITEMS_READ);
+
   return itemsLiveStatements(
     scope.userId,
     and(
@@ -1577,18 +1595,21 @@ function scopeLiveStatements(scope: InboxScope) {
 function itemsLiveStatements(readerId: string, read: SQL | undefined) {
   const itemIds = queryBuilder.select({ id: inboxItem.id }).from(inboxItem).where(read);
   const ofItem = eq(sibling.itemId, qualified(inboxMessage, inboxMessage.itemId));
+
   const latest = queryBuilder
     .select({ id: sibling.id })
     .from(sibling)
     .where(ofItem)
     .orderBy(desc(sibling.createdAt), desc(sibling.id))
     .limit(INBOX_BOUNDS.MAX_MESSAGES_READ);
+
   const first = queryBuilder
     .select({ id: sibling.id })
     .from(sibling)
     .where(ofItem)
     .orderBy(sibling.createdAt, sibling.id)
     .limit(1);
+
   // The messages the thread draws: the latest, the first, and the one whose ask is held open.
   const latestMessage = and(
     inArray(inboxMessage.itemId, itemIds),
@@ -1601,6 +1622,7 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
       ),
     ),
   );
+
   const items = liveRowsStatement(
     SCOPE_INBOX_PARTS.items,
     {
@@ -1638,6 +1660,7 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
     },
     (selection) => queryBuilder.select(selection).from(inboxItem).where(read),
   );
+
   const messages = liveRowsStatement(
     SCOPE_INBOX_PARTS.messages,
     {
@@ -1662,6 +1685,7 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
     },
     (selection) => queryBuilder.select(selection).from(inboxMessage).where(latestMessage),
   );
+
   const files = liveRowsStatement(
     SCOPE_INBOX_PARTS.files,
     {
@@ -1685,6 +1709,7 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
           ),
         ),
   );
+
   return { items, messages, files };
 }
 
@@ -1719,6 +1744,7 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
     ),
     narrowed,
   );
+
   const stamps = liveRowsStatement(
     INBOX_ITEMS_READ.parts.stamps,
     {
@@ -1739,6 +1765,7 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
     },
     (selection) => queryBuilder.select(selection).from(inboxItem).where(carried),
   );
+
   return { stamps, ...itemsLiveStatements(userId, and(carried, changed)) };
 }
 
@@ -1753,16 +1780,20 @@ const ITEM_NAMERS = [inboxMessageSync, inboxItemReadSync, attachmentSync, taskSy
  */
 function movedItems(moved: SyncMoved): SQL {
   const members = moved.keys(userSync, user.id);
+
   const named = (kind: typeof TOPIC.TASK | typeof TOPIC.AGENT) =>
     ITEM_NAMERS.flatMap((table) => moved.topics(table, kind));
+
   const assigned = queryBuilder
     .select({ id: task.id })
     .from(task)
     .where(liveKeysIn(task.assigneeId, members));
+
   const authored = queryBuilder
     .select({ id: inboxMessage.itemId })
     .from(inboxMessage)
     .where(liveKeysIn(inboxMessage.userId, members));
+
   return (
     or(
       liveKeysIn(inboxItem.id, moved.keys(inboxItemSync, inboxItem.id)),
@@ -1807,8 +1838,10 @@ function scopeItems(
 ): InboxStoreEffect<readonly InboxItem[]> {
   // Note that a read keeping to one standing filters before the settled bound, so the latest of that standing are read however many of another changed since.
   const open = standing === undefined || standing === INBOX_STATUS.OPEN;
+
   const settled =
     standing === undefined ? {} : standing === INBOX_STATUS.OPEN ? undefined : { status: standing };
+
   return Effect.map(
     Effect.all(
       [
@@ -2218,7 +2251,9 @@ function withPictureAddresses(
       const id = insideCode(body, offset)
         ? undefined
         : pictureOfPath(inboxPictureDestination(destination));
+
       if (id === undefined) return whole;
+
       return `${whole.slice(0, whole.length - destination.length)}${addressOf(id)}`;
     },
   );
@@ -2326,6 +2361,7 @@ function pictureAddressOf(
   itemId: string,
 ): PictureAddress {
   const place = itemPlace(agent, itemId);
+
   return (pictureId) => inboxAttachmentAddress(place, pictureId, workspace.workspaceStep);
 }
 
@@ -2341,8 +2377,10 @@ function picturesByPath(pictures: readonly InboxBodyPicture[]): PicturesByPath {
   const ids = new Map<string, string>();
   pictures.forEach((picture, at) => {
     const id = kept[at]?.id;
+
     if (id !== undefined && !ids.has(picture.path)) ids.set(picture.path, id);
   });
+
   return { kept, idOf: (path) => ids.get(path) };
 }
 
@@ -2353,6 +2391,7 @@ function picturesByPath(pictures: readonly InboxBodyPicture[]): PicturesByPath {
  */
 function postColumns(view: PostView, ask: InboxAsk | undefined) {
   const needsReply = ask === undefined ? false : view.needsReply;
+
   return { title: view.title, needsReply, status: INBOX_STATUS.OPEN, settledAt: null } as const;
 }
 
@@ -2371,6 +2410,7 @@ function keepPost(
   now: Date,
 ): InboxStoreEffect<InboxItem> {
   const { organizationId } = workspace;
+
   return Effect.gen(function* () {
     const { id: itemId } = yield* upsertItem({
       ...agent,
@@ -2380,7 +2420,9 @@ function keepPost(
       addresseeId: post.addresseeId,
       now,
     }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
     const ask = post.ask === undefined ? null : { ...post.ask, status: INBOX_ASK_STATUS.OPEN };
+
     const message = yield* writtenMessage({
       itemId,
       author: INBOX_MESSAGE_AUTHOR.AGENT,
@@ -2392,6 +2434,7 @@ function keepPost(
       clientKey: null,
       now,
     });
+
     yield* settleOpenAsks({
       itemId,
       except: message.id,
@@ -2399,6 +2442,7 @@ function keepPost(
       withdrawnReason: null,
       withdrawnAt: null,
     });
+
     if (ask !== null) yield* holdAsk({ itemId, messageId: message.id });
     yield* writeMessageFiles(
       post.pictures.map((picture, position) => ({
@@ -2416,6 +2460,7 @@ function keepPost(
         now,
       })),
     );
+
     return yield* itemAsWritten(agent.userId, itemId);
   });
 }
@@ -2447,12 +2492,16 @@ function placeOf(
 ): InboxStoreEffect<Result.Result<{ readonly addresseeId: string | null }, InboxPostRefusal>> {
   return Effect.gen(function* () {
     const { organizationId } = locked;
+
     if (post.addresseeId !== undefined) {
       const member = yield* isWorkspaceMember(post.addresseeId, organizationId);
+
       if (!member) return Result.fail(INBOX_POST_REFUSAL.NO_ADDRESSEE);
       const sees = yield* findReachedAgent({ userId: post.addresseeId, agentId: agent.agentId });
+
       if (Option.isNone(sees)) return Result.fail(INBOX_POST_REFUSAL.ADDRESSEE_CANNOT_SEE);
     }
+
     return Result.succeed({ addresseeId: post.addresseeId ?? null });
   });
 }
@@ -2494,10 +2543,12 @@ function followUp(
   return Effect.suspend(() => {
     const { kept, idOf } = picturesByPath(pictures);
     const text = withPictureAddresses(post.body, idOf, pictureAddressOf(agent, workspace, itemId));
+
     const writer = {
       author: INBOX_MESSAGE_AUTHOR.AGENT,
       addresseeId: post.addresseeId ?? null,
     } as const;
+
     return writeInboxMessage(agent.userId, itemId, writer, text, kept);
   }).pipe(
     // The item was found under the lock on its agent, so a message that finds none is a broken contract.
@@ -2540,22 +2591,30 @@ export function postInboxThread(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockAgent(agent);
+
         if (Option.isNone(locked)) return Result.fail(INBOX_POST_REFUSAL.NO_AGENT);
         const standing = yield* findAgentItem({ ...agent, key: post.key });
         const placed = yield* placeOf(agent, locked.value, post);
+
         if (Result.isFailure(placed)) return Result.fail(placed.failure);
+
         if (post.ask === undefined && Option.isSome(standing) && standing.value.asking) {
           const itemId = standing.value.id;
           yield* replaceItem(itemId, placed.success);
+
           return Result.succeed(yield* followUp(agent, locked.value, itemId, post, pictures));
         }
+
         const title = post.title ?? Option.getOrUndefined(standing)?.title;
+
         if (title === undefined) return Result.fail(INBOX_POST_REFUSAL.NO_TITLE);
         const now = yield* DateTime.nowAsDate;
         const { kept, idOf } = yield* Effect.sync(() => picturesByPath(pictures));
         const view = { title, needsReply: post.needsReply ?? true };
+
         const body = (addressOf: PictureAddress) =>
           withPictureAddresses(post.body, idOf, addressOf);
+
         const write = {
           key: post.key,
           view,
@@ -2564,6 +2623,7 @@ export function postInboxThread(
           pictures: [...kept, ...optionFiles],
           ...placed.success,
         };
+
         return Result.succeed(yield* keepPost(agent, locked.value, write, now));
       }),
     ),
@@ -2606,6 +2666,7 @@ export function closeInboxItem(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
         const closed = yield* closeItem({ ...agent, key, reason, now });
+
         if (Option.isNone(closed)) return Option.none();
         const itemId = closed.value.id;
         yield* settleOpenAsks({
@@ -2615,6 +2676,7 @@ export function closeInboxItem(
           withdrawnReason: reason,
           withdrawnAt: now.getTime(),
         });
+
         return Option.some(yield* itemAsWritten(agent.userId, itemId));
       }),
     ),
@@ -2686,6 +2748,7 @@ export function agentReachedInboxItems(
     "agentId" in of
       ? { scope: INBOX_SCOPE.AGENT_OF_WORKSPACE, id: of.agentId }
       : { scope: INBOX_SCOPE.TASK, id: of.taskId };
+
   return scopeItems(
     { userId: reader.userId, workspaceId: reader.workspaceId, ...named },
     INBOX_BOUNDS.MAX_SETTLED_TOLD,
@@ -2765,10 +2828,12 @@ export function readInboxItem(
 function pageMessages(before: string | null): SQL {
   const cursor = sql.identifier("cursor");
   const column = (name: string) => sql`${cursor}.${sql.identifier(name)}`;
+
   const older =
     before === null
       ? sql``
       : sql` and (${inboxMessage.createdAt}, ${inboxMessage.id}) < (select ${column(inboxMessage.createdAt.name)}, ${column(inboxMessage.id.name)} from ${inboxMessage} as ${cursor} where ${column(inboxMessage.id.name)} = ${before} and ${column(inboxMessage.itemId.name)} = ${ITEM_ID})`;
+
   return messagesAs(
     sql`select * from ${inboxMessage} where ${inboxMessage.itemId} = ${ITEM_ID}${older} order by ${inboxMessage.createdAt} desc, ${inboxMessage.id} desc limit ${sql.raw(String(INBOX_BOUNDS.MAX_MESSAGES_READ + 1))}`,
   );
@@ -2827,6 +2892,7 @@ export function inboxThreadPage(
     Option.map((row) => {
       const older = row.messages.length > INBOX_BOUNDS.MAX_MESSAGES_READ;
       const kept = older ? row.messages.slice(1) : row.messages;
+
       return { messages: kept.map((each) => storedMessage(each, row, undefined)), older };
     }),
   );
@@ -2850,6 +2916,7 @@ function markerFound(
   request: typeof ReaderItemSchema.Type,
 ): InboxStoreEffect<InboxMarked | false> {
   if (Option.isSome(marked)) return Effect.succeed({ txid: marked.value.txid });
+
   return Effect.map(findReachedItem(request), (found) => (Option.isSome(found) ? {} : false));
 }
 
@@ -2865,6 +2932,7 @@ export function markInboxItemRead(
   itemId: string,
 ): InboxStoreEffect<InboxMarked | false> {
   const request = { userId, itemId };
+
   return Effect.flatMap(upsertRead(request), (marked) => markerFound(marked, request));
 }
 
@@ -2874,6 +2942,7 @@ export function markInboxItemUnread(
   itemId: string,
 ): InboxStoreEffect<InboxMarked | false> {
   const request = { userId, itemId };
+
   return Effect.flatMap(upsertUnread(request), (marked) => markerFound(marked, request));
 }
 
@@ -2889,10 +2958,13 @@ export function remindInboxItem(
   until: Date | null,
 ): InboxStoreEffect<(InboxMarked & { readonly unread: boolean }) | false> {
   const request = { userId, itemId };
+
   return Effect.gen(function* () {
     const marked = yield* markerFound(yield* upsertReminder({ ...request, until }), request);
+
     if (marked === false) return false;
     const read = yield* findReaderUnread(request);
+
     return { ...marked, unread: Option.isSome(read) && read.value.unread };
   });
 }
@@ -2911,6 +2983,7 @@ export function markInboxRead(
 ): InboxStoreEffect<InboxMarked & { readonly marked: number }> {
   return Effect.map(upsertAllRead({ userId, workspaceId: workspaceId ?? null }), (marked) => {
     const [first] = marked;
+
     return first === undefined ? { marked: 0 } : { marked: marked.length, txid: first.txid };
   });
 }
@@ -2928,6 +3001,7 @@ function reopenAskOrNone(itemId: string, messageId: string): InboxStoreEffect<vo
       withdrawnReason: null,
       withdrawnAt: null,
     });
+
     if (opened.length === 0) yield* holdAsk({ itemId, messageId: null });
   });
 }
@@ -2988,13 +3062,17 @@ export function withdrawInboxAnswer(
         const answering = yield* findAnsweringMessage({ itemId, clientKey: answerKey });
         const openAsk = Option.isSome(answering) ? answering.value.answers.ask : null;
         const withdrawn = yield* withdrawAnswer({ userId, itemId, answerKey, openAsk, now });
+
         if (Option.isNone(withdrawn)) return Option.none();
+
         if (openAsk !== null) {
           yield* reopenAskOrNone(itemId, openAsk);
           yield* deleteMessage({ itemId, clientKey: answerKey });
         }
+
         // The answer taken back is the member's own, so it leaves the item read for them as the answer did.
         yield* upsertRead({ userId, itemId });
+
         return Option.map(
           yield* findItem({ userId, itemId }),
           (row) => storedItem(row, userId).item,
@@ -3027,14 +3105,18 @@ export function closeInboxItemAsMember(
   },
 ): InboxStoreEffect<Option.Option<InboxItemWritten>> {
   const noted = note.text !== "" || note.files.length > 0;
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
+
         // A key a message of the thread holds names that message, never this close, so taking the close back deletes only its own note.
         if (yield* keyTaken(itemId, closeKey)) return Option.none();
         const closed = yield* memberCloseItem({ userId, itemId, revision, closeKey, now });
+
         if (Option.isNone(closed)) return Option.none();
+
         if (noted) {
           yield* keepMemberMessage({
             userId,
@@ -3046,6 +3128,7 @@ export function closeInboxItemAsMember(
             now,
           });
         }
+
         // Note that the reason is left out, because an agent's close always says why and a member's never does, and the closer is kept on the ask, since the item forgets them once a post opens it again.
         yield* settleOpenAsks({
           itemId,
@@ -3057,6 +3140,7 @@ export function closeInboxItemAsMember(
         });
         yield* upsertRead({ userId, itemId });
         const { txid } = closed.value;
+
         return Option.map(yield* findItem({ userId, itemId }), (row) => ({
           ...storedItem(row, userId).item,
           txid,
@@ -3149,10 +3233,13 @@ export function withdrawInboxClose(
         const now = yield* DateTime.nowAsDate;
         const openAsk = yield* askTheCloseWithdrew(itemId);
         const withdrawn = yield* withdrawClose({ userId, itemId, closeKey, openAsk, now });
+
         if (Option.isNone(withdrawn)) return Option.none();
         yield* deleteMessage({ itemId, clientKey: closeKey });
+
         if (openAsk !== null) yield* reopenAskOrNone(itemId, openAsk);
         yield* upsertRead({ userId, itemId });
+
         return Option.map(
           yield* findItem({ userId, itemId }),
           (row) => storedItem(row, userId).item,
@@ -3215,6 +3302,7 @@ function keepMemberMessage(write: {
 }): InboxStoreEffect<void> {
   return Effect.gen(function* () {
     const { itemId, now } = write;
+
     const written = yield* answeringMessage({
       itemId,
       author: INBOX_MESSAGE_AUTHOR.MEMBER,
@@ -3226,6 +3314,7 @@ function keepMemberMessage(write: {
       clientKey: write.clientKey,
       now,
     });
+
     if (write.files.length === 0) return;
     const scope = yield* itemScope({ itemId });
     yield* writeMessageFiles(
@@ -3283,13 +3372,16 @@ export function acknowledgeInboxItem(
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
+
         // A key a message of the thread holds names that message, never this nod.
         if (yield* keyTaken(itemId, answerKey)) return Option.none();
         const nodded = yield* acknowledgeNotice({ userId, itemId, revision, answerKey, now });
+
         if (Option.isNone(nodded)) return Option.none();
         // The member's own nod leaves the item read for them.
         yield* upsertRead({ userId, itemId });
         const { txid } = nodded.value;
+
         return Option.map(yield* findItem({ userId, itemId }), (row) => ({
           ...storedItem(row, userId).item,
           txid,
@@ -3350,18 +3442,23 @@ export function answerInboxAsk(
   },
 ): InboxStoreEffect<Option.Option<InboxAskAnswered>> {
   const files = sent.files ?? [];
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const found = yield* findItem({ userId, itemId });
+
         if (Option.isNone(found)) return Option.none();
+
         const standing = (outcome: InboxAskAnswer, refusal?: string) =>
           Option.some({
             item: storedItem(found.value, userId).item,
             outcome,
             ...(refusal === undefined ? undefined : { refusal }),
           });
+
         const keyed = yield* findKeyedMessage({ itemId, clientKey: sent.clientKey });
+
         if (Option.isSome(keyed)) {
           // Only the same answer sent again is the one taken, so the agent never hears what the thread does not hold.
           const resent =
@@ -3372,24 +3469,32 @@ export function answerInboxAsk(
               text: sent.text,
               files: files.map((file) => ({ name: file.name, contentType: file.mediaType })),
             });
+
           return resent
             ? standing(INBOX_ASK_ANSWER.REPEATED)
             : standing(INBOX_ASK_ANSWER.REFUSED, KEY_NAMES_ANOTHER_MESSAGE);
         }
+
         if (found.value.answerKey === sent.clientKey) {
           return standing(INBOX_ASK_ANSWER.REFUSED, KEY_NAMES_ANOTHER_MESSAGE);
         }
+
         const asking = yield* findOpenAsk({ userId, itemId });
+
         if (Option.isNone(asking) || asking.value.id !== sent.answers.ask) {
           return standing(INBOX_ASK_ANSWER.NOT_OPEN);
         }
+
         const ask = knownAsk(asking.value.ask);
+
         const refusal =
           ask === undefined
             ? "The ask is one this version does not know."
             : inboxAnswersRefusal(ask, sent.answers, sent.text, files);
+
         if (refusal !== undefined) return standing(INBOX_ASK_ANSWER.REFUSED, refusal);
         const now = yield* DateTime.nowAsDate;
+
         const answered = yield* answerItem({
           userId,
           itemId,
@@ -3398,6 +3503,7 @@ export function answerInboxAsk(
           answerKey: sent.clientKey,
           now,
         });
+
         if (Option.isNone(answered)) return standing(INBOX_ASK_ANSWER.NOT_OPEN);
         // The member's own answer leaves the item read for them, and unread for every other member.
         yield* upsertRead({ userId, itemId });
@@ -3412,6 +3518,7 @@ export function answerInboxAsk(
           now,
         });
         const item = yield* itemAsWritten(userId, itemId, userId);
+
         return Option.some({
           item,
           outcome: INBOX_ASK_ANSWER.TAKEN,
@@ -3489,10 +3596,12 @@ function sameList<T>(
 ): boolean {
   const left = standing ?? [];
   const right = sent ?? [];
+
   return (
     left.length === right.length &&
     left.every((each, at) => {
       const other = right[at];
+
       return other !== undefined && same(each, other);
     })
   );
@@ -3557,10 +3666,12 @@ function writeInboxMessage(
   files: readonly MessageFile[],
 ): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
   const member = writer.author === INBOX_MESSAGE_AUTHOR.MEMBER ? writer : undefined;
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
+
         const written = yield* insertMessage({
           itemId,
           author: writer.author,
@@ -3572,6 +3683,7 @@ function writeInboxMessage(
           clientKey: member?.clientKey ?? null,
           now,
         });
+
         if (Option.isSome(written)) {
           const scope = yield* itemScope({ itemId });
           yield* writeMessageFiles(
@@ -3585,20 +3697,25 @@ function writeInboxMessage(
             })),
           );
           yield* touchItem({ itemId, now });
+
           if (member !== undefined) {
             // A member's own message leaves the item read for them, and unread for every other member.
             yield* upsertRead({ userId: member.userId, itemId });
             // Their words on the notice they were shown are their nod to it, as Got it is.
             const { userId, clientKey: answerKey, revision } = member;
+
             if (revision !== undefined) {
               yield* acknowledgeNotice({ userId, itemId, revision, answerKey, now });
             }
           }
         }
+
         const outcome = Option.isSome(written)
           ? INBOX_MESSAGE_OUTCOME.WRITTEN
           : yield* repeatOutcome(itemId, member, text, files);
+
         const found = yield* findItemOf({ readerId, itemId });
+
         return Option.map(found, (row) => ({
           item: storedItem(row, member?.userId).item,
           outcome,
@@ -3616,6 +3733,7 @@ function repeatOutcome(
   files: readonly MessageFile[],
 ): InboxStoreEffect<InboxMessageOutcome> {
   if (member === undefined) return Effect.succeed(INBOX_MESSAGE_OUTCOME.KEY_REUSED);
+
   return Effect.map(findKeyedMessage({ itemId, clientKey: member.clientKey }), (standing) =>
     Option.isSome(standing) && sameMessage(standing.value, { userId: member.userId, text, files })
       ? INBOX_MESSAGE_OUTCOME.REPEATED
@@ -3640,6 +3758,7 @@ export function postInboxMessage(
   },
 ): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
   const { clientKey, revision } = message;
+
   return Effect.flatMap(findItem({ userId, itemId }), (found) =>
     Option.isNone(found)
       ? Effect.succeed(Option.none())
@@ -3672,6 +3791,7 @@ function keyStem(title: string): string {
     .replace(/[^a-z0-9]+/gu, "-")
     .slice(0, KEY_STEM_CHARS)
     .replace(/^-+|-+$/gu, "");
+
   return stem === "" ? KEY_STEM_FALLBACK : stem;
 }
 
@@ -3679,7 +3799,9 @@ function keyStem(title: string): string {
 function freeKey(stem: string, taken: ReadonlySet<string>): string {
   if (!taken.has(stem)) return stem;
   let next = 2;
+
   while (taken.has(`${stem}-${next}`)) next += 1;
+
   return `${stem}-${next}`;
 }
 
@@ -3789,6 +3911,7 @@ const deleteStartedItem = SqlSchema.void({
         .select({ one: inboxMessage.id })
         .from(inboxMessage)
         .where(and(eq(inboxMessage.itemId, itemId), eq(inboxMessage.clientKey, clientKey)));
+
       const other = db
         .select({ one: inboxMessage.id })
         .from(inboxMessage)
@@ -3798,6 +3921,7 @@ const deleteStartedItem = SqlSchema.void({
             or(isNull(inboxMessage.clientKey), ne(inboxMessage.clientKey, clientKey)),
           ),
         );
+
       return db
         .delete(inboxItem)
         .where(and(eq(inboxItem.id, itemId), exists(first), notExists(other)));
@@ -3828,32 +3952,41 @@ export function startInboxThread(
   },
 ): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
   const { title, text, clientKey } = thread;
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const reached = yield* findReachedAgent({ userId, agentId: agent.agentId });
+
         if (Option.isNone(reached)) return Option.none();
         const locked = yield* lockAgent(agent);
+
         if (Option.isNone(locked)) return Option.none();
+
         const files = (thread.files ?? []).map((file) => ({
           name: file.name,
           contentType: file.mediaType,
           bytes: bytesOf(file),
         }));
+
         const started = yield* findStartedThread({ userId, agentId: agent.agentId, clientKey });
+
         if (Option.isSome(started)) {
           const item = yield* itemAsWritten(userId, started.value.id, userId);
           const first = yield* findKeyedMessage({ itemId: item.id, clientKey });
           // Note that other words or files under a key taken are refused, so the agent never hears what the thread does not show; the subject is not compared, since the agent may retitle the thread and the agent hears it as the thread stands.
           const same = Option.isSome(first) && sameMessage(first.value, { userId, text, files });
           const outcome = same ? INBOX_MESSAGE_OUTCOME.REPEATED : INBOX_MESSAGE_OUTCOME.KEY_REUSED;
+
           return Option.some({ item, outcome });
         }
+
         const stem = keyStem(title);
         const taken = yield* findStemKeys({ agentId: agent.agentId, stem });
         const key = freeKey(stem, new Set(taken.map((row) => row.key)));
         const now = yield* DateTime.nowAsDate;
         const { organizationId } = locked.value;
+
         const { id: itemId } = yield* insertStartedItem({
           ...agent,
           organizationId,
@@ -3863,6 +3996,7 @@ export function startInboxThread(
           clientKey,
           now,
         }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
         const message = yield* writtenMessage({
           itemId,
           author: INBOX_MESSAGE_AUTHOR.MEMBER,
@@ -3874,6 +4008,7 @@ export function startInboxThread(
           clientKey,
           now,
         });
+
         yield* writeMessageFiles(
           files.map((file, position) => ({
             userId: agent.userId,
@@ -3888,6 +4023,7 @@ export function startInboxThread(
         );
         yield* upsertRead({ userId, itemId });
         const item = yield* itemAsWritten(userId, itemId, userId);
+
         return Option.some({ item, outcome: INBOX_MESSAGE_OUTCOME.WRITTEN });
       }),
     ),
@@ -4004,6 +4140,7 @@ export function withdrawInboxMessage(
     yield* withdrawAnswer({ userId, itemId, answerKey: clientKey, openAsk: null, now });
     yield* deleteMessage({ itemId, clientKey });
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     Effect.flatMap(findItem({ userId, itemId }), (found) =>
       Option.isNone(found) ? Effect.void : client.withTransaction(withdrawn),

@@ -42,8 +42,10 @@ function slackRow(read: IntegrationToolsView | undefined) {
     readFailed: false,
     disabled: [],
   });
+
   const row = rows.find((each) => each.provider === INTEGRATION_PROVIDER.SLACK);
   assert.ok(row !== undefined);
+
   return row;
 }
 
@@ -105,6 +107,7 @@ function rowsWhere(
   return serverRows({
     statusOf: (server) => {
       const provider = integrationProviderFromWire(server);
+
       return provider === undefined
         ? undefined
         : (standing[provider] ?? INTEGRATION_STATUS.UNAVAILABLE);

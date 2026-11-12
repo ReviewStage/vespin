@@ -23,8 +23,8 @@ type WindowOpened = (event: Electron.Event, window: BrowserWindow) => void;
 
 /** Where windows are announced as they open: Electron's `app`, unless a test stands one in. */
 interface WindowsOpening {
-  on(event: "browser-window-created", listener: WindowOpened): unknown;
-  removeListener(event: "browser-window-created", listener: WindowOpened): unknown;
+  on(event: "browser-window-created", listener: WindowOpened): void;
+  removeListener(event: "browser-window-created", listener: WindowOpened): void;
 }
 
 /** The document a window's page is, by its file's name, such as `index.html`. */
@@ -42,14 +42,18 @@ function reportErrorsOf(
   contents.on("console-message", (details) => {
     if (details.level !== "error" || !reporting()) return;
     const page = documentName(contents.getURL());
+
     const crumb = withoutAccessTokens({
       message: details.message,
       data: { url: details.sourceId },
     });
+
     if (crumb === null) {
       report(`renderer error in ${page}, withheld because it names an access token`);
+
       return;
     }
+
     const source = `${documentName(details.sourceId)}:${details.lineNumber}`;
     report(`renderer error in ${page}: ${details.message} (${source})`);
   });
@@ -67,6 +71,7 @@ export function reportRendererErrors(
   let reporting = true;
   const opened: WindowOpened = (_event, window) => reportErrorsOf(window, report, () => reporting);
   windows.on("browser-window-created", opened);
+
   return () => {
     reporting = false;
     windows.removeListener("browser-window-created", opened);

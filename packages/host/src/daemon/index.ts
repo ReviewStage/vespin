@@ -3,7 +3,9 @@
  */
 
 export { hostDeviceWhen, readHostDevice, writeHostDevice } from "../host-device-record.js";
+
 export { readSetupStatus, SETUP_STEP, type SetupStatus } from "../setup-status.js";
+
 export {
   APP_RUNS_HOST_WORDS,
   appHostCommandLinked,
@@ -11,9 +13,13 @@ export {
   COMMAND_LINK_OUTCOME,
   type CommandLinkOutcome,
 } from "./app-host-command.js";
+
 export { HOST_DAEMON_END, hostDaemon, hostRefusedRest } from "./host-daemon.js";
+
 export { HOST_LEAVE_OUTCOME, leaveHostDevice } from "./host-leave.js";
+
 export { HOST_LOCK, hostLockTaken } from "./host-lock.js";
+
 export {
   DARWIN_HOST,
   type HostRuntime,
@@ -21,12 +27,17 @@ export {
   hostRuntime,
   LINUX_HOST,
 } from "./host-os.js";
+
 export {
   connectHostDevice,
   HOST_CONNECT_OUTCOME,
   type HostPairingCode,
 } from "./host-pairing.js";
+
 export { hostPlatform } from "./host-platform.js";
+
 export { HOST_SERVICE, type HostService, hostServiceOf } from "./host-service.js";
+
 export { uninstallBundledHost } from "./host-uninstall.js";
+
 export type { HostReleases } from "./host-update.js";

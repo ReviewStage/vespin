@@ -44,10 +44,12 @@ afterEach(() => {
 /** The pull request's row over the doors the desktop's window hands it where no panel takes its tab, beside the window's toasts. */
 async function mountRow(): Promise<HTMLElement> {
   fakeAppPlatform(DESKTOP_LINKS);
+
   const doors: PublishedDoors = {
     openGitHub: (url) => appPlatform().openGitHub(url),
     copy: () => undefined,
   };
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -67,6 +69,7 @@ async function mountRow(): Promise<HTMLElement> {
       ),
     ),
   );
+
   return (
     container.querySelector<HTMLElement>("a, button") ??
     assert.fail("the pull request's row stands as a press")
@@ -92,6 +95,7 @@ test("an Open on GitHub the host takes raises no toast", async () => {
   fakeActPort({
     [ACT_KIND.GITHUB_OPEN]: ({ url }) => {
       opened.push(url);
+
       return Promise.resolve();
     },
   });

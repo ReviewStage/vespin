@@ -55,6 +55,7 @@ const AGENT: AgentTranscriptKey = {
   kind: TRANSCRIPT_KIND.AGENT,
   agentId: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
 };
+
 const OTHER: AgentTranscriptKey = { ...AGENT, callId: "call-7" };
 
 let root: Root | undefined;
@@ -114,17 +115,22 @@ async function settle(): Promise<void> {
 function drawn(older?: TranscriptOlderReader) {
   const telling = tellingTranscripts();
   const frames: AgentTranscriptControl[] = [];
+
   function Probe(props: { shown: boolean }) {
     frames.push(useAgentTranscript({ transcript: AGENT, shown: props.shown, older }));
+
     return null;
   }
+
   function Window(props: { shown: boolean }) {
     return useQuery({ ...appStateQuery, select: selectRun }).data === undefined
       ? null
       : createElement(Probe, props);
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   return {
     telling,
     frames,
@@ -192,6 +198,7 @@ test("a transcript that could not be read offers Try again, which asks the host 
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: (transcript) => {
       retried.push(transcript);
+
       return Promise.resolve();
     },
   });
@@ -251,6 +258,7 @@ test("a page that says the agent's workers as they stood keeps what the tab hold
 
 test("an agent that ended stays held while its tab is shown, so the lines a call into it writes still reach the tab", async () => {
   const { telling, seen, draw, push } = drawn();
+
   const ended = (id: string, text: string): AgentTranscriptPage => ({
     ...pageOf(id, text),
     status: AGENT_STATUS.COMPLETED,
@@ -323,10 +331,12 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
   const { draw, push } = drawn();
 
   await draw(true);
+
   const painted = spans.map((span) => [
     span.name,
     span.attributes()[PANEL_SPAN_ATTRIBUTE.CACHE_HIT],
   ]);
+
   // The host lays what it held again as it reads on, and then the page past its cursor.
   await push(AGENT, held);
   await push(AGENT, { ...pageOf("m-3", "Writing."), caughtUp: true });
@@ -371,23 +381,28 @@ test("a hold let go before its first page landed is timed by no span", async () 
 function scriptedOlder() {
   const asked: AgentTranscriptOlderParams[] = [];
   let answer: (older: AgentTranscriptOlderAnswer) => void = () => undefined;
+
   const older: TranscriptOlderReader = (params) => {
     asked.push(params);
+
     return new Promise((resolve) => {
       answer = resolve;
     });
   };
+
   const hand = (older: AgentTranscriptOlderAnswer) =>
     act(async () => {
       answer(older);
       await settle();
     });
+
   return { older, asked, hand };
 }
 
 test("older pages are asked for one at a time, each out until the host lays it before what is held", async () => {
   const { older, asked, hand } = scriptedOlder();
   const { telling, seen, draw, push } = drawn(older);
+
   const laid = (older: Parameters<TranscriptsTelling["layOlder"]>[1]) =>
     act(async () => {
       telling.layOlder(AGENT, older);

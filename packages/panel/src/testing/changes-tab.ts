@@ -27,5 +27,6 @@ export function ChangesTabReading({
   const source = useAgentPullRequestSource(control, props.agentId, usePullRequestNumber());
   const reads = useChangesReads(props.agentId, source, props.shown);
   onReads?.(reads);
+
   return createElement(AgentChangesTab, { ...props, source, reads });
 }

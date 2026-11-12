@@ -31,6 +31,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -49,6 +50,7 @@ const openWorkspace = (userId: string) =>
     yield* db
       .insert(member)
       .values({ id: randomUUID(), organizationId, userId, role: "owner", createdAt: now });
+
     return organizationId;
   });
 
@@ -61,6 +63,7 @@ it.layer(getTestDB())("a run's agents", (it) => {
         const outsider = yield* openAccount;
         yield* openWorkspace(outsider);
         const organizationId = yield* openWorkspace(owner);
+
         const made = Option.getOrThrow(
           yield* createAutomation(owner, {
             organizationId,
@@ -73,6 +76,7 @@ it.layer(getTestDB())("a run's agents", (it) => {
             webhookSecretHash: null,
           }),
         );
+
         const runOf = (dedupeKey: string) =>
           Effect.map(
             recordAutomationRun(made, {
@@ -82,7 +86,9 @@ it.layer(getTestDB())("a run's agents", (it) => {
             }),
             (recorded) => Option.getOrThrow(recorded).id,
           );
+
         const { id: taskId } = yield* createTask(owner, { organizationId, name: "Triage" });
+
         const agentOf = (title: string, automationRunId: string) =>
           Effect.map(
             createAgent(owner, {
@@ -100,6 +106,7 @@ it.layer(getTestDB())("a run's agents", (it) => {
             }),
             (started) => Option.getOrThrow(started).agent.id,
           );
+
         const run = yield* runOf("manual-1");
         const otherRun = yield* runOf("manual-2");
         const first = yield* agentOf("Triage run", run);
@@ -107,11 +114,13 @@ it.layer(getTestDB())("a run's agents", (it) => {
         const elsewhere = yield* agentOf("Another run", otherRun);
         // Each row gets a start instant of its own, so the order does not hang on the clock's resolution.
         const db = yield* Database;
+
         const startedAt = (agentId: string, createdAt: string) =>
           db
             .update(agentTable)
             .set({ createdAt: new Date(createdAt) })
             .where(eq(agentTable.id, agentId));
+
         yield* startedAt(second, "2026-10-30T10:05:00Z");
         yield* startedAt(first, "2026-10-30T10:00:00Z");
         yield* startedAt(elsewhere, "2026-10-30T09:00:00Z");

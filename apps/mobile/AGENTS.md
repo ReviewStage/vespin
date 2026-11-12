@@ -215,7 +215,8 @@ hand on an iPad with a trackpad.
 
 ## The share extension
 
-Vespin stands in the system's share sheet for text and a web link: a share
+Vespin stands in the system's share sheet for text, a web link and up to
+four pictures: a share
 extension `app.config.ts` adds beside the other two, whose Swift is under
 `share-extension/`. An extension runs with no React Native and no host, so
 its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
@@ -232,11 +233,13 @@ it and posts a local notification (`share-extension/ShareNotice.swift`) whose
 tap the app routes as a push of `PUSH_KIND.SHARE_STARTED`
 (`@repo/features/inbox-push-wire`), to the agent's page or the task, since
 no public API lets an extension open its app. With no token, a stale one, or no answer,
-Start keeps the words and picks as a draft in the group instead, and the app
-opens New task on it, prefilled, the next time it comes forward, since no
+Start keeps the words and picks as a draft in the group instead, its
+pictures as JPEGs beside it under fixed names
+(`SHARE_DRAFT_PICTURE_FILES`), and the app opens New task on it, prefilled
+and with the pictures attached, the next time it comes forward, since no
 public API lets an extension bring its app forward. Every file the app
 and its extensions share goes through `src/app-group.ts`, flat JSON at the
-group's root, and each Swift target reads the group from its Info.plist's
+group's root but for those pictures, and each Swift target reads the group from its Info.plist's
 `VespinAppGroup`.
 
 ## Tests

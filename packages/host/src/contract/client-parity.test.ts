@@ -13,9 +13,11 @@ import { CLIENT_PARITY } from "./client-parity.js";
 describe("CLIENT_PARITY", () => {
   it("offers on iOS no platform kind, which the iOS host refuses", () => {
     const refused = refusedPlatformProcedures();
+
     const offered = Object.entries(CLIENT_PARITY).flatMap(([kind, row]) =>
       kind in refused && row.ios.offered ? [kind] : [],
     );
+
     expect(offered).toEqual([]);
   });
 });

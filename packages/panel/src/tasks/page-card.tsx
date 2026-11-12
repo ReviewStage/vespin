@@ -48,6 +48,7 @@ interface CardPage {
 function PagePreview({ place, page }: CardPage): React.JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null);
   usePageTheme(frame, PAGE_ROOM.OWN);
+
   return (
     <PageThumb
       frameRef={frame}
@@ -72,7 +73,9 @@ function showerActor(
   agents: ReadonlyMap<string, string>,
 ): Actor | undefined {
   if (shownBy === undefined) return undefined;
+
   if (shownBy.kind === PAGE_SHOWER.APP) return APP_ACTOR;
+
   return {
     kind: ACTOR_KIND.AGENT,
     agentId: shownBy.agentId,
@@ -86,9 +89,12 @@ function showerActor(
 /** A press on the agent who showed a page, opening its tab, where the window opens places; none for the app. */
 function useShowerDoor(shower: Actor | undefined): (() => void) | undefined {
   const openPlace = useOpenPlace();
+
   if (openPlace === undefined || shower?.kind !== ACTOR_KIND.AGENT) return undefined;
   const { agentId, taskId } = shower;
+
   if (agentId === undefined) return undefined;
+
   return () =>
     openPlace({
       kind: LINK_DESTINATION.AGENT,
@@ -102,6 +108,7 @@ export function PageCard({ place, page }: CardPage): React.JSX.Element {
   const now = useMinute();
   const shower = showerActor(page.shownBy, place, useKnownNames().agents);
   const openShower = useShowerDoor(shower);
+
   return (
     <HoverCard data-page-card="">
       <HoverCardHead

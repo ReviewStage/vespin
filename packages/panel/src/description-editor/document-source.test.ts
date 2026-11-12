@@ -71,14 +71,17 @@ function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
   const source = documentOpened(manager, markdown);
   const host = document.createElement("div");
   document.body.append(host);
+
   const editor = new Editor({
     element: host,
     extensions,
     content: source.content,
     contentType: "json",
   });
+
   editors.push(editor);
   let held = sourcesOf(editor.state.doc, source);
+
   return {
     editor,
     host,
@@ -86,6 +89,7 @@ function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
     took: (sent: string, merged: string) => {
       const answer = documentTook(editor, manager, held, sent, merged);
       held = answer.held;
+
       return answer.base;
     },
   };
@@ -94,6 +98,7 @@ function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
 async function retype(host: HTMLElement, words: string, next: string): Promise<void> {
   const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
+
   while (node !== null && !node.textContent?.includes(words)) node = walker.nextNode();
   assert.ok(node, words);
   node.textContent = node.textContent?.replace(words, next) ?? next;
@@ -118,12 +123,14 @@ test("a document opened and handed over untouched is byte for byte what it was",
 
   assert.equal(handedOver(), DOCUMENT);
 });
+
 test("Vespin's part of a merged answer replaces only the blocks it changed, and the caret stays in the developer's block", async () => {
   const { editor, host, handedOver, took } = opened(DOCUMENT);
   await retype(host, "Model an invite as a", "Model an invite as one");
   const sent = handedOver();
   editor.commands.setTextSelection(editor.state.doc.content.size - 30);
   const caretBlock = editor.state.selection.$from.node(1).textContent;
+
   const merged = sent.replace(
     "Only an admin can add someone,",
     "Only an admin or an owner can add someone,",
@@ -177,6 +184,7 @@ function picturePosition(editor: Editor): number {
     if (at === -1 && node.type.name === "image") at = pos;
   });
   assert.notEqual(at, -1, "the picture is in the document");
+
   return at;
 }
 
@@ -219,9 +227,9 @@ test("a picture whose alt text, address, and title need escaping reads back as t
 /** How many checkboxes the read view draws for a description's text. */
 function drawnCheckboxes(words: string): number {
   return (
-    renderToStaticMarkup(withQueryClient(createElement(MarkdownMessage, { words }))).split(
-      'type="checkbox"',
-    ).length - 1
+    renderToStaticMarkup(
+      withQueryClient(createElement(MarkdownMessage, { words, link: null })),
+    ).split('type="checkbox"').length - 1
   );
 }
 
@@ -246,14 +254,14 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
 });
 
 test.each([
-  { shape: "alone", markdown: "## Beats\n\n1.\n", saved: "## Beats\n\n1. Hook\n" },
+  { place: "alone", markdown: "## Beats\n\n1.\n", saved: "## Beats\n\n1. Hook\n" },
   {
-    shape: "over a nested list",
+    place: "over a nested list",
     markdown: "## Beats\n\n1.\n   1. Cut\n",
     saved: "## Beats\n\n1. Hook\n   1. Cut\n",
   },
 ])(
-  "an empty numbered item $shape, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it",
+  "an empty numbered item $place, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it",
   ({ markdown, saved }) => {
     const { editor, handedOver } = opened(markdown);
     const { doc } = editor.state;
@@ -286,9 +294,9 @@ test("blank lines left before, between, and after paragraphs are saved as ones t
 
   assert.equal(saved, "&nbsp;\n\nOne.\n\n&nbsp;\n\nTwo.\n\n&nbsp;\n");
   assert.equal(
-    renderToStaticMarkup(withQueryClient(createElement(MarkdownMessage, { words: saved }))).split(
-      "<p",
-    ).length - 1,
+    renderToStaticMarkup(
+      withQueryClient(createElement(MarkdownMessage, { words: saved, link: null })),
+    ).split("<p").length - 1,
     5,
   );
   assert.deepEqual(

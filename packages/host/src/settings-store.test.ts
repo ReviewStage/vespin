@@ -134,6 +134,7 @@ function awaitedStoreOf(
 ): PromisedSettingsStore {
   const awaited = <Value>(effect: Effect.Effect<Value, unknown>): Promise<Value> =>
     Effect.runPromiseWith(services)(effect);
+
   return {
     get: (field) => awaited(store.get(field)),
     set: (field, value) => awaited(store.set(field, value)),
@@ -171,6 +172,7 @@ function storeIn(
     fileSystem: FILE_SYSTEM,
     path: PATH,
   };
+
   return awaitedStoreOf(new SettingsStore(config), SERVICES);
 }
 
@@ -278,6 +280,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("settings-");
+
       const opened = () =>
         new SettingsStore({
           directory: () => directory,
@@ -285,6 +288,7 @@ it.effect(
           fileSystem: FILE_SYSTEM,
           path: PATH,
         });
+
       const store = opened();
       yield* store.set("theme", THEME.DARK);
       yield* store.set("zoom", 125);
@@ -304,6 +308,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("settings-");
+
       const opened = () =>
         new SettingsStore({
           directory: () => directory,
@@ -311,6 +316,7 @@ it.effect(
           fileSystem: FILE_SYSTEM,
           path: PATH,
         });
+
       yield* opened().set("openAtLogin", false);
       yield* opened().set("theme", THEME.DARK);
 
@@ -328,6 +334,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("settings-");
+
       const opened = (packaged: boolean) =>
         new SettingsStore({
           directory: () => directory,
@@ -336,6 +343,7 @@ it.effect(
           fileSystem: FILE_SYSTEM,
           path: PATH,
         });
+
       const shared = (packaged: boolean) =>
         Effect.map(opened(packaged).snapshot(), (snapshot) => snapshot.stored.usageData);
 
@@ -488,10 +496,12 @@ test("an account's ciphertext is kept as the standard base64 of the cipher's byt
 
 test("the Mac's session rides sealed beside the OAuth tokens, and reads back with them", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");
+
   const withSession = {
     ...TEST_ACCOUNT,
     sessionToken: "session-token-secret.signature",
   } as const satisfies StoredAccount;
+
   await storeIn(directory).setAccount(withSession);
 
   const reopened = storeIn(directory);
@@ -507,10 +517,12 @@ test("the Mac's session rides sealed beside the OAuth tokens, and reads back wit
 
 test("a stored account that signed in with Google still loads", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");
+
   const signedInWithGoogle = {
     ...TEST_ACCOUNT,
     provider: "google",
   } as const satisfies StoredAccount;
+
   await storeIn(directory).setAccount(signedInWithGoogle);
 
   const store = storeIn(directory);
@@ -529,6 +541,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("settings-");
+
       const store = new SettingsStore({
         directory: () => directory,
         cipher: testCipher(false),
@@ -547,6 +560,7 @@ it.effect(
 /** Preferences as they cross the wire: split into the snapshot's parts, through JSON, and joined again. */
 function throughSnapshot(preferences: AccountPreferences): AccountPreferences | undefined {
   const wire = unparsedWire(JSON.parse(JSON.stringify(accountPreferencesParts(preferences))));
+
   return isRecord(wire) ? accountPreferencesFromParts(wire) : undefined;
 }
 
@@ -562,6 +576,7 @@ test("a link choice made on one Mac reaches another through the snapshot", async
 
   const remote = throughSnapshot(await chooser.accountPreferences());
   assert.ok(remote, "the snapshot's parts did not read back");
+
   const applied = await other.applyAccountPreferences(remote, {
     accountEmail: TEST_ACCOUNT.email,
     preferences: baseline,
@@ -660,6 +675,7 @@ test("a sign-out, or another account's sign-in, leaves no experiment of the last
 it.effect("two stores on one file, as two browser tabs are, each keep the other's change", () =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("settings-tabs-");
+
     // A browser tab's store: the cookie session hands it no cipher.
     const tab = () =>
       new SettingsStore({
@@ -668,6 +684,7 @@ it.effect("two stores on one file, as two browser tabs are, each keep the other'
         fileSystem: FILE_SYSTEM,
         path: PATH,
       });
+
     const first = tab();
     const second = tab();
     // Both tabs have read the file before either writes.
@@ -709,6 +726,7 @@ it.effect(
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("settings-");
       const failing = { reads: false };
+
       const storeOf = (writer?: string) =>
         new SettingsStore({
           directory: () => directory,
@@ -717,6 +735,7 @@ it.effect(
           path: PATH,
           ...(writer === undefined ? undefined : { writer }),
         });
+
       const desktop = storeOf();
       const tab = storeOf("tab-1");
       yield* desktop.snapshot();

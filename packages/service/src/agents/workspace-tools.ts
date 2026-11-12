@@ -25,11 +25,14 @@ export function runOnMacStanding(agent: Agent, target: ConversationTarget) {
     if (!offers(yield* standingOfAgent(Option.some(agent)), AGENT_TOOL.RUN_ON_MAC)) {
       return undefined;
     }
+
     const userId = yield* macOwnerOf(target);
     const owner = { userId, name: (yield* readAccountNames([userId])).get(userId) ?? "" };
+
     const standing: RunOnMacStanding = (yield* macListening(userId))
       ? { on: true, owner }
       : { on: false, reason: RUN_ON_MAC_OFF.MAC_AWAY, owner };
+
     return standing;
   });
 }

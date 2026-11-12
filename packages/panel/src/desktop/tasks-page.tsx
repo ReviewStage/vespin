@@ -25,7 +25,7 @@ import {
   type TasksDisplay,
   type TasksFilter,
 } from "@repo/ui/tasks-page-model";
-import { Schema, SchemaTransformation } from "effect";
+import { Predicate, Schema, SchemaTransformation } from "effect";
 import { KanbanIcon, ListFilterIcon, ListIcon, SlidersHorizontalIcon } from "lucide-react";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
@@ -124,9 +124,7 @@ const INITIAL_DISPLAY = {
 function storedDisplayOf(view: TasksView) {
   return storedDisplay.pipe(
     Schema.decodeTo(
-      Schema.declare(
-        (display): display is TasksDisplay => typeof display === "object" && display !== null,
-      ),
+      Schema.declare((display): display is TasksDisplay => Predicate.isObjectOrArray(display)),
       SchemaTransformation.transform({
         decode: (kept) => keptTasksDisplay(kept, INITIAL_DISPLAY[view]),
         encode: (display) => ({ ...display, offered: OFFERED[view] }),
@@ -181,26 +179,33 @@ export function TasksPage({
 }): React.JSX.Element {
   const pictures = useRepositoryPictures();
   const [view, keepView] = useKept(KEPT.VIEW, TASKS_VIEW.LIST);
+
   const [listDisplay, onListDisplay] = useKept(
     KEPT.DISPLAY[TASKS_VIEW.LIST],
     INITIAL_DISPLAY[TASKS_VIEW.LIST],
   );
+
   const [boardDisplay, onBoardDisplay] = useKept(
     KEPT.DISPLAY[TASKS_VIEW.BOARD],
     INITIAL_DISPLAY[TASKS_VIEW.BOARD],
   );
+
   const [filters, , changeFilters] = useKept<Readonly<Record<string, TasksFilter>>>(
     KEPT.FILTERS,
     {},
   );
+
   const workspaceId = tasks.workspace?.id;
+
   const filter =
     workspaceId === undefined ? NO_TASKS_FILTER : (filters[workspaceId] ?? NO_TASKS_FILTER);
+
   // Note that the record is read again before it is written, so another tab's filter for another workspace is kept, over this tab's own where storage keeps nothing.
   const onFilter = (next: TasksFilter) => {
     if (workspaceId === undefined) return;
     changeFilters((held) => ({ ...held, [workspaceId]: next }));
   };
+
   const display = view === TASKS_VIEW.LIST ? listDisplay : boardDisplay;
   const onDisplay = view === TASKS_VIEW.LIST ? onListDisplay : onBoardDisplay;
   const choose = (next: TasksView) => keepView(next);
@@ -212,13 +217,16 @@ export function TasksPage({
   // holds New task (`mobile-bar.tsx`), the title centered, and a ⋯ holding
   // the view's switch and opening the Filter's and View options' own menus where it stands.
   const phone = room === SHELL_ROOM.NARROW;
+
   const viewItem = (value: TasksView, label: string, icon: React.JSX.Element) => ({
     label,
     icon,
     checked: view === value,
     onSelect: () => choose(value),
   });
+
   const filtered = filteredFields(filter).length > 0;
+
   const phoneHead = (
     <>
       <PhoneHead
@@ -283,6 +291,7 @@ export function TasksPage({
       />
     </>
   );
+
   const toolbar = phone ? (
     phoneHead
   ) : (
@@ -312,8 +321,10 @@ export function TasksPage({
       }
     />
   );
+
   // Note that the line stands while nothing is filtered, hidden, so its first chip scales in and its last scales out.
   const chips = <TasksFilterChips tasks={listed} filter={filter} onFilter={onFilter} />;
+
   const frame = {
     toolbar,
     chips,
@@ -324,6 +335,7 @@ export function TasksPage({
     measured: held?.measuredIn(view),
     column: held?.column,
   };
+
   // Note that find's subject is the view shown, so a search in one view is let go as the other is chosen.
   return (
     <PageFind page={FIND_PAGE.BOARD} at={view} active={tasks.shown} held={held?.find}>

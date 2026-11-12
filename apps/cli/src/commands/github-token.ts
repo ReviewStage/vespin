@@ -38,7 +38,9 @@ const REJECTION_WORDS = {
 /** The token as every answer prints it: whose it is and how it stands, never the token or its hint. */
 function tokenJson(answered: GitHubTokenAnswer) {
   const { token } = answered;
+
   if (token === null) return { set: false } as const;
+
   return {
     set: true,
     login: token.login,
@@ -51,6 +53,7 @@ function tokenJson(answered: GitHubTokenAnswer) {
 /** The token as an answer, its login for `-q`, with the lines a person reads in place of the default where given. */
 function tokenAnswer(answered: GitHubTokenAnswer, lines?: readonly string[]) {
   const found = tokenJson(answered);
+
   return answer({
     json: found,
     lines:
@@ -81,20 +84,24 @@ const showCommand = Command.make("show", {}, () =>
 const setCommand = Command.make("set", {}, () =>
   Effect.gen(function* () {
     const token = yield* readSecret("Paste your classic GitHub token:");
+
     if (!pastedTokenFits(token)) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.USAGE,
         message: "That is not shaped like a GitHub token. Nothing was saved.",
       });
     }
+
     const { hosted } = yield* session;
     const saved = yield* askService(hosted.githubToken.save, { token });
+
     if (saved.rejected !== undefined) {
       return yield* new CommandFailed({
         exit: CLI_EXIT.REFUSED,
         message: REJECTION_WORDS[saved.rejected],
       });
     }
+
     const found = tokenJson(saved);
     yield* tokenAnswer(saved, [
       found.set ? `Saved your GitHub token, for ${found.login}.` : "Saved your GitHub token.",
@@ -123,12 +130,14 @@ const removeCommand = Command.make(
     Effect.gen(function* () {
       const { hosted } = yield* session;
       const before = yield* askService(hosted.githubToken.read, undefined);
+
       if (before.token === null) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
           message: "No GitHub token is set.",
         });
       }
+
       yield* confirmOrYes(`Remove your GitHub token for ${before.token.login}?`, yes);
       const removed = yield* askService(hosted.githubToken.remove, undefined);
       yield* tokenAnswer(removed, ["Removed your GitHub token."]);

@@ -23,6 +23,7 @@ const WORK_RESERVE = 80;
 /** A box holding a pane and the work beside it, the pane resized by its edge on `side`. */
 function EdgedPane({ side }: { side: ResizeEdgeSide }): React.JSX.Element {
   const [width, setWidth] = useState<number>(BOUNDS.DEFAULT);
+
   const edge = useResizeEdge({
     side,
     width,
@@ -31,6 +32,7 @@ function EdgedPane({ side }: { side: ResizeEdgeSide }): React.JSX.Element {
     label: "Resize pane",
     onResize: setWidth,
   });
+
   const pane = (
     <div className="catalog-edged-pane" style={{ width }}>
       <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
@@ -39,6 +41,7 @@ function EdgedPane({ side }: { side: ResizeEdgeSide }): React.JSX.Element {
       <ResizeEdge edge={edge} />
     </div>
   );
+
   return (
     <div className="catalog-edged-box">
       {side === RESIZE_EDGE_SIDE.RIGHT ? pane : null}

@@ -61,11 +61,12 @@ const ROSTER: AdminUserList = {
 
 /** An answer as the port carries it: JSON, as the host's act answers cross. */
 function onTheWire(value: AdminReadAnswer): WireBoundaryInput {
-  return JSON.parse(JSON.stringify(value)) as WireBoundaryInput;
+  return JSON.parse(JSON.stringify(value));
 }
 
 let root: Root | undefined;
 let sent: SentPortAct[] = [];
+
 /** What the fake host answers every admin read with. */
 let answer: AdminReadAnswer = { answer: ROSTER };
 
@@ -76,6 +77,7 @@ beforeEach(() => {
   fakeAppPlatform({ adminDashboard: () => ({ href: "https://app.test/admin" }) });
   fakeActPortAnswering((request) => {
     sent.push(request);
+
     return Promise.resolve(request.kind === ACT_KIND.ADMIN_READ ? onTheWire(answer) : undefined);
   });
 });
@@ -115,6 +117,7 @@ async function open(
   await vi.waitFor(() =>
     expect(page.querySelector('[role="status"][aria-busy="true"]')).toBeNull(),
   );
+
   return { page, opened, exits };
 }
 
@@ -123,6 +126,7 @@ function sections(page: HTMLElement): { name: string; chosen: boolean }[] {
   const bar =
     page.querySelector('[role="radiogroup"][aria-label="Admin sections"]') ??
     assert.fail("the bar of sections");
+
   return [...bar.querySelectorAll<HTMLElement>('[role="radio"]')].map((option) => ({
     name: option.textContent ?? "",
     chosen: option.getAttribute("aria-checked") === "true",
@@ -216,6 +220,7 @@ test("the Users view reads its roster through the window's host and draws its ac
   const [read] = reads;
   assert.equal(reads.length, 1);
   assert.ok(read !== undefined);
+  // SAFETY: an admin read's payload names the procedure it reads.
   assert.equal((read.payload as { procedure: string }).procedure, ADMIN_READ.USERS);
   assert.match(page.textContent ?? "", /Ada Lovelace/u);
 });
@@ -226,6 +231,7 @@ test("an account opens on a press, as a step of the place, and is no link to an 
   const name = [...page.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Ada Lovelace"),
   );
+
   assert.ok(name instanceof HTMLButtonElement, "the account's name is a button");
   assert.equal(page.querySelector('a[href*="user="]'), null);
   act(() => name.click());
@@ -251,9 +257,11 @@ test("⌘F finds in the view standing, its bar under the view's toolbar, and cou
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.FIND), "⌘F is offered on the Admin place");
   });
+
   const field = page.querySelector<HTMLInputElement>(
     '.page-find > .find-bar input[aria-label="Find"]',
   );
+
   assert.ok(field, "the find bar stands in the view's column");
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(

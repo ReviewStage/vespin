@@ -51,13 +51,17 @@ export function useChosenWorkspace(
   // choice was read, as `folded-groups.ts` says of its folds.
   const [kept, keep] = useKept(KEPT.CHOICE, "");
   const [stagedChoice, setStagedChoice] = useState<string | undefined>(undefined);
+
   const choose = (workspaceId: string) => {
     if (staged) {
       setStagedChoice(workspaceId);
+
       return;
     }
+
     keep(workspaceId);
   };
+
   return { chosen: resolveChoice(workspaces, staged ? stagedChoice : kept), choose };
 }
 
@@ -71,5 +75,6 @@ export function useKeptChoice<Listed extends Pick<Workspace, "id">>(
   workspaces: readonly Listed[],
 ): Listed | undefined {
   const [kept] = useKept(KEPT.CHOICE, "");
+
   return resolveChoice(workspaces, kept);
 }

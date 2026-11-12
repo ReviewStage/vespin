@@ -26,15 +26,18 @@ function recordingSentry() {
   const warned: string[] = [];
   const errored: string[] = [];
   const captured: Error[] = [];
+
   const sentry: ShownFailureSentry = {
     captureException: (error) => {
       captured.push(error);
+
       return "event-fixture";
     },
     logger: { warn: (said) => warned.push(said), error: (said) => errored.push(said) },
     getActiveSpan: () => undefined,
     getCurrentScope: () => ({ getPropagationContext: () => ({ traceId: "trace-fixture" }) }),
   };
+
   return { sentry, warned, errored, captured };
 }
 

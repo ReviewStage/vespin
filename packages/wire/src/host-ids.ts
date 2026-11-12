@@ -26,6 +26,7 @@ const HEX = 16;
 
 function uuidBytes(uuid: string): Uint8Array {
   const hex = uuid.replaceAll("-", "");
+
   return Uint8Array.from({ length: hex.length / 2 }, (_, at) =>
     Number.parseInt(hex.slice(at * 2, at * 2 + 2), HEX),
   );
@@ -42,6 +43,7 @@ function nameBasedUuid(namespace: string, name: string): string {
   digest[6] = ((digest[6] ?? 0) & 0x0f) | UUID_VERSION_8;
   digest[8] = ((digest[8] ?? 0) & 0x3f) | UUID_VARIANT_RFC_4122;
   const hex = Array.from(digest, (byte) => byte.toString(HEX).padStart(2, "0")).join("");
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 

@@ -12,7 +12,7 @@ import {
 } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { isRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Fiber } from "effect";
+import { Deferred, Duration, Effect, Fiber, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppAccountPreferences, AppModels } from "./app-state.js";
 
@@ -39,10 +39,12 @@ it.effect(
       yield* acts.PROVIDER_KEYS_FOLLOW.hold(undefined);
       yield* settled;
       const read = providerKeys().at(-1);
+
       const saved = yield* acts.PROVIDER_KEYS_SAVE({
         provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
         key: PROVIDER_KEY,
       });
+
       const removed = yield* acts.PROVIDER_KEYS_REMOVE({
         provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
       });
@@ -66,26 +68,32 @@ it.effect(
     Effect.gen(function* () {
       const { acts, open, answerKeys, models, preferences } = yield* subject();
       const openai = AGENT_FALLBACK_CHOICE[MODEL_PROVIDER.OPENAI];
+
       const claude: CatalogModel = {
         id: AGENT_DEFAULT_CHOICE.model,
         name: "Claude Opus 5.5",
         provider: MODEL_PROVIDER.ANTHROPIC,
         efforts: ["high"],
       };
+
       const gpt: CatalogModel = {
         id: openai.model,
         name: "GPT-6.1 Sol",
         provider: MODEL_PROVIDER.OPENAI,
         efforts: ["high"],
       };
+
       const openaiKey = { ...KEPT, provider: PROVIDER_KEY_PROVIDER.OPENAI };
       answerKeys([openaiKey], [{ ...claude, credentialMissing: true }, gpt]);
+
       /** The default a surface draws from the slices the host told last. */
       const drawnDefault = () => {
         // SAFETY: the host tells its own slices whole, as built.
         const held = preferences().at(-1) as AppAccountPreferences | undefined;
+        // SAFETY: the host tells its own slices whole, as built.
         const offered = models().at(-1) as AppModels | undefined;
         assert.ok(held?.["user-dana"]?.rows !== undefined, "the preferences answered");
+
         return agentDefaultOf(held["user-dana"].rows.agent, offered?.["user-dana"] ?? {});
       };
 
@@ -113,12 +121,14 @@ it.effect(
       // The token the windows held as each write's read of the repository lists landed, a turn after it was asked.
       const movedUnder: unknown[] = [];
       let held: () => unknown[] = () => [];
+
       const { acts, asked, githubToken } = yield* subject({
         repositoriesMoved: Effect.andThen(
           Effect.yieldNow,
           Effect.sync(() => void movedUnder.push(held().at(-1))),
         ),
       });
+
       held = githubToken;
 
       yield* acts.GITHUB_TOKEN_FOLLOW.hold(undefined);
@@ -175,8 +185,9 @@ function memoryRow(memory: MemorySummary) {
 function memoryIdsOf(told: WireValue | undefined): readonly string[] | undefined {
   const read = isRecord(told) ? told[WORKSPACE_ID] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
+
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.id === "string" ? [row.id] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.id) ? [row.id] : []))
     : undefined;
 }
 
@@ -196,9 +207,11 @@ it.effect(
 
       const answering = yield* Deferred.make<void>();
       answerForgets({ memories: [OTHER_MEMORY], txid: "9200" }, Deferred.await(answering));
+
       const forgetting = yield* Effect.forkChild(
         acts.MEMORIES_FORGET({ workspaceId: WORKSPACE_ID, id: MEMORY.id }),
       );
+
       yield* settled;
       assert.equal(forgetting.pollUnsafe(), undefined, "no answer while the service is asked");
       assert.deepEqual(shown(), [OTHER_MEMORY.id], "gone before the service answers");
@@ -215,9 +228,11 @@ it.effect(
 
       const refusing = yield* Deferred.make<void>();
       answerForgets({ failure: AGENT_CALL_FAILURE.NOT_PERMITTED }, Deferred.await(refusing));
+
       const refused = yield* Effect.forkChild(
         acts.MEMORIES_FORGET({ workspaceId: WORKSPACE_ID, id: OTHER_MEMORY.id }),
       );
+
       yield* settled;
       assert.deepEqual(shown(), []);
       yield* Deferred.succeed(refusing, undefined);
@@ -231,8 +246,9 @@ it.effect(
 function memoryTextsOf(told: WireValue | undefined): readonly string[] | undefined {
   const read = isRecord(told) ? told[WORKSPACE_ID] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
+
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.text === "string" ? [row.text] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.text) ? [row.text] : []))
     : undefined;
 }
 
@@ -258,9 +274,11 @@ it.effect(
         },
         Deferred.await(answering),
       );
+
       const saving = yield* Effect.forkChild(
         acts.MEMORIES_SAVE({ workspaceId: WORKSPACE_ID, text: corrected, replaces: MEMORY.id }),
       );
+
       yield* settled;
       assert.deepEqual(shown(), [corrected], "drawn before the service answers");
       yield* Deferred.succeed(answering, undefined);
@@ -270,9 +288,11 @@ it.effect(
 
       const refusing = yield* Deferred.make<void>();
       answerSaves({ failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL }, Deferred.await(refusing));
+
       const refused = yield* Effect.forkChild(
         acts.MEMORIES_SAVE({ workspaceId: WORKSPACE_ID, text: "token=…", replaces: MEMORY.id }),
       );
+
       yield* settled;
       assert.deepEqual(shown(), ["token=…"]);
       yield* Deferred.succeed(refusing, undefined);
@@ -298,8 +318,9 @@ function hostIdsOf(told: WireValue | undefined): readonly string[] | undefined {
   const read = isRecord(told) ? told["user-dana"] : undefined;
   const held = isRecord(read) ? read.rows : undefined;
   const rows = isRecord(held) ? held.hosts : undefined;
+
   return Array.isArray(rows)
-    ? rows.flatMap((row) => (isRecord(row) && typeof row.id === "string" ? [row.id] : []))
+    ? rows.flatMap((row) => (isRecord(row) && Predicate.isString(row.id) ? [row.id] : []))
     : undefined;
 }
 
@@ -358,9 +379,11 @@ it.effect(
 
       const first = yield* Effect.forkChild(acts.ALLOWED_COMMANDS_WRITE({ add: ["pnpm", "test"] }));
       yield* settled;
+
       const second = yield* Effect.forkChild(
         acts.ALLOWED_COMMANDS_WRITE({ add: ["pnpm", "lint"] }),
       );
+
       yield* settled;
       signedIn = "user-eli";
       yield* Deferred.succeed(firstAnswered, undefined);
@@ -380,9 +403,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let signedIn = "user-dana";
+
       const { acts, open, holdCommandAdds, allowedCommands } = yield* subject({
         accountId: () => signedIn,
       });
+
       const answered = yield* Deferred.make<void>();
       holdCommandAdds(Deferred.await(answered));
       yield* acts.ALLOWED_COMMANDS_FOLLOW.hold(undefined);
@@ -391,6 +416,7 @@ it.effect(
       const adding = yield* Effect.forkChild(
         acts.ALLOWED_COMMANDS_WRITE({ add: ["pnpm", "test"] }),
       );
+
       yield* settled;
       signedIn = "user-eli";
       yield* open;

@@ -64,9 +64,12 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
           attachments: body.attachments,
         }),
       );
+
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
       return;
     }
+
     case QUEUE_CHANGE.EDIT:
       if (
         !(yield* found(
@@ -75,24 +78,29 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
       ) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }
+
       return;
     case QUEUE_CHANGE.DELETE:
       // Note that a message being sent has left the queue, so deleting it deletes nothing, which is said.
       if (Option.isNone(yield* found(takeQueuedMessage(userId, agent.id, body.messageId)))) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }
+
       return;
     case QUEUE_CHANGE.HOLD:
       if (!(yield* found(holdQueuedMessage(userId, agent.id, body.messageId, body.held)))) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }
+
       return;
     case QUEUE_CHANGE.STEER: {
       // Note that nothing is steered while the agent's first launch boots: its machine takes no line until it is up.
       const boot = yield* hostedStoreOrUnavailable(agentBootOf(agent.id));
+
       if (bootHolds(Option.getOrUndefined(boot)?.phase)) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       // Steered, the message is claimed first, with an edit's words and files where it steers one, so no hand-off
       // sends it beside this send, and goes now, into the turn under way or as the next; a refusal lets it go back.
       const claimed = yield* found(
@@ -103,20 +111,25 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
           body.text === undefined ? undefined : { text: body.text, attachments: body.attachments },
         ),
       );
+
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const message = claimed.value;
       yield* sendQueued(routedSessions, agent, message).pipe(
         Effect.tapError(() => hostedStoreOrUnavailable(releaseQueuedMessage(agent.id, message))),
       );
+
       return;
     }
+
     case QUEUE_CHANGE.REORDER:
       if (!(yield* found(reorderAgentQueue(userId, agent.id, body.order)))) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       return;
     case QUEUE_CHANGE.RESUME:
       yield* found(resumeAgentQueue(userId, agent.id));
+
       return;
     default:
       return yield* Effect.die(`unhandled queue change: ${JSON.stringify(body satisfies never)}`);
@@ -135,12 +148,16 @@ export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
 ) {
   if (agent.userId !== userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
+
   const claimed = HANDS_ON.has(body.change)
     ? yield* claimNext(agent)
     : Option.none<QueuedMessageRow>();
+
   if (Option.isSome(claimed)) {
     yield* afterResponse("agent-queue", sendClaimed(routedSessions, agent, claimed.value));
   }
+
   const queue = yield* found(readAgentQueue(userId, agent.id));
+
   return wireQueue(queue, yield* DateTime.nowAsDate);
 });

@@ -6,6 +6,7 @@ import { readPushDeviceStatus, registerPushDevice } from "@repo/database/models/
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
+import type { WireValue } from "@repo/wire";
 import { ConfigProvider, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { recordingApnsTransport } from "../testing/apns-fake.js";
@@ -62,11 +63,13 @@ function sender(
   answer: (request: ApnsRequest) => ApnsAnswer | ApnsTransportFailure = () => OK,
 ) {
   const transport = recordingApnsTransport(answer);
+
   const layer = apnsSenderFromEnvironment.pipe(
     Layer.provide(
       Layer.merge(transport.layer, ConfigProvider.layer(ConfigProvider.fromUnknown(variables))),
     ),
   );
+
   return { layer, transport };
 }
 
@@ -86,11 +89,12 @@ function notification(overrides: Partial<ApnsNotification> = {}): ApnsNotificati
 const send = (sent: ApnsNotification) =>
   Effect.gen(function* () {
     const apns = yield* ApnsSender;
+
     return yield* apns.send(sent);
   });
 
 /** A JWT's segment as the JSON it carries. */
-function decodeSegment(segment: string): unknown {
+function decodeSegment(segment: string): WireValue {
   return JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
 }
 
@@ -101,7 +105,9 @@ function decodeSegment(segment: string): unknown {
  */
 function verifiesUnderPublicKey(jwt: string): boolean {
   const [header, claims, signature] = jwt.split(".");
+
   if (!header || !claims || !signature) return false;
+
   return createVerify("SHA256")
     .update(`${header}.${claims}`)
     .verify({ key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url"));
@@ -111,6 +117,7 @@ function verifiesUnderPublicKey(jwt: string): boolean {
 function providerTokenOf(request: ApnsRequest): string {
   const authorization = request.headers.authorization ?? "";
   assert.ok(authorization.startsWith("bearer "), "sent under a bearer");
+
   return authorization.slice("bearer ".length);
 }
 
@@ -118,6 +125,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -128,19 +136,23 @@ it.layer(getTestDB())("the APNs sender", (it) => {
       Effect.gen(function* () {
         const { layer, transport } = sender(CREDENTIALS);
         const alert = notification({ collapseId: "ask:abc" });
+
         const wake = notification({
           device: { ...alert.device, environment: PUSH_ENVIRONMENT.PRODUCTION },
           pushType: APNS_PUSH_TYPE.BACKGROUND,
           payload: { aps: { "content-available": 1 } },
         });
+
         const activity = notification({
           pushType: APNS_PUSH_TYPE.LIVE_ACTIVITY,
           priority: APNS_PRIORITY.CONSERVE_POWER,
           expiration: 1_800_000_600,
         });
+
         const delivered = yield* Effect.all([send(alert), send(wake), send(activity)]).pipe(
           Effect.provide(layer),
         );
+
         assert.deepEqual(delivered, [
           APNS_DELIVERY.DELIVERED,
           APNS_DELIVERY.DELIVERED,
@@ -209,6 +221,7 @@ it.layer(getTestDB())("the APNs sender", (it) => {
     () =>
       Effect.gen(function* () {
         const account = yield* openAccount;
+
         const answers: (ApnsAnswer | ApnsTransportFailure)[] = [
           { status: 410, body: JSON.stringify({ reason: "Unregistered", timestamp: 1 }) },
           refusal(400, "BadDeviceToken"),
@@ -219,17 +232,22 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           new ApnsTransportFailure({ errorName: "ERR_HTTP2_STREAM_CANCEL" }),
           OK,
         ];
+
         const { layer } = sender(CREDENTIALS, () => {
           const answer = answers.shift();
           assert.ok(answer, "an answer is scripted");
+
           return answer;
         });
+
         const phone = { ...notification().device, environment: PUSH_ENVIRONMENT.PRODUCTION };
+
         const pushed = (sent: ApnsNotification) =>
           Effect.gen(function* () {
             yield* registerPushDevice(account, phone);
             const delivery = yield* send(sent);
             const standing = yield* readPushDeviceStatus(account, phone);
+
             return [delivery, Option.getOrUndefined(standing)?.failureReason] as const;
           });
 
@@ -237,6 +255,7 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           answers.map(() => notification({ device: phone })),
           pushed,
         ).pipe(Effect.provide(layer));
+
         assert.deepEqual(outcomes, [
           [APNS_DELIVERY.TOKEN_GONE, undefined],
           [APNS_DELIVERY.TOKEN_GONE, undefined],
@@ -263,6 +282,7 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           );
           assert.deepEqual(transport.sent, []);
         }
+
         const unreadable = sender({ ...CREDENTIALS, [APNS_ENVIRONMENT.PRIVATE_KEY]: "not a key" });
         assert.equal(
           yield* send(notification()).pipe(Effect.provide(unreadable.layer)),

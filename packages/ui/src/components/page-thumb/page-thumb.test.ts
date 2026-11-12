@@ -24,6 +24,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -33,6 +34,7 @@ test("a frame is inert: out of the tab order and the screen reader's reading", (
   const iframe = mount(createElement(PageThumb, { frame: frame("about:blank") })).querySelector(
     "iframe",
   );
+
   expect(iframe?.tabIndex).toBe(-1);
   expect(iframe?.getAttribute("aria-hidden")).toBe("true");
 });

@@ -207,17 +207,25 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
   const [stagedFolds, setStagedFolds] = useState<Folds>(OPEN);
   const folds = staged ? stagedFolds : { groups, pinned, sections, openedTasks };
+
   const fold = (next: Partial<Folds>) => {
     if (staged) {
       setStagedFolds({ ...stagedFolds, ...next });
+
       return;
     }
+
     if (next.groups !== undefined) keepGroups(next.groups);
+
     if (next.pinned !== undefined) keepPinned(next.pinned);
+
     if (next.sections !== undefined) keepSections(next.sections);
+
     if (next.openedTasks !== undefined) keepOpenedTasks(next.openedTasks);
   };
+
   const toggle = (repository: string | null) => fold({ groups: toggled(folds.groups, repository) });
+
   return {
     folded: (repository) => folds.groups.includes(repository),
     toggle,
@@ -249,6 +257,7 @@ export interface InboxWhoseChoice {
 export function useInboxViewChoices(): InboxViewChoices {
   const [show, onShow] = useKept(KEPT.INBOX_SHOW, INBOX_SHOW.OPEN);
   const [whose, onWhose] = useKept(KEPT.WHOSE, MINE);
+
   return { show, onShow, whose, onWhose };
 }
 
@@ -268,6 +277,7 @@ export interface InboxListWidth {
 /** The Inbox list's width, the default until first dragged, and kept as it is. */
 export function useInboxListWidth(): InboxListWidth {
   const [kept, keep] = useKept(KEPT.INBOX_LIST_WIDTH, INBOX_LIST_WIDTH.DEFAULT);
+
   return { width: clampListWidth(kept), onResize: (asked) => keep(clampListWidth(asked)) };
 }
 
@@ -289,6 +299,7 @@ export function useFileTreeWidth(): FileTreeWidth {
   const [kept, keep] = useKept(KEPT.FILE_TREE_WIDTH, FILE_TREE_WIDTH.DEFAULT);
   // Note that the drag's door is the same door across draws, so the tree the panel hands every tab is the same tree while nothing changed.
   const onResize = useCallback((asked: number) => keep(clampTreeWidth(asked)), [keep]);
+
   return { width: clampTreeWidth(kept), onResize };
 }
 
@@ -301,6 +312,7 @@ function clampPageCommentsWidth(width: number): number {
 export function usePageCommentsWidth(): FileTreeWidth {
   const [kept, keep] = useKept(KEPT.PAGE_COMMENTS_WIDTH, PAGE_COMMENTS_WIDTH.DEFAULT);
   const onResize = useCallback((asked: number) => keep(clampPageCommentsWidth(asked)), [keep]);
+
   return { width: clampPageCommentsWidth(kept), onResize };
 }
 
@@ -325,6 +337,7 @@ export interface RunsPanel {
 export function useRunsPanel(): RunsPanel {
   const [stored, keep] = useKept(KEPT.RUNS_PANEL, { width: RUNS_PANEL_WIDTH.DEFAULT, open: true });
   const kept = { width: clampRunsWidth(stored.width), open: stored.open };
+
   return {
     ...kept,
     onResize: (asked) => keep({ ...kept, width: clampRunsWidth(asked) }),

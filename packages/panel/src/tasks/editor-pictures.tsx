@@ -144,7 +144,9 @@ interface DrawnPicture {
 /** Why a keep failed, in the words said where its caption will stand. */
 function keepFailedWords(failure: string | undefined): string {
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY) return UPLOAD_WORDS.TOO_MANY;
+
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS) return UPLOAD_WORDS.TOO_MANY_VIDEOS;
+
   return UPLOAD_WORDS.FAILED;
 }
 
@@ -158,7 +160,9 @@ async function encodedUrl(
   file: File,
 ): Promise<{ readonly url: string } | { readonly reason: string }> {
   const read = await encodeImage(file, PICTURE_BOUNDS.MAX_BYTES);
+
   if ("unreadable" in read) return { reason: read.unreadable ?? UPLOAD_WORDS.NOT_A_PICTURE };
+
   return { url: dataUrlOf(read.image.mediaType, read.image.base64) };
 }
 
@@ -175,6 +179,7 @@ function UploadingPicture({
   onRemove: () => void;
 }): React.JSX.Element {
   const url = upload?.url;
+
   return (
     <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
       <Card
@@ -232,10 +237,12 @@ function DescribeField({
   onClose: () => void;
 }): React.JSX.Element {
   const [words, setWords] = useState(value);
+
   const keep = () => {
     onSave(words.trim());
     onClose();
   };
+
   return (
     <span className="mx-0 mt-item-gap mb-block-gap grid w-picture-describe">
       {/* Note that a picture's words may be cleared, so the field says it may be left empty. */}
@@ -274,23 +281,28 @@ function useToolsLayout(column: HTMLElement): ToolsLayout {
   const [layout, setLayout] = useState<ToolsLayout>({ worded: true, above: true });
   useLayoutEffect(() => {
     const scroller = documentScrollerOf(column);
+
     const measure = () => {
       const box = column.getBoundingClientRect();
+
       if (box.width <= 0) return;
       const top = column.querySelector(".picture-frame")?.getBoundingClientRect().top ?? box.top;
       const room = top - (scroller?.getBoundingClientRect().top ?? -Infinity);
       const next = { worded: box.width >= TOOLS_WORDED_PX, above: room >= TOOLS_ROOM_PX };
       setLayout((was) => (was.worded === next.worded && was.above === next.above ? was : next));
     };
+
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(column);
     scroller?.addEventListener("scroll", measure, { passive: true });
+
     return () => {
       observer.disconnect();
       scroller?.removeEventListener("scroll", measure);
     };
   }, [column]);
+
   return layout;
 }
 
@@ -303,6 +315,7 @@ function PictureTools({
   tools: readonly PictureTool[];
 }): React.JSX.Element {
   const { worded, above } = useToolsLayout(column);
+
   return (
     <MenuSurface
       as={MENU_SURFACE_ELEMENT.SPAN}
@@ -339,12 +352,15 @@ function KeptPicture({
 }): React.JSX.Element {
   const { picture, selected, doors } = drawn;
   const named = descriptionAttachmentOf(picture.src);
+
   const state = usePicture(
     pictureQuery(named?.taskId ?? "", named?.attachmentId ?? "", door.read),
     pictureUnread,
   );
+
   const [describing, setDescribing] = useState<Describing | undefined>(undefined);
   const own = named?.taskId === door.taskId;
+
   const tools: PictureTool[] = [
     {
       label: TOOL.ALT,
@@ -372,6 +388,7 @@ function KeptPicture({
       danger: true,
     },
   ];
+
   return (
     <span
       className="editor-picture-drawn relative mt-block-gap block w-fit max-w-full"
@@ -423,23 +440,30 @@ export function useEditorPictures(
   const [drawn, setDrawn] = useState<readonly DrawnPicture[]>([]);
   const [uploads, setUploads] = useState<ReadonlyMap<string, Upload>>(new Map());
   const counted = useRef(0);
+
   const settled = useCallback(
     (upload: string, next: Upload | undefined) =>
       setUploads((was) => {
         const now = new Map(was);
+
         if (next === undefined) now.delete(upload);
         else now.set(upload, next);
+
         return now;
       }),
     [],
   );
+
   const keep = useCallback(
     async (taken: PictureTaken, url: string | undefined) => {
       if (workspace === undefined || url === undefined) return;
       settled(taken.upload, { kind: UPLOAD.SENDING, url });
+
       const failed = (reason: string) =>
         settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken });
+
       const kept = await sendKeep({ planId: taskId, picture: url }).catch(() => undefined);
+
       if (kept === undefined || "failure" in kept) return failed(keepFailedWords(kept?.failure));
       keepPictureRead(queryClient, taskId, kept.id, url);
       handle.current?.settlePicture(
@@ -450,18 +474,24 @@ export function useEditorPictures(
     },
     [sendKeep, queryClient, handle, taskId, settled, workspace],
   );
+
   // Note that a picture of another description is read as that description's before it is kept again.
   const begin = useCallback(
     async (taken: PictureTaken) => {
       settled(taken.upload, { kind: UPLOAD.SENDING });
+
       if ("file" in taken) {
         const encoded = await encodedUrl(taken.file);
+
         if ("reason" in encoded) {
           return settled(taken.upload, { kind: UPLOAD.FAILED, reason: encoded.reason, taken });
         }
+
         return keep(taken, encoded.url);
       }
+
       const named = descriptionAttachmentOf(taken.from);
+
       // Note that a picture the window holds already is copied as it stands, since a picture's query never goes stale.
       const read =
         named === undefined || door === undefined
@@ -469,6 +499,7 @@ export function useEditorPictures(
           : await queryClient
               .fetchQuery(pictureQuery(named.taskId, named.attachmentId, door.read))
               .catch(() => undefined);
+
       if (read?.kind !== PICTURE_STATE.READY) {
         return settled(taken.upload, {
           kind: UPLOAD.FAILED,
@@ -476,20 +507,24 @@ export function useEditorPictures(
           taken,
         });
       }
+
       return keep(taken, read.url);
     },
     [door, keep, settled, queryClient],
   );
+
   // Note that the doors handed the editor once read the newest of these as they run.
   const beginning = useRef(begin);
   beginning.current = begin;
   const pictures = useRef<DescriptionEditorPictures | undefined>(undefined);
+
   if (pictures.current === undefined && workspace !== undefined) {
     pictures.current = {
       draw: (element, picture, doors) => {
         counted.current += 1;
         const key = counted.current;
         setDrawn((was) => [...was, { key, element, picture, doors, selected: false }]);
+
         return {
           redraw: (next, selected) =>
             setDrawn((was) =>
@@ -503,17 +538,21 @@ export function useEditorPictures(
       },
       copies: (src) => {
         const named = descriptionAttachmentOf(src);
+
         return named !== undefined && named.taskId !== taskId;
       },
     };
   }
+
   const chooser = useFilePicker({
     accept: CHOSEN_TYPES,
     multiple: true,
     onFiles: (files) => handle.current?.insertPictures([...files]),
   });
+
   const choose = workspace === undefined ? undefined : chooser.open;
   useAppCommand(APP_COMMAND.INSERT_PICTURE, choose);
+
   const portals = drawn.map((each) =>
     createPortal(
       each.picture.upload === "" ? (
@@ -526,6 +565,7 @@ export function useEditorPictures(
           alt={each.picture.alt}
           onRetry={() => {
             const upload = uploads.get(each.picture.upload);
+
             if (upload?.kind === UPLOAD.FAILED) beginning.current(upload.taken);
           }}
           onRemove={() => {
@@ -538,6 +578,7 @@ export function useEditorPictures(
       each.key,
     ),
   );
+
   return {
     pictures: pictures.current,
     sending: [...uploads.values()].some((upload) => upload.kind === UPLOAD.SENDING),

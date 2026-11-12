@@ -70,6 +70,7 @@ const openAccount = (role: "user" | "admin" = "user") =>
     yield* Database.use((db) =>
       db.insert(user).values({ id, name: `Account ${role}`, email: `${id}@app.test`, role }),
     );
+
     return id;
   });
 
@@ -125,6 +126,7 @@ const openAgent = (userId: string, organizationId: string, createdAt: Date) =>
         createdAt,
       }),
     );
+
     return conversationId;
   });
 
@@ -170,9 +172,11 @@ it.layer(getTestDB())("the reliability read's failure counts", (it) => {
 
         // The app's own turns: two of six failed, one of them abandoned by the sweep.
         const main = yield* openConversation(developer, CONVERSATION_KIND.MAIN);
+
         for (const status of [TURN_STATUS.SETTLED, TURN_STATUS.SETTLED, TURN_STATUS.SETTLED]) {
           yield* endTurn(developer, main, status, at(16));
         }
+
         yield* endTurn(developer, main, TURN_STATUS.CANCELED, at(16));
         yield* endTurn(developer, main, TURN_STATUS.FAILED, at(16), {
           failure: TURN_FAILURE.MODEL,
@@ -229,6 +233,7 @@ it.layer(getTestDB())("the reliability read's failure counts", (it) => {
           ),
           (rows) => rows[0]?.id ?? "",
         );
+
         const { STARTED, SKIPPED, FAILED, QUEUED } = AUTOMATION_RUN_STATUS;
         yield* settleRun(automationId, developer, STARTED, null, at(12));
         yield* settleRun(automationId, developer, STARTED, null, at(12));
@@ -306,6 +311,7 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
           sealedKey: "sealed",
           hint: "sk-…abcd",
         };
+
         yield* Database.use((db) =>
           db.insert(accountProviderKey).values([
             {
@@ -334,6 +340,7 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
             },
           ]),
         );
+
         const connection = (userId: string, status: IntegrationRowStatus, updatedAt: Date) => ({
           id: randomUUID(),
           userId,
@@ -344,6 +351,7 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
           status,
           updatedAt,
         });
+
         yield* Database.use((db) =>
           db
             .insert(integrationConnection)
@@ -355,11 +363,13 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
 
         // The installer is a member of a workspace whose installation GitHub suspended.
         const owner = yield* openAccount();
+
         const workspace = yield* openInstallationWorkspace(owner, {
           installationId: 41,
           accountId: 42,
           accountLogin: "acme",
         });
+
         yield* joinWorkspace(workspace, installer);
         yield* Database.use((db) =>
           db
@@ -375,11 +385,13 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
         yield* endTurn(installer, older, TURN_STATUS.FAILED, new Date(NOW - 10 * DAY_MS));
 
         const answer = yield* read(ADMIN_METRICS_SCOPE.NON_ADMINS);
+
         const listed = answer.attention.accounts.map((row) => ({
           id: row.id,
           problems: row.problems.map((problem) => ({ ...problem })),
           failedAgents: row.failedAgents,
         }));
+
         assert.equal(answer.attention.total, 3);
         assert.deepEqual(
           listed.find((row) => row.id === keyHolder),

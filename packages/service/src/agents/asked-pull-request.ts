@@ -75,6 +75,7 @@ const keptPublished = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Whether the agent has ended is part of the key, so the first ask after its turn ends reads GitHub afresh.
   const status = yield* statusOf(agent);
   const ended = status !== AGENT_STATUS.STARTING && status !== AGENT_STATUS.RUNNING;
+
   return yield* Cache.get(published, new PublishedKey({ userId, agentId: agent.id, ended })).pipe(
     // The row stood a statement ago; an agent gone between the two is not found, as it would be on the next ask.
     Effect.catchTag(
@@ -90,13 +91,16 @@ export const pullRequestNumberOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   named: readonly string[],
 ): Effect.fn.Return<number | undefined, HostedRefusal> {
   if (named.length === 0) return undefined;
+
   const read =
     named.length === 1
       ? readEither(githubPullRequestNumberSchema)(unparsedWire(Number(named[0])))
       : undefined;
+
   if (read === undefined || Result.isFailure(read)) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return read.success;
 });
 
@@ -113,6 +117,7 @@ export const askedPublished = /* @__PURE__ */ Effect.fnUntraced(function* (
   number: number | undefined,
 ) {
   if (number === undefined) return yield* keptPublished(published, userId, agent);
+
   return yield* agentPullRequestOfNumber(userId, agent, number).pipe(githubReadRefusal);
 });
 

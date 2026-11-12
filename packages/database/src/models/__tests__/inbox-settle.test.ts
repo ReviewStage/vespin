@@ -30,6 +30,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -40,6 +41,7 @@ const openTaskWithItems = (userId: string, organizationId: string) =>
     const agentId = yield* openTaskAgent(userId, organizationId, taskId);
     const question = yield* openInboxItem(userId, organizationId, taskId, agentId, true);
     const notice = yield* openInboxItem(userId, organizationId, taskId, agentId, false);
+
     return { taskId, agentId, items: [question], notice };
   });
 
@@ -47,6 +49,7 @@ const openTaskWithItems = (userId: string, organizationId: string) =>
 const standingOf = (itemId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [item] = yield* db
       .select({
         status: inboxItem.status,
@@ -57,10 +60,12 @@ const standingOf = (itemId: string) =>
       })
       .from(inboxItem)
       .where(eq(inboxItem.id, itemId));
+
     const messages = yield* db
       .select({ ask: inboxMessage.ask })
       .from(inboxMessage)
       .where(eq(inboxMessage.itemId, itemId));
+
     return {
       ...(item ?? assert.fail("the item is gone")),
       asks: messages.flatMap(({ ask }) =>
@@ -83,6 +88,7 @@ const assertOpen = (itemIds: readonly string[]) =>
     for (const itemId of itemIds) {
       const standing = yield* standingOf(itemId);
       assert.equal(standing.status, INBOX_STATUS.OPEN);
+
       for (const ask of standing.asks) {
         assert.equal(ask.status, INBOX_ASK_STATUS.OPEN);
         assert.equal(ask.withdrawnAt, undefined);
@@ -99,6 +105,7 @@ const assertSettled = (itemIds: readonly string[], reason: string) =>
       assert.equal(standing.closedReason, reason);
       assert.equal(standing.closedBy, null);
       assert.equal(standing.openAsk, null);
+
       for (const ask of standing.asks) {
         assert.deepEqual(ask, {
           status: INBOX_ASK_STATUS.WITHDRAWN,

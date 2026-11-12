@@ -13,7 +13,8 @@
  *
  *   (none)      -> STARTING     beginAgentBoot, its first line queued
  *   STARTING    -> HANDING_OFF  agentBootRunnerUp, its queue holding a
- *                               message; READY where none
+ *                               message, keeping the instant its attempt
+ *                               began; READY where none
  *   HANDING_OFF -> READY        agentBootHandedOff
  *   STARTING | HANDING_OFF -> FAILED  failAgentBoot, its queue paused
  *   FAILED      -> STARTING     rebootAgent, the pause lifted
@@ -136,15 +137,16 @@ const updatePhase = SqlSchema.findAll({
     at: Schema.Date,
     failure: Schema.NullOr(Schema.Literals(FAILURES)),
     nextAttempt: Schema.Boolean,
+    keepsPhaseAt: Schema.Boolean,
   }),
   Result: BootRowSchema,
-  execute: ({ agentId, attempt, from, to, at, failure, nextAttempt }) =>
+  execute: ({ agentId, attempt, from, to, at, failure, nextAttempt, keepsPhaseAt }) =>
     Database.use((db) =>
       db
         .update(agentBootTable)
         .set({
           phase: to,
-          phaseAt: at,
+          ...(keepsPhaseAt ? undefined : { phaseAt: at }),
           deadlineAt: deadlineFrom(at),
           ...(failure === null ? undefined : { failure }),
           // Note that a next attempt keeps nothing of the last, its failure among it.
@@ -201,6 +203,8 @@ function moved(
     readonly at: Date;
     readonly failure?: BootFailure | undefined;
     readonly nextAttempt?: boolean | undefined;
+    /** Whether the move keeps the instant the boot entered the phase it leaves, as a hand-off still says the boot is starting. */
+    readonly keepsPhaseAt?: boolean | undefined;
   },
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return Effect.map(
@@ -212,6 +216,7 @@ function moved(
       at: move.at,
       failure: move.failure ?? null,
       nextAttempt: move.nextAttempt === true,
+      keepsPhaseAt: move.keepsPhaseAt === true,
     }),
     ([row]) => Option.map(Option.fromNullishOr(row), bootOf),
   );
@@ -222,6 +227,7 @@ export function agentBootsOf(
   agentIds: readonly string[],
 ): AgentBootEffect<ReadonlyMap<string, AgentBootRow>> {
   if (agentIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findBoots({ agentIds }),
     (rows) => new Map(rows.map((row) => [row.agentId, bootOf(row)])),
@@ -254,11 +260,13 @@ export function beginAgentBoot(
     | undefined,
 ): AgentBootEffect<void> {
   let inserted = false;
+
   return Effect.asVoid(
     underAgentQueueLock(
       agentId,
       Effect.gen(function* () {
         yield* upsertStarting({ agentId, at });
+
         if (first === undefined) return;
         const queued = yield* queueLineInLock(agentId, first.userId, first);
         inserted = queued.inserted;
@@ -270,7 +278,9 @@ export function beginAgentBoot(
 
 /**
  * The agent's runner up (STARTING -> HANDING_OFF) under `attempt`, so its
- * queue's head goes next; straight to READY where nothing stands queued.
+ * queue's head goes next, still counted from when its attempt began, since
+ * the transcript says it is starting until the hand-off ends; straight to
+ * READY where nothing stands queued.
  * Answers the boot where it moved, none where it stood elsewhere or under
  * another attempt: an earlier poll moved it, or Retry replaced the machine
  * that came up.
@@ -284,11 +294,13 @@ export function agentBootRunnerUp(
     agentId,
     Effect.gen(function* () {
       const holds = yield* queueHoldsInLock(agentId);
+
       return yield* moved(agentId, {
         attempt,
         from: BOOTING_PHASES,
         to: holds ? BOOT_PHASE.HANDING_OFF : BOOT_PHASE.READY,
         at,
+        keepsPhaseAt: holds,
       });
     }),
     () => false,
@@ -319,6 +331,7 @@ export function failAgentBoot(
   attempt?: number,
 ): AgentBootEffect<boolean> {
   let paused = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
@@ -329,8 +342,10 @@ export function failAgentBoot(
         at,
         failure,
       });
+
       if (Option.isNone(failed)) return false;
       paused = yield* pauseInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+
       return true;
     }),
     () => paused,
@@ -347,6 +362,7 @@ export function rebootAgent(
   at: Date,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   let resumed = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
@@ -356,7 +372,9 @@ export function rebootAgent(
         at,
         nextAttempt: true,
       });
+
       if (Option.isSome(boot)) resumed = yield* resumeInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+
       return boot;
     }),
     () => resumed,

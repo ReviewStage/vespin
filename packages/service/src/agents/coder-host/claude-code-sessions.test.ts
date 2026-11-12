@@ -92,7 +92,7 @@ import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
@@ -101,11 +101,13 @@ import {
   DateTime,
   Duration,
   Effect,
+  ErrorReporter,
   Exit,
   Fiber,
   Layer,
   Logger,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schema,
@@ -139,12 +141,14 @@ import {
   type FakeSandbox,
   launchBearer,
   launchLines,
+  launchRead,
+  readClaudeCodeConfig,
+  readInputLine,
   runnerSandboxApi,
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
 import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
-import { BASE_DRIVE } from "../base-drive.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -159,6 +163,7 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
+import { WORKSPACE_DRIVE, workspaceDriveName } from "../workspace-drive.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { turnPayerOf } from "./agent-runtime-choice.js";
@@ -188,17 +193,21 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  */
 
 const IMAGE = "agent-image:fixture";
+
 /** The runner's unit the deploy ships, which each launch installs whole in its sandbox. */
 const RUNNER_FILES = [
   { name: RUNNER_UNIT.BUNDLE, contents: new TextEncoder().encode("// the deploy's runner") },
   { name: RUNNER_UNIT.PROFILER, contents: new TextEncoder().encode("the deploy's profiler") },
 ];
+
 const EVENTS_URL = "https://app.test/api/agents/runner/events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
+
 /** The query every URL a runner is handed names its launch by, here the agent's first. */
 const FIRST_LAUNCH = "?runnerLaunch=1";
 const MCP_URL = "https://app.test/api/agents/mcp";
+
 /** The host every address above names, which the firewall swaps the runner's bearer in on. */
 const SERVICE_HOST = "app.test";
 
@@ -210,14 +219,18 @@ const API_KEY = "sk-ant-api03-fixture-account-key";
 const RING = `1:${Buffer.alloc(32, 3).toString("base64")}`;
 const RELAY = { owner: "Acme", name: "Relay", defaultBranch: "trunk" } as const;
 const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
+
 const RELAY_INSTALLATION: InstallationFixture = {
   id: 7,
   login: RELAY.owner,
   repositories: [RELAY],
 };
+
 const CLI_SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
 /** Where the Agent SDK keeps the CLI's session in the store: the checkout's project, the main transcript. */
 const CLI_TRANSCRIPT = { projectKey: "-workspace-repository", sessionId: CLI_SESSION };
+
 /** The CLI session's root, its first entry, which every later one descends from. */
 const CLI_ROOT = { type: "user", uuid: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e01", parentUuid: null };
 
@@ -278,6 +291,7 @@ const openAgentWithoutPlan = Effect.gen(function* () {
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: "start-1",
@@ -288,7 +302,9 @@ const openAgentWithoutPlan = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
+
   return { userId, agent: started.value.agent };
 });
 
@@ -297,11 +313,13 @@ const savePlan = (userId: string) =>
   Effect.gen(function* () {
     const ring = parseKeyRing(Redacted.make(RING));
     assert.ok(Result.isSuccess(ring));
+
     const owner = {
       userId,
       provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
       kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
     };
+
     yield* saveProviderKey(
       userId,
       owner.provider,
@@ -327,6 +345,7 @@ const agentIdFrom = (agent: Agent, digit: string) =>
     yield* Effect.flatMap(Database, (db) =>
       db.update(agentTable).set({ id }).where(eq(agentTable.id, agent.id)),
     );
+
     return { ...agent, id };
   });
 
@@ -342,16 +361,20 @@ function sessionsFor(userId: string, sequence: { next: number }) {
     instructions: () => Effect.succeed(INSTRUCTIONS),
     nextSequence: () => Effect.sync(() => sequence.next),
   };
+
   return claudeCodeSessions(options);
 }
 
 /** The first launch's runner as a row leaves it before the next message: as launched, or exited. */
 const asLaunched = (_api: ReturnType<typeof runnerSandboxApi>, _userId: string, _session: string) =>
   Effect.void;
+
 const runnerExited = (api: ReturnType<typeof runnerSandboxApi>) => {
   const first = api.commands[0];
+
   if (first !== undefined) first.exitCode = 0;
 };
+
 /** The first launch's runner exited and let go, as its end or the reap leaves it: its place's record tells of no runner up. */
 const runnerLetGo = (api: ReturnType<typeof runnerSandboxApi>, userId: string, session: string) =>
   Effect.gen(function* () {
@@ -381,6 +404,7 @@ const writtenLine = (agent: Agent, text: string) =>
       { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
       Effect.succeed(true),
     );
+
     return message(agent, text, sentLineId(clientKey));
   });
 
@@ -396,9 +420,11 @@ const deliveredOpen = (
 ) =>
   Effect.gen(function* () {
     const opened = yield* sessions.open(sent);
+
     if (opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
       yield* sessions.deliverTurn(opened.sessionId, sent.conversationId);
     }
+
     return opened;
   });
 
@@ -411,9 +437,11 @@ const sentAndDelivered = (
 ) =>
   Effect.gen(function* () {
     const answer = yield* sessions.send(sessionId, yield* writtenLine(agent, text));
+
     if (answer.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
       yield* sessions.deliverTurn(sessionId, agent.conversationId);
     }
+
     return answer;
   });
 
@@ -444,8 +472,8 @@ const developerContent = (line: InputLine | undefined) =>
 
 /** Each message line of the launch as its text blocks, the turn's own words first. */
 const textsOf = (command: Parameters<typeof launchLines>[0]) =>
-  Effect.map(launchLines(command), (lines) =>
-    (lines as InputLine[]).flatMap((each) =>
+  Effect.map(launchRead(command, readClaudeCodeConfig), ({ lines }) =>
+    lines.flatMap((each) =>
       each.type === INPUT_LINE.MESSAGE
         ? [each.content.map((block) => (block.type === "text" ? block.text : ""))]
         : [],
@@ -455,14 +483,16 @@ const textsOf = (command: Parameters<typeof launchLines>[0]) =>
 /** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
 const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
   Effect.gen(function* () {
-    const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+    const { config } = yield* launchRead(command, readClaudeCodeConfig);
     assert.ok(command?.agentId !== undefined);
+
     const read = yield* runnerLinesPast(userId, command.agentId, {
       launch: config.firstSequence,
       after: 0,
       limit: 50,
     });
-    return read.map((line) => JSON.parse(line.text) as InputLine);
+
+    return read.map((line) => readInputLine(JSON.parse(line.text)));
   });
 
 /** A turn of the agent's under way, as the events route queues and starts one, by the id a Stop names it by. */
@@ -483,6 +513,7 @@ const turnUnderWay = (userId: string, agent: Agent) =>
       trigger: TURN_TRIGGER.ASK,
       at: yield* Clock.currentTimeMillis,
     });
+
     return turnId;
   });
 
@@ -490,12 +521,15 @@ const turnUnderWay = (userId: string, agent: Agent) =>
 function gate() {
   let arrive = () => {};
   let open = () => {};
+
   const arrived = new Promise<void>((settle) => {
     arrive = settle;
   });
+
   const opened = new Promise<void>((settle) => {
     open = settle;
   });
+
   return {
     arrived,
     open,
@@ -524,10 +558,12 @@ const turnsPass = Effect.promise(async () => {
 const across = <A, E>(work: Effect.Effect<A, E>, step: Duration.Duration, times: number) =>
   Effect.gen(function* () {
     const fiber = yield* Effect.forkChild(work);
+
     for (let move = 0; move < times; move += 1) {
       yield* turnsPass;
       yield* TestClock.adjust(step);
     }
+
     return yield* Fiber.join(fiber);
   });
 
@@ -549,6 +585,7 @@ const spacedClock = (step: Duration.Duration) =>
   Effect.gen(function* () {
     const clock = yield* Clock.Clock;
     const waits = { begun: 0, ended: 0 };
+
     const watched: Clock.Clock = {
       currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
       currentTimeMillis: clock.currentTimeMillis,
@@ -560,6 +597,7 @@ const spacedClock = (step: Duration.Duration) =>
         Duration.equals(duration, step)
           ? Effect.suspend(() => {
               waits.begun += 1;
+
               return Effect.ensuring(
                 clock.sleep(duration),
                 Effect.sync(() => {
@@ -569,18 +607,22 @@ const spacedClock = (step: Duration.Duration) =>
             })
           : clock.sleep(duration),
     };
+
     const waitedOut = <A, E>(work: Effect.Effect<A, E>) =>
       Effect.gen(function* () {
         const fiber = yield* Effect.forkChild(work);
         const done = () => fiber.pollUnsafe() !== undefined;
+
         for (;;) {
           yield* until(() => done() || waits.begun > waits.ended);
+
           if (done()) return yield* Fiber.join(fiber);
           const ended = waits.ended;
           yield* TestClock.adjust(step);
           yield* until(() => done() || waits.ended > ended);
         }
       });
+
     return { clock: watched, waitedOut };
   });
 
@@ -588,6 +630,7 @@ const spacedClock = (step: Duration.Duration) =>
 const newestTurn = (agent: Agent) =>
   Effect.map(latestTurnsOfReached([agent.conversationId]), (turns) => {
     const turn = turns.get(agent.conversationId);
+
     return { status: turn?.status, failure: agentFailureOf(turn) };
   });
 
@@ -604,7 +647,7 @@ afterEach(() => {
 
 /** What a repository agent's sessions are composed with beside the fake Vercel: what a test does as each request reaches GitHub. */
 interface RepositoryAgentSeams {
-  readonly onGitHub?: (sent: SentToGitHub) => void;
+  readonly onGitHub?: (sent: SentToGitHub) => void | Promise<void>;
   /** The edge runner the machine's checkout runs on, where not this test's own. */
   readonly run?: SandboxRunner;
 }
@@ -623,6 +666,7 @@ const repositoryAgent = (
     yield* savePlan(userId);
     const task = yield* startTask(userId, { name: "Relay", repository: RELAY_FULL_NAME });
     yield* connectWorkspaceGitHub(task.workspaceId, installation);
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: "start-1",
@@ -633,21 +677,27 @@ const repositoryAgent = (
       repository: RELAY_FULL_NAME,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const agent = Option.getOrThrow(started).agent;
-    const github = githubReaching([installation], undefined, {}, (sent) => {
+
+    const github = githubReaching([installation], undefined, {}, async (sent) => {
       if (new URL(sent.url).hostname === "vercel.com") {
         return api.respond(sent.url, {
           method: sent.method,
           headers: sent.headers,
           body: sent.body,
-          ...(sent.signal === undefined ? {} : { signal: sent.signal }),
+          ...(sent.signal !== undefined && { signal: sent.signal }),
         });
       }
-      seams.onGitHub?.(sent);
+
+      await seams.onGitHub?.(sent);
+
       return undefined;
     });
+
     // The SDK's calls of Vercel reach the same fake as the client's, through its own `fetch`.
     const http = Layer.provideMerge(vercelSandboxOver(api.respond), github.layer);
+
     const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -664,23 +714,28 @@ const repositoryAgent = (
 
 /** The contents access a repository token is cut to: a checkout's reads, the firewall's writes. */
 const TOKEN_ACCESS = { READ: "read", WRITE: "write" } as const;
+
 type TokenAccess = (typeof TOKEN_ACCESS)[keyof typeof TOKEN_ACCESS];
 
 /** Whether a request to GitHub mints a repository token cut to the access given. */
 const mintsRepositoryToken = (each: SentToGitHub, access: TokenAccess) => {
   if (!new URL(each.url).pathname.endsWith("/access_tokens")) return false;
+
   const asked: { repositories?: unknown; permissions?: { contents?: string } } = JSON.parse(
     each.body,
   );
+
   return asked.repositories !== undefined && asked.permissions?.contents === access;
 };
 
 /** A request a test waits to see reach GitHub: `seen` settles once one the predicate takes arrived. */
 function sighting(wanted: (sent: SentToGitHub) => boolean) {
   let settle = () => {};
+
   const seen = new Promise<void>((resolve) => {
     settle = resolve;
   });
+
   return {
     seen,
     observe: (sent: SentToGitHub) => {
@@ -698,6 +753,7 @@ const anotherAgent = (
 ) =>
   Effect.gen(function* () {
     assert.ok(agent.taskId !== null);
+
     const started = yield* createAgent(userId, {
       taskId: agent.taskId,
       idempotencyKey: `start-${randomUUID()}`,
@@ -710,6 +766,7 @@ const anotherAgent = (
       ...(startedFrom === undefined ? undefined : { startedFrom }),
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     return Option.getOrThrow(started).agent;
   });
 
@@ -726,25 +783,43 @@ function ownInstallation(): InstallationFixture {
 const isClone = (run: { readonly env: Readonly<Record<string, string>> }) =>
   Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.URL);
 
-/** Whether a run in the sandbox was a forked checkout's refresh. */
-const isRefresh = (run: { readonly env: Readonly<Record<string, string>> }) =>
-  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REFRESH);
+/** Whether a run in the sandbox claimed a workspace drive's folder as the checkout: handed a folder and the repository the checkout records. */
+const isClaim = (run: { readonly env: Readonly<Record<string, string>> }) =>
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER) &&
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY);
+
+/** Whether a run in the sandbox linked a workspace drive's folder to a checkout cloned beside it: handed a folder alone. */
+const isLink = (run: { readonly env: Readonly<Record<string, string>> }) =>
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER) &&
+  !Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY) &&
+  !Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.URL);
+
+/** How the claim exits where the fork holds no checkout in the repository's folder. */
+const NOT_HELD_EXIT = 3;
+
+/** The Relay repository's folder on its workspace's drive: `owner/name`, lower-cased. */
+const RELAY_FOLDER = "acme/relay";
 
 /** Whether a run in the sandbox was the install. */
 const isInstall = (run: { readonly args: readonly string[] }) =>
   run.args.some((arg) => arg.includes("pnpm install"));
 
-/** Every sandbox a base drive's fill created, deleted or not. */
-const baseFills = (api: ReturnType<typeof runnerSandboxApi>) =>
-  api.sandboxes.filter((each) => each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
+/** The agent's workspace's drive standing, as a fill that ended well leaves it, with no sandbox under its name. */
+const filledWorkspaceDrive = (api: ReturnType<typeof runnerSandboxApi>, agent: Agent) => {
+  const drive = {
+    id: `drv_${randomUUID()}`,
+    name: workspaceDriveName(agent.organizationId),
+    deleted: false,
+  };
 
-/** The base drive standing, where one does. */
-const baseDrive = (api: ReturnType<typeof runnerSandboxApi>) =>
-  api.drives.find((each) => !each.deleted && each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
+  api.drives.push(drive);
+
+  return drive;
+};
 
 /** The drive a sandbox mounts at the workspace, and the drive it was forked from, where it was. */
 const mountedDrive = (api: ReturnType<typeof runnerSandboxApi>, sandbox: FakeSandbox | undefined) =>
-  api.mountedAt(sandbox, BASE_DRIVE.MOUNT);
+  api.mountedAt(sandbox, WORKSPACE_DRIVE.MOUNT);
 
 /** Whether a run in the sandbox made the agent's user, as `@vercel/sandbox` makes one. */
 const isUserMade = (run: { readonly args: readonly string[] }) =>
@@ -767,9 +842,11 @@ interface SentRule {
 
 /** The swaps on Anthropic's API in the last policy sent to the sandbox session given: the header each matches, the value it matches at, and what it sets there. */
 const anthropicSwaps = (api: ReturnType<typeof runnerSandboxApi>, session: string | undefined) => {
+  // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
   const sent = api.policies.filter((each) => each.session === session).at(-1)?.policy as
     | { readonly allow?: Readonly<Record<string, readonly SentRule[]>> }
     | undefined;
+
   return (sent?.allow?.["api.anthropic.com"] ?? []).flatMap((rule) =>
     (rule.match?.headers ?? []).map(({ key, value }) => ({
       header: key.exact,
@@ -790,9 +867,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId } = started;
         // An agent of the hour-long cache's half, which its plan leaves on the CLI's own default.
         const agent = yield* agentIdFrom(started.agent, "0");
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const line = yield* writtenLine(agent, "Fix the invitations.");
         const { lineId } = line;
         assert.ok(lineId !== undefined);
@@ -828,16 +907,19 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // The launch uploaded the deploy's runner unit whole, and root installed every file of it
         // over the image's before the runner started, so no file of it is the disk's own.
         const uploaded = new Map(api.uploads.flatMap((upload) => [...upload]));
+
         const installed = readyingScript(api)
           .split("\n")
           .find((line) =>
             line.startsWith("install -o root -g root -m 0444 -t /opt/agent/agent-runner "),
           );
+
         for (const file of RUNNER_FILES) {
           const upload = `/tmp/agent-runner/${file.name}`;
           assert.equal(uploaded.get(upload), new TextDecoder().decode(file.contents));
           assert.ok(installed?.split(" ").includes(upload));
         }
+
         const [command] = api.commands;
         assert.ok(command !== undefined);
         assert.equal(command.user, "agent");
@@ -865,7 +947,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const record = Option.getOrThrow(yield* readAgentRunnerRecord(userId, opened.sessionId));
         assert.equal(record.fingerprint, "780f5f77680c20a5ad5b4c255021deb7");
 
-        const [config, first] = (yield* launchLines(command)) as [ClaudeCodeConfig, InputLine];
+        const {
+          config,
+          lines: [first],
+        } = yield* launchRead(command, readClaudeCodeConfig);
+
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CLAUDE_CODE,
           cwd: "/workspace/repository",
@@ -916,9 +1002,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
         });
-        assert.ok(first.type === INPUT_LINE.MESSAGE);
+        assert.ok(first?.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
         assert.deepEqual(developerContent(first), [{ type: "text", text: "Fix the invitations." }]);
+
         // No secret in the runner's own argv, the config, a tag, or anything uploaded, and neither the plan's token nor the bearer in any command's environment.
         const visible = JSON.stringify([
           command.args,
@@ -926,12 +1013,15 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           api.sandboxes,
           api.uploads.flatMap((upload) => [...upload.values()]),
         ]);
+
         for (const secret of [PLAN_TOKEN, placeholder, bearerPlaceholder, bearer]) {
           assert.equal(visible.includes(secret), false);
         }
+
         const environments = JSON.stringify(
           [api.commands, api.runs].flat().map((each) => each.env),
         );
+
         for (const secret of [PLAN_TOKEN, bearer])
           assert.equal(environments.includes(secret), false);
       }),
@@ -946,11 +1036,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const db = yield* Database;
         const deleted = Effect.orDie(db.delete(agentTable).where(eq(agentTable.id, agent.id)));
+
         // The agent's row goes once its sandbox has opened, before the launch in it records its bearer.
         const deletedOnceOpened = Layer.effect(
           AgentMachine,
           Effect.gen(function* () {
             const machine = yield* AgentMachine;
+
             return {
               ...machine,
               open: (ask, use) =>
@@ -958,6 +1050,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             } satisfies AgentMachineService;
           }),
         ).pipe(Layer.provide(machineOver(api.layer)));
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(Layer.merge(services(api), deletedOnceOpened)),
         );
@@ -977,22 +1070,28 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the invitations."));
+
         // The launch's step that shares the checkout with the group, run by a real bash on a real checkout.
         const step = readyingScript(api)
           .split("\n")
           .find((each) => each.includes("core.sharedRepository"));
+
         assert.ok(step !== undefined);
         const checkout = yield* Effect.promise(() => temporaryDirectory(t, "launch-checkout-"));
+
         const launched = () =>
           spawnSync(
             "bash",
             ["-euo", "pipefail", "-c", step.replaceAll(CODER.CHECKOUT_PATH, checkout)],
             { encoding: "utf8" },
           );
+
         assert.equal(spawnSync("git", ["init", "--quiet", checkout]).status, 0);
 
         assert.equal(launched().status, 0);
@@ -1018,8 +1117,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         // An installed skill is handed only to a member with the Skills experiment on.
         yield* writeAccountPreferences(userId, { experiments: { [EXPERIMENT.SKILLS]: true } });
+
         const skillFile =
           "---\nname: sentry-triage\ndescription: Triage a Sentry issue.\nallowed-tools: Bash\n---\nRun `scripts/triage.sh`.\n";
+
         yield* installSkill(userId, {
           owner: { scope: INSTALLED_SKILL_SCOPE.PERSONAL },
           name: "sentry-triage",
@@ -1047,6 +1148,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             },
           ],
         });
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
@@ -1054,9 +1156,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Triage it."));
 
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
         const skills = api.uploads.find((upload) =>
           [...upload.keys()].some((path) => path.startsWith("/tmp/agent-installed-skills/")),
         );
+
         assert.ok(skills !== undefined);
         // A Claude Code local plugin named luke, each skill a whole folder.
         assert.deepEqual([...skills.keys()].sort(), [
@@ -1088,15 +1192,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           readyingScript(api),
           /mv \/tmp\/agent-installed-skills \/opt\/agent\/installed-skills && chown -R root:root \/opt\/agent\/installed-skills && chmod -R u=rwX,go=rX/u,
         );
-        const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(command, readClaudeCodeConfig);
         assert.equal(config.installedSkills, "/opt/agent/installed-skills");
 
         // An account with no installed skills uploads none, and the launch installs nothing.
         const bare = runnerSandboxApi();
         const other = yield* openAgent;
+
         const otherSessions = yield* sessionsFor(other.userId, { next: 0 }).pipe(
           Effect.provide(services(bare)),
         );
+
         yield* deliveredOpen(otherSessions, yield* writtenLine(other.agent, "Triage it."));
         assert.ok(
           !bare.uploads.some((upload) =>
@@ -1112,11 +1218,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const { userId, agent } = yield* openAgent;
+
         const owner = {
           userId,
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
           kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         };
+
         const markPlan = (
           status: typeof PROVIDER_KEY_STATUS.LIMIT_REACHED | typeof PROVIDER_KEY_STATUS.INVALID,
           resetsAt?: Date,
@@ -1125,11 +1233,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             const now = yield* DateTime.nowAsDate;
             yield* setPlanStatus(userId, owner.provider, owner.kind, status, resetsAt, now, now);
           });
+
         const openOn = (api: ReturnType<typeof runnerSandboxApi>) =>
           Effect.gen(function* () {
             const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
               Effect.provide(services(api)),
             );
+
             return yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go."));
           });
 
@@ -1186,6 +1296,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const deviceId = randomUUID();
         yield* registerDevice(userId, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
         const task = yield* startTask(userId, { name: "Teammate invitations" });
+
         const started = yield* createAgent(userId, {
           taskId: task.id,
           idempotencyKey: "start-key",
@@ -1199,29 +1310,35 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           machine: AGENT_MACHINE.DEVICE,
           deviceId,
         });
+
         assert.ok(Option.isSome(started));
         const agent = started.value.agent;
 
         const onMac = runnerSandboxApi();
+
         const machines = agentMachinesLayer({
           run: () => assert.fail("a Mac's launch runs no sandbox checkout"),
         }).pipe(Layer.provide(onMac.layer));
+
         // Note that the machines are provided innermost, so the Mac's machine answers rather than the fake sandbox's.
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(machines),
           Effect.provide(services(onMac)),
         );
+
         assert.equal(
           (yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.ACCEPTED,
         );
         const [launch] = yield* deviceAgentLinesWaiting(userId, deviceId);
         assert.ok(launch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH);
+
         const claimed = Option.getOrThrow(
           yield* claimedDeviceAgentLine(userId, deviceId, launch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );
+
         assert.ok("secrets" in claimed);
         const { env } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
         assert.equal(env[RUNNER_ENV.API_KEY], undefined);
@@ -1234,6 +1351,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // A mode that asks is refused by name on a Mac whose runner reads no mode, rather than run with full access,
         // and queues no launch; once the Mac says its runner reads one, the launch is handed it.
         yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+
         const asked = () =>
           Effect.flatMap(
             sessionsFor(userId, { next: 0 }).pipe(
@@ -1243,14 +1361,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             (sessions) =>
               Effect.flatMap(writtenLine(agent, "Go on."), (line) => deliveredOpen(sessions, line)),
           );
+
         assert.deepEqual(yield* asked(), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
         });
+
         const launchesWaiting = (yield* deviceAgentLinesWaiting(userId, deviceId)).filter(
           (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
         );
+
         assert.deepEqual(launchesWaiting, []);
         yield* registerDevice(userId, {
           id: deviceId,
@@ -1261,16 +1382,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal((yield* asked()).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).at(-1);
         assert.ok(relaunch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH && relaunch.id !== launch.id);
+
         const reclaimed = Option.getOrThrow(
           yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );
+
         assert.ok("secrets" in reclaimed);
+
         const [config] = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(reclaimed.secrets)
           .stdin.trimEnd()
           .split("\n")
           .map((line: string): ClaudeCodeConfig => JSON.parse(line));
+
         assert.equal(config?.permissionMode, PERMISSION_MODE.ASK);
       }),
   );
@@ -1285,6 +1410,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
         );
         const task = yield* startTask(userId, { name: "Teammate invitations" });
+
         const started = yield* createAgent(userId, {
           taskId: task.id,
           idempotencyKey: "start-key",
@@ -1296,6 +1422,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.API_KEY,
         });
+
         assert.ok(Option.isSome(started));
         // An agent of the hour-long cache's half, at its last digit.
         const agent = yield* agentIdFrom(started.value.agent, "7");
@@ -1313,11 +1440,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         const ring = parseKeyRing(Redacted.make(RING));
         assert.ok(Result.isSuccess(ring));
+
         const owner = {
           userId,
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
           kind: PROVIDER_KEY_KIND.API_KEY,
         };
+
         yield* saveProviderKey(
           userId,
           owner.provider,
@@ -1329,13 +1458,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
 
         const api = runnerSandboxApi();
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [command] = api.commands;
         assert.ok(command !== undefined);
@@ -1346,19 +1478,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(anthropicSwaps(api, api.sandboxes[0]?.currentSessionId), [
           { header: "x-api-key", at: placeholder, sets: API_KEY },
         ]);
+
         const visible = JSON.stringify([
           command.args,
           command.env,
           yield* launchLines(command),
           api.sandboxes,
         ]);
+
         assert.equal(visible.includes(API_KEY), false);
         // The key pays for this agent's writes, so its half keeps the cache for an hour and the other keeps the CLI's five minutes.
-        const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(command, readClaudeCodeConfig);
         assert.equal(config.promptCacheHour, true);
 
         const sent = yield* sessions.send(opened.sessionId, message(agent, "Also the emails."));
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
         const other = yield* createAgent(userId, {
           taskId: task.id,
           idempotencyKey: "start-other",
@@ -1370,13 +1505,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.API_KEY,
         });
+
         assert.ok(Option.isSome(other));
         const outside = yield* agentIdFrom(other.value.agent, "8");
         const outsideOpened = yield* deliveredOpen(sessions, yield* writtenLine(outside, "Go."));
         assert.equal(outsideOpened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        const [outsideConfig] = (yield* launchLines(api.commands[1] ?? assert.fail())) as [
-          ClaudeCodeConfig,
-        ];
+
+        const { config: outsideConfig } = yield* launchRead(
+          api.commands[1] ?? assert.fail(),
+          readClaudeCodeConfig,
+        );
+
         assert.equal(outsideConfig.promptCacheHour, undefined);
 
         yield* removeProviderKey(
@@ -1385,9 +1524,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           PROVIDER_KEY_KIND.API_KEY,
         );
         const gone = runnerSandboxApi();
+
         const without = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(gone)),
         );
+
         assert.deepEqual(yield* deliveredOpen(without, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
@@ -1405,12 +1546,15 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const ring = parseKeyRing(Redacted.make(RING));
         assert.ok(Result.isSuccess(ring));
+
         const owner = {
           userId,
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
           kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         };
+
         const secondToken = "sk-ant-oat01-fixture-second-token";
+
         const second = yield* saveProviderKey(
           userId,
           owner.provider,
@@ -1422,6 +1566,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           null,
           { add: true },
         );
+
         const now = yield* DateTime.nowAsDate;
         yield* setPlanStatus(
           userId,
@@ -1432,15 +1577,19 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           now,
           now,
         );
+
         const sentOn = (on: Agent) =>
           Effect.gen(function* () {
             const api = runnerSandboxApi();
+
             const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
               Effect.provide(services(api)),
             );
+
             const opened = yield* deliveredOpen(sessions, yield* writtenLine(on, "Go."));
             assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
             const routing = Option.getOrThrow(yield* readAgentRouting(userId, on.id));
+
             return [
               anthropicSwaps(api, api.sandboxes[0]?.currentSessionId).map((swap) => swap.sets),
               routing.payer,
@@ -1456,6 +1605,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         yield* TestClock.adjust("31 minutes");
         const task = yield* startTask(userId, { name: "Invitation emails" });
+
         const later = yield* createAgent(userId, {
           taskId: task.id,
           idempotencyKey: "start-2",
@@ -1466,6 +1616,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           repository: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.deepEqual(yield* sentOn(Option.getOrThrow(later).agent), [
           [`Bearer ${PLAN_TOKEN}`],
           AGENT_PAYER.CLAUDE_SUBSCRIPTION,
@@ -1474,6 +1625,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         // A key saved now joins the bottom of the one order, and pays first, named by its id, once it is moved to its top, since a key has room.
         const keyOwner = { ...owner, kind: PROVIDER_KEY_KIND.API_KEY };
+
         const key = yield* saveProviderKey(
           userId,
           keyOwner.provider,
@@ -1483,6 +1635,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           null,
           now,
         );
+
         const bottom = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
         yield* reorderSubscriptions(userId, owner.provider, [key]);
         const top = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
@@ -1525,6 +1678,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           }),
         );
         const task = yield* startTask(userId, { name: "Teammate invitations" });
+
         const started = yield* createAgent(userId, {
           taskId: task.id,
           idempotencyKey: "start-key",
@@ -1536,17 +1690,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.API_KEY,
         });
+
         assert.ok(Option.isSome(started));
+
         // The key was sealed under another deployment's ring, as a Preview's database holds production's.
         const elsewhere = parseKeyRing(
           Redacted.make(`1:${Buffer.alloc(32, 9).toString("base64")}`),
         );
+
         assert.ok(Result.isSuccess(elsewhere));
+
         const owner = {
           userId,
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
           kind: PROVIDER_KEY_KIND.API_KEY,
         };
+
         yield* saveProviderKey(
           userId,
           owner.provider,
@@ -1558,9 +1717,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
 
         const api = runnerSandboxApi();
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         assert.deepEqual(
           yield* deliveredOpen(sessions, yield* writtenLine(started.value.agent, "Go.")),
           {
@@ -1573,6 +1734,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         const standIn = "sk-ant-api03-fixture-preview-key";
         const preview = runnerSandboxApi();
+
         const onPreview = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(
             services(preview, preview.layer, {
@@ -1581,10 +1743,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             }),
           ),
         );
+
         const opened = yield* deliveredOpen(
           onPreview,
           yield* writtenLine(started.value.agent, "Go."),
         );
+
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const placeholder = preview.commands[0]?.env[RUNNER_ENV.API_KEY];
         assert.deepEqual(anthropicSwaps(preview, preview.sandboxes[0]?.currentSessionId), [
@@ -1600,11 +1764,14 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const pdf = "%PDF-1.7 the spec";
         const png = Buffer.from("png bytes").toString("base64");
+
         const withFiles = (line: ReturnType<typeof message>, text: string, filename: string) => ({
           ...line,
           message: [
@@ -1618,6 +1785,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             { type: "file" as const, data: png, mediaType: "image/png", filename: "shot.png" },
           ],
         });
+
         const first = yield* writtenLine(agent, "Read the spec.");
         const firstId = first.lineId;
 
@@ -1625,13 +1793,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessions,
           withFiles(first, "Read the spec.", "Spec v2.pdf"),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const later = yield* writtenLine(agent, "And this one.");
         const laterId = later.lineId;
+
         const sent = yield* sessions.send(
           opened.sessionId,
           withFiles(later, "And this one.", "../../etc/notes.pdf"),
         );
+
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
         const firstPath = `/tmp/agent-attachments/${firstId}/2-Spec-v2.pdf`;
@@ -1639,9 +1810,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const written = new Map(api.uploads.flatMap((upload) => [...upload]));
         assert.equal(written.get(firstPath), pdf);
         assert.equal(written.get(laterPath), pdf);
-        const messages = ((yield* launchLines(api.commands[0])) as InputLine[]).filter(
+
+        const messages = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.filter(
           (each) => each.type === INPUT_LINE.MESSAGE,
         );
+
         assert.deepEqual(
           messages.map((each) => developerContent(each)),
           [
@@ -1673,18 +1846,23 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         yield* TestClock.adjust("1 minute");
+
         const later = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(later.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
         // An open that raced it, its session minted a moment before.
         yield* TestClock.setTime(30_000);
+
         const earlier = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Also the emails."),
@@ -1710,10 +1888,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       const lineId = randomUUID();
       yield* updateAgentChoice(userId, agent.id, {
@@ -1725,6 +1905,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         opened.sessionId,
         message(agent, "Also the emails.", lineId),
       );
+
       const turnId = yield* turnUnderWay(userId, agent);
       const canceled = yield* sessions.cancel(opened.sessionId, turnId);
 
@@ -1735,8 +1916,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       });
       assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.ACCEPTED);
       assert.equal(api.commands.length, 1);
-      const [model, line, stop] = ((yield* launchLines(api.commands[0])) as InputLine[]).slice(2);
+
+      const [model, line, stop] = (yield* launchRead(
+        api.commands[0],
+        readClaudeCodeConfig,
+      )).lines.slice(1);
       // The agent's model and effort as they stand, ahead of the message, so a change since the launch holds.
+
       assert.deepEqual(model, {
         type: INPUT_LINE.MODEL,
         model: "claude-sonnet-5-5",
@@ -1758,24 +1944,28 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
         yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
         yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
 
-        const [compact, effort] = (yield* launchLines(api.commands[0]))
+        const [compact, effort] = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines
           .filter(
             (line): line is Extract<InputLine, { type: "message" }> =>
-              (line as InputLine).type === INPUT_LINE.MESSAGE,
+              line.type === INPUT_LINE.MESSAGE,
           )
           .slice(1);
+
         assert.deepEqual(compact?.content, [{ type: "text", text: "/compact keep the plan" }]);
         // The CLI runs a command from the last text block alone, so the turn's words after it leave it words.
         assert.deepEqual(effort?.content[0], { type: "text", text: "/effort low" });
@@ -1790,13 +1980,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* updateAgentChoice(userId, agent.id, {
           model: "anthropic/claude-opus-5.5-fast",
@@ -1804,6 +1997,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         });
 
         const retuned = yield* sessions.retune(opened.sessionId, agent.conversationId);
+
         const elsewhere = yield* sessions.retune(
           `${opened.sessionId.slice(0, -4)}0000`,
           agent.conversationId,
@@ -1825,14 +2019,18 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
         yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
         const line = {
           type: INPUT_LINE.APPROVAL,
           requestId: "request-1",
@@ -1841,6 +2039,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         } as const;
 
         const answered = yield* sessions.answer(opened.sessionId, agent.conversationId, line);
+
         const elsewhere = yield* sessions.answer(
           `${opened.sessionId.slice(0, -4)}0000`,
           agent.conversationId,
@@ -1849,11 +2048,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.deepEqual([answered, elsewhere], [RUNNER_ANSWER.WRITTEN, RUNNER_ANSWER.NOT_LIVE]);
         assert.equal(api.commands.length, 1);
-        const [config, , written] = (yield* launchLines(api.commands[0])) as [
-          ClaudeCodeConfig,
-          InputLine,
-          InputLine,
-        ];
+
+        const {
+          config,
+          lines: [, written],
+        } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
+
         assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(written, line);
       }),
@@ -1866,13 +2066,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const turnId = yield* turnUnderWay(userId, agent);
         const kept = keptAfterResponse();
@@ -1880,6 +2083,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const canceled = yield* sessions
           .cancel(opened.sessionId, turnId)
           .pipe(Effect.provide(kept.layer));
+
         // The Stop's stamp, as `stop.ts` writes it once the cancel is taken.
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
         yield* writer.requestTurnCancel(
@@ -1908,10 +2112,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       // The turn a Stop was pressed on, then a newer one the Stop arrives during.
       const stopped = yield* turnUnderWay(userId, agent);
@@ -1922,7 +2128,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
       assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN);
       assert.ok(
-        ((yield* launchLines(api.commands[0])) as InputLine[]).every(
+        (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.every(
           (line) => line.type !== INPUT_LINE.STOP,
         ),
       );
@@ -1938,10 +2144,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const target = { userId, conversationId: agent.conversationId };
         // The events route records the CLI's session from the runner's init, and the run ends.
@@ -1950,11 +2158,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         sequence.next = 42;
 
         yield* runnerTook(agent.id);
+
         const ended = yield* runnerEnded({
           target,
           sessionId: opened.sessionId,
           sequence: 41,
         }).pipe(Effect.provide(api.layer));
+
         assert.equal(ended, RUNNER_ENDED.LEFT);
         assert.equal(api.sandboxes[0]?.status, "running");
         api.idleStop();
@@ -1971,7 +2181,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.commands.length, 2);
         const relaunch = api.commands[1];
         assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.firstSequence, 42);
@@ -1991,11 +2201,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         // The first launch's END, arriving late, stops nothing of the second's.
         yield* runnerTook(agent.id);
+
         const late = yield* runnerEnded({
           target,
           sessionId: opened.sessionId,
           sequence: 41,
         }).pipe(Effect.provide(api.layer));
+
         assert.equal(late, RUNNER_ENDED.STALE);
         assert.equal(api.sandboxes[0]?.status, "running");
       }),
@@ -2010,10 +2222,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const target = { userId, conversationId: agent.conversationId };
         // The session began before the store kept transcripts: the store holds only the line its
@@ -2047,7 +2261,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 1);
         const relaunch = api.commands[1];
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.resume, undefined);
         const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
@@ -2070,14 +2284,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sequence = { next: 0 };
         // The resume is tried again a spacing apart while the stop's snapshot is taken.
         const spaced = yield* spacedClock(CODER.RESUME_WHILE_ENDING.SPACING);
+
         const sessions = yield* sessionsFor(userId, sequence).pipe(
           Effect.provide(services(api)),
           Effect.provideService(Clock.Clock, spaced.clock),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* recordHeldSession(userId, agent);
         sequence.next = 42;
@@ -2102,7 +2319,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.deepEqual((yield* handedLines(userId, api.commands[1])).map(developerContent), [
           [{ type: "text", text: "Now the emails." }],
@@ -2121,10 +2338,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const { userId, agent } = yield* openAgent;
       const sequence = { next: 0 };
       const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       yield* recordHeldSession(userId, agent);
       sequence.next = 42;
@@ -2156,6 +2375,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         on: true,
         by: userId,
       });
+
       return { userId, agent, sessions, opened };
     });
 
@@ -2172,7 +2392,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
         assert.equal(api.sandboxes.length, 1);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, undefined);
         const [line] = yield* handedLines(userId, api.commands[1]);
         const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
@@ -2197,16 +2417,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // The relaunch's policy write is refused, so its runner never takes the line.
         api.failPolicy.remaining = 10;
         const commandsBefore = api.commands.length;
+
         const sent = yield* sessions.send(
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
+
         const failed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
         api.failPolicy.remaining = 0;
+
         // A runner the refused relaunch started is ended rather than left waiting for its config.
         const refusedRunners = api.commands
           .slice(commandsBefore)
           .filter((each) => each.command === "node");
+
         assert.ok(refusedRunners.length > 0, "the refused relaunch started a runner");
         assert.ok(refusedRunners.every((each) => each.exitCode !== null));
 
@@ -2221,7 +2445,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(failed, TURN_HANDOVER.FAILED);
         assert.equal(next.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const relaunch = api.commands.at(-1);
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         assert.equal(config.resume, undefined);
         const [line] = yield* handedLines(userId, relaunch);
         assert.deepEqual(developerContent(line), [{ type: "text", text: "And the invitations." }]);
@@ -2258,11 +2482,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
               db.execute(sql`alter table workspace_experiment_away rename to workspace_experiment`),
             ),
         );
+
         yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
       }),
   );
@@ -2275,6 +2500,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent, sessions, opened } = yield* flippedSession(api);
         const target = { userId, conversationId: agent.conversationId };
+
         // Two later steps: a long one, which fits the window alone, then a short one.
         for (const [seq, text] of [
           [11, `LONG-STEP ${"x".repeat(250_000)}`],
@@ -2324,14 +2550,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sequence = { next: 0 };
         // The resume is tried again a spacing apart while the sandbox stops.
         const spaced = yield* spacedClock(CODER.RESUME_WHILE_ENDING.SPACING);
+
         const sessions = yield* sessionsFor(userId, sequence).pipe(
           Effect.provide(services(api)),
           Effect.provideService(Clock.Clock, spaced.clock),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* runnerTook(agent.id);
         sequence.next = 42;
@@ -2347,9 +2576,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             { type: "file" as const, data: pdf, mediaType: "application/pdf", filename: "r.pdf" },
           ],
         });
+
         const pdfUploads = () =>
           api.uploads.filter((upload) => [...upload.keys()].some((path) => path.endsWith("r.pdf")))
             .length;
+
         const uploadedBefore = pdfUploads();
         yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
 
@@ -2376,10 +2607,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* runnerTook(agent.id);
         // The first launch's runner starts the Start's turn under its launch, then exits without ending it.
@@ -2415,9 +2648,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const reaped = yield* reconcileAgent(agent).pipe(Effect.provide(api.layer));
 
         assert.deepEqual(reaped, [turnId]);
+
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
         );
+
         assert.deepEqual(
           [turn?.status, turn?.failure],
           [TURN_STATUS.FAILED, TURN_FAILURE.RUNNER_LOST],
@@ -2435,16 +2670,21 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const queuedAt = yield* Clock.currentTimeMillis;
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const untaken = Option.getOrThrow(yield* queuedTurnOf(agent.conversationId));
+
         /** The newest launch's runner crashes before it takes a line, and the message given's delivery relaunches it. */
         const relaunched = (sent: ReturnType<typeof message>) =>
           Effect.gen(function* () {
@@ -2457,6 +2697,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             assert.equal(answer.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
             assert.equal(api.commands.length, launches + 1);
           });
+
         for (const text of ["Are you there?", "Hello?", "Still nothing?"]) {
           yield* TestClock.adjust(Duration.minutes(2));
           yield* relaunched(message(agent, text));
@@ -2473,10 +2714,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const reaped = yield* reconcileAgent(agent).pipe(Effect.provide(api.layer));
 
         assert.deepEqual(reaped, [untaken]);
+
         const [failed] = yield* (yield* Database)
           .select({ failure: turns.failure })
           .from(turns)
           .where(eq(turns.id, untaken));
+
         assert.equal(failed?.failure, TURN_FAILURE.LINE_UNTAKEN);
         const waiting = Option.getOrThrow(yield* queuedTurnOf(agent.conversationId));
         assert.notEqual(waiting, untaken, "the late line awaits a turn of its own");
@@ -2493,18 +2736,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* recordHeldSession(userId, agent);
         // The runner took its first message, and a message queued as it ended was never read.
         yield* runnerTook(agent.id);
+
         const sent = yield* sessions.send(
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
+
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         sequence.next = 9;
 
@@ -2514,6 +2761,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sequence: 8,
           reason: RUNNER_END.TURN_ENDED,
         }).pipe(Effect.provide(Layer.merge(api.layer, Layer.succeed(HostedEnvironment, NO_KEYS))));
+
         assert.equal(ended, RUNNER_ENDED.LINES_WAITING);
         assert.equal(api.sandboxes[0]?.status, "running");
         const first = api.commands[0];
@@ -2531,16 +2779,18 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         ]);
         const handOn = launchBearer(api, api.commands[1], SERVICE_HOST);
         assert.ok(handOn !== undefined && handOn !== firstBearer);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.firstSequence, 9);
+
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: config.firstSequence,
           after: 0,
           limit: 10,
         });
+
         assert.deepEqual(
-          read.map((line) => developerContent(JSON.parse(line.text) as InputLine)),
+          read.map((line) => developerContent(readInputLine(JSON.parse(line.text)))),
           [[{ type: "text", text: "Now the emails." }]],
         );
       }),
@@ -2555,19 +2805,23 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* recordHeldSession(userId, agent);
         yield* runnerTook(agent.id);
+
         const ended = yield* runnerEnded({
           target: { userId, conversationId: agent.conversationId },
           sessionId: opened.sessionId,
           sequence: 8,
           reason: RUNNER_END.IDLED,
         }).pipe(Effect.provide(Layer.merge(api.layer, Layer.succeed(HostedEnvironment, NO_KEYS))));
+
         assert.equal(ended, RUNNER_ENDED.LEFT);
         api.idleStop();
         const first = api.commands[0];
@@ -2579,7 +2833,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.warm, true);
         yield* sessions.warm(opened.sessionId, agent.conversationId);
@@ -2597,12 +2851,14 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2, "the message relaunched nothing");
+
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: config.firstSequence,
           after: 0,
           limit: 10,
         });
-        const lines = read.map((line) => JSON.parse(line.text) as InputLine);
+
+        const lines = read.map((line) => readInputLine(JSON.parse(line.text)));
         assert.deepEqual(
           lines.filter((line) => line.type === INPUT_LINE.WARM),
           [{ type: INPUT_LINE.WARM }],
@@ -2625,10 +2881,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // The runner took its message, and its events were applied.
         yield* runnerTook(agent.id);
@@ -2653,6 +2911,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // Read before the relaunch, which drops what the ended launch was written but its untaken messages.
         const haltedWith = (yield* launchLines(api.commands[0])).at(-1);
         yield* rewindConversation(target, lineId);
+
         const sent = yield* sentAndDelivered(
           sessions,
           opened.sessionId,
@@ -2668,7 +2927,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(haltedWith, { type: INPUT_LINE.STOP, launch: 0 });
         assert.notEqual(api.commands[0]?.exitCode, null);
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, api.commands[1]);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.rewindBefore, "dropped-line");
@@ -2685,10 +2944,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       const runner = api.commands[0];
       assert.ok(runner !== undefined);
@@ -2698,6 +2959,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const halting = yield* Effect.forkChild(
         sessions.halt(opened.sessionId, agent.conversationId),
       );
+
       // The liveness read gives up on the running runner at the sandbox's own two-second wait, and the runner is written its Stop.
       yield* turnsPass;
       yield* TestClock.adjust(Duration.seconds(2));
@@ -2721,6 +2983,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
@@ -2749,17 +3012,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             source: { type: INSTALLED_SKILL_SOURCE.TEXT },
             files: [{ path: "SKILL.md", bytes: new TextEncoder().encode("Write them.\n") }],
           });
+
           const skillUploads = () =>
             api.uploads.filter((upload) =>
               [...upload.keys()].some((path) => path.startsWith("/tmp/agent-installed-skills/")),
             ).length;
+
           const sequence = { next: 0 };
           const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
           const opened = yield* deliveredOpen(
             sessions,
             yield* writtenLine(agent, "Fix the invitations."),
           );
+
           assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
           if (stored) yield* recordHeldSession(userId, agent);
           else assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
           sequence.next = 42;
@@ -2791,7 +3059,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [expired.image, undefined]);
           const relaunch = api.commands[1];
           assert.equal(relaunch?.sandboxSessionId, fresh.currentSessionId);
-          const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+          const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
           const [line] = yield* handedLines(userId, relaunch);
           assert.equal(config.resume, stored ? CLI_SESSION : undefined);
           assert.ok(line?.type === INPUT_LINE.MESSAGE);
@@ -2815,10 +3083,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         sequence.next = 42;
         yield* runnerTook(agent.id);
@@ -2838,6 +3108,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
+
         const failed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -2847,12 +3118,14 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(replacement !== undefined);
         assert.deepEqual([expired.deleted, replacement.deleted], [true, false]);
         api.hooks.runExit = undefined;
+
         const retried = yield* sentAndDelivered(
           sessions,
           opened.sessionId,
           agent,
           "Now the emails.",
         );
+
         assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 2);
         assert.equal(replacement.status, "running");
@@ -2868,10 +3141,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         sequence.next = 42;
         yield* runnerTook(agent.id);
@@ -2915,10 +3190,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const target = { userId, conversationId: agent.conversationId };
         const first = api.commands[0];
@@ -2963,6 +3240,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
@@ -2972,10 +3250,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.deepEqual([api.sandboxes.length, api.commands.length], [0, 0]);
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
         const sent = yield* sessions.send(
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
+
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.deepEqual([api.sandboxes.length, api.commands.length], [0, 0]);
         const handed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
@@ -2989,9 +3269,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         const unplanned = yield* openAgentWithoutPlan;
         const refusedApi = runnerSandboxApi();
+
         const unplannedSessions = yield* sessionsFor(unplanned.userId, { next: 0 }).pipe(
           Effect.provide(services(refusedApi)),
         );
+
         const refused = yield* unplannedSessions.open(message(unplanned.agent, "Go."));
         assert.deepEqual(refused, {
           outcome: SESSION_SEND_OUTCOME.FAILED,
@@ -3011,10 +3293,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 3 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const first = api.commands[0];
         assert.ok(first !== undefined);
@@ -3068,10 +3352,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 3 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const first = api.commands[0];
         assert.ok(first !== undefined);
@@ -3084,6 +3370,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           yield* sessions.send(opened.sessionId, yield* writtenLine(agent, "One.")),
           yield* sessions.send(opened.sessionId, yield* writtenLine(agent, "Two.")),
         ];
+
         // The queue delivers at least once, so the turn's delivery may come twice.
         const handed = [
           yield* sessions.deliverTurn(opened.sessionId, agent.conversationId),
@@ -3111,14 +3398,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         // The first launch's runner reads as running to Vercel, and never takes its line.
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [stuck] = api.commands;
         assert.ok(stuck !== undefined && stuck.exitCode === null);
@@ -3140,10 +3430,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       // A read that waits for the running command's exit is held until its reader gives up.
       api.waits.hold = true;
@@ -3163,13 +3455,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 3 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const first = api.commands[0];
         assert.ok(first !== undefined);
@@ -3183,6 +3478,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const waiting = yield* Effect.forkChild(
           sessions.send(opened.sessionId, message(agent, "Again.")),
         );
+
         yield* Effect.promise(async () => {
           for (let turn = 0; turn < 50; turn += 1) {
             await new Promise<void>((settle) => setImmediate(settle));
@@ -3206,13 +3502,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 3 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* runnerTook(agent.id);
         // Another instance's call holds the lease, as a launch elsewhere does.
@@ -3235,10 +3534,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             ],
           }),
         );
+
         for (let second = 0; second < 29; second += 1) {
           yield* turnsPass;
           yield* TestClock.adjust("1 second");
         }
+
         yield* turnsPass;
         const answered = waiting.pollUnsafe();
         yield* Fiber.interrupt(waiting);
@@ -3256,13 +3557,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 3 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // Another instance's call holds the lease, as a launch elsewhere does.
         const now = new Date(yield* Clock.currentTimeMillis);
@@ -3282,11 +3586,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           answers.map((answer) => answer.outcome),
           [SESSION_SEND_OUTCOME.ACCEPTED, SESSION_SEND_OUTCOME.ACCEPTED],
         );
+
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: 3,
           after: 0,
           limit: 10,
         });
+
         // The developer's words close each message, the turn's own words ahead of them, and the
         // agent's model as it stands now goes ahead of each message queued behind.
         const model = {
@@ -3295,9 +3601,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           fast: false,
           effort: "low",
         };
+
         assert.deepEqual(
           read.map((line) => {
-            const parsed = JSON.parse(line.text) as InputLine;
+            const parsed = readInputLine(JSON.parse(line.text));
+
             return parsed.type === INPUT_LINE.MESSAGE ? parsed.content.at(-1) : parsed;
           }),
           [
@@ -3318,26 +3626,33 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const sentry = recordingSentry();
+
         // The edge runner traces as the web's runtime does, its root fiber handed nothing of the caller's.
         const traced: SandboxRunner = (effect) =>
           Effect.runPromise(effect.pipe(Effect.provide(sentryReportingLayer)));
+
         const asked = yield* Effect.gen(function* () {
           const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
             run: traced,
           });
+
           const opened = yield* deliveredOpen(
             sessions,
             yield* writtenLine(agent, "Push a branch."),
           );
+
           assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
           assert.ok(api.runs.some(isClone));
+
           return yield* Effect.currentSpan;
         }).pipe(Effect.withSpan("web/startAgent"), Effect.provide(sentry.layer));
+
         const traces = new Set(
           sentOfType(sentry.sent, "span").flatMap((item) =>
             JSON.parse(item.text).items.map((span: { trace_id: string }) => span.trace_id),
           ),
         );
+
         assert.deepEqual([...traces], [asked.traceId]);
       }),
   );
@@ -3349,13 +3664,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [sandbox] = api.sandboxes;
         assert.ok(sandbox !== undefined);
@@ -3366,6 +3684,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, until), true);
 
         yield* runnerTook(agent.id);
+
         const ending = yield* Effect.forkChild(
           runnerEnded({
             target: { userId, conversationId: agent.conversationId },
@@ -3373,6 +3692,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             sequence: 5,
           }).pipe(Effect.provide(api.layer)),
         );
+
         yield* Effect.promise(async () => {
           for (let turn = 0; turn < 50; turn += 1) {
             await new Promise<void>((settle) => setImmediate(settle));
@@ -3404,6 +3724,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const handed = { servers: [LINEAR_SERVER] };
         // Note that the first launch is numbered past the line queued for whichever launch runs next.
         const sequence = { next: 1 };
+
         const sessions = yield* claudeCodeSessions({
           userId,
           eventsUrl: EVENTS_URL,
@@ -3414,10 +3735,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           instructions: () => Effect.succeed(INSTRUCTIONS),
           nextSequence: () => Effect.sync(() => sequence.next),
         }).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // The runner took its message, and its events were applied.
         yield* runnerTook(agent.id);
@@ -3432,7 +3755,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.notEqual(first.exitCode, null);
         assert.ok(!JSON.stringify(yield* launchLines(first)).includes("Use Notion now."));
         const [config] = yield* launchLines(second);
-        assert.ok(typeof config === "object" && config !== null && "integrations" in config);
+        assert.ok(Predicate.isObjectOrArray(config) && "integrations" in config);
         assert.deepEqual(config.integrations, handed.servers);
         assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Use Notion now."));
 
@@ -3455,10 +3778,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 1 };
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* runnerTook(agent.id);
         sequence.next = 2;
@@ -3472,6 +3797,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const sending = yield* Effect.forkChild(
           sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
         );
+
         yield* turnsPass;
         yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
         yield* turnsPass;
@@ -3485,7 +3811,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const second = api.commands[1];
         assert.ok(second !== undefined);
-        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(second, readClaudeCodeConfig);
         assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
         assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
       }),
@@ -3498,13 +3824,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // The runner took its line, so nothing of the session waits on a launch once it is reset.
         yield* runnerTook(agent.id);
@@ -3531,14 +3860,18 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const mine = yield* openAgent;
       const theirs = yield* openAgent;
+
       const theirSessions = yield* sessionsFor(theirs.userId, { next: 0 }).pipe(
         Effect.provide(services(api)),
       );
+
       const opened = yield* deliveredOpen(
         theirSessions,
         yield* writtenLine(theirs.agent, "Their work."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
       const mySessions = yield* sessionsFor(mine.userId, { next: 0 }).pipe(
         Effect.provide(services(api)),
       );
@@ -3548,10 +3881,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const now = new Date(yield* Clock.currentTimeMillis);
       const until = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
       assert.equal(yield* claimAgentRunnerLease(mine.agent.id, randomUUID(), now, until), true);
+
       const queuedBehind = yield* mySessions.send(
         opened.sessionId,
         message(mine.agent, "Still not yours."),
       );
+
       const canceled = yield* mySessions.cancel(opened.sessionId, "turn_0");
       const reset = yield* mySessions.reset(opened.sessionId);
 
@@ -3571,13 +3906,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* runnerLetGo(api, userId, opened.sessionId);
         api.failStdin.remaining = 1;
@@ -3585,6 +3923,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         const sent = yield* sessions.send(opened.sessionId, yield* writtenLine(agent, "Again."));
         const failed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+
         const retried = yield* sentAndDelivered(
           sessions,
           opened.sessionId,
@@ -3597,7 +3936,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 3);
         assert.notEqual(api.commands[1]?.exitCode, null);
-        const [config] = (yield* launchLines(api.commands[2])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[2], readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, api.commands[2]);
         assert.equal(config.harness, RUNNER_HARNESS.CLAUDE_CODE);
         assert.equal(line?.type, INPUT_LINE.MESSAGE);
@@ -3610,10 +3949,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const api = runnerSandboxApi();
       const { userId, agent } = yield* openAgent;
       const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
       const opened = yield* deliveredOpen(
         sessions,
         yield* writtenLine(agent, "Fix the invitations."),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
       api.failStdin.remaining = 1;
       api.failStdin.status = 503;
@@ -3621,12 +3962,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const sending = yield* Effect.forkChild(
         sessions.send(opened.sessionId, message(agent, "Now the emails.")),
       );
+
       yield* TestClock.adjust(Duration.seconds(5));
       const sent = yield* Fiber.join(sending);
 
       assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
       assert.equal(api.commands.length, 1);
-      const last = ((yield* launchLines(api.commands[0])) as InputLine[]).at(-1);
+      const last = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.at(-1);
       assert.ok(last?.type === INPUT_LINE.MESSAGE);
       assert.deepEqual(developerContent(last), [{ type: "text", text: "Now the emails." }]);
     }),
@@ -3639,13 +3981,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
         // Note that the line joins the Start's turn, still open, as a message written before it ends does.
@@ -3675,13 +4020,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // The runner took the Start's line, and its turn ended, so the next line's turn hands the task.
         yield* runnerTook(agent.id);
@@ -3714,21 +4062,26 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
         const logged: string[] = [];
+
         const logger = Logger.layer([
           Logger.make((options) => {
             logged.push([options.message].flat().map(String).join(" "));
           }),
         ]);
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(Layer.merge(services(api), logger)),
         );
+
         api.failStdin.remaining = 1;
         api.failStdin.status = 400;
 
         const opened = yield* sessions
           .open(yield* writtenLine(agent, "Fix the invitations."))
           .pipe(Effect.provide(logger));
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
         const handed = yield* sessions
           .deliverTurn(opened.sessionId, agent.conversationId)
           .pipe(Effect.provide(logger));
@@ -3743,9 +4096,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const bearer = api.commands[0]?.env[RUNNER_ENV.BEARER];
         assert.ok(bearer !== undefined);
         const written = logged.join("\n");
+
         for (const secret of [PLAN_TOKEN, bearer, fixtureToken()]) {
           assert.equal(written.includes(secret), false);
         }
+
         assert.deepEqual(yield* newestTurn(agent), {
           status: TURN_STATUS.FAILED,
           failure: AGENT_FAILURE.SANDBOX,
@@ -3814,6 +4169,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+
         // The fake runs no git, so the checkout holds what went through: its clone, then its identity.
         const checkout = {
           cloneRefused: true,
@@ -3821,29 +4177,39 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           cloned: false,
           finished: false,
         };
+
         api.hooks.runExit = (args) => {
           if (args[0] === "-d") return checkout.cloned ? 0 : 1;
+
           if (args[0] === "config") return checkout.finished ? 0 : 1;
+
           if (args.some((arg) => arg.includes("git clone"))) {
             if (checkout.cloneRefused) return 1;
             checkout.cloned = true;
+
             return 0;
           }
+
           if (args.some((arg) => arg.includes("git config user.email"))) {
             if (checkout.identityRefused) return 1;
             checkout.finished = true;
+
             return 0;
           }
+
           return 0;
         };
+
         const isIdentity = (run: { readonly args: readonly string[] }) =>
           run.args.some((arg) => arg.includes("git config user.email"));
+
         const kept = keptAfterResponse();
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
-        // The launch, then the base drive's fill, whose clone is refused too.
+
         yield* kept.run;
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal((yield* newestTurn(agent)).status, TURN_STATUS.FAILED);
@@ -3858,14 +4224,18 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* kept.run;
         const clonedRuns = api.runs.length;
         checkout.identityRefused = false;
+
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Try again.").pipe(
           Effect.provide(kept.layer),
         );
+
         yield* kept.run;
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
         const ownAfter = (from: number) =>
           api.runs.slice(from).filter((run) => run.session === own);
+
         assert.equal(ownAfter(failedRuns).filter(isClone).length, 1, "cloned once");
         assert.equal(ownAfter(clonedRuns).filter(isClone).length, 0, "not cloned again");
         assert.equal(ownAfter(clonedRuns).filter(isIdentity).length, 1, "finished");
@@ -3875,7 +4245,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start on a repository with no base drive clones it whole from the image alone, then fills the base drive past the answer apart from the launch",
+    "a Start in a workspace with no drive yet is created from the image alone and clones its repository whole, filling no drive, and reports the drive gone",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3883,32 +4253,40 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
         const kept = keptAfterResponse();
 
+        const reported: Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"][] =
+          [];
+
+        const reporting = ErrorReporter.layer([
+          ErrorReporter.make(({ attributes }) => {
+            reported.push(attributes);
+          }),
+        ]);
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
-        ).pipe(Effect.provide(kept.layer));
-        const launched = api.commands.length;
-        const filledWithLaunch = baseDrive(api);
+        ).pipe(Effect.provide(Layer.merge(kept.layer, reporting)));
+
         yield* kept.run;
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(launched, 1);
-        assert.equal(filledWithLaunch, undefined);
+        assert.equal(api.commands.length, 1);
         const own = sandboxOfAgent(api, agent);
         assert.deepEqual(
           [own?.image, own?.sourceSnapshotId, mountedDrive(api, own)],
           [IMAGE, undefined, undefined],
         );
-        assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        // The fill mounted the base drive, and its sandbox is gone once it filled it.
-        const [fill] = baseFills(api);
-        assert.deepEqual([mountedDrive(api, fill), fill?.deleted], [baseDrive(api), true]);
-        // The base drive holds no credential: the token stood at its firewall for the clone alone.
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        assert.equal(ownRuns.filter(isClone).length, 1);
+        assert.deepEqual(api.drives, [], "no drive was made or filled");
+        assert.deepEqual(
+          reported.filter((each) => each.broken !== undefined),
+          [{ workspaceId: agent.organizationId, broken: "gone" }],
+        );
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
       }),
   );
-
   it.effect(
     "a repository agent's new sandbox starts its workspace's cloud setup after its checkout without waiting on it, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials, and records how each script exited once the run ends past the answer",
     () =>
@@ -3947,6 +4325,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         };
 
         const kept = keptAfterResponse();
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
@@ -3954,20 +4333,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.deepEqual(
-          yield* listScriptRuns(workspace),
+          yield* listScriptRuns(workspace, agent.userId),
           [],
           "nothing is recorded while the run goes on",
         );
+
         // The run ends past the answer, its stderr saying how each script exited, which is kept as each one's last run.
         const ended = api.commands.find((each) =>
           each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
         );
+
         assert.ok(ended !== undefined);
         ended.stderr = `vespin-setup-exit ${CLOUD_SETUP_SCRIPT.INSTALL} 0\nvespin-setup-exit ${CLOUD_SETUP_SCRIPT.SETUP} 0\n`;
         ended.exitCode = 0;
         yield* kept.run;
         assert.deepEqual(
-          (yield* listScriptRuns(workspace))
+          (yield* listScriptRuns(workspace, agent.userId))
             .map((run) => [run.script, run.repository, run.exitCode, run.agent.id])
             .sort(),
           [
@@ -3982,14 +4363,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           "apt-get install -y redis-tools",
         );
         assert.equal(uploaded.get("/tmp/vespin-setup/setup.sh"), "pnpm install");
+
         const clone = api.runs.findIndex(
           (run) => run.session === own?.currentSessionId && isClone(run),
         );
+
         const setup = api.commands.find(
           (each) =>
             each.sandboxSessionId === own?.currentSessionId &&
             each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
         );
+
         assert.ok(setup !== undefined && clone !== -1 && runsBeforeSetup !== undefined);
         assert.ok(runsBeforeSetup > clone, "the setup starts after the checkout");
         assert.equal(setup.user, undefined);
@@ -3997,6 +4381,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // The runner's own credentials stay in the runner's environment alone.
         const runner = api.commands.find((each) => each.user === "agent");
         assert.ok(runner !== undefined);
+
         for (const secret of [runner.env[RUNNER_ENV.CLAUDE_TOKEN], runner.env[RUNNER_ENV.BEARER]]) {
           assert.ok(secret !== undefined);
           assert.equal(JSON.stringify(setup.env).includes(secret), false);
@@ -4005,55 +4390,48 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "the next agent on the repository boots from the image on its own fork of the base drive, makes its user, fetches only its branch under its write token written once ahead of it, installs nothing, clones nothing, and launches with its write token standing",
+    "a Start boots from the image on its own fork of its workspace's drive, makes its user, claims its repository's folder there at the default branch under its write token written once ahead of it, clones and installs nothing, and launches with its write token standing",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const next = yield* anotherAgent(userId, agent);
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const drive = filledWorkspaceDrive(api, agent);
 
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const own = sandboxOfAgent(api, next);
+        const own = sandboxOfAgent(api, agent);
         assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
-        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 0);
         assert.equal(ownRuns.filter(isUserMade).length, 1);
-        const refresh = ownRuns.findIndex(isRefresh);
-        assert.equal(
-          ownRuns[refresh]?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
-          RELAY.defaultBranch,
-        );
-        assert.equal(
-          ownRuns[refresh]?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY],
-          RELAY_FULL_NAME,
-        );
         assert.equal(ownRuns.filter(isInstall).length, 0);
-        assert.equal(api.commands.length, 2);
-        assert.equal(baseFills(api).length, 1, "the base was not filled again");
+        const claims = ownRuns.filter(isClaim);
+        assert.deepEqual(
+          claims.map((run) => [
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER],
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY],
+          ]),
+          [[RELAY_FOLDER, RELAY.defaultBranch, RELAY_FULL_NAME]],
+        );
+        assert.equal(api.commands.length, 1);
         const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
         const ownPolicies = api.policies.filter((each) => each.session === own?.currentSessionId);
         assert.ok(JSON.stringify(ownPolicies.at(-1)?.policy).includes(writeHeader));
+
         // The fetch ran under one write, the agent's own credential on GitHub's API host as well as git's.
-        const beforeFetch = api.policies
-          .slice(0, ownRuns[refresh]?.policiesBefore)
+        const beforeClaim = api.policies
+          .slice(0, claims[0]?.policiesBefore)
           .filter((each) => each.session === own?.currentSessionId);
-        assert.equal(beforeFetch.length, 1);
-        const firstWrite = beforeFetch[0]?.policy as
-          | { readonly allow?: Readonly<Record<string, unknown>> }
-          | undefined;
+
+        assert.equal(beforeClaim.length, 1);
+
+        // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
+        const firstWrite = beforeClaim[0]?.policy as { readonly allow?: WireRecord } | undefined;
+
         assert.ok(
           JSON.stringify(firstWrite?.allow?.["api.github.com"] ?? null).includes(writeHeader),
         );
@@ -4061,109 +4439,71 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a Start whose workspace's drive holds no checkout of its repository clones it whole on the fork and links it at its folder",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const drive = filledWorkspaceDrive(api, agent);
+        let claiming = false;
+        api.hooks.onRun = async (env) => {
+          claiming = isClaim({ env });
+        };
+
+        api.hooks.runExit = () => (claiming ? NOT_HELD_EXIT : 0);
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal((yield* newestTurn(agent)).status === TURN_STATUS.FAILED, false);
+        const own = sandboxOfAgent(api, agent);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+
+        const steps = ownRuns.flatMap((run) =>
+          isClaim(run) ? ["claim"] : isClone(run) ? ["clone"] : isLink(run) ? ["link"] : [],
+        );
+
+        assert.deepEqual(steps, ["claim", "clone", "link"]);
+        assert.equal(
+          ownRuns.find(isLink)?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER],
+          RELAY_FOLDER,
+        );
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+  it.effect(
     "a message after a drive agent's stopped sandbox's snapshot expired mounts the drive its first open forked in the fresh sandbox from the image",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const next = yield* anotherAgent(userId, agent);
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
+        filledWorkspaceDrive(api, agent);
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const expired = sandboxOfAgent(api, next);
+        const expired = sandboxOfAgent(api, agent);
         const drive = mountedDrive(api, expired);
         assert.ok(expired !== undefined && drive !== undefined);
-        yield* runnerTook(next.id);
+        yield* runnerTook(agent.id);
         yield* runnerEnded({
-          target: { userId, conversationId: next.conversationId },
+          target: { userId, conversationId: agent.conversationId },
           sessionId: opened.sessionId,
           sequence: 0,
         }).pipe(Effect.provide(api.layer));
         api.idleStop();
         expired.snapshotExpired = true;
 
-        const sent = yield* sentAndDelivered(sessions, opened.sessionId, next, "Now the emails.");
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        const fresh = sandboxOfAgent(api, next);
+        const fresh = sandboxOfAgent(api, agent);
         assert.ok(fresh !== undefined && fresh !== expired);
         assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [IMAGE, undefined]);
         assert.equal(mountedDrive(api, fresh), drive);
       }),
   );
-
-  it.effect(
-    "an agent whose fast-forward from the base drive moved a lockfile has the base filled again past the answer",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const base = baseDrive(api);
-        api.hooks.runExit = (args) =>
-          args.some((arg) => arg.includes("git diff --quiet")) ? 1 : 0;
-        const next = yield* anotherAgent(userId, agent);
-
-        yield* deliveredOpen(sessions, yield* writtenLine(next, "Fix it again.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-
-        assert.equal(mountedDrive(api, sandboxOfAgent(api, next))?.forkedFrom, base?.name);
-        assert.equal(baseFills(api).length, 2);
-        assert.equal(baseDrive(api), base, "the refill mounted the drive standing");
-      }),
-  );
-
-  it.effect(
-    "an agent whose base drive is gone is created from the image alone and clones, and the base is filled again past the answer",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const gone = baseDrive(api);
-        assert.ok(gone !== undefined);
-        gone.deleted = true;
-        const next = yield* anotherAgent(userId, agent);
-
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
-        yield* kept.run;
-
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const own = sandboxOfAgent(api, next);
-        assert.deepEqual([own?.image, mountedDrive(api, own)], [IMAGE, undefined]);
-        assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        assert.equal(baseFills(api).length, 2);
-        assert.ok(baseDrive(api) !== undefined);
-      }),
-  );
-
   it.effect(
     "an agent continued from another is created from its source's stopped sandbox's snapshot, and makes no user and clones, fetches, and installs nothing",
     () =>
@@ -4172,16 +4512,19 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
         const kept = keptAfterResponse();
+
         const first = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
+
         yield* kept.run;
         assert.ok(first.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const source = sandboxOfAgent(api, agent);
         assert.ok(source !== undefined);
         source.status = "stopped";
         source.currentSnapshotId = "snap_source";
+
         const continued = yield* anotherAgent(userId, agent, undefined, {
           agentId: agent.id,
           steps: 0,
@@ -4201,45 +4544,45 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [
             ownRuns.filter(isUserMade).length,
             ownRuns.filter(isClone).length,
-            ownRuns.filter(isRefresh).length,
             ownRuns.filter(isInstall).length,
           ],
-          [0, 0, 0, 0],
+          [0, 0, 0],
         );
       }),
   );
 
-  /** An agent continued from one that runs on a fork of the base drive, its sandbox stopped on a snapshot, the snapshot gone where `gone` says. */
+  /** An agent continued from one that runs on a fork of its workspace's drive, its sandbox stopped on a snapshot, the snapshot gone where `gone` says. */
   const continuedFromDrive = (gone: boolean) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
       const api = runnerSandboxApi();
-      const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+      const { userId, agent: onDrive, sessions } = yield* repositoryAgent(api, ownInstallation());
+      const drive = filledWorkspaceDrive(api, onDrive);
       const kept = keptAfterResponse();
-      yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-        Effect.provide(kept.layer),
-      );
-      yield* kept.run;
-      const onDrive = yield* anotherAgent(userId, agent);
-      yield* deliveredOpen(sessions, yield* writtenLine(onDrive, "Fix it again.")).pipe(
+      yield* deliveredOpen(sessions, yield* writtenLine(onDrive, "Fix the relay.")).pipe(
         Effect.provide(kept.layer),
       );
       const source = sandboxOfAgent(api, onDrive);
       assert.ok(source !== undefined);
       source.status = "stopped";
       source.currentSnapshotId = "snap_source";
+
       if (gone) api.goneSnapshots.add("snap_source");
+
       const continued = yield* anotherAgent(userId, onDrive, undefined, {
         agentId: onDrive.id,
         steps: 0,
         totalSteps: 0,
         sandbox: source.name,
       });
+
       const opened = yield* deliveredOpen(sessions, yield* writtenLine(continued, "Go on.")).pipe(
         Effect.provide(kept.layer),
       );
+
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-      return { api, source, own: sandboxOfAgent(api, continued) };
+
+      return { api, drive, source, own: sandboxOfAgent(api, continued) };
     });
 
   it.effect(
@@ -4252,24 +4595,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(mountedDrive(api, own)?.forkedFrom, mountedDrive(api, source)?.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.deepEqual(
-          [
-            ownRuns.filter(isClone).length,
-            ownRuns.filter(isRefresh).length,
-            ownRuns.filter(isInstall).length,
-          ],
-          [0, 0, 0],
+          [ownRuns.filter(isClone).length, ownRuns.filter(isInstall).length],
+          [0, 0],
         );
       }),
   );
 
   it.effect(
-    "an agent continued from one on a drive whose snapshot is gone forks the base drive, leaving none of the source's drive it forked first",
+    "an agent continued from one on a drive whose snapshot is gone forks its workspace's drive, leaving none of the source's drive it forked first",
     () =>
       Effect.gen(function* () {
-        const { api, own } = yield* continuedFromDrive(true);
+        const { api, drive, own } = yield* continuedFromDrive(true);
 
         assert.equal(own?.sourceSnapshotId, undefined);
-        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
       }),
   );
 
@@ -4280,14 +4619,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         yield* deliveredOpen(sessions, yield* writtenLine(agent, "Draft the notes."));
         const source = sandboxOfAgent(api, agent);
         assert.ok(source !== undefined && agent.taskId !== null);
         source.status = "stopped";
         source.currentSnapshotId = "snap_source";
+
         const started = yield* createAgent(userId, {
           taskId: agent.taskId,
           idempotencyKey: `start-${randomUUID()}`,
@@ -4299,6 +4641,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           startedFrom: { agentId: agent.id, steps: 0, totalSteps: 0, sandbox: source.name },
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const continued = Option.getOrThrow(started).agent;
 
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(continued, "Go on."));
@@ -4315,10 +4658,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
+
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
+
         assert.ok(agent.taskId !== null);
+
         const started = yield* createAgent(userId, {
           taskId: agent.taskId,
           idempotencyKey: `start-${randomUUID()}`,
@@ -4336,6 +4682,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           },
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const continued = Option.getOrThrow(started).agent;
         // The Start copied the source's transcript, which the store holds from its root.
         yield* appendSessionEntries(userId, continued.conversationId, CLI_TRANSCRIPT, [CLI_ROOT]);
@@ -4343,7 +4690,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(continued, "Go on."));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const [config] = (yield* launchLines(api.commands[0])) as [ClaudeCodeConfig, InputLine];
+        const { config } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
         assert.deepEqual(
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
@@ -4354,75 +4701,88 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* writer.markSessionCleared({ userId, conversationId: continued.conversationId });
         yield* recordAgentNativeSession(userId, continued.id, null);
         const fresh = runnerSandboxApi();
+
         const reopened = yield* deliveredOpen(
           yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(fresh))),
           yield* writtenLine(continued, "Start over."),
         );
+
         assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
-          ClaudeCodeConfig,
-          InputLine,
-        ];
+
+        const { config: freshConfig } = yield* launchRead(fresh.commands[0], readClaudeCodeConfig);
+
         assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),
   );
 
   it.effect(
-    "an agent started on another branch is created from the image and clones its branch, passing the base drive by",
+    "an agent started on another branch claims its repository's folder on its workspace's drive at that branch",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
+        const drive = filledWorkspaceDrive(api, agent);
         const onBranch = yield* anotherAgent(userId, agent, "relay-fix");
 
-        const opened = yield* deliveredOpen(sessions, yield* writtenLine(onBranch, "Go on.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(onBranch, "Go on."));
 
-        const own = sandboxOfAgent(api, onBranch);
-        assert.equal(own?.image, IMAGE);
-        const clone = api.runs.find((run) => run.session === own?.currentSessionId && isClone(run));
-        assert.equal(clone?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH], "relay-fix");
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.deepEqual([own?.sourceSnapshotId, mountedDrive(api, own)], [undefined, undefined]);
-        assert.equal(baseFills(api).length, 1);
+        const own = sandboxOfAgent(api, onBranch);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        assert.equal(ownRuns.filter(isClone).length, 0);
+        assert.equal(
+          ownRuns.find(isClaim)?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
+          "relay-fix",
+        );
       }),
   );
+  it.effect(
+    "a launch mints its write token once, and clones on it while its commit identity is still read",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const clone = gate();
+        const sent: SentToGitHub[] = [];
 
-  it.effect("a launch mints its write token while its repository is cloned", () =>
-    Effect.gen(function* () {
-      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-      const api = runnerSandboxApi();
-      const clone = gate();
-      const write = sighting((sent) => mintsRepositoryToken(sent, TOKEN_ACCESS.WRITE));
-      const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
-        onGitHub: (sent) => write.observe(sent),
-      });
-      api.hooks.onRun = async (env) => {
-        if (isClone({ env })) await clone.pass();
-      };
+        // The commit identity's lookup (the App's bot, for a member with no GitHub sign-in) answers only once the clone runs.
+        const isIdentity = (each: SentToGitHub) =>
+          decodeURIComponent(new URL(each.url).pathname).endsWith("[bot]");
 
-      const line = yield* writtenLine(agent, "Fix the relay.");
-      const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
-      yield* Effect.promise(() => Promise.all([clone.arrived, write.seen]));
-      const startedDuringClone = api.commands.length;
-      clone.open();
-      const opened = yield* Fiber.join(opening);
+        const identity = sighting(isIdentity);
 
-      assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-      assert.equal(startedDuringClone, 0);
-      assert.equal(api.commands.length, 1);
-      const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
-      assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
-    }),
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
+          onGitHub: async (each) => {
+            sent.push(each);
+            identity.observe(each);
+
+            if (isIdentity(each)) await clone.arrived;
+          },
+        });
+
+        api.hooks.onRun = async (env) => {
+          if (isClone({ env })) await clone.pass();
+        };
+
+        const line = yield* writtenLine(agent, "Fix the relay.");
+        const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
+        yield* Effect.promise(() => Promise.all([clone.arrived, identity.seen]));
+        const startedDuringClone = api.commands.length;
+        clone.open();
+        const opened = yield* Fiber.join(opening);
+
+        assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(startedDuringClone, 0);
+        assert.equal(api.commands.length, 1);
+        assert.equal(
+          sent.filter((each) => mintsRepositoryToken(each, TOKEN_ACCESS.WRITE)).length,
+          1,
+        );
+        const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
+        assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
+      }),
   );
   it.effect(
     "a message to a running runner is written ahead of its credential's renewal, and a renewal Vercel refused leaves the message standing",
@@ -4431,10 +4791,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const policiesBefore = api.policies.length;
         api.failPolicy.remaining = 1;
@@ -4459,10 +4821,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const policiesBefore = api.policies.length;
         const kept = keptAfterResponse();
@@ -4487,13 +4851,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const analytics = recordingProductAnalytics();
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
+
         const sessions = yield* sessionsFor(userId, sequence).pipe(
           Effect.provide(Layer.merge(services(api), analytics.layer)),
         );
+
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
         );
+
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
         yield* sessions.send(opened.sessionId, message(agent, "Also the emails."));

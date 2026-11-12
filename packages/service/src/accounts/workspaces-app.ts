@@ -47,6 +47,7 @@ export interface WorkspacesAppSeams {
 const accountOf = Effect.fn("web/workspacesAccount")(function* (seams: WorkspacesAppSeams) {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
+
   return yield* resolvedUserId(seams, request);
 });
 
@@ -63,18 +64,24 @@ const photoEndpoint = Effect.fn("web/workspacePhotoEndpoint")(function* (
   HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope
 > {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD_GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const userId = yield* accountOf(seams);
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const named = new URL(request.url).searchParams.getAll(PHOTO_QUERY.ID);
   const asked = readEither(workspaceIdSchema)(unparsedWire(named[0]));
+
   if (named.length !== 1 || Result.isFailure(asked)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const photo = yield* hostedStoreOrUnavailable(readWorkspacePhoto(userId, asked.success));
+
   if (Option.isNone(photo)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return HttpServerResponse.uint8Array(photo.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: photo.value.contentType,

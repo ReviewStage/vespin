@@ -47,26 +47,25 @@ import {
   type DialogQuestion,
   FormField,
   GAP,
-  INLINE_EDIT_LOOK,
-  InlineEdit,
   type InlineEditEnd,
   MENU_DETAIL,
   OneLine,
   PhotoPick,
   ProviderMark,
+  RenamableName,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsRow,
   SettingsRowActSlot,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
   SettingsRowsSkeleton,
   SettingsRowValue,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   STATUS_TONE,
   Stack,
@@ -117,9 +116,8 @@ import {
 } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
-import { type RenameShape, renameWrite } from "../rename-write.js";
+import { type RenameTerms, renameWrite } from "../rename-write.js";
 import { useToast } from "../toast.js";
-import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
@@ -182,17 +180,17 @@ const TRANSFER_WORDS = {
   BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
 } as const;
 
+type TransferAskResult = { gate: string; question: DialogQuestion };
+
 /**
  * The one question either door to the handover asks, a member row's Make
  * owner and the owner's Transfer ownership: its title names the new owner
  * where the door already knows them, and the act waits on the workspace's
  * name typed, since only the new owner can give it back.
  */
-function transferAsk(
-  workspace: Workspace,
-  heir: string | undefined,
-): { gate: string; question: DialogQuestion } {
+function transferAsk(workspace: Workspace, heir: string | undefined): TransferAskResult {
   const to = heir === undefined ? "" : ` to ${heir}`;
+
   return {
     gate: workspace.name,
     question: {
@@ -223,6 +221,7 @@ const CONNECT = "Connect";
 /** An integration's line under its name, by whether it is connected and whether the reader may connect it. */
 function connectionLine(connected: boolean, manages: boolean): React.ReactNode {
   if (!connected) return manages ? CONNECTION_LINE.MANAGES : CONNECTION_LINE.MEMBER;
+
   return (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
       {CONNECTION_LINE.CONNECTED}
@@ -260,7 +259,7 @@ const MEMBERS_SKELETON_MOST = 5;
 const MEMBER_ESTIMATE_PX = 60;
 
 /** A member's row while the members are read: their face at a card's size, the email under the name, the role and the ⋯. */
-const MEMBER_ROW_SKELETON: SettingsRowSkeletonShape = {
+const MEMBER_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
   controls: [SETTINGS_SKELETON_CONTROL.VALUE],
@@ -268,7 +267,7 @@ const MEMBER_ROW_SKELETON: SettingsRowSkeletonShape = {
 };
 
 /** An invitation's row while the invitations are read: the invited face, the role and expiry under the email, Copy link and the ⋯. */
-const INVITATION_ROW_SKELETON: SettingsRowSkeletonShape = {
+const INVITATION_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
@@ -287,7 +286,7 @@ const WORKSPACE_INTEGRATIONS = [
  * its tile at a card's size; the members; and a row to each integration, its
  * mark leading and its press at its end.
  */
-const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: false,
     rows: [
@@ -322,12 +321,14 @@ type ListRead<Item> = { readonly items: readonly Item[] } | { readonly failed: s
 function useMembersRead(workspace: Workspace) {
   const members = useQuery(workspaceMembersQuery(workspace.id));
   const { mutate } = useMutation(workspaceMembersRetryMutation());
+
   const read: ListRead<WorkspaceMember> =
     members.data !== undefined
       ? { items: members.data.members }
       : members.isError
         ? { failed: WORKSPACE_READ_FAILED.MEMBERS }
         : undefined;
+
   return { read, retry: () => mutate({ workspaceId: workspace.id }) };
 }
 
@@ -354,40 +355,49 @@ function MemberRow({
   const { mutateAsync: sendWorkspaceTransfer, ...transferring } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_TRANSFER),
   );
+
   const { mutateAsync: sendWorkspaceMemberRole } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_MEMBER_ROLE),
   );
+
   const { mutate: sendWorkspaceMemberRemove } = useMutation(
     pressMutation(ACT_KIND.WORKSPACE_MEMBER_REMOVE),
   );
+
   const workspaceId = workspace.id;
   const { userId } = member;
   const may = memberActs(workspace, member, userId === readerId);
   const [refusal, setRefusal] = useState<string>();
   const answered = () => ANSWER_ACCEPTED;
+
   // Note that the dialog lets go at once, since the row it stands in goes with the removal the host draws on the press.
   const remove = useConfirmDialog(
     { subject: may.remove, surfaceOpen: true },
     neverBusyAct(() => sendWorkspaceMemberRemove({ workspaceId, userId })),
     confirmFailure(FAILURE_SURFACE.WORKSPACE_MEMBER_REMOVE, { workspaceId }),
   );
+
   const makeOwnerAct = useConfirmAct(transferring, {
     send: () => sendWorkspaceTransfer({ workspaceId, userId }),
     answered,
     failed: refusedWith,
   });
+
   const makeOwner = useConfirmDialog(
     { subject: may.transfer, surfaceOpen: true },
     makeOwnerAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_TRANSFER, { workspaceId }),
   );
+
   const giveRole = (role: WorkspaceInvitation["role"]) => {
     setRefusal(undefined);
     sendWorkspaceMemberRole({ workspaceId, userId, role }).catch((refused: Error) =>
       setRefusal(refused.message),
     );
   };
+
   const openPerson = useOpenPerson();
+
   // Note that Open profile is the one way to the person, whose page holds their Copy link.
   const profileActs = [
     ...(openPerson === undefined
@@ -400,6 +410,7 @@ function MemberRow({
           },
         ]),
   ];
+
   const roleActs = [
     ...(may.promote
       ? [
@@ -423,6 +434,7 @@ function MemberRow({
       ? [{ label: MEMBER_WORDS.MAKE_OWNER, icon: <CrownIcon />, onSelect: makeOwner.ask }]
       : []),
   ];
+
   const removeActs = may.remove
     ? [
         {
@@ -433,7 +445,9 @@ function MemberRow({
         },
       ]
     : [];
+
   const acting = profileActs.length + roleActs.length + removeActs.length > 0;
+
   return (
     <Stack gap={GAP.NONE}>
       <MenuRow
@@ -488,7 +502,9 @@ function MemberRow({
  */
 function useOwnAutomations(workspaceId: string, asked: boolean): readonly string[] | undefined {
   const rows = useQuery(automationsQuery(asked ? workspaceId : undefined)).data;
+
   if (rows === undefined || rows.some((each) => each.mine === undefined)) return undefined;
+
   return rows.filter((each) => each.mine === true).map((each) => each.name);
 }
 
@@ -510,8 +526,10 @@ function MemberLeave({
   const { mutateAsync: sendWorkspaceLeave, ...leaving } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_LEAVE),
   );
+
   const toast = useToast();
   const workspaceId = workspace.id;
+
   const leaveAct = useConfirmAct(leaving, {
     send: () =>
       sendWorkspaceLeave({ workspaceId }).then(() => {
@@ -524,18 +542,22 @@ function MemberLeave({
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const leave = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     leaveAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_LEAVE),
   );
+
   const ownAutomations = useOwnAutomations(workspaceId, leave.stage !== CONFIRM_STAGE.RESTING);
+
   const automationsLine =
     ownAutomations === undefined
       ? LEAVE_WORDS.AUTOMATIONS
       : ownAutomations.length === 0
         ? undefined
         : LEAVE_WORDS.AUTOMATIONS_NAMED(ownAutomations);
+
   return (
     <>
       <SettingsRow
@@ -602,6 +624,7 @@ function HeirChip({
 }): React.JSX.Element {
   const menu = useMenu(true);
   const door = useRef<HTMLButtonElement | null>(null);
+
   // Note that a container holds the chip wide enough for a name, because width is its place's.
   return (
     <>
@@ -662,6 +685,7 @@ function OwnerLeave({
   const { mutateAsync: sendWorkspaceTransfer, ...transferring } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_TRANSFER),
   );
+
   // Note that the admins stand in the order the menu lists them, so the first offered is the first listed.
   const admins = memberRows(
     members !== undefined && "items" in members
@@ -669,8 +693,10 @@ function OwnerLeave({
       : [],
     undefined,
   ).map((row) => row.member);
+
   const [chosenId, setChosenId] = useState<string>();
   const heir = admins.find((each) => each.userId === chosenId) ?? admins[0];
+
   const transferAct = useConfirmAct(transferring, {
     send: () =>
       heir === undefined
@@ -679,11 +705,13 @@ function OwnerLeave({
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const transfer = useConfirmDialog(
     { subject: heir !== undefined, surfaceOpen: true },
     transferAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_TRANSFER),
   );
+
   return (
     <>
       <SettingsRow
@@ -742,8 +770,10 @@ function WorkspaceDelete({
   const { mutateAsync: sendWorkspaceDelete, ...deleting } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_DELETE),
   );
+
   const toast = useToast();
   const workspaceId = workspace.id;
+
   const deleteAct = useConfirmAct(deleting, {
     send: () =>
       sendWorkspaceDelete({ workspaceId }).then(() => {
@@ -756,11 +786,13 @@ function WorkspaceDelete({
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     deleteAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_DELETE),
   );
+
   return (
     <>
       <SettingsRow
@@ -823,7 +855,9 @@ function LeaveGroup({
   onLeft: () => void;
 }): React.JSX.Element | null {
   const owner = workspace.role === WORKSPACE_ROLE.OWNER;
+
   if (owner && workspace.personal === true) return null;
+
   return (
     <SettingsSection anchor={SETTINGS_SECTION.LEAVE}>
       {owner ? (
@@ -861,6 +895,7 @@ function TeamMembers({
       />
     );
   }
+
   if ("failed" in members)
     return (
       <ReadFailed
@@ -869,6 +904,7 @@ function TeamMembers({
         onRetry={onRetry}
       />
     );
+
   return <MemberRows workspace={workspace} readerId={readerId} members={members.items} />;
 }
 
@@ -889,6 +925,7 @@ function MemberRows({
 }): React.JSX.Element {
   const { scroller, shiftedBy } = usePageScroll();
   const keys = useMemo(() => members.map((member) => member.userId), [members]);
+
   return (
     <VirtualRows
       scroller={scroller}
@@ -901,6 +938,7 @@ function MemberRows({
     >
       {(index) => {
         const member = members[index];
+
         return member === undefined ? null : (
           <MemberRow
             workspace={workspace}
@@ -925,6 +963,7 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
     workspaceName: workspace.name,
     owner: workspace.role === WORKSPACE_ROLE.OWNER,
   });
+
   return (
     <div {...searchAnchorProps(SETTINGS_SECTION.INVITATIONS)}>
       <Button variant={BUTTON_VARIANT.OUTLINE} onClick={invite.ask}>
@@ -946,6 +985,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
   const { mutate: sendWorkspaceInvitationCancel } = useMutation(
     pressMutation(ACT_KIND.WORKSPACE_INVITATION_CANCEL),
   );
+
   const copy = useCopyToast();
   const invitations = useQuery(workspaceInvitationsQuery(workspaceId));
   const retry = useMutation(workspaceInvitationsRetryMutation());
@@ -956,6 +996,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
 
   // Note that the question goes with its invitation, canceled or accepted meanwhile.
   const [canceling, setCanceling] = useState<WorkspaceInvitation>();
+
   const cancellation = useConfirmDialog(
     {
       subject: canceling !== undefined && (pending ?? []).some((one) => one.id === canceling.id),
@@ -1049,6 +1090,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
 function connectionsOf(workspace: Workspace): readonly ShownConnection[] {
   const listed =
     workspace.githubInstallations ?? (workspace.github === null ? [] : [workspace.github]);
+
   return listed.filter((connection) => connection.active);
 }
 
@@ -1080,12 +1122,16 @@ function ManagedGitHub({
   const { mutateAsync: sendWorkspaceGithubConnect } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT),
   );
+
   const workspaceId = workspace.id;
   // Note that a second press while the browser is being sent is taken as none, because an install begun again replaces the first one's intent.
   const opening = useAsyncAction(rejectionWords);
+
   const open = () =>
     void opening.run(() => sendWorkspaceGithubConnect({ workspaceId }).then(() => undefined));
+
   const connected = connections.length > 0;
+
   const actions = connected
     ? [
         [
@@ -1098,6 +1144,7 @@ function ManagedGitHub({
         ],
       ]
     : [];
+
   return (
     <Stack gap={GAP.NONE}>
       <MenuRow
@@ -1144,6 +1191,7 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
   const connections = connectionsOf(workspace);
   const repositories = useTokenRepositories(workspace.id);
   const [addRefusal, setAddRefusal] = useState<string>();
+
   const add = (
     <AddTokenRepository
       workspaceId={workspace.id}
@@ -1151,11 +1199,13 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
       onRefused={setAddRefusal}
     />
   );
+
   // Note that the token rows say their read while it is out or failed, so GitHub folds those lines too.
   const owns =
     connections.length > 0 ||
     repositories.read !== TOKEN_REPOSITORIES_READ.READY ||
     repositories.listed.length > 0;
+
   return (
     <SettingsRowsFold
       label={GITHUB_FOLD}
@@ -1211,18 +1261,23 @@ function ManagedSentry({
   const { mutateAsync: sendWorkspaceSentryInstall } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SENTRY_INSTALL),
   );
+
   const { mutateAsync: sendWorkspaceSentryDisconnect, ...sentryLeaving } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SENTRY_DISCONNECT),
   );
+
   const workspaceId = workspace.id;
   const installing = useAsyncAction(rejectionWords);
   const [leaving, setLeaving] = useState<WorkspaceSentryInstallation>();
+
   const install = () =>
     void installing.run(() => sendWorkspaceSentryInstall({ workspaceId }).then(() => undefined));
+
   // Note that the question stands only while its installation is still listed, so a read that drops it dismisses it.
   const stillListed =
     leaving !== undefined &&
     sentry.installations.some((one) => one.installationId === leaving.installationId);
+
   const disconnectAct = useConfirmAct(sentryLeaving, {
     send: () =>
       leaving === undefined
@@ -1231,11 +1286,13 @@ function ManagedSentry({
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const disconnect = useConfirmDialog(
     { subject: stillListed, surfaceOpen: true },
     disconnectAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SENTRY_DISCONNECT),
   );
+
   const actions = [
     sentry.installations.map((installation) => ({
       // Note that a lone installation's act says only Disconnect, since the menu offers no other to tell it from.
@@ -1252,6 +1309,7 @@ function ManagedSentry({
       },
     })),
   ].filter((group) => group.length > 0);
+
   return (
     <Stack gap={GAP.NONE}>
       <MenuRow
@@ -1308,6 +1366,7 @@ function ManagedSentry({
 function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.Element | null {
   const read = useQuery(workspaceIntegrationsQuery(workspace.id));
   const retry = useMutation(workspaceIntegrationsRetryMutation());
+
   if (read.data === undefined) {
     return read.isError ? (
       <ReadFailed
@@ -1317,11 +1376,15 @@ function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.
       />
     ) : null;
   }
+
   const { sentry } = read.data;
+
   if (!sentry.configured) return null;
+
   if (managesWorkspace(workspace)) {
     return <ManagedSentry workspace={workspace} sentry={sentry} />;
   }
+
   return (
     <SettingsRow
       leading={SENTRY_MARK}
@@ -1357,24 +1420,30 @@ function ManagedSlackBot({
   const { mutateAsync: sendWorkspaceSlackBotConnect } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT),
   );
+
   const { mutateAsync: sendWorkspaceSlackBotDisconnect, ...slackLeaving } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT),
   );
+
   const workspaceId = workspace.id;
   const [addRefusal, setAddRefusal] = useState<string>();
   const connecting = useAsyncAction(rejectionWords);
+
   const connect = () =>
     void connecting.run(() => sendWorkspaceSlackBotConnect({ workspaceId }).then(() => undefined));
+
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const disconnect = useConfirmDialog(
     { subject: slack.team !== undefined, surfaceOpen: true },
     disconnectAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SLACK_BOT_DISCONNECT),
   );
+
   const actions =
     slack.team === undefined
       ? []
@@ -1388,6 +1457,7 @@ function ManagedSlackBot({
             },
           ],
         ];
+
   return (
     <Stack gap={GAP.NONE}>
       <MenuRow
@@ -1453,6 +1523,7 @@ function ManagedSlackBotRows({
   slack: WorkspaceSlack;
 }): React.JSX.Element {
   const channels = useQuery(slackChannelsQuery(workspace.id));
+
   return (
     <SettingsRowsFold
       label={SLACK_BOT_FOLD}
@@ -1483,6 +1554,7 @@ function SlackBotRows({
 }): React.JSX.Element {
   if (managesWorkspace(workspace))
     return <ManagedSlackBotRows workspace={workspace} slack={slack} />;
+
   // Note that a member's row folds nothing, but stands in the fold so its end keeps the chevron's room, as every row of the card does.
   return (
     <SettingsRowsFold
@@ -1510,6 +1582,7 @@ function SlackBotRows({
 function WorkspaceSlackBotRow({ workspace }: { workspace: Workspace }): React.JSX.Element | null {
   const read = useQuery(workspaceIntegrationsQuery(workspace.id));
   const retry = useMutation(workspaceIntegrationsRetryMutation());
+
   if (read.data === undefined) {
     return read.isError ? (
       <ReadFailed
@@ -1519,8 +1592,11 @@ function WorkspaceSlackBotRow({ workspace }: { workspace: Workspace }): React.JS
       />
     ) : null;
   }
+
   const { slack } = read.data;
+
   if (!slack.configured) return null;
+
   return <SlackBotRows workspace={workspace} slack={slack} />;
 }
 
@@ -1566,12 +1642,15 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
   const field = useRef<HTMLInputElement | null>(null);
   const problem = workspaceSlugProblemOf(slug);
   const shown = problem === undefined ? undefined : WORKSPACE_SLUG_REFUSAL[problem];
+
   const confirm = useConfirmDialog(
     { subject: workspace.role === WORKSPACE_ROLE.OWNER, surfaceOpen: true },
     neverBusyAct(() => sendWorkspaceSlugSet({ workspaceId, slug })),
     confirmFailure(FAILURE_SURFACE.WORKSPACE_WRITE, { workspaceId }),
   );
+
   const form = useFormDialog(confirm, problem === undefined && slug !== standing);
+
   const dialog = (
     <Dialog
       open={form.open}
@@ -1617,6 +1696,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
       </FormField>
     </Dialog>
   );
+
   return {
     ask: () => {
       setSlug(standing);
@@ -1627,7 +1707,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
 }
 
 /** A workspace's rename as its mutation is asked; refused where the service refuses the call. */
-const WORKSPACE_RENAME_SHAPE: RenameShape<
+const WORKSPACE_RENAME_TERMS: RenameTerms<
   ActResult<typeof ACT_KIND.WORKSPACE_RENAME>,
   ActVariables<typeof ACT_KIND.WORKSPACE_RENAME>
 > = {
@@ -1638,8 +1718,9 @@ const WORKSPACE_RENAME_SHAPE: RenameShape<
 
 /**
  * The page's first row, drawn as Account's account row is: the workspace's
- * tile, its name, and who shares it. An account's first workspace is named
- * by its owner's account name, so it offers no Rename. The new name stands
+ * tile, its name, renamed by pressing it (`RenamableName`), and who shares
+ * it. An account's first workspace is named by its owner's account name, so
+ * its name is drawn plain. The new name stands
  * at once, as the host draws it on the press, and the photo once the
  * service answers it; a refusal, its name back, or a file that cannot be a
  * photo, is said under the row until the next try.
@@ -1648,39 +1729,41 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const { mutateAsync: sendWorkspacePhotoSet } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_PHOTO_SET),
   );
+
   const workspaceId = workspace.id;
   const manages = managesWorkspace(workspace);
   const renamable = manages && workspace.personal !== true;
   const renaming = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
-  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_SHAPE));
+  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_TERMS));
   const [uploading, setUploading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
-  const button = useRef<HTMLButtonElement | null>(null);
   const set = workspace.photoVersion !== undefined;
   const photoRemoving = useMutation(actMutation(ACT_KIND.WORKSPACE_PHOTO_SET));
+
   const removeAct = useConfirmAct(photoRemoving, {
     send: () => photoRemoving.mutateAsync({ workspaceId, photo: null }),
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const remove = useConfirmDialog(
     { subject: manages && set, surfaceOpen: true },
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_WRITE),
   );
-  // Note that focus goes back to Rename once the edit ends, since the host draws the new name on the press.
-  const endedByKey = useRefocusAfterEdit(rename.editing, button);
-  const end = ({ value: name, byKey }: InlineEditEnd) => {
-    endedByKey(byKey);
+
+  const end = ({ value: name }: InlineEditEnd) => {
     // Note that a field reopened over a refused name and typed back to the one drawn changes nothing.
     rename.end(name === workspace.name ? undefined : name);
   };
+
   const upload = (file: File) => {
     setRefusal(undefined);
     setUploading(true);
     photoOfFile(file)
       .then((read) => {
         if ("refusal" in read) throw new Error(read.refusal);
+
         return sendWorkspacePhotoSet({ workspaceId, photo: read.photo });
       })
       .then(
@@ -1689,26 +1772,25 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
       )
       .finally(() => setUploading(false));
   };
+
   const picker = useFilePicker({
     accept: PHOTO_ACCEPT,
     onFiles: ([picked]) => {
       if (picked !== undefined) upload(picked);
     },
   });
+
   const slugging = useSlugDialog(workspace);
+
   const slugActs =
     workspace.role === WORKSPACE_ROLE.OWNER
       ? [{ label: SLUG_WORDS.CHANGE, icon: <GLYPH.LINK />, onSelect: slugging.ask }]
       : [];
+
   // Note that the photo's acts are its tile's own (`PhotoPick`), as setup and New workspace draw it, so the ⋯ holds the slug alone.
   const actions = slugActs.length === 0 ? [] : [slugActs];
-  const renamePress =
-    renamable && !rename.editing ? (
-      <Button ref={button} variant={BUTTON_VARIANT.OUTLINE} onClick={rename.begin}>
-        Rename
-      </Button>
-    ) : null;
   const tileUrl = useWorkspaceTileUrl(workspace);
+
   return (
     <Stack gap={GAP.NONE} {...searchAnchorProps(SETTINGS_SEARCH_ROW.WORKSPACE_RENAME)}>
       <MenuRow
@@ -1740,12 +1822,12 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
           ),
           label: (
             <ReplayMask>
-              <InlineEdit
+              <RenamableName
                 value={rename.asked ?? workspace.name}
                 label="Workspace name"
                 editing={rename.editing}
+                onBegin={renamable ? rename.begin : undefined}
                 maxLength={WORKSPACE_BOUNDS.MAX_NAME_CHARS}
-                look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={end}
               />
             </ReplayMask>
@@ -1758,7 +1840,6 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               FAILURE_SURFACE.WORKSPACE_WRITE,
             ),
           ),
-          control: renamePress,
         }}
       />
       <ConfirmDialog
@@ -1793,6 +1874,7 @@ export function WorkspacePage({
   readerId: string | undefined;
 }): React.JSX.Element {
   const workspace = shownWorkspace(control);
+
   if (workspace === undefined) {
     return control.listFailed ? (
       <SettingsSection>
@@ -1809,6 +1891,7 @@ export function WorkspacePage({
       />
     );
   }
+
   // Keyed to the workspace, so another one listed reads its own members and asks nothing left over.
   return (
     <ShownWorkspace
@@ -1832,6 +1915,7 @@ function ShownWorkspace({
 }): React.JSX.Element {
   const members = useMembersRead(workspace);
   const ownName = control.workspaces.find((each) => each.personal === true)?.name;
+
   return (
     <>
       <SettingsSection>

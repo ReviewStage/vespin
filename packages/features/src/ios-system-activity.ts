@@ -20,7 +20,13 @@
 
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
-import { LINK_DESTINATION, type LinkDestination, linkOf, readLink } from "./link-grammar.js";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  linkWorkspaceStep,
+  readLink,
+} from "./link-grammar.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -69,12 +75,6 @@ export interface SpotlightChanges {
   readonly remove: readonly string[];
 }
 
-/** The step a workspace's links are written under: its slug, else its id, else the id itself before the workspaces are read. */
-function linkWorkspaceStep(workspaceId: string, workspaces: readonly Workspace[]): string {
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
-  return workspace?.slug ?? workspace?.id ?? workspaceId;
-}
-
 /** An agent's place, under its task where it is known, as the agent's page writes its address. */
 function agentPlace(agentId: string, taskId: string | undefined): LinkDestination {
   return taskId === undefined
@@ -86,6 +86,7 @@ function agentPlace(agentId: string, taskId: string | undefined): LinkDestinatio
 export function threadActivity(listed: InboxListed, workspaces: readonly Workspace[]): IosActivity {
   const { holder, item } = listed;
   const step = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+
   return {
     title: cardTitle(item.title),
     webpageUrl: linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, step),
@@ -99,6 +100,7 @@ export function threadActivity(listed: InboxListed, workspaces: readonly Workspa
  */
 export function taskActivity(task: TaskSummary, workspaces: readonly Workspace[]): IosActivity {
   const step = linkWorkspaceStep(task.workspaceId, workspaces);
+
   return {
     title: task.name,
     webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, step),
@@ -116,6 +118,7 @@ export function agentActivity(
   workspaces: readonly Workspace[],
 ): IosActivity {
   const step = linkWorkspaceStep(agent.workspaceId, workspaces);
+
   return { title: agent.title, webpageUrl: linkOf(agentPlace(agent.id, agent.taskId), step) };
 }
 
@@ -132,10 +135,12 @@ export function pullRequestActivity(
 ): IosActivity {
   const step = linkWorkspaceStep(pullRequest.workspaceId, workspaces);
   const { agentId, taskId } = pullRequest;
+
   const place: LinkDestination =
     taskId === undefined
       ? { kind: LINK_DESTINATION.CHANGES, agentId }
       : { kind: LINK_DESTINATION.CHANGES, planId: taskId, agentId };
+
   return {
     title: pullRequest.title,
     webpageUrl: linkOf(place, step),
@@ -156,10 +161,12 @@ export function spotlightItems(read: {
 }): readonly SpotlightItem[] {
   const { workspace, readerId } = read;
   const workspaces = [workspace];
+
   const tasks = read.tasks
     .filter((task) => task.workspaceId === workspace.id)
     .map((task): SpotlightItem => {
       const status = task.status === undefined ? [] : [TASK_STATUS_WORDS[task.status]];
+
       return {
         id: taskActivity(task, workspaces).webpageUrl,
         domain: SPOTLIGHT_DOMAIN.TASK,
@@ -167,10 +174,12 @@ export function spotlightItems(read: {
         summary: [...status, workspace.name].join(SUMMARY_PART),
       };
     });
+
   const threads = read.threads
     .filter(({ holder }) => holder.task.workspaceId === workspace.id)
     .map((listed): SpotlightItem => {
       const activity = threadActivity(listed, workspaces);
+
       return {
         id: activity.webpageUrl,
         domain: SPOTLIGHT_DOMAIN.THREAD,
@@ -178,6 +187,7 @@ export function spotlightItems(read: {
         summary: inboxPreview(listed.item, (member) => inboxMemberName(member, readerId)),
       };
     });
+
   return [...tasks, ...threads];
 }
 
@@ -192,11 +202,15 @@ export function spotlightChanges(
   next: readonly SpotlightItem[],
 ): SpotlightChanges {
   const listed = new Set(next.map(({ id }) => id));
+
   const index = next.filter((item) => {
     const held = indexed.get(item.id);
+
     return held === undefined || !sameItem(held, item);
   });
+
   const remove = [...indexed.keys()].filter((id) => !listed.has(id));
+
   return { index, remove };
 }
 
@@ -208,12 +222,15 @@ export function spotlightChanges(
  */
 export function iosContinuedRouteOf(continued: ContinuedActivity): string | undefined {
   const read = readLink(continued.link);
+
   if (read === undefined) return undefined;
   const { place } = read;
   const { pullRequest } = continued;
+
   if (place.kind === LINK_DESTINATION.CHANGES && pullRequest !== undefined)
     return Number.isSafeInteger(pullRequest) && pullRequest > 0
       ? iosPullRequestRoute(place.agentId, pullRequest)
       : undefined;
+
   return iosAppRouteOf(place);
 }

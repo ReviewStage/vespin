@@ -21,19 +21,23 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(scriptDirectory, "..");
 const outputRoot = path.join(appRoot, "dist");
 const brandRoot = BRAND_ASSETS_DIRECTORY;
+
 const appVersion = JSON.parse(
   await fs.readFile(path.join(appRoot, "package.json"), "utf8"),
 ).version;
+
 // The one release every build's reports and uploaded source maps share, a
 // Developer ID build's or not: main reports under it (`PACKAGED_SENTRY_RELEASE`)
 // and the upload below files the maps under it, so the two cannot drift.
 const sentryRelease = `Vespin@${appVersion}`;
+
 // Whether this build uploads its source maps (`sentryPlugins` below): where
 // the token is set, unless the build is a Release workflow rehearsal (a
 // manual dispatch), which publishes no release and so must not file maps
 // under the real one. A tag's build and a release cut by hand both upload.
 const uploadsSourceMaps =
   Boolean(process.env.SENTRY_AUTH_TOKEN) && process.env.GITHUB_EVENT_NAME !== "workflow_dispatch";
+
 // The Dock takes one large PNG per mode and swaps them as the theme changes.
 const DOCK_ICON_IMAGES = {
   "icon-light.png": "icon-light-512.png",
@@ -49,6 +53,7 @@ const panelRedirects = {
   setup(build) {
     build.onResolve({ filter: REDIRECTED }, (args) => {
       const target = redirectOf(args.path, args.importer);
+
       return target === undefined ? undefined : { path: target };
     });
   },
@@ -59,6 +64,7 @@ const panelRedirects = {
 // is read in a namespace of its own, so the resolver never takes it for the
 // package and keeps answering the named imports with the ES build.
 const LUCIDE_WHOLE_FILE = "lucide-whole-file";
+
 const lucideWholeOnDemand = {
   name: "lucide-whole-on-demand",
   setup(build) {
@@ -90,11 +96,13 @@ const lucideWholeOnDemand = {
 // that loads a chunk's stylesheets itself, as Vite does, needs none of this.
 const TERMINAL_STYLESHEET = path.join(appRoot, "../../packages/panel/src/terminal/index.css");
 const SIDE_STYLESHEETS = new Map([[TERMINAL_STYLESHEET, "terminal.css"]]);
+
 const sideStylesheetsLinked = {
   name: "side-stylesheets-linked",
   setup(build) {
     build.onResolve({ filter: /\.css$/ }, (args) => {
       const stylesheet = path.resolve(args.resolveDir, args.path);
+
       return args.kind === "import-statement" && SIDE_STYLESHEETS.has(stylesheet)
         ? { path: stylesheet, namespace: "side-stylesheet" }
         : undefined;
@@ -131,6 +139,7 @@ function git(...args) {
 function nearestRef() {
   try {
     const ref = git("name-rev", "--name-only", "--no-undefined", "HEAD");
+
     return ref.replace(/^remotes\/[^/]+\//u, "").replace(/\^0$/u, "");
   } catch {
     return undefined;
@@ -142,7 +151,9 @@ function nearestRef() {
 function worktreeFolder() {
   const gitDirectory = git("rev-parse", "--absolute-git-dir");
   const commonDirectory = path.resolve(appRoot, git("rev-parse", "--git-common-dir"));
+
   if (gitDirectory === commonDirectory) return undefined;
+
   return path.basename(git("rev-parse", "--show-toplevel"));
 }
 
@@ -152,9 +163,12 @@ function buildCommit() {
       sha: git("rev-parse", "--short", "HEAD"),
       dirty: git("status", "--porcelain") !== "",
     };
+
     const branch = git("rev-parse", "--abbrev-ref", "HEAD");
     const named = branch === "HEAD" ? (nearestRef() ?? worktreeFolder()) : branch;
+
     if (named !== undefined) commit.branch = named;
+
     return commit;
   } catch {
     return null;
@@ -165,6 +179,7 @@ function buildCommit() {
 // first `import` is a syntax error and the window stays blank.
 async function assertModuleEntry(document, entry) {
   const html = await fs.readFile(path.join(outputRoot, "renderer", document), "utf8");
+
   if (!html.includes(`<script type="module" src="${entry}"></script>`)) {
     throw new Error(`${document} must load ${entry} with <script type="module">`);
   }
@@ -177,6 +192,7 @@ async function assertModuleEntry(document, entry) {
 // electron-builder's `files` (`electron-builder-config.mjs`) leaves them out.
 function sentryPlugins() {
   if (!uploadsSourceMaps) return [];
+
   return [
     sentryEsbuildPlugin({
       authToken: process.env.SENTRY_AUTH_TOKEN,
@@ -193,7 +209,9 @@ function sentryPlugins() {
 }
 
 await fs.rm(outputRoot, { recursive: true, force: true });
+
 await fs.mkdir(path.join(outputRoot, "renderer"), { recursive: true });
+
 await fs.mkdir(path.join(outputRoot, "icon"), { recursive: true });
 
 // The window's entry, by the bundle it is built into: its source, and the

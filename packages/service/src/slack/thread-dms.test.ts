@@ -39,17 +39,22 @@ interface SlackCall {
 function fakeSlack(calls: SlackCall[], refuseFirstReply = false): SlackWebApi {
   let posted = 0;
   let refused = !refuseFirstReply;
+
   return (method, args) => {
     calls.push({ method, args });
+
     switch (method) {
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: `U-${args.email}` } });
       case "chat.postMessage":
         if (args.thread_ts !== undefined && !refused) {
           refused = true;
+
           return Effect.succeed({ ok: false, error: "ratelimited" });
         }
+
         posted += 1;
+
         return Effect.succeed({ ok: true, channel: "D0001", ts: `1700000000.00010${posted}` });
       case "files.getUploadURLExternal":
         return Effect.succeed({
@@ -86,6 +91,7 @@ const openConnectedAgent = Effect.gen(function* () {
   const email = `${userId}@app.test`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -96,15 +102,19 @@ const openConnectedAgent = Effect.gen(function* () {
     prompt: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
   const organizationId = task.workspaceId;
   yield* linkSlackInstallation({ organizationId, teamId: "T0001", teamName: "Team", userId });
+
   const [workspace] = yield* db
     .select({ slug: organization.slug })
     .from(organization)
     .where(eq(organization.id, organizationId));
+
   assert.ok(workspace !== undefined);
   const agent = { userId, taskId: task.id, agentId: started.value.agent.id };
+
   return { agent, organizationId, email, slug: workspace.slug };
 });
 
@@ -117,8 +127,10 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const sent: { url: string; bytes: Uint8Array }[] = [];
+
       return Effect.gen(function* () {
         const { agent, organizationId, email, slug } = yield* openConnectedAgent;
+
         const ask = {
           key: "branch-protection",
           title: "Require a review on main",
@@ -126,34 +138,42 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
           ask: { type: INBOX_ASK.DO, steps: [] },
           needsReply: true,
         };
+
         const item = Result.getOrThrow(yield* postInboxThread(agent, ask, [SCREENSHOT]));
         yield* dmThreadPost({ organizationId, item, asked: true, wasOpen: false });
         const wasOpen = yield* threadStandsOpen(agent, ask.key);
         // The follow-up comes later than the ask, as an agent's next post does.
         yield* TestClock.adjust("1 second");
+
         const followUp = Result.getOrThrow(
           yield* postInboxThread(agent, { key: ask.key, body: "Still needed." }),
         );
+
         yield* dmThreadPost({ organizationId, item: followUp, asked: false, wasOpen });
 
         const link = `https://vespin.dev/${slug}/inbox/${item.id}`;
+
         const [title, reply, later, ...more] = calls.filter(
           (call) => call.method === "chat.postMessage",
         );
+
         assert.deepEqual(more, []);
         assert.equal(title?.args.channel, `U-${email}`);
         assert.equal(title?.args.thread_ts, undefined);
         assert.equal(title?.args.text, "📥 Require a review on main");
+
         const header = {
           type: "header",
           text: { type: "plain_text", text: "📥 Require a review on main" },
         };
+
         const open = {
           type: "actions",
           elements: [
             { type: "button", text: { type: "plain_text", text: "Open in Vespin" }, url: link },
           ],
         };
+
         assert.deepEqual(blocksOf(title), [header, open]);
         assert.equal(reply?.args.channel, "D0001");
         assert.equal(reply?.args.thread_ts, "1700000000.000101");
@@ -188,6 +208,7 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
 
         const askId =
           item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN)?.id ?? "";
+
         yield* answerInboxAsk(agent.userId, item.id, {
           answers: { ask: askId, reply: INBOX_REPLY.DONE },
           text: "",
@@ -199,6 +220,7 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
         const [asking, answered, untitled, ...again] = calls.filter(
           (call) => call.method === "chat.update",
         );
+
         assert.deepEqual(again, []);
         // The title DM says the open ask with its own buttons while it waits, and the title alone once it is answered.
         assert.equal(asking?.args.ts, "1700000000.000101");
@@ -225,8 +247,10 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
     "a post whose reply Slack refused leaves its title DM the thread's, so the next ask replies under it",
     () => {
       const calls: SlackCall[] = [];
+
       return Effect.gen(function* () {
         const { agent, organizationId, slug } = yield* openConnectedAgent;
+
         const ask = {
           key: "invite-expiry",
           title: "How long should an invitation last?",
@@ -234,12 +258,15 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
           ask: { type: INBOX_ASK.DECIDE, options: [{ label: "A week" }, { label: "A month" }] },
           needsReply: true,
         };
+
         const item = Result.getOrThrow(yield* postInboxThread(agent, ask));
         yield* dmThreadPost({ organizationId, item, asked: true, wasOpen: false });
         yield* TestClock.adjust("1 second");
+
         const again = Result.getOrThrow(
           yield* postInboxThread(agent, { ...ask, body: "Or a month?" }),
         );
+
         yield* dmThreadPost({ organizationId, item: again, asked: true, wasOpen: true });
 
         const posted = calls.filter((call) => call.method === "chat.postMessage");
@@ -279,8 +306,10 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
     "a press on the title DM after its ask settled draws the title again, not a reply",
     () => {
       const calls: SlackCall[] = [];
+
       return Effect.gen(function* () {
         const { agent, organizationId, slug } = yield* openConnectedAgent;
+
         const ask = {
           key: "invite-expiry",
           title: "How long should an invitation last?",
@@ -288,6 +317,7 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
           ask: { type: INBOX_ASK.DECIDE, options: [{ label: "A week" }, { label: "A month" }] },
           needsReply: true,
         };
+
         const item = Result.getOrThrow(yield* postInboxThread(agent, ask));
         yield* dmThreadPost({ organizationId, item, asked: true, wasOpen: false });
         const message = item.thread?.find((each) => each.ask?.status === INBOX_ASK_STATUS.OPEN);
@@ -306,6 +336,7 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
         const [redrawn, ...more] = calls
           .slice(before)
           .filter((call) => call.method === "chat.update");
+
         assert.deepEqual(more, []);
         assert.equal(redrawn?.args.ts, title.ts);
         assert.deepEqual(blocksOf(redrawn), [
@@ -330,8 +361,10 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
 
   it.effect("a DM from before the title stood alone keeps its title once its ask settles", () => {
     const calls: SlackCall[] = [];
+
     return Effect.gen(function* () {
       const { agent } = yield* openConnectedAgent;
+
       const ask = {
         key: "branch-protection",
         title: "Require a review on main",
@@ -339,9 +372,12 @@ it.layer(getTestDB())("a thread's Slack DM", (it) => {
         ask: { type: INBOX_ASK.DO, steps: [] },
         needsReply: true,
       };
+
       const item = Result.getOrThrow(yield* postInboxThread(agent, ask));
+
       const askId =
         item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN)?.id ?? "";
+
       // The DM as it was kept before, the post's words in the thread's first message.
       yield* (yield* Database)
         .update(inboxMessage)

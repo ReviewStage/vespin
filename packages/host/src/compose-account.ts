@@ -131,14 +131,17 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     credential: session.credential,
     sessionCredential: session.sessionCredential,
   });
+
   const access = accountAccessHolder({
     client: accessClient,
     accountKey: () => {
       const account = session.snapshot();
+
       return account.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
     },
     publish: (next) => kernel.emit(GATEWAY_EVENT.ACCOUNT_ACCESS_CHANGED, carried(next)),
   });
+
   const accessReads = yield* FiberSet.make();
 
   /**
@@ -154,8 +157,10 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
   ): Effect.fn.Return<void> {
     const signedIn = next.status === ACCOUNT_STATUS.SIGNED_IN;
     const wasSignedIn = previousAccount.status === ACCOUNT_STATUS.SIGNED_IN;
+
     const previousAccountKey =
       previousAccount.status === ACCOUNT_STATUS.SIGNED_IN ? previousAccount.email : undefined;
+
     const nextAccountKey = signedIn ? next.email : undefined;
     // Note that another person under a session that stays signed in, as a
     // renewal whose identity read names someone else, is a departure and an
@@ -165,26 +170,34 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     // it, is drawn for the next.
     // Note that a person is told by their id where both name one, and by their address otherwise, as the session manager tells them.
     const [previousId, nextId] = [signedInAccountId(previousAccount), signedInAccountId(next)];
+
     const anotherPerson =
       wasSignedIn &&
       signedIn &&
       (previousId !== undefined && nextId !== undefined
         ? previousId !== nextId
         : previousAccountKey !== nextAccountKey);
+
     previousAccount = next;
+
     if (previousAccountKey !== nextAccountKey) settings.forgetAccountPreferenceHydration();
+
     if (anotherPerson) yield* Effect.flatMap(late.value, (links) => links.stopCapabilities);
+
     // An account that stays signed in under a new address had its preferences dropped with the old one, and no sign-in reads them again; another person's are read as their capabilities start.
     if (wasSignedIn && signedIn && previousAccountKey !== nextAccountKey && !anotherPerson) {
       yield* settings.reconcileAccountPreferences();
     }
+
     // A deletion stands recording down until the next sign-in, which starts it again.
     if (signedIn && !wasSignedIn) sessionReplayEndedByDeletion = false;
     kernel.emit(GATEWAY_EVENT.ACCOUNT_CHANGED, carried(next));
     yield* access.accountChanged;
     yield* settings.emitSettings();
     yield* emitSessionReplay;
+
     if (signedIn && !wasSignedIn) settings.recordProductEvent(PRODUCT_EVENT.ACCOUNT_SIGN_IN, {});
+
     if (anotherPerson) yield* Effect.flatMap(late.value, (links) => links.startCapabilities);
   });
 
@@ -206,7 +219,9 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
   const sessionReplayState: Effect.Effect<SessionReplayState> = Effect.sync(() => {
     const account = session.snapshot();
     const permitted = runMode.sendsNetwork && !sessionReplayEndedByDeletion;
+
     if (account.status !== ACCOUNT_STATUS.SIGNED_IN || !account.id) return { permitted };
+
     return {
       permitted,
       accountId: account.id,
@@ -256,8 +271,10 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
       Effect.catch((error) =>
         Effect.sync(() => {
           report(`${SIGN_IN_REFUSED}: ${error.message}`);
+
           const failure: SignInFailure =
             error instanceof SignInFailed ? error.failure : SIGN_IN_FAILURE.UNFINISHED;
+
           return { failure };
         }),
       ),
@@ -272,6 +289,7 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     settings.recordProductEvent(PRODUCT_EVENT.ACCOUNT_ACTION, {
       account_action: PRODUCT_ACCOUNT_ACTION.SIGN_IN_START,
     });
+
     return settings.flushProductEvents;
   });
 
@@ -286,6 +304,7 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     settings.recordProductEvent(PRODUCT_EVENT.ACCOUNT_ACTION, {
       account_action: PRODUCT_ACCOUNT_ACTION.SIGN_IN_START,
     });
+
     if (launched.status === ACCOUNT_STATUS.SIGNED_IN) {
       settings.recordProductEvent(PRODUCT_EVENT.ACCOUNT_SIGN_IN, {});
     }
@@ -318,6 +337,7 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         // authenticated with; queued behind the sign-out it would wait for the
         // next sign-in.
         yield* settings.flushProductEvents;
+
         return yield* refusedAs(SIGN_OUT_REFUSED)(session.signOut({ revokeRemote: true }));
       }),
     ACCOUNT_DELETE: () =>
@@ -327,17 +347,22 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         });
         yield* settings.flushProductEvents;
         const deleted = yield* Effect.result(session.deleteEverywhere());
+
         if (Result.isFailure(deleted)) {
           report(`${DELETE_REFUSED}: ${deleted.failure.message}`);
+
           // Note that a session too old to delete under, and a deletion the Mac could not confirm, are refused in sentences of their own, since the act's own says only that it failed.
           if (deleted.failure instanceof DeletionSessionExpired) {
             return yield* new ActRefused({ sentence: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL });
           }
+
           if (deleted.failure instanceof DeletionUnconfirmed) {
             return yield* new ActRefused({ sentence: ACCOUNT_DELETE_UNCONFIRMED_REFUSAL });
           }
+
           return yield* new RefusedRefusal({ message: DELETE_REFUSED });
         }
+
         const snapshot = deleted.success;
         // Only a deletion that landed stands recording down for the run.
         sessionReplayEndedByDeletion = true;
@@ -346,6 +371,7 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         // would be interrupted with it, dropping the very reply that is
         // supposed to stand recording down.
         yield* Effect.forkDetach(emitSessionReplay);
+
         return snapshot;
       }),
     // Note that the access is read again before the answer, so a window that
@@ -357,15 +383,21 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         // anyone but the person the window shows is refused.
         const pressedFor = signedInAccountId(session.snapshot());
         yield* session.confirmAccount?.() ?? Effect.void;
+
         if (pressedFor === undefined || signedInAccountId(session.snapshot()) !== pressedFor) {
           return yield* new RefusedRefusal({ message: SUPPORT_ACCESS_REFUSED });
         }
+
         const written = yield* Effect.result(accessClient.writeSupportAccess(grant));
+
         if (Result.isFailure(written)) {
           report(`${SUPPORT_ACCESS_REFUSED}: ${written.failure._tag}`);
+
           return yield* new RefusedRefusal({ message: SUPPORT_ACCESS_REFUSED });
         }
+
         yield* access.refresh;
+
         return { supportAccessUntil: written.success.supportAccessUntil };
       }),
   };
@@ -399,9 +431,11 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     lifetime: Effect.gen(function* () {
       const changes = yield* session.changes;
       previousAccount = yield* session.initialize;
+
       if (session.returnedFromSignIn && (yield* session.returnedFromSignIn)) {
         recordReturnFromSignIn(previousAccount);
       }
+
       yield* Effect.forkScoped(Stream.runForEach(changes, onAccountChange));
     }),
   };

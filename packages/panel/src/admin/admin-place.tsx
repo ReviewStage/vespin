@@ -54,10 +54,12 @@ export function AdminPlace(props: AdminPlaceProps): React.JSX.Element {
 
 function AdminViews({ view, onOpen }: AdminPlaceProps): React.JSX.Element {
   const [hideAdmins, setHideAdmins] = useState(ADMINS_HIDDEN.read);
+
   const changeHideAdmins = (hide: boolean) => {
     ADMINS_HIDDEN.write(hide);
     setHideAdmins(hide);
   };
+
   const [windowDays, setWindowDays] = useState<AdminMetricsWindow>(ADMIN_METRICS_WINDOW_DEFAULT);
   const openAccount = (id: string) => onOpen({ kind: ADMIN_PAGE.ACCOUNT, id });
   const openWorkspace = (id: string) => onOpen({ kind: ADMIN_PAGE.WORKSPACE, id });

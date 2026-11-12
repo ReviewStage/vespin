@@ -79,10 +79,12 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const mac = resumable(now);
+
       const sandbox: CarryOnInput = {
         ...mac,
         agent: { archivedAt: null, machine: AGENT_MACHINE.VERCEL },
       };
+
       // A Mac quiet past its lease, as the sweep words it, back now.
       const away: CarryOnInput = {
         ...mac,
@@ -139,10 +141,12 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
     Effect.gen(function* () {
       const settled = yield* Clock.currentTimeMillis;
       yield* TestClock.adjust("59 minutes");
+
       const inside = carryOnDecision({
         ...resumable(settled),
         now: yield* Clock.currentTimeMillis,
       });
+
       yield* TestClock.adjust("2 minutes");
       const past = carryOnDecision({ ...resumable(settled), now: yield* Clock.currentTimeMillis });
 
@@ -170,6 +174,7 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         const ready = resumable(now);
+
         const left: readonly CarryOnInput[] = [
           { ...ready, agent: { ...ready.agent, archivedAt: new Date(now) } },
           { ...ready, turn: { ...cutOff(now), startedAt: null } },
@@ -217,6 +222,7 @@ const turnRunning = (warm: WarmLocalAgent, text: string) =>
       at: yield* Clock.currentTimeMillis,
     });
     yield* writer.takeAwaitingLine(target, { text, turnId });
+
     return turnId;
   });
 
@@ -225,8 +231,10 @@ const launchClaimed = (warm: WarmLocalAgent) =>
   Effect.gen(function* () {
     const waiting = yield* deviceAgentLinesWaiting(warm.userId, warm.deviceId);
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
+
     if (launch === undefined) return undefined;
     yield* claimedDeviceAgentLine(warm.userId, warm.deviceId, launch.id);
+
     return launch.id;
   });
 
@@ -260,6 +268,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(
             resumed?.status,
             TURN_STATUS.QUEUED,
@@ -294,6 +303,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const left = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(left?.id, resumed?.id);
           assert.equal(left?.status, TURN_STATUS.FAILED);
           assert.equal(left?.failure, TURN_FAILURE.RUNNER_LOST);
@@ -310,9 +320,11 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const lost = yield* turnRunning(warm, "Now the emails.");
           yield* TestClock.adjust("6 minutes");
           yield* reconcileAgent(agent);
+
           const failed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(failed?.failureDetail, hostAwayDetail("Studio"));
           // Nothing goes while the Mac is away, which would refuse it, and the queue waits unpaused.
           yield* turnEnded(warm);
@@ -324,9 +336,11 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
 
           assert.equal(went, 1);
           assert.equal(yield* carriedOnStands(warm, lost), true);
+
           const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(resumed?.status, TURN_STATUS.QUEUED);
           assert.notEqual(yield* launchClaimed(warm), undefined);
         }),
@@ -341,6 +355,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const lost = yield* turnRunning(warm, "Now the emails.");
           yield* TestClock.adjust("6 minutes");
           yield* reconcileAgent(agent);
+
           const hostWrite = <A, E, R>(write: Effect.Effect<A, E, R>) =>
             hostWriteCarriedOn(sessionsFor, userId, deviceId, () => Effect.void, write);
 
@@ -424,12 +439,14 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const paused = yield* warmLocalAgent;
           yield* turnRunning(warm, "Now the emails.");
           yield* turnRunning(paused, "Now the emails.");
+
           for (const each of [warm, paused]) {
             yield* queueAgentMessage(each.userId, each.agent.id, {
               id: randomUUID(),
               text: "Then open the pull request.",
             });
           }
+
           yield* pauseAgentQueue(paused.agent.id, QUEUE_PAUSE.STOPPED);
           yield* TestClock.adjust("6 minutes");
           yield* reconcileAgent(agent);
@@ -454,9 +471,11 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             [],
             "the queued message went",
           );
+
           const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(resumed?.status, TURN_STATUS.QUEUED);
           assert.notEqual(yield* launchClaimed(warm), undefined);
           assert.equal(

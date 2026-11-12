@@ -196,6 +196,7 @@ const REVEAL_MARGIN = 16;
 /** The room left above a section the scroller reveals: its scroll padding where that is wider, which clears its faded top edge (its `ScrollArea`'s fade). */
 function revealMargin(scroller: HTMLElement): number {
   const padding = Number.parseFloat(getComputedStyle(scroller).scrollPaddingTop);
+
   return Number.isNaN(padding) ? REVEAL_MARGIN : Math.max(padding, REVEAL_MARGIN);
 }
 
@@ -225,7 +226,9 @@ export function lastEditOf(task: Task): DescriptionLastEdit | undefined {
   if (task.lastEdit !== undefined) return task.lastEdit;
   // The journal is oldest first, so the newest save is its last.
   const journaled = task.agentEdits?.at(-1);
+
   if (journaled === undefined) return undefined;
+
   return {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: journaled.label,
@@ -272,11 +275,13 @@ function EditTime({
 }): React.JSX.Element {
   // Note that the time reads the minute itself, so the minute draws it again and not the section it stands in.
   const now = useMinute();
+
   const words = dated
     ? dateOfText(at, now)
     : short
       ? sinceText(at, now, { year: false })
       : agoText(at, now);
+
   const time =
     onShow === undefined ? (
       <span>{words}</span>
@@ -295,6 +300,7 @@ function EditTime({
         {words}
       </TextButton>
     );
+
   return short ? <Tooltip label={momentText(at)}>{time}</Tooltip> : time;
 }
 
@@ -361,6 +367,7 @@ function DescriptionByline({
   // Note that a description nobody edited since history began was last saved as the task last changed.
   const saved = edit?.at ?? task.updatedAt;
   const stale = onSince !== undefined && saved < onSince;
+
   return (
     <DocumentByline
       creator={creator}
@@ -406,6 +413,7 @@ function DescriptionByline({
 /** How many sections changed since the last look, as the line under the byline counts them, and by whom where any is named. */
 function changedLine(count: number, named: boolean): string {
   const sections = `${count} ${count === 1 ? "section" : "sections"}`;
+
   return `Changed since you last looked · ${sections}${named ? " by " : ""}`;
 }
 
@@ -425,6 +433,7 @@ function ChangedLine({
   if (looks.changed.size === 0) return null;
   const edits = [...looks.changed].flatMap((heading) => marks.edits.get(heading) ?? []);
   const editors = editorsOf(edits, marks.place);
+
   // Note that the line keeps the room it always had under "Edited by" and Dismiss overhangs it, so the button does not push the document down.
   return (
     <p className="description-changed-note -mt-ui-6 mb-ui-12 mx-0 flex h-description-changed-note items-center gap-item-gap text-caption text-muted-foreground">
@@ -472,8 +481,10 @@ interface SectionMarks {
 function bylineOf(marks: SectionMarks, heading: string): React.JSX.Element | null {
   if (heading === "") return null;
   const edit = marks.edits.get(heading);
+
   if (edit === undefined) return null;
   const { onShowHistory, onPreloadHistory, place } = marks;
+
   return (
     <span className={UNIT_BYLINE_CLASS}>
       {/* Note that the face and the time stay the line's own children, which alone take the pointer, so only the bare word is marked. */}
@@ -501,8 +512,10 @@ function bylineOf(marks: SectionMarks, heading: string): React.JSX.Element | nul
  */
 function pictureNoteOf(marks: SectionMarks, heading: string): React.JSX.Element | null {
   const edit = marks.edits.get(heading);
+
   if (edit === undefined) return null;
   const { place } = marks;
+
   return (
     <span className="actor-line">
       {edit.actor === DESCRIPTION_ACTOR.EARLIER ? "Edited" : "Edited by "}
@@ -544,6 +557,8 @@ const DESCRIPTION_LOADING_LABEL = readingWords("the description");
 /** How wide each line of the description's text stands while it is read: a paragraph's, the last line short. */
 const TEXT_LINE_WIDTHS = ["96%", "90%", "94%", "62%"] as const;
 
+type UnitsAfterResult = { readonly views: readonly UnitView[]; readonly nextId: number };
+
 /**
  * Each section of a newer document drawn under the id it had in the older
  * while its heading stands, so a save redraws a section in place rather than
@@ -556,44 +571,58 @@ function unitsAfter(
   previous: readonly UnitView[],
   sections: readonly DescriptionSection[],
   firstId: number,
-): { readonly views: readonly UnitView[]; readonly nextId: number } {
+): UnitsAfterResult {
   const changes = diffArrays(
     previous.map((view) => view.heading),
     sections.map((section) => section.heading),
   );
+
   const views: UnitView[] = [];
   let nextId = firstId;
+
   const place = (kept: number | undefined): void => {
     const section = sections[views.length];
+
     if (section === undefined) return;
     const id = kept ?? nextId;
+
     if (kept === undefined) nextId += 1;
     views.push({ id, heading: section.heading, words: section.text });
   };
+
   let before = 0;
+
   for (let index = 0; index < changes.length; index += 1) {
     const change = changes[index];
+
     if (change === undefined) continue;
     const count = change.value.length;
+
     if (change.added) {
       for (let at = 0; at < count; at += 1) place(undefined);
       continue;
     }
+
     if (!change.removed) {
       for (let at = 0; at < count; at += 1) place(previous[before + at]?.id);
       before += count;
       continue;
     }
+
     // A run dropped beside a run added in its place is the same sections renamed, which keep their ids.
     const beside = changes[index + 1];
+
     if (beside?.added === true) {
       for (let at = 0; at < beside.value.length; at += 1) {
         place(at < count ? previous[before + at]?.id : undefined);
       }
+
       index += 1;
     }
+
     before += count;
   }
+
   return { views, nextId };
 }
 
@@ -603,6 +632,7 @@ function drawnUnits(task: Task, held: DrawnUnits | undefined): DrawnUnits {
   const sections = descriptionSections(body);
   const same = held?.taskId === task.id ? held : undefined;
   const { views, nextId } = unitsAfter(same?.views ?? [], sections, same?.nextId ?? 0);
+
   return { taskId: task.id, body, sections, views, nextId };
 }
 
@@ -613,12 +643,16 @@ function drawnUnits(task: Task, held: DrawnUnits | undefined): DrawnUnits {
  */
 function useDrawnUnits(task: Task, drawn: boolean): DrawnUnits | undefined {
   const [held, setHeld] = useState(() => (drawn ? drawnUnits(task, undefined) : undefined));
+
   if (!drawn) return undefined;
+
   if (held !== undefined && held.taskId === task.id && held.body === task.document.body) {
     return held;
   }
+
   const current = drawnUnits(task, held);
   setHeld(current);
+
   return current;
 }
 
@@ -633,7 +667,9 @@ function useSectionsDrawn(taskId: string, shown: boolean): boolean {
   const [held, setHeld] = useState({ taskId, drawn: shown });
   // Note that another task starts over, so a task shown, left, and come back to while hidden draws nothing.
   const drawn = shown || (held.taskId === taskId && held.drawn);
+
   if (held.taskId !== taskId || held.drawn !== drawn) setHeld({ taskId, drawn });
+
   return drawn;
 }
 
@@ -643,7 +679,7 @@ function unitClass(changed: boolean): string {
 
 /**
  * What draws the description's mentions as chips, on a task's own page: a link
- * whose destination names a mention, whoever wrote it (`linkMention`),
+ * `linkChipOf` draws as a chip, whoever wrote it,
  * drawn against the anchors of the description's headings as they stand; nothing
  * off a task's page, where mentions stay words. Note that it is made again
  * only when a heading changes, since every unit's words are drawn again
@@ -664,8 +700,10 @@ function useMentionChips(
   const workspace = linked?.place.workspace ?? "";
   const repository = linked?.place.repository ?? null;
   const anchorKey = anchors.join("\n");
+
   return useMemo(() => {
     if (taskId === undefined) return { link: undefined, doors: undefined };
+
     const doors: MentionDoors = {
       holder: { taskId },
       place: { workspace, repository },
@@ -677,6 +715,7 @@ function useMentionChips(
       agentOf,
       pullRequestOf,
     };
+
     return { link: mentionLinkDrawer(doors), doors };
   }, [opensFiles, agentOf, pullRequestOf, taskId, workspace, repository, anchorKey]);
 }
@@ -694,9 +733,11 @@ const TASK_ITEM = /^(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ \txX])\]/u;
 /** The task item whose marker starts at `at`: where its box stands, and its line with the box blanked, which reads the same ticked or not; nothing where no task item starts there. */
 function taskItemAt(text: string, at: number): { box: number; line: string } | undefined {
   const item = TASK_ITEM.exec(text.slice(at));
+
   if (item === null) return undefined;
   const box = at + item[0].length - 2;
   const end = text.indexOf("\n", at);
+
   return {
     box,
     line: `${text.slice(at, box)} ${text.slice(box + 1, end === -1 ? undefined : end)}`,
@@ -710,7 +751,9 @@ function taskItemAt(text: string, at: number): { box: number; line: string } | u
  */
 function taskSet(text: string, at: number, line: string, ticked: boolean): string | undefined {
   const item = taskItemAt(text, at);
+
   if (item === undefined || item.line !== line) return undefined;
+
   return `${text.slice(0, item.box)}${ticked ? "x" : " "}${text.slice(item.box + 1)}`;
 }
 
@@ -732,6 +775,7 @@ interface DrawnDescription {
 /** The description's text as it stands: the text a write saved while its task's description drawn is still the one it was written over, or the description drawn. */
 function descriptionTextNow(writes: DescriptionWrites, drawn: DrawnDescription): string {
   const saved = writes.saved;
+
   return saved !== undefined && saved.taskId === drawn.id && saved.over === drawn.body
     ? saved.text
     : drawn.body;
@@ -754,6 +798,7 @@ function savedOver(
     if (!("saved" in answer)) return notKept(answer);
     writes.saved =
       kept === undefined ? undefined : { taskId: drawn.id, over: drawn.body, text: kept };
+
     return KEPT;
   }, notKept);
 }
@@ -775,6 +820,7 @@ function DescriptionTaskBox({
 }): React.JSX.Element {
   const { mutate, isPending, data, variables } = useMutation(tick(item.at));
   const asked = isPending || data === true ? variables : undefined;
+
   return (
     <TaskBox
       label={item.label}
@@ -792,6 +838,7 @@ const TASK_ITEM_ANYWHERE = /(?:[-*+]|\d{1,9}[.)])[ \t]+\[[ \txX]\]/u;
 
 /** No section's save named, as a description from a service before sections were named has. */
 const NO_SECTION_EDITS: readonly DescriptionSectionEdit[] = [];
+
 /** The sections of a description not yet shown, which draws none. */
 const NO_VIEWS: readonly UnitView[] = [];
 const NO_TEXT_SECTIONS: readonly DescriptionSection[] = [];
@@ -803,6 +850,7 @@ function attributed(
   menu: React.JSX.Element | null,
 ): React.JSX.Element {
   if (byline === null && menu === null) return drawn;
+
   // Note that the byline and the ⋯ share one row, because a row centers the
   // line on the button's box where two separately placed boxes never quite do.
   // The row hangs past the column's edge by `--ui-space-6`, as the ⋯ always
@@ -836,6 +884,7 @@ function UnitLinkButton({
   tabbable: boolean;
 }): React.JSX.Element {
   const copy = useCopyToast();
+
   return (
     <span className={UNIT_MORE_CLASS}>
       <Tooltip label={LINK_COPY.LABEL}>
@@ -870,6 +919,7 @@ function SectionLink({
     { kind: LINK_DESTINATION.SECTION, planId: linked.step, anchor },
     linked.place.workspace,
   );
+
   return (
     <UnitLinkButton link={link} label={`${LINK_COPY.LABEL} to ${heading}`} tabbable={tabbable} />
   );
@@ -884,6 +934,7 @@ function TitleLink({
   tabbable: boolean;
 }): React.JSX.Element {
   const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: linked.step }, linked.place.workspace);
+
   return <UnitLinkButton link={link} label={LINK_COPY.LABEL} tabbable={tabbable} />;
 }
 
@@ -898,10 +949,13 @@ function useCommentMarks(
   descriptionText: string | undefined,
 ): MarkdownEdit | undefined {
   const { active, pending } = useCommentFocus();
+
   return useMemo(() => {
     if (threads === undefined || section === undefined) return undefined;
     const spans = commentSpansIn(threads, section, active, pending, descriptionText);
+
     if (spans.length === 0) return undefined;
+
     const marks = spans.map((span) => ({
       from: span.from,
       to: span.to,
@@ -910,6 +964,7 @@ function useCommentMarks(
       active: span.active,
       block: span.block,
     }));
+
     return { marks };
   }, [section, threads, active, pending, descriptionText]);
 }
@@ -925,7 +980,9 @@ function sameSection(
   right: DescriptionSection | undefined,
 ): boolean {
   if (left === right) return true;
+
   if (left === undefined || right === undefined) return false;
+
   return (
     left.heading === right.heading &&
     left.text === right.text &&
@@ -999,22 +1056,25 @@ const DocumentUnit = memo(function DocumentUnit({
   const openLink = useOpenLink();
   const picture = useDescriptionPictureDrawer();
   const edit = useCommentMarks(section, threads, descriptionText);
+
   const drawn = (
     <MarkdownMessage
       words={view.words}
       className={unitClass(changed)}
       edit={edit}
-      link={link}
+      link={link ?? null}
       openLink={openLink}
       diagrams
       picture={picture}
       taskBox={taskBox}
     />
   );
+
   const menu =
     linked === undefined || anchor === "" ? null : (
       <SectionLink linked={linked} anchor={anchor} heading={view.heading} tabbable={entry} />
     );
+
   return attributed(drawn, bylineOf(marks, view.heading), menu);
 }, sameUnit);
 
@@ -1046,12 +1106,15 @@ function SectionDates({
   children: React.ReactNode;
 }): React.JSX.Element {
   const open = useWordsDatePicker();
+
   const door = useMemo<WordsDates | undefined>(() => {
     if (open === undefined || dates === undefined) return undefined;
+
     return {
       pick: (written, chip) => {
         // Note that the chip's link is placed in its section's words, which start where the section does in the description's text.
         const from = dates.from(section);
+
         if (from === undefined) return;
         const at = { from: from + written.at.from, to: from + written.at.to };
         // Note that the date is written only into the description it was picked on, so a page handed another task while the picker stands writes nothing.
@@ -1061,6 +1124,7 @@ function SectionDates({
       },
     };
   }, [open, dates, section]);
+
   return <WordsDatesContext.Provider value={door}>{children}</WordsDatesContext.Provider>;
 }
 
@@ -1104,6 +1168,7 @@ export function DescriptionBodySkeleton({
   const body = useRef<HTMLDivElement>(null);
   const room = useMemo((): DescriptionRoom => ({ scroller, column: body }), []);
   const documented = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
+
   return (
     <DocumentScroll ref={scroller}>
       <DescriptionBodyColumn ref={body}>
@@ -1225,18 +1290,22 @@ export const DescriptionBody = memo(function DescriptionBody({
   const sectionEdits = task.sectionEdits ?? NO_SECTION_EDITS;
   const agentsControl = agents?.control;
   const openAgent = useSteadyDoor(agents?.onOpen);
+
   const steadyAgents = useMemo<EditAgents | undefined>(
     () => (agentsControl === undefined ? undefined : { control: agentsControl, onOpen: openAgent }),
     [agentsControl, openAgent],
   );
+
   const place = useMemo<EditPlace>(
     () => ({ reader: editReader, sections: sectionEdits, agents: steadyAgents }),
     [editReader, sectionEdits, steadyAgents],
   );
+
   const descriptionWrites = edit ?? descriptionEditMutation(task.id, NO_EDIT);
   const editing = useDescriptionEditing(task.id, text, descriptionWrites, place);
   const showHistory = useSteadyDoor(onShowHistory);
   const preloadHistory = useSteadyDoor(onPreloadHistory);
+
   const marks = useMemo<SectionMarks>(
     () => ({
       edits: new Map(place.sections.map(({ section, ...edit }) => [section, edit])),
@@ -1247,11 +1316,13 @@ export const DescriptionBody = memo(function DescriptionBody({
     }),
     [place, looks.changed, showHistory, preloadHistory],
   );
+
   const scroller = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const room = useMemo((): DescriptionRoom => ({ scroller, column: body }), []);
   // A link in the description's words being edited opens, from its right-click, where the description stands.
   const editedLinks = useEditedLinksHost();
+
   const bodyHost = useCallback(
     (element: HTMLDivElement | null) => {
       body.current = element;
@@ -1259,6 +1330,7 @@ export const DescriptionBody = memo(function DescriptionBody({
     },
     [editedLinks],
   );
+
   // The open editor's handle, which a comment started on its words is measured through.
   const editorHandle = useRef<DescriptionEditorHandle | undefined>(undefined);
   const closedOn = useWordsKeptOnClose(task.id, editing.editor !== undefined, body, scroller);
@@ -1275,6 +1347,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   });
   const anchors = sectionAnchors(views.map((view) => view.heading));
   const linkedWorkspace = sectionLinks?.workspace;
+
   const linked = useMemo<LinkedTask | undefined>(
     () =>
       linkedWorkspace === undefined
@@ -1286,6 +1359,7 @@ export const DescriptionBody = memo(function DescriptionBody({
           },
     [linkedWorkspace, task.id, task.number, task.repository],
   );
+
   const { link, doors: mentionDoors } = useMentionChips(linked, anchors, sectionLinks);
   /** The ticks and dates written from the words at rest, each sent once the one before it settles. */
   const writes = useRef<DescriptionWrites>({ saved: undefined });
@@ -1295,24 +1369,33 @@ export const DescriptionBody = memo(function DescriptionBody({
   // Note that focus anywhere else keeps its own arrows.
   useEffect(() => {
     if (!editable) return;
+
     const select = (event: KeyboardEvent) => {
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       const element = scroller.current;
+
       if (element === null || document.activeElement !== document.body) return;
       const shown = element.getBoundingClientRect();
+
       const blocks = [...element.querySelectorAll<HTMLElement>(`.${EDITABLE_BLOCK_CLASS}`)].filter(
         (block) => {
           const at = block.getBoundingClientRect();
+
           return at.bottom > shown.top && at.top < shown.bottom;
         },
       );
+
       const chosen = event.key === "ArrowDown" ? blocks[0] : blocks.at(-1);
+
       if (chosen === undefined) return;
       event.preventDefault();
       chosen.focus({ preventScroll: true });
     };
+
     window.addEventListener("keydown", select);
+
     return () => window.removeEventListener("keydown", select);
   }, [editable]);
 
@@ -1322,13 +1405,17 @@ export const DescriptionBody = memo(function DescriptionBody({
   useEffect(() => {
     const reveal = sectionLinks?.reveal;
     const element = scroller.current;
+
     if (reveal === undefined || element === null || revealed.current === reveal.ask) return;
+
     // Note that an ask waits for the sections, which a description not yet shown has not drawn.
     if (units === undefined) return;
     revealed.current = reveal.ask;
     const at = reveal.anchor === undefined ? -1 : anchors.indexOf(reveal.anchor);
+
     const unit =
       at === -1 ? undefined : element.querySelectorAll<HTMLElement>(`.${UNIT_CLASS}`)[at];
+
     element.scrollTop =
       unit === undefined
         ? 0
@@ -1342,8 +1429,10 @@ export const DescriptionBody = memo(function DescriptionBody({
   // The sections as the description's text holds them, which is where comments are marked and measured.
   // Note that comments are the description's own page's alone, never a version of it.
   const comments = useDescriptionCommentsControl();
+
   const commentsHere =
     comments !== undefined && comments.planId === task.id && sectionLinks !== undefined;
+
   const drawnSections = commentsHere ? textSections : undefined;
   // The toolbar over the editor's words selected starts a thread on them where the description's comments are drawn.
   const commentOnWords = useEditorComment(editorHandle);
@@ -1354,6 +1443,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   const tickable = (section: number): boolean => cut[section] !== undefined;
   // A tick or a date that did not save goes back, and says so here, since nothing beside the box or the chip does.
   const toast = useToast();
+
   const sayNotSaved = useCallback(
     (taskId: string, cause: unknown) =>
       toast({
@@ -1368,6 +1458,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       }),
     [toast],
   );
+
   // The description as drawn last, which a tick waiting its turn and a date read as the picker closes are written over.
   // Note that a tick and a date each run as a mutation in this description's
   // writes' scope, so each waits its turn behind the editor's saves and every
@@ -1378,16 +1469,20 @@ export const DescriptionBody = memo(function DescriptionBody({
     body: task.document.body,
     saves: edit !== undefined,
   });
+
   latestDescription.current = {
     cut,
     id: task.id,
     body: task.document.body,
     saves: edit !== undefined,
   };
+
   const said = (pickedOn: string) => (saved: Kept) => {
     if (!saved.kept) sayNotSaved(pickedOn, saved.cause);
+
     return saved.kept;
   };
+
   // A tick is placed by its item's offset and line in its section's words as
   // its box drew them, and writes nothing where the text no longer holds that
   // line. Note that the section's start is read from the text the tick is
@@ -1398,24 +1493,33 @@ export const DescriptionBody = memo(function DescriptionBody({
     const item = unit === undefined ? undefined : taskItemAt(unit.text, at);
     const pressedOn = task.id;
     const queue = writes.current;
+
     const written = (ticked: boolean, save: DescriptionEditSend): Promise<Kept> | Kept => {
       const now = latestDescription.current;
+
       if (!now.saves || item === undefined || now.id !== pressedOn)
         return notKept(FAILURE_CONDITION.NOT_KEPT);
       const base = descriptionTextNow(queue, now);
       const from = descriptionSections(base)[section]?.from;
+
       if (from === undefined) return notKept(FAILURE_CONDITION.NOT_KEPT);
       const value = taskSet(base, from + at, item.line, ticked);
+
       if (value === undefined) return notKept(FAILURE_CONDITION.NOT_KEPT);
+
       if (value === base) return KEPT;
+
       return savedOver(queue, save, now, { base, value }, value);
     };
+
     return descriptionAtRestMutation(pressedOn, descriptionWrites, (ticked: boolean, save) =>
       Promise.resolve(written(ticked, save)).then(said(pressedOn)),
     );
   };
+
   const latestTick = useRef(tick);
   latestTick.current = tick;
+
   // A date changed from the description at rest is written over the text as it
   // then stands, read as the picker closes. Note that one saved since the
   // picker read the description is not under its text, so nothing after it is
@@ -1431,6 +1535,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       ) => {
         const now = latestDescription.current;
         const queue = writes.current;
+
         const sent =
           now.id === asked.pickedOn
             ? savedOver(
@@ -1441,12 +1546,15 @@ export const DescriptionBody = memo(function DescriptionBody({
                 descriptionTextNow(queue, now) === asked.base ? asked.value : undefined,
               )
             : Promise.resolve(notKept(FAILURE_CONDITION.NOT_KEPT));
+
         return sent.then(said(asked.pickedOn));
       },
     ),
   );
+
   const writeDate = useRef(dated.mutate);
   writeDate.current = dated.mutate;
+
   const descriptionDates = useMemo<DescriptionDates | undefined>(
     () =>
       editable
@@ -1456,29 +1564,37 @@ export const DescriptionBody = memo(function DescriptionBody({
             from: (section) => latestDescription.current.cut[section]?.from,
             write: (value, base) => {
               const { saves, id: pickedOn } = latestDescription.current;
+
               if (saves) writeDate.current({ value, base, pickedOn });
             },
           }
         : undefined,
     [editable],
   );
+
   // Each section's box drawer stands across draws and ticks from the description as drawn last, so a section is not drawn again for a new one.
   const boxes = useRef(new Map<number, MarkdownTaskBox>());
+
   const taskBox = (section: number): MarkdownTaskBox | undefined => {
     // Note that a unit with no box has none, so the editor opening and closing leaves it as drawn.
     if (!tickable(section) || !TASK_ITEM_ANYWHERE.test(views[section]?.words ?? "")) {
       return undefined;
     }
+
     const held = boxes.current.get(section);
+
     if (held !== undefined) return held;
     const tickAt = (at: number) => latestTick.current(section, at);
     const drawBox: MarkdownTaskBox = (item) => <DescriptionTaskBox item={item} tick={tickAt} />;
     boxes.current.set(section, drawBox);
+
     return drawBox;
   };
+
   // The text a thread being started is laid over, handed to the units only while one is, since every unit is drawn again when it changes.
   const { pending } = useCommentFocus();
   const pendingText = pending === undefined ? undefined : task.document.body;
+
   // The document's one Tab stop: the block selected last while it still stands, or its title, or its first section, or its placeholder where it has none.
   const standing =
     editing.cursor === EDITOR_PLACE.TITLE
@@ -1486,14 +1602,17 @@ export const DescriptionBody = memo(function DescriptionBody({
       : editing.cursor === EDITOR_PLACE.EMPTY
         ? views.length === 0
         : views.some((view) => view.id === editing.cursor);
+
   const entry = standing
     ? editing.cursor
     : onRename === undefined
       ? (views[0]?.id ?? EDITOR_PLACE.EMPTY)
       : EDITOR_PLACE.TITLE;
+
   // The block an editor closed by the keyboard gives it back to: the placeholder of a description it leaves with no words, which takes it once the save lands even where sections still stand, or the section its caret stood in, or the title.
   const editorHostOf = (section: number, words: string): EditorHost =>
     words.trim() === "" ? EDITOR_PLACE.EMPTY : (views[section]?.id ?? EDITOR_PLACE.TITLE);
+
   const sections = views.map((view, section) =>
     editable ? (
       <DocumentBlock
@@ -1535,7 +1654,9 @@ export const DescriptionBody = memo(function DescriptionBody({
       />
     ),
   );
+
   const titled = edit !== undefined && onRename !== undefined;
+
   const titleMenu =
     !titleActions || linked === undefined ? null : (
       <TitleLink
@@ -1544,6 +1665,7 @@ export const DescriptionBody = memo(function DescriptionBody({
         tabbable={editable ? entry === EDITOR_PLACE.TITLE : true}
       />
     );
+
   const column = (
     <DocumentScroll ref={scroller}>
       <DescriptionBodyColumn ref={bodyHost}>
@@ -1628,6 +1750,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       </DescriptionBodyColumn>
     </DocumentScroll>
   );
+
   return documented ? (
     <DescriptionPictures
       taskId={task.id}

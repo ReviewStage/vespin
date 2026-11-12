@@ -62,6 +62,7 @@ const AGENT_IMAGE_READER = join(
   "coder-host",
   "agent-image.ts",
 );
+
 /** Where `vite build` and `prerender.ts` leave the site, copied whole under the output's `static/`. */
 const SITE_DIRECTORY = "dist";
 
@@ -80,7 +81,9 @@ const SITE_DIRECTORY = "dist";
  */
 function withSentrySourceMaps(options: BuildOptions): BuildOptions {
   const authToken = process.env.SENTRY_AUTH_TOKEN;
+
   if (!authToken || process.env.VERCEL_ENV !== "production") return options;
+
   return {
     ...options,
     // Sentry's guide asks for "hidden" maps; esbuild spells that `external`, a map named by no comment in the bundle.
@@ -109,11 +112,14 @@ function withSentrySourceMaps(options: BuildOptions): BuildOptions {
 const agentImage = shippedBesideFunctions(await agentImageContext());
 
 const task = await functionBundlePlan(WEB);
+
 // Emptied first, so a bundle an earlier plan emitted can never sit beside the shipping ones and be read as one of them.
 await rm(join(WEB, FUNCTION_BUNDLE_DIRECTORY), { recursive: true, force: true });
+
 const result = await build({ ...withSentrySourceMaps(task.options), metafile: true, write: true });
 
 const undeclared = undeclaredImports(result.metafile, WEB, task.externalPackages);
+
 if (undeclared.length > 0) {
   throw new Error(
     `bundled routes reach dependencies apps/web does not declare: ${undeclared.join(", ")}`,
@@ -122,6 +128,7 @@ if (undeclared.length > 0) {
 
 // A route that reaches the local server's own routes would carry a session for anyone into the deploy.
 const localOnly = localOnlyReach(result.metafile, WEB);
+
 if (localOnly.length > 0) {
   throw new Error(
     `bundled routes reach modules only the local server may carry: ${localOnly.join(", ")}`,
@@ -140,6 +147,7 @@ const profilerBinary = await profilerBinaryFiles(result.metafile, WEB);
 const durationOf = new Map(
   task.functions.map((definition) => [join(WEB, bundlePath(definition)), definition.maxDuration]),
 );
+
 for (const [file, output] of Object.entries(result.metafile.outputs)) {
   const maxDuration = durationOf.get(join(WEB, file));
   // biome-ignore lint/suspicious/noConsole: a build script's output is its log — what it wrote, and how much of it.
@@ -175,6 +183,7 @@ const emitted = await emitBuildOutput({
     )),
   ],
 });
+
 // biome-ignore lint/suspicious/noConsole: a build script's output is its log — the tree it left for Vercel.
 console.log(
   `emitted ${BUILD_OUTPUT_DIRECTORY} with ${emitted.length} functions: ${emitted.join(", ")}`,

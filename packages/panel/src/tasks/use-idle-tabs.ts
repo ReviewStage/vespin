@@ -54,6 +54,7 @@ const wokenAt = (due: number): Effect.Effect<number> =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     yield* Effect.sleep(Duration.millis(Math.max(0, due - now)));
+
     return yield* Clock.currentTimeMillis;
   });
 
@@ -107,6 +108,7 @@ export interface IdleTabsInput<Column extends StripTab, Panel extends StripTab> 
 function useWokenAt(due: number): number | undefined {
   const woken = useCreateStore<number | undefined>(undefined);
   useEffect(() => forkEffect(streamInto(wakes(due), woken)), [due, woken]);
+
   return useSelector(woken);
 }
 
@@ -121,11 +123,14 @@ function nextDueOf<T extends StripTab>(strip: IdleStrip<T> | undefined): number 
   const { shown } = strip;
   const restamp = shown === undefined ? undefined : viewedAtOf(strip.viewedAt, shown);
   let due = restamp === undefined ? NEVER_DUE : restamp + Duration.toMillis(RESTAMP_EVERY);
+
   for (const tab of strip.tabs) {
     if (sameTab(tab, shown) || strip.keeps(tab)) continue;
     const at = viewedAtOf(strip.viewedAt, tab);
+
     if (at !== undefined) due = Math.min(due, at + Duration.toMillis(TAB_IDLE));
   }
+
   return due;
 }
 
@@ -167,7 +172,9 @@ function stampLeft<T extends StripTab>(
 ): void {
   if (was === undefined) return;
   const here = wasOn === taskId && strip !== undefined;
+
   if (here && sameTab(was.tab, strip.shown)) return;
+
   if (here && !strip.tabs.some((tab) => sameTab(tab, was.tab))) return;
   was.onViewedAt(wasOn, [was.tab], here ? strip.tabs : [], now);
 }
@@ -191,6 +198,7 @@ function tidy<T extends StripTab>(strip: IdleStrip<T> | undefined, now: number):
   const { shown } = strip;
   const keeps = (tab: T) => sameTab(tab, shown) || strip.keeps(tab);
   const idle = idleTabs(strip.tabs, strip.viewedAt, now, Duration.toMillis(TAB_IDLE), keeps);
+
   for (const tab of idle) strip.onIdle(tab);
 }
 
@@ -217,10 +225,12 @@ export function useIdleTabs<Column extends StripTab, Panel extends StripTab>(
     const was = shownBefore.current;
     shownBefore.current =
       taskId === undefined ? undefined : { taskId, column: shownOf(strip), panel: shownOf(side) };
+
     if (was !== undefined) {
       stampLeft(strip, was.taskId, was.column, taskId, now);
       stampLeft(side, was.taskId, was.panel, taskId, now);
     }
+
     if (taskId === undefined) return;
     stampStanding(strip, taskId, now);
     stampStanding(side, taskId, now);

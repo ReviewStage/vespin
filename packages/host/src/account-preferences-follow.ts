@@ -103,6 +103,7 @@ function poolRowOf(
   choices: readonly AccountSoundChoiceLiveRow[],
 ): AccountPreferencesPoolRow {
   const [row] = rows;
+
   return {
     userId,
     agentModel: row?.agentModel ?? null,
@@ -129,32 +130,40 @@ function followPreferences(
     dependencies.gate()
       ? dependencies.seal(userId, poll, after)
       : Effect.succeed<PreferencesUnanswered>(LIVE_SIGNED_OUT);
+
   const attempt = Effect.scoped(
     Effect.gen(function* () {
       const first = yield* seal(false);
+
       if ("failure" in first) {
         if (first.failure === LIVE_SIGNED_OUT.failure) return false;
         answers.unanswered();
+
         return true;
       }
+
       let wait: TxWait | undefined;
       let answered = false;
+
       const drawn: Effect.Effect<void> = Effect.sync(() => {
         if (!answered) return;
         const rows = row.rows();
         const [held] = rows;
         answers.answered(accountPreferencesOfLiveRows(rows, held?.sounds ?? NO_SOUNDS));
       });
+
       const row: HeldRows<AccountPreferencesPoolRow> = yield* dependencies.pool.stand(
         ACCOUNT_PREFERENCES,
         {
           redraw: () => drawn,
           confirmation: () => {
             const handed = wait;
+
             return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
           },
         },
       );
+
       const gone = yield* followTakingRows(
         {
           poll: (after) =>
@@ -174,6 +183,7 @@ function followPreferences(
             row.answer([poolRowOf(userId, rows.preferences, rows.sounds, rows.soundChoices)]),
             Effect.suspend(() => {
               answered = true;
+
               return drawn;
             }),
           ),
@@ -181,9 +191,11 @@ function followPreferences(
         Effect.as(false),
         Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
       );
+
       return !gone;
     }),
   );
+
   return restarting(attempt);
 }
 
@@ -208,6 +220,7 @@ export function heldAccountPreferences(
 /** The account's row a write changes: the account signed in, or none while nobody is. */
 function readerRow(readerId: () => string | undefined): readonly string[] {
   const userId = readerId();
+
   return userId === undefined ? [] : [userId];
 }
 

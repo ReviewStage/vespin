@@ -69,6 +69,7 @@ import { CatalogSection } from "../section";
 /** A switch holding its own state, named `label` and described and failed by its row. */
 function HeldSwitch({ label, control }: { label: string; control: SettingsRowControl }) {
   const [on, setOn] = useState(true);
+
   return (
     <Switch
       checked={on}
@@ -128,6 +129,7 @@ function Mark({ provider }: { provider: (typeof MARK_PROVIDER)[keyof typeof MARK
 /** A key's field and its presses, grown under the key's row. */
 function KeyForm(): React.JSX.Element {
   const [key, setKey] = useState("");
+
   return (
     <form className="catalog-settings-key" noValidate onSubmit={(event) => event.preventDefault()}>
       <TextField
@@ -323,6 +325,7 @@ function ListRows(): React.JSX.Element {
     APP_SHORTCUTS[APP_COMMAND.FIND_PREVIOUS],
     APP_SHORTCUTS[APP_COMMAND.DELETE],
   ];
+
   return (
     <SettingsSection title="General">
       {commands.map((command) => (
@@ -339,6 +342,7 @@ function AddRows(): React.JSX.Element {
   const [typed, setTyped] = useState("");
   const [added, setAdded] = useState<readonly string[]>(["pnpm test"]);
   const [refused, setRefused] = useState(false);
+
   return (
     <SettingsSection title="Always allowed" caption="Commands your agents run without asking.">
       <SettingsAddRow
@@ -361,8 +365,10 @@ function AddRows(): React.JSX.Element {
         onAdd={(value) => {
           if (/[;&|<>$`]/.test(value)) {
             setRefused(true);
+
             return;
           }
+
           setAdded((was) => [value, ...was]);
           setTyped("");
         }}

@@ -38,10 +38,13 @@ const STEPS = ["Auth refactor · Code", "Auth refactor · Description", "Inbox"]
 function HeldBack({ onDone }: { onDone: (what: string) => void }): React.JSX.Element {
   const menu = useMenu(true);
   const button = useRef<HTMLButtonElement>(null);
+
   const openList = () => {
     const element = button.current;
+
     if (element !== null) menu.show(dropBelowStart(element), element);
   };
+
   return (
     <HoldPress
       mouse
@@ -75,6 +78,7 @@ function HeldBack({ onDone }: { onDone: (what: string) => void }): React.JSX.Ele
 /** Start, busy, whose refused press is still heard. */
 function HeardSplit({ onDone }: { onDone: (what: string) => void }): React.JSX.Element {
   const menu = useMenu(true);
+
   return (
     <SplitButton
       variant={BUTTON_VARIANT.OUTLINE}
@@ -112,6 +116,7 @@ function PressShortcuts(): React.JSX.Element {
   const [done, setDone] = useState("Nothing yet");
   const said = <Text tone={TEXT_TONE.MUTED}>{done}</Text>;
   useAnnounce(ANNOUNCE.POLITE, done);
+
   return (
     <>
       <Announcer />

@@ -1,8 +1,10 @@
 /** renderer-revival.test.ts -- a panel renderer that dies is stood back up after a pause, a bounded number of times before a load succeeds. */
 import { EventEmitter } from "node:events";
 import type { RunMode } from "@repo/host";
+import type { BaseWindow, MessageBoxOptions } from "electron";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PanelManager, type PanelSystem } from "./panel-manager";
+import { STAND_IN_DISPLAY } from "./stand-in-display";
 
 /**
  * What a window does once its renderer dies or its page fails to load: the
@@ -16,8 +18,12 @@ import { PanelManager, type PanelSystem } from "./panel-manager";
  */
 
 const windows: FakeBrowserWindow[] = [];
+
+type Sheets = { answers: number[]; shownOn: (BaseWindow | MessageBoxOptions)[] };
+
 /** The answers the next sheets give, by button, and the windows each was shown on. */
-const sheets = { answers: [] as number[], shownOn: [] as unknown[] };
+const sheets: Sheets = { answers: [], shownOn: [] };
+
 /** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
 const quit = { goes: true, asked: false, tearingDown: false };
 
@@ -40,6 +46,7 @@ class FakeBrowserWindow extends EventEmitter {
   isDestroyed = () => this.destroyed;
   loadFile = () => {
     this.loads += 1;
+
     return Promise.resolve();
   };
   show = () => {
@@ -53,26 +60,37 @@ class FakeBrowserWindow extends EventEmitter {
   };
 }
 
-const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
+/**
+ * Electron's window class, stood in for by the fake above. Note that it is
+ * held as unknown, because the fake answers only the part of a
+ * `BrowserWindow` the panel calls, which no type short of Electron's own names.
+ */
+const STAND_IN_WINDOW: unknown = FakeBrowserWindow;
 
 /** Electron as the panel meets it: these windows, one display, a quit, and sheets answered from `sheets`. */
-const SYSTEM = {
-  BrowserWindow: FakeBrowserWindow,
+// SAFETY: the panel reaches only these members of Electron, each stood in for here.
+const SYSTEM: PanelSystem = {
+  BrowserWindow: STAND_IN_WINDOW as PanelSystem["BrowserWindow"],
   app: {
     focus: () => undefined,
     quit: () => {
       quit.asked = true;
+
       if (quit.goes) quit.tearingDown = true;
     },
   },
   dialog: {
-    showMessageBox: (window: unknown) => {
+    showMessageBox: (window: BaseWindow | MessageBoxOptions) => {
       sheets.shownOn.push(window);
-      return Promise.resolve({ response: sheets.answers.shift() ?? 0 });
+
+      return Promise.resolve({ response: sheets.answers.shift() ?? 0, checkboxChecked: false });
     },
   },
-  screen: { getPrimaryDisplay: () => DISPLAY, getAllDisplays: () => [DISPLAY] },
-} as unknown as PanelSystem;
+  screen: {
+    getPrimaryDisplay: () => STAND_IN_DISPLAY,
+    getAllDisplays: () => [STAND_IN_DISPLAY],
+  },
+};
 
 const RUN_MODE: RunMode = {
   requiresAccount: false,
@@ -88,6 +106,7 @@ const PAST_THE_PAUSE_MS = 5_000;
 /** The panel's one window, its first page drawn, and every reason its renderer was reported gone. */
 function drawnPanel() {
   const gone: string[] = [];
+
   const panels = new PanelManager({
     system: SYSTEM,
     runMode: RUN_MODE,
@@ -99,10 +118,13 @@ function drawnPanel() {
     closing: () => quit.tearingDown,
     onRendererGone: (reason) => gone.push(reason),
   });
+
   panels.reconcile();
   const [window] = windows;
+
   if (window === undefined) throw new Error("The panel opened no window.");
   window.emit("ready-to-show");
+
   return { window, gone };
 }
 
@@ -148,10 +170,12 @@ test("a panel whose page fails to load loads it again, though a subframe's failu
 
 test("past the bound the panel stops reloading and asks, and Reload loads it once more", async () => {
   const { window, gone } = drawnPanel();
+
   for (let death = 0; death < 3; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
   }
+
   expect(window.loads).toBe(4);
   expect(sheets.shownOn).toEqual([]);
 
@@ -164,16 +188,19 @@ test("past the bound the panel stops reloading and asks, and Reload loads it onc
   );
   // Reload was answered: the page loads at once, and the count starts over.
   expect(window.loads).toBe(5);
+
   for (let death = 0; death < 3; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
   }
+
   expect(window.loads).toBe(8);
 });
 
 /** Crashes the panel's renderer past the bound and lets the sheet answer `answer`. */
 async function crashPastTheBound(window: FakeBrowserWindow, answer: number) {
   sheets.answers.push(answer);
+
   for (let death = 0; death < 4; death += 1) {
     crash(window);
     await vi.advanceTimersByTimeAsync(PAST_THE_PAUSE_MS);
@@ -197,11 +224,13 @@ test("Quit Vespin held by a live call that is kept loads the panel once more rat
 
 test("a load that finishes between deaths starts the count over", () => {
   const { window } = drawnPanel();
+
   for (let death = 0; death < 5; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
     window.webContents.emit("did-finish-load");
   }
+
   expect(window.loads).toBe(6);
   expect(sheets.shownOn).toEqual([]);
 });

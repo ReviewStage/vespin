@@ -60,9 +60,11 @@ export function ReplyForm({
 }): React.JSX.Element {
   const [body, setBody] = useState(start);
   const blank = body.trim() === "" || overCommentBound(body);
+
   const send = () => {
     if (!blank && !busy) onSend(body);
   };
+
   return (
     <CommentEditor
       variant={REPLY_VARIANT.EDIT}

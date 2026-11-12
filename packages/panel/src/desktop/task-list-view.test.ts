@@ -134,12 +134,14 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
   const root = createRoot(container);
   roots.push(root);
   sidebarRouter = windowRouter();
+
   const control = tasksControl({
     tasks: [...tasks],
     workspace,
     workspaces: [workspace],
     me: DEAN,
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -152,6 +154,7 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
       ),
     ),
   );
+
   return container;
 }
 
@@ -171,8 +174,10 @@ function menuItem(label: string): HTMLElement {
       '[role="menuitem"], [role="menuitemcheckbox"], [role="option"]',
     ),
   ];
+
   const found = items.find((item) => itemLabel(item) === label);
   assert.ok(found, `a menu item named ${label} stands among ${items.map(itemLabel).join(", ")}`);
+
   return found;
 }
 
@@ -216,6 +221,7 @@ async function choose(sidebar: HTMLElement, submenu: string, choice: string): Pr
 /** The first of a button's words a reader hears: a row's or a fold's name, before its count and its chord. */
 function heardName(button: Element): string {
   const heard = [...button.children].find((part) => part.getAttribute("aria-hidden") !== "true");
+
   return heard?.textContent ?? "";
 }
 
@@ -223,6 +229,7 @@ function heardName(button: Element): string {
 function groupNames(sidebar: HTMLElement): string[] {
   const tasks = sidebar.querySelector(TASK_LIST);
   assert.ok(tasks, "the Tasks section stands");
+
   return [
     ...tasks.querySelectorAll(".ui-group-header-head button[aria-expanded]:not([aria-haspopup])"),
   ].map(heardName);
@@ -234,6 +241,7 @@ function taskRows(
 ): { name: string; repository: string | undefined; face: boolean }[] {
   const tasks = sidebar.querySelector(TASK_LIST);
   assert.ok(tasks, "the Tasks section stands");
+
   return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => ({
     name: row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
     repository: row.querySelector(".sidebar-task-repository")?.textContent ?? undefined,
@@ -255,6 +263,7 @@ function cardName(): string | undefined {
 /** The words of each item of the menu standing last, its glyph left out. */
 function lastMenuItems(): string[] {
   const menu = [...document.querySelectorAll<HTMLElement>('[role="menu"]')].at(-1);
+
   return [
     ...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]') ?? []),
   ].map(itemLabel);
@@ -267,19 +276,23 @@ async function mountRead(
 ): Promise<HTMLElement> {
   const sidebar = mountSidebar(workspace, tasks);
   await act(async () => undefined);
+
   return sidebar;
 }
 
 /** What the Tasks head says, which the list is called by too. */
 function headWords(sidebar: HTMLElement): string | undefined {
   const list = sidebar.querySelector(TASK_LIST);
+
   const said =
     sidebar.querySelector(".sidebar-tasks-head .ui-group-header-lead")?.textContent ?? undefined;
+
   assert.equal(
     list?.getAttribute("aria-label") ?? undefined,
     said,
     "the list is called as its head says",
   );
+
   return said;
 }
 
@@ -422,9 +435,11 @@ test("a list of your own that holds nothing says so, and Show all lists everyone
   const theirs = TASKS.filter((each) => each.createdBy?.userId === CHARLES);
   const sidebar = await mountRead(ACME, theirs);
   assert.equal(taskRows(sidebar).length, 0);
+
   const note = [...sidebar.querySelectorAll(".ui-note-line")].find((each) =>
     each.textContent?.startsWith("No tasks match this view."),
   );
+
   const showAll = note?.querySelector("button");
   assert.ok(showAll, "the note offers Show all");
   act(() => showAll.click());
@@ -469,10 +484,12 @@ test("in one run, a task with no repository says so on its row", async () => {
 
 test("an empty workspace says only that it holds no tasks", async () => {
   const sidebar = await mountRead(ACME, []);
+
   // Note that the pinned section's own "Drag tasks here to pin them" is a line of the sidebar too.
-  const notes = [...sidebar.querySelectorAll(".ui-note-line")]
-    .map((note) => note.textContent)
-    .filter((note) => !note?.startsWith("Drag tasks here"));
+  const notes = [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
+    note?.startsWith("Drag tasks here") === true ? [] : [note],
+  );
+
   assert.deepEqual(notes, ["No tasks yet."]);
 });
 
@@ -517,31 +534,38 @@ test("Show completed sub-tasks stands a parent's finished sub-tasks under it, mu
     status,
     ...(parentTaskId === undefined ? undefined : { parentTaskId }),
   });
+
   const names = (within: HTMLElement) =>
     [...within.querySelectorAll(`${TASK_LIST} .ui-list-row-title`)].map(
       (title) => title.firstChild?.textContent,
     );
+
   const sidebar = await mountRead(ACME, [
     of("p", "Onboarding", TASK_STATUS.IN_PROGRESS),
     of("a", "Audit", TASK_STATUS.DONE, "p"),
     of("d", "Delete", TASK_STATUS.IN_PROGRESS, "a"),
     of("s", "Shipped", TASK_STATUS.DONE),
   ]);
+
   const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Show completed sub-tasks").click());
+
   const fold = sidebar.querySelector<HTMLButtonElement>(
     'button[aria-label="Sub-tasks of Onboarding"]',
   );
+
   assert.ok(fold, "Onboarding folds its sub-tasks");
   act(() => fold.click());
   const audit = sidebar.querySelector<HTMLButtonElement>('button[aria-label="Sub-tasks of Audit"]');
   assert.ok(audit, "Audit folds its sub-tasks");
   act(() => audit.click());
   assert.deepEqual(names(sidebar), ["Onboarding", "Audit", "Delete"]);
+
   const muted = [...sidebar.querySelectorAll(`${TASK_LIST} li[data-muted="true"]`)].map(
     (row) => row.querySelector(".ui-list-row-title")?.firstChild?.textContent,
   );
+
   assert.deepEqual(muted, ["Audit"]);
 
   act(() => {
@@ -579,9 +603,11 @@ test("the list holds the tasks to do and in progress, each led by its status's m
     taskRows(sidebar).map((row) => row.name),
     ["Fix Safari login", "CSV export"],
   );
+
   const marks = [
     ...sidebar.querySelectorAll(`${TASK_LIST} .ui-list-row-leading .ui-task-status-mark`),
   ].map((mark) => mark.getAttribute("data-status"));
+
   assert.deepEqual(marks, [TASK_STATUS.IN_PROGRESS, TASK_STATUS.TODO]);
 });
 
@@ -594,6 +620,7 @@ test("a task from a service before statuses stands among them", () => {
 function heardFaces(sidebar: HTMLElement): [string, string | undefined][] {
   const tasks = sidebar.querySelector(TASK_LIST);
   assert.ok(tasks, "the Tasks section stands");
+
   return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => [
     row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
     row.querySelector(".ui-list-row-title .ui-visually-hidden:last-child")?.textContent ??
@@ -619,9 +646,11 @@ test("Assigned to a teammate, with nothing of theirs, says so, and Show all list
 
   assert.equal(headWords(sidebar), "Charles Pan's tasks");
   assert.equal(taskRows(sidebar).length, 0);
+
   const note = [...sidebar.querySelectorAll(".ui-note-line")].find((each) =>
     each.textContent?.startsWith("No tasks match this view."),
   );
+
   const showAll = note?.querySelector("button");
   assert.ok(showAll, "the note offers Show all");
   act(() => showAll.click());
@@ -634,6 +663,7 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
   fakeActPort({
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
       reads.deliverMembers({ [workspaceId]: { rows: { members: MEMBERS } } });
+
       return Promise.resolve();
     },
   });
@@ -641,8 +671,10 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
   const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Assigned to").click());
+
   const offered = () =>
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].map(itemLabel);
+
   const retry = () =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
       (each) => each.textContent === "Retry",

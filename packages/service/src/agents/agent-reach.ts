@@ -68,6 +68,7 @@ export const reachedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<ReachedAgent, HostedRefusal, DatabaseServices | Scope.Scope> {
   const agentId = yield* uuidOf(request, AGENT_ID_QUERY);
   const userId = yield* resolvedUserId(seams, request);
+
   return yield* reachedAgentById(userId, agentId);
 });
 
@@ -81,7 +82,9 @@ export const reachedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<ReachedAgent, HostedRefusal, DatabaseServices> {
   const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, yield* pathUuid(id)));
+
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return {
     userId,
     agent: agent.value,
@@ -100,6 +103,7 @@ export function controlsAgent(
   agent: Pick<Agent, "userId" | "githubAccess" | "machine">,
 ): boolean {
   if (agent.userId === userId) return true;
+
   return agent.githubAccess !== GITHUB_ACCESS.TOKEN && agent.machine !== AGENT_MACHINE.DEVICE;
 }
 
@@ -169,6 +173,7 @@ export function writesToAgent(
   policy: PlanAgentWriters = PLAN_AGENT_WRITER_POLICY,
 ): boolean {
   if (payer === null || !PLAN_PAYERS.has(payer)) return true;
+
   return policy === PLAN_AGENT_WRITERS.WORKSPACE || agent.userId === userId;
 }
 
@@ -182,7 +187,9 @@ export const admitsPlanWriter = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
 ): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(userId, agent.id));
+
   if (Option.isNone(routing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (!writesToAgent(userId, agent, routing.value.payer)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }

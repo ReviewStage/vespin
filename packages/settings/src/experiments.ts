@@ -1,6 +1,5 @@
 // experiments.ts -- the features a developer can turn on before they are finished, and how a choice of them is read.
 
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Option, Schema } from "effect";
 
@@ -14,15 +13,13 @@ export const EXPERIMENT = {
   MEMORY: "memory",
   /** Skills: the skills a member installs into the app for their agents, managed in Settings › Skills, and the `/` list of skills in a box written to an agent. */
   SKILLS: "skills",
-  /** Bring your own machine: agents that run on the member's own Macs and Linux machines, This Mac among them, set up in Settings › Machines, rather than only in our cloud. */
-  BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
   TURN_END: "turn-end",
-  /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs in a cloud agent's sandbox from the Run button over its tabs, ⌘K, or a phone's ⋯. */
+  /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs from the Run button over an agent's tabs, ⌘K, or a phone's ⋯: in a cloud agent's sandbox, or on the Mac a local agent runs on, as each action allows. */
   RUN_ACTIONS: "run-actions",
 } as const;
 
@@ -51,6 +48,7 @@ export const WORKSPACE_EXPERIMENT_LIST = [
 ] as const;
 
 export type WorkspaceExperiment = (typeof WORKSPACE_EXPERIMENT_LIST)[number];
+
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
 
 const isWorkspaceExperimentKey = Schema.is(Schema.Literals(WORKSPACE_EXPERIMENT_LIST));
@@ -117,15 +115,6 @@ export const EXPERIMENTS = [
     since: "2026-11-05",
   },
   {
-    key: EXPERIMENT.BRING_YOUR_OWN_HOST,
-    name: "Bring your own machine",
-    detail:
-      "Run agents on your own Macs and Linux machines. " +
-      `Their transcripts and the files they read are still sent to ${PRODUCT_NAME}.`,
-    owner: "Charles",
-    since: "2026-10-30",
-  },
-  {
     key: EXPERIMENT.SKILLS,
     name: "Skills",
     detail: "Install skills for your agents, and use one by typing / in a message.",
@@ -165,11 +154,14 @@ const choicesRecord = Schema.Record(Schema.String, Schema.Unknown);
  */
 export function experimentChoicesFrom(value: UnparsedWireValue): ExperimentChoices | undefined {
   const decoded = Schema.decodeUnknownOption(choicesRecord)(value);
+
   if (Option.isNone(decoded)) return undefined;
   const choices: Partial<Record<Experiment, boolean>> = {};
+
   for (const [key, choice] of Object.entries(decoded.value)) {
     if (isExperiment(key) && isChoice(choice)) choices[key] = choice;
   }
+
   return choices;
 }
 
@@ -202,9 +194,11 @@ export function workspaceExperimentChoicesFrom(
   entries: readonly { readonly experiment: string; readonly on: boolean }[] | undefined,
 ): WorkspaceExperimentChoices {
   const choices: Partial<Record<WorkspaceExperiment, boolean>> = {};
+
   for (const { experiment, on } of entries ?? []) {
     if (isWorkspaceExperimentKey(experiment)) choices[experiment] = on;
   }
+
   return choices;
 }
 

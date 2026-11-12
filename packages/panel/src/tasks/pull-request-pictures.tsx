@@ -2,7 +2,7 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { githubImageOf } from "@repo/features/github-image";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { ProviderMark, SKELETON_SHAPE, Skeleton } from "@repo/ui";
+import { ProviderMark, SKELETON_KIND, Skeleton } from "@repo/ui";
 import { type RenderingPicture, renderingPictures } from "@repo/ui/github-html";
 import { PICTURE_STATE, type PictureRead, usePicture } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
@@ -75,9 +75,11 @@ export function useGitHubImageRead(): PictureReader {
  */
 function picturesOf(html: string, dark: boolean): readonly RenderingPicture[] {
   const seen = new Set<string>();
+
   return renderingPictures(html, dark).filter(({ src }) => {
     if (seen.has(src) || githubImageOf(src) === undefined) return false;
     seen.add(src);
+
     return true;
   });
 }
@@ -86,6 +88,7 @@ function picturesOf(html: string, dark: boolean): readonly RenderingPicture[] {
 function viewerName(alt: string, mediaType: string): string {
   const words = alt.trim() === "" ? PICTURE_WORDS.UNNAMED : alt.trim();
   const extension = mediaType.slice(mediaType.indexOf("/") + 1).replace(/\+.*$/u, "");
+
   return `${words.replaceAll(/[/\\:]/gu, "-")}.${extension}`;
 }
 
@@ -101,9 +104,11 @@ function heldFiles(
 ): readonly { readonly src: string; readonly original: string; readonly file: FileChip }[] {
   return pictures.flatMap(({ src, original, alt }, index) => {
     const state = reads[index];
+
     if (state?.kind !== PICTURE_STATE.READY) return [];
     const mediaType = mediaTypeOf(state.url);
     const file = { name: viewerName(alt, mediaType), mediaType, url: state.url };
+
     return [{ src, original, file }];
   });
 }
@@ -124,13 +129,16 @@ function EntryViewer({
 }): ReactNode {
   const openLink = useOpenLink();
   const read = useGitHubImageRead();
+
   // Note that every picture of the entry is watched, so one still being read joins the walk as it lands.
   const reads = useQueries({
     queries: pictures.map(({ src }) => pictureQuery(agentId, src, read)),
     combine: (results) => results.map((result) => result.data),
   });
+
   const files = heldFiles(pictures, reads);
   const at = files.findIndex((each) => each.src === src);
+
   const action: ViewerAction = {
     label: PICTURE_WORDS.OPEN_ON_GITHUB,
     icon: <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />,
@@ -138,12 +146,14 @@ function EntryViewer({
     address: (file) => files.find((each) => each.file === file)?.original,
     onOpen: openLink,
   };
+
   return at < 0 ? null : (
     <AttachmentViewer
       files={files.map((each) => each.file)}
       at={at}
       onAt={(next) => {
         const shown = files[next];
+
         if (shown !== undefined) onSrc(shown.src);
       }}
       onClose={onClose}
@@ -167,10 +177,12 @@ export function EntryPictures({
   const dark = useDrawnDark();
   const pictures = useMemo(() => picturesOf(html, dark), [html, dark]);
   const [viewing, setViewing] = useState<{ readonly agentId: string; readonly src: string }>();
+
   const door = useMemo<EntryViewerDoor>(
     () => ({ open: (agentId, src) => setViewing({ agentId, src }) }),
     [],
   );
+
   return (
     <EntryViewerContext.Provider value={door}>
       {children}
@@ -188,7 +200,7 @@ export function EntryPictures({
 }
 
 /** The shape a picture's written width and height give it, as an `aspect-ratio`; none where either is unwritten. */
-function writtenShape(size: GitHubPictureSize): string | undefined {
+function writtenAspect(size: GitHubPictureSize): string | undefined {
   return size.width === undefined || size.height === undefined
     ? undefined
     : `${size.width} / ${size.height}`;
@@ -216,17 +228,22 @@ function GitHubPicture({
 }): React.JSX.Element {
   const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
   const door = useContext(EntryViewerContext);
+
   // Note that an inline picture whose read did not land is its link too, because it stands in a line, where no Retry may stand.
   if (state.kind === PICTURE_STATE.MISSING || (inline && state.kind === PICTURE_STATE.FAILED)) {
     return <GitHubPictureLink src={src} alt={alt} />;
   }
+
   if (!inline) {
     const open = door === undefined ? undefined : () => door.open(agentId, src);
+
     return <PictureBlock state={state} alt={alt} caption={undefined} onOpen={open} />;
   }
+
   // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
   const heightOnly = size.height !== undefined && size.width === undefined;
-  const shape = writtenShape(size);
+  const aspect = writtenAspect(size);
+
   return state.kind === PICTURE_STATE.READY ? (
     <img
       className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
@@ -234,7 +251,7 @@ function GitHubPicture({
       alt={alt}
       width={size.width}
       height={size.height}
-      style={shape === undefined ? undefined : { aspectRatio: shape }}
+      style={aspect === undefined ? undefined : { aspectRatio: aspect }}
     />
   ) : (
     <PictureSkeleton alt={alt} size={size} />
@@ -249,7 +266,8 @@ function PictureSkeleton({
   alt: string;
   size: GitHubPictureSize;
 }): React.JSX.Element {
-  const shape = writtenShape(size);
+  const aspect = writtenAspect(size);
+
   return (
     <span
       className="pull-request-picture-skeleton"
@@ -257,12 +275,12 @@ function PictureSkeleton({
       aria-label={alt}
       // Note that with both sizes written it keeps their shape rather than their height, so it stands as tall as the picture the column narrows.
       style={
-        shape === undefined
+        aspect === undefined
           ? { width: size.width, height: size.height }
-          : { width: size.width, aspectRatio: shape }
+          : { width: size.width, aspectRatio: aspect }
       }
     >
-      <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+      <Skeleton kind={SKELETON_KIND.BLOCK} />
     </span>
   );
 }

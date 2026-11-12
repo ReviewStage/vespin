@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { PencilLineIcon } from "../../icons/icons.js";
 import { drawsSomething } from "../../said.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Tooltip } from "../tooltip/hint.js";
 import type { CardBox } from "../tooltip/tooltip.js";
 import type { CommentAuthor } from "./comment.js";
@@ -87,16 +87,18 @@ function PinFaceOf({ face }: { face: PinFace }): React.JSX.Element {
       </span>
     );
   }
+
   const { author, count } = face;
   // Note that a glyph drawn conditionally may arrive as nothing to draw, which is no glyph, so the letter still stands.
   const glyph = drawsSomething(author.glyph) ? author.glyph : undefined;
+
   return (
     <>
       <Avatar
         name={author.name}
         {...(author.id === undefined ? {} : { id: author.id })}
         src={author.picture}
-        shape={author.shape ?? AVATAR_SHAPE.CIRCLE}
+        outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
         glyph={glyph}
         tiled={glyph !== undefined}
         size={AVATAR_SIZE.INLINE}
@@ -137,6 +139,7 @@ export function CommentPin({
   cardAt?: (() => CardBox | undefined) | undefined;
 }): React.JSX.Element {
   const look = face.look ?? COMMENT_PIN_LOOK.POSTED;
+
   return (
     // Note that its comments open tell the pointer nothing more, so no card stands over them.
     <Tooltip label={open ? undefined : label} card={open ? undefined : preview} cardAt={cardAt}>

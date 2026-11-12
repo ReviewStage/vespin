@@ -124,6 +124,7 @@ export function DescriptionDiagram({
   const coarse = useCoarsePointer();
   const room = useContext(ShellRoomContext);
   const pointerOpens = coarse || room === SHELL_ROOM.NARROW;
+
   return (
     <Card
       as={CARD_ELEMENT.FIGURE}
@@ -157,6 +158,7 @@ export function DescriptionDiagram({
               // Note that a key's press (no pointer's click count) opens it in any room, because the
               // head's Full screen stands only where a finger's tap would open it too.
               const keyed = event.detail === 0;
+
               if (!keyed && !opensFullScreen(event.currentTarget)) return;
               // The press is the picture's, so the section around it does not open to be edited.
               event.stopPropagation();
@@ -191,8 +193,10 @@ export function DiagramPreview({
 }): React.JSX.Element {
   const appearance = useAppearance();
   const { drawing: drawingNow, retry } = useDrawing(code, appearance);
+
   const shown =
     drawingNow ?? (previous === undefined ? undefined : heldDrawing(appearance, previous));
+
   return (
     <>
       <div className={HEAD_CLASS}>

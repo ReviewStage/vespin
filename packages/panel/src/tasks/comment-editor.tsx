@@ -92,17 +92,21 @@ interface Opened {
   readonly key: number;
 }
 
+type UseOpenedResult = { opened: Opened; said: (markdown: string) => void };
+
 /**
  * Note that the editor opens on its words once, so words the owner changed
  * outside it, rather than the ones it last handed over, open it again.
  */
-function useOpened(value: string): { opened: Opened; said: (markdown: string) => void } {
+function useOpened(value: string): UseOpenedResult {
   const handed = useRef(value);
   const opened = useRef<Opened>({ markdown: value, key: 0 });
+
   if (value !== handed.current) {
     handed.current = value;
     opened.current = { markdown: value, key: opened.current.key + 1 };
   }
+
   return {
     opened: opened.current,
     said: (markdown) => {
@@ -170,13 +174,17 @@ export function CommentEditor({
   // Note that a box drawn into a note the diff stands only once it draws again takes the keyboard once it stands in the window.
   useEffect(() => {
     const placed = room.current;
+
     if (!focus || placed === null || placed.isConnected) return undefined;
+
     const standing = new MutationObserver(() => {
       if (!placed.isConnected) return;
       standing.disconnect();
       handle.current?.focusAt(PLACEMENT_END);
     });
+
     standing.observe(document.body, { childList: true, subtree: true });
+
     return () => standing.disconnect();
   }, [focus]);
 
@@ -201,12 +209,16 @@ export function CommentEditor({
         aria-busy={busy}
         onKeyDown={(event) => {
           const finishing = event.key === "Escape" || enterSends(event);
+
           if (!finishing || !event.defaultPrevented) return;
+
           // Note that a key the editor took, a menu's Esc or an answered finish, is the box's alone.
           if (unanswered.current) {
             unanswered.current = false;
+
             return;
           }
+
           event.stopPropagation();
         }}
       >

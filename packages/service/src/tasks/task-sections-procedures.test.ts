@@ -41,14 +41,18 @@ interface Answer {
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   const bearers = new Map([
     [`Bearer ${owner}`, owner],
     [`Bearer ${other}`, other],
   ]);
+
   const ask = (request: Request) => answer(bearers, request);
+
   return { owner, other, ask };
 });
 
@@ -57,6 +61,7 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
     // The procedure runs on the services handed to it, the test's clock among them: a section's instant is read from it.
     // SAFETY: the procedures yield the database and the clock alone, which the test's own context holds.
     const services = (yield* Effect.context<never>()) as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       taskSections: taskSectionsProcedures({
         resolveUserId: (incoming) =>
@@ -65,9 +70,11 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
           ),
       }),
     });
+
     const response = yield* Effect.promise(() => handle(request, services));
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -92,13 +99,16 @@ function request(
 function readAnswer(answered: Answer) {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(taskSectionsWrittenSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
 /** The sections an answer carries, failing the test where it is not the wire's. */
 function sectionsOf(answered: Answer): TaskSections {
   const { txid: _txid, ...sections } = readAnswer(answered);
+
   return sections;
 }
 
@@ -114,6 +124,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
         const id = randomUUID();
         const madeAt = yield* Clock.currentTimeMillis;
         yield* TestClock.adjust("1 minute");
+
         const createIt = () =>
           ask(
             request(owner, {
@@ -127,6 +138,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
               },
             }),
           );
+
         const answered = yield* createIt();
         const made = sectionsOf(answered);
         // The write names the transaction it wrote in, for the sidebar's follower to wait on; made again, it wrote nothing and names none.
@@ -147,6 +159,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
           agentEntries: [],
         });
         assert.deepEqual(sectionsOf(yield* ask(request(owner))), made);
+
         // A released desktop still places an agent in a section; every agent stands on a task, so it writes nothing and is no refusal.
         const placed = yield* ask(
           request(owner, {
@@ -154,6 +167,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
             body: { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: randomUUID(), sectionId: id },
           }),
         );
+
         assert.deepEqual(readAnswer(placed), made);
         assert.deepEqual(sectionsOf(yield* ask(request(other))), {
           sections: [],
@@ -171,6 +185,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
         const workspaceId = yield* openWorkspace(owner);
         const id = randomUUID();
         const key = randomUUID();
+
         const write = (body: WireBoundaryInput, idempotencyKey?: string) =>
           ask(
             request(owner, {
@@ -179,6 +194,7 @@ it.layer(getTestDB())("the task sections route", (it) => {
               ...(idempotencyKey === undefined ? undefined : { idempotencyKey }),
             }),
           );
+
         const edit = (title: string) => ({ kind: TASK_SECTION_WRITE.EDIT, id, title, icon: null });
         readAnswer(
           yield* write({ kind: TASK_SECTION_WRITE.CREATE, id, workspaceId, title: "Draft" }),
@@ -213,11 +229,13 @@ it.layer(getTestDB())("the task sections route", (it) => {
           workspaceId,
           icon: { kind: "emoji", emoji: "🚀🚀" },
         });
+
         const notAGlyph = yield* write({
           ...create,
           workspaceId,
           icon: { kind: "glyph", glyph: "unicorn" },
         });
+
         const blank = yield* write({ ...create, workspaceId, title: "   " });
         const extraKey = yield* write({ ...create, workspaceId, userId: other });
         const notTheirs = yield* write({ ...create, workspaceId });
@@ -225,9 +243,11 @@ it.layer(getTestDB())("the task sections route", (it) => {
         const deleted = yield* ask(request(owner, { method: "DELETE" }));
 
         const invalid = refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
+
         for (const answered of [twoEmoji, notAGlyph, blank, extraKey, notTheirs]) {
           assert.deepEqual(answered, invalid);
         }
+
         assert.deepEqual(
           unsigned,
           refusal(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN),

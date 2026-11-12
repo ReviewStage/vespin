@@ -30,12 +30,16 @@ export function onTerminalPort(
     // Only this window's own post hands a port in: the desktop's preload's, or the tab's host's.
     if (event.source !== window) return;
     const message = unparsedWire(event.data);
+
     if (!isRecord(message) || message.channel !== TERMINAL_PORT_CHANNEL) return;
     const ticket = readTicket(message.ticket);
     const [port] = event.ports;
+
     if (Result.isFailure(ticket) || port === undefined) return;
     callback(ticket.success, port);
   };
+
   window.addEventListener("message", listener);
+
   return () => window.removeEventListener("message", listener);
 }

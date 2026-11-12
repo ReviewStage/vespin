@@ -34,6 +34,7 @@ it.effect(
         methods: {},
         client: { clientId: "panel", role: GATEWAY_CLIENT_ROLE.OPERATOR },
       });
+
       const state = new AppStateStore(initialAppState(RUN, true, []), Context.empty());
       yield* wireGateway({
         gateway,

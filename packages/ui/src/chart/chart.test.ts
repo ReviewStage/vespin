@@ -31,7 +31,9 @@ function draw(config: ChartConfig): HTMLElement {
     root?.render(createElement(ChartContainer, { config, children: createElement("svg") })),
   );
   const chart = container.querySelector<HTMLElement>("[data-slot=chart]");
+
   if (chart === null) throw new Error("no chart drawn");
+
   return chart;
 }
 

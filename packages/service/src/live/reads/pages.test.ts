@@ -29,6 +29,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -58,6 +59,7 @@ const liveRowsOf = (statement: LiveStatement) =>
     const rows = yield* Schema.decodeUnknownEffect(TASK_PAGES_READ.rows)({
       pages: yield* runLive(statement),
     });
+
     return pagesOfLiveRows(rows);
   });
 
@@ -74,13 +76,16 @@ it.layer(getTestDB())("a task's pages followed live", (it) => {
         const stranger = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
         const other = yield* startTask(owner, { name: "Billing" });
+
         const agrees = Effect.gen(function* () {
           const held = yield* listPages(owner, taskPageOwner(task.id));
           assert.deepEqual(yield* livePagesOf(owner, task.id), held);
+
           return held;
         });
 
         assert.deepEqual(yield* agrees, []);
+
         const funnel = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -89,6 +94,7 @@ it.layer(getTestDB())("a task's pages followed live", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         yield* writePage(
           owner,
           taskPageOwner(task.id),

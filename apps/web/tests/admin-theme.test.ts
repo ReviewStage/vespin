@@ -15,12 +15,14 @@ import { followAppTheme } from "../src/admin/admin-appearance";
  */
 
 const WEB = join(import.meta.dirname, "..");
+
 const ADMIN_PAGE = new DOMParser().parseFromString(
   readFileSync(join(WEB, "admin.html"), "utf8"),
   "text/html",
 );
 
 let machineDark = false;
+
 /** The media query lists handed out, which the machine's flip is announced to. */
 const machine: MediaQueryListStub[] = [];
 
@@ -40,6 +42,7 @@ class MediaQueryListStub extends EventTarget implements MediaQueryList {
 /** The machine's appearance flips: every list handed out hears it. */
 function flipMachine(dark: boolean): void {
   machineDark = dark;
+
   for (const list of machine) list.dispatchEvent(new Event("change"));
 }
 
@@ -49,12 +52,15 @@ beforeEach(() => {
   vi.spyOn(window, "matchMedia").mockImplementation((query) => {
     const list = new MediaQueryListStub(query);
     machine.push(list);
+
     return list;
   });
+
   // The page's head as admin.html writes it: its root's attributes and its tint.
   for (const { name, value } of Array.from(ADMIN_PAGE.documentElement.attributes)) {
     document.documentElement.setAttribute(name, value);
   }
+
   const tint = ADMIN_PAGE.querySelector('meta[name="theme-color"]');
   const meta = document.head.appendChild(document.createElement("meta"));
   meta.name = "theme-color";

@@ -66,7 +66,9 @@ export interface Invitees {
 /** Who is signed in, by the address invitations go to and the name their face is drawn by; nothing while signed out. */
 export function useSignedIn(): { readonly email: string; readonly name: string } | undefined {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
+
   return { email: account.email, name: account.name ?? account.email };
 }
 
@@ -81,11 +83,13 @@ function joined(
   yours: string | undefined,
 ): readonly Invitee[] {
   const known = new Set(now.map((one) => keyOf(one.email)));
+
   const added = inviteesOf(typed)
     .filter((one) => !known.has(keyOf(one.email)))
     .map((one): Invitee => {
       const mine = yours !== undefined && keyOf(one.email) === keyOf(yours);
       const reason = !one.invitable ? NOT_AN_ADDRESS : mine ? YOURS : undefined;
+
       return {
         email: one.email,
         words: one.name ?? one.email,
@@ -94,11 +98,12 @@ function joined(
         reason,
       };
     });
+
   return [...now, ...added];
 }
 
 function pendingOf(invitees: readonly Invitee[]): readonly string[] {
-  return invitees.filter((one) => one.state === EMAIL_CHIP_STATE.DRAFT).map((one) => one.email);
+  return invitees.flatMap((one) => (one.state === EMAIL_CHIP_STATE.DRAFT ? [one.email] : []));
 }
 
 /**
@@ -111,8 +116,10 @@ export function useInvitees(yours: string | undefined): Invitees {
   const { mutateAsync: sendWorkspaceInvite } = useMutation(actMutation(ACT_KIND.WORKSPACE_INVITE));
   const [invitees, setInvitees] = useState<readonly Invitee[]>([]);
   const [typed, setTyped] = useState("");
+
   const mark = (email: string, state: EmailChipState, reason?: string) =>
     setInvitees((now) => now.map((one) => (one.email === email ? { ...one, state, reason } : one)));
+
   return {
     chips: invitees.map(({ email, ...chip }) => ({ id: keyOf(email), ...chip })),
     typed,
@@ -132,12 +139,15 @@ export function useInvitees(yours: string | undefined): Invitees {
       const next = joined(invitees, typed, yours);
       setInvitees(next);
       setTyped("");
+
       return { pending: pendingOf(next) };
     },
     send: async (workspaceId, emails) => {
       const refused: string[] = [];
+
       for (const email of emails) {
         mark(email, EMAIL_CHIP_STATE.SENDING);
+
         try {
           await sendWorkspaceInvite({
             workspaceId,
@@ -151,6 +161,7 @@ export function useInvitees(yours: string | undefined): Invitees {
           refused.push(`${email}: ${words}`);
         }
       }
+
       return refused;
     },
   };

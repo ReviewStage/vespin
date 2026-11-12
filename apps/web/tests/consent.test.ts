@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+
+import type { WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { act } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -32,6 +35,7 @@ const PATH = {
 } as const;
 
 const ACCOUNT = { id: "account-1", name: "Ada", email: "ada@example.com" };
+
 /** Where the server sends each answer: the client's redirect, with a code or with `access_denied`. */
 const ANSWERED = {
   ALLOWED: "http://127.0.0.1:4810/callback?code=code-for-the-client&state=client-state",
@@ -49,33 +53,40 @@ function signedAuthorization(): string {
     state: "client-state",
     exp: "4102444800",
   });
+
   for (const name of [...query.keys(), "ba_param"].sort()) query.append("ba_param", name);
   query.set("sig", "signature-from-the-server");
+
   return query.toString();
 }
 
 /** One request the page sent: its path and its JSON body. */
 interface Sent {
   readonly path: string;
-  readonly body: Record<string, unknown> | undefined;
+  readonly body: WireRecord | undefined;
 }
 
 let sent: Sent[] = [];
+
 /** How many times the page tried to leave. */
 let leaves = 0;
 
 /** Better Auth's answers, by path and body; every other request hangs. */
-function answer(path: string, body: Record<string, unknown> | undefined): Response | undefined {
+function answer(path: string, body: WireRecord | undefined): Response | undefined {
   if (path === PATH.SESSION) {
     return Response.json({ session: { id: "session-1", userId: ACCOUNT.id }, user: ACCOUNT });
   }
+
   if (path === PATH.PUBLIC_CLIENT) {
     return Response.json({ client_id: "acme-notes", client_name: "Acme Notes" });
   }
+
   if (path === PATH.CONSENT) {
     const url = body?.accept === true ? ANSWERED.ALLOWED : ANSWERED.DENIED;
+
     return Response.json({ redirect: true, url });
   }
+
   return undefined;
 }
 
@@ -85,8 +96,9 @@ async function openPage(page: "consent" | "sign-in", address: string): Promise<H
     const request = input instanceof Request ? input : undefined;
     const url = new URL(request?.url ?? String(input), window.location.href);
     const text = request === undefined ? init?.body : await request.text();
-    const body = typeof text === "string" ? JSON.parse(text) : undefined;
+    const body = Predicate.isString(text) ? JSON.parse(text) : undefined;
     sent.push({ path: url.pathname, body });
+
     return answer(url.pathname, body) ?? new Promise<Response>(() => undefined);
   });
   window.history.replaceState(null, "", address);
@@ -100,6 +112,7 @@ async function openPage(page: "consent" | "sign-in", address: string): Promise<H
   await act(async () => {
     await import(page === "consent" ? "../src/consent" : "../src/sign-in");
   });
+
   return root;
 }
 
@@ -107,7 +120,9 @@ function buttonNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const button = Array.from(page.querySelectorAll("button")).find(
     (candidate) => candidate.textContent === name,
   );
+
   if (!button) throw new Error(`No button named ${name}`);
+
   return button;
 }
 

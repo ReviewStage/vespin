@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
@@ -34,6 +35,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -41,6 +43,7 @@ const READY = { kind: PICTURE_STATE.READY, url: "data:image/png;base64,iVBORw=="
 
 test("a few pictures stand captioned in the list their caller names, each opening at a press", () => {
   const opened: string[] = [];
+
   const container = mount(
     createElement(
       PictureSet,
@@ -58,6 +61,7 @@ test("a few pictures stand captioned in the list their caller names, each openin
       ),
     ),
   );
+
   const list = container.querySelector('ul[aria-label="Pictures the agent showed"]');
   const presses = [...(list?.querySelectorAll("li button") ?? [])];
 
@@ -66,7 +70,9 @@ test("a few pictures stand captioned in the list their caller names, each openin
     "Enlarge After",
   ]);
   expect(presses.map((press) => press.textContent)).toEqual(["Before", "After"]);
-  act(() => (presses[1] as HTMLButtonElement).click());
+  const after = presses[1];
+  assert.ok(after instanceof HTMLButtonElement);
+  act(() => after.click());
   expect(opened).toEqual(["After"]);
   expect(container.querySelector("figcaption")).toBeNull();
 });
@@ -87,6 +93,7 @@ test("many pictures say how many they hold, the last tile drawn saying how many 
       ),
     ),
   );
+
   const presses = [...container.querySelectorAll("li button")];
 
   expect(presses).toHaveLength(6);
@@ -96,6 +103,7 @@ test("many pictures say how many they hold, the last tile drawn saying how many 
 
 test("a gone picture says so, or why where its place says, and opens nothing, nor does one with nothing to open", () => {
   const opened: string[] = [];
+
   const container = mount(
     createElement(
       PictureSet,
@@ -119,6 +127,7 @@ test("a gone picture says so, or why where its place says, and opens nothing, no
       }),
     ),
   );
+
   const tiles = [...container.querySelectorAll("li")];
 
   expect(container.querySelectorAll("button")).toHaveLength(0);
@@ -139,6 +148,7 @@ test("a gone picture with no words of its own says the picture is not available"
 
 test("a picture whose read did not land says it could not be read, and its Retry reads it again rather than opening it", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(
       PictureSet,
@@ -151,18 +161,22 @@ test("a picture whose read did not land says it could not be read, and its Retry
       }),
     ),
   );
+
   const presses = [...container.querySelectorAll("button")];
 
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     "Members could not be read.",
   );
   expect(presses.map((press) => press.textContent)).toEqual(["Retry"]);
-  act(() => (presses[0] as HTMLButtonElement).click());
+  const retry = presses[0];
+  assert.ok(retry instanceof HTMLButtonElement);
+  act(() => retry.click());
   expect(pressed).toEqual(["retry"]);
 });
 
 test("the last tile drawn, failed, keeps its Retry in reach rather than under how many more there are", () => {
   const retried: string[] = [];
+
   const container = mount(
     createElement(
       PictureSet,
@@ -180,6 +194,7 @@ test("the last tile drawn, failed, keeps its Retry in reach rather than under ho
       ),
     ),
   );
+
   const sixth = container.querySelectorAll("li")[5];
 
   expect(sixth?.textContent).not.toContain("+1");

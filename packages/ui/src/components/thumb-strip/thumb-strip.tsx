@@ -66,14 +66,18 @@ export function ThumbStrip({
   useEffect(() => {
     const box = list.current;
     const shown = box?.querySelector<HTMLButtonElement>('[aria-current="true"]');
+
     if (box === null || shown === null || shown === undefined) return;
     // Note that the strip scrolls itself rather than calling `scrollIntoView`, because that scrolls every box around it, the card that clips it among them.
     const room = box.getBoundingClientRect();
     const thumb = shown.getBoundingClientRect();
+
     if (thumb.left < room.left) box.scrollLeft -= room.left - thumb.left;
     else if (thumb.right > room.right) box.scrollLeft += thumb.right - room.right;
+
     if (box.contains(document.activeElement)) shown.focus({ preventScroll: true });
   }, [at]);
+
   return (
     <ul
       ref={list}

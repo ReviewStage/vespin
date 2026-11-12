@@ -230,6 +230,7 @@ function changedFile(
   patch: string,
 ): AgentChangedFile {
   const lines = patch.split("\n").slice(1);
+
   return {
     path,
     previousPath: null,
@@ -316,6 +317,7 @@ function agentSummary(taskId: string, running = false, held = false): AgentSumma
     brief: AGENT_BRIEF.PROMPT,
     sandboxVcpus: 2,
   };
+
   return held
     ? {
         ...summary,
@@ -628,6 +630,7 @@ const LONG_TRANSCRIPT: AppTranscript = { ...TRANSCRIPT, messages: LONG_MESSAGES 
 /** A check on the pull request's head, run by GitHub Actions. */
 function check(name: string, state: (typeof CHECK_STATE)[keyof typeof CHECK_STATE], took: number) {
   const startedAt = STARTED_AT + 7 * MINUTE;
+
   return {
     name,
     app: "GitHub Actions",
@@ -804,14 +807,17 @@ const INVITE_CHANGES = CHANGED_FILES.filter((file) => file.path === "src/members
  * turn whose snapshot the machine no longer holds, one on a Mac away, and
  * the invite for every other.
  */
-const TURN_CHANGES: Readonly<Record<string, AgentTurnChangesAnswerView>> = {
-  "fixture-agent-pending-ask": { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING },
-  "fixture-agent-race-ask": {
-    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-    refusedDevice: { name: "Studio" },
-  },
-};
+const TURN_CHANGES: ReadonlyMap<string, AgentTurnChangesAnswerView> = new Map([
+  ["fixture-agent-pending-ask", { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING }],
+  [
+    "fixture-agent-race-ask",
+    {
+      failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+      localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+      refusedDevice: { name: "Studio" },
+    },
+  ],
+]);
 
 /** The pull request's chapters, made for its head: the pending state first, then the invite itself. */
 const CHAPTERS = {
@@ -883,12 +889,14 @@ const CHAPTERS = {
 function treeAt(path: string): readonly TaskTreeEntry[] {
   const prefix = path === "" ? "" : `${path}/`;
   const entries = new Map<string, TaskTreeEntry>();
+
   for (const file of FILES.keys()) {
     if (!file.startsWith(prefix)) continue;
     const [name = "", ...below] = file.slice(prefix.length).split("/");
     const kind = below.length === 0 ? TASK_TREE_ENTRY.FILE : TASK_TREE_ENTRY.FOLDER;
     entries.set(name, { name, kind });
   }
+
   return [...entries.values()].sort(
     (one, other) =>
       Number(one.kind === TASK_TREE_ENTRY.FILE) - Number(other.kind === TASK_TREE_ENTRY.FILE) ||
@@ -1020,13 +1028,16 @@ function postShellPort(stage: Extract<TerminalStage, { kind: typeof TERMINAL_STA
   closeHeldPort();
   const channel = new MessageChannel();
   heldPort = channel.port1;
+
   const said: TerminalPortOutbound[] = [
     { type: TERMINAL_PORT_MESSAGE.STATE, state: TERMINAL_CONNECTION.ATTACHED },
     { type: TERMINAL_PORT_MESSAGE.OUTPUT, data: new TextEncoder().encode(SHELL_SCREEN) },
   ];
+
   if (stage.after !== undefined) {
     said.push({ type: TERMINAL_PORT_MESSAGE.STATE, state: stage.after, code: stage.code });
   }
+
   for (const message of said) channel.port1.postMessage(message);
   window.postMessage(
     { channel: TERMINAL_PORT_CHANNEL, ticket: { agentId: FIXTURE_AGENT_ID, terminalId: SHELL_ID } },
@@ -1038,6 +1049,7 @@ function postShellPort(stage: Extract<TerminalStage, { kind: typeof TERMINAL_STA
 /** The agent's transcript as the stage says it stands: the long run's at the step it reached, or the one turn, as long as the stage says. */
 function stagedTranscript(stage: AgentStage): AppTranscript {
   if (longRun(stage)) return longRunTranscript();
+
   return "view" in stage && stage.transcript === TRANSCRIPT_LENGTH.LONG
     ? LONG_TRANSCRIPT
     : TRANSCRIPT;
@@ -1058,8 +1070,10 @@ function terminalStage(stage: AgentStage): TerminalStage | undefined {
   return "terminal" in stage ? stage.terminal : undefined;
 }
 
+type StagedShare = { shared: { readonly port: number; readonly url: string } | null };
+
 /** The port the fixture's agent shares by link, which its share and its close move, so the plug's menu reads back what it pressed. */
-const STAGED_SHARE: { shared: { readonly port: number; readonly url: string } | null } = {
+const STAGED_SHARE: StagedShare = {
   shared: null,
 };
 
@@ -1069,8 +1083,10 @@ type StagedAnswer<Kind extends PortActKind> = (
   stage: AgentStage,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /** Every read the agent's tabs ask through the act door, answered as the service would answer it for this agent; the parts the host holds are staged apart (`STAGED_PARTS`). */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }, stage) => ({
     agents: [agentSummary(taskId, longRun(stage), holdsCall(stage))],
   }),
@@ -1085,23 +1101,28 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
   [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
-    TURN_CHANGES[messageId] ?? { files: INVITE_CHANGES, truncated: false },
+    TURN_CHANGES.get(messageId) ?? { files: INVITE_CHANGES, truncated: false },
   [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: STAGED_SHARE.shared }),
   [ACT_KIND.AGENTS_PORT_SHARE]: ({ port }) => {
     const url = `https://sb-relay-${port}.vercel.run`;
     STAGED_SHARE.shared = { port, url };
+
     return { url };
   },
   [ACT_KIND.AGENTS_PORT_UNSHARE]: () => {
     STAGED_SHARE.shared = null;
+
     return { shared: null };
   },
   [ACT_KIND.TASKS_FILE]: ({ path, firstLine, lastLine, raw }) => {
     const lines = FILES.get(path);
+
     if (lines === undefined) return { refusal: TASK_FILE_REFUSAL.MISSING };
     const place = { path, repository: REPOSITORY, branch: PULL_REQUEST.head };
+
     if (raw === true) return { text: { ...place, text: `${lines.join("\n")}\n` } };
+
     return {
       file: {
         ...place,
@@ -1123,9 +1144,11 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   }),
   [ACT_KIND.TERMINAL_CREATE]: (_payload, stage) => {
     const terminal = terminalStage(stage);
+
     if (terminal?.kind === TERMINAL_STAGE.REFUSED) {
       return { failure: TERMINAL_REFUSAL.SANDBOX_UNANSWERED };
     }
+
     if (terminal?.kind === TERMINAL_STAGE.SANDBOX) {
       return {
         failure:
@@ -1134,10 +1157,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
             : TERMINAL_REFUSAL.AGENT_NOT_READY,
       };
     }
+
     return { terminal: SHELL };
   },
   [ACT_KIND.TERMINAL_ATTACH]: (_payload, stage) => {
     const terminal = terminalStage(stage);
+
     if (terminal?.kind === TERMINAL_STAGE.PORT) postShellPort(terminal);
   },
 };
@@ -1150,15 +1175,18 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
  */
 export function agentTasksView(profile: string, open: TasksView): TasksView | undefined {
   const taskId = open.activeTaskId;
+
   if (!AGENT_STAGES.has(profile) || taskId === undefined) return undefined;
   const stage = AGENT_STAGES.get(profile) ?? { description: true };
   const agent = agentSummary(taskId, longRun(stage), holdsCall(stage));
+
   const agents: TaskSummary["agents"] = {
     total: 1,
     working: 0,
     activityAt: STARTED_AT + 23 * MINUTE,
     pullRequestTotal: 1,
   };
+
   const pullRequest: TaskPullRequestLine = {
     number: PULL_REQUEST.number,
     title: PULL_REQUEST.title,
@@ -1170,8 +1198,10 @@ export function agentTasksView(profile: string, open: TasksView): TasksView | un
     agentId: agent.id,
     queued: true,
   };
+
   // Note that the agent works where its task does, as the task list carries its row.
   const task = open.tasks.find((each) => each.id === taskId);
+
   return {
     ...open,
     tasks: open.tasks.map((each) => (each.id === taskId ? { ...each, agents } : each)),
@@ -1200,7 +1230,9 @@ const FIXTURE_AGENT_TAB: MainTab = agentTab(FIXTURE_AGENT_ID);
  */
 export function agentColumnTab(profile: string): MainTab | undefined {
   const stage = AGENT_STAGES.get(profile);
+
   if (stage === undefined) return undefined;
+
   return "description" in stage ? MAIN_TAB.OVERVIEW : FIXTURE_AGENT_TAB;
 }
 
@@ -1213,11 +1245,14 @@ const STAGED_TRANSCRIPTS = new WeakMap<AppTranscripts, WeakMap<AppTranscript, Ap
 /** Lays `transcript` as the agent's own over main's held transcripts, one object for each pair. */
 function stagedTranscripts(held: AppTranscripts, transcript: AppTranscript): AppTranscripts {
   let ofHeld = STAGED_TRANSCRIPTS.get(held);
+
   if (ofHeld === undefined) {
     ofHeld = new WeakMap();
     STAGED_TRANSCRIPTS.set(held, ofHeld);
   }
+
   let laid = ofHeld.get(transcript);
+
   if (laid === undefined) {
     laid = {
       ...held,
@@ -1225,6 +1260,7 @@ function stagedTranscripts(held: AppTranscripts, transcript: AppTranscript): App
     };
     ofHeld.set(transcript, laid);
   }
+
   return laid;
 }
 
@@ -1239,10 +1275,12 @@ const STAGED_RUN_ON_MAC = new WeakMap<AppWorkspaceTools, AppWorkspaceTools>();
 /** Lays the agent's `run_on_mac` over main's held reads of it, one object for each of main's. */
 function stagedRunOnMac(held: AppWorkspaceTools): AppWorkspaceTools {
   let laid = STAGED_RUN_ON_MAC.get(held);
+
   if (laid === undefined) {
     laid = { ...held, [FIXTURE_AGENT_ID]: RUN_ON_MAC_HELD };
     STAGED_RUN_ON_MAC.set(held, laid);
   }
+
   return laid;
 }
 
@@ -1254,8 +1292,10 @@ function stagedPart<Part>(
   rows: Part,
 ): (held: AppPullRequestPart<Part>) => AppPullRequestPart<Part> {
   const staged = new WeakMap<AppPullRequestPart<Part>, AppPullRequestPart<Part>>();
+
   return (held) => {
     let laid = staged.get(held);
+
     if (laid === undefined) {
       laid = {
         ...held,
@@ -1263,6 +1303,7 @@ function stagedPart<Part>(
       };
       staged.set(held, laid);
     }
+
     return laid;
   };
 }
@@ -1299,9 +1340,11 @@ const STAGED_PARTS = {
  */
 export function agentAppState(state: AppStateSnapshot, taskId: string): AppStateSnapshot {
   const stage = AGENT_STAGES.get(state.run.profile);
+
   if (stage === undefined) return state;
   const held = state[LIVE_READ.PAGES];
   let staged = STAGED_PAGES.get(held);
+
   if (staged === undefined) {
     const { html: _html, ...pageLine } = FIXTURE_PAGE;
     staged = {
@@ -1310,8 +1353,10 @@ export function agentAppState(state: AppStateSnapshot, taskId: string): AppState
     };
     STAGED_PAGES.set(held, staged);
   }
+
   const heldChapters = state[LIVE_READ.PULL_REQUEST_CHAPTERS];
   let chapters = STAGED_CHAPTERS.get(heldChapters);
+
   if (chapters === undefined) {
     chapters = {
       ...heldChapters,
@@ -1319,6 +1364,7 @@ export function agentAppState(state: AppStateSnapshot, taskId: string): AppState
     };
     STAGED_CHAPTERS.set(heldChapters, chapters);
   }
+
   return {
     ...state,
     [LIVE_READ.PAGES]: staged,
@@ -1356,9 +1402,12 @@ export function agentSidePanel(
   taskId: string,
 ): StagedSidePanel | undefined {
   const stage = AGENT_STAGES.get(profile);
+
   if (stage === undefined) return undefined;
+
   if ("view" in stage) {
     const pullRequest = changesTab(FIXTURE_AGENT_ID);
+
     return {
       ...panel,
       tasks: { [taskId]: { opened: [], closed: [], changes: [pullRequest] } },
@@ -1366,6 +1415,7 @@ export function agentSidePanel(
       pullRequestViews: new Map([[FIXTURE_AGENT_ID, new Map([[undefined, stage.view]])]]),
     };
   }
+
   if ("file" in stage) {
     return {
       ...panel,
@@ -1373,13 +1423,17 @@ export function agentSidePanel(
       files: [{ path: stage.file, range: undefined, opened: 1, browsedOn: taskId }],
     };
   }
+
   if ("page" in stage) {
     const page = pageTab(stage.page);
+
     return { ...panel, tab: page, pages: [page] };
   }
+
   // The description stands in the column's Overview, so the panel beside it is shut (`agentColumnTab`).
   if ("description" in stage) return { ...panel, open: false, tab: undefined };
   const terminal = terminalTab(FIXTURE_AGENT_ID, FIXTURE_TERMINAL_TAB, "Cloud 1");
+
   return { ...panel, tab: terminal, terminals: [terminal] };
 }
 
@@ -1394,10 +1448,13 @@ export function agentActAnswer(
   payload: PortActPayload<PortActKind>,
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   const stage = AGENT_STAGES.get(profile);
+
   if (stage === undefined) return undefined;
+
   // Note that only the long run's hold is the fixture's own, which writes its transcript on; any other goes to main, which holds nothing behind its closed gate, the transcript staged whole (`agentAppState`).
   if (kind === ACT_KIND.AGENTS_TRANSCRIPT && !longRun(stage)) return undefined;
   // SAFETY: the table is keyed by kind, each answer taking that kind's payload and answering its result.
   const answer = ANSWERS[kind] as StagedAnswer<PortActKind> | undefined;
+
   return answer === undefined ? undefined : { answer: answer(payload, stage) };
 }

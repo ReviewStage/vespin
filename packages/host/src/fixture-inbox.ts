@@ -63,11 +63,18 @@ import {
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import {
+  acknowledgedNow,
+  closedNow,
+  INBOX_SENDING,
+  inboxSendingDrawn,
+  takenBackNow,
+} from "@repo/features/inbox-writes";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -76,6 +83,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -126,6 +134,7 @@ import {
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
+  FIXTURE_PLAN_PDF,
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
@@ -170,6 +179,7 @@ const PICTURE = {
   ADA: "https://avatars.githubusercontent.com/u/9919?v=4",
   GRACE: "https://avatars.githubusercontent.com/u/1342004?v=4",
 } as const;
+
 const ACCOUNT: AccountSnapshot = {
   status: ACCOUNT_STATUS.SIGNED_IN,
   id: ADA.userId,
@@ -257,6 +267,7 @@ function item(
   const last = thread.at(-1)?.createdAt ?? first;
   // Note that the agent hears the answer to every ask and never a notice's nod, as the service stores its latest post.
   const latestPost = thread.findLast((message) => message.author === INBOX_MESSAGE_AUTHOR.AGENT);
+
   return {
     id: fixtureId(n),
     agentId,
@@ -277,11 +288,12 @@ function item(
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 
-/** The recorded thread's files: a still its words draw, and the recording sent after them, by the attachment each is read by. */
+/** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
   ITEM: fixtureId(10),
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
+  PLAN: "b4058d71-90c2-4dea-85a2-3c4d5e6f7182",
 } as const;
 
 /** The turn-end thread's option files, by the attachment each is read by: a still of the card, one of the dock, and a recording of it. */
@@ -295,6 +307,7 @@ const TURN_END = {
 /** One of the turn-end thread's option files as its option names it. */
 function turnEndMedia(attachmentId: string, caption: string, recording = false) {
   const mediaType = recording ? CONVERSATION_MEDIA_TYPE.WEBM : AGENT_ATTACHMENT_TYPE.PNG;
+
   return { type: INBOX_OPTION_MEDIA.FILE, attachmentId, mediaType, caption } as const;
 }
 
@@ -340,7 +353,9 @@ function turnEndFile(
       ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
       : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
   }
+
   const stills: readonly string[] = [TURN_END.CARD, TURN_END.DOCK];
+
   return stills.includes(attachmentId)
     ? { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG }
     : { failure: AGENT_CALL_FAILURE.NOT_FOUND };
@@ -561,6 +576,16 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           },
         ],
       },
+      {
+        ...agentSaid(117, 23 * MINUTE, "The test plan I followed:"),
+        files: [
+          {
+            attachmentId: RECORDED.PLAN,
+            name: "invite-test-plan.pdf",
+            mediaType: AGENT_ATTACHMENT_TYPE.PDF,
+          },
+        ],
+      },
     ],
     { unread: true },
   ),
@@ -678,6 +703,7 @@ const HOLDINGS: readonly AppInboxTaskHolding[] = [...INBOXES]
 /** What waits on the account, as main counts it: each task's open items. */
 const WAITING: readonly AppInboxTask[] = HOLDINGS.flatMap(({ taskId }) => {
   const open = (INBOXES.get(taskId) ?? []).filter((each) => each.status === INBOX_STATUS.OPEN);
+
   return open.length === 0
     ? []
     : [
@@ -685,6 +711,7 @@ const WAITING: readonly AppInboxTask[] = HOLDINGS.flatMap(({ taskId }) => {
           taskId,
           items: open.map((each) => {
             const { id, agentId, title, postedAt } = each;
+
             return { id, agentId, title, postedAt, asking: asking(each) };
           }),
         },
@@ -775,8 +802,10 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   const agent = AGENTS.get(taskId);
+
   if (agent === undefined) return {};
   const working = agent.status === AGENT_STATUS.RUNNING ? 1 : 0;
+
   return {
     agents: {
       total: 1,
@@ -946,6 +975,48 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/**
+ * The fixture workspace's memories, as Settings › Memory lists them: one an
+ * agent of the account kept and agents recall often, one Grace kept this
+ * week, which reads as New and the account may delete as its owner, and one
+ * no agent was handed in the recall window.
+ */
+const MEMORIES: readonly MemorySummary[] = [
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a61",
+    text: "The web server's tests run on PGlite through `test:store`.",
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: LANDED - 20 * DAY,
+    updatedAt: LANDED - 20 * DAY,
+    source: null,
+    recalls30d: 14,
+    lastRecalledAt: LANDED - 2 * HOUR,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a62",
+    text: "Release dates are written in Eastern time, never UTC.",
+    keptBy: { userId: "user-grace", name: "Grace Hopper" },
+    forgettable: true,
+    createdAt: LANDED - 2 * DAY,
+    updatedAt: LANDED - 2 * DAY,
+    source: null,
+    recalls30d: 3,
+    lastRecalledAt: LANDED - DAY,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a63",
+    text: "The staging database is reset every Sunday night.",
+    keptBy: { userId: "user-alan", name: "Alan Turing" },
+    forgettable: true,
+    createdAt: LANDED - 60 * DAY,
+    updatedAt: LANDED - 60 * DAY,
+    source: null,
+    recalls30d: 0,
+    lastRecalledAt: null,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1011,9 +1082,11 @@ function ownInvites(task: TaskSummary): TaskSummary {
  */
 export function inboxTasksView(profile: string, list: TasksView): TasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
+
   const listed = list.tasks.some((task) => task.id === TASK.INVITES)
     ? list.tasks
     : [INVITES_TASK, ...list.tasks];
+
   // Note that a list staged already, which the host wrote again, holds the staged tasks once, so they are laid over it rather than added twice.
   const tasks = [
     ...listed
@@ -1022,9 +1095,11 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
     ...OWN_TASKS,
     ...LISTED_TASKS,
   ];
+
   // Note that the list follows each task's agent live too, which its row, its Inbox items, and a person's page read.
   const followed = tasks.flatMap((task) => {
     const agent = AGENTS.get(task.id);
+
     return agent === undefined
       ? []
       : [
@@ -1036,7 +1111,9 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
           },
         ];
   });
+
   const invitesAgent = AGENTS.get(TASK.INVITES);
+
   return {
     ...list,
     tasks,
@@ -1121,6 +1198,7 @@ const INVITES_DESCRIPTION = [
 /** The reference journey's task as its page reads it: its row's fields, its description, and the task it waits on. */
 function invitesDocument(listed: TaskSummary): Task {
   const { agents: _agents, ...task } = listed;
+
   return {
     ...task,
     document: { body: INVITES_DESCRIPTION, assumptions: [] },
@@ -1168,10 +1246,12 @@ function stagedDocuments(
   const held = state[LIVE_READ.DESCRIPTION_DOCUMENT];
   const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
+
   if (staged !== undefined && staged.from === from) return staged.laid;
   const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
   STAGED_DOCUMENTS.set(held, { from, laid });
   STAGED_DOCUMENTS.set(laid, { from, laid });
+
   return laid;
 }
 
@@ -1184,13 +1264,17 @@ const STAGED_PAGES = new WeakMap<
 function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.PAGES] {
   const held = state[LIVE_READ.PAGES];
   const staged = STAGED_PAGES.get(held);
+
   if (staged !== undefined) return staged;
+
   const laid = {
     ...held,
     [PAGE_OWNER.TASK]: { ...held[PAGE_OWNER.TASK], [TASK.INVITES]: { rows: INVITES_PAGES } },
   };
+
   STAGED_PAGES.set(held, laid);
   STAGED_PAGES.set(laid, laid);
+
   return laid;
 }
 
@@ -1255,7 +1339,9 @@ function stagedComments(
 ): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS] {
   const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
   const staged = STAGED_COMMENTS.get(held);
+
   if (staged !== undefined) return staged;
+
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
@@ -1263,8 +1349,10 @@ function stagedComments(
       [TASK.INVITES]: { rows: INVITES_THREADS },
     },
   };
+
   STAGED_COMMENTS.set(held, laid);
   STAGED_COMMENTS.set(laid, laid);
+
   return laid;
 }
 
@@ -1284,9 +1372,11 @@ const STAGED_INBOX = new WeakMap<AppStateSnapshot["inbox"], AppStateSnapshot["in
 
 function stagedInbox(inbox: AppStateSnapshot["inbox"]): AppStateSnapshot["inbox"] {
   const held = STAGED_INBOX.get(inbox);
+
   if (held !== undefined) return held;
   const staged = { ...inbox, waiting: WAITING, tasks: HOLDINGS };
   STAGED_INBOX.set(inbox, staged);
+
   return staged;
 }
 
@@ -1307,8 +1397,11 @@ function withQueued(transcript: AppTranscript): AppTranscript {
     text: "Then add a Resend button beside each pending invite.",
     queuedBy: ADA.userId,
   };
+
   const { word } = transcript;
+
   if (word === undefined) return transcript;
+
   return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
 }
 
@@ -1322,12 +1415,16 @@ function stagedTranscripts(
   held: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
 ): AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] {
   const kept = STAGED_TRANSCRIPTS.get(held);
+
   if (kept !== undefined) return kept;
+
   const staged = {
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
   };
+
   STAGED_TRANSCRIPTS.set(held, staged);
+
   return staged;
 }
 
@@ -1357,7 +1454,9 @@ export function olderPageAppState(state: AppStateSnapshot, asks: number): AppSta
   if (!STAGED_PROFILES.has(state.run.profile)) return state;
   const held = state[LIVE_READ.TRANSCRIPT];
   const rows = asks >= OLDER_LANDS_ON ? INVITES_OLDER.READ : INVITES_OLDER.OFFERED;
+
   if (held[AGENT.INVITES]?.[OWN_TRANSCRIPT]?.rows === rows) return state;
+
   return {
     ...state,
     [LIVE_READ.TRANSCRIPT]: {
@@ -1374,6 +1473,7 @@ export function olderPageAnswer(
   asks: number,
 ): AgentTranscriptOlderAnswer | undefined {
   if (!STAGED_PROFILES.has(profile) || params.agentId !== AGENT.INVITES) return undefined;
+
   return asks >= OLDER_LANDS_ON ? { landed: true } : { failure: AGENT_CALL_FAILURE.UNANSWERED };
 }
 
@@ -1504,6 +1604,7 @@ export function inboxAppState(
   if (!STAGED_PROFILES.has(state.run.profile)) return state;
   // Note that the account's feed of every item, which the window's Inbox draws from, holds each staged task's items whole.
   const fed = Object.fromEntries([...INBOXES].filter(([, items]) => items.length > 0));
+
   return {
     ...state,
     account: ACCOUNT,
@@ -1520,6 +1621,7 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
@@ -1537,8 +1639,10 @@ export type InboxReminders = ReadonlyMap<string, number | null>;
 /** An item with the reminder set on it, or cleared, as `reminders` holds; the item handed in where they name it not. */
 function remindedItem(item: InboxItem, reminders: InboxReminders): InboxItem {
   const until = reminders.get(item.id);
+
   if (until === undefined) return item;
   const { remindAt: _held, ...rest } = item;
+
   return until === null ? rest : { ...rest, remindAt: until };
 }
 
@@ -1553,13 +1657,16 @@ export function inboxRemindersAppState(
   reminders: InboxReminders,
 ): AppStateSnapshot {
   const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+
   if (reminders.size === 0 || fed === undefined) return state;
+
   const reminded = Object.fromEntries(
     Object.entries(fed).map(([taskId, items]) => [
       taskId,
       items.map((item) => remindedItem(item, reminders)),
     ]),
   );
+
   return {
     ...state,
     [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
@@ -1587,32 +1694,46 @@ export function agentChangeOf(
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): { readonly agentId: string; readonly change: AgentChange } | undefined {
-  // SAFETY: each payload below is the kind's, which its guard names.
   switch (kind) {
     case ACT_KIND.AGENTS_CHOOSE: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
+
       return { agentId, change: { model, effort } };
     }
+
     case ACT_KIND.AGENTS_PERMISSION_MODE: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, permissionMode } = payload as PortActPayload<
         typeof ACT_KIND.AGENTS_PERMISSION_MODE
       >;
+
       return { agentId, change: { permissionMode } };
     }
+
     case ACT_KIND.AGENTS_SERVERS: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, disabledServers } = payload as PortActPayload<
         typeof ACT_KIND.AGENTS_SERVERS
       >;
+
       return { agentId, change: { disabledServers } };
     }
+
     case ACT_KIND.AGENTS_RENAME: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, title } = payload as PortActPayload<typeof ACT_KIND.AGENTS_RENAME>;
+
       return { agentId, change: { title } };
     }
+
     case ACT_KIND.AGENTS_PIN: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, pinned } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PIN>;
+
       return { agentId, change: { pinned } };
     }
+
     default:
       return undefined;
   }
@@ -1621,6 +1742,7 @@ export function agentChangeOf(
 /** One agent with the run's change to it laid over, the pin left to the list's pins. */
 function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A {
   const { pinned: _pinned, ...fields } = change;
+
   return { ...agent, ...fields };
 }
 
@@ -1638,7 +1760,9 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
     const held = agent[key];
+
     if (value === undefined) return true;
+
     return Array.isArray(value) && Array.isArray(held)
       ? value.length === held.length && value.every((each, at) => each === held[at])
       : held === value;
@@ -1652,9 +1776,11 @@ function pinnedAgents(
   choices: AgentChoices,
 ): NonNullable<TasksView["taskAgentPins"]> {
   const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
+
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
     .map(({ id, planId }) => ({ agentId: id, taskId: planId, pinnedAt: LANDED }));
+
   return [...kept, ...added];
 }
 
@@ -1675,15 +1801,20 @@ function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: Agent
 export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
   const agents = list.taskAgents ?? [];
   const pins = list.taskAgentPins ?? [];
+
   const agentsStand = agents.every((agent) => {
     const change = choices.get(agent.id);
+
     return change === undefined || standsOn(agent, change);
   });
+
   if (agentsStand && pinsStand(pins, choices)) return list;
+
   return {
     ...list,
     taskAgents: agents.map((agent) => {
       const change = choices.get(agent.id);
+
       return change === undefined ? agent : changedAgent(agent, change);
     }),
     taskAgentPins: pinnedAgents(pins, agents, choices),
@@ -1707,15 +1838,18 @@ type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /**
  * Every read the Inbox, its items, and the person page ask, answered as the
  * service would answer it for this account. Note that the workspace's members
  * are not among them, because the tasks fixture's own answer names them
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
+
     return { agents: agent === undefined ? [] : [agent] };
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
@@ -1723,21 +1857,31 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a reminder is taken as the service takes one, the item's read state echoed; the iOS run lays it over the document itself (`inboxRemindersAppState`).
   [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId }) => {
     const held = stagedItem(itemId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { id: itemId, unread: held.unread === true };
   },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId === TURN_END.ITEM) return turnEndFile(attachmentId, playable);
+
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
+
+    if (attachmentId === RECORDED.PLAN) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF };
+    }
+
     if (attachmentId === RECORDED.VIDEO) {
       return playable === MP4_TYPE
         ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
         : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
     }
+
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
@@ -1752,70 +1896,109 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
   [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {
     const held = stagedItem(itemId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     if (itemId === REFUSED_ITEM) return { failure: AGENT_CALL_FAILURE.UNANSWERED };
     const sent = { kind: INBOX_SENDING.REPLY, key: clientKey, text, answers, at: Date.now() };
+
     return { item: inboxSendingDrawn(held, [sent], ADA) };
   },
   [ACT_KIND.AGENTS_INBOX_CLOSE]: ({ itemId }) => {
     const held = stagedItem(itemId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { item: closedNow(held, ADA, Date.now()), taken: true };
+  },
+  // Note that a Got it and an Undo's take-back are taken as the service takes them, though nothing here moves, so the window draws its own.
+  [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: acknowledgedNow(held, ADA, Date.now()), taken: true };
+  },
+  [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: takenBackNow(held, Date.now()), outcome: INBOX_TAKE_BACK.TAKEN };
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, status: AGENT_STATUS.RUNNING } };
   },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { queue: { messages: [], revision: 2 } };
   },
   [ACT_KIND.AGENTS_STOP]: ({ agentId }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
   },
   // Note that a change of model, of permission mode, of servers, of name, or of pin is taken as the service takes one, answered with the agent as it then stands; the iOS run lays it over the list itself (`chosenTasksView`).
   [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, model, effort } };
   },
   [ACT_KIND.AGENTS_PERMISSION_MODE]: ({ agentId, permissionMode }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, permissionMode } };
   },
   [ACT_KIND.AGENTS_SERVERS]: ({ agentId, disabledServers }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, disabledServers } };
   },
   [ACT_KIND.AGENTS_RENAME]: ({ agentId, title }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, title } };
   },
   [ACT_KIND.AGENTS_PIN]: ({ agentId }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: held };
   },
   // Note that an archive is taken as the service takes one, though nothing here moves, so the agent stays on its task's list.
   [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, archivedAt: LANDED } };
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
+
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
     return { agent: { ...held, status: AGENT_STATUS.STARTING } };
   },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
@@ -1844,10 +2027,13 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
     const thread = INVITES_THREADS.find((each) => each.id === threadId);
+
     if (planId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
+
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
+
     const reply = {
       id: fixtureId(306),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
@@ -1855,6 +2041,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
       words: action.words,
       at: Date.now(),
     };
+
     return { thread: { ...thread, entries: [...thread.entries, reply] } };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
@@ -1889,5 +2076,6 @@ export function inboxActAnswer(
   if (!STAGED_PROFILES.has(profile)) return undefined;
   // SAFETY: the table is keyed by kind, each answer taking that kind's payload and answering its result.
   const answer = ANSWERS[kind] as StagedAnswer<PortActKind> | undefined;
+
   return answer === undefined ? undefined : { answer: answer(payload) };
 }

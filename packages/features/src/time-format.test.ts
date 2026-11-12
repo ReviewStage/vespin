@@ -21,6 +21,7 @@ import {
 
 test("a call's header names its day as today, yesterday, a weekday this week, or a date", () => {
   const now = new Date(2026, 9, 8, 18, 0).getTime();
+
   const at = (month: number, day: number, year = 2026) =>
     new Date(year, month, day, 15, 42).getTime();
 
@@ -33,6 +34,7 @@ test("a call's header names its day as today, yesterday, a weekday this week, or
 
 test("a run's span names its day once where it ended on it, and both days where it crossed midnight", () => {
   const now = new Date(2026, 9, 8, 18, 0).getTime();
+
   const at = (day: number, hour: number, minute: number) =>
     new Date(2026, 9, day, hour, minute).getTime();
 

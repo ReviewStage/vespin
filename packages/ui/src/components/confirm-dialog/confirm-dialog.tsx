@@ -108,10 +108,12 @@ export function useConfirmDialog(
 ): DialogConfirm {
   const held = useConfirm(surroundings, act, failure);
   const standing = surroundings.subject && surroundings.surfaceOpen;
+
   if (!standing && held.rejection !== undefined && held.stage !== CONFIRM_STAGE.ACTING) {
     // Note that the refusal is only forgotten here, never reset on the caller's mutation, because the render must not change another component's state.
     held.forget();
   }
+
   return useMemo(() => ({ ...held, standing }), [held, standing]);
 }
 
@@ -173,15 +175,18 @@ function ConfirmCard({
 
   const dismiss = () => {
     if (settling) return;
+
     if (confirmWithdrawable(stage)) confirm.keep();
     confirm.clear();
   };
+
   // Enter in the question's field, or in its gate, answers it as a press of
   // the act would, which a gate still locked refuses with the act's own
   // shake; anywhere else Enter is the focused button's own. An Enter that
   // confirms an input method's composition is the input method's, not the act's.
   const fieldKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" || settling || isComposingKey(event)) return;
+
     if (event.target !== field?.current && event.target !== gateField.current) return;
     event.preventDefault();
     actButton.current?.click();
@@ -296,15 +301,20 @@ function useAnswerState(confirm: DialogConfirm): AnswerState {
   // still wearing it, so it goes as it stood rather than as a question again.
   const [seen, setSeen] = useState(false);
   const [openings, setOpenings] = useState(0);
+
   if (stage !== wasStage) {
     setWasStage(stage);
     setLanded(wasStage === CONFIRM_STAGE.ACTING && rejection === undefined && confirm.standing);
     setSeen(false);
+
     if (wasStage === CONFIRM_STAGE.RESTING) setOpenings((count) => count + 1);
   }
+
   if (landed && !confirm.standing) setLanded(false);
+
   const shown =
     confirm.standing && (confirmAsked(stage) || rejection !== undefined || (landed && !seen));
+
   return { acting, landed, onShown: () => setSeen(true), shown, openings };
 }
 
@@ -343,6 +353,7 @@ export function ConfirmDialog({
   children?: React.ReactNode;
 }): React.JSX.Element {
   const answer = useAnswerState(confirm);
+
   // Note that an answer under way is hidden with its surface rather than
   // drawn over whatever stands in its place, because the window then
   // presents something else; the act itself finishes all the same.
@@ -414,12 +425,16 @@ export function FootQuestion({
   const cancel = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   const bodyId = useId();
+
   const withdraw = (): boolean => {
     if (settling) return false;
+
     if (confirmWithdrawable(confirm.stage)) confirm.keep();
     confirm.clear();
+
     return true;
   };
+
   // Note that the dialog reads the newest withdrawal as Escape lands, so
   // the foot is claimed again only as what the dialog holds it by changes.
   const newestWithdraw = useRef(withdraw);
@@ -427,6 +442,7 @@ export function FootQuestion({
   const shown = answer.shown && foot !== undefined;
   useLayoutEffect(() => {
     if (!shown) return;
+
     return foot.claim({
       withdraw: () => newestWithdraw.current(),
       focus: cancel,
@@ -436,6 +452,7 @@ export function FootQuestion({
   }, [shown, foot, settling, refused]);
 
   if (!shown || foot.slot == null) return null;
+
   return createPortal(
     // biome-ignore lint/a11y/useSemanticElements: a question is its words and its two answers, not a form's fields, so it is no `<fieldset>`.
     <div

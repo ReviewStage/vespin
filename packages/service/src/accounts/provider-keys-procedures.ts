@@ -158,18 +158,23 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   ring: KeyRing,
 ) {
   const listed = yield* hostedStoreOrUnavailable(listProviderKeyRows(userId, kind));
+
   const retired =
     kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
     listed.some((row) => retiredChatGptRow(ring, userId, row));
+
   if (retired) yield* hostedStoreOrUnavailable(dropRetiredChatGptCredentials(userId, ring));
   const rows = retired ? [] : listed;
   const now = yield* Clock.currentTimeMillis;
+
   return rows.map((row) => {
     const readable = Result.isSuccess(
       openProviderKey(ring, { userId, provider: row.provider, kind }, row),
     );
+
     // Note that a plan is answered as it stands now, so a limit whose reset has passed reads as lifted.
     const status = readable ? planStanding(row, now) : PROVIDER_KEY_STATUS.UNREADABLE;
+
     const summary: ProviderKeySummary = {
       provider: row.provider,
       hint: row.hint,
@@ -183,6 +188,7 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
     };
+
     return { summary, row, usage: usageOf(row, now) };
   });
 });
@@ -196,7 +202,9 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   const keys = (yield* summariesOf(userId, PROVIDER_KEY_KIND.API_KEY, ring)).map(
     (read) => read.summary,
   );
+
   const subscriptions: SubscriptionKeySummary[] = [];
+
   for (const kind of SUBSCRIPTION_KINDS) {
     for (const { summary, row, usage } of yield* summariesOf(userId, kind, ring)) {
       subscriptions.push({
@@ -211,6 +219,7 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
       });
     }
   }
+
   return {
     keys,
     ...(subscriptions.length === 0 ? undefined : { subscriptions }),
@@ -231,12 +240,13 @@ function deviceAnswerOf(outcome: ChatGptDeviceLoginOutcome): ChatGptDevicePollAn
 }
 
 /** Whether a subscription credential is saved for the provider its kind belongs to and spelled as one of its kind; nothing is asked of the provider. */
-function subscriptionShapeOf(
+function subscriptionRefusalOf(
   provider: ProviderKeyProvider,
   kind: Exclude<ProviderKeyKind, typeof PROVIDER_KEY_KIND.API_KEY>,
   key: Redacted.Redacted<string>,
 ): ProviderKeyRejection | undefined {
   if (SUBSCRIPTION_KIND_PROVIDER[kind] !== provider) return PROVIDER_KEY_REJECTION.WRONG_PROVIDER;
+
   switch (kind) {
     case PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN:
       return Redacted.value(key).startsWith(CLAUDE_SETUP_TOKEN_PREFIX)
@@ -254,10 +264,12 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
   const pollBrake = createRateBrake(DEVICE_POLL_BRAKE);
   const signingKeys = chatGptSigningKeys();
   const keyed = hosted.account.use(accountMiddleware(seams.resolveUserId)).use(keyRingMiddleware);
+
   return {
     /** The account's keys, its ChatGPT plans' usage read afresh first where due (`readChatGptUsage`). */
     providerKeys: keyed.providerKeys.effect(function* ({ context }) {
       yield* readChatGptUsage(context.userId, context.ring);
+
       return yield* keysAnswer(context.userId, context.ring);
     }),
 
@@ -267,20 +279,25 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       const { provider } = input;
       const kind = input.kind ?? PROVIDER_KEY_KIND.API_KEY;
       const key = Redacted.make(input.key);
+
       if (!(yield* brake.check(userId))) {
         return yield* keysAnswer(userId, ring, PROVIDER_KEY_REJECTION.TOO_MANY_TRIES);
       }
+
       if (kind !== PROVIDER_KEY_KIND.API_KEY) {
-        const refused = subscriptionShapeOf(provider, kind, key);
+        const refused = subscriptionRefusalOf(provider, kind, key);
+
         if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
         const now = yield* DateTime.nowAsDate;
         const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
+
         const placement = {
           ...(input.subscriptionId === undefined
             ? undefined
             : { subscriptionId: input.subscriptionId }),
           ...(input.add === undefined ? undefined : { add: input.add }),
         };
+
         yield* hostedStoreOrUnavailable(
           saveProviderKey(
             userId,
@@ -295,8 +312,10 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           ),
         );
         yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
+
         return yield* keysAnswer(userId, ring);
       }
+
       // An Anthropic key is asked about fast mode beside the check, which the catalog offers by; OpenAI has none we run.
       const [checked, fastAccess] = yield* Effect.all(
         [
@@ -307,6 +326,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ],
         { concurrency: "unbounded" },
       );
+
       // Note that a refusal's wording is never logged or answered, because it may quote the key.
       if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(userId, ring, checked);
       const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
@@ -326,6 +346,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ),
       );
       yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
+
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -334,6 +355,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       const { userId, ring } = context;
       const kind = input.query.kind ?? PROVIDER_KEY_KIND.API_KEY;
       const { subscriptionId } = input.query;
+
       if (
         kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
         input.query.provider === SUBSCRIPTION_KIND_PROVIDER[kind]
@@ -341,11 +363,14 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         const confirmed = yield* hostedStoreOrUnavailable(
           removeChatGptCredentials(userId, ring, subscriptionId),
         );
+
         return yield* keysAnswer(userId, ring, undefined, !confirmed);
       }
+
       yield* hostedStoreOrUnavailable(
         removeProviderKey(userId, input.query.provider, kind, subscriptionId),
       );
+
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -361,6 +386,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           input.subscriptionId,
         ),
       );
+
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -378,6 +404,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           label === "" ? null : label,
         ),
       );
+
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -387,29 +414,37 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       yield* hostedStoreOrUnavailable(
         reorderSubscriptions(userId, input.provider, input.subscriptionIds),
       );
+
       return yield* keysAnswer(userId, ring);
     }),
 
     /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. A start that adds keeps the plan it connects at the bottom of the account's order. */
     startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId, ring } = context;
+
       if (!(yield* brake.check(userId))) return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
+
       const started = yield* hostedStoreOrUnavailable(
         startChatGptDeviceLogin(userId, ring, input?.add === true),
       );
+
       if (Option.isNone(started)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
+
       return started.value;
     }),
 
     /** One check of the account's device-code login against OpenAI, braked; once connected, the answer carries the account's keys as they then stand. */
     pollChatGptDeviceLogin: keyed.pollChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId, ring } = context;
+
       if (!(yield* pollBrake.check(userId))) {
         return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
       }
+
       const polled = yield* hostedStoreOrUnavailable(
         pollChatGptDeviceLogin({ userId, loginId: input.loginId }, ring, signingKeys),
       );
+
       if (polled.connectedNow) {
         yield* recordServerEvent(
           SERVER_EVENT.PROVIDER_KEY_CREATE,
@@ -417,18 +452,24 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           { provider: PROVIDER_KEY_PROVIDER.OPENAI },
         );
       }
+
       const answered = deviceAnswerOf(polled.outcome);
+
       if (polled.outcome !== CHATGPT_DEVICE_LOGIN.CONNECTED) return answered;
+
       return { ...answered, keys: yield* keysAnswer(userId, ring) };
     }),
 
     /** The account's device-code login dropped, braked with its polls; a plan it already connected stands. */
     cancelChatGptDeviceLogin: keyed.cancelChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId } = context;
+
       if (!(yield* pollBrake.check(userId))) {
         return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
       }
+
       yield* hostedStoreOrUnavailable(dropChatGptDeviceLogin({ userId, loginId: input.loginId }));
+
       return deviceAnswerOf(CHATGPT_DEVICE_LOGIN.CANCELED);
     }),
   };

@@ -22,6 +22,7 @@ const PASSERBY = {
 /** Tells the descriptions' words which account is signed in, and draws nothing. */
 export function WordsOwner(): null {
   useDescriptionWordsOwner();
+
   return null;
 }
 

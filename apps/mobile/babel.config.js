@@ -13,6 +13,7 @@ const ORPC_FILE = /node_modules[\\/]@orpc[\\/]/u;
  */
 module.exports = (api) => {
   api.cache(true);
+
   return {
     presets: ["babel-preset-expo"],
     overrides: [

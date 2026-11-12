@@ -22,6 +22,7 @@ import {
 } from "@repo/features/page-pick";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import {
+  PAGE_ZOOM_ACTUAL,
   PAGE_ZOOM_KEY,
   type PageZoomKey,
   pageZoomMoves,
@@ -32,6 +33,8 @@ import type { CodeLines, TasksPageSourceAnswer } from "@repo/features/tasks-view
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  BUTTON_VARIANT,
+  Button,
   cn,
   cssCustomProperties,
   ERROR_STATE_PLACEMENT,
@@ -39,7 +42,6 @@ import {
   FILL_ELEMENT,
   Fill,
   IconButton,
-  MENU_DETAIL,
   PaneBar,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
@@ -55,9 +57,9 @@ import {
   CodeXmlIcon,
   GLYPH,
   MessageSquarePlusIcon,
+  MinusIcon,
+  PlusIcon,
   RotateCwIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
 } from "@repo/ui/icons";
 import { pageTab } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -150,8 +152,11 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * The tab stays on the source or the page while its versions are stepped.
  *
  * The page is drawn at a size the tab holds (`usePageZoom`), stepped by the
- * ⋯'s Zoom in, Zoom out, and Actual size, by ⌘+, ⌘−, and ⌘0 pressed in the
+ * ⋯'s Zoom row, − 125% +, by ⌘+, ⌘−, and ⌘0 pressed in the
  * page, and by a pinch over it, and kept across reloads and versions.
+ * While it is not the actual size, the bar says the size, and pressing it
+ * draws the page at actual size again, so a pinch never leaves a page
+ * zoomed unseen.
  *
  * ⌘F over the page itself finds in the frame: no find of this window reaches
  * the page's words, so the find bar asks the frame, whose page is served
@@ -235,14 +240,17 @@ function sourceText(lines: CodeLines): string {
  */
 function useFrameFind(frame: RefObject<HTMLIFrameElement | null>) {
   const press = useFindPress();
+
   const [find] = useState(() => {
     const listeners = new Set<(tally: FindTally) => void>();
     const held = { query: "", selection: "" };
     const post = (ask: PageFindAsk) => frame.current?.contentWindow?.postMessage(ask, "*");
+
     const search = (query: string) => {
       held.query = query;
       post({ type: PAGE_FIND_TYPE, act: PAGE_FIND_ACT.SEARCH, query });
     };
+
     const source: FindSource = {
       search,
       step: (query, by) => {
@@ -255,36 +263,48 @@ function useFrameFind(frame: RefObject<HTMLIFrameElement | null>) {
       },
       onTally: (listener) => {
         listeners.add(listener);
+
         return () => listeners.delete(listener);
       },
       selection: () =>
         held.selection.length === 0 || held.selection.includes("\n") ? undefined : held.selection,
     };
+
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined || event.source !== framed) return;
       const answer = readFindAnswer(event.data);
+
       if (Option.isNone(answer)) return;
+
       if ("key" in answer.value) {
         press(CHORD_OF_KEY[answer.value.key]);
       } else if ("selection" in answer.value) {
         held.selection = answer.value.selection;
       } else if (held.query.length > 0) {
         const { count, at } = answer.value.tally;
+
         for (const listener of listeners) listener({ count, at: at < count ? at : -1 });
       }
     };
+
     const loaded = () => {
       held.selection = "";
+
       if (held.query.length > 0) search(held.query);
     };
+
     return { source, hear, loaded };
   });
+
   useEffect(() => {
     window.addEventListener("message", find.hear);
+
     return () => window.removeEventListener("message", find.hear);
   }, [find]);
   useFindSource(find.source);
+
   return find.loaded;
 }
 
@@ -300,13 +320,18 @@ export function useFrameLinks(frame: RefObject<HTMLIFrameElement | null>): void 
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined || event.source !== framed) return;
       const press = readLinkPress(event.data);
+
       if (Option.isNone(press) || !opensAsLink(press.value.href)) return;
+
       if (navigator.userActivation?.isActive !== true) return;
       open(press.value.href);
     };
+
     window.addEventListener("message", hear);
+
     return () => window.removeEventListener("message", hear);
   }, [frame, open]);
 }
@@ -360,10 +385,12 @@ function useFrameComments(frame: RefObject<HTMLIFrameElement | null>, asks: Fram
   const latest = useRef(asks);
   latest.current = asks;
   const [said, setSaid] = useState<FrameSaid>(NOTHING_SAID);
+
   const post = useCallback(
     (ask: PagePickAsk) => frame.current?.contentWindow?.postMessage(ask, "*"),
     [frame],
   );
+
   // Note that a page no one comments on is asked nothing.
   const told = useRef<{
     picking: boolean;
@@ -371,61 +398,87 @@ function useFrameComments(frame: RefObject<HTMLIFrameElement | null>, asks: Fram
     hinted: string | undefined;
     marks: readonly PageMark[];
   }>({ picking: false, shown: undefined, hinted: undefined, marks: [] });
+
   const { picking, shown, hinted, marks } = asks;
   useEffect(() => {
     if (picking !== told.current.picking) {
       post({ type: PAGE_PICK_TYPE, act: picking ? PAGE_PICK_ACT.START : PAGE_PICK_ACT.STOP });
     }
+
     if (shown !== told.current.shown) {
       post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.SHOW, path: shown ?? "" });
     }
+
     if (hinted !== told.current.hinted) {
       post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.HINT, path: hinted ?? "" });
     }
+
     if (!sameMarks(marks, told.current.marks)) {
       post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.MARK, marks });
     }
+
     told.current = { picking, shown, hinted, marks };
   }, [post, picking, shown, hinted, marks]);
+
   const loaded = useCallback(() => {
     const { picking, shown, marks } = latest.current;
     setSaid(NOTHING_SAID);
+
     if (picking) post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.START });
+
     if (shown !== undefined) post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.SHOW, path: shown });
+
     if (marks.length > 0) post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.MARK, marks });
   }, [post]);
+
   const unselect = useCallback(() => {
     setSaid((was) => ({ ...was, selected: undefined }));
     post({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.UNSELECT });
   }, [post]);
+
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current?.contentWindow;
+
       if (framed === null || framed === undefined || event.source !== framed) return;
       const answer = readPick(event.data);
+
       if (Option.isNone(answer)) return;
       const message = answer.value;
+
       if ("marks" in message) {
         const marks = new Map(message.marks.map(({ path, box }) => [path, box]));
+
         return setSaid((was) => ({ ...was, marks }));
       }
+
       if ("selected" in message) {
         const selected = message.selected ?? undefined;
+
         return setSaid((was) => ({ ...was, selected }));
       }
+
       if ("over" in message) {
         const over = message.over ?? undefined;
+
         return setSaid((was) => ({ ...was, over }));
       }
+
       if ("pressed" in message) return latest.current.onPressed();
+
       if (!latest.current.picking) return;
+
       if ("stopped" in message) return latest.current.onStopped();
+
       if (navigator.userActivation?.isActive !== true) return;
       latest.current.onPicked(message.picked);
     };
+
     window.addEventListener("message", hear);
+
     return () => window.removeEventListener("message", hear);
   }, [frame]);
+
   return { said, loaded, unselect };
 }
 
@@ -440,11 +493,14 @@ function useFrameFocus(frame: RefObject<HTMLIFrameElement | null>): void {
   useEffect(() => {
     const blurred = () => {
       const element = frame.current;
+
       if (element !== null && document.activeElement === element) {
         element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
       }
     };
+
     window.addEventListener("blur", blurred);
+
     return () => window.removeEventListener("blur", blurred);
   }, [frame]);
 }
@@ -480,6 +536,7 @@ function PageFrame({
   usePageTheme(frame, PAGE_ROOM.OWN);
   useFrameFocus(frame);
   const loaded = framedSrc === src;
+
   return (
     <div ref={room} className="page-view-room relative flex min-h-0 flex-1">
       <iframe
@@ -535,7 +592,9 @@ function VersionStep({
 /** Where the read of the version's source stands, a failed read being read again shown as reading. */
 function sourceRead(source: UseQueryResult<TasksPageSourceAnswer>): SourceRead {
   if (source.isPending || (source.isFetching && !source.isSuccess)) return SOURCE_READING;
+
   if (source.isError || !("lines" in source.data)) return { kind: SOURCE_READ.FAILED };
+
   return { kind: SOURCE_READ.READY, lines: source.data.lines };
 }
 
@@ -562,8 +621,10 @@ function PageSource({
     () => (read.kind === SOURCE_READ.READY ? sourceText(read.lines) : ""),
     [read],
   );
+
   if (read.kind === SOURCE_READ.READING)
     return <SpinnerRegion delay label={readingWords("the source")} />;
+
   if (read.kind === SOURCE_READ.FAILED) {
     return (
       <ErrorState
@@ -575,6 +636,7 @@ function PageSource({
       </ErrorState>
     );
   }
+
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
@@ -627,35 +689,42 @@ function versionStepAction(
   };
 }
 
+/** The row the tab's ⋯ sizes the page in. */
+const ZOOM_ROW = "Zoom";
+
 /**
- * The tab's ⋯ items that size the page: Zoom in and Zoom out, which leave
- * the menu standing so a size is stepped to press by press, and Actual size,
- * the size shown beside it; each dimmed where it would change nothing. Note
- * that no item prints ⌘+, ⌘−, or ⌘0, because those size the page only
+ * The tab's ⋯ items that size the page, as one row, Zoom − 125% +, as a
+ * browser's menu sizes its page: Zoom out, the size, which draws the page at
+ * actual size, and Zoom in, each leaving the menu standing so a size is
+ * stepped to press by press, and each dimmed where it would change nothing.
+ * Note that no item prints ⌘+, ⌘−, or ⌘0, because those size the page only
  * pressed in it, and the window anywhere else.
  */
 function zoomActions(zoom: number, press: (key: PageZoomKey) => void): MenuAction[] {
   return [
     {
-      label: "Zoom in",
-      icon: <ZoomInIcon aria-hidden="true" />,
-      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.IN),
-      stays: true,
-      onSelect: () => press(PAGE_ZOOM_KEY.IN),
-    },
-    {
       label: "Zoom out",
-      icon: <ZoomOutIcon aria-hidden="true" />,
+      row: ZOOM_ROW,
+      icon: <MinusIcon aria-hidden="true" />,
       disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.OUT),
       stays: true,
       onSelect: () => press(PAGE_ZOOM_KEY.OUT),
     },
     {
       label: "Actual size",
+      row: ZOOM_ROW,
       detail: pageZoomWords(zoom),
-      detailPlace: MENU_DETAIL.BESIDE,
       disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.ACTUAL),
+      stays: true,
       onSelect: () => press(PAGE_ZOOM_KEY.ACTUAL),
+    },
+    {
+      label: "Zoom in",
+      row: ZOOM_ROW,
+      icon: <PlusIcon aria-hidden="true" />,
+      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.IN),
+      stays: true,
+      onSelect: () => press(PAGE_ZOOM_KEY.IN),
     },
   ];
 }
@@ -682,33 +751,42 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
   const [picking, setPicking] = useState(false);
   const [pending, setPending] = useState<PageCommentOn | undefined>(undefined);
   const [open, setOpen] = useState<readonly string[] | undefined>(undefined);
+
   // Note that an element picked stands over its field as the thread's quote line, so only one quoted into a comment already being started is quoted into its words; words replied to are laid into them as a quote, as every box's Reply lays its quote in.
   const begin = (on: PageCommentOn, quote: string | undefined) => {
     setPicking(false);
     setOpen(undefined);
     const quoted = pending !== undefined || on.element?.words === true;
+
     if (place !== undefined && quote !== undefined && quoted) {
       drafts.update(place, (was) => ({ ...was, text: withQuote(was.text, quote) }));
     }
+
     if (pending === undefined) setPending(on);
   };
+
   // Note that the draft is told the element as its words come and as a pick moves it, so a tab shut with its card open still pins it there.
   const element = pending?.element;
   useEffect(() => {
     if (place === undefined || pending === undefined || !holdsAny(kept)) return;
+
     if (Equal.equals(kept.element, element)) return;
     drafts.update(place, (was) => withElement(was, element));
   }, [place, pending, kept, element, drafts]);
+
   const dismiss = () => {
     setPicking(false);
     setOpen(undefined);
+
     if (pending === undefined) return;
     setPending(undefined);
+
     if (place === undefined) return;
     drafts.update(place, (was) =>
       ownWordsIn(was.text) || was.attachments.length > 0 ? was : { ...was, text: "" },
     );
   };
+
   return {
     column,
     picking,
@@ -749,6 +827,7 @@ function holdsAny(draft: Draft): boolean {
 /** A draft kept on `element`, or on the page as a whole where none is named. */
 function withElement(draft: Draft, element: DraftPageElement | undefined): Draft {
   const { element: _was, ...rest } = draft;
+
   return element === undefined ? rest : { ...rest, element };
 }
 
@@ -778,21 +857,27 @@ function threadMarks(
   drafted: DraftPageElement | undefined,
 ): readonly PageMark[] {
   const quoted = new Map<string, Set<string>>();
+
   const mark = (path: string, words: string | undefined) => {
     const marked = quoted.get(path) ?? new Set<string>();
     quoted.set(path, marked);
+
     if (words !== undefined) marked.add(words);
   };
+
   for (const [path, onIt] of threadsByElement(threads)) {
     for (const thread of onIt) {
       mark(path, thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS ? thread.quote : undefined);
     }
   }
+
   for (const { element } of held) {
     if (element !== undefined)
       mark(element.path, element.words === true ? element.quote : undefined);
   }
+
   if (drafted !== undefined) mark(drafted.path, undefined);
+
   return [...quoted].flatMap(([path, words]) =>
     words.size === 0 ? [{ path }] : [...words].map((each) => ({ path, words: each })),
   );
@@ -828,12 +913,16 @@ export function PagePane({
 }): React.JSX.Element {
   const [reloads, setReloads] = useState(0);
   const [view, setView] = useState<PageView>(PAGE_VIEW.PAGE);
+
   const commenting = useCommenting(
     comments === undefined ? undefined : pageDraftPlace(comments.control.planId, page.id),
   );
+
   const frame = useRef<HTMLIFrameElement>(null);
   const room = useRef<HTMLDivElement>(null);
   const pageZoom = usePageZoom(frame);
+  // The bar's source toggle, which takes the keys from the size's press as that press goes.
+  const sourceToggle = useRef<HTMLButtonElement>(null);
   const threads = comments?.control.threads;
   // The version stepped to, none while the newest is followed.
   const [chosen, setChosen] = useState<number | undefined>(undefined);
@@ -843,16 +932,20 @@ export function PagePane({
   // Note that a phone draws no bar for the review's press, so its comments post at once and none it holds are drawn.
   const reviewing = phone ? undefined : review;
   const draftedOn = commenting.drafted?.element;
+
   const marks = useMemo(
     () => threadMarks(threads ?? [], reviewing?.held ?? [], draftedOn),
     [threads, reviewing?.held, draftedOn],
   );
+
   const [hinted, setHinted] = useState<string | undefined>(undefined);
   // The element a held comment's quote line shows, until a press in the page lets it go.
   const [showing, setShowing] = useState<string | undefined>(undefined);
+
   const shown =
     threads?.find((thread) => commenting.open?.includes(thread.id) === true)?.page?.element ??
     showing;
+
   const framed = useFrameComments(frame, {
     picking: commenting.picking,
     shown,
@@ -865,15 +958,18 @@ export function PagePane({
       commenting.dismiss();
     },
   });
+
   const copyWithToast = useCopyToast();
   const queryClient = useQueryClient();
   const step = (to: number) => setChosen(to === page.version ? undefined : to);
   const showingSource = view === PAGE_VIEW.SOURCE;
+
   // The source of the version shown is read the first time it is asked for.
   const sourceQuery = useQuery({
     ...pageSourceQueryOptions(place, page.id, version),
     enabled: showingSource,
   });
+
   const source = showingSource || sourceQuery.isSuccess ? sourceRead(sourceQuery) : undefined;
   const toggleLabel = showingSource ? "View page" : "View source";
   const toggleView = () => setView(showingSource ? PAGE_VIEW.PAGE : PAGE_VIEW.SOURCE);
@@ -881,6 +977,7 @@ export function PagePane({
   // Note that the pane's filter is the tab's, so the pane shut and opened again lists what it listed.
   const [commentsFilter, setCommentsFilter] = useState<CommentsFilter>(COMMENTS_FILTER.OPEN);
   const commentsWidth = usePageCommentsWidth();
+
   // Note that the edge is the tab's, which outlives the pane a drag shuts.
   const commentsEdge = useResizeEdge({
     side: RESIZE_EDGE_SIDE.LEFT,
@@ -891,13 +988,16 @@ export function PagePane({
     onResize: commentsWidth.onResize,
     onToggleCollapsed: commenting.toggleColumn,
   });
+
   const commentsSlide = usePaneSlide(comments !== undefined && commenting.column);
+
   // Note that Comment asks the page itself for an element, so it shows the page where its source stood.
   const comment = () => {
     if (commenting.picking) return commenting.stopPick();
     setView(PAGE_VIEW.PAGE);
     commenting.startPick();
   };
+
   const commentsAction: MenuAction[] =
     comments === undefined
       ? []
@@ -913,18 +1013,23 @@ export function PagePane({
             onSelect: commenting.toggleColumn,
           },
         ];
+
   const reload = () => {
     setReloads((was) => was + 1);
     void queryClient.resetQueries({ queryKey: pageSourcesKey(place, page.id) });
   };
+
   const copySource = copySourceAction(source, copyWithToast);
+
   const reloadAction: MenuAction = {
     label: "Reload page",
     icon: <RotateCwIcon aria-hidden="true" />,
     onSelect: reload,
   };
+
   const settings = useViewSettingsSheet({ kind: VIEW_SETTINGS_SCOPE.LINES });
   const workspace = useLinkWorkspace();
+
   // None where the surface hands down no workspace to write the page's link under, as Copy link stands nowhere there.
   const inBrowser =
     workspace === undefined
@@ -935,6 +1040,7 @@ export function PagePane({
             workspace,
           ),
         ];
+
   const versionWords = `Version ${version} of ${page.version}`;
   // Note that the zoom sizes the page alone, so it stands nowhere while the source is shown.
   const zoom = showingSource ? [] : zoomActions(pageZoom.zoom, pageZoom.press);
@@ -973,6 +1079,7 @@ export function PagePane({
           (group) => group.length > 0,
         ),
   );
+
   return (
     <FindScope
       className="page-view-find"
@@ -1012,8 +1119,24 @@ export function PagePane({
                     />
                   </div>
                 ) : null}
+                {showingSource || pageZoom.zoom === PAGE_ZOOM_ACTUAL ? null : (
+                  <Tooltip label="Actual size">
+                    <Button
+                      variant={BUTTON_VARIANT.QUIET}
+                      onClick={(event) => {
+                        // Note that the press is gone once the page is at actual size, so the keys it held move on to its neighbor.
+                        if (document.activeElement === event.currentTarget)
+                          sourceToggle.current?.focus();
+                        pageZoom.press(PAGE_ZOOM_KEY.ACTUAL);
+                      }}
+                    >
+                      {pageZoomWords(pageZoom.zoom)}
+                    </Button>
+                  </Tooltip>
+                )}
                 <Tooltip label={toggleLabel}>
                   <IconButton
+                    ref={sourceToggle}
                     icon={<CodeXmlIcon aria-hidden="true" />}
                     label={toggleLabel}
                     onClick={toggleView}

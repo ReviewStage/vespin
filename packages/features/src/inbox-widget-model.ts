@@ -95,24 +95,30 @@ export interface InboxWidgetSource {
 /** The ask a row's glyph says, or none for a notice or a thread whose line leads with no ask. */
 function rowAsk(kind: ReturnType<typeof inboxLineKind>): Pick<InboxWidgetRow, "ask"> {
   const ask = Object.values(INBOX_WIDGET_ASK).find((each) => each === kind);
+
   return ask === undefined ? {} : { ask };
 }
 
 /** The snapshot of the Inbox as it stands for the reader at `now`. */
 export function inboxWidgetSnapshot(source: InboxWidgetSource): InboxWidgetSnapshot {
   const { workspace, workspaces, groups, readerId, now } = source;
+
   const waiting = inboxAtNow(groups, now)
     .flatMap(({ holder, items }) => items.map((item) => ({ holder, item })))
     .filter(({ item }) => waitsOnReaderNow(item, readerId, now))
     .toSorted((a, b) => b.item.updatedAt - a.item.updatedAt);
+
   const clipped = (words: string) => words.slice(0, INBOX_WIDGET_BOUNDS.MAX_TITLE_CHARS);
+
   const rows = waiting.slice(0, INBOX_WIDGET_BOUNDS.MAX_ROWS).map(({ holder, item }) => ({
     id: item.id,
     title: clipped(cardTitle(item.title)),
     task: clipped(holder.task.name),
     ...rowAsk(inboxLineKind(item)),
   }));
+
   const ids = waiting.slice(0, INBOX_WIDGET_BOUNDS.MAX_IDS).map(({ item }) => item.id);
+
   return { workspace, waiting: waiting.length, wholeAccount: workspaces === 1, ids, rows };
 }
 
@@ -132,14 +138,17 @@ export function inboxWidgetAfterSettle(
   badge: number | undefined,
 ): InboxWidgetSnapshot {
   const held = snapshot.ids.includes(itemId);
+
   const waiting =
     snapshot.wholeAccount && badge !== undefined
       ? Math.max(0, Math.trunc(badge))
       : held
         ? Math.max(0, snapshot.waiting - 1)
         : snapshot.waiting;
+
   const ids = snapshot.ids.filter((id) => id !== itemId);
   const rows = snapshot.rows.filter((row) => row.id !== itemId).slice(0, waiting);
+
   return { ...snapshot, waiting, ids, rows };
 }
 

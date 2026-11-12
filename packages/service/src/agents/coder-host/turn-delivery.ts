@@ -46,7 +46,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { turnStatusOf, turnsAwaitingRunner } from "@repo/database/models/turn-state";
 import { type QueuedAgentTurn, QueuedTurnListener } from "@repo/database/models/writer";
 import { causeKind, failureKind } from "@repo/runtime/effect";
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_STATUS, type WireValue } from "@repo/wire";
 import { send } from "@vercel/queue";
 import {
   Cause,
@@ -88,7 +88,7 @@ export const TURN_PUBLISH = {
 
 type TurnPublish = (typeof TURN_PUBLISH)[keyof typeof TURN_PUBLISH];
 
-export interface TurnQueueShape {
+export interface TurnQueueService {
   /** The turn handed on to be delivered to a runner, as `how` says; a publish that fails is said in the log, and the sweep publishes the turn again. */
   readonly publish: (
     turn: QueuedAgentTurn,
@@ -108,23 +108,32 @@ function deliveredAgainAfter(again: Duration.Duration): QueueAnswer {
  * queue to deliver again where its store or machine was unreachable.
  */
 export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDelivery")(function* (
-  message: unknown,
+  message: WireValue | QueuedAgentTurn,
 ): Effect.fn.Return<QueueAnswer, unknown, DatabaseServices> {
   const delivered = yield* Effect.option(decodeTurnMessage(message));
+
   if (Option.isNone(delivered)) {
     yield* Effect.logError("an agent-turns message did not decode; it is dropped");
+
     return QUEUE_ACKNOWLEDGED;
   }
+
   const turn = delivered.value;
+
   return yield* Effect.gen(function* () {
     const status = yield* turnStatusOf(turn.conversationId, turn.turnId);
+
     if (!Option.contains(status, TURN_STATUS.QUEUED)) return QUEUE_ACKNOWLEDGED;
     const handover = yield* turnHandedOver(turn);
+
     if (handover === TURN_HANDOVER.BUSY) return deliveredAgainAfter(TURN_DELIVERY.BUSY_AGAIN);
+
     if (handover === TURN_HANDOVER.AWAITED) return deliveredAgainAfter(TURN_DELIVERY.TAKE_GRACE);
+
     if (handover === TURN_HANDOVER.UNREACHED) {
       yield* Effect.logWarning("a queued turn's agent was not reached, so nothing was handed over");
     }
+
     return QUEUE_ACKNOWLEDGED;
   }).pipe(Effect.annotateLogs({ ...agentLogIds(turn), turnId: turn.turnId }));
 });
@@ -132,6 +141,7 @@ export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDel
 /** The publish's options: kept for the turn's pickup window, under the turn's id where it is keyed. */
 function sendOptions(turn: QueuedAgentTurn, how: TurnPublish) {
   const retentionSeconds = Math.ceil(Duration.toSeconds(TURN_DELIVERY.RETENTION));
+
   return how === TURN_PUBLISH.KEYED
     ? { retentionSeconds, idempotencyKey: turn.turnId }
     : { retentionSeconds };
@@ -145,7 +155,7 @@ function sendOptions(turn: QueuedAgentTurn, how: TurnPublish) {
  * the turn to the delivery its keyed publish already made, and else to the
  * sweep's reap at its pickup deadline.
  */
-const VERCEL_TURN_QUEUE: TurnQueueShape = {
+const VERCEL_TURN_QUEUE: TurnQueueService = {
   publish: (turn, how) =>
     Effect.tryPromise(() =>
       send(
@@ -190,8 +200,10 @@ const deliveredInProcess = (turn: QueuedAgentTurn, until: number) =>
               ),
         ),
       );
+
       if (answer.acknowledged) return;
       yield* Effect.sleep(answer.again);
+
       if ((yield* Clock.currentTimeMillis) >= until) return;
     }
   });
@@ -201,15 +213,19 @@ const deliveredInProcess = (turn: QueuedAgentTurn, until: number) =>
  * over the publisher's services. A keyed publish of a turn whose message is
  * still kept is dropped, as Queues drops it.
  */
-function inProcessTurnQueue(): TurnQueueShape {
+function inProcessTurnQueue(): TurnQueueService {
   const kept = new Map<string, number>();
+
   return {
     publish: (turn, how) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+
         for (const [turnId, until] of kept) if (until <= now) kept.delete(turnId);
+
         if (how === TURN_PUBLISH.KEYED && kept.has(turn.turnId)) return;
         const until = now + Duration.toMillis(TURN_DELIVERY.RETENTION);
+
         if (how === TURN_PUBLISH.KEYED) kept.set(turn.turnId, until);
         const services = yield* outsideTransaction;
         yield* Effect.forkDetach(
@@ -220,7 +236,7 @@ function inProcessTurnQueue(): TurnQueueShape {
 }
 
 /** The queue one runtime has: Vercel's where the runtime provides it, this process's otherwise. */
-export const TurnQueue = Context.Reference<TurnQueueShape>("@repo/service/TurnQueue", {
+export const TurnQueue = Context.Reference<TurnQueueService>("@repo/service/TurnQueue", {
   defaultValue: inProcessTurnQueue,
 });
 
@@ -261,15 +277,18 @@ export const republishQueuedTurns = /* @__PURE__ */ Effect.fn("web/republishQueu
   function* (now: number) {
     const queue = yield* TurnQueue;
     const queuedBefore = new Date(now - Duration.toMillis(TURN_DELIVERY.REPUBLISH_AFTER));
+
     const turns = yield* turnsAwaitingRunner(
       queuedBefore,
       new Date(now),
       TURN_DELIVERY.REPUBLISH_LIMIT,
     );
+
     yield* Effect.forEach(turns, (turn) => queue.publish(turn, TURN_PUBLISH.KEYED), {
       concurrency: TURN_DELIVERY.REPUBLISH_CONCURRENCY,
       discard: true,
     });
+
     return turns.length;
   },
 );

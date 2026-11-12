@@ -103,6 +103,7 @@ function drawnElement(page: TaskMentionsValue | undefined, words: ReactElement):
       ),
     ),
   );
+
   return container;
 }
 
@@ -117,6 +118,7 @@ function chips(container: HTMLElement): [string | undefined, string | null][] {
 /** Whether any element drawn carries an address on an attribute the recording keeps, other than a link's own. */
 function carriesTarget(container: HTMLElement): boolean {
   const masked = new Set(["title", "href", "xmlns"]);
+
   return [...container.querySelectorAll("*")]
     .flatMap((element) => [...element.attributes])
     .some((attribute) => !masked.has(attribute.name) && attribute.value.includes("://"));
@@ -147,6 +149,7 @@ test("on a plan's page a plan's link, a file's lines, and a Linear page are chip
   )) {
     act(() => chip.click());
   }
+
   assert.deepEqual(opened, [{ kind: MENTION_KIND.SECTION, taskId: TASK_ID, anchor: "rollout" }]);
   assert.deepEqual(files, [
     { path: "apps/web/store.ts", lines: { commit: COMMIT, startLine: 3, endLine: 5 } },
@@ -174,6 +177,7 @@ test("a reference link is read through its definition, and a file's page far lon
   // Each letter spelled in six characters, so the address passes a page's bound while its path stays inside a path's.
   const longPath = `apps/${"é".repeat(400)}.ts`;
   const longPage = `https://github.com/${REPOSITORY}/blob/HEAD/apps/${"%C3%A9".repeat(400)}.ts`;
+
   const container = drawn(
     taskPage([], files),
     [
@@ -187,11 +191,13 @@ test("a reference link is read through its definition, and a file's page far lon
     [MENTION_KIND.FILE, "the store"],
     [MENTION_KIND.FILE, "the long one"],
   ]);
+
   for (const chip of container.querySelectorAll<HTMLElement>(
     ":is(button, a, [role='button'])[data-mention-ref]",
   )) {
     act(() => chip.click());
   }
+
   assert.deepEqual(
     files.map((file) => file.path),
     ["apps/web/store.ts", longPath],
@@ -213,18 +219,21 @@ function fileCall(kind: CallKind, subject: string, named: { files?: string[]; pa
 
 test("a call's row names the first file it edited by the file's chip and how many more, the page it fetched by its site's chip, and off a repository its path", () => {
   const page = taskPage([], []);
+
   const edited = drawnElement(
     page,
     fileCall(CALL_KIND.EDIT, "src/members/list.ts +1", {
       files: ["src/members/list.ts", "src/members/invite.ts"],
     }),
   );
+
   const fetched = drawnElement(
     page,
     fileCall(CALL_KIND.WEB_PAGE, "www.rfc-editor.org/rfc/rfc9110", {
       page: "https://www.rfc-editor.org/rfc/rfc9110",
     }),
   );
+
   const elsewhere = drawnElement(
     undefined,
     fileCall(CALL_KIND.READ_FILE, "src/members/list.ts", { files: ["src/members/list.ts"] }),

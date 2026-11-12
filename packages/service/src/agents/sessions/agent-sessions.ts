@@ -47,6 +47,7 @@ export class SessionUnreachable extends Data.TaggedError("SessionUnreachable")<{
 export function describeUnreachable(failure: SessionUnreachable): string {
   const kind = failureKind(failure.cause);
   const status = failure.cause.response?.status;
+
   return status === undefined ? kind : `${kind} ${status}`;
 }
 

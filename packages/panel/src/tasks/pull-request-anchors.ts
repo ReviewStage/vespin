@@ -13,7 +13,7 @@
  */
 
 import type { ConversationEntry, ReviewThread } from "@repo/features/agent-wire";
-import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { samePullRequest } from "@repo/features/link-grammar";
 
 /** What a link to a pull request's own comment names: a review thread, or an entry of its conversation. */
 export const ANCHOR_KIND = {
@@ -40,18 +40,6 @@ function fragmentOf(href: string): string {
   }
 }
 
-/** Whether two addresses are pages of the same pull request, whatever the case its owner and name are spelled in. */
-function samePullRequest(href: string, pullRequestUrl: string): boolean {
-  const there = pullRequestAddressOf(href);
-  const here = pullRequestAddressOf(pullRequestUrl);
-  return (
-    there !== undefined &&
-    here !== undefined &&
-    there.number === here.number &&
-    there.repository.toLowerCase() === here.repository.toLowerCase()
-  );
-}
-
 /**
  * The comment of the pull request at `pullRequestUrl` that `href` names, as
  * its tab's `conversation` holds it: the thread a line comment of it stands
@@ -65,14 +53,19 @@ export function anchorIn(
   if (!samePullRequest(href, pullRequestUrl)) return undefined;
   const fragment = fragmentOf(href);
   const line = LINE_COMMENT.exec(fragment)?.[1];
+
   if (line !== undefined) {
     const named = `#discussion_r${line}`;
+
     const thread = conversation
       .flatMap((entry) => entry.threads ?? [])
       .find((each) => each.comments.some((comment) => fragmentOf(comment.url) === named));
+
     return thread === undefined ? undefined : { kind: ANCHOR_KIND.THREAD, thread };
   }
+
   if (!ENTRY_FRAGMENT.test(fragment)) return undefined;
   const entry = conversation.find((each) => fragmentOf(each.url) === fragment);
+
   return entry === undefined ? undefined : { kind: ANCHOR_KIND.ENTRY, entry };
 }

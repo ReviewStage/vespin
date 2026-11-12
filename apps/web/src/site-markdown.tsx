@@ -58,6 +58,7 @@ const servedPath = (href: string) =>
    repository's file, and anywhere else would resolve under whatever page or
    feed holds it, so it is written as that file on GitHub. */
 const RELATIVE_LINK = /^(?![a-z][a-z0-9+.-]*:|\/|#)/i;
+
 const repositoryFile = (href: string) =>
   RELATIVE_LINK.test(href) ? `${REPOSITORY_URL}/blob/main/${href}` : href;
 
@@ -100,6 +101,7 @@ function documentHtml(words: string, components?: MarkdownComponents): string {
 function writtenAs(markdown: string, nodes: readonly Nodes[]): string {
   const from = nodes[0]?.position?.start.offset;
   const to = nodes.at(-1)?.position?.end.offset;
+
   return from === undefined || to === undefined ? "" : markdown.slice(from, to);
 }
 
@@ -108,8 +110,11 @@ function plainText(nodes: readonly PhrasingContent[]): string {
   return nodes
     .map((node): string => {
       if (node.type === "image" || node.type === "imageReference") return "";
+
       if (node.type === "break") return " ";
+
       if ("value" in node) return node.value;
+
       return "children" in node ? plainText(node.children) : "";
     })
     .join("")
@@ -130,43 +135,53 @@ function firstImage(nodes: readonly Nodes[]): ReleaseImage | undefined {
   for (const node of nodes) {
     if (node.type === "image") return { src: servedPath(node.url), alt: node.alt ?? "" };
     const inside = "children" in node ? firstImage(node.children) : undefined;
+
     if (inside !== undefined) return inside;
   }
+
   return undefined;
 }
 
 /** The headline, summary, and first screenshot a release's notes open on. */
 function releaseHighlights(body: string): Pick<Release, "headline" | "summary" | "image"> {
   const blocks = markdownTree(body).children;
+
   const heading = blocks.find(
     (node): node is Heading => node.type === "heading" && node.depth === 3,
   );
+
   const named = heading === undefined ? undefined : writtenAs(body, heading.children);
   const headline = named !== undefined && !STANDING_SECTIONS.has(named) ? named : undefined;
   const paragraph = blocks.find((node) => node.type === "paragraph" && !picturesAlone(node));
   const list = blocks.find((node) => node.type === "list");
+
   const opening =
     paragraph?.type === "paragraph"
       ? paragraph.children
       : list?.type === "list" && list.children[0]?.children[0]?.type === "paragraph"
         ? list.children[0].children[0].children
         : [];
+
   return { headline, summary: plainText(opening), image: firstImage(blocks) };
 }
 
 /** Every release in CHANGELOG.md, newest first, as the file lists them. */
 export function parseReleases(markdown: string): readonly Release[] {
   const sections = markdown.split(/^(?=## )/m);
+
   return sections.slice(1).map((section) => {
     const headingEnd = section.indexOf("\n");
     const heading = headingEnd === -1 ? section : section.slice(0, headingEnd);
     const match = RELEASE_HEADING.exec(heading.trimEnd());
     const version = match?.[1];
     const date = match?.[2];
+
     if (!version || !date) {
       throw new Error(`CHANGELOG.md release heading must be "## <version> — <date>": ${heading}`);
     }
+
     const body = headingEnd === -1 ? "" : section.slice(headingEnd + 1);
+
     return {
       version,
       date,
@@ -184,6 +199,7 @@ export function parseReleases(markdown: string): readonly Release[] {
 export function policyOf(markdown: string): Policy {
   let title: string | null = null;
   const sections: { title: string | null; blocks: RootContent[] }[] = [{ title: null, blocks: [] }];
+
   for (const node of markdownTree(markdown).children) {
     if (node.type === "heading" && node.depth === 1)
       title = documentHtml(writtenAs(markdown, node.children), INLINE_COMPONENTS);
@@ -194,14 +210,15 @@ export function policyOf(markdown: string): Policy {
       });
     else sections.at(-1)?.blocks.push(node);
   }
+
   if (title === null) throw new Error("PRIVACY.md has no `#` title");
+
   return {
     title,
-    sections: sections
-      .filter((section) => section.title !== null || section.blocks.length > 0)
-      .map((section) => ({
-        title: section.title,
-        html: documentHtml(writtenAs(markdown, section.blocks)),
-      })),
+    sections: sections.flatMap((section) =>
+      section.title !== null || section.blocks.length > 0
+        ? [{ title: section.title, html: documentHtml(writtenAs(markdown, section.blocks)) }]
+        : [],
+    ),
   };
 }

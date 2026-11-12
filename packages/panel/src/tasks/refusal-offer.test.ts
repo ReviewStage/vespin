@@ -15,12 +15,14 @@ const OPUS: CatalogModel = {
   provider: MODEL_PROVIDER.ANTHROPIC,
   efforts: ["low", "medium", "high", "xhigh", "max"],
 };
+
 const SONNET: CatalogModel = {
   id: "anthropic/claude-sonnet-5.5",
   name: "Claude Sonnet 5.5",
   provider: MODEL_PROVIDER.ANTHROPIC,
   efforts: ["low", "medium", "high", "max"],
 };
+
 const GPT: CatalogModel = {
   id: "openai/gpt-6.1-sol",
   name: "GPT-6.1 Sol",

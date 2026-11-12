@@ -43,6 +43,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -57,6 +58,7 @@ const openConversation = (userId: string, parentConversationId?: string) =>
         parentConversationId === undefined ? CONVERSATION_KIND.OBSERVED : CONVERSATION_KIND.CHILD,
       ...(parentConversationId === undefined ? undefined : { parentConversationId }),
     });
+
     return id;
   });
 
@@ -166,7 +168,9 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
         const owner = yield* openAccount;
         const other = yield* openAccount;
         const conversation = yield* openConversation(owner);
+
         for (const seq of [1, 2, 3, 4, 5]) yield* writeLine(owner, conversation, seq);
+
         const seqsOf = (read: Effect.Success<ReturnType<typeof listMessagesBefore>>) =>
           read.ok ? read.value.map((record) => record.seq) : assert.fail("the page read");
 
@@ -228,6 +232,7 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
         const read = yield* listMessagesPast(owner, conversation, {}, { seq: 0, revision: 0 });
         const second = read.read.ok ? read.read.value[1] : assert.fail("the page read");
         assert.ok(second !== undefined);
+
         const partsOf = (page: Effect.Success<ReturnType<typeof readMessageById>>) =>
           page.ok ? page.value.map((record) => record.message.parts) : assert.fail("the row read");
 

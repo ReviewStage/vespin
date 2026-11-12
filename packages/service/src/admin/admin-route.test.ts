@@ -32,7 +32,7 @@ const ORIGIN = "https://app.test";
 const METRICS_PATH = "/api/admin/metrics";
 
 // SAFETY: the resource writes the metrics read's answer as it came, so a marker object stands in for the whole answer.
-const METRICS = { generatedAt: 1 } as unknown as AdminMetrics;
+const METRICS = { generatedAt: 1 } as AdminMetrics;
 
 /** An admin signed in on a browser of their own, on Better Auth over its own PGlite. */
 const openAdmin = Effect.gen(function* () {
@@ -46,6 +46,7 @@ const openAdmin = Effect.gen(function* () {
       role: USER_ROLE.ADMIN,
     }),
   ).pipe(Effect.provide(plugin.database));
+
   return { api: plugin.api, cookie: yield* plugin.sessionCookieOf(admin) };
 });
 
@@ -54,6 +55,7 @@ const metrics = (api: AdminSessionApi, headers: Record<string, string>) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<DatabaseServices>().pipe(Effect.provide(noDatabase));
     const seams = { ...hostedAdminSeams(api), readMetrics: () => Effect.succeed(METRICS) };
+
     const response = yield* Effect.promise(() =>
       hostedFetch({ admin: adminProcedures(seams) })(
         new Request(new URL(METRICS_PATH, ORIGIN), { headers }),
@@ -61,6 +63,7 @@ const metrics = (api: AdminSessionApi, headers: Record<string, string>) =>
         services as Context.Context<WebServices>,
       ),
     );
+
     return { status: response.status, text: yield* Effect.promise(() => response.text()) };
   });
 
@@ -74,6 +77,7 @@ it.effect(
         status: HOSTED_HTTP_STATUS.OK,
         text: JSON.stringify(METRICS),
       });
+
       for (const authorization of ["Bearer not-a-token", "Basic YWRhOmxvdmVsYWNl", ""]) {
         assert.deepEqual(
           yield* metrics(api, { authorization, cookie }),

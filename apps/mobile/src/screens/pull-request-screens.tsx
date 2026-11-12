@@ -90,7 +90,9 @@ function landedOf<Answer extends object>(
   read: AppHostRead<Answer> | undefined,
 ): Exclude<Answer, { failure: unknown }> | undefined {
   const rows = read?.rows;
+
   if (rows === undefined || "failure" in rows) return undefined;
+
   // SAFETY: an answer view is its answer or a failure, and the failure was ruled out above.
   return rows as Exclude<Answer, { failure: unknown }>;
 }
@@ -108,8 +110,10 @@ function checkDetail(check: PullRequestCheck): string {
     check.completedAt !== null
   ) {
     const ran = check.completedAt - check.startedAt;
+
     if (ran >= RAN_AT_LEAST_MS) return workingTime(ran);
   }
+
   return CHECK_WORDS[check.state];
 }
 
@@ -130,6 +134,7 @@ function mergePressOf(
   switch (action) {
     case MERGE_ACTION.MERGE:
       if (method === undefined) return undefined;
+
       return {
         words: MERGE_PRESS_WORDS[method],
         prominent: true,
@@ -137,6 +142,7 @@ function mergePressOf(
       };
     case MERGE_ACTION.ENABLE_AUTO_MERGE:
       if (method === undefined) return undefined;
+
       return {
         words: MERGE_WORDS.ENABLE_AUTO_MERGE,
         prominent: false,
@@ -181,9 +187,11 @@ function shownPressOf(
   const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
   const action = live ? mergeActionFor(pullRequest) : undefined;
   const press = mergePressOf(action, method, pullRequest?.merging?.headSha ?? "");
+
   if (press === undefined) return undefined;
   const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
   const { request } = press;
+
   return {
     words: pending === undefined ? press.words : MERGE_BUSY_WORDS[pending],
     prominent: press.prominent,
@@ -219,9 +227,11 @@ function PullRequestToolbar({
   const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
   const action = live ? mergeActionFor(pullRequest) : undefined;
   const methods = pullRequest?.merging?.methods ?? [];
+
   const chooses =
     methods.length > 1 &&
     (action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE);
+
   // Note that these stand in the top bar in every window, never the bottom: expo-router shows a navigation controller's toolbar and never hides it again, so a bottom bar outlived the page. A regular window hands no press, since its top bar folds it into More, and draws it under the checks instead.
   return (
     <Stack.Toolbar placement="right">
@@ -301,11 +311,13 @@ export function PullRequestScreen() {
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
   const press = shownPressOf(pullRequest, method, writes, () => setAsking(true));
+
   // Whether the pull request offers Remove from queue as it stands, which its question asks about.
   const dequeues =
     pullRequest !== undefined &&
     isLivePullRequest(pullRequest) &&
     mergeActionFor(pullRequest) === MERGE_ACTION.DEQUEUE;
+
   // Note that the question is dropped as soon as the queue no longer offers it, rather than only when its alert says it went, so it never stands again by itself the next time the pull request is queued.
   useEffect(() => {
     if (!dequeues) setAsking(false);
@@ -327,6 +339,7 @@ export function PullRequestScreen() {
         ),
   );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
+
   const bar = (
     <>
       <Stack.Screen
@@ -345,8 +358,10 @@ export function PullRequestScreen() {
       />
     </>
   );
+
   if (title === undefined || state === undefined) {
     const failed = failedOf(parts.pullRequest);
+
     return (
       <>
         {bar}
@@ -363,8 +378,10 @@ export function PullRequestScreen() {
       </>
     );
   }
+
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
+
   const reviewers =
     pullRequest === undefined
       ? []
@@ -373,12 +390,16 @@ export function PullRequestScreen() {
           conversation?.reviewers ?? [],
           pullRequest.author?.login,
         );
+
   // Each row a press opens, by its id: a check's run, and the conversation, on GitHub.
   const opens = new Map<string, string>();
+
   for (const check of checks ?? []) {
     if (check.url !== null) opens.set(check.url, check.url);
   }
+
   if (url !== undefined) opens.set(COMMENTS_ROW, url);
+
   return (
     <>
       {bar}
@@ -387,6 +408,7 @@ export function PullRequestScreen() {
           look={LIST_LOOK.PLAIN}
           onSelect={(row) => {
             const address = opens.get(row);
+
             if (address !== undefined) openInSafari(address);
           }}
           onRefresh={retry}

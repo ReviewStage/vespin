@@ -44,17 +44,22 @@ beforeEach(() => {
     "requestIdleCallback",
     (run: () => void, options?: { timeout?: number }): number => {
       idle.push({ run, timeout: options?.timeout, canceled: false });
+
       return idle.length - 1;
     },
   );
   vi.stubGlobal("cancelIdleCallback", (handle: number) => {
     const each = idle[handle];
+
     if (each) each.canceled = true;
   });
+
+  const platform: Partial<AppPlatform> = {
+    applySessionReplay: (word: SessionReplayBootstrap) => void heard.push(word),
+  };
+
   // SAFETY: only the capability under test is answered; nothing here reads another.
-  uninstall = installAppPlatform({
-    applySessionReplay: (word: SessionReplayBootstrap) => heard.push(word),
-  } as unknown as AppPlatform);
+  uninstall = installAppPlatform(platform as AppPlatform);
 });
 
 afterEach(() => {
@@ -69,6 +74,7 @@ afterEach(() => {
 function Startup(props: { readonly state: AppStateSnapshot }): null {
   useSessionReplay(props.state.run, props.state.sessionReplay, undefined);
   usePrefetchBundles();
+
   return null;
 }
 
@@ -76,12 +82,15 @@ function Startup(props: { readonly state: AppStateSnapshot }): null {
 function draw(first: AppStateSnapshot): (next: AppStateSnapshot) => void {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const bundles = standInBundles({
     descriptionEditor: () => {
       editorImports += 1;
+
       return new Promise(() => undefined);
     },
   });
+
   const render = (state: AppStateSnapshot): ReactElement =>
     withQueryClient(
       createElement(
@@ -90,13 +99,16 @@ function draw(first: AppStateSnapshot): (next: AppStateSnapshot) => void {
         createElement(Startup, { state }),
       ),
     );
+
   act(() => root.render(render(first)));
+
   return (next) => act(() => root.render(render(next)));
 }
 
 /** A delivery of the document, a new object each time as a delivery is, recording as given. */
 function delivery(sessionReplay: AppStateSnapshot["sessionReplay"]): AppStateSnapshot {
   const base = stateWith({}, {});
+
   return { ...base, run: { ...base.run, packaged: true }, sessionReplay };
 }
 
@@ -157,6 +169,7 @@ test("the latest word before idle is the one the platform hears first, once", ()
 
 test("leaving before the renderer is idle starts nothing", () => {
   draw(delivery({ permitted: true, halted: false }));
+
   for (const root of roots) act(() => root.unmount());
   roots = [];
 

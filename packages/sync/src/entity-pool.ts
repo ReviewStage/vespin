@@ -72,6 +72,7 @@ import {
   Equal,
   Exit,
   FiberSet,
+  Predicate,
   PubSub,
   Result,
   Schema,
@@ -114,6 +115,7 @@ function movesRow<Row extends object>(row: Row, fields: Partial<Row>): boolean {
   for (const name in fields) {
     if (Object.hasOwn(fields, name) && !Equal.equals(row[name], fields[name])) return true;
   }
+
   return false;
 }
 
@@ -124,10 +126,13 @@ export function fieldKind<Row extends object>(
   return {
     key,
     drawn: (change, row) => {
-      if (typeof change !== "function") return row === undefined ? change.made : undefined;
+      if (!Predicate.isFunction(change)) return row === undefined ? change.made : undefined;
+
       if (row === undefined) return undefined;
       const fields = change(row);
+
       if (fields === ROW_GONE) return ROW_GONE;
+
       // Note that a change the row already carries leaves it alone, so a reader holds the very row.
       return movesRow(row, fields) ? { ...row, ...fields } : undefined;
     },
@@ -392,6 +397,7 @@ interface Queue {
 function movedTo(queue: Queue, waiting: readonly Waiting[]): Effect.Effect<void> {
   return Effect.suspend(() => {
     queue.waiting = waiting;
+
     return Effect.asVoid(PubSub.publish(queue.moves, undefined));
   });
 }
@@ -415,13 +421,16 @@ function drawnRow<Row extends object, Change>(
   key: string,
 ): Row | undefined {
   const stored = rows.synced.collection.get(key);
-  let row = stored === undefined ? undefined : rowOf<Row>(stored);
+  let row = stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
+
   for (const write of rows.standing) {
     if (!write.keys.includes(key)) continue;
     const drawn = rows.kind.drawn(write.change, row);
+
     if (drawn === ROW_GONE) row = undefined;
     else if (drawn !== undefined) row = drawn;
   }
+
   return row;
 }
 
@@ -459,6 +468,7 @@ function redrawn<Row, Change>(
   keys: readonly string[],
 ): Effect.Effect<void> {
   if (keys.length === 0) return Effect.void;
+
   return Effect.forEach(holdings, (holding) => holding.read.redraw(keys), { discard: true });
 }
 
@@ -484,10 +494,13 @@ function movedBy<Row extends object, Change>(
   const before = keys.map((key) => [drawnRow(rows, key), standingOver(rows, key)] as const);
   const showing = holdersOf(rows.reads, keys);
   step();
+
   const moved = keys.filter(
     (key, at) => !Equal.equals(before[at], [drawnRow(rows, key), standingOver(rows, key)] as const),
   );
+
   if (moved.length === 0) return Effect.void;
+
   return redrawn([...new Set([...showing, ...holdersOf(rows.reads, moved)])], moved);
 }
 
@@ -495,7 +508,9 @@ function movedBy<Row extends object, Change>(
 function adopted<Row extends object, Change>(rows: KindRows<Row, Change>, keys: readonly string[]) {
   for (const key of keys) {
     const row = drawnRow(rows, key);
+
     if (row === undefined) continue;
+
     for (const holding of rows.reads) {
       if (shows(holding, key) || holding.read.adopts?.(row) !== true) continue;
       holding.adopted = new Set([...holding.adopted, key]);
@@ -509,6 +524,7 @@ function unadopted<Row extends object, Change>(
   keys: readonly string[],
 ) {
   const loose = keys.filter((key) => !standingOver(rows, key));
+
   for (const holding of rows.reads) {
     if (!loose.some((key) => holding.adopted.has(key))) continue;
     holding.adopted = new Set([...holding.adopted].filter((key) => !loose.includes(key)));
@@ -523,6 +539,7 @@ function takenAndDrawn<Row extends object, Change>(
 ): Effect.Effect<readonly string[]> {
   return Effect.suspend(() => {
     const written = rows.synced.take(next);
+
     return Effect.as(redrawn(holdersOf(rows.reads, written, except), written), written);
   });
 }
@@ -544,13 +561,16 @@ function stood<Row extends object, Change>(
     Effect.sync(() => {
       rows.reads.delete(holding);
       const next = new Map(rows.synced.held());
+
       for (const key of holding.order) {
         if (heldByAny(rows.reads, key)) continue;
         next.delete(key);
         rows.takenAt.delete(key);
       }
+
       rows.synced.take(next);
     });
+
   return Effect.map(
     Effect.acquireRelease(
       Effect.sync(() => {
@@ -560,7 +580,9 @@ function stood<Row extends object, Change>(
           held: new Set(),
           adopted: new Set(),
         };
+
         rows.reads.add(holding);
+
         return holding;
       }),
       release,
@@ -574,21 +596,27 @@ function stood<Row extends object, Change>(
           holding.order = [...keys];
           holding.held = keys;
           const next = new Map(rows.synced.held());
+
           for (const [key, row] of keyed) {
             const taken = rows.takenAt.get(key);
+
             if (at !== undefined && taken !== undefined && taken > at) continue;
             next.set(key, row);
+
             if (at !== undefined) rows.takenAt.set(key, at);
           }
+
           for (const key of was) {
             if (heldByAny(rows.reads, key)) continue;
             next.delete(key);
             rows.takenAt.delete(key);
           }
+
           const placed = [
             ...[...keys].filter((key) => !was.has(key)),
             ...[...was].filter((key) => !keys.has(key)),
           ];
+
           return Effect.map(takenAndDrawn(rows, next, holding), (written) => [
             ...new Set([...written, ...placed]),
           ]);
@@ -600,6 +628,7 @@ function stood<Row extends object, Change>(
       pending: () => shown(holding).filter((key) => standingOver(rows, key)),
       synced: () => {
         const synced = rows.synced.held();
+
         return holding.order.flatMap((key) => synced.get(key) ?? []);
       },
       standing: () => rows.standing.map((write) => write.change),
@@ -622,21 +651,27 @@ function takenInPlace<Row extends object, Change>(
   return Effect.suspend(() => {
     const next = new Map(rows.synced.held());
     const beside: Holding<Row, Change>[] = [];
+
     for (const holding of holdings) {
       if (keys.some((key) => holding.read.beside?.shows(key) === true)) beside.push(holding);
+
       for (const key of keys) {
         if (!holding.held.has(key) && !holding.adopted.has(key)) continue;
         const drawn = rows.kind.drawn(taken, next.get(key));
+
         if (drawn === ROW_GONE) {
           next.delete(key);
           rows.takenAt.delete(key);
         } else if (drawn !== undefined) next.set(key, drawn);
+
         if (holding.held.has(key) || !next.has(key)) continue;
         holding.order = [...holding.order, key];
         holding.held = new Set([...holding.held, key]);
       }
     }
+
     for (const holding of beside) holding.read.beside?.take(taken);
+
     return Effect.andThen(redrawn(beside, keys), takenAndDrawn(rows, next));
   });
 }
@@ -657,9 +692,12 @@ function confirmedOn<Row extends object, Change, Answer>(
   earlier: Effect.Effect<void>,
 ): Effect.Effect<void> {
   const wait = holding.read.confirmation();
+
   if (wait !== undefined && written.txid !== undefined) return wait(written.txid);
   const taken = takenInPlace(rows, [holding], write.keys, written.taken ?? write.change);
+
   if (written.carried === undefined) return taken;
+
   return Effect.andThen(written.carried, Effect.andThen(earlier, taken));
 }
 
@@ -672,13 +710,16 @@ function resent(queue: Queue): Effect.Effect<void> {
     Effect.gen(function* () {
       for (;;) {
         const next = queue.waiting[0];
+
         if (next === undefined) return;
         const retried = yield* next.retried;
+
         if (retried === RETRIED.UNANSWERED) return;
         yield* movedTo(
           queue,
           queue.waiting.filter((each) => each !== next),
         );
+
         if (retried === RETRIED.REFUSED) yield* queue.options?.replayRefused ?? Effect.void;
       }
     }),
@@ -701,28 +742,36 @@ function written<Row extends object, Change, Input, Answer>(
   return Effect.gen(function* () {
     const keys = [...new Set(declaration.keys(input))];
     const write: Standing<Change> = { keys, change: declaration.change(input) };
+
     const turn: Turn = {
       answered: yield* Deferred.make<void>(),
       dropped: yield* Deferred.make<void>(),
     };
+
     const before = [...new Set(keys.flatMap((key) => rows.lastWrites.get(key) ?? []))];
+
     for (const key of keys) rows.lastWrites.set(key, turn);
+
     const drawnOn = movedBy(rows, keys, () => {
       rows.standing = [...rows.standing, write];
       adopted(rows, keys);
     });
+
     const drop = Effect.suspend(() => {
       for (const key of keys) if (rows.lastWrites.get(key) === turn) rows.lastWrites.delete(key);
+
       return movedBy(rows, keys, () => {
         rows.standing = rows.standing.filter((each) => each !== write);
         unadopted(rows, keys);
       });
     }).pipe(Effect.ensuring(Deferred.succeed(turn.dropped, undefined)));
+
     const plan = declaration.queue;
     // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
     const askedAs = queue.options?.holder?.();
     const mintKey = queue.options?.mintKey;
     const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
+
     // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
     const entry =
       plan === undefined || key === undefined
@@ -734,23 +783,29 @@ function written<Row extends object, Change, Input, Answer>(
               input: kept,
             })),
           );
+
     // Note that each attempt asks the declaration anew, so one sent again reads the host as it stands then.
     const attempt = (waited: boolean) =>
       Effect.suspend(() => declaration.send(input, { key, waited }));
+
     const sent = Effect.gen(function* () {
       yield* drawnOn;
       yield* awaitEach(before, (each) => each.answered);
+
       return yield* attempt(false);
     }).pipe(Effect.ensuring(Deferred.succeed(turn.answered, undefined)));
+
     // Note that every read showing the keys is waited on at once, so the write stands until the slowest carries it.
     const settled = (kept: Written<Change, Answer>) =>
       Effect.gen(function* () {
         const { standsAs } = kept;
+
         if (kept.settled !== true && standsAs !== undefined) {
           yield* movedBy(rows, keys, () => {
             write.change = standsAs;
           });
         }
+
         if (kept.settled !== true) {
           yield* Effect.forEach(
             holdersOf(rows.reads, keys),
@@ -765,47 +820,63 @@ function written<Row extends object, Change, Input, Answer>(
             { concurrency: "unbounded", discard: true },
           );
         }
+
         yield* awaitEach(before, (each) => each.dropped);
       }).pipe(Effect.ensuring(drop));
+
     /** A refused write taken back, on the service's word where it gave one. */
     const takenBack = (refused: Refused<Answer, Change>) =>
       Effect.gen(function* () {
         const { taken } = refused;
+
         if (taken !== undefined) {
           yield* takenInPlace(rows, holdersOf(rows.reads, keys), keys, taken);
         }
+
         yield* drop;
       });
+
     /** What a caller the write holds hears once it is sent again: the service's answer, its refusal, or, let go, what it hears meanwhile. */
     const heard = yield* Deferred.make<Answer>();
+
     /** The write laid behind those waiting, still standing, sent again as they are; let go, its caller hears `meanwhile`. */
     const waits = (kept: QueuedEntry, meanwhile: Answer) =>
       Effect.suspend(() => {
         const letGo = Effect.andThen(drop, Deferred.succeed(heard, meanwhile));
+
         const waiting: Waiting = {
           entry: kept,
           retried: Effect.gen(function* () {
             // Note that the account is read again just before the send, because the session may move with no word to the pool, and a write is never carried under another's credential.
             if (queue.options?.holder?.() !== askedAs) {
               yield* letGo;
+
               return RETRIED.LET_GO;
             }
+
             const answered = yield* attempt(true);
+
             if ("refused" in answered) {
               if (answered.unanswered === true) return RETRIED.UNANSWERED;
               yield* takenBack(answered);
               yield* Deferred.succeed(heard, answered.refused);
+
               return RETRIED.REFUSED;
             }
+
             yield* FiberSet.run(queue.confirming, settled(answered));
             yield* Deferred.succeed(heard, answered.answer);
+
             return RETRIED.KEPT;
           }),
           letGo,
         };
+
         return movedTo(queue, [...queue.waiting, waiting]);
       });
+
     const room = () => queue.waiting.length < QUEUE_BOUND;
+
     // Note that a kept write answers before its reads carry it, standing on in a fiber of the pool's; a refused one answers once it is taken back, on the service's word where it gave one; one unanswered that may wait answers at once that it waits, or, holding its caller, once it is sent again.
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
@@ -814,27 +885,37 @@ function written<Row extends object, Change, Input, Answer>(
           waiting.holds?.(input) === true && restored === undefined
             ? restore(Deferred.await(heard))
             : Effect.succeed(waiting.queued(input));
+
         if (plan !== undefined && entry !== undefined && room()) {
           if (restored !== undefined || queue.waiting.length > 0) {
             yield* drawnOn;
             yield* Deferred.succeed(turn.answered, undefined);
             yield* waits(entry, plan.queued(input));
+
             if (restored === undefined) yield* FiberSet.run(queue.confirming, resent(queue));
+
             return yield* heardAs(plan);
           }
         }
+
         const answered = yield* Effect.onExit(restore(sent), (exit) =>
           Exit.isSuccess(exit) ? Effect.void : drop,
         );
+
         if ("refused" in answered) {
           if (answered.unanswered === true && plan !== undefined && entry !== undefined && room()) {
             yield* waits(entry, plan.queued(input));
+
             return yield* heardAs(plan);
           }
+
           yield* takenBack(answered);
+
           return answered.refused;
         }
+
         yield* FiberSet.run(queue.confirming, settled(answered));
+
         return answered.answer;
       }),
     );
@@ -858,15 +939,20 @@ function requeued(
       ),
     ),
   );
+
   return Effect.forEach(
     entries,
     (entry) => {
       const named = byName.get(entry.name);
+
       if (named === undefined) return Effect.void;
+
       return named((declaration) => {
         const plan = declaration.queue;
+
         if (plan === undefined) return Effect.void;
         const input = Result.getOrUndefined(Schema.decodeUnknownResult(plan.input)(entry.input));
+
         return input === undefined ? Effect.void : rewritten(declaration, input, entry.key);
       });
     },
@@ -883,6 +969,7 @@ function requeued(
 export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, never, Scope.Scope> {
   return Effect.gen(function* () {
     const scope = yield* Effect.scope;
+
     const queue: Queue = {
       options,
       confirming: yield* FiberSet.make<void>(),
@@ -890,8 +977,10 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       moves: yield* PubSub.unbounded<void>(),
       waiting: [],
     };
+
     /** Each kind's rows, by the kind's own declaration. */
     const kinds = new Map<object, unknown>();
+
     const rowsOf = <Row extends object, Change>(
       kind: RowKind<Row, Change>,
     ): Effect.Effect<KindRows<Row, Change>> =>
@@ -899,11 +988,15 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
         const made = () => kinds.get(kind) as KindRows<Row, Change> | undefined;
         const standing = made();
+
         if (standing !== undefined) return Effect.succeed(standing);
+
         return Effect.map(Scope.provide(scope)(syncedCollection(kind.key)), (synced) => {
           // Note that a kind made meanwhile by another fiber is the one kept, so a kind has one collection.
           const raced = made();
+
           if (raced !== undefined) return raced;
+
           const fresh: KindRows<Row, Change> = {
             kind,
             synced,
@@ -912,10 +1005,13 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
             lastWrites: new Map(),
             takenAt: new Map(),
           };
+
           kinds.set(kind, fresh);
+
           return fresh;
         });
       });
+
     return {
       stand: (kind, read) => Effect.flatMap(rowsOf(kind), (rows) => stood(rows, read)),
       write: (declaration, input) =>
@@ -925,6 +1021,7 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       row: <Row extends object, Change>(kind: RowKind<Row, Change>, key: string) => {
         // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
         const rows = kinds.get(kind) as KindRows<Row, Change> | undefined;
+
         return rows === undefined ? undefined : drawnRow(rows, key);
       },
       queued: () => queue.waiting.map((each) => each.entry),
@@ -940,7 +1037,9 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       resend: Effect.suspend(() => resent(queue)),
       letGoQueued: Effect.suspend(() => {
         const waiting = queue.waiting;
+
         if (waiting.length === 0) return Effect.void;
+
         return Effect.andThen(
           movedTo(queue, []),
           Effect.forEach(waiting, (each) => each.letGo, { discard: true }),

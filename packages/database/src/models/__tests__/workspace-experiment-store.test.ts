@@ -25,6 +25,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -62,11 +63,13 @@ it.layer(getTestDB())("a workspace's experiments", (it) => {
           on: true,
           by: bob,
         });
+
         const read = {
           acmeMemory: yield* workspaceExperimentOn(acme, EXPERIMENT.MEMORY),
           acmeDescriptions: yield* workspaceExperimentOn(acme, EXPERIMENT.DESCRIPTIONS),
           betaMemory: yield* workspaceExperimentOn(beta, EXPERIMENT.MEMORY),
         };
+
         const betaStandings = yield* workspaceExperimentsOf(beta);
         yield* Database.use((db) => db.delete(user).where(eq(user.id, bob)));
         const standings = yield* workspaceExperimentsOf(acme);

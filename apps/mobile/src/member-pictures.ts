@@ -18,6 +18,7 @@ export type PictureOf = (userId: string | undefined) => string | undefined;
 /** The workspace the phone works in, which its members are read for. */
 function useChosenWorkspaceId(): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
   return useChosenWorkspace(workspaces).chosen?.id;
 }
 
@@ -44,6 +45,7 @@ export function useMemberPicturesFollow(): void {
 export function useMemberPictures(): PictureOf {
   const workspaceId = useChosenWorkspaceId();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+
   const { data: members } = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -54,17 +56,23 @@ export function useMemberPictures(): PictureOf {
       [workspaceId],
     ),
   });
+
   const readerId = account === undefined ? undefined : signedInAccountId(account);
+
   const readerPicture =
     account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.pictureUrl : undefined;
+
   return useMemo(() => {
     const pictures = new Map<string, string>();
+
     for (const member of members ?? []) {
       if (member.pictureUrl !== undefined) pictures.set(member.userId, member.pictureUrl);
     }
+
     if (readerId !== undefined && readerPicture !== undefined) {
       pictures.set(readerId, readerPicture);
     }
+
     return (userId) => (userId === undefined ? undefined : pictures.get(userId));
   }, [members, readerId, readerPicture]);
 }

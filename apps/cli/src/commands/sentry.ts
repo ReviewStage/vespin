@@ -26,9 +26,11 @@ const listCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const sentry = yield* askService(hosted.workspaceSentry.installations, {
       workspaceId: workspace.id,
     });
+
     const lines = !sentry.configured
       ? ["Sentry is not offered on this deployment."]
       : sentry.installations.length === 0
@@ -36,6 +38,7 @@ const listCommand = Command.make("list", {}, () =>
         : columns(
             sentry.installations.map((one) => [one.installationId, one.account ?? "(unnamed)"]),
           );
+
     yield* answer({
       json: { workspaceId: workspace.id, ...sentry },
       lines,
@@ -69,12 +72,14 @@ const disconnectCommand = Command.make(
         yes,
       );
       const { hosted } = yield* session;
+
       const sentry = yield* askService(
         hosted.workspaceSentry.disconnect,
         { workspaceId: workspace.id, installationId: installation },
         undefined,
         DISCONNECT_REFUSAL,
       );
+
       yield* answer({
         json: {
           workspaceId: workspace.id,

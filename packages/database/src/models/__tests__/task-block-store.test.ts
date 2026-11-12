@@ -29,6 +29,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -40,6 +41,7 @@ const openSharedWorkspace = Effect.gen(function* () {
   yield* joinWorkspace(workspace, charles);
   const { id: schema } = yield* createTask(dean, { name: "Schema", organizationId: workspace });
   const { id: sidebar } = yield* createTask(dean, { name: "Sidebar", organizationId: workspace });
+
   return { dean, charles, workspace, schema, sidebar };
 });
 
@@ -77,14 +79,17 @@ it.layer(getTestDB())("one task blocking another", (it) => {
       Effect.gen(function* () {
         const { dean, workspace, schema, sidebar } = yield* openSharedWorkspace;
         const elsewhere = yield* openWorkspace(dean);
+
         const { id: approve } = yield* createTask(dean, {
           name: "Approve",
           organizationId: workspace,
         });
+
         const { id: moving } = yield* createTask(dean, {
           name: "Moving",
           organizationId: workspace,
         });
+
         yield* addTaskBlock(dean, { blockerTaskId: schema, blockedTaskId: sidebar });
         yield* addTaskBlock(dean, { blockerTaskId: sidebar, blockedTaskId: approve });
         yield* addTaskBlock(dean, { blockerTaskId: moving, blockedTaskId: schema });
@@ -93,10 +98,12 @@ it.layer(getTestDB())("one task blocking another", (it) => {
           blockerTaskId: schema,
           blockedTaskId: sidebar,
         });
+
         const removedAgain = yield* removeTaskBlock(dean, {
           blockerTaskId: schema,
           blockedTaskId: sidebar,
         });
+
         yield* deleteTask(dean, approve);
         yield* updateTask(dean, moving, { organizationId: elsewhere });
 
@@ -113,6 +120,7 @@ it.layer(getTestDB())("one task blocking another", (it) => {
     () =>
       Effect.gen(function* () {
         const { dean, charles, workspace, schema, sidebar } = yield* openSharedWorkspace;
+
         // Dean's own token reached this repository, which Charles's never read.
         const { id: hidden } = yield* createTask(dean, {
           name: "Hidden",
@@ -120,6 +128,7 @@ it.layer(getTestDB())("one task blocking another", (it) => {
           repository: "dean/side",
           githubAccess: GITHUB_ACCESS.TOKEN,
         });
+
         yield* addTaskBlock(dean, { blockerTaskId: schema, blockedTaskId: hidden });
         yield* addTaskBlock(dean, { blockerTaskId: hidden, blockedTaskId: sidebar });
 
@@ -141,6 +150,7 @@ it.layer(getTestDB())("one task blocking another", (it) => {
       const self = yield* Effect.flip(
         addTaskBlock(dean, { blockerTaskId: schema, blockedTaskId: schema }),
       );
+
       const across = yield* Effect.flip(
         addTaskBlock(dean, { blockerTaskId: schema, blockedTaskId: other }),
       );
@@ -157,6 +167,7 @@ it.layer(getTestDB())("one task blocking another", (it) => {
         const { dean, charles, workspace, schema, sidebar } = yield* openSharedWorkspace;
         const outsider = yield* openAccount;
         yield* openWorkspace(outsider);
+
         // Dean's own token reached this repository, which Charles's never read.
         const { id: hidden } = yield* createTask(dean, {
           name: "Hidden",
@@ -164,19 +175,23 @@ it.layer(getTestDB())("one task blocking another", (it) => {
           repository: "dean/side",
           githubAccess: GITHUB_ACCESS.TOKEN,
         });
+
         yield* addTaskBlock(dean, { blockerTaskId: schema, blockedTaskId: sidebar });
         yield* TestClock.adjust("1 minute");
         yield* addTaskBlock(dean, { blockerTaskId: hidden, blockedTaskId: sidebar });
 
         const outsiderRead = yield* readTaskBlocks(outsider, sidebar);
+
         const outsiderAdd = yield* addTaskBlock(outsider, {
           blockerTaskId: sidebar,
           blockedTaskId: schema,
         });
+
         const outsiderRemove = yield* removeTaskBlock(outsider, {
           blockerTaskId: schema,
           blockedTaskId: sidebar,
         });
+
         const charlesRemove = yield* removeTaskBlock(charles, {
           blockerTaskId: hidden,
           blockedTaskId: sidebar,

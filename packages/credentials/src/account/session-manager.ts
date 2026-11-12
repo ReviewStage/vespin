@@ -88,7 +88,9 @@ const SESSION_PAGES = {
  */
 function connectionSource(provider: AccountProvider): LoopbackConnectionSource | undefined {
   if (provider === LOOPBACK_CONNECTION_SOURCE.GOOGLE) return LOOPBACK_CONNECTION_SOURCE.GOOGLE;
+
   if (provider === LOOPBACK_CONNECTION_SOURCE.GITHUB) return LOOPBACK_CONNECTION_SOURCE.GITHUB;
+
   return undefined;
 }
 
@@ -286,13 +288,16 @@ export class AccountSessionManager {
 
   cancelSignIn(): void {
     const standing = this.#lifecycle;
+
     if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) {
       // A press during the wait withdraws every sign-in waiting, and a fresh
       // round of presses stands for any begun after it.
       standing.presses.withdrawn = true;
       this.#move({ ...standing, presses: { withdrawn: false } });
+
       return;
     }
+
     if (standing.kind !== ACCOUNT_LIFECYCLE.IDLE) standing.cancel();
   }
 
@@ -308,12 +313,14 @@ export class AccountSessionManager {
    */
   #endTrip(): void {
     const standing = this.#lifecycle;
+
     if (
       standing.kind !== ACCOUNT_LIFECYCLE.SIGNING_IN &&
       standing.kind !== ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN
     ) {
       return;
     }
+
     this.#move(IDLE);
     standing.cancel();
   }
@@ -330,6 +337,7 @@ export class AccountSessionManager {
       Effect.withFiber((fiber) =>
         Effect.sync(() => {
           const standing = this.#lifecycle;
+
           if (standing.kind !== ACCOUNT_LIFECYCLE.IDLE && standing.fiber === fiber) {
             this.#move(IDLE);
           }
@@ -348,6 +356,7 @@ export class AccountSessionManager {
       // on disk and loops still running. The revocation after it is the
       // remote's own business and may be cut like any other call.
       const stored = yield* Effect.uninterruptible(this.#clearAccount());
+
       if (options.revokeRemote && stored?.refreshToken) {
         yield* reportingFailure(
           this.#options.client.revoke(stored.refreshToken),
@@ -355,6 +364,7 @@ export class AccountSessionManager {
           this.#options.report,
         );
       }
+
       if (options.revokeRemote && stored?.sessionToken) {
         yield* reportingFailure(
           this.#options.client.endSession(stored.sessionToken),
@@ -362,6 +372,7 @@ export class AccountSessionManager {
           this.#options.report,
         );
       }
+
       return this.#account;
     });
   }
@@ -375,6 +386,7 @@ export class AccountSessionManager {
       this.#account = { status: ACCOUNT_STATUS.SIGNED_OUT };
       yield* this.#publishChange();
       const stored = yield* this.#options.store.readAccount();
+
       // The clearing and the capability stop run together rather than in a
       // fixed order: what the sign-out guarantees is that both have settled
       // before the account it reports is the cleared one.
@@ -382,8 +394,10 @@ export class AccountSessionManager {
         [this.#options.store.clearAccount(), this.#options.stopCapabilities],
         { concurrency: 2 },
       );
+
       this.#account = cleared;
       yield* this.#publishChange();
+
       return stored;
     });
   }
@@ -395,6 +409,7 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       // Note that the account is held from before it is read: a sign-out or sign-in landing while the deletion runs stops it before it asks a session or a delete for whatever account stands then.
       const generation = this.#generation;
+
       const stillHeld = Effect.suspend(() =>
         this.#isCurrent(generation)
           ? Effect.void
@@ -404,22 +419,28 @@ export class AccountSessionManager {
               }),
             ),
       );
+
       const stored = yield* this.#options.store.readAccount();
+
       if (!stored) {
         return yield* Effect.fail(
           new NoStoredAccount({ message: "No stored account credential to delete with" }),
         );
       }
+
       yield* stillHeld;
       // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service finds the one held too old, a sign-in through the browser's hand-off page each.
       const held = stored.sessionToken ?? (yield* this.#freshSession());
       yield* stillHeld;
       const deleted = yield* Effect.result(this.#deleteHosted(held));
+
       if (Result.isFailure(deleted)) {
         if (deletionSessionRefused(deleted.failure)) {
           // Note that a session the service no longer takes may be one a lost answer's deletion ended, or one that lapsed, so the account is looked for first: a sign-in for an account that is gone would make a new one.
           const standing = yield* this.#accountStanding(stored, generation);
+
           if (standing === ACCOUNT_STANDING.GONE) return yield* this.signOut();
+
           if (standing === ACCOUNT_STANDING.UNKNOWN) {
             return yield* new DeletionUnconfirmed({
               message:
@@ -429,11 +450,13 @@ export class AccountSessionManager {
         } else if (!deletionNeedsNewSession(deleted.failure)) {
           return yield* Effect.fail(deleted.failure);
         }
+
         yield* stillHeld;
         const fresh = yield* this.#freshSession();
         yield* stillHeld;
         yield* this.#deleteHosted(fresh);
       }
+
       return yield* this.signOut();
     });
   }
@@ -441,23 +464,30 @@ export class AccountSessionManager {
   refresh(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const stored = yield* this.#options.store.readAccount();
+
       if (!stored || !this.#options.requiresAccount) return;
       const generation = this.#generation;
+
       const identity = yield* Effect.result(
         this.#options.client.userInfo(stored.accessToken, stored.provider),
       );
+
       if (Result.isSuccess(identity)) {
         if (sameIdentity(stored, identity.success)) return;
+
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(stored, identity.success))))
           return;
         yield* this.#publishChange();
+
         return;
       }
+
       if (!accessTokenNeedsRefresh(identity.failure)) return;
       yield* this.renewOnce();
       // Note that the launch's refresh holds nothing a teardown needs, so it
       // alone waits for the sign-out a refused renewal started.
       const standing = this.#lifecycle;
+
       if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) yield* Fiber.await(standing.fiber);
     });
   }
@@ -479,8 +509,10 @@ export class AccountSessionManager {
       // Note that the generation is taken before the read, so tokens read across a sign-in never pass for the account that signed in.
       const generation = this.#generation;
       const stored = yield* this.#options.store.readAccount();
+
       if (!stored || !this.#options.requiresAccount || !this.#isCurrent(generation)) return;
       const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
+
       if (Result.isFailure(renewed)) {
         if (
           accountFailureAction(renewed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT &&
@@ -494,8 +526,10 @@ export class AccountSessionManager {
           const fiber = yield* Effect.forkDetach(this.#settling(this.signOut()));
           this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_OUT, fiber, presses: { withdrawn: false } });
         }
+
         return;
       }
+
       const tokens = renewed.success;
       // The renewed tokens are already stored by the time the identity read
       // below is made, so a read that fails leaves the account signed in on
@@ -505,6 +539,7 @@ export class AccountSessionManager {
           if (!(yield* this.#storeCurrent(generation, { ...stored, ...tokens }))) return;
           const next = yield* this.#options.client.userInfo(tokens.accessToken, stored.provider);
           const merged = mergedIdentity({ ...stored, ...tokens }, next);
+
           if (!(yield* this.#storeCurrent(generation, merged))) return;
           yield* this.#publishChange();
         }),
@@ -532,6 +567,7 @@ export class AccountSessionManager {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
         const standing = this.#lifecycle;
+
         // Note that a sign-out a refused renewal started is let finish first,
         // because its capability stop and cleared account would otherwise
         // land over the session this sign-in starts. A cancel pressed during
@@ -540,13 +576,18 @@ export class AccountSessionManager {
         if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) {
           const presses = standing.presses;
           yield* restore(Fiber.await(standing.fiber));
+
           if (presses.withdrawn) return this.#account;
+
           return yield* restore(this.beginSignIn(provider));
         }
+
         if (this.#account.status === ACCOUNT_STATUS.SIGNED_IN) return this.#account;
+
         if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN) {
           return yield* restore(Fiber.join(standing.fiber));
         }
+
         // A sign-in again only stands over a signed-in account, so one still
         // standing here is over an account already gone.
         this.#endTrip();
@@ -556,6 +597,7 @@ export class AccountSessionManager {
         const consent = this.#consent(provider, generation);
         const fiber = yield* Effect.forkDetach(this.#settling(this.#trip(consent, generation)));
         this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_IN, fiber, cancel: () => consent.cancel() });
+
         return yield* restore(Fiber.join(fiber));
       }),
     );
@@ -577,6 +619,7 @@ export class AccountSessionManager {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
         const standing = this.#lifecycle;
+
         // Note that an account a refused renewal is signing out is as good as
         // gone, so the ask waits on that sign-out as a first sign-in does
         // rather than opening a trip the sign-out would end.
@@ -585,18 +628,24 @@ export class AccountSessionManager {
           this.#account.status !== ACCOUNT_STATUS.SIGNED_IN
         ) {
           const account = yield* restore(this.beginSignIn(provider));
+
           return account.status === ACCOUNT_STATUS.SIGNED_IN;
         }
+
         if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN) {
           if (standing.provider !== provider) return false;
+
           return yield* restore(Fiber.join(standing.fiber));
         }
+
         // A first sign-in that already landed may still be finishing its
         // trip; the trip again is taken once it ends.
         if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN) {
           yield* restore(Fiber.await(standing.fiber));
+
           return yield* restore(this.signInAgain(provider));
         }
+
         const consent = this.#consent(provider, this.#generation, { again: true });
         const fiber = yield* Effect.forkDetach(this.#settling(this.#tripAgain(consent)));
         this.#move({
@@ -605,6 +654,7 @@ export class AccountSessionManager {
           fiber,
           cancel: () => consent.cancel(),
         });
+
         return yield* restore(Fiber.join(fiber));
       }),
     );
@@ -613,8 +663,11 @@ export class AccountSessionManager {
   #tripAgain(consent: LoopbackConsent<AccountSnapshot>): Effect.Effect<boolean, SignInFailed> {
     return Effect.gen(function* () {
       const outcome = yield* Effect.scoped(consent.signInEffect());
+
       if (!("reason" in outcome)) return true;
+
       if (outcome.reason === LOOPBACK_CONSENT_CANCELED) return false;
+
       return yield* Effect.fail(signInFailed(outcome));
     });
   }
@@ -625,15 +678,20 @@ export class AccountSessionManager {
   ): Effect.Effect<AccountSnapshot, SignInFailed> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* Effect.scoped(consent.signInEffect());
+
       if (!("reason" in outcome)) {
         yield* this.#publishChange();
+
         return this.#account;
       }
+
       if (this.#isCurrent(generation)) yield* this.signOut();
+
       // A withdrawn sign-in — the developer's own press, or a later attempt
       // taking the generation out from under this one — is an ordinary end.
       // Anything else is a failure the panel has to be able to report.
       if (outcome.reason === LOOPBACK_CONSENT_CANCELED) return this.#account;
+
       return yield* Effect.fail(signInFailed(outcome));
     });
   }
@@ -650,12 +708,17 @@ export class AccountSessionManager {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
         if (this.#account.status !== ACCOUNT_STATUS.SIGNED_IN) return false;
+
         const fiber =
           this.#session?.fiber ??
           (yield* this.#startSession(this.#generation, (url) => this.#options.openExternal(url)));
+
         const outcome = yield* restore(Fiber.join(fiber));
+
         if (!("reason" in outcome)) return true;
+
         if (outcome.reason === LOOPBACK_CONSENT_CANCELED) return false;
+
         return yield* Effect.fail(signInFailed(outcome));
       }),
     );
@@ -672,12 +735,16 @@ export class AccountSessionManager {
   #continueToSession(): Effect.Effect<string | undefined> {
     return Effect.gen({ self: this }, function* () {
       const stored = yield* this.#options.store.readAccount();
+
       if (!stored || stored.sessionToken !== undefined || this.#session) return undefined;
       const page = yield* Deferred.make<string | undefined>();
+
       const settle = (url: string | undefined) => {
         Deferred.doneUnsafe(page, Exit.succeed(url));
       };
+
       yield* this.#startSession(this.#generation, settle, () => settle(undefined));
+
       return yield* Deferred.await(page);
     });
   }
@@ -691,6 +758,7 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       const consent = this.#sessionConsent(generation, openExternal);
       const cancel = () => consent.cancel();
+
       const fiber = yield* Effect.forkDetach(
         Effect.scoped(consent.signInEffect()).pipe(
           Effect.ensuring(
@@ -701,7 +769,9 @@ export class AccountSessionManager {
           ),
         ),
       );
+
       this.#session = { fiber, cancel };
+
       return fiber;
     });
   }
@@ -746,7 +816,9 @@ export class AccountSessionManager {
         state: input.state,
         codeVerifier: input.codeVerifier,
       });
+
       const stored = yield* this.#options.store.readAccount();
+
       const ours =
         stored !== undefined &&
         sameAccount(stored, {
@@ -754,6 +826,7 @@ export class AccountSessionManager {
           email: session.email,
           provider: stored.provider,
         });
+
       const kept =
         stored !== undefined &&
         ours &&
@@ -762,12 +835,14 @@ export class AccountSessionManager {
           id: session.userId,
           sessionToken: session.sessionToken,
         }));
+
       if (kept) return this.#account;
       yield* reportingFailure(
         this.#options.client.endSession(session.sessionToken),
         "Refused account session sign-out failed",
         this.#options.report,
       );
+
       return { reason: ours ? LOOPBACK_CONSENT_CANCELED : OTHER_BROWSER_ACCOUNT };
     }).pipe(Effect.catch((error) => Effect.succeed({ reason: error.message })));
   }
@@ -822,21 +897,26 @@ export class AccountSessionManager {
         Effect.gen({ self: this }, function* () {
           const identity = yield* this.#options.client.userInfo(tokens.accessToken, provider);
           const replaced = options.again ? yield* this.#options.store.readAccount() : undefined;
+
           if (!this.#isCurrent(generation)) return yield* Effect.fail(new SignInCanceled());
+
           if (replaced !== undefined && !sameAccount(replaced, identity)) {
             return yield* Effect.fail(
               new SignInFailed({ failure: SIGN_IN_FAILURE.UNFINISHED, message: OTHER_ACCOUNT }),
             );
           }
+
           // Note that a sign-in again takes the generation from the session it
           // replaces, so a refresh of the old one still out stores nothing over it.
           const current = options.again ? ++this.#generation : generation;
           // The same person's session outlives a sign-in again, which renews
           // only the OAuth grant.
           const session = replaced?.sessionToken ? { sessionToken: replaced.sessionToken } : {};
+
           if (!(yield* this.#storeCurrent(current, { ...tokens, ...identity, ...session }))) {
             return yield* Effect.fail(new SignInCanceled());
           }
+
           if (replaced?.refreshToken) {
             yield* reportingFailure(
               this.#options.client.revoke(replaced.refreshToken),
@@ -844,8 +924,11 @@ export class AccountSessionManager {
               this.#options.report,
             );
           }
+
           yield* this.#options.startCapabilities;
+
           if (!this.#isCurrent(current)) return yield* Effect.fail(new SignInCanceled());
+
           return this.#account;
         }),
       revoke: (refreshToken) => this.#options.client.revoke(refreshToken),
@@ -864,9 +947,11 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       if (!this.#isCurrent(generation)) return false;
       const next = yield* this.#options.store.setAccount(stored);
+
       if (!this.#isCurrent(generation)) return false;
       this.#account = next;
       yield* this.#publishChange();
+
       return true;
     });
   }
@@ -886,6 +971,7 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       if (!this.#isCurrent(generation)) return ACCOUNT_STANDING.UNKNOWN;
       const standing = yield* this.#readStanding(stored, generation);
+
       return this.#isCurrent(generation) ? standing : ACCOUNT_STANDING.UNKNOWN;
     });
   }
@@ -904,23 +990,32 @@ export class AccountSessionManager {
   #readStanding(stored: StoredAccount, generation: number): Effect.Effect<AccountStanding> {
     return Effect.gen({ self: this }, function* () {
       const client = this.#options.client;
+
       const standingOf = (failure: AccountClientFailure) =>
         accountNotFound(failure) ? ACCOUNT_STANDING.GONE : ACCOUNT_STANDING.UNKNOWN;
+
       const held = yield* this.#options.store.readAccount();
+
       // Note that a held account other than the one the deletion was asked for says nothing of it.
       if (held === undefined || !sameAccount(stored, held)) return ACCOUNT_STANDING.UNKNOWN;
       const read = yield* Effect.result(client.userInfo(held.accessToken, held.provider));
+
       if (Result.isSuccess(read)) return identityStanding(stored, read.success);
+
       if (!accessTokenNeedsRefresh(read.failure)) return standingOf(read.failure);
+
       // Note that a renewal is never started for an account that replaced this one while its identity was read, since a refused one signs that account out.
       if (!this.#isCurrent(generation)) return ACCOUNT_STANDING.UNKNOWN;
       yield* this.renewOnce();
       const renewed = yield* this.#options.store.readAccount();
+
       // A renewal that stored nothing new was refused or did not answer, which says nothing of the account.
       if (renewed === undefined || renewed.accessToken === held.accessToken) {
         return ACCOUNT_STANDING.UNKNOWN;
       }
+
       const again = yield* Effect.result(client.userInfo(renewed.accessToken, renewed.provider));
+
       return Result.isSuccess(again)
         ? identityStanding(stored, again.success)
         : standingOf(again.failure);
@@ -936,6 +1031,7 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       const landed = yield* this.obtainSession().pipe(Effect.orElseSucceed(() => false));
       const stored = landed ? yield* this.#options.store.readAccount() : undefined;
+
       if (stored?.sessionToken === undefined) {
         return yield* Effect.fail(
           new NoStoredAccount({
@@ -943,6 +1039,7 @@ export class AccountSessionManager {
           }),
         );
       }
+
       return stored.sessionToken;
     });
   }

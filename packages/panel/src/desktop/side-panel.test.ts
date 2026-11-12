@@ -67,6 +67,7 @@ const THIRD = agent("1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c", "Expiry job", 3);
 /** The task's agents, the first two on one pull request and the third on its own. */
 function agents(): AgentsControl {
   const shared = pullRequest(41, "Teammate invitations");
+
   return {
     ...tasksControl().agents,
     agents: [FIRST, SECOND, THIRD],
@@ -98,11 +99,13 @@ test('an agent\'s pull request chip opens the one tab the "+" offers for its pul
 test("an agent's pull request opens in the one Pull request tab of its pull request, on the overview or on the files", () => {
   const control = agents();
   const asked: unknown[] = [];
+
   const panel = {
     changes: [],
     onOpen: (tab: SidePanelTab) => asked.push(["open", tab]),
     onPullRequestView: (tab: SidePanelTab, view: string) => asked.push(["view", tab, view]),
   };
+
   showPullRequest(panel, control, SECOND.id, PULL_REQUEST_VIEW.CONVERSATION);
   showPullRequest(panel, control, THIRD.id, PULL_REQUEST_VIEW.FILES);
   assert.deepEqual(asked, [
@@ -116,11 +119,13 @@ test("an agent's pull request opens in the one Pull request tab of its pull requ
 test("a pull request named by its number opens a Pull request tab of its own for it, unless it is the agent's own", () => {
   const control = agents();
   const asked: unknown[] = [];
+
   const panel = {
     changes: [],
     onOpen: (tab: SidePanelTab) => asked.push(["open", tab]),
     onPullRequestView: (tab: SidePanelTab, view: string) => asked.push(["view", tab, view]),
   };
+
   showPullRequest(panel, control, THIRD.id, PULL_REQUEST_VIEW.CONVERSATION, 40);
   showPullRequest(panel, control, THIRD.id, PULL_REQUEST_VIEW.CONVERSATION, 42);
   assert.deepEqual(asked, [
@@ -139,15 +144,18 @@ test("a pull request named by its number opens a Pull request tab of its own for
 test("an archived agent's merged pull request is offered as any other, in the order its agent started", () => {
   const read = agents();
   const merged = { ...pullRequest(40, "Invite emails"), state: PULL_REQUEST_STATE.MERGED };
+
   const gone = {
     ...agent("2f4d6b8c-0e3a-4c7f-9b2d-4f6a8c0e2b4d", "Invite emails", 0),
     archivedAt: 5,
   };
+
   const control = {
     ...read,
     archived: [gone],
     pullRequests: new Map([...read.pullRequests, [gone.id, merged]]),
   };
+
   assert.deepEqual(
     changesOffers(control).map((offer) => [offer.agentId, offer.pullRequest.state]),
     [
@@ -211,9 +219,11 @@ test("a pull request's card names the coding agent whose it is on a row by its t
     container.querySelector(".ui-hover-card-note")?.textContent,
     "+210 −14 in 6 files · Checks passing",
   );
+
   const named = container.querySelector<HTMLButtonElement>(
     '.ui-hover-card-row button[data-actor-ref][data-kind="agent"]',
   );
+
   assert.ok(named, "the agent is named as an actor");
   assert.equal(named.textContent, "Expiry job");
 
@@ -233,6 +243,7 @@ test("the phone's Activity list hangs each tab's card on its row, as the tab han
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const tab: SidePanelTab = changesTab(THIRD.id);
+
   const strip: DrawnTab[] = [
     {
       tab,
@@ -246,6 +257,7 @@ test("the phone's Activity list hangs each tab's card on its row, as the tab han
       close: () => undefined,
     },
   ];
+
   act(() =>
     root.render(
       withQueryClient(
@@ -253,9 +265,11 @@ test("the phone's Activity list hangs each tab's card on its row, as the tab han
       ),
     ),
   );
+
   const row =
     container.querySelector<HTMLElement>("button.ui-list-row-main") ??
     assert.fail("the tab's row is drawn");
+
   restOn(row);
   assert.equal(
     document.querySelector(".ui-tooltip-card [data-pull-request-card]")?.textContent,
@@ -270,10 +284,13 @@ test("a panel shut by going to another stop is drawn there no longer, rather tha
   const root = createRoot(container);
   const shut = tasksControl().sidePanel;
   let drawing: SidePanelDrawing | undefined;
+
   const Drawn = ({ panel }: { panel: SidePanelControl }) => {
     drawing = useSidePanelDrawing(panel);
+
     return null;
   };
+
   const draw = (panel: SidePanelControl) => act(() => root.render(createElement(Drawn, { panel })));
   draw({ ...shut, open: true, stop: TASK, tab: changesTab(FIRST.id) });
   draw({ ...shut, open: false, stop: "0e9c4b1d-6a2f-4e3b-9c7d-1f2a3b4c5d6e" });

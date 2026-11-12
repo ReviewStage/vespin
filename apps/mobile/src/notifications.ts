@@ -23,6 +23,7 @@
 
 import {
   INBOX_PUSH_ACTION,
+  inboxPushOf,
   inboxPushResponseOf,
   PUSH_CATEGORY,
 } from "@repo/features/inbox-push-wire";
@@ -70,19 +71,22 @@ export function useInboxNotifications(signedIn: boolean): void {
   const router = useRouter();
   const response = useLastNotificationResponse();
   useEffect(() => {
-    setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS).catch((error: unknown) =>
-      console.error("The reply's notification category was not registered.", error),
+    setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS).catch((cause: unknown) =>
+      console.error("The reply's notification category was not registered.", cause),
     );
   }, []);
   useEffect(() => {
     if (!signedIn || response === undefined || response === null) return;
     // Note that the response is let go first, so a later render never opens it twice.
     clearLastNotificationResponse();
-    const opened = inboxPushResponseOf(response.notification.request.content.data, {
+
+    const opened = inboxPushResponseOf(inboxPushOf(response.notification.request.content.data), {
       actionId: response.actionIdentifier,
       ...(response.userText === undefined ? undefined : { text: response.userText }),
     });
+
     if (opened === undefined) return;
+
     if (opened.press !== undefined) pressFromNotification(opened.press);
     router.push(opened.route);
   }, [signedIn, response, router]);
@@ -92,6 +96,6 @@ export function useInboxNotifications(signedIn: boolean): void {
 export function clearAccountNotifications(): Promise<void> {
   return Promise.all([dismissAllNotificationsAsync(), setBadgeCountAsync(0)]).then(
     () => undefined,
-    (error: unknown) => console.error("The account's notifications were not cleared.", error),
+    (cause: unknown) => console.error("The account's notifications were not cleared.", cause),
   );
 }

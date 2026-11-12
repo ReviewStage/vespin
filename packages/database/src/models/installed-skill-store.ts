@@ -174,6 +174,7 @@ function ownPersonal(userId: string): SQL | undefined {
  */
 function allowedTo(userId: string, access: InstalledSkillAccess, id?: string): SQL | undefined {
   const workspace = installedSkill.organizationId;
+
   const rule =
     access === INSTALLED_SKILL_ACCESS.MANAGE
       ? or(
@@ -181,6 +182,7 @@ function allowedTo(userId: string, access: InstalledSkillAccess, id?: string): S
           memberOf(userId, workspace, MANAGING_ROLES),
         )
       : memberOf(userId, workspace);
+
   return and(
     id === undefined ? undefined : eq(installedSkill.id, id),
     or(ownPersonal(userId), and(eq(installedSkill.scope, INSTALLED_SKILL_SCOPE.WORKSPACE), rule)),
@@ -212,9 +214,11 @@ function refusalOf(files: readonly InstalledSkillFile[]): Option.Option<Installe
   if (!files.some((file) => file.path === INSTALLED_SKILL_MAIN_FILE)) {
     return Option.some(INSTALLED_SKILL_REFUSAL.NO_SKILL_FILE);
   }
+
   if (holdsFileTooLarge(files.map((file) => file.bytes.byteLength))) {
     return Option.some(INSTALLED_SKILL_REFUSAL.TOO_LARGE);
   }
+
   return Option.none();
 }
 
@@ -371,12 +375,15 @@ function groupedFiles(
   rows: readonly (typeof SkillFileRowSchema.Type)[],
 ): readonly InstalledSkillWithFiles[] {
   const skills = new Map<string, { skill: InstalledSkill; files: InstalledSkillFile[] }>();
+
   for (const { filePath, fileBytes, ...skill } of rows) {
     const held = skills.get(skill.id) ?? { skill, files: [] };
+
     if (filePath !== null && fileBytes !== null)
       held.files.push({ path: filePath, bytes: fileBytes });
     skills.set(skill.id, held);
   }
+
   return [...skills.values()].map(({ skill, files }) => ({ ...skill, files }));
 }
 
@@ -403,14 +410,18 @@ export function readInstalledSkill(
 ): TaskStoreEffect<Option.Option<InstalledSkillRead>> {
   return Effect.map(findSkillWithFiles({ userId, id, access }), (rows) => {
     const [first] = rows;
+
     if (first === undefined) return Option.none();
     const { filePath: _path, fileSize: _size, mainBytes: _main, ...skill } = first;
+
     const files = rows.flatMap((row) =>
       row.filePath === null || row.fileSize === null
         ? []
         : [{ path: row.filePath, bytes: row.fileSize }],
     );
+
     const main = rows.find((row) => row.mainBytes !== null)?.mainBytes ?? new Uint8Array();
+
     return Option.some({ ...skill, skillFile: main, files });
   });
 }
@@ -432,15 +443,20 @@ export function installSkill(
 > {
   return Effect.gen(function* () {
     yield* checkedFiles(made.files);
+
     const organizationId =
       made.owner.scope === INSTALLED_SKILL_SCOPE.WORKSPACE ? made.owner.organizationId : null;
+
     return yield* inTransaction(
       Effect.gen(function* () {
         if (organizationId !== null) {
           const membership = yield* findMembership({ userId, organizationId });
+
           if (membership.length === 0) return Option.none();
         }
+
         const now = yield* DateTime.nowAsDate;
+
         const [row] = yield* insertSkill({
           ownerUserId: organizationId === null ? userId : null,
           installedByUserId: userId,
@@ -452,8 +468,10 @@ export function installSkill(
           source: made.source,
           now,
         });
+
         if (row === undefined) return yield* new InstalledSkillNameTaken({ name: made.name });
         yield* insertFiles({ skillId: row.id, files: made.files });
+
         return Option.some(row);
       }),
     );

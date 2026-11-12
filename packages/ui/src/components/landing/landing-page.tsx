@@ -1,4 +1,5 @@
 import { type ReactNode, useId } from "react";
+import type { CodexArt } from "../../marks/harness-mark.js";
 import { MarkOrb } from "../../marks/mark-orb.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
 import { LANDING_SCENE, type LandingScene, LandingSceneView } from "./landing-scenes.js";
@@ -40,20 +41,25 @@ export function LandingSection({
   lead,
   scene,
   aside,
+  codexArt,
 }: {
   title: ReactNode;
   lead: ReactNode;
   scene: LandingScene;
   /** What stands beside the stage, such as `LandingFacts`; none lets the stage take the column. */
   aside?: ReactNode;
+  /** Codex's picture as the site serves it, which a scene naming Codex draws its mark from. */
+  codexArt?: CodexArt | undefined;
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
+
   const stage = (
     <div className="ui-landing-stage" data-scene={scene}>
       <LandingField pattern={SCENE_FIELD[scene]} />
-      <LandingSceneView scene={scene} />
+      <LandingSceneView scene={scene} codexArt={codexArt} />
     </div>
   );
+
   return (
     <section className="ui-landing-section" aria-labelledby={titleId}>
       <SiteRule />
@@ -155,6 +161,7 @@ export function LandingPage({
   footer: ReactNode;
 }): React.JSX.Element {
   const closeId = `${useId()}close`;
+
   return (
     <SiteFrame bar={bar} barCall={barCall} footer={footer}>
       <main>

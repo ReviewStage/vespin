@@ -54,12 +54,14 @@ function shot(name: string): FileChip {
 }
 
 const FIRST = shot("first.png");
+
 /** A recording, drawn by the video player under its bar. */
 const VIDEO: FileChip = {
   name: "recording.webm",
   mediaType: "video/webm",
   url: "data:video/webm;base64,GkXfow==",
 };
+
 const SECOND = shot("second.png");
 
 const roots: Root[] = [];
@@ -96,6 +98,7 @@ function opened(opening: ImageOpening = IMAGE_OPENING.FITTED, room: ShellRoom = 
   const root = createRoot(container);
   roots.push(root);
   const state: ViewerState = { files: [FIRST, SECOND], at: 0, closed: false };
+
   const draw = () =>
     act(() =>
       root.render(
@@ -119,11 +122,14 @@ function opened(opening: ImageOpening = IMAGE_OPENING.FITTED, room: ShellRoom = 
         ),
       ),
     );
+
   draw();
+
   const picture = () => {
     const image =
       document.querySelector<HTMLImageElement>(".ui-zoom-image") ??
       assert.fail("the viewer draws the picture");
+
     const frame = image.parentElement ?? assert.fail("the picture stands in its frame");
     laidOut(frame, {
       clientWidth: 800,
@@ -140,34 +146,45 @@ function opened(opening: ImageOpening = IMAGE_OPENING.FITTED, room: ShellRoom = 
       naturalHeight: 1200,
       setPointerCapture: () => undefined,
     });
+
     return image;
   };
+
   const card = () =>
     document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("the viewer is open");
+
   const fire = (target: Element, event: Event) => act(() => target.dispatchEvent(event));
+
   const pointer = (type: string, x: number, y: number, buttons: number) =>
     new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0, buttons });
+
   /** A finger, told apart from any other by `id`, as a touch screen's pointer events carry it. */
   const finger = (type: string, id: number, x: number, y: number) => {
     const event = pointer(type, x, y, type === "pointerup" ? 0 : 1);
     Object.defineProperty(event, "pointerId", { value: id });
     Object.defineProperty(event, "pointerType", { value: "touch" });
+
     return event;
   };
+
   const key = (key: string) =>
     fire(card(), new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+
   const press = (label: string) => {
     const button =
       card().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ??
       assert.fail(`the header offers ${label}`);
+
     act(() => button.click());
   };
+
   /** The files and the place shown handed in anew, as the place opening the viewer does when a picture lands. */
   const show = (files: readonly FileChip[], at: number) => {
     state.files = files;
     state.at = at;
     draw();
   };
+
   return { state, picture, fire, pointer, finger, key, press, show };
 }
 
@@ -176,7 +193,9 @@ function drawn(image: HTMLImageElement): ImageView {
   const match = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/u.exec(
     image.style.transform,
   );
+
   assert.ok(match, `a transform is drawn: ${image.style.transform}`);
+
   return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 }
 
@@ -184,6 +203,7 @@ test("a pinch on the picture zooms it about the fingers, and one the other way f
   const viewer = opened();
   const image = viewer.picture();
   assert.equal(drawn(image).scale, 1, "it opens fitted");
+
   const pinch = (deltaY: number) =>
     new WheelEvent("wheel", {
       bubbles: true,
@@ -193,11 +213,13 @@ test("a pinch on the picture zooms it about the fingers, and one the other way f
       clientX: 600,
       clientY: 250,
     });
+
   const apart = pinch(-30);
   viewer.fire(image, apart);
   assert.ok(drawn(image).scale > 1, "a pinch apart zooms in");
   assert.ok(drawn(image).x < 0, "toward the point under the fingers, right of center");
   assert.ok(apart.defaultPrevented, "the window itself is not zoomed by it");
+
   for (let each = 0; each < 5; each += 1) viewer.fire(image, pinch(40));
   assert.equal(drawn(image).scale, 1, "a pinch together fits it again");
 });
@@ -232,12 +254,14 @@ test("a pinch whose second finger lands on the frame around the picture leaves i
     const spread = drawn(image);
     assert.equal(spread.scale, 2, "the pinch zooms it");
     const lastUp = firstUp === 1 ? 2 : 1;
+
     for (const id of [firstUp, lastUp]) {
       viewer.fire(
         id === 1 ? image : frame,
         viewer.finger("pointerup", id, id === 1 ? 500 : 900, 250),
       );
     }
+
     viewer.fire(image, viewer.pointer("click", 500, 250, 0));
     assert.deepEqual(
       drawn(image),
@@ -305,9 +329,12 @@ test("a zoomed picture is moved by a drag, and the press the drag ends on leaves
 
 test("on a phone a finger swiped sideways walks the files, one let go slowly short of a quarter of the way stays and is no press, and one on a zoomed picture or a video's scrubber moves that instead", () => {
   const viewer = opened(IMAGE_OPENING.FITTED, SHELL_ROOM.NARROW);
+
   const surface =
     document.querySelector<HTMLElement>(".attachment-viewer") ?? assert.fail("the viewer");
+
   laidOut(surface, { getBoundingClientRect: () => DOMRect.fromRect({ width: 400, height: 800 }) });
+
   /** A finger going down on `target` at `from` and lifted at `to`, `ms` milliseconds later, in four even moves. */
   const swipe = (from: number, to: number, ms: number, target: Element = viewer.picture()) => {
     const touch = (type: string, x: number, at: number) => {
@@ -320,15 +347,20 @@ test("on a phone a finger swiped sideways walks the files, one let go slowly sho
         isPrimary: true,
         buttons: type === "pointerup" ? 0 : 1,
       });
+
       Object.defineProperty(event, "timeStamp", { value: at });
       viewer.fire(target, event);
     };
+
     touch("pointerdown", from, 0);
+
     for (let each = 1; each <= 4; each += 1) {
       touch("pointermove", from + ((to - from) * each) / 4, (ms * each) / 4);
     }
+
     touch("pointerup", to, ms);
   };
+
   swipe(300, 100, 120);
   assert.equal(viewer.state.at, 1, "a swipe left shows the next file");
   swipe(100, 300, 120);
@@ -353,8 +385,10 @@ test("on a phone a finger swiped sideways walks the files, one let go slowly sho
   viewer.show([VIDEO, FIRST], 0);
   // The bar stands once the video's size is read, as a browser reads it.
   act(() => document.querySelector("video")?.dispatchEvent(new Event("loadedmetadata")));
+
   const scrubber =
     document.querySelector('[data-slot="slider-thumb"]') ?? assert.fail("the video's scrubber");
+
   laidOut(scrubber.parentElement ?? assert.fail("the scrubber's control"), {
     setPointerCapture: () => undefined,
     releasePointerCapture: () => undefined,
@@ -367,8 +401,10 @@ test("on a phone a finger swiped sideways walks the files, one let go slowly sho
 test("a two-finger scroll moves a zoomed picture and leaves a fitted one where it is", () => {
   const viewer = opened();
   const image = viewer.picture();
+
   const scroll = () =>
     new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaX: 30, deltaY: 10 });
+
   viewer.fire(image, scroll());
   assert.deepEqual(drawn(image), { scale: 1, x: 0, y: 0 });
   viewer.press("Zoom in");
@@ -431,8 +467,10 @@ test("a frame grown past the zoomed picture centers it again", () => {
 test("a mouse counting its wheel in lines zooms by about as much as one counting pixels", () => {
   const viewer = opened();
   const image = viewer.picture();
+
   const notch = (deltaY: number, deltaMode: number) =>
     new WheelEvent("wheel", { bubbles: true, cancelable: true, ctrlKey: true, deltaY, deltaMode });
+
   viewer.fire(image, notch(-100, WheelEvent.DOM_DELTA_PIXEL));
   const byPixels = drawn(image).scale;
   viewer.key("0");
@@ -443,6 +481,7 @@ test("a mouse counting its wheel in lines zooms by about as much as one counting
 test("a wheel counting pages moves a zoomed picture by the frame's own width across and height down", () => {
   const viewer = opened();
   const image = viewer.picture();
+
   for (const _ of [1, 2, 3]) viewer.key("=");
   const page = { bubbles: true, cancelable: true, deltaMode: WheelEvent.DOM_DELTA_PAGE };
   viewer.fire(image, new WheelEvent("wheel", { ...page, deltaX: -1 }));
@@ -453,16 +492,20 @@ test("a wheel counting pages moves a zoomed picture by the frame's own width acr
 
 test("the zoom buttons name the bare keys that do the same", () => {
   opened();
+
   const named = (label: string) =>
     document.querySelector(`button[aria-label="${label}"]`)?.getAttribute("aria-keyshortcuts");
+
   assert.equal(named("Zoom in"), "=");
   assert.equal(named("Zoom out"), "-");
 });
 
 test("Previous, Next and Close name the arrows and Esc that do the same", () => {
   opened();
+
   const named = (label: string) =>
     document.querySelector(`button[aria-label="${label}"]`)?.getAttribute("aria-keyshortcuts");
+
   assert.equal(named("Previous file"), "ArrowLeft");
   assert.equal(named("Next file"), "ArrowRight");
   assert.equal(named("Close"), "Escape");
@@ -474,6 +517,7 @@ test("a text file opened over the window is drawn as every code is, numbered fro
     mediaType: "text/plain",
     url: `data:text/plain;base64,${btoa("const a = 1;\r\nconst b = 2;\r\n")}`,
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -498,11 +542,13 @@ test("a text file opened over a tab leaves the tab's find its own, the file's wo
   vi.stubGlobal("Highlight", Set);
   // jsdom lays nothing out, so a range has no box to scroll to.
   Range.prototype.getBoundingClientRect = () => new DOMRect();
+
   const notes: FileChip = {
     name: "notes.ts",
     mediaType: "text/plain",
     url: `data:text/plain;base64,${btoa("const seat = 1;\nconst seats = 2;\n")}`,
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -526,9 +572,11 @@ test("a text file opened over a tab leaves the tab's find its own, the file's wo
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
+
   const field =
     document.querySelector<HTMLInputElement>('.find-bar input[aria-label="Find"]') ??
     assert.fail("the tab's find bar stands open");
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, "seat");
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -559,10 +607,12 @@ test("Copy image puts the picture shown on the clipboard as its PNG, and its che
   viewer.press("Copy image");
   await act(async () => undefined);
   assert.deepEqual(copied, [PIXEL], "the PNG's own bytes, whatever the address says after them");
+
   const glyph = () =>
     document
       .querySelector('button[aria-label="Copy image"] .ui-copy-glyph')
       ?.getAttribute("data-state");
+
   assert.equal(glyph(), "copied");
   viewer.key("ArrowLeft");
   assert.equal(glyph(), "idle", "the picture walked to was not the one copied");
@@ -580,6 +630,7 @@ test("a picture held by its address alone is shown and zoomed, with no size, Cop
     mediaType: "image/*",
     url: "https://avatars.githubusercontent.com/u/1001?v=4&s=512",
   };
+
   const viewer = opened();
   viewer.show([photo], 0);
   assert.equal(viewer.picture().getAttribute("src"), photo.url);
@@ -592,11 +643,13 @@ test("a picture held by its address alone is shown and zoomed, with no size, Cop
 test("Copy text puts a text file's words on the clipboard and shows the check", async () => {
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
+
   const notes: FileChip = {
     name: "notes.ts",
     mediaType: "text/plain",
     url: `data:text/plain;base64,${btoa("const a = 1;\nconst b = 2;\n")}`,
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -612,9 +665,11 @@ test("Copy text puts a text file's words on the clipboard and shows the check", 
     ),
   );
   await wholeFileDrawn(document.body);
+
   const button =
     document.querySelector<HTMLButtonElement>('button[aria-label="Copy text"]') ??
     assert.fail("a text file offers Copy text");
+
   await act(async () => button.click());
 
   assert.deepEqual(copied, ["const a = 1;\nconst b = 2;\n"]);
@@ -622,10 +677,13 @@ test("Copy text puts a text file's words on the clipboard and shows the check", 
 
 test("on a phone the viewer's header is Close alone at its start, the file's name centered over its size, and one ⋯ at its end holding every other button; the arrow keys still walk the files", () => {
   const viewer = opened(IMAGE_OPENING.FITTED, SHELL_ROOM.NARROW);
+
   const head =
     document.querySelector<HTMLElement>('[role="dialog"] header') ?? assert.fail("a header");
+
   const named = (selector: string) =>
     [...head.querySelectorAll(selector)].map((button) => button.getAttribute("aria-label"));
+
   assert.deepEqual(named("button"), ["Close", "Attachment actions"], "one control in each corner");
   assert.equal(head.querySelector("h2")?.textContent, "first.png");
 
@@ -658,12 +716,14 @@ function textFile(name: string, words: string): FileChip {
 async function openedOver(file: FileChip, bundles: SideBundles): Promise<void> {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const viewer = createElement(AttachmentViewer, {
     files: [file],
     at: 0,
     onAt: () => undefined,
     onClose: () => undefined,
   });
+
   act(() => root.render(withQueryClient(onSideBundles(bundles, viewer))));
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
@@ -674,6 +734,7 @@ async function openedOver(file: FileChip, bundles: SideBundles): Promise<void> {
 test("a Mermaid file opened over the window is drawn as its diagram, zoomed and copied as a picture is", async () => {
   const code = "flowchart LR\n  Invite --> Join";
   const drawn = `data:image/svg+xml,${encodeURIComponent(code)}`;
+
   const diagram: DiagramModule = {
     draw: (asked) =>
       Promise.resolve({ kind: DIAGRAM_DRAWING.DRAWN, url: asked === code ? drawn : "" }),
@@ -693,9 +754,11 @@ test("a Mermaid file opened over the window is drawn as its diagram, zoomed and 
 
 test("a file that is no diagram opened over the window imports no diagram bundle", async () => {
   let imports = 0;
+
   const bundles = standInBundles({
     diagram: () => {
       imports += 1;
+
       return Promise.resolve({ draw: () => Promise.resolve({ kind: DIAGRAM_DRAWING.REFUSED }) });
     },
   });
@@ -715,7 +778,9 @@ const PDF: FileChip = {
 
 /** The PDF bundle standing in for pdf.js, which needs a worker jsdom cannot start: its pages drawn as the bytes and the worker handed it, or as what stands where it cannot open the file. */
 function pdfBundle(opens: boolean): PdfModule {
+  // SAFETY: the stand-in pages only compare the worker they are handed with this one, and never call it.
   const worker = {} as Worker;
+
   return {
     worker: () => worker,
     PdfPages: ({ base64, label, worker: handed, refused }) =>

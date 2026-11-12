@@ -18,9 +18,14 @@ const WEB_PORT = {
 export function webPageAddressOf(href: string): URL | undefined {
   if (!URL.canParse(href)) return undefined;
   const url = new URL(href);
+  // SAFETY: a protocol the table lacks reads undefined, which the line below answers.
   const port = WEB_PORT[url.protocol as keyof typeof WEB_PORT];
+
   if (port === undefined) return undefined;
+
   if (url.username !== "" || url.password !== "") return undefined;
+
   if (url.port !== "" && url.port !== port) return undefined;
+
   return url;
 }

@@ -28,6 +28,7 @@ const SANDBOX: PageSandbox = {
   key: Redacted.make("synthetic-preview-key-for-tests-only-00000"),
   appOrigins: ["https://app.test"],
 };
+
 const MEMBER = { userId: "user-1", agentId: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21" };
 const NOW = 1_000_000;
 
@@ -54,6 +55,7 @@ describe("preview links", () => {
       agentHead: "8c1a6a",
     });
     assert.deepEqual(previewNameOfHost(SANDBOX, `${host}.`), name);
+
     for (const other of [
       "vespin.page",
       "app.test",
@@ -79,6 +81,7 @@ describe("preview links", () => {
 
   it("returns only to a path of the preview's own", () => {
     assert.equal(previewReturnPath("/docs?x=1"), "/docs?x=1");
+
     for (const offSite of [
       "//evil.test",
       "/\\evil.test",

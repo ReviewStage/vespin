@@ -42,6 +42,7 @@ export const TASK_ASSIGNEE_INPUT = describeWire(taskAssigneeWrittenSchema, TASK_
 /** The account a call's assignee names: the person a mention link, whole or bare, is of; nothing for words that name no person. */
 export function assigneeIdOf(written: string): string | undefined {
   const mention = memberMentionOf(written);
+
   return mention?.kind === MENTION_KIND.PERSON ? mention.userId : undefined;
 }
 
@@ -51,7 +52,9 @@ export function assigneeMentionOf(
   step: string,
 ): string | null {
   const { assignee } = task;
+
   if (assignee === undefined) return null;
+
   return writtenMention(
     { kind: MENTION_KIND.PERSON, userId: assignee.userId },
     assignee.name,

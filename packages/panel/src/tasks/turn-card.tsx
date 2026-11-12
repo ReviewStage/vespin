@@ -92,20 +92,24 @@ interface RunEnding {
 function tokenRows(tokens: TurnTokens): readonly HoverCardFigure[] {
   const read = Math.min(tokens.cachedInputTokens, tokens.inputTokens);
   const written = Math.min(tokens.cacheWriteTokens ?? 0, tokens.inputTokens - read);
+
   const rows: HoverCardFigure[] = [
     { label: TOKEN_ROW.INPUT, figure: formatCount(tokens.inputTokens - read - written) },
     { label: TOKEN_ROW.OUTPUT, figure: formatCount(tokens.outputTokens) },
     { label: TOKEN_ROW.CACHE_READ, figure: formatCount(read) },
   ];
+
   if (tokens.cacheWriteTokens !== undefined) {
     rows.push({ label: TOKEN_ROW.CACHE_WRITE, figure: formatCount(written) });
   }
+
   return rows;
 }
 
 /** A turn's ending as the card says it: the corner's word, and its reason where it has one. */
 function turnEnding(ending: TurnEnding): RunEnding {
   const note = ENDING_NOTE[ending];
+
   return {
     reason: ending,
     word: ENDING_WORD[ending],
@@ -144,9 +148,11 @@ function RunCard({
   figures: { readonly label: string; readonly rows: readonly HoverCardFigure[] } | undefined;
 }): React.JSX.Element {
   const provider = model === undefined ? undefined : providerOf(model.id);
+
   const when = (
     <time dateTime={new Date(startedAt).toISOString()}>{runSpanText(startedAt, endedAt, now)}</time>
   );
+
   return (
     <HoverCard data-turn-card="">
       <HoverCardHead
@@ -192,6 +198,7 @@ export function TurnCard({
   models: readonly CatalogModel[];
 }): React.JSX.Element {
   const { model, effort, tokens, ending, fastRefused } = record;
+
   return (
     <RunCard
       model={

@@ -58,6 +58,7 @@ import {
   Duration,
   Effect,
   Layer,
+  Predicate,
   Stream,
   SubscriptionRef,
 } from "effect";
@@ -80,11 +81,14 @@ import { type Script, scriptedSpawner } from "./testing/scripted-spawner.js";
 const HOME = "/Users/dev";
 const AGENT_ID = "6f1c2a4e-0b7d-4c55-9a3e-2d8f61b0c9a1";
 const LINE_ID = "0e9b7c1d-5a2f-4e63-8b40-7c1d2e3f4a5b";
+
 /** A launch the service holds the device to that this run of the follower never claimed. */
 const GONE_LINE_ID = "3c5d7e9f-1a2b-4c3d-8e4f-5a6b7c8d9e0f";
 const STATE_ROOT = "/Users/dev/Library/Application Support/Vespin";
+
 /** The machine's own temp folder, as the platform hands it. */
 const MACHINE_TEMP = "/var/folders/dv/fixture/T";
+
 const LAYOUT = deviceAgentLayoutIn(
   {
     agentsFolder: deviceAgentsFolder(HOME),
@@ -93,13 +97,17 @@ const LAYOUT = deviceAgentLayoutIn(
   },
   AGENT_ID,
 );
+
 const SECRET_ENV = { APP_RUNNER_TOKEN: "runner-secret" };
+
 /** The runner's own start on the box, as the platform launches it. */
 const RUNNER = "/opt/vespin-host/node/bin/node";
 const CLIS = fakeClis();
 const IDENTITY = { name: "Ada Lovelace", email: "7001+ada@users.noreply.github.com" };
+
 /** The script that checks the box's own GitHub sign-in reaches a repository, as the test's platform hands it. */
 const REACH_CHECK = "reach-check";
+
 /** The host user's SSH agent, a synthetic socket. */
 const SSH_AGENT = "/private/tmp/com.apple.launchd.fixture/Listeners";
 
@@ -126,8 +134,18 @@ const until = (holds: () => boolean) =>
     for (let round = 0; round < 200 && !holds(); round += 1) {
       yield* TestClock.adjust(Duration.zero);
     }
+
     assert.ok(holds(), "the follower never got there");
   });
+
+type Service = {
+  held: Set<string>;
+  refusing: number;
+  refused: string[];
+  settleTakes: Duration.Input;
+  beatTakes: Duration.Input;
+  release: DeviceAgentRelease | undefined;
+};
 
 /**
  * The follower on a host whose agents run straight on the box, with its
@@ -169,6 +187,7 @@ const followingDevice = (
   Effect.gen(function* () {
     /** Each link made, by its path, to what it leads to. */
     const links = new Map<string, string>();
+
     const disk = memoryFileSystem({
       exists: (path) =>
         Effect.succeed(options.worktreeStands === true && path === `${LAYOUT.checkoutPath}/.git`),
@@ -180,6 +199,7 @@ const followingDevice = (
       readLink: (path) =>
         Effect.suspend(() => {
           const target = links.get(path);
+
           return target === undefined
             ? Effect.fail(
                 systemError({
@@ -193,9 +213,11 @@ const followingDevice = (
             : Effect.succeed(target);
         }),
     });
+
     const { files } = disk;
     let minted = 0;
     const signal = yield* Deferred.make<void>();
+
     const runner: Script =
       options.runsUntilSignaled === true
         ? // Note that the runner ends as its group is signaled, as the runner on a SIGTERM does.
@@ -206,28 +228,37 @@ const followingDevice = (
           }
         : // Note that the runner ends by itself a second in, so the test's end has no runner to wait out.
           { exitCode: 0, after: Duration.seconds(1) };
+
     const spawner = scriptedSpawner((program, args) => {
       if (program === "/bin/bash" && args[0] === "-l")
         return { stdout: "/usr/bin:/bin", exitCode: 0 };
+
       if (program === "/bin/bash" && args[1] === REACH_CHECK)
         return { exitCode: options.signInUnreached === true ? 128 : 0 };
+
       if (program === "/bin/bash" && args[1] === CHECKOUT_RESTORE_SCRIPT)
         return { exitCode: options.restoreExits ?? 0 };
+
       if (program === "/bin/bash" && args[1] === "exit 0")
         return {
           exitCode: options.worktreeFails === true ? 1 : 0,
           after: options.worktreeTakes ?? Duration.zero,
         };
+
       if (program === "/bin/bash") return { exitCode: 0 };
+
       if (program === RUNNER) return runner;
+
       return undefined;
     });
+
     const registered: DeviceAgentDevice[] = [];
     const beats: number[] = [];
     /** What each beat said of the host's update, none where it named none. */
     const said: (DeviceAgentUpdate | undefined)[] = [];
     const reported: string[] = [];
     const settled: { id: string; exitCode?: number; unstarted?: string }[] = [];
+
     /**
      * The service as the test steers it: the launches it holds the device
      * to, which a claim adds and a settle it takes removes; how many settles
@@ -236,15 +267,17 @@ const followingDevice = (
      * it was asked; and the release it names on each beat's answer, where it
      * publishes one newer.
      */
-    const service = {
-      held: new Set<string>(),
+    const service: Service = {
+      held: new Set(),
       refusing: 0,
-      refused: [] as string[],
-      settleTakes: Duration.zero as Duration.Input,
-      beatTakes: Duration.zero as Duration.Input,
-      release: undefined as DeviceAgentRelease | undefined,
+      refused: [],
+      settleTakes: Duration.zero,
+      beatTakes: Duration.zero,
+      release: undefined,
     };
+
     let launched = false;
+
     const client = {
       register: (_deviceId: string, device: DeviceAgentDevice) =>
         Effect.sync(() => registered.push(device)).pipe(Effect.as(true)),
@@ -255,6 +288,7 @@ const followingDevice = (
           const answer = { openLaunches: [...service.held] };
           const { release } = service;
           yield* Effect.sleep(service.beatTakes);
+
           return release === undefined ? answer : { ...answer, release };
         }),
       lines: () =>
@@ -262,6 +296,7 @@ const followingDevice = (
           ? Effect.never
           : Effect.sync(() => {
               launched = true;
+
               return options.lines ?? [LAUNCH.line];
             }).pipe(Effect.delay(options.linesAfter ?? Duration.zero)),
       claimLine: (_deviceId: string, _id: string, token?: string) =>
@@ -287,14 +322,17 @@ const followingDevice = (
             if (service.refusing > 0) {
               service.refusing -= 1;
               service.refused.push(id);
+
               return false;
             }
+
             service.held.delete(id);
             settled.push({
               id,
               ...(exitCode === undefined ? undefined : { exitCode }),
               ...(unstarted === undefined ? undefined : { unstarted }),
             });
+
             return true;
           }),
         ),
@@ -302,6 +340,7 @@ const followingDevice = (
       claimRequest: () => Effect.succeed({ claimed: false as const }),
       answerRequest: () => Effect.succeed(true),
     };
+
     const services = Layer.mergeAll(
       spawner.layer,
       NodePath.layer,
@@ -329,7 +368,9 @@ const followingDevice = (
         repositoryReachedScript: () => REACH_CHECK,
       }),
     );
+
     const clock = options.clock ?? (yield* Clock.Clock);
+
     const composer = yield* composeLocalAgents({
       kernel: {
         stateRoot: STATE_ROOT,
@@ -340,7 +381,9 @@ const followingDevice = (
       client,
       update: options.update,
     }).pipe(Effect.provide(services), Effect.provideService(Clock.Clock, clock));
+
     yield* composer.lifetime.pipe(Effect.provideService(Clock.Clock, clock));
+
     return {
       registered,
       beats,
@@ -385,10 +428,12 @@ it.effect(
           JSON.parse(files.get(group) ?? "{}").group,
           spawned.findIndex((each) => each.program === RUNNER) + 1,
         );
+
         // Note that the identity the launch carries is set in the agent's repository, as a cloud checkout sets it, before its runner starts.
         const identity = spawned.findIndex((each) =>
           each.args.some((arg) => arg.includes(CHECKOUT_IDENTITY_SCRIPT)),
         );
+
         assert.equal(spawned[identity]?.cwd, LAYOUT.checkoutPath);
         assert.equal(spawned[identity]?.env?.HOME, HOME);
         assert.equal(spawned[identity]?.env?.APP_GIT_NAME, IDENTITY.name);
@@ -422,6 +467,7 @@ it.effect(
         const { spawned, settled } = yield* followingDevice(() => Effect.void, {
           signInUnreached: true,
         });
+
         yield* until(() => settled.length > 0);
 
         assert.deepEqual(settled, [
@@ -440,6 +486,7 @@ it.effect(
         const { registered, beats, spawned } = yield* followingDevice((preparing) =>
           Effect.andThen(preparing, Effect.sleep(Duration.minutes(3))),
         );
+
         yield* TestClock.adjust(Duration.seconds(5));
         yield* until(() => registered.length > 0);
 
@@ -472,9 +519,11 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         let tries = 0;
+
         const { registered, beats, spawned, reported } = yield* followingDevice(() =>
           Effect.suspend(() => {
             tries += 1;
+
             return tries <= 2
               ? Effect.fail(
                   new LocalAgentClisUnavailable({ detail: "Codex couldn't be downloaded" }),
@@ -482,6 +531,7 @@ it.effect(
               : Effect.void;
           }),
         );
+
         yield* until(() => reported.length > 0);
         yield* TestClock.adjust(Duration.seconds(50));
 
@@ -521,17 +571,22 @@ it.effect(
         // Note that the service takes the first claim and keeps its token, but its answer never arrives.
         let landed: string | undefined;
         const claims: (string | undefined)[] = [];
+
         const { spawned, settled } = yield* followingDevice(() => Effect.void, {
           claim: (token) =>
             Effect.sync(() => {
               claims.push(token);
+
               if (landed === undefined) {
                 landed = token;
+
                 return undefined;
               }
+
               return token !== undefined && token === landed ? LAUNCH : { claimed: false as const };
             }),
         });
+
         yield* until(() => claims.length === 1);
         yield* TestClock.adjust(Duration.seconds(2));
         yield* until(() => spawned.some((each) => each.program === RUNNER));
@@ -553,6 +608,7 @@ it.effect(
       Effect.gen(function* () {
         // Note that the line is claimed at the fourteenth second and its answer lost, so the beat at the fifteenth hears the service hold it before the claim is asked again at the sixteenth; the service answers that claim only while it still holds the line, as it does once the line is settled.
         let landed: string | undefined;
+
         const { service, spawned, settled, beats } = yield* followingDevice(() => Effect.void, {
           linesAfter: Duration.seconds(14),
           claim: (
@@ -562,13 +618,16 @@ it.effect(
               if (landed === undefined) {
                 landed = token;
                 service.held.add(LINE_ID);
+
                 return undefined;
               }
+
               return token === landed && service.held.has(LINE_ID)
                 ? LAUNCH
                 : { claimed: false as const };
             }),
         });
+
         yield* until(() => beats.length > 0);
         yield* TestClock.adjust(Duration.seconds(14));
         yield* until(() => landed !== undefined);
@@ -591,20 +650,25 @@ it.effect(
         const on = yield* SubscriptionRef.make(true);
         let landed: string | undefined;
         const claims: (string | undefined)[] = [];
+
         const { spawned, settled, beats } = yield* followingDevice(() => Effect.void, {
           linesAfter: Duration.seconds(4),
           switchedOn: SubscriptionRef.changes(on),
           claim: (token) =>
             Effect.gen(function* () {
               claims.push(token);
+
               if (landed === undefined) {
                 landed = token;
                 yield* SubscriptionRef.set(on, false);
+
                 return undefined;
               }
+
               return token === landed ? LAUNCH : { claimed: false as const };
             }),
         });
+
         yield* until(() => beats.length > 0);
         yield* TestClock.adjust(Duration.seconds(4));
         yield* until(() => landed !== undefined);
@@ -630,6 +694,7 @@ it.effect(
           signInUnreached: true,
           worktreeStands: true,
         });
+
         yield* until(() => spawned.some((each) => each.program === RUNNER));
 
         assert.ok(!spawned.some((each) => each.args[1] === REACH_CHECK));
@@ -646,6 +711,7 @@ it.effect(
         const { spawned, settled } = yield* followingDevice(() => Effect.void, {
           worktreeFails: true,
         });
+
         yield* until(() => settled.some((each) => each.id === LINE_ID));
 
         assert.deepEqual(settled, [{ id: LINE_ID, exitCode: 1 }]);
@@ -665,6 +731,7 @@ it.effect(
         const { spawned, settled } = yield* followingDevice(() => Effect.void, {
           claim: () => Effect.succeed({ line: LAUNCH.line, secretsGone: true as const }),
         });
+
         yield* until(() => settled.some((each) => each.id === LINE_ID));
 
         assert.deepEqual(settled, [{ id: LINE_ID }]);
@@ -738,6 +805,7 @@ it.effect(
         const { service, settled, spawned, reported } = yield* followingDevice(() => Effect.void, {
           runsUntilSignaled: true,
         });
+
         yield* until(() => spawned.some((each) => each.program === RUNNER));
         yield* beatsOn(1);
         const runner = spawned.find((each) => each.program === RUNNER);
@@ -764,6 +832,7 @@ it.effect("a runner claimed after the beat was sent is not stopped by that beat'
         runsUntilSignaled: true,
         linesAfter: Duration.seconds(1),
       });
+
       // Note that the first beat is answered three seconds after it was read, by which time the launch was claimed.
       service.beatTakes = Duration.seconds(3);
       yield* until(() => beats.length > 0);
@@ -787,6 +856,7 @@ it.effect(
         const { service, settled, spawned } = yield* followingDevice(() => Effect.void, {
           worktreeTakes: Duration.seconds(40),
         });
+
         yield* until(() => service.held.has(LINE_ID));
         yield* beatsOn(2);
 
@@ -822,10 +892,12 @@ const newerTarball = Effect.gen(function* () {
   execFileSync("tar", ["-czf", `${scratch}/vespin-host.tar.gz`, "-C", scratch, "vespin-host"]);
   const archive = readFileSync(`${scratch}/vespin-host.tar.gz`);
   const sha256 = createHash("sha256").update(archive).digest("hex");
+
   const release: DeviceAgentRelease = {
     version: NEWER,
     sha256: { [HOST_TARGET.LINUX_X64]: sha256, [HOST_TARGET.LINUX_ARM64]: sha256 },
   };
+
   return { archive, release };
 });
 
@@ -839,11 +911,14 @@ const updatingHost = (tarball: Uint8Array<ArrayBuffer>) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const folder = yield* temporaryDirectoryScoped("host-releases-");
+
     for (const version of ["0.2.0", RUNNING]) {
       yield* fileSystem.makeDirectory(`${folder}/versions/${version}/bin`, { recursive: true });
     }
+
     yield* fileSystem.symlink(`versions/${RUNNING}`, `${folder}/current`);
     const fetched: string[] = [];
+
     const update = yield* hostUpdate({
       releases: { folder, running: RUNNING },
       version: RUNNING,
@@ -854,16 +929,20 @@ const updatingHost = (tarball: Uint8Array<ArrayBuffer>) =>
           NODE,
           fakeHttpClientLayer((url) => {
             fetched.push(url);
+
             return new Response(tarball);
           }),
           Layer.succeed(Reporter, { report: () => undefined }),
         ),
       ),
     );
+
     const current = fileSystem.readLink(`${folder}/current`);
+
     const versions = Effect.map(fileSystem.readDirectory(`${folder}/versions`), (names) =>
       [...names].sort(),
     );
+
     return { folder, update, fetched, current, versions };
   });
 
@@ -871,10 +950,12 @@ const updatingHost = (tarball: Uint8Array<ArrayBuffer>) =>
 const untilOnDisk = <E, R>(holds: Effect.Effect<boolean, E, R>) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     for (let round = 0; round < 50_000; round += 1) {
       if (yield* holds) return;
       yield* Effect.ignore(fileSystem.exists("/"));
     }
+
     assert.fail("the update never got there");
   });
 
@@ -884,10 +965,12 @@ it.effect(
     Effect.gen(function* () {
       const { archive, release } = yield* newerTarball;
       const { update, fetched, current, versions } = yield* updatingHost(archive);
+
       const { service, spawned, said } = yield* followingDevice(() => Effect.void, {
         runsUntilSignaled: true,
         update: update.follower,
       });
+
       service.release = release;
       yield* until(() => spawned.some((each) => each.program === RUNNER));
       yield* untilOnDisk(update.follower.waiting);
@@ -899,13 +982,18 @@ it.effect(
       assert.deepEqual(said.at(-1), { update: HOST_UPDATE.WAITING });
       assert.equal(yield* current, `versions/${RUNNING}`);
       const stdin = spawned.find((each) => each.program === RUNNER)?.stdin;
-      assert.ok(typeof stdin === "object" && "stream" in stdin && Stream.isStream(stdin.stream));
+      assert.ok(
+        Predicate.isObjectKeyword(stdin) && "stream" in stdin && Stream.isStream(stdin.stream),
+      );
       const retire = JSON.stringify({ type: INPUT_LINE.RETIRE });
+
+      // SAFETY: the guard above checked the stdin is a stream, of the bytes the runner is handed.
       const retireWritten = (stdin.stream as Stream.Stream<Uint8Array>).pipe(
         Stream.decodeText(),
         Stream.takeUntil((text) => text.includes(retire)),
         Stream.runCollect,
       );
+
       const written = yield* retireWritten;
       assert.ok(written.at(-1)?.includes(retire), "the runner is asked to end where it is warm");
       yield* beatsOn(1);
@@ -928,6 +1016,7 @@ it.effect(
     Effect.gen(function* () {
       const { archive, release } = yield* newerTarball;
       const { update, current } = yield* updatingHost(archive);
+
       // Note that the launch's claim is under way from the fourteenth second to the seventeenth, across the beat at the fifteenth.
       const { service, spawned, said, beats } = yield* followingDevice(() => Effect.void, {
         runsUntilSignaled: true,
@@ -935,6 +1024,7 @@ it.effect(
         claim: () => Effect.delay(Effect.succeed(LAUNCH), Duration.seconds(3)),
         update: update.follower,
       });
+
       service.release = release;
       yield* untilOnDisk(update.follower.waiting);
       yield* TestClock.adjust(Duration.seconds(14));
@@ -959,10 +1049,12 @@ it.effect(
       const tampered = Uint8Array.from(archive);
       tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 0xff;
       const { folder, update, fetched, current, versions } = yield* updatingHost(tampered);
+
       const { service, said } = yield* followingDevice(() => Effect.void, {
         lines: [],
         update: update.follower,
       });
+
       service.release = release;
       yield* untilOnDisk(Effect.map(update.follower.beating, (now) => now !== undefined));
       yield* beatsOn(1);
@@ -989,6 +1081,7 @@ it.effect(
     Effect.gen(function* () {
       const { archive, release } = yield* newerTarball;
       const { update, current } = yield* updatingHost(archive);
+
       const files: DeviceAgentLine = {
         id: GONE_LINE_ID,
         agentId: AGENT_ID,
@@ -998,6 +1091,7 @@ it.effect(
           files: [{ path: `${LAYOUT.attachments}/notes.txt`, mode: 0o600, contents: "bm90ZXM=" }],
         },
       };
+
       // Note that the files line is claimed at once and its write takes an hour, across every beat the test sends.
       const { service, said } = yield* followingDevice(() => Effect.void, {
         lines: [files],
@@ -1005,6 +1099,7 @@ it.effect(
         writingTakes: Duration.hours(1),
         update: update.follower,
       });
+
       service.release = release;
       yield* untilOnDisk(update.follower.waiting);
       yield* beatsOn(2);
@@ -1025,6 +1120,7 @@ it.effect(
           head: "89abcdef0123456789abcdef0123456789abcdef",
           branch: "feat/invitations",
         };
+
         const restore: DeviceAgentLine = {
           id: GONE_LINE_ID,
           agentId: AGENT_ID,
@@ -1032,11 +1128,13 @@ it.effect(
           kind: DEVICE_AGENT_LINE_KIND.RESTORE,
           payload: snapshot,
         };
+
         const { settled, spawned } = yield* followingDevice(() => Effect.void, {
           lines: [restore],
           claim: () => Effect.succeed({ line: restore }),
           restoreExits: CHECKOUT_RESTORE_EXIT.MISSING,
         });
+
         yield* until(() => settled.some((each) => each.id === GONE_LINE_ID));
 
         const ran = spawned.find((each) => each.args[1] === CHECKOUT_RESTORE_SCRIPT);

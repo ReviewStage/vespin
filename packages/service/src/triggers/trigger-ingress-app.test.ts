@@ -67,20 +67,26 @@ const standing = (settings: SentryAppSettings | undefined) =>
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       Layer.succeed(SentryApp, sentryAppService(settings, ["SENTRY_APP_CLIENT_SECRET"])),
     );
+
     const ingress = HttpRouter.toWebHandler(
       triggerIngressApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => ingress.dispose()));
+
     const ask = (init: RequestInit) =>
       Effect.gen(function* () {
         const response = yield* Effect.promise(() =>
           ingress.handler(new Request(`${ORIGIN}${PATH}`, init)),
         );
+
         // SAFETY: the group answers JSON; the test reads it as the wire value it is.
         const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
         return { status: response.status, body } satisfies Answer;
       });
+
     return { ask };
   });
 
@@ -123,6 +129,7 @@ const openWorkspace = Effect.gen(function* () {
     organizationId: task.workspaceId,
     userId: owner,
   });
+
   return { owner, workspaceId: task.workspaceId, installation };
 });
 
@@ -168,23 +175,27 @@ it.layer(getTestDB())("the trigger ingress", (it) => {
       Effect.gen(function* () {
         const { owner, workspaceId, installation } = yield* openWorkspace;
         const { ask } = yield* standing(SETTINGS);
+
         const matching = yield* sentryAutomation(
           owner,
           workspaceId,
           SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
           { project: ["Storefront"], environment: ["production", "staging"] },
         );
+
         const filteredOut = yield* sentryAutomation(
           owner,
           workspaceId,
           SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
           { level: ["fatal"] },
         );
+
         const otherEvent = yield* sentryAutomation(
           owner,
           workspaceId,
           SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
         );
+
         const body = fixture("event-alert-triggered", installation);
         const requestId = randomUUID();
 
@@ -222,11 +233,13 @@ it.layer(getTestDB())("the trigger ingress", (it) => {
       const ours = yield* openWorkspace;
       const theirs = yield* openWorkspace;
       const { ask } = yield* standing(SETTINGS);
+
       const mine = yield* sentryAutomation(
         ours.owner,
         ours.workspaceId,
         SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
       );
+
       const other = yield* sentryAutomation(
         theirs.owner,
         theirs.workspaceId,
@@ -247,6 +260,7 @@ it.layer(getTestDB())("the trigger ingress", (it) => {
       Effect.gen(function* () {
         const { owner, workspaceId, installation } = yield* openWorkspace;
         const { ask } = yield* standing(SETTINGS);
+
         const automation = yield* sentryAutomation(
           owner,
           workspaceId,
@@ -254,9 +268,11 @@ it.layer(getTestDB())("the trigger ingress", (it) => {
         );
 
         const unknown = yield* ask(delivery("issue", fixture("issue-created", randomUUID())));
+
         const uninstalled = yield* ask(
           delivery("installation", fixture("installation-deleted", installation)),
         );
+
         const late = yield* ask(delivery("issue", fixture("issue-created", installation)));
 
         assert.deepEqual(
@@ -279,11 +295,13 @@ it.layer(getTestDB())("the trigger ingress", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId, installation } = yield* openWorkspace;
+
         const automation = yield* sentryAutomation(
           owner,
           workspaceId,
           SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
         );
+
         const body = fixture("issue-created", installation);
         const { ask } = yield* standing(SETTINGS);
         const unconfigured = yield* standing(undefined);

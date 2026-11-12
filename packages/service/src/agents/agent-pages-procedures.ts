@@ -28,6 +28,7 @@ export interface AgentPagesProcedureSeams {
 /** The version a path names, or the invalid-request refusal where it is no whole number from one. */
 function pageVersionOf(version: string): Effect.Effect<number, HostedRefusal> {
   const read = readEither(pageVersionNumberSchema)(unparsedWire(Number(version)));
+
   return Result.isFailure(read)
     ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)
     : Effect.succeed(read.success);
@@ -36,21 +37,25 @@ function pageVersionOf(version: string): Effect.Effect<number, HostedRefusal> {
 /** The agent pages resource: the list and one version, to a signed-in caller resolved before its input is read. */
 export function agentPagesProcedures(seams: AgentPagesProcedureSeams) {
   const member = hosted.agentPages.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: member.list.effect(function* ({ input }) {
       yield* pathUuid(input.id);
+
       return { pages: [] };
     }),
     version: member.version.effect(function* ({ input }) {
       yield* pathUuid(input.id);
       yield* pathUuid(input.page);
       yield* pageVersionOf(input.version);
+
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }),
     frame: member.frame.effect(function* ({ input }) {
       yield* pathUuid(input.id);
       yield* pathUuid(input.page);
       yield* pageVersionOf(input.version);
+
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }),
   };

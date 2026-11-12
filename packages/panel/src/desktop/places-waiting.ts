@@ -39,13 +39,16 @@ function toDoByTask(
   now: number,
 ): ReadonlyMap<string, number> {
   const counted = new Map<string, number>();
+
   for (const { taskId, toDo } of holdings) {
     if (toDo !== undefined) counted.set(taskId, toDo);
   }
+
   for (const { taskId, items } of waiting) {
     const reminded = items.filter((item) => item.remindAt !== undefined && item.remindAt > now);
     counted.set(taskId, (counted.get(taskId) ?? items.length) - reminded.length);
   }
+
   return new Map([...counted].filter(([, count]) => count > 0));
 }
 
@@ -65,6 +68,7 @@ function waitingThreads(
 ): readonly AppInboxWaitingItem[] {
   // Note that only the standing tasks are counted, as To do lists them, so a task not listed yet counts nowhere.
   const standing = new Set(tasks.listed.tasks.map((task) => task.id));
+
   return inboxWaiting
     .filter((task) => standing.has(task.taskId))
     .flatMap((task) => task.items)
@@ -77,6 +81,7 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
   const holdings = useInboxTaskHoldings();
   const waiting = useInboxWaitingTasks();
   const byTask = useMemo(() => toDoByTask(holdings, waiting, now), [holdings, waiting, now]);
+
   return tasks.signedIn ? byTask : NO_COUNTS;
 }
 
@@ -89,5 +94,6 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
 export function useInboxWaiting(tasks: TasksControl): number {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
+
   return tasks.signedIn ? waitingThreads(tasks, waiting, now).length : 0;
 }

@@ -31,6 +31,7 @@ const CONTEXT_MARK = " ";
 /** The run of the file's lines the snippet draws; none where it holds no lines. */
 export function snippetRange(code: SnippetLines): SnippetRange | undefined {
   if (code.lines.length === 0) return undefined;
+
   return { startLine: code.firstLine, endLine: code.firstLine + code.lines.length - 1 };
 }
 
@@ -43,6 +44,7 @@ export function snippetPatch(code: SnippetLines): string | undefined {
   if (snippetRange(code) === undefined) return undefined;
   const { path } = code.ref;
   const count = code.lines.length;
+
   return [
     `diff --git a/${path} b/${path}`,
     `--- a/${path}`,
@@ -60,15 +62,18 @@ export function snippetPatch(code: SnippetLines): string | undefined {
 export function pointedRange(code: SnippetLines): SnippetRange | undefined {
   const drawn = snippetRange(code);
   const { startLine, endLine } = code.ref;
+
   if (drawn === undefined || startLine === undefined || endLine === undefined) return undefined;
   const from = Math.max(startLine, drawn.startLine);
   const to = Math.min(endLine, drawn.endLine);
+
   return from > to ? undefined : { startLine: from, endLine: to };
 }
 
 /** A run of the snippet's lines as the bundle lights it, on the side every line of a hunk of context counts on. */
 export function litSelection(range: SnippetRange | undefined): DiffSelection | undefined {
   if (range === undefined) return undefined;
+
   return {
     start: range.startLine,
     side: DIFF_SELECTION_SIDE.ADDITIONS,

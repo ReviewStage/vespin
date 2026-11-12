@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
-import type { PostHog } from "posthog-js/dist/module.no-external";
 import { afterEach, expect, test, vi } from "vitest";
 import { sessionReplay } from "./session-replay.js";
 
@@ -18,6 +17,13 @@ const client = {
   register: vi.fn(),
   identify: vi.fn(),
   startSessionRecording: vi.fn(),
+  opt_out_capturing: () => expect.unreachable("a recording opts nobody out"),
+  reset: () => expect.unreachable("a recording resets nobody"),
+  group: () => expect.unreachable("a recording with no workspace groups nothing"),
+  resetGroups: () => expect.unreachable("a recording with no workspace ungroups nothing"),
+  setPersonProperties: () => expect.unreachable("a recording sets no person's properties"),
+  unsetPersonProperties: () => expect.unreachable("a recording unsets no person's properties"),
+  stopSessionRecording: () => expect.unreachable("a recording is not stopped here"),
 };
 
 afterEach(() => {
@@ -35,18 +41,22 @@ async function mask(): Promise<Mask> {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
-    importClient: () => Promise.resolve(client as unknown as PostHog),
+    importClient: () => Promise.resolve(client),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
+
+  // SAFETY: `init` is handed the client's options second, as PostHog's own signature takes them.
   const options = client.init.mock.calls[0]?.[1] as {
     session_recording: { maskAttributeFn: Mask };
   };
+
   return options.session_recording.maskAttributeFn;
 }
 
 test("a recording asterisks every attribute it does not lay out by, those that carry words, names, and ids among them", async () => {
   const masked = await mask();
   const row = document.createElement("div");
+
   for (const name of [
     "title",
     "aria-label",
@@ -70,6 +80,7 @@ test("a recording asterisks every attribute it does not lay out by, those that c
   ]) {
     assert.equal(masked(name, "acme/launch", row), "***********", name);
   }
+
   // A picture's `data:` address is megabytes, which leaves as no more asterisks than a short value.
   const address = `data:image/png;base64,${"A".repeat(100_000)}`;
   assert.equal(masked("src", address, document.createElement("img")), "****************");

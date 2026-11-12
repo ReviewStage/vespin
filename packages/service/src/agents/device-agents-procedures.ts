@@ -152,7 +152,9 @@ function requestAddressOf(request: Request): string | undefined {
   const named =
     request.headers.get(ADDRESS_HEADER.REAL_IP) ??
     request.headers.get(ADDRESS_HEADER.FORWARDED_FOR)?.split(",")[0];
+
   const address = named?.trim() ?? "";
+
   return isIP(address) === 0 ? undefined : address;
 }
 
@@ -166,8 +168,10 @@ const openedPairing = (opening: Omit<HostPairingOpening, "userCode">) =>
   Effect.gen(function* () {
     const userCode = mintHostUserCode();
     const opened = yield* hostedStoreOrUnavailable(openHostPairing({ ...opening, userCode }));
+
     if (Option.isSome(opened)) return userCode;
     yield* Effect.logError("the pairing code minted was already shown");
+
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   });
 
@@ -180,6 +184,7 @@ const followed = (caller: DeviceCaller, deviceId: string) =>
   Effect.gen(function* () {
     yield* ownDevice(caller, deviceId);
     const { userId } = caller;
+
     if (!(yield* hostedStoreOrUnavailable(deviceAgentDeviceOf(userId, deviceId)))) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }
@@ -194,6 +199,7 @@ const macRunnerStarted = (userId: string, agentId: string) =>
   Effect.gen(function* () {
     const agent = yield* readAgent(userId, agentId);
     const boot = yield* agentBootOf(agentId);
+
     if (Option.isNone(agent) || Option.isNone(boot)) return;
     yield* bootBecameReady(agent.value, boot.value.attempt);
   });
@@ -203,6 +209,7 @@ const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
   if (name !== undefined && platform !== undefined && arch !== undefined) {
     return Effect.succeed({ name, platform, arch });
   }
+
   return name === undefined && platform === undefined && arch === undefined
     ? Effect.succeed(undefined)
     : Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
@@ -229,8 +236,11 @@ const hostWrite = <A, E, R>(userId: string, deviceId: string, write: Effect.Effe
  */
 function newerReleaseFor(request: Request): DeviceAgentRelease | undefined {
   const version = presentedHostVersion(request);
+
   if (HOST_RELEASE === undefined || version === undefined) return undefined;
+
   if (hostVersionMeets(version, HOST_RELEASE.VERSION)) return undefined;
+
   return { version: HOST_RELEASE.VERSION, sha256: HOST_RELEASE.SHA256 };
 }
 
@@ -242,14 +252,18 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
   const pairing = hosted.deviceAgents.use(pairingHostMiddleware);
   const polling = hosted.deviceAgents.use(pollSecretMiddleware);
   const startBrake = createRateBrake(PAIRING_START_BRAKE);
+
   return {
     startPairing: pairing.startPairing.effect(function* ({ context, input }) {
       const ip = requestAddressOf(context.request);
+
       if (!(yield* startBrake.check(ip ?? UNNAMED_ADDRESS))) {
         return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
       }
+
       const poll = mintHostSecret(HOST_WIRE.POLL_SECRET_PREFIX);
       const { name, platform, arch } = input;
+
       // Note that the pairing keeps no machine the start named, since the box's first register follows its approve at once and names it again.
       const userCode = yield* openedPairing({
         pollSecretHash: poll.hash,
@@ -259,6 +273,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
         version: context.hostVersion,
         ip: ip ?? null,
       });
+
       return {
         pollSecret: poll.secret,
         userCode: shownHostUserCode(userCode),
@@ -270,9 +285,11 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     pollPairing: polling.pollPairing.effect(function* ({ context }) {
       // Note that a secret is minted for every poll, and the store keeps its hash only where it hands the pairing over.
       const minted = mintHostSecret(HOST_WIRE.DEVICE_SECRET_PREFIX);
+
       const polled = yield* hostedStoreOrUnavailable(
         pollHostPairing(hostSecretHash(context.pollSecret), minted.hash),
       );
+
       if (polled.status !== HOST_PAIRING_POLL_STATUS.APPROVED) return { status: polled.status };
       yield* recordServerEvent(
         SERVER_EVENT.HOST_INSTALL,
@@ -281,6 +298,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
           kind: SERVER_HOST_KIND.BOX_HOST,
         },
       );
+
       return { status: polled.status, deviceId: polled.deviceId, deviceSecret: minted.secret };
     }),
     enrollOwn: signedIn.enrollOwn.effect(function* ({ context, input }) {
@@ -290,6 +308,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       const machine = yield* enrollingMachine(input);
       // Note that a Mac enrolled before is keyed again here, which is no new install, so it is read first.
       const before = yield* hostedStoreOrUnavailable(hostsOf(userId));
+
       const enrolled = yield* hostedStoreOrUnavailable(
         enrollOwnDevice(userId, {
           id: input.deviceId,
@@ -299,8 +318,10 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
           ...(machine === undefined ? undefined : { machine }),
         }),
       );
+
       if (Option.isNone(enrolled)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       yield* settleLostHostTurns(enrolled.value);
+
       if (!before.some((host) => host.id === input.deviceId)) {
         yield* recordServerEvent(
           SERVER_EVENT.HOST_INSTALL,
@@ -310,24 +331,29 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
           },
         );
       }
+
       return { deviceId: input.deviceId, deviceSecret: minted.secret };
     }),
     // Note that a host leaving is removed as Settings › Hosts' Remove removes it, and that it answers done where its host was already gone, since the box deletes its secret either way.
     leave: deviceAgents.leave.effect(function* ({ context, input }) {
       yield* ownDevice(context, input.deviceId);
       yield* removeAccountHost(context.userId, input.deviceId);
+
       return DONE;
     }),
     register: deviceAgents.register.effect(function* ({ context, input }) {
       yield* ownDevice(context, input.deviceId);
       const { userId } = context;
       const { deviceId, ...device } = input;
+
       // Note that a host that restarts registers before its first beat, so the register carries its agents on as the beat does.
       const registered = yield* hostedStoreOrUnavailable(
         hostWrite(userId, deviceId, registerHost(userId, { id: deviceId, ...device })),
       );
+
       if (Option.isNone(registered)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       yield* settleLostHostTurns(registered.value);
+
       return DONE;
     }),
     beat: deviceAgents.beat.effect(function* ({ context, input }) {
@@ -339,42 +365,54 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
           hostWrite(userId, deviceId, beatDevice(userId, deviceId, { update, updateFailure })),
         ),
       );
+
       // Note that the launches are read after the beat is written, so a claim the device finished before it sent the beat is among them.
       const openLaunches = yield* hostedStoreOrUnavailable(
         openDeviceAgentLaunches(context.userId, deviceId),
       );
+
       const release = newerReleaseFor(context.request);
+
       return { ...DONE, openLaunches, ...(release === undefined ? undefined : { release }) };
     }),
     liveAgents: deviceAgents.liveAgents.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       const agentIds = yield* hostedStoreOrUnavailable(
         liveDeviceAgents(context.userId, input.deviceId),
       );
+
       return { agentIds };
     }),
     lines: deviceAgents.lines.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       const lines = yield* hostedStoreOrUnavailable(
         deviceAgentLinesFor(context.userId, input.deviceId),
       );
+
       return { lines };
     }),
     claimLine: deviceAgents.claimLine.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       const claimed = yield* hostedStoreOrUnavailable(
         claimedDeviceAgentLine(context.userId, input.deviceId, input.id, input.claimToken),
       );
+
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return claimed.value;
     }),
     lineStep: deviceAgents.lineStep.effect(function* ({ context, input }) {
       // Note that the step is traced on the request's span, since the working line never words it: a launch's breakdown is read off these spans.
       yield* Effect.annotateCurrentSpan("launchStep", input.step);
       yield* followed(context, input.deviceId);
+
       const stepped = yield* hostedStoreOrUnavailable(
         stepDeviceAgentLaunch(context.userId, input.deviceId, input.id, input.step),
       );
+
       // A launch starting its runner is the Mac's machine up for the agent's first launch, which hands its queue on:
       // the lines go on the runner's stdin behind its launch, so the first message reaches it once it runs.
       if (Option.isSome(stepped) && input.step === DEVICE_LAUNCH_STEP.STARTING) {
@@ -383,10 +421,12 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
           macRunnerStarted(context.userId, stepped.value),
         );
       }
+
       return yield* keptOrNotFound(Option.isSome(stepped));
     }),
     settleLine: deviceAgents.settleLine.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       return yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
           settledDeviceAgentLine(
@@ -401,21 +441,27 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     }),
     requests: deviceAgents.requests.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       const requests = yield* hostedStoreOrUnavailable(
         deviceAgentRequestsFor(context.userId, input.deviceId),
       );
+
       return { requests };
     }),
     claimRequest: deviceAgents.claimRequest.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       const claimed = yield* hostedStoreOrUnavailable(
         claimDeviceAgentRequest(context.userId, input.deviceId, input.id),
       );
+
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { request: claimed.value };
     }),
     answerRequest: deviceAgents.answerRequest.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
+
       return yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
           answerDeviceAgentRequest(context.userId, input.deviceId, input.id, input.answer),

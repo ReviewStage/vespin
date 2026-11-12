@@ -48,6 +48,7 @@ function stay(): void {}
 
 function CardPresses(): React.JSX.Element {
   const [pressed, setPressed] = useState("Nothing yet");
+
   return (
     <>
       <CatalogSection id="card-press-overlay" title="Over the card">

@@ -44,11 +44,14 @@ type Tree = Nodes | RootContent[];
 /** An element with its `style` moved into the data attribute, its children the same. */
 function restyledElement(element: HastElement): HastElement {
   const { style, ...rest } = element.properties;
+
   const properties: Properties =
     style === undefined || style === null ? rest : { ...rest, [INLINE_STYLE_PROPERTY]: style };
+
   const children = element.children.map((child) =>
     child.type === "element" ? restyledElement(child) : child,
   );
+
   return { ...element, properties, children };
 }
 
@@ -60,9 +63,11 @@ function restyledContent(node: RootContent): RootContent {
 /** `toHtml`, with every inline style written in `INLINE_STYLE_ATTRIBUTE`. */
 export function toHtml(tree: Tree, options?: Parameters<typeof writeHast>[1]): string {
   if (Array.isArray(tree)) return writeHast(tree.map(restyledContent), options);
+
   if (tree.type === "root") {
     return writeHast({ ...tree, children: tree.children.map(restyledContent) }, options);
   }
+
   return writeHast(tree.type === "element" ? restyledElement(tree) : tree, options);
 }
 
@@ -83,6 +88,7 @@ export function hastToHtml(tree: Tree): string {
 function restyle(element: Element): void {
   const selector = `[${INLINE_STYLE_ATTRIBUTE}]`;
   const styled = element.matches(selector) ? [element] : [];
+
   for (const each of [...styled, ...element.querySelectorAll(selector)]) {
     if (!(each instanceof HTMLElement || each instanceof SVGElement)) continue;
     each.style.cssText = each.getAttribute(INLINE_STYLE_ATTRIBUTE) ?? "";
@@ -97,18 +103,24 @@ export function adoptShadowStyles(root: ShadowRoot, look: CSSStyleSheet): () => 
   // Pierre's own sheet, adopted before anything here was.
   const own = root.adoptedStyleSheets.filter((sheet) => sheet !== look);
   const sheets = styleElementSheets(root);
+
   const adopt = () => {
     root.adoptedStyleSheets = [...own, ...sheets(), look];
   };
+
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       for (const node of record.addedNodes) if (node instanceof Element) restyle(node);
     }
+
     if (records.some(touchesStyle)) adopt();
   });
+
   observer.observe(root, { childList: true, subtree: true, characterData: true });
+
   for (const child of root.children) restyle(child);
   adopt();
+
   return () => {
     observer.disconnect();
     root.adoptedStyleSheets = own;

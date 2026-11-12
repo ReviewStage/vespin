@@ -22,6 +22,7 @@ import {
   spotlightChanges,
   spotlightItems,
 } from "@repo/features/ios-system-activity";
+import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxGroupsIn,
@@ -41,7 +42,7 @@ import { systemActivityModule } from "./system-activity-module.js";
 const NONE: readonly never[] = [];
 
 /** Says on the console what the system did not take; the next change tries again. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not reach the system.`, error);
 }
 
@@ -62,10 +63,12 @@ export function useScreenActivity(
   useFocusEffect(
     useCallback(() => {
       const module = systemActivityModule;
+
       if (module === null || title === undefined || webpageUrl === undefined) return undefined;
       module
-        .setCurrent({ title, webpageUrl, ...(pullRequest === undefined ? {} : { pullRequest }) })
+        .setCurrent({ title, webpageUrl, ...(pullRequest !== undefined && { pullRequest }) })
         .catch(refused("The screen's activity"));
+
       // Note that the activity is taken back by its page, so a screen going after the next one stood never takes back the next one's.
       return () => {
         module.clearCurrent(webpageUrl).catch(refused("The screen's activity"));
@@ -79,14 +82,18 @@ function useSpotlightItems(): readonly SpotlightItem[] {
   const workspace = useTasksWorkspace();
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const tasks = view?.tasks ?? NONE;
+
   const { data: groups = NONE } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(workspace?.id),
   });
+
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   return useMemo(() => {
     if (workspace === undefined) return NONE;
     const threads = groups.flatMap(({ holder, items }) => items.map((item) => ({ holder, item })));
+
     return spotlightItems({ workspace, tasks, threads, readerId });
   }, [workspace, tasks, groups, readerId]);
 }
@@ -100,25 +107,35 @@ function useSpotlightIndex(signedIn: boolean): void {
   const sent = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     const module = systemActivityModule;
+
     if (module === null) return;
+
     const send = (change: () => Promise<void>) => {
       sent.current = sent.current.then(change).catch(refused("The Spotlight index"));
     };
+
     // Note that a launch with no account empties the index too, since one signed out while the app was closed left its items.
     if (!signedIn) {
       if (indexed.current === null) return;
       indexed.current = null;
       send(() => module.removeAll());
+
       return;
     }
+
     const held = indexed.current;
     indexed.current = new Map(items.map((item) => [item.id, item]));
+
     if (held === undefined || held === null) {
       send(() => module.removeAll().then(() => module.index(items)));
+
       return;
     }
+
     const { index, remove } = spotlightChanges(held, items);
+
     if (remove.length > 0) send(() => module.remove(remove));
+
     if (index.length > 0) send(() => module.index(index));
   }, [signedIn, items]);
 }
@@ -129,19 +146,23 @@ function useContinuedActivities(signedIn: boolean): void {
   const [waiting, setWaiting] = useState<readonly ContinuedActivity[]>(NONE);
   useEffect(() => {
     if (systemActivityModule === null) return undefined;
+
     const subscription = systemActivityModule.addListener("onContinue", (continued) =>
       setWaiting((held) => [...held, continued]),
     );
+
     return () => subscription.remove();
   }, []);
   useEffect(() => {
     if (!signedIn || waiting.length === 0) return;
     // Note that the waiting are let go first, so a later render never opens one twice.
     setWaiting(NONE);
+
     for (const continued of waiting) {
       const route = iosContinuedRouteOf(continued);
+
       if (route !== undefined) router.push(route);
-      else if (continued.link.startsWith("https://")) openInSafari(continued.link);
+      else if (openableLinkOf(continued.link) === OPENABLE_LINK.WEB) openInSafari(continued.link);
     }
   }, [signedIn, waiting, router]);
 }

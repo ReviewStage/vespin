@@ -16,11 +16,13 @@ import { THEME_KEY, tintChrome } from "../theme-chrome";
 /** The theme the browser keeps for the app, a missing, refused, or unknown one following the machine. */
 function storedTheme(): Theme {
   let kept: string | null = null;
+
   try {
     kept = localStorage.getItem(THEME_KEY);
   } catch {
     // A storage the browser refuses keeps no choice, so the machine's stands.
   }
+
   return kept === THEME.LIGHT || kept === THEME.DARK ? kept : THEME.SYSTEM;
 }
 
@@ -30,12 +32,15 @@ function storedTheme(): Theme {
  */
 export function followAppTheme(root: HTMLElement = document.documentElement): () => void {
   let stopWearing = wearTheme(root, storedTheme(), () => tintChrome(root));
+
   const onStorage = (event: StorageEvent): void => {
     if (event.key !== null && event.key !== THEME_KEY) return;
     stopWearing();
     stopWearing = wearTheme(root, storedTheme(), () => tintChrome(root));
   };
+
   window.addEventListener("storage", onStorage);
+
   return () => {
     window.removeEventListener("storage", onStorage);
     stopWearing();

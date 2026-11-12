@@ -49,6 +49,7 @@ export interface SlackBotProcedureSeams {
 /** The workspace Slack bot resource: connect and disconnect to an owner or admin, and the read and the member's own switch to any member, each the operation of the same name (`slack-bot-operations.ts`). */
 export function slackBotProcedures(seams: SlackBotProcedureSeams) {
   const resource = hosted.workspaceSlackBot.use(accountMiddleware(seams.resolveUserId));
+
   return {
     read: resource.read.effect(function* ({ input, context }) {
       return yield* readSlackBot(context.userId, input.workspaceId);

@@ -62,6 +62,7 @@ function watchChanges(
     const fiber = yield* Effect.forkChild(Stream.runCollect(Stream.take(app.changes, count)));
     yield* Effect.yieldNow;
     act();
+
     return yield* Fiber.join(fiber);
   });
 }
@@ -82,9 +83,11 @@ const SETTINGS = inert<NonNullable<AppState["settings"]>>();
 it.effect("one slice patched bumps the version once and announces once on `changes`", () =>
   Effect.gen(function* () {
     const app = store();
+
     const seen = yield* watchChanges(app, 2, () => {
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED } });
     });
+
     assert.equal(seen.length, 2);
     assert.equal(seen[1]?.version, 1);
     assert.equal(seen[1]?.audio.microphoneStatus, MICROPHONE_STATUS.GRANTED);
@@ -94,6 +97,7 @@ it.effect("one slice patched bumps the version once and announces once on `chang
 it.effect("a patch that says nothing new announces nothing on `changes`", () =>
   Effect.gen(function* () {
     const app = store();
+
     const seen = yield* watchChanges(app, 2, () => {
       app.update({});
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.NOT_DETERMINED } });
@@ -102,6 +106,7 @@ it.effect("a patch that says nothing new announces nothing on `changes`", () =>
       // three no-ops before it wrote nothing for a collector to see.
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED } });
     });
+
     assert.equal(seen.length, 2);
     assert.equal(seen[0]?.version, 0);
     assert.equal(seen[1]?.version, 1);
@@ -111,6 +116,7 @@ it.effect("a patch that says nothing new announces nothing on `changes`", () =>
 it.effect("a subscriber that patches the document as it is announced lands its patch next", () =>
   Effect.gen(function* () {
     const app = store();
+
     // The subscriber is parked on `changes` when the first patch lands, so it is
     // resumed on the writer's own stack, and answers it with a patch of its own.
     const answering = yield* Effect.forkChild(
@@ -122,9 +128,11 @@ it.effect("a subscriber that patches the document as it is announced lands its p
         }),
       ),
     );
+
     const seen = yield* watchChanges(app, 3, () => {
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED } });
     });
+
     yield* Fiber.join(answering);
     assert.deepEqual(
       seen.map((state) => [state.version, state.network.online]),
@@ -149,6 +157,7 @@ it("two slices in one patch are one version", () => {
 
 it("a slice that moved keeps every part of it that did not, so what a reader held of it is the object it still holds", () => {
   const app = store();
+
   const page = (id: string, title: string, agentId: string) => ({
     id,
     title,
@@ -156,11 +165,13 @@ it("a slice that moved keeps every part of it that did not, so what a reader hel
     at: 0,
     shownBy: { kind: PAGE_SHOWER.AGENT, agentId },
   });
+
   const held = (second: string) => ({
     [PAGE_OWNER.TASK]: {
       "plan-1": { rows: [page(PAGE_ONE, "Invites", AGENT), page(PAGE_TWO, second, AGENT)] },
     },
   });
+
   const rowsOf = () => app.snapshot()[LIVE_READ.PAGES][PAGE_OWNER.TASK]["plan-1"]?.rows;
   app.update({ [LIVE_READ.PAGES]: held("Billing") });
   const before = rowsOf();
@@ -180,11 +191,13 @@ it("a slice that moved keeps every part of it that did not, so what a reader hel
 it.effect("a touch re-announces the document without numbering it again", () =>
   Effect.gen(function* () {
     const app = store();
+
     const seen = yield* watchChanges(app, 4, () => {
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED } });
       app.touch();
       app.touch();
     });
+
     assert.deepEqual(
       seen.map((state) => state.version),
       [0, 1, 1, 1],
@@ -237,6 +250,7 @@ it("an unpackaged run never records, whatever the host permitted", () => {
     initialAppState({ ...RUN, packaged: false }, true, []),
     Context.empty(),
   );
+
   app.update({ sessionReplay: { permitted: true, accountId: "person", halted: false } });
   assert.equal(sessionReplayBootstrap(app.snapshot()).permitted, false);
 });
@@ -245,15 +259,19 @@ it.effect(
   "a push that dies is reported, to Sentry as well, and the next change is still pushed",
   () => {
     const sentry = recordingReporter();
+
     return Effect.gen(function* () {
       const app = store();
       const reported: string[] = [];
       let pushes = 0;
+
       const publish = () =>
         Effect.suspend(() => {
           pushes += 1;
+
           return pushes === 1 ? Effect.die(new Error("the window went away")) : Effect.void;
         });
+
       yield* publishAppStateChanges(app, publish, (message) => reported.push(message));
       yield* Effect.yieldNow;
       app.update({ audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED } });

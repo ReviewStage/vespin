@@ -86,24 +86,32 @@ export function EditableBlock({
   useEffect(() => {
     for (const code of block.current?.querySelectorAll("pre") ?? []) code.tabIndex = -1;
   });
+
   const pressed = (event: MouseEvent<HTMLDivElement>) => {
     const { target, currentTarget } = event;
+
     if (onPress === undefined || !(target instanceof Node) || !currentTarget.contains(target)) {
       return;
     }
+
     onPress({ target, x: event.clientX, y: event.clientY, block: currentTarget });
   };
+
   const keyed = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
+
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       stepBlock(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
+
       return;
     }
+
     if (event.key !== "Enter") return;
     event.preventDefault();
     onOpen();
   };
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: a block holds a section's words, not a form's controls, so it is no `<fieldset>`.
     <div

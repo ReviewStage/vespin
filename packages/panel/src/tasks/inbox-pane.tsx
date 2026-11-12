@@ -247,6 +247,7 @@ export function LinkBlock({ url, label }: { url: string; label: string }): React
       </div>
     );
   }
+
   return (
     <div className="m-0 select-text">
       <Tooltip label={url}>
@@ -264,7 +265,9 @@ type NumberedPick = (draft: InboxDraft, number: number) => InboxDraft | undefine
 /** How the number keys pick an open item's options, its thread's open `decide`'s, or none where it has none they pick. */
 function numberedPickOf(thread: readonly InboxMessage[]): NumberedPick | undefined {
   const ask = openAskOf(thread)?.ask;
+
   if (ask === undefined || !knownAsk(ask) || ask.type !== INBOX_ASK.DECIDE) return undefined;
+
   return (draft, number) => askNumberedPick(ask, draft, number);
 }
 
@@ -288,11 +291,15 @@ function useOptionNumbers(
   const numbered = pick !== undefined;
   useEffect(() => {
     if (!numbered) return;
+
     const onKey = (event: KeyboardEvent) => {
       const { item, draft, control, pick } = latest.current;
       const shown = pane.current;
+
       if (!OPTION_NUMBER.test(event.key) || !bareKey(event) || event.shiftKey) return;
+
       if (event.defaultPrevented || event.isComposing || takesTyping(event.target)) return;
+
       if (
         shown === null ||
         shown.hidden ||
@@ -300,21 +307,27 @@ function useOptionNumbers(
       ) {
         return;
       }
+
       const inbox = shown.parentElement;
       const from = event.target;
+
       if (from !== document.body && !(from instanceof Node && inbox?.contains(from) === true))
         return;
       const number = Number(event.key);
       // Note that a number picks only an option drawn, never one stepped aside while the box starts a new thread.
       const row = optionRows(shown)[number - 1];
+
       if (row === undefined) return;
       const picked = pick?.(draft, number);
+
       if (picked === undefined) return;
       event.preventDefault();
       control.onDraft(item, picked);
       row.focus();
     };
+
     document.addEventListener("keydown", onKey);
+
     return () => document.removeEventListener("keydown", onKey);
   }, [numbered, pane]);
 }
@@ -329,12 +342,16 @@ function useReader(readerId: string | undefined): Actor {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const { members } = useMemberDirectory();
   const member = members?.find((each) => each.userId === readerId);
+
   if (member !== undefined) return memberActor(member, readerId);
+
   if (account?.status === ACCOUNT_STATUS.SIGNED_IN) return accountActor(account);
+
   // Note that a reader known by their id alone is still drawn as a person, by the words the head names them with.
   if (readerId !== undefined) {
     return { kind: ACTOR_KIND.PERSON, userId: readerId, name: DRAFT_HEAD.YOU, you: true };
   }
+
   return { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
 }
 
@@ -355,6 +372,7 @@ function DraftReply({
   children: React.ReactNode;
 }): React.JSX.Element {
   const reader = useReader(readerId);
+
   return (
     <InboxComment
       place={place}
@@ -379,6 +397,7 @@ function SendingReplyWords({
   attachments: readonly AgentAttachment[];
 }): React.JSX.Element {
   const shown = useWordFiles(attachmentChips(attachments), text);
+
   return (
     <WordFilesContext.Provider value={shown.named}>
       {shown.beside.length === 0 ? null : <AttachedFileChips files={shown.beside} uploading />}
@@ -414,6 +433,7 @@ function PendingReply({
   place: VirtualRowPlace;
 }): React.JSX.Element {
   const reader = useReader(readerId);
+
   return (
     <InboxComment
       place={place}
@@ -451,6 +471,7 @@ function AnswerValues({
   texts: ReadonlySet<string>;
 }): React.JSX.Element | null {
   if (values.length === 0) return null;
+
   return (
     <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.TIGHT} className="inbox-values" data-inbox-values="">
       {values.map(({ label, value }) => (
@@ -509,7 +530,9 @@ const NEWER_APP_ASK = `Answer this in a newer ${PRODUCT_NAME}.`;
  */
 function Waiting({ on }: { on: InboxItem["startedBy"] }): React.JSX.Element | null {
   const starter = usePerson(on);
+
   if (on === undefined) return null;
+
   return (
     <span className="inbox-waiting-on text-muted-foreground" data-inbox-waiting="">
       Waiting on {actorName(starter, { sentence: true })}
@@ -552,9 +575,7 @@ function AnsweredMarker(): React.JSX.Element {
  * ink (`SteppedBack`), nothing picked and taking nothing, so what it used to
  * ask still reads in the thread and never as an answer; what became of it
  * is the thread's own line (`ThreadEvent`). An `answer` of words alone,
- * which has no controls, keeps none, as does a to-do naming no steps, whose
- * one step was the item's title as it stood then, which a later post may
- * have renamed.
+ * which has no controls, keeps none.
  */
 function HeldAsk({
   ask,
@@ -566,6 +587,7 @@ function HeldAsk({
 }): React.JSX.Element | null {
   // A to-do naming no steps draws the item's title as its one step, and a later post may have renamed the item since, so the title it drew then is not known.
   if (!hasControls(ask) || (ask.type === INBOX_ASK.DO && ask.steps.length === 0)) return null;
+
   return (
     <div
       className="inbox-ask-replaced flex min-w-0 flex-col gap-control-gap"
@@ -642,6 +664,7 @@ function standsAfter(
   at: number | undefined,
 ): number {
   if (at === undefined) return from;
+
   return Math.max(
     from,
     thread.findLastIndex((message) => message.createdAt <= at),
@@ -660,6 +683,7 @@ function closeNote(
   closerId: string | undefined,
 ): InboxMessage | undefined {
   if (at === undefined) return undefined;
+
   return thread.find(
     (message) =>
       message.author === INBOX_MESSAGE_AUTHOR.MEMBER &&
@@ -677,6 +701,7 @@ function closerOf(
 ): Closer | undefined {
   if (closerId === undefined) return note?.member;
   const named = [item.closedBy, note?.member].find((ref) => ref?.userId === closerId);
+
   return { userId: closerId, name: named?.name };
 }
 
@@ -690,7 +715,9 @@ function closerOf(
 function replacingPost(thread: readonly InboxMessage[], index: number): number {
   const later = (message: InboxMessage, at: number) =>
     at > index && message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+
   const asked = thread.findIndex((message, at) => later(message, at) && message.ask !== undefined);
+
   return asked === -1 ? thread.findIndex(later) : asked;
 }
 
@@ -706,9 +733,13 @@ function withdrawnByStandingClose(
   index: number,
 ): boolean {
   const ask = thread[index]?.ask;
+
   if (!resolvedByMember(item) || ask?.status !== INBOX_ASK_STATUS.WITHDRAWN) return false;
+
   if (ask.withdrawnReason !== undefined) return false;
+
   if (ask.withdrawnAt !== undefined) return ask.withdrawnAt === item.settledAt;
+
   return thread.findLastIndex((message) => message.ask !== undefined) === index;
 }
 
@@ -731,24 +762,32 @@ function askEvent(
 ): { readonly after: number; readonly line: ThreadEventLine } | undefined {
   const message = thread[index];
   const ask = message?.ask;
+
   if (message === undefined || ask === undefined) return undefined;
   const key = message.id;
+
   if (ask.status === INBOX_ASK_STATUS.REPLACED) {
     const next = replacingPost(thread, index);
     const by = next === -1 ? undefined : thread[next];
     const line = { key, kind: THREAD_EVENT.REPLACED, by, at: by?.createdAt } as const;
+
     return { after: next === -1 ? index : next - 1, line };
   }
+
   if (ask.status !== INBOX_ASK_STATUS.WITHDRAWN) return undefined;
+
   if (ask.withdrawnReason !== undefined) {
     const reason = ask.withdrawnReason;
     const line = { key, kind: THREAD_EVENT.WITHDRAWN, reason, at: ask.withdrawnAt } as const;
+
     return { after: standsAfter(thread, index, ask.withdrawnAt), line };
   }
+
   const standing = withdrawnByStandingClose(item, thread, index);
   const at = ask.withdrawnAt ?? (standing ? item.settledAt : undefined);
   const closerId = ask.withdrawnBy ?? (standing ? item.closedBy?.userId : undefined);
   const note = closeNote(thread, at, closerId);
+
   const line = {
     key,
     kind: THREAD_EVENT.RESOLVED,
@@ -756,6 +795,7 @@ function askEvent(
     note,
     at,
   } as const;
+
   return { after: standsAfter(thread, index, at), line };
 }
 
@@ -769,20 +809,26 @@ function askEvent(
  */
 function threadEvents(item: InboxItem, thread: readonly InboxMessage[]): ThreadEventsAfter {
   const events = new Map<number, ThreadEventLine[]>();
+
   const add = (after: number, line: ThreadEventLine) => {
     events.set(after, [...(events.get(after) ?? []), line]);
   };
+
   thread.forEach((_, index) => {
     const event = askEvent(item, thread, index);
+
     if (event !== undefined) add(event.after, event.line);
   });
   const askless = !thread.some((_, index) => withdrawnByStandingClose(item, thread, index));
+
   if (resolvedByMember(item) && askless) {
     const settled = item.settledAt;
+
     const after =
       settled === undefined
         ? thread.length - 1
         : thread.findLastIndex((message) => message.createdAt <= settled);
+
     const note = closeNote(thread, settled, item.closedBy?.userId);
     add(after, {
       key: item.id,
@@ -792,17 +838,20 @@ function threadEvents(item: InboxItem, thread: readonly InboxMessage[]): ThreadE
       at: settled,
     });
   }
+
   return events;
 }
 
 /** The messages a close's line draws as its note, which the thread draws there rather than as messages of their own. */
 function closeNotes(events: ThreadEventsAfter): ReadonlySet<string> {
   const notes = new Set<string>();
+
   for (const lines of events.values()) {
     for (const line of lines) {
       if (line.kind === THREAD_EVENT.RESOLVED && line.note !== undefined) notes.add(line.note.id);
     }
   }
+
   return notes;
 }
 
@@ -851,21 +900,28 @@ function threadRows(
   pending: readonly PendingInboxReply[],
 ): readonly ThreadRow[] {
   const notes = closeNotes(events);
+
   const eventsAt = (after: number): ThreadRow[] =>
     (events.get(after) ?? []).map((line) => ({
       kind: THREAD_ROW.EVENT,
       key: `${line.key}/${line.kind}`,
       line,
     }));
+
   const rows: ThreadRow[] = eventsAt(-1);
+
   for (const [at, message] of thread.entries()) {
     if (!notes.has(message.id)) rows.push({ kind: THREAD_ROW.MESSAGE, key: message.id, message });
+
     if (at === 0 && thread.length >= INBOX_BOUNDS.MAX_MESSAGES_READ) {
       rows.push({ kind: THREAD_ROW.EARLIER, key: THREAD_ROW.EARLIER });
     }
+
     rows.push(...eventsAt(at));
   }
+
   for (const reply of pending) rows.push({ kind: THREAD_ROW.PENDING, key: reply.key, reply });
+
   return rows;
 }
 
@@ -884,9 +940,12 @@ function namedCloser(
   if (closer === undefined) return undefined;
   const { userId } = closer;
   const known = (each: { readonly userId: string }) => each.userId === userId;
+
   const name =
     closer.name ?? directory.members?.find(known)?.name ?? directory.former?.find(known)?.name;
+
   if (name !== undefined) return { userId, name };
+
   return userId === directory.readerId ? { userId, name: "" } : undefined;
 }
 
@@ -913,9 +972,11 @@ function ThreadEvent({
   place: VirtualRowPlace;
 }): React.JSX.Element {
   const directory = useMemberDirectory();
+
   const closer = usePerson(
     line.kind === THREAD_EVENT.RESOLVED ? namedCloser(line.closer, directory) : undefined,
   );
+
   if (line.kind === THREAD_EVENT.RESOLVED) {
     return (
       <InboxComment
@@ -934,7 +995,9 @@ function ThreadEvent({
       </InboxComment>
     );
   }
+
   const agent = { author: commentAuthor(by.subject.tile), nameRef: <AgentName by={by} /> };
+
   if (line.kind === THREAD_EVENT.WITHDRAWN) {
     return (
       <InboxComment
@@ -949,12 +1012,14 @@ function ThreadEvent({
       </InboxComment>
     );
   }
+
   const said =
     line.by === undefined
       ? AGENT_DID.REPLACED
       : line.by.ask === undefined
         ? AGENT_DID.REPLACED_BY_MESSAGE
         : AGENT_DID.REPLACED_BY_QUESTION;
+
   return (
     <InboxComment
       place={place}
@@ -975,7 +1040,9 @@ function ThreadEvent({
  */
 function AskMarker({ on }: { on: InboxItem["startedBy"] }): React.JSX.Element | null {
   const starter = usePerson(on);
+
   if (on === undefined) return null;
+
   return <WaitingMarker on={actorName(starter, { sentence: true })} />;
 }
 
@@ -1019,18 +1086,23 @@ function AskBox({
       </div>
     );
   }
+
   if (ask.status === INBOX_ASK_STATUS.REPLACED || ask.status === INBOX_ASK_STATUS.WITHDRAWN) {
     return <HeldAsk ask={ask} title={title} />;
   }
+
   if (ask.status === INBOX_ASK_STATUS.OPEN) {
     return <AskMarker on={waitingOn} />;
   }
+
   // The card goes with the reply that answered it, wherever the thread read still carries that reply.
   const answered = ask.status === INBOX_ASK_STATUS.ANSWERED;
+
   if (answered && answerOf(thread, message.id)?.answers !== undefined) {
     // An answer of words alone draws no card, so its marker says here that it was answered.
     return ask.type === INBOX_ASK.ANSWER && ask.fields === undefined ? <AnsweredMarker /> : null;
   }
+
   return (
     <div className={INBOX_ASK_BOX} data-inbox-ask={ask.status}>
       <Card look={CARD_LOOK.RAISED} padding={CARD_PADDING.FLUSH}>
@@ -1058,19 +1130,10 @@ function answeredAsk(
 const NO_TEXT_LABELS: ReadonlySet<string> = new Set();
 
 /**
- * One message of the thread, a Markdown document, as its
- * writer's comment: a member by their face and name, the agent by its tile
- * and name and a quiet "agent" after it, then when. An answer leads with
- * the card of the ask it answered, filled in as it was answered
- * (`AnsweredCard`), or, where the thread read no longer carries that ask,
- * its stamp and its values listed; then its words, the agent's drawn as its
- * question's are and a member's as a sent message's, and the files it
- * carried after them, a picture its words draw standing there alone;
- * an agent's message that asks ends with its ask's box, a marker alone
- * while it waits, until it is answered. It is drawn again only where it is
- * handed another prop (`memo`), each the part of the item it draws, so a
- * change to the item that leaves the message as it was, as marking it read
- * does, draws none of the thread's messages again.
+ * One message of the thread as its writer's comment. It is drawn again only
+ * where it is handed another prop (`memo`), each the part of the item it
+ * draws, so a change to the item that leaves the message as it was, as
+ * marking it read does, draws none of the thread's messages again.
  */
 const ThreadMessage = memo(function ThreadMessage({
   itemId,
@@ -1087,7 +1150,7 @@ const ThreadMessage = memo(function ThreadMessage({
   itemId: string;
   /** The item's title, as `cardTitle` reads it. */
   title: string;
-  /** The member the item's agent addressed its thread to (`inboxAddressedTo`), which an open ask from before messages kept their own addressee is addressed to. */
+  /** The member the item's agent addressed its thread to (`inboxAddressedTo`). */
   threadAddressedTo: InboxItem["waitsOn"];
   message: InboxMessage;
   thread: readonly InboxMessage[];
@@ -1099,11 +1162,14 @@ const ThreadMessage = memo(function ThreadMessage({
 }): React.JSX.Element {
   const writer = useMessageWriter(message, by);
   const answers = message.answers;
+
   // Note that an open ask from before messages kept their own addressee is addressed as its thread is.
   const addressedTo =
     message.addressedTo ??
     (message.ask?.status === INBOX_ASK_STATUS.OPEN ? threadAddressedTo : undefined);
+
   const answered = answers === undefined ? undefined : answeredAsk(thread, answers);
+
   return (
     <InboxComment
       place={place}
@@ -1180,8 +1246,10 @@ function phoneItemGroups(
             command: APP_COMMAND.NEXT_INBOX_ITEM,
           },
         ];
+
   const { onOpenHolder } = doors;
   const { task } = holder;
+
   // ⌘O opens the item's task (`desktop-inbox.tsx`).
   const holderItem: MenuAction = {
     label: OPEN_TASK,
@@ -1191,6 +1259,7 @@ function phoneItemGroups(
     onSelect: onOpenHolder,
     command: APP_COMMAND.OPEN_IN_TASK,
   };
+
   const agentItem: MenuAction = {
     label: OPEN_AGENT,
     detail: by.subject.name,
@@ -1198,10 +1267,12 @@ function phoneItemGroups(
     icon: <BotIcon />,
     onSelect: by.onOpen,
   };
+
   const panel: MenuAction[] =
     phone.onShowPanel === undefined
       ? []
       : [{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
+
   return [steps, [holderItem, agentItem], panel].filter((group) => group.length > 0);
 }
 
@@ -1240,17 +1311,21 @@ function InboxItemMenu({
   heading?: React.ReactNode;
 }): React.JSX.Element | null {
   const menu = useMenu(shown);
-  // Note that a time of the reader's own is picked from the item's row, whose list holds the picker, so this menu offers the times alone.
   // The item the pane shows is the one the Inbox's U, H, and E act on, so its ⋯ names their chords.
   useShortcutTarget(shown ? inboxItemSubject(item.id) : undefined, INBOX_ITEM_KEYS);
+
+  // Note that a time of the reader's own is picked from the item's row, whose list holds the picker, so this menu offers the times alone.
   const { groups: itemGroups } = useInboxItemActions(item, {
     onMark,
     onResolve: onClose,
     remind: onRemind === undefined ? undefined : { onRemind },
   });
+
   // Note that a phone's ⋯, the one given a lead, also stands in for ⌘F, read here as the menu is drawn rather than as the lead was made.
   const groups = itemGroups(lead === NO_LEAD ? lead : [...lead, ...phoneFindGroups()]);
+
   if (groups.length === 0) return null;
+
   return (
     <>
       <MoreButton thing={ITEM_THING} {...menu.trigger()} />
@@ -1284,6 +1359,7 @@ function QuestionResolve({
   resolver: InboxResolver | undefined;
 }): React.JSX.Element | null {
   const resolve = resolveAction([item], resolver);
+
   return resolve === undefined ? null : (
     <Tooltip label={resolve.label}>
       <IconButton
@@ -1346,14 +1422,18 @@ function useHeadingAway(
     itemId,
     away: false,
   });
+
   useEffect(() => {
     const scroller = board.current;
+
     if (scroller === null || heading === null || typeof IntersectionObserver === "undefined") {
       return undefined;
     }
+
     const seen = new IntersectionObserver(
       (entries) => {
         const entry = entries.at(-1);
+
         if (entry === undefined) return;
         const top = entry.rootBounds?.top ?? 0;
         setAway({
@@ -1363,9 +1443,12 @@ function useHeadingAway(
       },
       { root: scroller },
     );
+
     seen.observe(heading);
+
     return () => seen.disconnect();
   }, [board, heading, itemId]);
+
   return away.itemId === itemId && away.away;
 }
 
@@ -1384,6 +1467,7 @@ function AnswerMentions({
 function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[] {
   const { repository } = holder.task;
   const body = (item.thread ?? []).map((message) => message.text).join("\n");
+
   return dictationKeywords({ repository, title: item.title, body });
 }
 
@@ -1422,6 +1506,7 @@ export interface InboxNewThread {
  */
 function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent): AnswerNewThread {
   const { name, tile } = by.subject;
+
   return {
     agent: (
       <InlineRef
@@ -1475,21 +1560,22 @@ function Crumbs({
   const path = (task: CrumbHeld, agent: CrumbHeld | undefined) => {
     const crumbs: Crumb[] = [
       taskCrumb(holder, doors, task),
-      // Note that once the title joins the path the agent's crumb keeps its size, so a narrow bar cuts the task's crumb short first and then the title.
       agentCrumb(by, titleShown, agent),
       { label: title, current: true, shown: titleShown },
     ].filter((crumb) => crumb !== undefined);
+
     return (
       <div className="inbox-crumbs flex min-w-0 flex-initial">
         <Breadcrumbs label="Path" crumbs={crumbs} />
       </div>
     );
   };
+
   // The agent's crumb holds its menu where the window lists the agent, which an agent started on another Mac may not be.
   const listed = by.subject.agent;
-  // While the thread holds the keys, they act on its task, the agent's copies on its agent; U and P stay the thread's.
   const keys = doors.keys === true;
   const agentKeys = keys ? THREAD_AGENT_COPY_KEYS : NO_CRUMB_KEYS;
+
   const withAgent = (task: CrumbHeld) =>
     listed === undefined ? (
       path(task, undefined)
@@ -1498,6 +1584,7 @@ function Crumbs({
         {(agent) => path(task, agent)}
       </AgentCrumbMenu>
     );
+
   return (
     <TaskCrumbMenu
       tasks={doors.tasks}
@@ -1517,6 +1604,7 @@ function taskCrumb(
 ): Crumb {
   const { onOpenHolder } = doors;
   const { task } = holder;
+
   return {
     label: task.name,
     glyph: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
@@ -1531,6 +1619,7 @@ function taskCrumb(
 /** The path's agent crumb, wearing its mark and hanging its card, which opens its tab and holds its menu (`held`); `fixed` keeps its size where the crumbs after it give way first. */
 function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined): Crumb {
   const { name, agent } = by.subject;
+
   return {
     label: name,
     glyph: tabLook({ kind: TAB_KIND.AGENT, name, agent }).icon,
@@ -1562,6 +1651,7 @@ function PhoneHolder({
   narrowed: (() => void) | undefined;
 }): React.JSX.Element {
   const holds = taskCrumb(holder, doors);
+
   return (
     <Breadcrumbs
       label="Path"
@@ -1631,15 +1721,18 @@ export function InboxPane({
   const now = useMinute();
   const board = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLElement>(null);
+
   // The box's door a quote is laid in through, which the pages the thread draws offer Reply through; held in a record, since a function handed to a state's setter is read as an update.
   const [quoteDoor, setQuoteDoor] = useState<{ readonly lay: (words: string) => void } | undefined>(
     undefined,
   );
+
   const onQuoteDoor = useCallback(
     (lay: ((words: string) => void) | undefined) =>
       setQuoteDoor(lay === undefined ? undefined : { lay }),
     [],
   );
+
   // The thread's run of rows, which a quote laid into the box takes to its end, the box being its last row.
   const run = useRef<VirtualRowsHandle>(null);
   const onQuoted = useCallback(() => run.current?.scrollToEnd(), []);
@@ -1654,6 +1747,7 @@ export function InboxPane({
   // Note that the agent and the pictures are handed to the thread's messages as the same objects while they say the same, so a message is drawn again only where it moved (`ThreadMessage`).
   const onOpenAgent = useSteadyDoor(() => doors.onOpenAgent(item.agentId));
   const { agents: listedAgents, archived, models, me, pullRequests } = agents;
+
   const by: ItemAgent = useMemo(
     () => ({
       subject: agentSubject(
@@ -1667,6 +1761,7 @@ export function InboxPane({
     }),
     [listedAgents, archived, models, me, pullRequests, item.agentId, onOpenAgent],
   );
+
   const { images } = control;
   const open = item.status === INBOX_STATUS.OPEN;
   const draft = control.draftOf(item);
@@ -1676,6 +1771,7 @@ export function InboxPane({
   const rows = useMemo(() => threadRows(thread, events, pending), [thread, events, pending]);
   // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes.
   const rowKeys = useMemo(() => [...rows.map((row) => row.key), DRAFT_ROW_KEY], [rows]);
+
   // The reader's own newest reply, on its way or landed, which takes the thread to its end as it lands, as TanStack's example does on a send.
   const ownLast = rows.findLast(
     (row) =>
@@ -1685,7 +1781,9 @@ export function InboxPane({
         readerId !== undefined &&
         row.message.member?.userId === readerId),
   )?.key;
+
   useOptionNumbers(pane, item, draft, control, open ? numberedPickOf(thread) : undefined);
+
   const formText: FormTextDoors = {
     self: item.agentId,
     agent: by.subject.agent,
@@ -1693,6 +1791,7 @@ export function InboxPane({
     keywords: answerKeywords(holder, item),
     onEnter: () => sendFromPane(pane.current),
   };
+
   // Note that the item's words are read under its own workspace, its plan's, never the one the Inbox lists, which may not be the item's.
   const { workspaceId } = holder.task;
   const onDraft = (next: InboxDraft) => control.onDraft(item, next);
@@ -1701,6 +1800,7 @@ export function InboxPane({
   const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
   // Note that an ask of words alone has no controls, so the box stands plain and its words answer it.
   const wordsAlone = openAsk?.type === INBOX_ASK.ANSWER && openAsk.fields === undefined;
+
   const question =
     openAsk === undefined || wordsAlone ? undefined : (
       <DraftQuestion
@@ -1714,7 +1814,7 @@ export function InboxPane({
         />
       </DraftQuestion>
     );
-  // The box stands at the thread's end as the reader's draft reply.
+
   const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
       <DraftReply readerId={readerId} place={place}>
@@ -1737,6 +1837,7 @@ export function InboxPane({
       </DraftReply>
     </AnswerMentions>
   );
+
   return (
     <section
       ref={pane}
@@ -1808,7 +1909,6 @@ export function InboxPane({
           pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
           actions={
             <>
-              {/* The bar ends in the pager, where the item stands alone, and the item's ⋯ menu. */}
               {pager === undefined ||
               (pager.onPrevious === undefined && pager.onNext === undefined) ? null : (
                 <ReplayUnmask>
@@ -1828,12 +1928,10 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        {/* The thread is a log as an agent's transcript is: each item opens at its newest message, the box at its end, and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
         <Conversation list={board}>
           <ConversationContent
             className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
           >
-            {/* The item's words are drawn as documents: its own pictures read through the Inbox, and a link alone on its line as its card. */}
             <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
               <Subject item={item} heading={setHeading} first={phoneHead} />
               <ReplyDoorProvider value={quoteDoor?.lay}>
@@ -1852,6 +1950,7 @@ export function InboxPane({
                 >
                   {(at, place) => {
                     const row = rows[at];
+
                     switch (row?.kind) {
                       case THREAD_ROW.EVENT:
                         return (

@@ -48,6 +48,7 @@ beforeEach(() => {
   fakeAppBridge({});
   fakeActPortAnswering((request) => {
     sent.push({ kind: request.kind });
+
     return Promise.resolve(undefined);
   });
   handCapabilities(DESKTOP_CAPABILITIES);
@@ -86,6 +87,7 @@ async function stateArrived(): Promise<void> {
 /** The release-ready toast, mounted as `App` mounts it. */
 function ReadyToast(): null {
   useReadyToast();
+
   return null;
 }
 
@@ -93,6 +95,7 @@ function ReadyToast(): null {
 function HelpOffers({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.SEND_FEEDBACK, () => ran.push(APP_COMMAND.SEND_FEEDBACK));
   useAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS, () => ran.push(APP_COMMAND.KEYBOARD_SHORTCUTS));
+
   return null;
 }
 
@@ -165,6 +168,7 @@ function mount(
       ),
     ),
   );
+
   return (
     container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("the foot draws the account's button")
@@ -178,20 +182,25 @@ function accountMenu(): HTMLElement | null {
 /** The account menu's own lines as they stand down its scrolling column: its heading, items, and rules. */
 function accountMenuColumn(): Element[] {
   const first = accountMenu()?.querySelector('[role^="menuitem"]');
+
   return [...(first?.parentElement?.children ?? [])];
 }
 
 /** The open account menu as it reads down: its heading, each item's label and chord, and a dash for each rule; not the unseen focus guards a submenu standing beside it leaves among them. */
 function accountMenuLines(): string[] {
   accountMenu() ?? assert.fail("the account's menu stands");
+
   const lines = accountMenuColumn().filter((line) =>
     line.matches('hr, [role^="menuitem"], [role="none"]'),
   );
+
   return lines.map((line) => {
     if (line.matches("hr")) return "—";
+
     const words = [...line.querySelectorAll(":scope > span, :scope > kbd")].map(
       (part) => part.textContent ?? "",
     );
+
     return words.filter((word) => word !== "").join(" ");
   });
 }
@@ -218,6 +227,7 @@ function accountItem(label: string): HTMLButtonElement {
       line instanceof HTMLButtonElement &&
       line.querySelector(".ui-menu-item-label")?.textContent === label,
   );
+
   return item ?? assert.fail(`the account's menu offers ${label}`);
 }
 
@@ -241,6 +251,7 @@ test("the account's menu opens Keyboard shortcuts and the changelog, each closin
   const ran: string[] = [];
   const button = mount(DEAN, { ran });
   await stateArrived();
+
   for (const label of ["Keyboard shortcuts", "Changelog"]) {
     act(() => button.click());
     await act(async () => accountItem(label).click());
@@ -274,6 +285,7 @@ test("Contact us flies out its own menu beside the account's, which stands whole
 test("Left or Escape closes Contact us's menu alone, and choosing in it closes both", async () => {
   const button = mount(DEAN);
   act(() => button.click());
+
   for (const key of ["ArrowLeft", "Escape"]) {
     act(() => accountItem("Contact us").click());
     act(() =>
@@ -289,9 +301,11 @@ test("Left or Escape closes Contact us's menu alone, and choosing in it closes b
   }
 
   act(() => accountItem("Contact us").click());
+
   const email = [...(contactMenu()?.querySelectorAll("button") ?? [])].find(
     (item) => item.textContent === "Email",
   );
+
   await act(async () => email?.click());
   assert.equal(accountMenu(), null);
   assert.equal(contactMenu(), null, "the submenu goes with the menu");
@@ -314,10 +328,12 @@ test("in the window's bottom-left corner, Contact us's menu opens rightward and 
     height: 340,
   });
   placeAt(contact, { left: 16, top: 640, width: 200, height: 32 });
+
   // Note that a menu is laid out 196 by 74, its own offset size as well, as a browser lays it out, though jsdom lays out nothing.
   const menuBox = (element: HTMLElement) =>
     element.getAttribute("role") === "menu" ||
     element.querySelector(':scope > [role="menu"]') !== null;
+
   const measured = HTMLElement.prototype.getBoundingClientRect;
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
@@ -344,21 +360,26 @@ test("in the window's bottom-left corner, Contact us's menu opens rightward and 
   });
 
   const submenu = contactMenu() ?? assert.fail("Contact us opens its submenu");
+
   const at = /translate\((-?[\d.]+px), (-?[\d.]+px)\)/u.exec(
     submenu.parentElement?.style.transform ?? "",
   );
+
   assert.equal(at?.[1], "226px", "beside the menu's right edge");
   assert.equal(at?.[2], "602px", "its foot level with Contact us's");
 });
 
 test("Sign out signs the account out on the press, with no question first", async () => {
   let signOuts = 0;
+
   const button = mount(DEAN, {
     onSignOut: () => {
       signOuts += 1;
+
       return Promise.resolve();
     },
   });
+
   act(() => button.click());
 
   await act(async () => accountItem("Sign out").click());
@@ -390,10 +411,12 @@ test("signed out, the account says so and its menu names no one and offers no Si
 
 test("in the window, the account's menu opens with the reader's own profile, once their account's id is known", () => {
   const opened: string[] = [];
+
   const button = mount(
     { ...DEAN, id: "user-dean" },
     { openPerson: (userId) => opened.push(userId) },
   );
+
   act(() => button.click());
 
   assert.equal(accountMenuLines()[2], "Your profile");
@@ -405,9 +428,11 @@ test("Send feedback beside the gear runs the Help menu's Send feedback, with no 
   const ran: string[] = [];
   mount(DEAN, { ran });
   await stateArrived();
+
   const feedback =
     document.querySelector<HTMLButtonElement>('button[aria-label="Send feedback"]') ??
     assert.fail("the foot draws Send feedback");
+
   act(() => feedback.click());
 
   assert.deepEqual(ran, [APP_COMMAND.SEND_FEEDBACK]);
@@ -417,9 +442,11 @@ test("Send feedback beside the gear runs the Help menu's Send feedback, with no 
 test("the gear goes to Settings, and marks itself the page while Settings shows", () => {
   let opened = 0;
   mount(DEAN, { onSettings: () => opened++ });
+
   const gear = (): HTMLButtonElement =>
     document.querySelector<HTMLButtonElement>('button[aria-label="Settings"]') ??
     assert.fail("the foot draws the gear");
+
   assert.equal(gear().getAttribute("aria-current"), null);
   act(() => gear().click());
   assert.equal(opened, 1);
@@ -437,28 +464,34 @@ test("an update ready to install offers Restart in the sidebar once its toast is
     installSupported: true,
     latestVersion: "1.1.0",
   };
+
   const footWith = (capabilities: readonly HostCapability[]) =>
     footOn(
       { run: { ...stateWith({}, {}).run, capabilities }, update: ready },
       { update: ready, readyToast: true },
     );
+
   // The sidebar's own Restart, not the toast's.
   const sidebarRestart = () =>
     [...document.querySelectorAll("button")].some(
       (button) => button.textContent === "Restart" && button.closest(".ui-toast") === null,
     );
+
   window.localStorage.clear();
 
   // The release's toast stands, offering the same Restart, so the sidebar waits.
   await footWith(DESKTOP_CAPABILITIES);
+
   const dismiss = await vi.waitFor(
     () =>
       document.querySelector<HTMLButtonElement>(`${STANDING_TOAST} button[aria-label="Dismiss"]`) ??
       assert.fail("the release's toast stands"),
   );
+
   assert.equal(sidebarRestart(), false);
   act(() => dismiss.click());
   await vi.waitFor(() => assert.equal(sidebarRestart(), true));
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   window.localStorage.clear();
@@ -472,7 +505,9 @@ test("the Mac offline says so in the foot, and nothing does while it is online",
     await footOn({ network: { online, reachable: true } });
     const mark = document.querySelector('.offline-mark[aria-label="Offline"]');
     const words = mark?.textContent ?? null;
+
     for (const root of roots.splice(0)) act(() => root.unmount());
+
     return words;
   };
 

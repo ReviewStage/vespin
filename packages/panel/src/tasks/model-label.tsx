@@ -24,6 +24,7 @@ export function ModelLabel({
   models: readonly CatalogModel[];
 }): React.JSX.Element {
   const words = choiceWords(choice, models);
+
   return (
     <span className="model-label whitespace-nowrap" data-model-label="">
       <span className="model-label-name">{words.model}</span>

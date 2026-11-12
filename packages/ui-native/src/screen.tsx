@@ -15,6 +15,7 @@ import { useColors } from "./tokens/colors.js";
  */
 export function Screen({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
       {children}

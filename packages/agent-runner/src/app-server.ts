@@ -87,6 +87,7 @@ export interface AppServerCommand {
 
 /** A request method the pinned protocol defines, and the params it takes. */
 export type RequestMethod = ClientRequest["method"];
+
 export type RequestParams<M extends RequestMethod> = Extract<
   ClientRequest,
   { method: M }
@@ -154,6 +155,7 @@ const IncomingSchema = Schema.Struct({
     }),
   ),
 });
+
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json));
 const decodeIncoming = Schema.decodeUnknownOption(IncomingSchema);
 
@@ -170,6 +172,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const scope = yield* Scope.Scope;
   const stdin = yield* Queue.unbounded<Uint8Array>();
+
   const handle = yield* spawner
     .spawn(
       ChildProcess.make(command.executable, command.args, {
@@ -179,7 +182,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
         stdin: { stream: Stream.fromQueue(stdin), endOnDone: true },
         killSignal: APP_SERVER_KILL.SIGNAL,
         forceKillAfter: APP_SERVER_KILL.GRACE,
-        ...(command.inRunnerGroup === true ? { detached: false } : {}),
+        ...(command.inRunnerGroup === true && { detached: false }),
       }),
     )
     .pipe(
@@ -196,20 +199,25 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
   // Note that a request is refused once stdout has ended, because no reader
   // is left to answer it; the check and the registration are one step.
   let closed = false;
+
   const write = (message: Outgoing) =>
     Queue.offer(stdin, encoder.encode(`${JSON.stringify(message)}\n`)).pipe(Effect.asVoid);
 
   const takeLine = (line: string): Effect.Effect<void> => {
     const value = decodeJson(line);
     const incoming = Option.flatMap(value, decodeIncoming);
+
     if (Option.isNone(value) || Option.isNone(incoming)) {
       return Effect.logWarning(
         "agent-runner: skipped a line app-server wrote that is not JSON-RPC",
       );
     }
+
     const { id, method, params, result, error } = incoming.value;
+
     if (method !== undefined && id !== undefined) {
       const served = listener.onRequest?.({ id, method, params });
+
       if (served === undefined) {
         return write({
           id,
@@ -218,6 +226,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
           Effect.andThen(Effect.logWarning(`agent-runner: refused app-server's ${method} request`)),
         );
       }
+
       return served.pipe(
         Effect.matchEffect({
           onSuccess: (result) => write({ id, result }),
@@ -228,13 +237,17 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
         Effect.asVoid,
       );
     }
+
     if (method !== undefined) {
       // SAFETY: a JSON-RPC notification app-server wrote is one of the pinned protocol's `ServerNotification`s.
       return listener.onNotification(value.value as CodexNotification);
     }
+
     const answer = pending.get(Number(id));
     pending.delete(Number(id));
+
     if (answer === undefined) return Effect.void;
+
     return error === undefined
       ? Deferred.succeed(answer, result ?? null).pipe(Effect.asVoid)
       : Deferred.fail(
@@ -254,6 +267,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
     closed = true;
     const unanswered = [...pending.values()];
     pending.clear();
+
     return Effect.forEach(
       unanswered,
       (answer) =>
@@ -264,6 +278,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
       Effect.andThen(Effect.suspend(() => listener.onExit(stderrTail))),
     );
   });
+
   const stderrRead = yield* handle.stderr.pipe(
     Stream.decodeText(),
     Stream.runForEach((chunk) =>
@@ -274,6 +289,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
     Effect.ignore,
     Effect.forkScoped,
   );
+
   yield* handle.stdout.pipe(
     Stream.decodeText(),
     Stream.splitLines,
@@ -288,10 +304,12 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
       const id = nextId;
       nextId += 1;
       const answer = Deferred.makeUnsafe<Schema.Json, AppServerError>();
+
       if (closed) return yield* new AppServerError({ method, detail: "app-server exited" });
       pending.set(id, answer);
       yield* write({ id, method, params });
       const bound = OPENING_METHODS.has(method) ? REQUEST_TIMEOUT.OPEN : REQUEST_TIMEOUT.DEFAULT;
+
       // Note that an unanswered request is forgotten, so an answer that comes late is dropped.
       return yield* Deferred.await(answer).pipe(
         Effect.timeoutOrElse({
@@ -299,6 +317,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
           orElse: () =>
             Effect.suspend(() => {
               pending.delete(id);
+
               return Effect.fail(
                 new AppServerError({ method, detail: "app-server did not answer in time" }),
               );
@@ -311,6 +330,8 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
           new AppServerError({ method, detail: error.detail, code: error.code, data: error.data }),
       ),
     );
+
   const notify = (method: string) => write({ method });
+
   return { request, notify } satisfies AppServer;
 });

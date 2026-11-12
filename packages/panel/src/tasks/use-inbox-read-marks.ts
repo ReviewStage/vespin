@@ -14,7 +14,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { firstRefusal, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
+import { firstNotKept, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
@@ -96,6 +96,7 @@ export function useInboxReadMarks({
   const { mutateAsync: sendReadState } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
   const { mutateAsync: sendReadAll } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL));
   const { mutateAsync: sendRemind } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
+
   const refused = useCallback(
     (words: string, cause: unknown, about: FailureAbout) =>
       toast({
@@ -106,39 +107,49 @@ export function useInboxReadMarks({
       }),
     [toast],
   );
+
   const acknowledge = useInboxAcknowledger();
+
   const nodAll = useCallback(
     (items: readonly InboxItem[]) => {
       const now = Date.now();
       const nodding = items.filter((item) => settledOnRead(item, readerId, now));
+
       if (nodding.length > 0) acknowledge(nodding);
     },
     [acknowledge, readerId],
   );
+
   const sendMark = useCallback(
     (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> =>
       sendReadState({ itemId: item.id, unread })
         .catch(unreached)
         .then((answer) => {
           if (!("failure" in answer)) return KEPT;
+
           if (saying?.quiet !== true) {
             refused(markedNote(unread, 0, 1), answer, { inboxItemId: item.id, workspaceId });
           }
+
           return notKept(answer);
         }),
     [sendReadState, workspaceId, refused],
   );
+
   const onMark = useCallback(
     (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> => {
       if (!unread) nodAll([item]);
+
       return sendMark(item, unread, saying);
     },
     [sendMark, nodAll],
   );
+
   const onMarkAll = useCallback(
     (items: readonly InboxItem[]) => {
       nodAll(items);
-      const itemIds = items.filter(isUnread).map((item) => item.id);
+      const itemIds = items.flatMap((item) => (isUnread(item) ? [item.id] : []));
+
       if (itemIds.length === 0) return;
       sendReadAll({
         ...(workspaceId === undefined ? undefined : { workspaceId }),
@@ -152,17 +163,20 @@ export function useInboxReadMarks({
     },
     [sendReadAll, nodAll, workspaceId, refused],
   );
+
   // Note that each item's mark goes on its own, there being no act marking several but the workspace's whole, and one toast answers them all.
   const onMarkEach = useCallback(
     (items: readonly InboxItem[]) => {
       nodAll(items);
       const marking = items.filter(isUnread);
+
       if (marking.length === 0) return;
       void Promise.all(marking.map((item) => sendMark(item, false, { quiet: true }))).then(
         (taken) => {
           const landed = taken.filter((each) => each.kept).length;
+
           if (landed === marking.length) return;
-          refused(markedNote(false, landed, marking.length - landed), firstRefusal(taken), {
+          refused(markedNote(false, landed, marking.length - landed), firstNotKept(taken)?.cause, {
             workspaceId,
           });
         },
@@ -170,11 +184,14 @@ export function useInboxReadMarks({
     },
     [sendMark, nodAll, workspaceId, refused],
   );
+
   const { remind } = useInboxPresses();
+
   // Note that a reminder reaches the reader alone and is undone by putting back what it replaced, so it asks nothing and offers Undo through the undo stack, as the panel's other such acts do.
   const onRemind = useCallback(
     (item: InboxItem, until: number | null, saying?: RemindSaying): Promise<Kept> => {
       const pressed = until === null || saying?.quiet === true ? undefined : remind([item], until);
+
       return sendRemind({ itemId: item.id, until })
         .catch(unreached)
         .then((answer) => {
@@ -183,18 +200,23 @@ export function useInboxReadMarks({
               inboxItemId: item.id,
               workspaceId,
             });
+
             return notKept(answer);
           }
+
           if (pressed !== undefined && until !== null) {
             const words = `Reminder set for ${remindWords(until, Date.now())}`;
             const said = pressed.keep(words);
+
             if (said !== undefined) toast(said);
           }
+
           return KEPT;
         });
     },
     [sendRemind, remind, workspaceId, refused, toast],
   );
+
   return useMemo(
     () => ({ onMark, onMarkAll, onMarkEach, onOpenRead: sendMark, onRemind }),
     [onMark, onMarkAll, onMarkEach, sendMark, onRemind],
@@ -224,10 +246,13 @@ export function useReadOnOpen({
   useEffect(() => {
     if (shown === undefined) {
       readOn.current = undefined;
+
       return;
     }
+
     if (readOn.current === shown.id) return;
     readOn.current = shown.id;
+
     if (isUnread(shown)) afterPaint(() => onOpenRead(shown, false));
   }, [shown, onOpenRead]);
   useAppCommand(
@@ -263,16 +288,21 @@ export function useNodOnOpen({
   useEffect(() => {
     if (shown === undefined) {
       nodded.current = undefined;
+
       return;
     }
+
     // Note that nothing is settled until a read of the holder and the reader's id stand, so neither an older revision nor a teammate's notice is acknowledged.
     if (!drawn || failed || readerId === undefined) return;
     const { item } = shown;
     const was = nodded.current;
+
     if (was !== undefined && was.id === item.id && was.revision === item.revision) return;
     nodded.current = { id: item.id, revision: item.revision };
+
     if (!acknowledgedOnOpen(item, readerId)) return;
     const draft = draftOf(item);
+
     if (draft.note.trim() !== "" || draft.attachments.length > 0) return;
     afterPaint(() => onAcknowledge(item));
   }, [shown, readerId, drawn, failed, draftOf, onAcknowledge]);

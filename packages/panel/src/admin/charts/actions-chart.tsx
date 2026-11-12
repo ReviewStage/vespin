@@ -60,6 +60,7 @@ export function ActionsChart({
   const totals = actions.daily.map((point) =>
     KINDS.reduce((total, kind) => total + point[kind], 0),
   );
+
   if (seriesHasNoData(totals)) {
     return (
       <ChartFrame title={ACTIONS_TITLE} aside={<ChartTrend trend={actions.actionsTrend} />}>

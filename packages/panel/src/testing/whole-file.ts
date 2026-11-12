@@ -12,6 +12,7 @@ export async function wholeFileDrawn(container: HTMLElement): Promise<void> {
   await vi.waitFor(
     async () => {
       await act(async () => undefined);
+
       if (!wholeFileRoot(container)?.querySelector("[data-line]")) throw new Error("not drawn");
     },
     { timeout: 4000, interval: 10 },
@@ -26,6 +27,7 @@ export function wholeFileRoot(container: HTMLElement): ShadowRoot | undefined {
 /** Each line the whole file under `container` draws, its number then its text; none where none is drawn. */
 export function wholeFileLines(container: HTMLElement): string[] {
   const root = wholeFileRoot(container);
+
   return [...(root?.querySelectorAll("[data-line]") ?? [])].map(
     (row) => `${row.getAttribute("data-line")} ${row.textContent}`,
   );
@@ -34,7 +36,9 @@ export function wholeFileLines(container: HTMLElement): string[] {
 /** Presses a line's number in the whole file under `container`, as the reader picks it, with ⇧ to pick on from the line picked. */
 export function pressLineNumber(container: HTMLElement, line: number, shiftKey = false): void {
   const number = wholeFileRoot(container)?.querySelector(`[data-column-number="${line}"]`);
+
   if (number === null || number === undefined) throw new Error(`line ${line} is drawn`);
+
   const at = {
     bubbles: true,
     composed: true,
@@ -43,6 +47,7 @@ export function pressLineNumber(container: HTMLElement, line: number, shiftKey =
     pointerType: "mouse",
     shiftKey,
   };
+
   number.dispatchEvent(new PointerEvent("pointerdown", at));
   document.dispatchEvent(new PointerEvent("pointerup", at));
 }

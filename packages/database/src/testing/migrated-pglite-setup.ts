@@ -18,6 +18,7 @@ export default async function setup(): Promise<() => Promise<void>> {
   const directory = await mkdtemp(join(tmpdir(), "luke-migrated-pglite-"));
   const removeDirectory = () => rm(directory, { recursive: true, force: true });
   const file = join(directory, "migrated.tar");
+
   try {
     await writeMigratedPgliteDump(file);
   } catch (error) {
@@ -25,6 +26,8 @@ export default async function setup(): Promise<() => Promise<void>> {
     await removeDirectory();
     throw error;
   }
+
   process.env[MIGRATED_PGLITE_ENVIRONMENT.DUMP] = file;
+
   return removeDirectory;
 }

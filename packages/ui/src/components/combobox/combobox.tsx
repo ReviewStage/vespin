@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ComponentPropsWithRef, ReactNode, Ref, RefObject } from "react";
 import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
@@ -215,6 +216,7 @@ export function ComboboxOptionItem({
   const more = option.more;
   // Note that an option with a ⋯ keeps its end's room though it is not chosen, so the ⋯ of every such option stands in one column.
   const ended = option.opens === true || option.current === true || more !== undefined;
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the field or the engine reads the keys and names this option active.
     <div
@@ -259,7 +261,7 @@ export function ComboboxOptionItem({
         )}
       >
         {/* A label drawn as a tree (marked for a recording, or a search's matches) is measured by its plain words, so its hint still says it whole. */}
-        <OneLine words={typeof option.label === "string" ? undefined : option.words}>
+        <OneLine words={Predicate.isString(option.label) ? undefined : option.words}>
           {option.label}
         </OneLine>
         {under ? <span className={COMBOBOX_ITEM_DETAIL_UNDER}>{option.detail}</span> : null}
@@ -352,10 +354,12 @@ function OptionRow({
       onClick={option.disabled === true ? undefined : onChoose}
     />
   );
+
   if (option.card === undefined) return row;
+
   return (
     <Tooltip
-      label={option.words ?? (typeof option.label === "string" ? option.label : undefined)}
+      label={option.words ?? (Predicate.isString(option.label) ? option.label : undefined)}
       card={option.card}
       cardBeside
     >
@@ -386,6 +390,7 @@ export function ComboboxListBox({
   children?: ReactNode;
 } & ComboboxOptionEngineProps): React.JSX.Element {
   const fade = scrollFadeMarks(SCROLL_FADE.BOTH);
+
   return (
     <div
       role="listbox"
@@ -453,21 +458,27 @@ export function ComboboxList({
   const runsBox = useRef<HTMLDivElement>(null);
   // Each group's run, by the group's place in the list, held while the list stands.
   const runs = useRef<RefObject<VirtualRowsHandle | null>[]>([]);
+
   const runOf = (group: number): RefObject<VirtualRowsHandle | null> => {
     const held = runs.current[group];
+
     if (held !== undefined) return held;
     const made: RefObject<VirtualRowsHandle | null> = { current: null };
     runs.current[group] = made;
+
     return made;
   };
+
   const options = groups.flatMap((group) => group.options);
   // Note that the empty line is said as it appears, because a line drawn into a list is not itself a live region.
   useAnnounce(ANNOUNCE.POLITE, options.length === 0 ? (empty ?? "") : "");
   // Note that an active index outside the options washes none, because a
   // caller's highlight may stand past them, on a row of its own.
   const at = active >= 0 && active < options.length ? active : -1;
+
   const choose = (index: number) => {
     const option = options[index];
+
     if (option !== undefined) onChoose(index, option);
   };
 
@@ -481,48 +492,63 @@ export function ComboboxList({
   useLayoutEffect(() => {
     if (pointed.current) {
       pointed.current = false;
+
       return;
     }
+
     const box = list.current;
     const row = at < 0 ? null : document.getElementById(comboboxOptionId(listId, at));
+
     if (box === null || at < 0) return;
+
     // Note that an option the keys took past those drawn is brought in by its run, which draws it, and is kept in view as it draws.
     if (row === null) {
       bringIn(at);
+
       return;
     }
+
     // Note that the row is placed within its group's run, which places it
     // in turn, so its place is read up to the list rather than off the row
     // alone, which would count a later group's rows from that group's top.
     const rowTop = offsetWithin(row, box);
     // Note that a group's first row brings its heading in with it, so the keys never leave a row named by no heading in view.
     const group = row.getAttribute("aria-posinset") === "1" ? row.closest('[role="group"]') : null;
+
     const headTop =
       group instanceof HTMLElement && box.contains(group) ? offsetWithin(group, box) : rowTop;
+
     // Note that the row is brought clear of a faded edge too, which the list's scroll padding is as deep as.
     const clear = getComputedStyle(box);
     const top = headTop - (Number.parseFloat(clear.scrollPaddingTop) || 0);
+
     if (top < box.scrollTop) box.scrollTop = top;
+
     const bottom =
       rowTop +
       row.offsetHeight +
       (Number.parseFloat(clear.scrollPaddingBottom) || 0) -
       box.clientHeight;
+
     if (bottom > box.scrollTop) box.scrollTop = bottom;
   });
 
   const marks = scrollFadeMarks(fade);
   let offset = 0;
+
   const placed = groups.map((group) => {
     const start = offset;
     offset += group.options.length;
+
     return { group, start };
   });
+
   // Brings in the option at `index` across every group, by its group's run.
   const bringIn = (index: number) => {
     const run = placed.findLastIndex(({ start }) => start <= index);
     const entry = placed[run];
     const option = entry?.group.options[index - entry.start];
+
     if (option !== undefined) runOf(run).current?.bringIn(option.id);
   };
 
@@ -556,6 +582,7 @@ export function ComboboxList({
             >
               {(index, place) => {
                 const option = group.options[index];
+
                 return option === undefined ? null : (
                   <OptionRow
                     id={comboboxOptionId(listId, start + index)}
@@ -572,7 +599,9 @@ export function ComboboxList({
               }}
             </VirtualRows>
           );
+
           if (group.label === undefined) return rows;
+
           return (
             // biome-ignore lint/a11y/useSemanticElements: a listbox's section is a group of options, which a <fieldset> of form controls is not.
             <div key={start} role="group" aria-label={group.label}>
@@ -653,8 +682,10 @@ export function Combobox({
   const options = groups.flatMap((group) => group.options);
   const shown = open && options.length > 0;
   const at = Math.min(Math.max(active, 0), options.length - 1);
+
   const choose = (index: number) => {
     const option = options[index];
+
     if (option !== undefined) onChoose(index, option);
   };
 

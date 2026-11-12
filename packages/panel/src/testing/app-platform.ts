@@ -43,6 +43,7 @@ export function copyingInto(copied: string[]): Pick<AppPlatform, "copyText"> {
   return {
     copyText: (words) => {
       copied.push(words);
+
       return Promise.resolve();
     },
   };

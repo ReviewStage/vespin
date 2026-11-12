@@ -34,6 +34,7 @@ function joined(folder: string, name: string): string {
 /** The folder's entry in the tree, where it stands there. */
 function folderItem(tree: FileTree, folder: string): FileTreeDirectoryHandle | undefined {
   const item = tree.getItem(treePath(folder, true));
+
   return item !== null && "expand" in item ? item : undefined;
 }
 
@@ -46,13 +47,16 @@ export function keepMarked(tree: FileTree, id: string | undefined): void {
   for (const selected of tree.getSelectedPaths()) {
     if (selected !== id) tree.getItem(selected)?.deselect();
   }
+
   const item = id === undefined ? null : tree.getItem(id);
+
   if (item !== null && !item.isSelected()) item.select();
 }
 
 /** Marks one entry as the one shown, as `keepMarked` does, and scrolls it to the middle of the tree. */
 export function markAlone(tree: FileTree, id: string, focus: boolean): void {
   keepMarked(tree, id);
+
   if (tree.getItem(id) === null) return;
   tree.scrollToPath(id, { focus, offset: "center" });
 }
@@ -60,6 +64,7 @@ export function markAlone(tree: FileTree, id: string, focus: boolean): void {
 /** The folders a path stands in, the root first and the nearest last. */
 function foldersAbove(path: string): readonly string[] {
   const segments = path.split("/");
+
   return ["", ...segments.slice(0, -1).map((_, at) => segments.slice(0, at + 1).join("/"))];
 }
 
@@ -86,55 +91,70 @@ export function browseFolders(tree: FileTree, readFolder: ListEntries): FolderBr
   // reads an open one on every change it notices and would ask again at once.
   const missed = (folder: string): boolean => {
     listings.delete(folder);
+
     if (folder === "") return false;
     unlisted.add(folder);
     folderItem(tree, folder)?.collapse();
+
     return false;
   };
 
   const list = (folder: string): Promise<boolean> => {
     const standing = listings.get(folder);
+
     if (standing !== undefined) return standing;
     unlisted.delete(folder);
+
     const listing = readFolder(folder).then(
       (entries) => {
         if (entries === undefined) return missed(folder);
+
         const added = entries.map((entry) => ({
           path: joined(folder, entry.name),
           folder: entry.folder,
         }));
+
         for (const entry of added) if (entry.folder) unlisted.add(entry.path);
         tree.batch(
           added.map((entry) => ({ type: "add", path: treePath(entry.path, entry.folder) })),
         );
         // Note that the root is no row of its own, so a lone folder there is drawn as itself.
         const [lone, ...others] = added;
+
         if (folder !== "" && lone?.folder && others.length === 0) {
           folderItem(tree, lone.path)?.expand();
         }
+
         return true;
       },
       () => missed(folder),
     );
+
     listings.set(folder, listing);
+
     return listing;
   };
 
   const unsubscribe = tree.subscribe(() => {
     for (const folder of [...unlisted]) if (opened(folder)) list(folder);
   });
+
   list("");
 
   const reveal = async (path: string, options: RevealOptions): Promise<void> => {
     revealing += 1;
     const ticket = revealing;
+
     for (const folder of foldersAbove(path)) {
       const listed = await list(folder);
+
       // A later reveal stands in for this one, and a folder unread ends it.
       if (ticket !== revealing || !listed) return;
       const item = folder === "" ? undefined : folderItem(tree, folder);
+
       if (item !== undefined && !item.isExpanded()) item.expand();
     }
+
     markAlone(tree, path, options.focus);
   };
 

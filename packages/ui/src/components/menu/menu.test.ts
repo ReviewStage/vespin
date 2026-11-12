@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { MOTION_DELAY_MS } from "@repo/brand";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -51,6 +52,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
   document.documentElement.removeAttribute("data-ui-room");
@@ -66,6 +68,7 @@ function action(label: string, chosen: Chosen, extra: { disabled?: boolean } = {
 /** A ⋯ that drops `groups`, a button after it, and a row a right-click opens the same menu on. */
 function Harness({ groups }: { groups: readonly (readonly MenuEntry[])[] }): React.JSX.Element {
   const menu = useMenu(true);
+
   return createElement(
     Fragment,
     null,
@@ -98,6 +101,7 @@ function taskGroups(chosen: Chosen): readonly (readonly MenuEntry[])[] {
 /** A menu of two submenus, as a sidebar's View options is: Group by over Order by. */
 function viewGroups(chosen: Chosen): readonly (readonly MenuEntry[])[] {
   const choice = (label: string) => ({ ...action(label, chosen), checked: false });
+
   return [
     [
       { label: "Group by", items: [choice("Repository"), choice("None")] },
@@ -158,7 +162,9 @@ function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`no button named ${name}`);
+
   return found;
 }
 
@@ -189,6 +195,7 @@ function press(element: HTMLElement): void {
 /** A press on whatever has focus, as Enter or Space on a menu's item gives. */
 function pressFocused(): void {
   const item = document.activeElement;
+
   if (!(item instanceof HTMLElement)) throw new Error("nothing has focus");
   press(item);
 }
@@ -204,8 +211,10 @@ const SUBMENU_REST_MS = 150;
 function under(element: HTMLElement): HTMLElement {
   for (let at: HTMLElement | null = element; at !== null; at = at.parentElement) {
     if (at.style.pointerEvents === "auto") return element;
+
     if (at.style.pointerEvents === "none") return document.documentElement;
   }
+
   return element;
 }
 
@@ -241,6 +250,7 @@ function mouseMove(
     landed.dispatchEvent(new MouseEvent("mouseenter", { relatedTarget: from, ...at }));
     landed.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, movementX: 4, ...at }));
   });
+
   return landed !== to && under(to) === to ? mouseMove(landed, to, at) : landed;
 }
 
@@ -354,6 +364,39 @@ function standInResizeObserver(): void {
   );
 }
 
+test("an item standing for a wait, or tagged beside a detail, is heard with those words after its label", () => {
+  mount(
+    createElement(Harness, {
+      groups: [
+        [
+          {
+            label: "Stop Dev server",
+            detail: "pnpm dev",
+            busy: "Running",
+            onSelect: () => undefined,
+          },
+          { label: "Check", busy: "Running", onSelect: () => undefined },
+          {
+            label: "Serve",
+            tag: "Default",
+            tagWords: "Default",
+            detail: "pnpm serve",
+            onSelect: () => undefined,
+          },
+        ],
+      ],
+    }),
+  );
+  press(button("More"));
+  const items = [...(openMenu()?.querySelectorAll('[role="menuitem"]') ?? [])];
+
+  expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+    "Stop Dev server, pnpm dev, Running",
+    "Check, Running",
+    "Serve, Default, pnpm serve",
+  ]);
+});
+
 test("a detail placed beside its label is heard after the label as one under it is", () => {
   standInResizeObserver();
   mount(
@@ -420,11 +463,13 @@ test("an item with a card hangs it while the pointer rests on it, and the menu k
 
 test("a card hung from a control on an item's card is the menu's too, so a press on it leaves the menu standing", () => {
   standInResizeObserver();
+
   const agentCard = createElement(Tooltip, {
     label: "Builder",
     card: createElement("p", { className: "agent-card" }, "Builder's card"),
     children: createElement("button", { type: "button", onClick: () => undefined }, "Builder"),
   });
+
   mount(
     createElement(Harness, {
       groups: [
@@ -541,10 +586,13 @@ function viewMenuLaidOut(): void {
     // Note that a menu's positioner stands where the menu it holds does.
     const menu =
       this.getAttribute("role") === "menu" ? this : this.querySelector(':scope > [role="menu"]');
+
     const boxes: Readonly<Record<string, readonly [number, number, number, number]>> =
       menu === null ? VIEW_LAYOUT.item : VIEW_LAYOUT.menu;
+
     const name = menu === null ? this.textContent : menu.getAttribute("aria-label");
     const box = name === null ? undefined : boxes[name];
+
     return box === undefined ? measured.call(this) : new DOMRect(...box);
   });
 }
@@ -582,6 +630,7 @@ test("a value that stays, pressed in the second submenu the pointer opened once 
     toFake: ["requestAnimationFrame", "cancelAnimationFrame", "setTimeout", "clearTimeout"],
   });
   const exits = holdExits();
+
   try {
     const chosen: Chosen = [];
     const value = (label: string) => ({ ...action(label, chosen), checked: false, stays: true });
@@ -607,9 +656,11 @@ test("a value that stays, pressed in the second submenu the pointer opened once 
     });
     press(button("High"));
     expect(chosen).toEqual(["High"]);
+
     // Note that a menu closing is still drawn while its exit is held, so standing is read as not ending.
     const standing = (label: string) =>
       document.querySelector(`[role="menu"][aria-label="${label}"]:not([data-ending-style])`);
+
     expect(standing("Priority")).not.toBeNull();
     expect(standing("Task actions")).not.toBeNull();
   } finally {
@@ -642,6 +693,7 @@ test("a key an item prints as its shortcut chooses that item, and one a submenu 
   const heard: string[] = [];
   const hear = (event: KeyboardEvent) => heard.push(event.key);
   window.addEventListener("keydown", hear);
+
   try {
     mount(
       createElement(Harness, {
@@ -709,7 +761,8 @@ test("an item that opens a panel opens it beside the standing menu with its fiel
 
   pressFocused();
   expect(searching()).toBe(true);
-  const field = document.activeElement as HTMLInputElement;
+  const field = document.activeElement;
+  assert.ok(field instanceof HTMLInputElement);
   field.value = "lin";
   key("ArrowLeft");
   expect(serversPanel()).not.toBeNull();
@@ -738,6 +791,7 @@ test("a chord pressed in a panel goes on to the window's shortcuts, where a key 
   const heard: string[] = [];
   const hear = (event: KeyboardEvent) => heard.push(event.metaKey ? `⌘${event.key}` : event.key);
   window.addEventListener("keydown", hear);
+
   try {
     act(() => {
       document.activeElement?.dispatchEvent(
@@ -748,6 +802,7 @@ test("a chord pressed in a panel goes on to the window's shortcuts, where a key 
   } finally {
     window.removeEventListener("keydown", hear);
   }
+
   expect(heard).toEqual(["⌘n"]);
   expect(serversPanel()).not.toBeNull();
 });
@@ -764,6 +819,7 @@ test("the mouse resting on an item that opens a panel opens it with the keyboard
   const field =
     document.querySelector<HTMLElement>('[aria-label="Search servers"]') ??
     expect.fail("the panel searches");
+
   const arrived = mouseMove(resting, field, { clientX: 300, clientY: 50 });
   expect(searching()).toBe(true);
   mouseMove(arrived, button("Attachment"), { clientX: 50, clientY: 20 });
@@ -774,6 +830,7 @@ test("the mouse resting on an item that opens a panel opens it with the keyboard
 function GroupBy({ chosen }: { chosen: string }): React.JSX.Element {
   const menu = useMenu(true);
   const choice = (label: string) => ({ label, checked: label === chosen, onSelect: () => {} });
+
   return createElement(
     Fragment,
     null,
@@ -794,9 +851,11 @@ test("a submenu standing open checks what its owner holds now, though the owner 
   press(button("More"));
   press(button("Group by"));
   act(() => roots.at(-1)?.render(createElement(GroupBy, { chosen: "None" })));
+
   const checked = [...(openMenu("Group by")?.querySelectorAll('[aria-checked="true"]') ?? [])].map(
     (item) => item.textContent,
   );
+
   expect(checked).toEqual(["None"]);
 });
 
@@ -822,9 +881,75 @@ test("a value that stays leaves its menu and submenu standing as it is chosen, w
   expect(openMenu()).toBeNull();
 });
 
+test.each([
+  { layout: "a floating menu", phone: false },
+  { layout: "a phone's sheet", phone: true },
+])(
+  "in $layout, actions naming one row stand in one group named by it, each an item named by its label that the arrows walk in turn, one that stays leaves the menu standing, and one that dims itself as it is chosen hands the keys to the menu's first item",
+  ({ phone }) => {
+    if (phone) {
+      vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+      inPhoneLayout();
+    }
+
+    const chosen: Chosen = [];
+
+    const step = (label: string, extra: { detail?: string; disabled?: boolean } = {}) => ({
+      ...action(label, chosen),
+      ...extra,
+      row: "Zoom",
+      stays: true,
+    });
+
+    // A zoom at 125%, which Actual size draws at 100%, where it no longer applies.
+    function Zoomed(): React.JSX.Element {
+      const [actual, setActual] = useState(false);
+
+      return createElement(Harness, {
+        groups: [
+          [action("Rename", chosen)],
+          [
+            step("Zoom out"),
+            {
+              ...step("Actual size", { detail: actual ? "100%" : "125%", disabled: actual }),
+              onSelect: () => {
+                chosen.push("Actual size");
+                setActual(true);
+              },
+            },
+            step("Zoom in"),
+          ],
+        ],
+      });
+    }
+
+    mount(createElement(Zoomed));
+    press(button("More"));
+
+    const row =
+      document.querySelector('[role="group"][aria-label="Zoom"]') ?? expect.fail("no row");
+
+    expect(
+      [...row.querySelectorAll('[role="menuitem"]')].map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Zoom out", "Actual size, 125%", "Zoom in"]);
+    expect(row.textContent).toBe("ZoomZoom out125%Zoom in");
+
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Zoom out");
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Actual size, 125%");
+
+    pressFocused();
+    expect(chosen).toEqual(["Actual size"]);
+    expect(openMenu()).not.toBeNull();
+    expect(focused()).toBe("Rename");
+  },
+);
+
 test("the menu key or Shift-F10 on a row opens its menu under it on the first item", () => {
   function Row(): React.JSX.Element {
     const menu = useMenu(true);
+
     return createElement(
       Fragment,
       null,
@@ -839,6 +964,7 @@ test("the menu key or Shift-F10 on a row opens its menu under it on the first it
           }),
     );
   }
+
   mount(createElement(Row));
   const row = button("Issue");
   act(() => row.focus());
@@ -860,12 +986,14 @@ function mountSteered(chosen: Chosen) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const steered = (id: string, extra: { expanded?: boolean } = {}) => ({
     id,
     highlighted: id === "effort",
     onHover: () => chosen.push(`hover ${id}`),
     ...extra,
   });
+
   act(() =>
     root.render(
       createElement(
@@ -894,6 +1022,7 @@ function mountSteered(chosen: Chosen) {
       ),
     ),
   );
+
   return (id: string) => document.getElementById(id) ?? expect.fail(id);
 }
 
@@ -921,6 +1050,7 @@ test("an item steered from a field is a switch for a setting, says its list stan
 /** A row a right-click or a long press opens the task's menu on, whose press is counted in `opened`, with a switch in it that keeps the menu. */
 function HeldRow({ opened }: { opened: string[] }): React.JSX.Element {
   const menu = useMenu(true);
+
   return createElement(
     Fragment,
     null,
@@ -949,6 +1079,7 @@ function heldRow() {
   vi.useFakeTimers();
   const opened: string[] = [];
   mount(createElement(HeldRow, { opened }));
+
   return { row: button("Row"), opened };
 }
 
@@ -988,10 +1119,13 @@ function lift(target: HTMLElement, pointerType: string, x = 40, y = 20): boolean
   const touchEnd = new TouchEvent("touchend", { bubbles: true, cancelable: true });
   act(() => {
     target.dispatchEvent(pointer("pointerup", pointerType, x, y));
+
     if (pointerType === "touch") target.dispatchEvent(touchEnd);
+
     if (touchEnd.defaultPrevented) return;
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
   });
+
   return !touchEnd.defaultPrevented;
 }
 
@@ -999,9 +1133,11 @@ function lift(target: HTMLElement, pointerType: string, x = 40, y = 20): boolean
 async function hungAt(): Promise<[string, string] | undefined> {
   await placed();
   const menu = openMenu();
+
   const at = /translate\((-?[\d.]+px), (-?[\d.]+px)\)/u.exec(
     menu?.parentElement?.style.transform ?? "",
   );
+
   return at === null ? undefined : [at[1] ?? "", at[2] ?? ""];
 }
 
@@ -1048,17 +1184,20 @@ test("a touch that moves past its slop, scrolls, or lifts before the hold is don
 
 test("a mouse or a pen held down opens nothing, and its click presses as it always has", () => {
   const { row, opened } = heldRow();
+
   for (const pointerType of ["mouse", "pen"]) {
     down(row, pointerType);
     wait(HELD_MS);
     expect(openMenu()).toBeNull();
     expect(lift(row, pointerType)).toBe(true);
   }
+
   expect(opened).toEqual(["Row", "Row"]);
 });
 
 test("a second finger opens nothing: held alone it starts no hold, and laid down beside a held first finger, as a pinch begins, it lets that hold go", () => {
   const { row, opened } = heldRow();
+
   const second = (type: string) =>
     new PointerEvent(type, {
       bubbles: true,
@@ -1069,6 +1208,7 @@ test("a second finger opens nothing: held alone it starts no hold, and laid down
       clientX: 80,
       clientY: 20,
     });
+
   act(() => {
     row.dispatchEvent(second("pointerdown"));
   });
@@ -1089,8 +1229,10 @@ test("a second finger opens nothing: held alone it starts no hold, and laid down
 
 test("the contextmenu Android sends for a hold opens nothing more, whether it comes after the hold's menu or before it", async () => {
   const { row, opened } = heldRow();
+
   const android = (x: number) =>
     new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: x, clientY: 20 });
+
   down(row, "touch", 120, 60);
   wait(HELD_MS);
   key("ArrowDown");
@@ -1122,6 +1264,7 @@ test("the contextmenu Android sends for a hold opens nothing more, whether it co
 test("a row taken away while a touch is held on it leaves no hold behind to open its menu later", () => {
   const { row } = heldRow();
   down(row, "touch");
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   expect(vi.getTimerCount()).toBe(0);
   wait(HELD_MS);
@@ -1130,8 +1273,10 @@ test("a row taken away while a touch is held on it leaves no hold behind to open
 
 test("a touch a list captures to drag its row opens nothing, dragged, lifted, or resting within the slop; the browser's own capture on the row is no drag", () => {
   const { row } = heldRow();
+
   const list =
     row.closest('[role="row"]')?.parentElement ?? expect.fail("the row stands in its list");
+
   down(row, "touch");
   act(() => {
     list.dispatchEvent(pointer("pointermove", "touch", 46, 20));
@@ -1196,6 +1341,7 @@ function menusMeasure(
     this: HTMLElement,
   ) {
     if (menuBox(this)) return new DOMRect(0, 0, width, height);
+
     return laid(this) ?? measured.call(this);
   });
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
@@ -1225,6 +1371,7 @@ function rightClickAt(y: number): HTMLElement {
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: y }),
     );
   });
+
   return openMenu() ?? expect.fail("the menu is open");
 }
 
@@ -1396,6 +1543,7 @@ test("Escape or a press on the dimmed window puts a sheet away and hands focus b
 /** A ⋯ whose menu holds a Status submenu of two filter values, Todo and Done, each toggled on and off where it stays. */
 function FilterHarness(): React.JSX.Element {
   const [on, setOn] = useState<readonly string[]>([]);
+
   const toggle = (label: string) => ({
     label,
     checked: on.includes(label),
@@ -1403,6 +1551,7 @@ function FilterHarness(): React.JSX.Element {
     onSelect: () =>
       setOn(on.includes(label) ? on.filter((each) => each !== label) : [...on, label]),
   });
+
   return createElement(Harness, {
     groups: [[{ label: "Status", items: [toggle("Todo"), toggle("Done")] }]],
   });
@@ -1420,6 +1569,7 @@ test("a sheet put away sinks out before it goes, held until its sink has played"
         : [];
     },
   });
+
   try {
     mount(createElement(Harness, { groups: taskGroups([]) }));
     press(button("More"));
@@ -1467,9 +1617,11 @@ test("a choice in a sheet acts with focus already back on what opened it, so a d
 /** A ⋯ whose menu offers Retry, which stays and turns to a dimmed Reading… as it reads again, beside Archive. */
 function RetryHarness(): React.JSX.Element {
   const [reading, setReading] = useState(false);
+
   const stand = reading
     ? { label: "Reading…", disabled: true, onSelect: () => undefined }
     : { label: "Retry", stays: true, onSelect: () => setReading(true) };
+
   return createElement(Harness, {
     groups: [[stand], [{ label: "Archive", onSelect: () => undefined }]],
   });

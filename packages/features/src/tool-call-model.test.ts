@@ -26,6 +26,7 @@ test("a command's row is the command it ran, and its answer reads as a terminal 
       truncated: true,
     },
   });
+
   assert.equal(view.kind, CALL_KIND.COMMAND);
   assert.equal(view.subject, "pnpm check");
   assert.deepEqual(view.input, { kind: TOOL_BLOCK.COMMAND, text: "pnpm check" });
@@ -41,6 +42,7 @@ test("a command the model described carries its description on one line for the 
     input: { command: "pnpm test --filter web", description: " Run the web\n- tests " },
     output: undefined,
   });
+
   assert.equal(described.description, "Run the web - tests");
   assert.equal(described.subject, "pnpm test --filter web");
   assert.deepEqual(described.input, { kind: TOOL_BLOCK.COMMAND, text: "pnpm test --filter web" });
@@ -60,6 +62,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
       { action: "click", ref: "e14" },
     ],
   };
+
   const done = toolCallView({
     tool: "browser",
     input,
@@ -70,6 +73,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
       tabs: [{ tab: "tab-1", url: "https://app.example.com/login", title: "Sign in · Acme" }],
     },
   });
+
   const line = callLine(done.kind, done.subject, done.description);
   assert.deepEqual(line, { verb: "Clicked, typed in", subject: "Sign in · Acme", code: false });
   assert.equal(callPlace(done.kind), "Browser");
@@ -81,6 +85,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
     },
     output: undefined,
   });
+
   assert.deepEqual(callLine(running.kind, running.subject, running.description), {
     verb: "Opened, took a screenshot in",
     subject: "localhost:3000",
@@ -92,6 +97,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
     input: { actions: [{ action: "list" }] },
     output: { status: "not-run", reason: "Not run: your browser could not be reached." },
   });
+
   assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
     verb: "Listed the tabs",
     subject: "",
@@ -110,6 +116,7 @@ test("a command run on the Mac is the command it ran, described as a command is,
       input: { command: "pnpm dev", description: "Start the dev server" },
       output,
     });
+
   const killed = ran({
     status: "ran",
     exitCode: null,
@@ -118,6 +125,7 @@ test("a command run on the Mac is the command it ran, described as a command is,
     truncated: false,
     timedOut: true,
   });
+
   assert.equal(killed.kind, CALL_KIND.MAC_COMMAND);
   assert.equal(killed.subject, "pnpm dev");
   assert.equal(killed.description, "Start the dev server");
@@ -126,6 +134,7 @@ test("a command run on the Mac is the command it ran, described as a command is,
     kind: TOOL_BLOCK.TEXT,
     text: "  ready on :3000\n(killed at its timeout)",
   });
+
   const failed = ran({
     status: "ran",
     exitCode: 1,
@@ -134,11 +143,14 @@ test("a command run on the Mac is the command it ran, described as a command is,
     truncated: false,
     timedOut: false,
   });
+
   assert.deepEqual(failed.output, { kind: TOOL_BLOCK.TEXT, text: "missing script: dev\nexit 1" });
+
   const refused = ran({
     status: "not-run",
     reason: "Not run: Vespin is not running on the developer's Mac.",
   });
+
   assert.deepEqual(refused.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "Not run: Vespin is not running on the developer's Mac.",
@@ -151,6 +163,7 @@ test("a file read and a search say the path and the pattern, and answer with the
     input: { filePath: "/workspace/repository/README.md", limit: 20 },
     output: { content: "# Vespin\n" },
   });
+
   assert.equal(read.kind, CALL_KIND.READ_FILE);
   assert.equal(read.subject, "/workspace/repository/README.md");
   assert.deepEqual(read.output, { kind: TOOL_BLOCK.TEXT, text: "# Vespin\n" });
@@ -165,6 +178,7 @@ test("a file read and a search say the path and the pattern, and answer with the
       truncated: false,
     },
   });
+
   assert.equal(grep.kind, CALL_KIND.SEARCH);
   assert.equal(grep.subject, "invit");
   assert.deepEqual(grep.output, { kind: TOOL_BLOCK.TEXT, text: "a.ts:1: invite" });
@@ -175,6 +189,7 @@ test("a file read and a search say the path and the pattern, and answer with the
     input: { pattern: "invit" },
     output: { content: "a.ts:1: invite\n", matchCount: 100, path: "/w", truncated: true },
   });
+
   assert.deepEqual(cut.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "a.ts:1: invite\n(output truncated)",
@@ -183,11 +198,13 @@ test("a file read and a search say the path and the pattern, and answer with the
 
 test("a skill load says the skill it loaded, and answers with the skill's instructions as words", () => {
   const body = "# Release\n\nTag the commit, then publish the notes.";
+
   const view = toolCallView({
     tool: "load_skill",
     input: { skill: "release-notes" },
     output: body,
   });
+
   assert.equal(view.kind, CALL_KIND.LOAD_SKILL);
   assert.equal(view.subject, "/release-notes");
   assert.deepEqual(view.input, { kind: TOOL_BLOCK.TEXT, text: "release-notes" });
@@ -198,12 +215,14 @@ test("a skill load says the skill it loaded, and answers with the skill's instru
     input: { skill: "release-notes" },
     output: undefined,
   });
+
   assert.equal(loading.subject, "/release-notes");
   assert.equal(loading.output, undefined);
 });
 
 test("a memory search reads how many memories it recalled about its query and lists them as Markdown, its query alone before it answers", () => {
   const input = { query: "invitations" };
+
   const answered = toolCallView({
     tool: "search_memory",
     input,
@@ -216,6 +235,7 @@ test("a memory search reads how many memories it recalled about its query and li
       total: 12,
     },
   });
+
   assert.equal(callLine(answered.kind, answered.subject, undefined).verb, "Recalled");
   assert.equal(answered.subject, "2 memories about “invitations”");
   assert.deepEqual(answered.output, {
@@ -239,6 +259,7 @@ test("a patch names the first file it touches and how many more, a moved file by
     "+export const b = 1;",
     "*** End Patch",
   ].join("\n");
+
   const view = toolCallView({
     tool: "apply_patch",
     input: { root: "/workspace/repository", patchText },
@@ -250,6 +271,7 @@ test("a patch names the first file it touches and how many more, a moved file by
       ],
     },
   });
+
   assert.equal(view.kind, CALL_KIND.EDIT);
   assert.equal(view.subject, "apps/web/moved.ts +1");
   assert.deepEqual(
@@ -276,6 +298,7 @@ test("a patch names the first file it touches and how many more, a moved file by
       files: [{ operation: "update", path: "apps/web/a.ts" }],
     },
   });
+
   assert.deepEqual(flagged.output, {
     kind: TOOL_BLOCK.TEXT,
     text: `update apps/web/a.ts\nType error in apps/web/a.ts\n${JSON.stringify({ path: "apps/web/b.ts", message: "unused" }, null, 2)}`,
@@ -288,6 +311,7 @@ test("a tool this build does not know is named as it is, with its input and answ
     input: { args: ["pr", "create"] },
     output: { url: "https://github.com/acme/relay/pull/7" },
   });
+
   assert.equal(view.kind, CALL_KIND.OTHER);
   assert.equal(view.subject, "gh");
   assert.deepEqual(view.input, {
@@ -314,6 +338,7 @@ test("a command's answer that is not a terminal's envelope falls back to its JSO
       reason: "The turn ended before the call answered; it may have run.",
     },
   });
+
   assert.equal(view.output?.kind, TOOL_BLOCK.JSON);
   assert.match(view.output?.text ?? "", /"reason": "The turn ended/u);
 });
@@ -379,13 +404,16 @@ test("a description edit's row sums its notes by what each did, and shows them a
     { kind: "replace", field: "problem", find: "an admin", text: "an owner" },
     { kind: "replace", find: "## Assumptions\n\n- Invites expire.", text: "" },
   ];
+
   const view = toolCallView({
     tool: "edit_description",
     input: { notes },
     output: { status: "accepted", taken: 4 },
   });
+
   assert.equal(view.kind, CALL_KIND.EDIT_DESCRIPTION);
   assert.equal(view.subject, "2 added, 1 corrected, 1 struck");
+
   const pictured = toolCallView({
     tool: "edit_description",
     input: {
@@ -394,6 +422,7 @@ test("a description edit's row sums its notes by what each did, and shows them a
     },
     output: undefined,
   });
+
   assert.equal(pictured.subject, "1 added, 1 picture added");
   assert.equal(view.input.kind, TOOL_BLOCK.JSON);
   assert.equal(
@@ -429,6 +458,7 @@ test("a post to the inbox is a row naming its item, its blocks and options as th
     },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(view.kind, CALL_KIND.INBOX_POST);
   assert.equal(
     view.subject,
@@ -446,6 +476,7 @@ test("a post to the inbox is a row naming its item, its blocks and options as th
     input: { key: "invite-queue", reason: "Found it in the README." },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(closed.kind, CALL_KIND.INBOX_CLOSE);
   assert.equal(closed.subject, "invite-queue");
   assert.deepEqual(closed.input, { kind: TOOL_BLOCK.TEXT, text: "Found it in the README." });
@@ -467,6 +498,7 @@ test("a form posted to the inbox lists its fields by type, a select's options wi
     },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.deepEqual(view.input, {
     kind: TOOL_BLOCK.TEXT,
     text: "- Channel (select): Email, Slack (recommended)\n- Remind (boolean, required)",
@@ -483,6 +515,7 @@ test("an agent's reply on an inbox thread is its own row, naming the item's key 
     },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(view.kind, CALL_KIND.INBOX_REPLY);
   assert.equal(view.subject, "invite-queue");
   assert.deepEqual(view.input, {
@@ -496,6 +529,7 @@ test("an agent's reply on an inbox thread is its own row, naming the item's key 
     input: { key: "gone", text: "Done." },
     output: { status: "rejected", reason: "No item of yours is under the key gone." },
   });
+
   assert.deepEqual(refused.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "No item of yours is under the key gone.",
@@ -508,6 +542,7 @@ test("an inbox call that did nothing shows why, so a refused post never reads as
     input: { key: "one-more", title: "Protect main", response: { type: "task" } },
     output: { status: "rejected", reason: "Not posted: you hold 20 open items already." },
   });
+
   assert.deepEqual(view.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "Not posted: you hold 20 open items already.",
@@ -520,6 +555,7 @@ test("a coding agent's hosted public reads draw as the web reads they are: a sea
     input: { query: "invite link expiry" },
     output: { status: "found", findings: [] },
   });
+
   assert.equal(search.kind, CALL_KIND.WEB_SEARCH);
   assert.equal(search.subject, "invite link expiry");
 
@@ -533,6 +569,7 @@ test("a coding agent's hosted public reads draw as the web reads they are: a sea
       truncated: true,
     },
   });
+
   assert.equal(page.kind, CALL_KIND.WEB_PAGE);
   assert.equal(page.subject, "docs.example.com/invites");
   assert.deepEqual(page.output, {
@@ -544,6 +581,7 @@ test("a coding agent's hosted public reads draw as the web reads they are: a sea
 test("an agent's task calls draw from their parts", () => {
   const started = (input: Record<string, string>) =>
     toolCallView({ tool: "start_coding_agent", input, output: undefined }).subject;
+
   assert.deepEqual(
     [started({ prompt: "Fix the invite email." }), started({ task: "Fix the invite email." })],
     ["Fix the invite email.", "Fix the invite email."],
@@ -551,11 +589,13 @@ test("an agent's task calls draw from their parts", () => {
   );
   const waited = toolCallView({ tool: "task_wait", input: {}, output: "1 task settled." });
   assert.equal(waited.kind, CALL_KIND.WORKER_WAIT);
+
   const stopped = toolCallView({
     tool: "task_cancel",
     input: { taskId: "delegate-7k2m9q" },
     output: "Stopped delegate-7k2m9q.",
   });
+
   assert.deepEqual([stopped.kind, stopped.subject], [CALL_KIND.WORKER_CANCEL, "delegate-7k2m9q"]);
 });
 
@@ -566,6 +606,7 @@ test("a description edit or a comment call opens the task it named, and one made
     input: { taskId: "task-2", notes: [{ kind: "add", section: "Problem", text: "- Slow." }] },
     output: { status: "accepted", taken: 1 },
   };
+
   const replied = {
     tool: "reply_to_comment",
     callId: "call-2",
@@ -580,12 +621,14 @@ test("a description edit or a comment call opens the task it named, and one made
   });
 });
 
-test("a look at a description's picture says it looked and opens the task its address names, and one refused shows why and opens nothing", () => {
+test("a look at a description's picture says it looked and opens the task its address names, one refused shows why and opens nothing, and one at a thread's picture says so and opens the Inbox", () => {
   const input = {
     address:
       "https://vespin.dev/acme/plan/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b/files/9d2e4c61-7a3b-4f0e-8b1a-2c6d4e8f0a13",
   };
+
   const looked = { tool: "look_at_picture", callId: "call-1", input, output: { status: "looked" } };
+
   const refused = {
     ...looked,
     output: { status: "not-looked", reason: "Not looked: this task's plan holds no such picture." },
@@ -600,6 +643,17 @@ test("a look at a description's picture says it looked and opens the task its ad
   assert.equal(shown?.kind, TOOL_BLOCK.JSON);
   assert.ok(shown?.text.includes(refused.output.reason));
   assert.equal(toolTarget(refused), undefined);
+
+  const inThread = {
+    ...looked,
+    input: {
+      address:
+        "https://vespin.dev/acme/task/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b/inbox/7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e/files/9d2e4c61-7a3b-4f0e-8b1a-2c6d4e8f0a13",
+    },
+  };
+
+  assert.equal(toolCallView(inThread).kind, CALL_KIND.LOOK_AT_THREAD_PICTURE);
+  assert.deepEqual(toolTarget(inThread), { kind: TOOL_TARGET.INBOX });
 });
 
 test("an agent a call starts, reads, or messages opens its tab while it is on the call's own task, and nothing once its answer says it is on another, which this task's column has no tab for", () => {
@@ -607,12 +661,14 @@ test("an agent a call starts, reads, or messages opens its tab while it is on th
     id: "agent-2",
     ...(onYourTask === undefined ? undefined : { onYourTask }),
   });
+
   const call = (tool: string, onYourTask?: boolean) => ({
     tool,
     callId: "call-1",
     input: { agentId: "agent-2", text: "Rebase on main." },
     output: { status: "accepted", agent: agent(onYourTask) },
   });
+
   for (const tool of ["start_agent", "read_agent", "message_agent"]) {
     const opened = { kind: TOOL_TARGET.AGENT, agent: "agent-2" };
     assert.deepEqual(toolTarget(call(tool, true)), opened, tool);
@@ -652,6 +708,7 @@ test("a task's change says it updated the task its answer names, an older transc
     input: { taskId: "task-2", ...input },
     output,
   });
+
   const answer = {
     status: "accepted",
     task: {
@@ -661,9 +718,12 @@ test("a task's change says it updated the task its answer names, an older transc
     },
     already: false,
   };
+
   const opened = { kind: TOOL_TARGET.TASK, task: "task-2" };
+
   const line = (input: WireRecord, output?: WireRecord) => {
     const view = toolCallView(call(input, output));
+
     return [view.kind, callLine(view.kind, view.subject, undefined).verb, view.subject];
   };
 
@@ -705,6 +765,7 @@ test("a list of the models reads as one, not as a tool this build does not know,
 
 test("a stop names the agent its answer titles and opens that agent's tab, which stays; a refused stop opens nothing", () => {
   const asked = { tool: "stop_agent", callId: "call-1", input: { agentId: "agent-2" } };
+
   const stopped = {
     ...asked,
     output: {
@@ -736,12 +797,14 @@ test("a task read or a task made names the task its answer names, nothing before
   const view = toolCallView(read);
   assert.deepEqual([view.kind, view.subject], [CALL_KIND.READ_TASK, "Bill by seat"]);
   assert.deepEqual(toolTarget(read), { kind: TOOL_TARGET.TASK, task: "task-1" });
+
   const made = {
     tool: "create_task",
     callId: "call-2",
     input: { name: "Bill by seat" },
     output: { status: "accepted", task: { id: "task-2", name: "Bill by seat", repository: null } },
   };
+
   const madeView = toolCallView(made);
   assert.deepEqual([madeView.kind, madeView.subject], [CALL_KIND.CREATE_TASK, "Bill by seat"]);
   assert.deepEqual(toolTarget(made), { kind: TOOL_TARGET.TASK, task: "task-2" });
@@ -759,6 +822,7 @@ test("the section calls read as theirs, a made section by the title asked and a 
     input: { title: "Growth" },
     output: { status: "accepted", section: { id: "section-1", title: "Growth" } },
   };
+
   const deleted = {
     tool: "delete_section",
     callId: "call-2",
@@ -769,6 +833,7 @@ test("the section calls read as theirs, a made section by the title asked and a 
       tasksBackUnderTasks: 2,
     },
   };
+
   const moved = {
     tool: "move_task",
     callId: "call-3",
@@ -782,8 +847,10 @@ test("the section calls read as theirs, a made section by the title asked and a 
 
   const rows = [made, deleted, moved].map((call) => {
     const view = toolCallView(call);
+
     return [view.kind, view.subject, toolTarget(call)];
   });
+
   assert.deepEqual(rows, [
     [CALL_KIND.CREATE_SECTION, "Growth", undefined],
     [CALL_KIND.DELETE_SECTION, "Growth", undefined],
@@ -794,6 +861,7 @@ test("the section calls read as theirs, a made section by the title asked and a 
 
 test("the automation calls read as theirs, a made one by the name asked and a changed or deleted one by the name its answer names, and open nothing", () => {
   const automation = { id: "automation-1", name: "Agent audit" };
+
   const calls = [
     {
       tool: "list_automations",
@@ -830,6 +898,7 @@ test("the automation calls read as theirs, a made one by the name asked and a ch
   assert.deepEqual(
     calls.map((call) => {
       const view = toolCallView(call);
+
       return [view.kind, view.subject, toolTarget(call)];
     }),
     [
@@ -844,6 +913,7 @@ test("the automation calls read as theirs, a made one by the name asked and a ch
 
 test("the issue calls read as theirs, an issue by the identifier and title its answer names and by the name or title asked before then, and open nothing", () => {
   const issue = { id: "issue-1", identifier: "ACME-4", title: "Flaky invite test" };
+
   const calls = [
     {
       tool: "list_issues",
@@ -868,8 +938,10 @@ test("the issue calls read as theirs, an issue by the identifier and title its a
 
   const rows = calls.map((call) => {
     const view = toolCallView(call);
+
     return [view.kind, view.subject, toolTarget(call)];
   });
+
   assert.deepEqual(rows, [
     [CALL_KIND.LIST_ISSUES, "", undefined],
     [CALL_KIND.READ_ISSUE, "ACME-4 Flaky invite test", undefined],
@@ -910,6 +982,7 @@ test("a change to an agent names the agent its answer titles and opens its tab; 
     callId: "call-1",
     input: { agentId: "agent-2", model: "openai/gpt-6.1-sol", effort: "low" },
   };
+
   const changed = {
     ...asked,
     output: {
@@ -959,6 +1032,7 @@ test("a page read names the page its answer titles, and opens the page's tab onl
 test("a pause names how long it waits, and its answer how long it waited or that a message ended it early", () => {
   const paused = (seconds: number, output?: Record<string, number | boolean>) =>
     toolCallView({ tool: "sleep", input: { seconds }, output });
+
   assert.deepEqual(
     [paused(45), paused(300), paused(5_400), paused(3_600)].map((view) => [
       view.kind,
@@ -988,16 +1062,19 @@ test("a booked wakeup names how long until it fires, as the service held it once
     input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
     output: undefined,
   });
+
   const booked = toolCallView({
     tool: "schedule_wakeup",
     input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
     output: { status: "accepted", wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 } },
   });
+
   const canceled = toolCallView({
     tool: "schedule_wakeup",
     input: { stop: true },
     output: { status: "accepted", wakeup: null },
   });
+
   assert.deepEqual(
     [asking, booked, canceled].map((view) => [view.kind, view.subject]),
     [
@@ -1024,6 +1101,7 @@ test("a post from version 5 is a row naming its thread's title, or its key where
     },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(view.kind, CALL_KIND.INBOX_POST);
   assert.equal(view.subject, "Invite links expire after 7 days or 14?");
   assert.deepEqual(view.input, {
@@ -1046,6 +1124,7 @@ test("a post from version 5 is a row naming its thread's title, or its key where
     },
     output: undefined,
   });
+
   assert.deepEqual(several.input, {
     kind: TOOL_BLOCK.TEXT,
     text: "Which channels send invitations?\nPick any\n- Email (recommended)\n- Slack\n- SMS (recommended)",
@@ -1060,6 +1139,7 @@ test("a post from version 5 is a row naming its thread's title, or its key where
     },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(steps.subject, "postmark-token", "a later post names no title, so its key stands");
   assert.deepEqual(steps.input, {
     kind: TOOL_BLOCK.TEXT,
@@ -1075,24 +1155,29 @@ test("a post from version 5 is a row naming its thread's title, or its key where
     },
     output: undefined,
   });
+
   assert.deepEqual(fields.input, {
     kind: TOOL_BLOCK.TEXT,
     text: "Which relay?\nFill in\n- Host (text, required)",
   });
+
   const words = toolCallView({
     tool: "post_to_inbox",
     input: { key: "smtp", body: "What should the page offer?", ask: { type: "answer" } },
     output: undefined,
   });
+
   assert.deepEqual(words.input, {
     kind: TOOL_BLOCK.TEXT,
     text: "What should the page offer?\nYour answer",
   });
+
   const note = toolCallView({
     tool: "post_to_inbox",
     input: { key: "smtp", body: "Shipped it." },
     output: { status: "rejected", reason: "No thread of yours is under the key smtp." },
   });
+
   assert.deepEqual(note.input, { kind: TOOL_BLOCK.TEXT, text: "Shipped it." });
   assert.deepEqual(note.output, {
     kind: TOOL_BLOCK.TEXT,
@@ -1103,6 +1188,7 @@ test("a post from version 5 is a row naming its thread's title, or its key where
 test("a post to the inbox opens the Inbox on the item it posted, by the thread it answers with, a read of one thread is a row naming its title, and a list opens the whole Inbox", () => {
   const target = (tool: string, input: Record<string, string>) =>
     toolTarget({ tool, callId: "call", input, output: { status: "accepted", inbox: [] } });
+
   assert.deepEqual(target("post_to_inbox", { key: "invite-ttl", body: "7 days or 14?" }), {
     kind: TOOL_TARGET.INBOX,
     key: "invite-ttl",
@@ -1124,6 +1210,7 @@ test("a post to the inbox opens the Inbox on the item it posted, by the thread i
     input: { threadId: "item-1" },
     output: { status: "accepted", thread: { id: "item-1", title: "Invite expiry" } },
   });
+
   assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
   assert.equal(read.subject, "Invite expiry");
 });
@@ -1135,6 +1222,7 @@ test("withdraw_ask is a row naming the thread's key and saying why, opening the 
     input: { key: "invite-ttl", reason: "The plan now says 7 days." },
     output: { status: "accepted", inbox: [] },
   };
+
   const withdrawn = toolCallView(call);
   assert.deepEqual(toolTarget(call), { kind: TOOL_TARGET.INBOX, key: "invite-ttl" });
   assert.equal(withdrawn.kind, CALL_KIND.INBOX_WITHDRAW);
@@ -1147,13 +1235,16 @@ test("withdraw_ask is a row naming the thread's key and saying why, opening the 
     input: { key: "invite-ttl", text: "Done." },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(replied.kind, CALL_KIND.INBOX_REPLY);
   assert.equal(replied.subject, "invite-ttl");
+
   const closed = toolCallView({
     tool: "close_inbox_item",
     input: { key: "invite-ttl", reason: "Settled." },
     output: { status: "accepted", inbox: [] },
   });
+
   assert.equal(closed.kind, CALL_KIND.INBOX_CLOSE);
   assert.deepEqual(closed.input, { kind: TOOL_BLOCK.TEXT, text: "Settled." });
 });

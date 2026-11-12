@@ -26,6 +26,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -48,6 +49,7 @@ it.layer(getTestDB())("what moves a pull request's chapters notifies", (it) => {
         }),
         chapters,
       );
+
       assert.ok(claimed.value.outcome === CHAPTER_CLAIM_OUTCOME.CLAIMED, "the head was claimed");
 
       const finished = yield* expectTopicsFire(
@@ -58,6 +60,7 @@ it.layer(getTestDB())("what moves a pull request's chapters notifies", (it) => {
         }),
         chapters,
       );
+
       assert.ok(finished.value, "the chapters landed under the claim");
     }),
   );

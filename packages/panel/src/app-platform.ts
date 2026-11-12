@@ -167,6 +167,7 @@ export function installAppPlatform(platform: AppPlatform): () => void {
   installed = platform;
   const restoreCommandKey = installCommandKey(platform.commandKey ?? COMMAND_KEY.META);
   const restoreBrowserChords = installBrowserChords(platform.browserTab === true);
+
   return () => {
     if (installed !== platform) return;
     installed = undefined;
@@ -178,6 +179,7 @@ export function installAppPlatform(platform: AppPlatform): () => void {
 /** What this window's root installed. */
 export function appPlatform(): AppPlatform {
   if (installed === undefined) throw new Error("No app platform is installed in this window.");
+
   return installed;
 }
 

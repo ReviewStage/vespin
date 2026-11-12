@@ -59,13 +59,16 @@ export function useAgentMode(agentId: string): AgentMode | undefined {
   const [note, setNote] = useState<string | undefined>(undefined);
   /** How many changes have been sent, so an answer to an earlier one is told apart from the latest. */
   const writes = useRef(0);
+
   if (
     agent === undefined ||
     (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
   ) {
     return undefined;
   }
+
   const mode = agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
+
   return {
     mode,
     modes: MODE_OPTIONS,

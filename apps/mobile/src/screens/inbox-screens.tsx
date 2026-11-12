@@ -34,8 +34,9 @@ import {
   type InboxItem,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
+import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -58,6 +59,7 @@ import {
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
+  RowForEach,
   RowList,
   SCOPE_LOOK,
   type Scope,
@@ -65,6 +67,7 @@ import {
   Screen,
   SplitView,
   THREAD_MEDIA,
+  type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
@@ -163,20 +166,46 @@ function InboxRows({
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
+
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {listed.map((each) => (
-        <InboxRow
-          key={each.item.id}
-          listed={each}
-          readerId={readerId}
-          pictureOf={pictureOf}
-          onMark={onMark}
-          onRemind={onRemind}
-          onResolve={onResolve}
-        />
-      ))}
+      <InboxItemRows
+        listed={listed}
+        readerId={readerId}
+        pictureOf={pictureOf}
+        onMark={onMark}
+        onRemind={onRemind}
+        onResolve={onResolve}
+      />
     </RowList>
+  );
+}
+
+type InboxRowActs = {
+  readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
+  readonly onMark: (itemId: string, unread: boolean) => void;
+  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
+  readonly onRemind: (item: InboxItem) => void;
+  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
+  readonly onResolve: (item: InboxItem) => void;
+};
+
+/**
+ * A run of Inbox items, each on its own `InboxRow`, recycled as the list
+ * scrolls, so an Inbox of a thousand threads mounts only the rows near the
+ * screen: the one run every list of Inbox items draws, the Search tab's
+ * among them.
+ */
+export function InboxItemRows({
+  listed,
+  ...acts
+}: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
+  return (
+    <RowForEach data={listed} keyOf={(each) => each.item.id}>
+      {(each) => <InboxRow listed={each} {...acts} />}
+    </RowForEach>
   );
 }
 
@@ -188,26 +217,15 @@ function InboxRows({
  * while it stands open, which a full swipe runs, or opens Remind me. A long
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
- * The one row every list of Inbox items draws, the Search tab's among them.
  */
-export function InboxRow({
+function InboxRow({
   listed,
   readerId,
   pictureOf,
   onMark,
   onRemind,
   onResolve,
-}: {
-  readonly listed: InboxListed;
-  readonly readerId: string | undefined;
-  /** Each member's picture by their id, read once by the list the row stands in. */
-  readonly pictureOf: PictureOf;
-  readonly onMark: (itemId: string, unread: boolean) => void;
-  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
-  readonly onRemind: (item: InboxItem) => void;
-  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
-  readonly onResolve: (item: InboxItem) => void;
-}) {
+}: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -216,7 +234,8 @@ export function InboxRow({
   const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
+  const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
     () =>
@@ -231,6 +250,7 @@ export function InboxRow({
       ),
     [item, agentName, readerId, pictureOf, harness],
   );
+
   const resolve =
     item.status === INBOX_STATUS.OPEN
       ? [
@@ -242,6 +262,7 @@ export function InboxRow({
           } as const,
         ]
       : [];
+
   return (
     <ListRow
       id={item.id}
@@ -275,7 +296,7 @@ export function InboxRow({
       ]}
       link={linkOf(
         { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
-        workspace?.slug ?? workspace?.id ?? holder.task.workspaceId ?? "",
+        workspaceStep,
       )}
       preview={
         <ThreadPreview
@@ -307,6 +328,7 @@ function InboxEmpty({
 }) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
@@ -316,9 +338,11 @@ function InboxEmpty({
       />
     );
   }
+
   if (search.trim() !== "") {
     return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
   }
+
   return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol="tray" />;
 }
 
@@ -358,12 +382,14 @@ function moreMenu(
 /** Every agent's title the document holds, by the agent's id. */
 function useAgentTitles(): ReadonlyMap<string, string> {
   const { data = NO_TITLES } = useQuery({ ...appStateQuery, select: selectAgentTitles });
+
   return data;
 }
 
 /** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
 function useAgentHarness(agentId: string): ModelProvider | undefined {
   const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
+
   return data?.get(agentId);
 }
 
@@ -405,10 +431,12 @@ function ThreadDetail({
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const pictureOf = useMemberPictures();
+
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
   );
+
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
     () => [
@@ -430,6 +458,7 @@ function ThreadDetail({
     ],
     [messages, item],
   );
+
   // The videos the words draw in place, by attachment.
   const drawnVideos = useMemo(
     () =>
@@ -442,9 +471,11 @@ function ThreadDetail({
       ),
     [messages],
   );
+
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const { workspaceId } = holder.task;
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
+
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
     const place = {
@@ -452,10 +483,11 @@ function ThreadDetail({
       planId: holder.task.id,
       itemId: item.id,
     } as const;
-    const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
-    openInSafari(address);
+
+    openInSafari(linkOf(place, workspaceStep));
   };
-  const sources = useThreadMedia(item.id, media);
+
+  const { sources, sizes } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const answer = useThreadAnswer(listed);
@@ -463,6 +495,7 @@ function ThreadDetail({
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
   const menu = threadMenu(item, answer, () => openRemind(item));
+
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
     writer: {
@@ -474,43 +507,63 @@ function ThreadDetail({
       message.stamp === undefined
         ? undefined
         : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
-    media: message.media.map((each) =>
-      each.kind === INBOX_MEDIA.VIDEO
-        ? {
-            kind: THREAD_MEDIA.VIDEO,
-            key: each.attachmentId,
-            source: sources.get(each.attachmentId),
-            label: each.name,
-            onOpenElsewhere: openOnWeb,
-          }
-        : {
-            kind: THREAD_MEDIA.PICTURE,
-            key: each.attachmentId,
-            source: sources.get(each.attachmentId),
-            alt: each.name,
-          },
-    ),
+    media: message.media.map((each): ThreadMedia => {
+      const source = sources.get(each.attachmentId);
+      const key = each.attachmentId;
+
+      if (each.kind === INBOX_MEDIA.VIDEO) {
+        return {
+          kind: THREAD_MEDIA.VIDEO,
+          key,
+          source,
+          label: each.name,
+          onOpenElsewhere: openOnWeb,
+        };
+      }
+
+      if (each.kind === INBOX_MEDIA.FILE) {
+        const size = sizes.get(key);
+
+        return {
+          kind: THREAD_MEDIA.FILE,
+          key,
+          source,
+          name: each.name,
+          mediaType: each.mediaType,
+          size,
+        };
+      }
+
+      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name };
+    }),
   }));
+
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
   const pictureSource = (written: string): string | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
+
     return named === undefined || named.itemId !== item.id
       ? written
       : sources.get(named.attachmentId);
   };
+
   // A video the words name as a picture is played where they name it, from its bytes as read.
   const videoAt = (written: string): MarkdownVideo | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
+
     if (named === undefined || named.itemId !== item.id || !drawnVideos.has(named.attachmentId)) {
       return undefined;
     }
+
     return {
       source: sources.get(named.attachmentId),
       label: VIDEO_LABEL,
       onOpenElsewhere: openOnWeb,
     };
   };
+
   const path = [holder.task.name, agentName];
+
   const page = (
     <ThreadPage
       path={path}
@@ -536,7 +589,7 @@ function ThreadDetail({
                     planId: page.place.taskId,
                     pageId: page.pageId,
                   },
-                  workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
+                  workspaceStep,
                 ),
               ),
             openLink,
@@ -547,7 +600,9 @@ function ThreadDetail({
       {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
     />
   );
+
   if (!inStack) return page;
+
   return (
     <>
       <Stack.Screen
@@ -580,8 +635,10 @@ function ThreadDetail({
 /** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
 function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
   const { refresh, refreshTasks } = useInboxActs();
+
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
@@ -595,6 +652,7 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
       />
     );
   }
+
   return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
 }
 
@@ -611,7 +669,9 @@ function ThreadColumn({
   readonly onRemind: (item: InboxItem) => void;
 }) {
   const { listed, readerId, feed } = useInboxThread(id);
+
   if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+
   return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
 }
 
@@ -626,6 +686,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   const scopes = scopePills(show, choose, listing.counts);
   const menu = moreMenu(listing.unread, acts.markAll);
   const remind = useRemindSheet();
+
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
@@ -639,6 +700,7 @@ function InboxStackList(words: InboxSearch) {
   const switcher = useWorkspaceSwitcher();
   const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(words);
   const field = useRefilledSearchField(search);
+
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE }}>
@@ -680,7 +742,9 @@ function InboxStackList(words: InboxSearch) {
               look={LIST_LOOK.PLAIN}
               listed={listing.listed}
               readerId={listing.readerId}
-              onSelect={(id) => router.push(`/inbox/${encodeURIComponent(id)}`)}
+              onSelect={(id) =>
+                router.push(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }))
+              }
               onRefresh={acts.refresh}
               onMark={acts.mark}
               onRemind={remind.open}
@@ -713,8 +777,10 @@ function InboxSplitScreen({
     words,
     selected,
   );
+
   const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -772,6 +838,7 @@ export function InboxListScreen() {
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
   const [search, setSearch] = useState("");
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
+
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
@@ -785,11 +852,13 @@ export function InboxThreadScreen() {
   const { listed, readerId, feed } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
+
   if (handed) return null;
+
   return (
     <>
       <Stack.Screen
-        options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined ? { title: "" } : {}) }}
+        options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined && { title: "" }) }}
       />
       {listed !== undefined ? (
         <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />

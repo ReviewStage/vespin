@@ -89,6 +89,7 @@ const PATH_BASE = "http://live.invalid";
  */
 function isLiveReadPath(path: string): boolean {
   if (!path.startsWith(LIVE_SOCKET.READ_PREFIX) || !URL.canParse(path, PATH_BASE)) return false;
+
   return new URL(path, PATH_BASE).pathname.startsWith(LIVE_SOCKET.READ_PREFIX);
 }
 
@@ -128,7 +129,9 @@ export function liveDigestOf(
   const parts = Object.keys(queries)
     .filter((part) => queries[part]?.cursor === undefined)
     .toSorted();
+
   const digests = parts.map((part) => queries[part]?.digest);
+
   return digests.every((digest) => digest !== undefined) ? digests.join(",") : undefined;
 }
 

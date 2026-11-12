@@ -79,8 +79,10 @@ function rowLine(
   if (reaches(workspace, repository)) {
     return workspaceSharedWords(workspace.memberCount, workspace.id === personalId);
   }
+
   const github =
     workspace.github === null ? "No GitHub connected" : `${workspace.github.login} on GitHub`;
+
   return `${github} · cannot reach ${repository}`;
 }
 
@@ -97,6 +99,7 @@ function named(workspace: Workspace): ReactNode {
  */
 function lossLine(from: Workspace | undefined, to: Workspace): ReactNode {
   const losing = " lose access to it, its calls, and its agents.";
+
   if (from === undefined) {
     return (
       <>
@@ -106,6 +109,7 @@ function lossLine(from: Workspace | undefined, to: Workspace): ReactNode {
       </>
     );
   }
+
   if (from.memberCount !== undefined && from.memberCount <= 1) {
     return (
       <>
@@ -114,6 +118,7 @@ function lossLine(from: Workspace | undefined, to: Workspace): ReactNode {
       </>
     );
   }
+
   return (
     <>
       {"Members of "}
@@ -128,6 +133,7 @@ function lossLine(from: Workspace | undefined, to: Workspace): ReactNode {
 /** Who in the workspace chosen gains it: its members counted, or named as its members where they are not. */
 function gainLine(to: Workspace): ReactNode {
   const { memberCount } = to;
+
   if (memberCount === undefined) {
     return (
       <>
@@ -137,6 +143,7 @@ function gainLine(to: Workspace): ReactNode {
       </>
     );
   }
+
   if (memberCount <= 1) {
     return (
       <>
@@ -145,6 +152,7 @@ function gainLine(to: Workspace): ReactNode {
       </>
     );
   }
+
   return (
     <>
       {`${countWords(memberCount, TERM.MEMBER)} in `}
@@ -186,6 +194,7 @@ function WorkspaceChoices({
     disabled: !reaches(workspace, repository),
     replayMasked: true,
   }));
+
   return (
     <ScrollArea size={SCROLL_SIZE.CONTENT}>
       <ChoiceList
@@ -227,11 +236,13 @@ function MoveTaskCard({
   const moving = stage === CONFIRM_STAGE.ACTING;
   const first = useRef<HTMLButtonElement | null>(null);
   const cancel = useRef<HTMLButtonElement | null>(null);
+
   const dismiss = () => {
     if (moving) return;
     confirm.keep();
     confirm.clear();
   };
+
   return (
     <Dialog
       open={open}
@@ -299,6 +310,7 @@ export function strandedHome(
   task: TaskSummary,
 ): Workspace | undefined {
   if (!ownsTask(tasks, task)) return undefined;
+
   return strandedTaskHome(task, tasks.workspaces);
 }
 
@@ -320,9 +332,11 @@ export function useMoveTaskDialog(
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const moving = useMutation(tasks.moveTask);
   const repository = task?.repository ?? null;
+
   const chosen =
     others.find((workspace) => workspace.id === picked && reaches(workspace, repository)) ??
     others.find((workspace) => reaches(workspace, repository));
+
   const moveAct = useConfirmAct(moving, {
     send: () =>
       task === undefined || chosen === undefined
@@ -337,12 +351,15 @@ export function useMoveTaskDialog(
         ? { status: ACTION_RESULT_STATUS.REJECTED, reason: "Choose a workspace." }
         : undefined,
   });
+
   const confirm = useConfirmDialog(
     { subject: offered, surfaceOpen: tasks.shown },
     moveAct,
     confirmFailure(FAILURE_SURFACE.TASK_MOVE),
   );
+
   const open = confirm.standing && (confirmAsked(confirm.stage) || confirm.rejection !== undefined);
+
   return {
     ask: offered
       ? () => {

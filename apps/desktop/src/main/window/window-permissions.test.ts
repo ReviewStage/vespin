@@ -10,10 +10,13 @@ import { grantWindowPermissions } from "./window-permissions";
  */
 
 type CheckHandler = Parameters<Session["setPermissionCheckHandler"]>[0];
+
 type RequestHandler = Parameters<Session["setPermissionRequestHandler"]>[0];
 
 // SAFETY: the pages are only identities the handlers compare, which nothing here reads further.
 const own = {} as WebContents;
+
+// SAFETY: the pages are only identities the handlers compare, which nothing here reads further.
 const foreign = {} as WebContents;
 
 /** A session as Electron's holds its handlers, granted to `own` alone. */
@@ -31,6 +34,7 @@ function grantedSession() {
     },
     (webContents) => webContents === own,
   );
+
   /** What a request is answered, as Electron hands it the details it does. */
   const asked = (
     webContents: WebContents,
@@ -45,18 +49,22 @@ function grantedSession() {
       ...details,
     } as Electron.MediaAccessPermissionRequest);
     assert.notEqual(granted, undefined, "every request is answered");
+
     return granted === true;
   };
+
   /** What a check is answered. */
   const checked = (
     webContents: WebContents | null,
     permission: Parameters<NonNullable<CheckHandler>>[1],
     mediaType?: "audio" | "video",
   ): boolean =>
+    // SAFETY: the handlers read only whether the frame is the main one and its media type.
     check?.(webContents, permission, "app://desktop/panel", {
       isMainFrame: true,
       ...(mediaType === undefined ? undefined : { mediaType }),
     } as Electron.PermissionCheckHandlerHandlerDetails) === true;
+
   return { asked, checked };
 }
 

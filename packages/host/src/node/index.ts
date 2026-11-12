@@ -5,6 +5,9 @@
  * Node process that composes the host, such as the desktop's main process.
  */
 export { armedWatchLayer } from "./armed-watch.js";
+
 export { jsonStateFile } from "./json-state-file.js";
+
 export { mirrorPlatform } from "./open-on-mac.js";
+
 export { reportToStderr, tolerateClosedStderr } from "./stderr-report.js";

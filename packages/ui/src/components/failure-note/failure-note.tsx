@@ -127,6 +127,7 @@ export function FailureNote({
   const Mark = GLYPH.FAILED;
   const acts = onRetry !== undefined || also !== undefined || isReported(failure);
   const part = acts ? PART.ROW : PART.LINE;
+
   return (
     <p
       className={LINE}

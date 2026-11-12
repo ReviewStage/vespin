@@ -137,6 +137,7 @@ export interface AuthSecrets {
 /** A secret as the environment holds it, sealed; a blank one is absent. */
 function secret(value: string | undefined): Redacted.Redacted | undefined {
   const named = text(value);
+
   return named === undefined ? undefined : Redacted.make(named);
 }
 
@@ -155,7 +156,9 @@ function socialClient(
 /** Vercel reports a bare hostname; a value that already names a scheme keeps it. */
 function deploymentOrigin(host: string | undefined): string | undefined {
   const named = text(host);
+
   if (named === undefined) return undefined;
+
   try {
     return new URL(named.includes("://") ? named : `https://${named}`).origin;
   } catch {
@@ -184,12 +187,16 @@ function ownOriginsOf(
   productionURL: string | undefined,
 ): string[] {
   if (environment === DEPLOYMENT_ENVIRONMENT.PREVIEW) return previewOrigins.filter(webOrigin);
+
   if (environment !== DEPLOYMENT_ENVIRONMENT.PRODUCTION) {
     return [deploymentOrigin(productionURL ?? LOCAL_AUTH_URL)].filter(webOrigin);
   }
+
   const own = deploymentOrigin(productionURL);
+
   if (!webOrigin(own)) return [];
   const aliases = LINK_HOST_ALIASES.map((host) => deploymentOrigin(host)).filter(webOrigin);
+
   return [...new Set([own, ...aliases])];
 }
 
@@ -225,6 +232,7 @@ export function socialClientConfigured(client: SocialClient): boolean {
 export function authDeployment(variables: Record<string, string | undefined>): AuthDeployment {
   const productionURL = text(variables[AUTH_DEPLOYMENT_ENVIRONMENT.PRODUCTION_URL]);
   const proxySecret = text(variables[AUTH_DEPLOYMENT_ENVIRONMENT.PROXY_SECRET]);
+
   const previewOrigins =
     variables[AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT] === DEPLOYMENT_ENVIRONMENT.PREVIEW
       ? [
@@ -236,6 +244,7 @@ export function authDeployment(variables: Record<string, string | undefined>): A
           ),
         ]
       : [];
+
   const [previewBaseURL, ...previewAliases] = previewOrigins;
 
   return {

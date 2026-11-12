@@ -1,6 +1,8 @@
 // start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its relation to another task, its repository, its model and effort, and where its agent runs, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -100,6 +102,7 @@ function useKeptWords(drafted: boolean): KeptWords {
   const [letGo, setLetGo] = useState(false);
   const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
   const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
+
   return {
     asking: leave !== undefined,
     discard: () => {
@@ -137,6 +140,7 @@ function SheetBar({
 }) {
   const colors = useColors();
   const router = useRouter();
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
@@ -258,6 +262,13 @@ function DraftSection({
   );
 }
 
+type UseSheetStartResult = {
+  readonly starting: boolean;
+  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+};
+
+type Started = { answer?: StartAnswer };
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made with no agent, filed for later or
@@ -269,28 +280,30 @@ function DraftSection({
 function useSheetStart(
   kept: KeptWords,
   setNote: (note: string | undefined) => void,
-): {
-  readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
-} {
+): UseSheetStartResult {
   const router = useRouter();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
+
   const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
     if (starting) return;
+
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     setStarting(true);
     setNote(undefined);
-    const started: { answer?: StartAnswer } = {};
+    const started: Started = {};
     // Note that a start refused says why in the sheet, under its words, rather than in the notice.
     write(
       () =>
         start().then((answer) => {
           started.answer = answer;
+
           return answer;
         }),
       {
@@ -301,16 +314,17 @@ function useSheetStart(
     )
       .then((went) => {
         const answer = started.answer;
+
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
+        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
+
+        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
       })
       .finally(() => setStarting(false));
   };
+
   return { starting, go };
 }
 
@@ -329,6 +343,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+
   const start = () =>
     go(
       () =>
@@ -340,6 +355,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
         }),
       pictures.refusal,
     );
+
   return (
     <>
       <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={start} kept={kept} />
@@ -365,6 +381,8 @@ export interface NewTaskDraft {
   /** The workspace it was kept for, where one was picked; the phone's own otherwise. */
   readonly workspaceId?: string | undefined;
   readonly repository?: string | undefined;
+  /** The addresses of the JPEGs its pictures were kept in, in the App Group, which New task reads and deletes. */
+  readonly pictures?: readonly string[] | undefined;
 }
 
 /** No task list read yet. */
@@ -416,7 +434,9 @@ function useRelationPick(
   const [kind, setKind] = useState<string>(
     parent === undefined ? NO_RELATION : TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
+
   const [picked, setPicked] = useState<string | undefined>(parent);
+
   const tasks = useMemo(
     () =>
       listed.filter(
@@ -426,7 +446,9 @@ function useRelationPick(
       ),
     [listed, workspaceId, parent],
   );
+
   const taskId = picked ?? tasks[0]?.id;
+
   return {
     relation: isRelationKind(kind) && taskId !== undefined ? { kind, taskId } : undefined,
     kind,
@@ -499,18 +521,22 @@ export function NewTaskScreen({
   const startTask = useStartTask(workspaceId);
   const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
-  const pictures = useAttachedPictures(setNote);
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
-  const filed = pictures.files === undefined ? filedTaskOf(prompt) : undefined;
+  const pictures = useAttachedPictures(setNote, draft?.pictures);
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
+  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   // Note that a relation picked holds the start until it names a task, so the task never starts unrelated.
   const relationReady = relation.kind === NO_RELATION || relation.relation !== undefined;
+
   const tree = inTree(relation.relation)
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
-  const start = () =>
+
+  const start = () => {
+    if (!drafted) return;
     go(
       () =>
         startTask({
@@ -522,9 +548,12 @@ export function NewTaskScreen({
         }),
       pictures.refusal,
     );
+  };
+
   const file = () => {
     if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };
+
   return (
     <>
       <SheetBar

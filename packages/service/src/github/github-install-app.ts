@@ -63,6 +63,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import { Effect, Layer, Option } from "effect";
 import { type HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { workspaceDriveRegenerated } from "../agents/workspace-drive.js";
 import { sessionCredential } from "../auth/session-credential.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedNotFoundRoute, type SessionUserIdResolver } from "../http/http-effect.js";
@@ -136,6 +137,7 @@ function landing(status: GitHubInstallStatus): HttpServerResponse.HttpServerResp
 /** GET: to GitHub's install page for the App; a deployment without the App lands on the page saying so. */
 const installEndpoint = Effect.gen(function* () {
   const app = yield* GitHubApp;
+
   return yield* app.installUrl.pipe(
     Effect.map((url) => HttpServerResponse.redirect(url)),
     Effect.catch((failure) =>
@@ -150,12 +152,16 @@ const confirmInstallation = /* @__PURE__ */ Effect.fn("web/confirmInstallation")
   action: string | undefined,
 ): Effect.fn.Return<GitHubInstallStatus, GitHubReadFailure, GitHubApp | HttpClient.HttpClient> {
   if (action === SETUP_ACTION.REQUEST) return GITHUB_INSTALL_STATUS.REQUESTED;
+
   if (installationId === undefined || !INSTALLATION_ID.test(installationId)) {
     return GITHUB_INSTALL_STATUS.NOT_FOUND;
   }
+
   const app = yield* GitHubApp;
   const installation = yield* app.installation(Number(installationId));
+
   if (Option.isNone(installation)) return GITHUB_INSTALL_STATUS.NOT_FOUND;
+
   return action === SETUP_ACTION.UPDATE
     ? GITHUB_INSTALL_STATUS.UPDATED
     : GITHUB_INSTALL_STATUS.INSTALLED;
@@ -178,14 +184,18 @@ const authorizeConnect = /* @__PURE__ */ Effect.fn("web/authorizeConnect")(funct
   GitHubApp | DatabaseServices
 > {
   if (action === SETUP_ACTION.REQUEST) return landing(GITHUB_INSTALL_STATUS.REQUESTED);
+
   if (installationId === undefined || !INSTALLATION_ID.test(installationId)) {
     return landing(GITHUB_INSTALL_STATUS.NOT_FOUND);
   }
+
   const codeVerifier = generateRandomString(CODE_VERIFIER_LENGTH);
   const recorded = yield* recordConnectAuthorization(state, Number(installationId), codeVerifier);
+
   if (!recorded) return landing(GITHUB_INSTALL_STATUS.EXPIRED);
   const app = yield* GitHubApp;
   const url = yield* app.authorizeUrl({ redirectUri: callback, state, codeVerifier });
+
   return HttpServerResponse.redirect(url, { status: HTTP_STATUS.SEE_OTHER });
 });
 
@@ -201,14 +211,18 @@ const authorizedInstallation = /* @__PURE__ */ Effect.fn("web/authorizedInstalla
 > {
   const app = yield* GitHubApp;
   const installations = yield* app.authorizedInstallations(returned, installer);
+
   const reached = Option.getOrElse(installations, () => []).find(
     (installation) => installation.id === installationId,
   );
+
   if (reached === undefined) return Option.none();
   const { accountId, accountLogin, accountType, suspended } = reached;
+
   if (accountId === undefined || accountLogin === undefined || accountType === undefined) {
     return Option.none();
   }
+
   return Option.some({ installationId, accountId, accountLogin, accountType, suspended });
 });
 
@@ -223,7 +237,9 @@ function signedInAs(
   userId: string,
 ): Effect.Effect<Option.Option<string>> {
   const credential = sessionCredential(request.headers);
+
   if (credential === undefined) return Effect.succeedNone;
+
   return seams.resolveSessionUserId(new Request(request.url, { headers: credential })).pipe(
     Effect.map(Option.filter((signedIn) => signedIn === userId)),
     Effect.catch((failure) =>
@@ -246,25 +262,36 @@ const connectInstallation = /* @__PURE__ */ Effect.fn("web/connectInstallation")
 > {
   if (state === null) return GITHUB_INSTALL_STATUS.EXPIRED;
   const intent = yield* spendConnectIntent(state);
+
   if (Option.isNone(intent)) return GITHUB_INSTALL_STATUS.EXPIRED;
   const { userId, organizationId, installationId, codeVerifier } = intent.value;
+
   if (installationId === null || codeVerifier === null) return GITHUB_INSTALL_STATUS.EXPIRED;
+
   // A declined authorization returns no code.
   if (code === null) return GITHUB_INSTALL_STATUS.NOT_FOUND;
   const workspace = yield* workspaceOf(userId, organizationId);
+
   if (Option.isNone(workspace) || !GITHUB_CONNECT_ROLES.has(workspace.value.role)) {
     return GITHUB_INSTALL_STATUS.EXPIRED;
   }
+
   const installer = yield* signedInAs(seams, request, userId);
+
   const installation = yield* authorizedInstallation(
     installationId,
     { code, codeVerifier, redirectUri: callback },
     installer,
   );
+
   if (Option.isNone(installation)) return GITHUB_INSTALL_STATUS.NOT_FOUND;
   // Note that a connect repeated for an installation the workspace holds links it as before, which is no new connection, so what it holds is read first.
   const held = yield* installationsOfWorkspace(organizationId);
   const linked = yield* linkInstallationAs(userId, organizationId, installation.value);
+
+  // Note that every link regenerates the workspace's drive, a repeated connect among them, which finds it as it stands.
+  if (linked === LINK_OUTCOME.LINKED) yield* workspaceDriveRegenerated(organizationId);
+
   if (
     linked === LINK_OUTCOME.LINKED &&
     !held.some((each) => each.installationId === installationId)
@@ -275,6 +302,7 @@ const connectInstallation = /* @__PURE__ */ Effect.fn("web/connectInstallation")
       {},
     );
   }
+
   return LANDED_ON_LINK[linked];
 });
 
@@ -292,6 +320,7 @@ const requestQuery = Effect.gen(function* () {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const url = new URL(request.url);
+
   return {
     request,
     callback: new URL(HOSTED_SERVICE_PATH.GITHUB_INSTALLED_AUTHORIZED, url.origin).toString(),
@@ -305,11 +334,13 @@ const installedEndpoint = Effect.gen(function* () {
   const installationId = query.get(SETUP_QUERY.INSTALLATION_ID) ?? undefined;
   const action = query.get(SETUP_QUERY.SETUP_ACTION) ?? undefined;
   const state = query.get(SETUP_QUERY.STATE);
+
   if (state === null) {
     return landing(
       yield* Effect.catch(confirmInstallation(installationId, action), landedOnFailure),
     );
   }
+
   return yield* authorizeConnect(state, installationId, action, callback).pipe(
     Effect.catch((failure) => Effect.map(landedOnFailure(failure), landing)),
   );
@@ -319,6 +350,7 @@ const installedEndpoint = Effect.gen(function* () {
 const authorizedEndpoint = (seams: GitHubInstallSeams) =>
   Effect.gen(function* () {
     const { request, callback, query } = yield* requestQuery;
+
     const settled = connectInstallation(
       seams,
       request,
@@ -326,6 +358,7 @@ const authorizedEndpoint = (seams: GitHubInstallSeams) =>
       query.get(AUTHORIZED_QUERY.STATE),
       callback,
     );
+
     return landing(yield* Effect.catch(settled, landedOnFailure));
   });
 

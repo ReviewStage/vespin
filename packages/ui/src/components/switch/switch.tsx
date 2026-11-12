@@ -75,6 +75,7 @@ export function Switch({
       </Tooltip>
     );
   }
+
   return (
     <ShadcnSwitch
       {...button}
@@ -89,6 +90,7 @@ export function Switch({
       onClick={(event) => {
         // Note that the thumb is what a press moves, so it is what gives as the press lands.
         const thumb = event.currentTarget.firstElementChild;
+
         if (thumb instanceof HTMLElement) pulsePress(thumb);
         onChange(!checked, event);
       }}
@@ -118,6 +120,7 @@ export function LabeledSwitch(props: SwitchProps): React.JSX.Element {
 /** The switch's drawing alone, hidden from a reader, inside a control that is the switch. */
 export function SwitchMark({ checked }: { checked: boolean }): React.JSX.Element {
   const state = checked ? { "data-checked": "" } : { "data-unchecked": "" };
+
   return (
     <span data-slot="switch" className={SWITCH_TRACK} {...state} aria-hidden="true">
       <span className={SWITCH_THUMB} {...state} />

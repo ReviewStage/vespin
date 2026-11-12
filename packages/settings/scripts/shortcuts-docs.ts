@@ -66,18 +66,22 @@ function commandKeys(chord: ShortcutChord): string {
 function code(text: string): string {
   const longest = Math.max(0, ...(text.match(/`+/gu) ?? []).map((run) => run.length));
   const fence = "`".repeat(longest + 1);
+
   return `${fence} ${text} ${fence}`;
 }
 
 function inContext(key: InContextKey): Row {
   const { label, chord, through }: InContextShortcut = IN_CONTEXT_SHORTCUTS[key];
+
   return [label, through === undefined ? kbd(chord) : `${kbd(chord)}–${kbd(through)}`];
 }
 
 /** One row per action: an action with two keys, such as play or pause on Space and K, lists both. */
 function merged(rows: readonly Row[]): readonly Row[] {
   const keysOf = new Map<string, string[]>();
+
   for (const [label, keys] of rows) keysOf.set(label, [...(keysOf.get(label) ?? []), keys]);
+
   return [...keysOf].map(([label, keys]): Row => [label, keys.join(" or ")]);
 }
 
@@ -85,12 +89,14 @@ function section(title: string, rows: readonly Row[]): string {
   const body = merged(rows)
     .map(([label, keys]) => `| ${label} | ${keys} |`)
     .join("\n");
+
   return `## ${title}\n\n| Action | Keys |\n| --- | --- |\n${body}\n`;
 }
 
 function writingRow(action: (typeof WRITING_ACTIONS_LISTED)[number]): Row {
   const { label, markdown, chord }: WritingShortcut = WRITING_SHORTCUTS[action];
   const keys = [markdown === undefined ? undefined : code(markdown), chord && kbd(chord)];
+
   return [label, keys.filter((part) => part !== undefined).join(" ")];
 }
 
@@ -106,33 +112,41 @@ function pageSource(): string {
       ...group.keys.map(inContext),
     ]),
   );
+
   const writing = section(WRITING_GROUP_TITLE, [
     ...WRITING_ACTIONS_LISTED.map(writingRow),
     ...WRITING_KEYS_IN_CONTEXT.filter((key) => inContextShown(key, DESKTOP)).map(inContext),
   ]);
+
   const filesChanged = section(
     FILES_CHANGED_GROUP_TITLE,
     FILES_CHANGED_KEYS_LISTED.map((key): Row => {
       const { label, chord } = FILES_CHANGED_SHORTCUTS[key];
+
       return [label, kbd(chord)];
     }),
   );
+
   const chapters = section(
     CHAPTERS_GROUP_TITLE,
     CHAPTERS_KEYS.map((key): Row => {
       const { label, chord } = CHAPTERS_SHORTCUTS[key];
+
       return [label, kbd(chord)];
     }),
   );
+
   return [HEAD, ...groups, writing, filesChanged, chapters].join("\n");
 }
 
 const mode = process.argv[2];
+
 if (mode !== MODE.WRITE && mode !== MODE.CHECK) {
   throw new Error(`usage: shortcuts-docs.ts ${MODE.WRITE} | ${MODE.CHECK}`);
 }
 
 const expected = pageSource();
+
 if (mode === MODE.WRITE) {
   await writeFile(PAGE, expected);
 } else if ((await readFile(PAGE, "utf8").catch(() => "")) !== expected) {

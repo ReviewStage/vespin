@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inboxPushResponseOf } from "./inbox-push-wire.js";
+import { inboxPushOf, inboxPushResponseOf } from "./inbox-push-wire.js";
 
 /**
  * Where a tap or an action on a push takes the app, and what it sends there,
@@ -110,6 +110,6 @@ describe("inboxPushResponseOf", () => {
       response: undefined,
     },
   ])("$name", ({ payload, action, response }) => {
-    expect(inboxPushResponseOf(payload, action)).toEqual(response);
+    expect(inboxPushResponseOf(inboxPushOf(payload), action)).toEqual(response);
   });
 });

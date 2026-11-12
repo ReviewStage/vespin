@@ -61,6 +61,7 @@ const openAgent = Effect.gen(function* () {
   const userId = yield* openGithubUser();
   yield* experimentInTestWorkspace(userId, EXPERIMENT.DESCRIPTIONS);
   const task = yield* startTask(userId, { name: "Teammate invitations", repository: "acme/relay" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -72,13 +73,16 @@ const openAgent = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   });
+
   const agent: Agent = Option.getOrThrow(started).agent;
+
   const admitted: AdmittedConversation = {
     caller: userId,
     target: { userId, conversationId: agent.conversationId },
     runtimeSessionId: undefined,
     timeZone: undefined,
   };
+
   return { userId, agent, admitted };
 });
 
@@ -113,6 +117,7 @@ const ranTurn = (admitted: AdmittedConversation, turnId: string, at: number) =>
 /** The id of the memory a keep wrote. */
 function keptId(outcome: MemoryOutcome): string {
   assert.ok("memory" in outcome, `nothing was written: ${outcome.kind}`);
+
   return outcome.memory.id;
 }
 
@@ -122,6 +127,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
     () =>
       Effect.gen(function* () {
         const { agent, admitted } = yield* openAgent;
+
         const typedOn = (handed: TurnHanded) =>
           coderTurnMessage(
             admitted,
@@ -150,6 +156,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         const firstTurn = randomUUID();
         const nextTurn = randomUUID();
         let handed: TurnHanded = {};
+
         // Each typed turn's message, the session keeping what it handed; the task's text, or nothing where it was not handed.
         const typedAt = (turnId: string) =>
           Effect.map(
@@ -165,10 +172,12 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
             (message) => {
               handed = message.handed;
               const text = message.text ?? "";
+
               // Note that the task is read as handed by its lead, since with Descriptions off it is handed without its document.
               return text.includes(taskWithLead("")) ? text : undefined;
             },
           );
+
         const agentNotes = (notes: Parameters<typeof saveNotes>[1]) =>
           Effect.map(
             runAgentEditDescription(
@@ -236,22 +245,29 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
       Effect.gen(function* () {
         const { userId, agent, admitted } = yield* openAgent;
         const elsewhere = yield* openWorkspace(userId);
+
         const kept = (workspaceId: string, text: string) =>
           Effect.map(rememberMemory(workspaceId, userId, text, undefined), keptId);
+
         const invitations = yield* kept(
           agent.organizationId,
           "Invitation emails go out through the mail queue.",
         );
+
         const releases = yield* kept(
           agent.organizationId,
           "Release notes are dated in Eastern time.",
         );
+
         yield* kept(elsewhere, "Invitations in the other workspace expire after a day.");
+
         const recalls = Effect.map(
           tallyMemoryRecalls(agent.organizationId, [invitations, releases]),
           (tallies) => [invitations, releases].map((id) => tallies.get(id)?.recalls30d),
         );
+
         const firstTurn = randomUUID();
+
         const typedAt = (turnId: string) =>
           Effect.map(
             coderTurnMessage(

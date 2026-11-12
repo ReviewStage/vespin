@@ -73,16 +73,19 @@ export function useAgentBox(input: {
   const { agentId, agent, agents } = input;
   const model = useAgentModel({ agent, choose: agents.onChoose });
   const mode = useAgentPermissionMode({ agent, write: agents.onPermissionMode });
+
   const servers = useAgentServers({
     agent: agent ?? { id: agentId },
     write: agents.onSwitchServers,
     onOpenSettings: agents.onOpenIntegrations,
   });
+
   const placeMove = useMovePlace(agent, agents);
   // Note that a teammate's agent is named as theirs, so its chip names their plan and none of the reader's.
   const starter = usePerson(agent?.startedBy);
   const teammate = teammateStarter(agent?.startedBy, agents.me) !== undefined;
   const owner = teammate ? starter : undefined;
+
   return {
     agentId,
     status: agent?.status ?? AGENT_STATUS.COMPLETED,

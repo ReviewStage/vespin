@@ -15,5 +15,7 @@
  */
 
 export * from "lucide-react";
+
 export { GLYPH } from "./glyph-registry.js";
+
 export { ICON_SIZE } from "./icon-size.js";

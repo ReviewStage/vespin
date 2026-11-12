@@ -50,7 +50,7 @@ import {
   type WireRecord,
 } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Effect, type Schema as EffectSchema, Option, Result } from "effect";
+import { Clock, Effect, type Schema as EffectSchema, Option, Predicate, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import type {
   AppAccessSlice,
@@ -231,7 +231,7 @@ function record(result: GatewayCallResult): WireRecord | undefined {
 /** One answered value of the host's, as the domain type its method documents. */
 function answered<Value>(value: UnparsedWireValue): Value | undefined {
   // SAFETY: the host is our own authenticated process answering the shape the method documents; the act's own answer guard re-checks it before a renderer sees it.
-  return value === undefined ? undefined : (value as unknown as Value);
+  return value === undefined ? undefined : (value as Value);
 }
 
 /** One live follow's slice as the host tells it: its read's name, and the slice whole. */
@@ -343,7 +343,9 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         (payload): HostSettingsChange | undefined => {
           if (!isRecord(payload) || !isRecord(payload.settings)) return undefined;
           const settings = answered<AppSettings>(payload.settings);
+
           if (!settings) return undefined;
+
           return {
             settings,
             ...(isWireString(payload.reporter) ? { reporter: payload.reporter } : undefined),
@@ -474,8 +476,10 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.TERMINAL_OUTPUT,
         (payload) => {
           const output = Result.getOrUndefined(readEither(terminalOutputEventSchema)(payload));
+
           if (output === undefined) return undefined;
           const bytes = Base64.decode(output.data);
+
           return Result.isSuccess(bytes)
             ? { connectionId: output.connectionId, data: bytes.success }
             : undefined;
@@ -493,7 +497,8 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         client.call(GATEWAY_METHOD.MIRRORS_ENSURE, { agentId: params.agentId }),
         (answer) => {
           const folder = record(answer)?.folder;
-          return typeof folder === "string" ? folder : undefined;
+
+          return Predicate.isString(folder) ? folder : undefined;
         },
       ),
     browserLiveConnect: (params) =>
@@ -533,6 +538,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.PORT_FORWARDS_CHANGED,
         (payload) => {
           const read = readEither(portForwardingSchema)(payload);
+
           return Result.isSuccess(read) ? { forwarding: read.success } : undefined;
         },
         ({ forwarding }) => listener(forwarding),
@@ -542,6 +548,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.MIRRORS_CHANGED,
         (payload) => {
           const read = readEither(mirrorStandingsSchema)(payload);
+
           return Result.isSuccess(read) ? { mirrors: read.success } : undefined;
         },
         ({ mirrors }) => listener(mirrors),

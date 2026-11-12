@@ -33,6 +33,7 @@ afterEach(() => {
 /** A name field of ten characters at most, as a workspace's name is bounded. */
 function Named(): React.JSX.Element {
   const [name, setName] = useState("");
+
   return createElement(FormField, {
     label: "Name",
     count: { length: name.length, limit: LIMIT },
@@ -51,6 +52,7 @@ function render(): HTMLElement {
   const root = createRoot(page);
   roots.push(root);
   act(() => root.render(createElement(Named)));
+
   return page;
 }
 
@@ -88,6 +90,7 @@ test("a limit in the thousands is counted as every figure is, grouped, as the no
 
 test("drawn back under four fifths, the count leaves through its exit", () => {
   const exits = holdExits();
+
   try {
     const page = render();
     type(page, "12345678");

@@ -99,6 +99,7 @@ beforeEach(() => {
 afterEach(() => {
   laid?.remove();
   laid = undefined;
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   window.localStorage.clear();
@@ -131,30 +132,37 @@ async function drawnTab(
   const answers: ((answer: AgentAgentAnswer) => void)[] = [];
   const sent: { text: string; clientKey: string }[] = [];
   let release: () => void = () => undefined;
+
   const released = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   const page = (messages: readonly AgentTranscriptMessage[], status: AgentStatus) => ({
     messages: [...messages],
     cursor: "2:0",
     status,
     title: null,
   });
+
   pushedTranscripts(() => [page(first, statuses[0]), page([...first, ...later], statuses[1])], {
     page: 1,
     release: released,
   });
+
   const control = agentsControl({
     agents: [agent],
     onMessage: (_agentId, text, clientKey) => {
       sent.push({ text, clientKey });
+
       return new Promise((resolve) => answers.push(resolve));
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   let drawn = agent;
+
   const draw = (open: boolean) =>
     act(async () =>
       root.render(
@@ -178,8 +186,10 @@ async function drawnTab(
         ),
       ),
     );
+
   await draw(true);
   await settle();
+
   return {
     container,
     sent,
@@ -223,9 +233,11 @@ async function drawnTab(
       const [line] = [...container.querySelectorAll<HTMLElement>(".is-user")].filter((each) =>
         each.textContent?.includes(words),
       );
+
       const mark =
         line?.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
         assert.fail("the line wears the red alert");
+
       await act(async () => mark.click());
       await act(async () => menuItem(label).click());
       await settle();
@@ -246,6 +258,7 @@ function rowOf(line: HTMLElement | undefined): Element {
 test("a message sent stands in the transcript at once with its time, the box empty and taking words, and its row lands in its place, drawn once, before the send answers", async () => {
   vi.spyOn(crypto, "randomUUID").mockReturnValue(KEY);
   vi.spyOn(Date, "now").mockReturnValue(PRESSED_AT);
+
   const row: AgentTranscriptMessage = {
     id: "row-1",
     role: MESSAGE_ROLE.USER,
@@ -253,6 +266,7 @@ test("a message sent stands in the transcript at once with its time, the box emp
     clientId: sentLineId(KEY),
     sentAt: 90_000,
   };
+
   const tab = await drawnTab([row]);
   await tab.send("Now the dark variant.");
 
@@ -279,6 +293,7 @@ test("a message sent stands in the transcript at once with its time, the box emp
 
 test("a line whose row landed before its send answered offers Edit only once the service took it, since it may yet withdraw the row", async () => {
   vi.spyOn(crypto, "randomUUID").mockReturnValue(KEY);
+
   const row: AgentTranscriptMessage = {
     id: "row-1",
     role: MESSAGE_ROLE.USER,
@@ -286,9 +301,12 @@ test("a line whose row landed before its send answered offers Edit only once the
     clientId: sentLineId(KEY),
     sentAt: 90_000,
   };
+
   const tab = await drawnTab([row]);
+
   const edit = () =>
     tab.container.querySelector('[data-message-id="row-1"] button[aria-label="Edit"]');
+
   await tab.send("Now the dark variant.");
   await tab.landRow();
 
@@ -315,6 +333,7 @@ test("a Codex or Claude Code agent's box says nothing under it of the plan that 
   for (const runtime of [AGENT_RUNTIME.CODEX, AGENT_RUNTIME.CLAUDE_CODE]) {
     const tab = await drawnTab([], { ...AGENT_SUMMARY, runtime });
     const box = composerEditor(tab.container).closest(".agent-composer") ?? tab.container;
+
     for (const words of ["Codex plan", "Claude plan", "Manage usage"]) {
       assert.ok(!box.textContent?.includes(words), `${runtime} draws no "${words}"`);
     }
@@ -326,14 +345,18 @@ test("two messages of the same words are two lines, each let go by its own row a
     "e27a0caf-9d8e-43e1-8bcc-cfa2d08e9187",
     "f38b1db0-ae9f-44f2-9cdd-d0b3e19fa298",
   ] as const;
+
   const mint = vi.spyOn(crypto, "randomUUID");
+
   for (const key of keys) mint.mockReturnValueOnce(key);
+
   const row: AgentTranscriptMessage = {
     id: "row-1",
     role: MESSAGE_ROLE.USER,
     parts: [{ type: "text", text: "ok" }],
     clientId: sentLineId(keys[0]),
   };
+
   const tab = await drawnTab([row]);
   await tab.send("ok");
   await tab.send("ok");
@@ -402,6 +425,7 @@ test("a message the plan's usage limit refused says the limit's words where Not 
   const mark =
     line?.querySelector<HTMLButtonElement>('button[aria-label^="Usage limit reached"]') ??
     assert.fail("the line's mark is named by the limit's words");
+
   await act(async () => mark.click());
   await act(async () => menuItem("Retry").click());
   await settle();
@@ -441,6 +465,7 @@ test("a refusal for good marks the lines refused for now before it as not delive
       .lines("Rebase on main")[0]
       ?.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
     assert.fail("the earlier line wears the red alert");
+
   await act(async () => mark.click());
   assert.deepEqual(
     [...document.querySelectorAll('[role="menuitem"]')].map((each) => each.textContent),
@@ -460,6 +485,7 @@ test("a line refused before its agent was archived offers only Delete, since an 
       .lines("Rebase on main")[0]
       ?.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
     assert.fail("the line wears the red alert");
+
   await act(async () => mark.click());
   assert.deepEqual(
     [...document.querySelectorAll('[role="menuitem"]')].map((each) => each.textContent),
@@ -496,6 +522,7 @@ test("a line another hand sent after a stopped turn puts the tab to work once th
     parts: [{ type: "text", text: "Open the pull request." }],
     sentAt: 90_000,
   };
+
   const stopped: AgentSummary = {
     ...AGENT_SUMMARY,
     status: AGENT_STATUS.CANCELED,
@@ -507,16 +534,19 @@ test("a line another hand sent after a stopped turn puts the tab to work once th
       status: TURN_STATUS.CANCELED,
     },
   };
+
   const tab = await drawnTab([handedOn], stopped, [AGENT_STATUS.CANCELED, AGENT_STATUS.RUNNING]);
   assert.match(tab.container.textContent ?? "", /Stopped/u, "the stopped turn ends on Stopped");
 
   await tab.landRow();
+
   // The list names the turn the line queued, which is what puts the tab to work, whatever the page says.
   const queued = {
     id: "9b2d4f6a-3e5c-4d7b-9f1a-2c4e6a8b0d32",
     queuedAt: 90_000,
     status: TURN_STATUS.QUEUED,
   };
+
   await tab.row({ ...stopped, status: AGENT_STATUS.RUNNING, turnId: queued.id, turn: queued });
   typeInComposer(tab.container, "Then run the tests.");
   await settle();
@@ -546,15 +576,19 @@ test("with Done and follow-ups on, the follow-ups a done turn offered stand in t
       },
     ],
   };
+
   const threads: AgentThreads = { waiting: [], posted: [], onOpen: () => undefined, turnEnd: true };
+
   const tab = await drawnTab([], AGENT_SUMMARY, undefined, {
     first: [...MESSAGES, ended],
     threads,
   });
+
   const tick =
     [...tab.container.querySelectorAll<HTMLElement>('[role="checkbox"]')].find(
       (each) => each.textContent === "Let an admin revoke an invitation",
     ) ?? assert.fail("each follow-up is a row that ticks");
+
   await act(async () => tick.click());
   await tab.send("Keep the link valid for a week.");
 

@@ -52,6 +52,7 @@ const NOT_POSTED = "The comment could not be posted.";
 export function useTaskComments(taskId: string | undefined): readonly DescriptionCommentThread[] {
   const acts = useHostActs();
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_COMMENTS_FOLLOW]({ taskId: id }));
+
   const { data: threads = NO_THREADS } = useQuery({
     ...appStateQuery,
     select: (state) =>
@@ -59,6 +60,7 @@ export function useTaskComments(taskId: string | undefined): readonly Descriptio
         ? undefined
         : state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId]?.rows,
   });
+
   return threads;
 }
 
@@ -81,11 +83,15 @@ function writerOf(
   pictureOf: PictureOf,
 ): ThreadMessage["writer"] {
   const { writer } = entry;
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return { name: PRODUCT_NAME, agent: true };
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
     const named = writer.agentId === undefined ? undefined : agentNames.get(writer.agentId);
+
     return { name: named ?? PRODUCT_NAME, agent: true };
   }
+
   return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
 }
 
@@ -134,9 +140,11 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
   const [sent, setSent] = useState<SentReply | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
+
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
+
       if (kept === "" || sending) return;
       const key = sent?.words === kept ? sent.key : randomUUID();
       setSent({ words: kept, key });
@@ -167,6 +175,7 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
         })
         .finally(() => setSending(false));
     };
+
     return {
       words,
       onWords: setWords,

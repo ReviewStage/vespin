@@ -61,8 +61,11 @@ interface Said {
 /** Where `connection` stands: a sign-in waited on or pending is a reconnect under way, ahead of the read's word. */
 function standsOf(statuses: IntegrationStatuses, connection: string): Stands {
   const status = statuses.statusOf(connection);
+
   if (statuses.signInOf(connection)?.kind === SIGN_IN.WAITING) return STANDS.RECONNECTING;
+
   if (status === INTEGRATION_STATUS.PENDING) return STANDS.RECONNECTING;
+
   return status === INTEGRATION_STATUS.EXPIRED ? STANDS.EXPIRED : STANDS.CLEAR;
 }
 
@@ -86,6 +89,7 @@ export function useExpiredServerToasts(): void {
     /** The server's toast turned to say `says`, shown by `show` under a subject of its own, in place of what it said. */
     const say = (server: NamedServer, says: Says, show: (subject: string) => void) => {
       const was = said.current.get(server.connection);
+
       if (was !== undefined) latest.current.withdraw(was.subject);
       const subject = crypto.randomUUID();
       said.current.set(server.connection, { server, subject, says });
@@ -97,6 +101,7 @@ export function useExpiredServerToasts(): void {
       // Note that pressing a toast's action dismisses it first, which is no dismissal of the server.
       dismissed.current.delete(server.connection);
       const entry = said.current.get(server.connection);
+
       if (entry !== undefined) entry.says = SAYS.BEGINNING;
       void latest.current.grant.begin(server.connection).then((outcome) => {
         if (outcome === GRANT_OUTCOME.BEGUN) return;
@@ -126,14 +131,17 @@ export function useExpiredServerToasts(): void {
     const sayExpired = (server: NamedServer) => {
       if (dismissed.current.has(server.connection)) {
         const was = said.current.get(server.connection);
+
         if (was !== undefined) latest.current.withdraw(was.subject);
         said.current.set(server.connection, {
           server,
           subject: crypto.randomUUID(),
           says: SAYS.EXPIRED,
         });
+
         return;
       }
+
       say(server, SAYS.EXPIRED, (subject) =>
         latest.current.toast({
           words: `${INTEGRATION_NAME[server.provider]}'s sign-in expired`,
@@ -156,12 +164,16 @@ export function useExpiredServerToasts(): void {
       accountsOf: statuses.accountsOf,
       standing: (status) => status === INTEGRATION_STATUS.EXPIRED,
     });
+
     for (const server of expired) {
       if (said.current.has(server.connection)) continue;
+
       if (standsOf(statuses, server.connection) === STANDS.EXPIRED) sayExpired(server);
     }
+
     for (const [connection, entry] of said.current) {
       const stands = standsOf(statuses, connection);
+
       if (stands === STANDS.CLEAR) {
         latest.current.withdraw(entry.subject);
         said.current.delete(connection);

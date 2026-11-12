@@ -30,6 +30,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -43,10 +44,12 @@ test("each fact is a term and its definition", () => {
       ],
     }),
   );
+
   const read = [...container.querySelectorAll("dt")].map((term) => [
     term.textContent,
     term.nextElementSibling?.tagName === "DD" ? term.nextElementSibling.textContent : undefined,
   ]);
+
   expect(read).toEqual([
     ["Used", "41%"],
     ["Left", "~118k"],

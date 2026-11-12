@@ -55,6 +55,7 @@ const openConversation = (kind: (typeof CONVERSATION_KIND)[keyof typeof CONVERSA
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const conversationId = randomUUID();
     yield* db.insert(conversations).values({ id: conversationId, userId, kind });
+
     return { userId, conversationId };
   });
 
@@ -83,6 +84,7 @@ const failedTurnJournal = (
       origin: TURN_ORIGIN.TYPED,
       runtimeTurnId: "turn_0",
     });
+
     const bodies = [
       {
         kind: RUN_EVENT.TURN_STARTED,
@@ -106,13 +108,16 @@ const failedTurnJournal = (
         at: 1,
       },
     ];
+
     for (const [index, body] of bodies.entries()) {
       yield* writer.consume(target, { ...turn, ...body, sequence: index + 1 });
     }
+
     const read = yield* readMessageByClientId(target.userId, target.conversationId, TOOLS, turnId);
     assert.ok(read.ok);
     const journal = read.value[0];
     assert.notEqual(journal?.finishedAt, undefined);
+
     return journal?.message.parts ?? [];
   });
 
@@ -124,6 +129,7 @@ const openTarget = Effect.gen(function* () {
   yield* db
     .insert(conversations)
     .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
+
   return { userId, conversationId };
 });
 
@@ -140,6 +146,7 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
           origin: TURN_ORIGIN.TYPED,
           runtimeTurnId: "turn_0",
         });
+
         const event = {
           conversationId: sessionKey(target.conversationId),
           turnId,
@@ -147,15 +154,18 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
           kind: RUN_EVENT.USAGE_LIMIT_REACHED,
           notice: { agent: "Claude", resetsAt: 60000 },
         } as const;
+
         yield* writer.consume(target, event);
         yield* writer.consume(target, event);
         yield* writer.consume(target, { ...event, sequence: 2 });
+
         const read = yield* readMessageByClientId(
           target.userId,
           target.conversationId,
           TOOLS,
           turnId,
         );
+
         assert.ok(read.ok);
         assert.equal(read.value[0]?.message.parts.length, 2);
       }),
@@ -174,19 +184,23 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
           runtimeTurnId: "turn_0",
         });
         const turn = { conversationId: sessionKey(target.conversationId), turnId };
+
         const lost = {
           ...turn,
           sequence: 1,
           kind: RUN_EVENT.CONNECTION_LOST,
           notice: { provider: "Anthropic", restoredAt: null },
         } as const;
+
         yield* writer.consume(target, lost);
         yield* writer.consume(target, lost);
+
         const partsNow = () =>
           Effect.map(
             readMessageByClientId(target.userId, target.conversationId, TOOLS, turnId),
             (read) => (read.ok ? (read.value[0]?.message.parts ?? []) : []),
           );
+
         assert.deepEqual(yield* partsNow(), [
           {
             type: CONNECTION_LOST_PART,
@@ -202,12 +216,15 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
           lostSequence: 1,
           restoredAt: 90_000,
         } as const;
+
         yield* writer.consume(target, restored);
+
         const again = yield* writer.consume(target, {
           ...restored,
           sequence: 3,
           restoredAt: 95_000,
         });
+
         assert.deepEqual(yield* partsNow(), [
           {
             type: CONNECTION_LOST_PART,
@@ -228,6 +245,7 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
         const turnId = randomUUID();
         const turn = { conversationId: sessionKey(target.conversationId), turnId };
         let sequence = 0;
+
         const tell = (
           body:
             | { readonly kind: typeof RUN_EVENT.STEP_STARTED; readonly step: number }
@@ -239,8 +257,10 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
               },
         ) => {
           sequence += 1;
+
           return writer.consume(target, { ...turn, ...body, sequence });
         };
+
         const callState = (callId: string) =>
           Effect.gen(function* () {
             const read = yield* readMessageByClientId(
@@ -249,15 +269,20 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
               TOOLS,
               turnId,
             );
+
             assert.ok(read.ok);
             const journal = read.value[0];
             assert.equal(journal?.finishedAt, undefined);
+
             const part = journal?.message.parts.find(
               (each) => "toolCallId" in each && each.toolCallId === callId,
             );
+
             assert.ok(part !== undefined && "state" in part);
+
             return part;
           });
+
         const call = (callId: string) => ({
           kind: RUN_EVENT.TOOL_CALL_STARTED,
           callId,
@@ -318,11 +343,13 @@ it.layer(getTestDB())("the store writer's journal rewrites", (it) => {
           trigger: TURN_TRIGGER.ASK,
           at: 0,
         });
+
         // Note that the metric is read as Sentry's layer reads it, from the registry by its name.
         const rewritten = Effect.gen(function* () {
           const found = (yield* Metric.snapshot).find(
             ({ id }) => id === "app.transcript.journal_rewrite_bytes",
           );
+
           return found?.type === "Histogram" ? found.state : { count: 0, sum: 0 };
         });
 
@@ -405,10 +432,13 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
         const writer = yield* storeWriter({ tools: TOOLS });
         const turnId = randomUUID();
         let sequence = 0;
+
         const stamped = (body: RunEventBody): RunEvent => {
           sequence += 1;
+
           return { ...body, conversationId: sessionKey(target.conversationId), turnId, sequence };
         };
+
         yield* writer.enqueueTurn(target, {
           turnId,
           origin: TURN_ORIGIN.TYPED,
@@ -423,11 +453,14 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
           }),
           stamped({ kind: RUN_EVENT.STEP_STARTED, step: 1 }),
         ]);
+
         const before = yield* listMessagesPast(target.userId, target.conversationId, TOOLS, {
           seq: 0,
           revision: 0,
         });
+
         const callIds = Array.from({ length: 5 }, (_, index) => `call-${index}`);
+
         const results = yield* writer.consumeAll(target, [
           ...callIds.map((callId) =>
             stamped({
@@ -446,6 +479,7 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
             }),
           ),
         ]);
+
         assert.equal(results.length, 10);
         assert.ok(results.every(Result.isSuccess));
 
@@ -455,6 +489,7 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
           TOOLS,
           before.cursor,
         );
+
         assert.equal(past.cursor.revision, before.cursor.revision + 1);
         assert.ok(past.read.ok);
         assert.equal(past.read.value.length, 1);
@@ -465,12 +500,14 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
           ),
           callIds.map((callId) => [callId, TOOL_PART_STATE.OUTPUT_AVAILABLE]),
         );
+
         const after = yield* listMessagesPast(
           target.userId,
           target.conversationId,
           TOOLS,
           past.cursor,
         );
+
         assert.deepEqual(after.read.ok ? after.read.value : undefined, []);
       }),
   );
@@ -479,6 +516,7 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
     Effect.gen(function* () {
       const writer = yield* storeWriter({ tools: TOOLS });
       const conversationId = randomUUID();
+
       const results = yield* writer.consumeAll({ userId: `user-${randomUUID()}`, conversationId }, [
         {
           kind: RUN_EVENT.STEP_STARTED,
@@ -488,6 +526,7 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
           sequence: 1,
         },
       ]);
+
       assert.deepEqual(
         results.map((result) => (Result.isFailure(result) ? result.failure.refusal : undefined)),
         ["no_conversation"],
@@ -506,6 +545,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         const writer = yield* storeWriter({ tools: TOOLS });
         const handed = yield* Ref.make(0);
         const heardWhileHanded = yield* Ref.make<number[]>([]);
+
         const dispatch = (taken: boolean) =>
           Effect.as(
             Effect.andThen(
@@ -514,14 +554,17 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
             ),
             taken,
           );
+
         const listening = Layer.succeed(QueuedTurnListener, {
           heard: (turn) => Effect.sync(() => void queued.push(turn)),
         });
+
         const line = {
           text: "Fix the tile.",
           clientKey: "fix",
           sender: { kind: MESSAGE_SENDER.APP },
         };
+
         const rowOf = Effect.map(
           readMessageByClientId(target.userId, target.conversationId, {}, sentLineId("fix")),
           (read) => (read.ok ? read.value.length : -1),
@@ -530,10 +573,13 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         const refused = yield* writer
           .writeAwaitingLine(target, line, dispatch(false))
           .pipe(Effect.provide(listening));
+
         const rowsAfterRefusal = yield* rowOf;
+
         const sent = yield* writer
           .writeAwaitingLine(target, line, dispatch(true))
           .pipe(Effect.provide(listening));
+
         const repeated = yield* writer
           .writeAwaitingLine(target, line, dispatch(true))
           .pipe(Effect.provide(listening));
@@ -541,6 +587,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         const turn = (yield* latestTurnsOf(target.userId, [target.conversationId])).get(
           target.conversationId,
         );
+
         assert.deepEqual(queued, [{ ...target, turnId: turn?.id }]);
         assert.deepEqual(yield* Ref.get(heardWhileHanded), [0, 0]);
         assert.deepEqual(refused, Result.succeed(Option.none()));
@@ -564,6 +611,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         const target = yield* openConversation(CONVERSATION_KIND.AGENT);
         const writer = yield* storeWriter({ tools: TOOLS });
         const text = "Check the deploy again.";
+
         const refused = yield* writer.writeAwaitingLine(
           target,
           {
@@ -574,10 +622,12 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           },
           Effect.succeed(false),
         );
+
         const page = yield* listMessagesPast(target.userId, target.conversationId, TOOLS, {
           seq: 0,
           revision: 0,
         });
+
         assert.deepEqual(refused, Result.succeed(Option.none()));
         assert.ok(page.read.ok);
         assert.equal(page.read.value.length, 0);
@@ -591,6 +641,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           runtimeTurnId: "t_0",
         });
         const taken = yield* writer.takeAwaitingLine(target, { text, turnId });
+
         const read = yield* readMessageByClientId(
           target.userId,
           target.conversationId,
@@ -621,12 +672,14 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         const target = yield* openConversation(CONVERSATION_KIND.AGENT);
         const other = yield* openConversation(CONVERSATION_KIND.AGENT);
         const writer = yield* storeWriter({ tools: TOOLS });
+
         const withdrawn = (text: string, into = target) =>
           writer.writeAwaitingLine(
             into,
             { text, clientKey: text, sender: { kind: MESSAGE_SENDER.APP } },
             Effect.succeed(false),
           );
+
         yield* withdrawn("Rerun the tests.");
         yield* withdrawn("Push the branch.");
         yield* withdrawn("Rebase the stack.", other);
@@ -637,6 +690,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           runtimeTurnId: "t_0",
         });
         yield* writer.takeAwaitingLine(target, { text: "Push the branch.", turnId });
+
         const standingIn = (conversationId: string) =>
           Effect.map(
             db
@@ -645,6 +699,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
               .where(eq(messages.conversationId, conversationId)),
             (rows) => rows.map((row) => row.clientId).sort(),
           );
+
         const standing = standingIn(target.conversationId);
 
         yield* TestClock.adjust(WITHDRAWN_LINE_KEEP_MS);
@@ -682,9 +737,11 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         yield* settleRunnerLostTurns(writer, target.conversationId, 1000, "the sandbox failed");
         const handed: string[] = [];
+
         const dispatch = (line: { readonly clientId: string }) =>
           Effect.sync(() => {
             handed.push(line.clientId);
+
             return true;
           });
 
@@ -707,6 +764,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
       Effect.gen(function* () {
         const target = yield* openConversation(CONVERSATION_KIND.AGENT);
         const writer = yield* storeWriter({ tools: TOOLS });
+
         for (const clientKey of ["first", "second"]) {
           yield* writer.writeAwaitingLine(
             target,
@@ -714,20 +772,25 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
             Effect.succeed(true),
           );
         }
+
         yield* TestClock.adjust(Duration.seconds(1));
         yield* settleRunnerLostTurns(writer, target.conversationId, 1000, "the sandbox failed");
         yield* TestClock.adjust(Duration.seconds(1));
         const handed: string[] = [];
+
         const takesFirstOnly = (line: { readonly clientId: string }) =>
           Effect.sync(() => {
             handed.push(line.clientId);
+
             return line.clientId === sentLineId("first");
           });
+
         const transcript = Effect.map(
           listMessagesPast(target.userId, target.conversationId, TOOLS, { seq: 0, revision: 0 }),
           (page) =>
             page.read.ok ? page.read.value.map((row) => [row.clientId, row.createdAt]) : [],
         );
+
         const before = yield* transcript;
 
         const resent = yield* writer.resendLostLines(target, takesFirstOnly);

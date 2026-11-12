@@ -25,15 +25,20 @@ function useFit(width: number) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const box = ref.current;
+
     // Note that a document with no layout, as jsdom's is, keeps the screen unscaled, because it has no box to measure.
     if (!box || typeof ResizeObserver === "undefined") return undefined;
+
     const watch = new ResizeObserver(([entry]) => {
       const room = entry?.contentRect.width ?? width;
       setScale(room > 0 ? room / width : 1);
     });
+
     watch.observe(box);
+
     return () => watch.disconnect();
   }, [width]);
+
   return { ref, style: cssCustomProperties({ "--ui-landing-fit": scale }) };
 }
 
@@ -46,6 +51,7 @@ export function LandingWindow({
   children: ReactNode;
 }): React.JSX.Element {
   const fit = useFit(SCREEN.WINDOW.WIDTH);
+
   return (
     <div className="ui-landing-window" role="img" aria-label={label}>
       <div ref={fit.ref} className="ui-landing-window-fit" style={fit.style}>
@@ -71,6 +77,7 @@ export function LandingPhone({
   children: ReactNode;
 }): React.JSX.Element {
   const fit = useFit(SCREEN.PHONE.WIDTH);
+
   return (
     <div className="ui-landing-phone" role="img" aria-label={label}>
       <div ref={fit.ref} className="ui-landing-phone-fit" style={fit.style}>

@@ -31,7 +31,7 @@ import {
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import { URL_FLAG } from "./flags.js";
 import { CommandFailed } from "./output.js";
 import { accountStore } from "./token-store.js";
@@ -53,6 +53,7 @@ export const SIGN_IN_HINT = "Run vespin login to sign in.";
 
 function environmentValue(name: string): string | undefined {
   const value = process.env[name];
+
   return value === undefined || value.length === 0 ? undefined : value;
 }
 
@@ -62,12 +63,14 @@ export const serviceOrigin = Effect.gen(function* () {
   const named = Option.getOrUndefined(flag) ?? environmentValue(ENVIRONMENT.URL) ?? LINK_ORIGIN;
   // Note that a value such as localhost:3000 parses with an opaque origin, which names no service.
   const origin = URL.canParse(named) ? new URL(named).origin : OPAQUE_ORIGIN;
+
   if (origin === OPAQUE_ORIGIN) {
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: `${named} is not a service address, such as ${LINK_ORIGIN}.`,
     });
   }
+
   return origin;
 });
 
@@ -119,30 +122,39 @@ export const session = Effect.gen(function* () {
   const origin = yield* serviceOrigin;
   const client = accountClient(origin);
   const store = yield* storeFor(origin);
+
   const { credential, source } = credentialFor({
     environmentToken: environmentValue(ENVIRONMENT.TOKEN),
     store,
     client,
   });
+
   const hosted: HostedClient = hostedClient({ baseUrl: origin, credential });
+
   return { origin, client, store, credential, source, hosted };
 });
 
 /** A hosted failure in words: never the token, and never more of the service's answer than its slug and status. */
 function failureWords(failed: HostedFailure): string {
   const exit = cliExitOfHostedFailure(failed);
+
   if (exit === CLI_EXIT.AUTH) return `Not signed in, or the sign-in lapsed. ${SIGN_IN_HINT}`;
-  if (failed._tag === "HostedRefused") {
+
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     if (failed.refusal === HOSTED_API_ERROR.UNAVAILABLE) {
       return `${PRODUCT_NAME} is unavailable right now.`;
     }
+
     // Note that the service answers this where a procedure this build calls was renamed, so only a newer build reaches it.
     if (failed.refusal === HOSTED_API_ERROR.HOST_UPGRADE_NEEDED) {
       return `This vespin is older than ${PRODUCT_NAME}: update it with vespin update, then run the command again.`;
     }
+
     return `${PRODUCT_NAME} refused: ${failed.refusal}.`;
   }
+
   if (failed.status !== undefined) return `${PRODUCT_NAME} failed (${failed.status}).`;
+
   return `Could not reach ${PRODUCT_NAME}.`;
 }
 
@@ -158,7 +170,10 @@ export function askService<Input, Output>(
   refusalWords: Readonly<Partial<Record<HostedApiError, string>>> = {},
 ) {
   return Effect.mapError(askHosted(procedure, input, deadline), (failed) => {
-    const named = failed._tag === "HostedRefused" ? refusalWords[failed.refusal] : undefined;
+    const named = Predicate.isTagged(failed, "HostedRefused")
+      ? refusalWords[failed.refusal]
+      : undefined;
+
     return new CommandFailed({
       exit: cliExitOfHostedFailure(failed),
       message: named ?? failureWords(failed),

@@ -61,13 +61,16 @@ const readAgents = (userId: string, workspaceId: string, named: readonly string[
     const found = new Map<string, MentionedAgent>();
     // Note that an id that is no UUID names no agent, and is not asked of a store that would refuse it.
     const ids = named.flatMap((id) => Option.toArray(agentIdOf(id)));
+
     if (ids.length === 0) return found;
     const read = yield* listPublishedAgentsById(userId, ids);
     const standing = read.filter(({ agent }) => agent.organizationId === workspaceId);
+
     const tasks = yield* taskNamesOf(
       userId,
       standing.map(({ agent }) => agent.taskId),
     );
+
     for (const { agent, published } of standing) {
       const task = tasks.get(agent.taskId);
       found.set(agent.id, {
@@ -80,6 +83,7 @@ const readAgents = (userId: string, workspaceId: string, named: readonly string[
         archived: agent.archivedAt !== null,
       });
     }
+
     return found;
   });
 
@@ -105,12 +109,15 @@ const readPeople = (workspaceId: string, named: readonly string[]) =>
 const readNumberedTasks = (userId: string, words: string) =>
   Effect.gen(function* () {
     const found = new Map<string, Map<number, string>>();
+
     for (const { workspace, number } of numberedTasksIn(words)) {
       const taskId = yield* taskIdOfNumber(userId, workspace, number);
+
       if (Option.isNone(taskId)) continue;
       const numbers = found.get(workspace) ?? new Map<number, string>();
       found.set(workspace, numbers.set(number, taskId.value));
     }
+
     return found;
   });
 
@@ -124,9 +131,11 @@ export function readMentioned(
     const { task } = place;
     const tasks = yield* readNumberedTasks(userId, words);
     const named = mentionedIds(words, task, tasks);
+
     if (named.pages.length === 0 && named.agents.length === 0 && named.people.length === 0) {
       return { ...NO_MENTIONED_READS, tasks };
     }
+
     return yield* Effect.all({
       pages:
         task === undefined || named.pages.length === 0

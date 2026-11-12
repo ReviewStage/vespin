@@ -65,8 +65,10 @@ class StandInWorker extends EventTarget implements Worker {
     queueMicrotask(() => {
       if (!this.loads) {
         this.dispatchEvent(new Event("error", { cancelable: true }));
+
         return;
       }
+
       sent.push(message);
       const data = { type: "success", id: message.id, requestType: message.type, sentAt: 0 };
       this.dispatchEvent(new MessageEvent("message", { data }));
@@ -104,6 +106,7 @@ test("a list whose door throws, or whose worker fails as it loads, highlights on
     LOOK,
     1000,
   );
+
   started = throwing;
   assert.equal(await throwing.settled, HIGHLIGHT_MODE.MAIN_THREAD);
   assert.equal(throwing.pool?.isWorkingPool(), false);
@@ -122,6 +125,7 @@ test("a pool kept for a list drawn in another look hands its workers that look",
   await vi.waitFor(() => {
     const told = sent.filter((request) => request.type === "set-render-options");
     assert.equal(told.length, 2, "both workers are told");
+
     for (const request of told) assert.deepEqual(request.renderOptions?.theme, solarized);
   });
 });
@@ -131,6 +135,7 @@ test("a list's workers color with Highlights where the window may compile WebAss
   assert.equal(await started.settled, HIGHLIGHT_MODE.POOL);
   const starts = sent.filter((request) => request.type === "initialize");
   assert.equal(starts.length, 2, "both workers are started");
+
   for (const request of starts) {
     assert.equal(request.preferredHighlighter, HIGHLIGHTER.HIGHLIGHTS);
   }

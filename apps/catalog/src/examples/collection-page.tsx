@@ -87,6 +87,7 @@ function Tasks({
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [open, setOpen] = useState<string>("billing");
+
   return (
     <CollectionPage
       frame={PAGE_FRAME.PAGE}
@@ -156,6 +157,7 @@ function Toolbar(): React.JSX.Element {
 
 function TasksUnderToolbar({ state }: { state: CollectionState }): React.JSX.Element {
   const [query, setQuery] = useState("");
+
   return (
     <CollectionPage
       frame={PAGE_FRAME.TOOLBAR}
@@ -214,6 +216,7 @@ function Board(): React.JSX.Element {
 
 function SwitchedUnderToolbar(): React.JSX.Element {
   const [state, setState] = useState<CollectionState>(COLLECTION_STATE.READY);
+
   return (
     <div className="catalog-stack">
       <ChoiceBar<CollectionState>
@@ -232,6 +235,7 @@ function SwitchedUnderToolbar(): React.JSX.Element {
 
 function Switched(): React.JSX.Element {
   const [state, setState] = useState<CollectionState>(COLLECTION_STATE.READY);
+
   return (
     <div className="catalog-stack">
       <ChoiceBar<CollectionState>

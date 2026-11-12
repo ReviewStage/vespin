@@ -89,6 +89,7 @@
  * where every page has them, and says so in the room under it.
  */
 
+import { Predicate } from "effect";
 import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { NotFoundIcon } from "../../icons/lucide-glyphs.js";
 import { said } from "../../said.js";
@@ -143,8 +144,10 @@ const TRAIL_LABEL = "Path";
 const LEAD = "ui-toolbar-lead flex min-w-0 flex-initial items-center gap-control-gap";
 const ACTIONS = "ui-toolbar-actions relative flex flex-none items-center gap-control-gap";
 const TAG = "ui-toolbar-tag flex-none";
+
 /** Quiet words after the title, in the body's type, on one line cut short, fading, before the title is. */
 const DETAIL = "ui-toolbar-detail min-w-0 flex-[0_1000_auto] text-body text-muted-foreground";
+
 /** The title, in a bar title's type; its room reaches 6px left of the words, so its own hover fill and field ring, which start there, are not clipped. */
 const TITLE =
   "ui-toolbar-title m-0 -ml-ui-6 pl-ui-6 text-toolbar-title font-toolbar-title tracking-title";
@@ -172,6 +175,7 @@ const TITLE_PRESS =
  */
 const TITLE_EDIT =
   "ui-toolbar-title-edit flex min-w-0 items-center [&>.ui-inline-edit]:min-w-0 [&>.ui-inline-edit]:flex-auto";
+
 const TITLE_EDIT_PRESS = `${TITLE_EDIT} h-control gap-icon-gap px-ui-8 [&_svg]:size-control-icon [&_svg]:flex-none`;
 
 /** What holds the title and takes the focus back from its rename: its press, or the box holding the page's menu. */
@@ -282,7 +286,8 @@ function ToolbarTitle({
   /** The title's rename in place, while it stands (`titleEdit`). */
   edit?: ToolbarTitleEdit | undefined;
 }): React.JSX.Element {
-  if (typeof title !== "string") return <>{title}</>;
+  if (!Predicate.isString(title)) return <>{title}</>;
+
   if (edit !== undefined) {
     const field = (
       <ReplayWords unmasked={unmasked}>
@@ -296,6 +301,7 @@ function ToolbarTitle({
         />
       </ReplayWords>
     );
+
     return press === undefined ? (
       <h1 className={`${TITLE} ${TITLE_EDIT}`}>{field}</h1>
     ) : (
@@ -307,6 +313,7 @@ function ToolbarTitle({
       </h1>
     );
   }
+
   if (press !== undefined) {
     return (
       <h1 className={TITLE_PRESS_HEADING}>
@@ -328,6 +335,7 @@ function ToolbarTitle({
       </h1>
     );
   }
+
   return (
     <OneLine as={ONE_LINE_ELEMENT.H1} hint={wholeWordsHint(title)} className={TITLE} words={title}>
       <ReplayWords unmasked={unmasked}>{title}</ReplayWords>
@@ -360,6 +368,7 @@ function TitleMenu({
   children: ReactNode;
 }): React.JSX.Element {
   if (menu === undefined) return <>{children}</>;
+
   if (crumbs) {
     return (
       // biome-ignore lint/a11y/useSemanticElements: the box groups a trail's crumbs and the page's name, not a form's fields, so it is no `<fieldset>`.
@@ -368,6 +377,7 @@ function TitleMenu({
       </div>
     );
   }
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: the box holds the page's heading, which a <button> may not hold.
     <div
@@ -386,6 +396,7 @@ function TitleMenu({
 /** A place of the trail as a crumb: the folding way back where it wears a glyph, a quiet pill where it does not. */
 function placeCrumb(place: ToolbarPlace): Crumb {
   const onPress = () => place.onPress();
+
   return place.icon === undefined
     ? { label: place.label, onPress }
     : { label: place.label, icon: place.icon, onPress };
@@ -412,6 +423,7 @@ function ToolbarTrail({
   // Note that a name not yet read leaves the places alone, so the way back stands while it loads.
   const own: Crumb[] =
     title === "" || end !== undefined ? [] : [{ label: title, current: true, shown }];
+
   return (
     <Breadcrumbs
       label={TRAIL_LABEL}
@@ -468,6 +480,7 @@ export function Toolbar({
     refocus.current = false;
     heading.current?.querySelector<HTMLElement>(TITLE_FOCUS)?.focus();
   });
+
   const edit: ToolbarTitleEdit | undefined =
     titleEdit === undefined
       ? undefined
@@ -478,8 +491,10 @@ export function Toolbar({
             titleEdit.onEnd(end);
           },
         };
+
   // Note that a title being renamed stands alone, its trail and its menu giving way to its field.
   const crumbs = trail !== undefined && trail.length > 0 && titleEdit === undefined;
+
   return (
     <ToolbarFrame
       frameRef={frame}
@@ -498,7 +513,7 @@ export function Toolbar({
           menu={titlePress === undefined && titleEdit === undefined ? titleMenu : undefined}
           crumbs={crumbs}
         >
-          {crumbs && typeof title === "string" && title !== "" ? (
+          {crumbs && Predicate.isString(title) && title !== "" ? (
             <ReplayMask>
               <ToolbarTrail
                 trail={trail}
@@ -572,7 +587,9 @@ export function NotFound({
       {`This ${thing} doesn't exist, or you don't have access to it.`}
     </EmptyState>
   );
+
   if (bar === undefined) return state;
+
   return (
     <Fill as={FILL_ELEMENT.SECTION} aria-label={NOT_FOUND_TITLE}>
       <Toolbar {...bar} />

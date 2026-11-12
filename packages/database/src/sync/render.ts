@@ -92,6 +92,7 @@ function topicJson(topic: SyncColumnTopic, owner: string): string {
 function ownTopics(table: SyncTable, record: Record): readonly string[] {
   if (table.topics.length === 0) return [];
   const pairs = table.topics.map((topic) => topicJson(topic, record)).join(", ");
+
   return [`sync_topics := sync_topics || jsonb_build_array(${pairs});`];
 }
 
@@ -99,6 +100,7 @@ function ownTopics(table: SyncTable, record: Record): readonly string[] {
 function lookupTopics(lookup: SyncTableLookup, record: Record): string {
   const parent = quoteIdentifier(lookup.table);
   const pairs = lookup.topics.map((topic) => `(${topicJson(topic, parent)})`).join(", ");
+
   return [
     "sync_topics := sync_topics || coalesce((",
     `\t\t\tSELECT jsonb_agg("sync_lookup"."topic") FROM ${parent}`,
@@ -111,10 +113,12 @@ function lookupTopics(lookup: SyncTableLookup, record: Record): string {
 /** The block gathering one record's topics, run only where the write has that record. */
 function recordBlock(table: SyncTable, record: Record): string {
   const absentOn = record === RECORD.OLD ? "INSERT" : "DELETE";
+
   const statements = [
     ...ownTopics(table, record),
     ...table.lookups.map((lookup) => lookupTopics(lookup, record)),
   ];
+
   return [
     `\tIF TG_OP <> '${absentOn}' THEN`,
     ...statements.map((statement) => `\t\t${statement}`),
@@ -127,12 +131,14 @@ function keyJson(key: readonly string[], record: Record): string {
   const pairs = key.map(
     (column) => `${quoteLiteral(column)}, ${record}.${quoteIdentifier(column)}`,
   );
+
   return `jsonb_build_object(${pairs.join(", ")})`;
 }
 
 /** The SQL names of the log's columns the capture writes, in the order its insert lists them. */
 function logColumns(): string {
   const columns = [syncLog.txid, syncLog.tableName, syncLog.key, syncLog.topics];
+
   return columns.map((column) => quoteIdentifier(column.name)).join(", ");
 }
 
@@ -157,13 +163,16 @@ function rowsLogged(log: SyncTableLog): string {
   const changed = log.updatesOf.map(
     (column) => `OLD.${quoteIdentifier(column)} IS DISTINCT FROM NEW.${quoteIdentifier(column)}`,
   );
+
   return ["TG_OP <> 'UPDATE'", ...changed].join(" OR ");
 }
 
 /** The block logging the write, around its statements where `LOG.ROWS` skips the update. */
 function logBlock(table: SyncTable, log: SyncTableLog): string {
   const statements = logStatements(table, log);
+
   if (log.writes === LOG.EVERY) return statements.map((line) => `\t${line}`).join("\n");
+
   return [
     `\tIF ${rowsLogged(log)} THEN`,
     ...statements.map((line) => `\t\t${line}`),
@@ -179,6 +188,7 @@ function payload(batch: string): string {
 /** The loop sending each distinct topic once, batched under the payload limit. */
 function notifyBlock(): string {
   const channel = quoteLiteral(SYNC_CHANNEL);
+
   return [
     "\tFOR sync_topic IN",
     `\t\tSELECT DISTINCT "value" FROM jsonb_array_elements(sync_topics) WHERE "value" ->> 1 IS NOT NULL ORDER BY "value"`,
@@ -197,6 +207,7 @@ function notifyBlock(): string {
 
 function functionStatement(table: SyncTable): string {
   const log = table.log;
+
   return [
     `CREATE OR REPLACE FUNCTION ${quoteIdentifier(syncFunctionName(table))}() RETURNS trigger LANGUAGE plpgsql AS $app_sync$`,
     "DECLARE",
@@ -229,6 +240,7 @@ function updateCondition(table: SyncTable): string {
 export function renderSyncTable(table: SyncTable): SyncStatements {
   const on = quoteIdentifier(table.name);
   const execute = `EXECUTE FUNCTION ${quoteIdentifier(syncFunctionName(table))}()`;
+
   return {
     drop: [SYNC_TRIGGER.UPDATE, SYNC_TRIGGER.WRITE].map(
       (trigger) => `DROP TRIGGER IF EXISTS ${quoteIdentifier(trigger)} ON ${on};`,
@@ -249,6 +261,7 @@ export function renderSyncTable(table: SyncTable): SyncStatements {
 export function syncMigration(tables: readonly SyncTable[], statements: string): string {
   const rendered = tables.map(renderSyncTable);
   const own = statements.trim();
+
   return [
     ...rendered.flatMap((capture) => capture.drop),
     ...(own.length === 0 ? [] : [own]),
@@ -264,6 +277,7 @@ export function syncMigration(tables: readonly SyncTable[], statements: string):
  */
 export function syncFunctionMigration(tables: readonly SyncTable[], statements: string): string {
   const own = statements.trim();
+
   return [...(own.length === 0 ? [] : [own]), ...tables.map(functionStatement)].join(
     STATEMENT_BREAKPOINT,
   );

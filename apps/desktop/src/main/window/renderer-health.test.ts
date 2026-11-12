@@ -30,6 +30,7 @@ import {
 
 /** The working set of each process, in kilobytes, as the system would measure it. */
 const metrics = new Map<number, number>();
+
 /** Each process's type and the CPU seconds it has spent since it started, as the system would count them. */
 const cpu = new Map<number, { type: string; seconds: number }>();
 
@@ -109,9 +110,11 @@ it.effect("a panel that stops answering is reported once per stretch, as it answ
     const panel = new FakeWindow(4101, "index.html");
     metrics.set(4101, 0.9 * KILOBYTES_PER_GIGABYTE);
     const reported: UnresponsiveEpisode[] = [];
+
     const following = yield* forkOnProcesses(
       followResponsiveness(panel, (episode) => Effect.sync(() => reported.push(episode))),
     );
+
     yield* settle;
 
     panel.emit("unresponsive");
@@ -157,9 +160,11 @@ it.effect("a panel that closes while it still does not answer is reported as not
   Effect.gen(function* () {
     const panel = new FakeWindow(4102, "index.html");
     const reported: UnresponsiveEpisode[] = [];
+
     const following = yield* forkOnProcesses(
       followResponsiveness(panel, (episode) => Effect.sync(() => reported.push(episode))),
     );
+
     yield* settle;
 
     panel.emit("unresponsive");
@@ -185,11 +190,13 @@ it.effect("a window's working set is noted once as it crosses its bound, and nev
     metrics.set(4201, 1.2 * KILOBYTES_PER_GIGABYTE);
     metrics.set(4202, 0.3 * KILOBYTES_PER_GIGABYTE);
     const noted: WorkingSetCrossing[] = [];
+
     const sampling = yield* forkOnProcesses(
       sampleWindowMemory((crossing) => {
         noted.push(crossing);
       }),
     );
+
     yield* settle;
     assert.equal(noted.length, 0, "nothing under the bound is noted");
 
@@ -227,11 +234,15 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
     cpu.set(4301, { type: "Tab", seconds: 0 });
     cpu.set(4302, { type: "Tab", seconds: 0 });
     cpu.set(4303, { type: "Zygote", seconds: 0 });
+
     const spend = (pid: number, seconds: number) => {
       const process = cpu.get(pid);
+
       if (process !== undefined) process.seconds += seconds;
     };
+
     const summaries: CpuSummary[] = [];
+
     const sampling = yield* forkOnProcesses(
       sampleProcessCpu(
         () => 3,
@@ -240,6 +251,7 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
         },
       ),
     );
+
     yield* settle;
 
     // Twenty fifteen-second spans: main spends a tenth of a core but for one
@@ -249,6 +261,7 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
       spend(4301, 3);
       spend(4302, 1.5);
       spend(4303, 15);
+
       if (span === 20)
         assert.equal(summaries.length, 0, "nothing is summed up before five minutes");
       yield* TestClock.adjust(Duration.seconds(15));

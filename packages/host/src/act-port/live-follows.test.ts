@@ -14,7 +14,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WireBoundaryInput } from "@repo/wire";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { OWN_PULL_REQUEST, OWN_TRANSCRIPT } from "../app-state.js";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -354,7 +354,7 @@ const FOLLOWS = [
   readonly follow: PortActKind;
   readonly retry?: PortActKind;
   readonly key: WireBoundaryInput;
-  readonly [field: string]: unknown;
+  readonly [field: string]: WireBoundaryInput;
 }[];
 
 const ports: TestActPort<unknown>[] = [];
@@ -369,16 +369,20 @@ async function until(ready: () => boolean): Promise<void> {
 }
 
 /** A level of a held slice: its keys by id, each holding a level below or a key's read. */
-type SliceLevel = Readonly<Record<string, unknown>>;
+type SliceLevel = { readonly [id: string]: WireBoundaryInput };
 
 /** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
-function isSliceLevel(value: unknown): value is SliceLevel {
-  return typeof value === "object" && value !== null;
+function isSliceLevel(value: WireBoundaryInput): value is SliceLevel {
+  return Predicate.isObjectOrArray(value);
 }
 
 /** What `held` holds at `at`, the key's path in its slice. */
-function readAt(held: unknown, at: readonly string[]): unknown {
-  return at.reduce<unknown>((level, id) => (isSliceLevel(level) ? level[id] : undefined), held);
+function readAt<Held>(held: Held, at: readonly string[]): WireBoundaryInput {
+  return at.reduce<WireBoundaryInput>(
+    (level, id) => (isSliceLevel(level) ? level[id] : undefined),
+    // SAFETY: a slice the window is told is the document's data, as it crossed the port.
+    held as WireBoundaryInput,
+  );
 }
 
 it.effect(
@@ -388,6 +392,7 @@ it.effect(
       const { port, requests } = yield* hostActPort({ account: SIGNED_IN });
       const refused = [];
       const expected = [];
+
       for (const each of FOLLOWS) {
         const kinds: readonly (readonly [PortActKind, string])[] =
           "retry" in each
@@ -396,6 +401,7 @@ it.effect(
                 [each.retry, each.retryRefusal],
               ]
             : [[each.follow, each.followRefusal]];
+
         for (const [kind, words] of kinds) {
           refused.push(yield* port.perform({ kind, payload: each.key }, OTHER_WINDOW));
           refused.push(yield* port.perform({ kind, payload: each.key }, PANEL, { trusted: false }));
@@ -418,13 +424,18 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { port, requests, told } = yield* hostActPort({ account: SIGNED_IN });
+
       for (const each of FOLLOWS) {
         const asked = () => requests.filter((request) => request.pathname === each.path).length;
         const slice = () => told.filter((changed) => changed.read === each.slice).at(-1)?.held;
+        // SAFETY: each follow's key is the one its follow takes.
         const one = yield* Effect.promise(() => port.as(PANEL)[each.follow](each.key as never));
+
+        // SAFETY: each follow's key is the one its follow takes.
         const two = yield* Effect.promise(() =>
           port.as(SECOND_PANEL)[each.follow](each.key as never),
         );
+
         yield* Effect.promise(() => until(() => readAt(slice(), each.at) !== undefined));
 
         assert.equal(asked(), 1, `${each.follow}: two holds share one follow`);
@@ -435,6 +446,7 @@ it.effect(
         );
 
         if ("retry" in each) {
+          // SAFETY: each follow's key is the one its follow takes.
           yield* Effect.promise(() => port.as(PANEL)[each.retry](each.key as never));
           yield* Effect.promise(() => until(() => asked() === 2));
           assert.equal(asked(), 2, `${each.follow}: Try again asks once more`);

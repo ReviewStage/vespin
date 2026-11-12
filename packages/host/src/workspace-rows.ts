@@ -34,6 +34,7 @@ const WORKSPACE: RowKind<Workspace, WorkspaceChange> = {
   drawn: (change, row) => {
     if (row === undefined) return undefined;
     const next = change(row);
+
     // Note that a change the row already carries leaves it alone, so the view holds the very row.
     return Equal.equals(next, row) ? undefined : next;
   },
@@ -84,6 +85,7 @@ export interface WorkspaceRows {
 /** `workspace` with the photo `answered` carries in place of its own, or none where it carries none. */
 function withPhotoOf(workspace: Workspace, answered: Workspace): Workspace {
   const { photoVersion: _replaced, ...kept } = workspace;
+
   return answered.photoVersion === undefined
     ? kept
     : { ...kept, photoVersion: answered.photoVersion };
@@ -108,13 +110,16 @@ export function workspaceRows(
     /** How many times the follow has moved each workspace, so a write's answer that lands after a newer move is not drawn over it. */
     const moves = new Map<string, number>();
     const drawn = Effect.suspend(() => (answered ? dependencies.draw(held.rows()) : Effect.void));
+
     const held: HeldRows<Workspace, WorkspaceChange> = yield* dependencies.pool.stand(WORKSPACE, {
       redraw: () => drawn,
       // Note that no workspace write answers a transaction, so the read hands no wait and each write waits on the follow's next move (`carried`).
       confirmation: () => undefined,
     });
+
     const waits = yield* carriedWaits(() => held.synced());
     const movesOf = (workspaceId: string) => moves.get(workspaceId) ?? 0;
+
     /** What a write's service answered as the pool takes it: standing until the follow moves the workspace past `before`, and taken in its place only where it has not. */
     const taken = <Answer>(
       workspaceId: string,
@@ -131,14 +136,17 @@ export function workspaceRows(
               open && movesOf(workspaceId) === before ? kept(sent.workspace)(row) : row,
             carried: waits.carried(() => movesOf(workspaceId) !== before),
           };
+
     const owned =
       (change: WorkspaceChange): WorkspaceChange =>
       (row) =>
         open ? change(row) : row;
+
     return {
       answer: (workspaces) =>
         Effect.gen(function* () {
           const moved = yield* held.answer(workspaces);
+
           for (const workspaceId of moved) moves.set(workspaceId, movesOf(workspaceId) + 1);
           answered = true;
           yield* waits.answered;
@@ -152,6 +160,7 @@ export function workspaceRows(
         Effect.suspend((): Effect.Effect<Written<WorkspaceChange, Answer> | Refused<Answer>> => {
           if (!open) return Effect.succeed({ refused: unsent });
           const before = movesOf(workspaceId);
+
           return Effect.map(send, (sent) =>
             taken(workspaceId, before, sent, (workspace) => () => workspace),
           );

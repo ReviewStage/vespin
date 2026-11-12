@@ -47,6 +47,7 @@ const RELEASE_FILES = [
 /** The release's files laid out under `root`, whatever stood there before removed. */
 export function stagedRelease(root: string, sources: ReleaseSources): void {
   rmSync(root, { recursive: true, force: true });
+
   for (const file of RELEASE_FILES) {
     mkdirSync(dirname(join(root, file.to)), { recursive: true });
     copyFileSync(sources[file.from], join(root, file.to));

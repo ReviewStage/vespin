@@ -15,8 +15,15 @@
  * written unless the turn has ended.
  */
 
-import { MESSAGE_ROLE } from "@repo/wire";
+import {
+  isRecord,
+  MESSAGE_ROLE,
+  type UnparsedWireValue,
+  type WireRecord,
+  type WireValue,
+} from "@repo/wire";
 import { TOOL_PART_STATE } from "@repo/wire/ui-messages";
+import { Predicate } from "effect";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 
 /** How the SDK spells a tool part's type: the tool's name behind this prefix. */
@@ -50,27 +57,35 @@ type PrintedPart =
   | undefined;
 
 /** A stored part, or a call's input, as a terminal reads it: its fields by name, each still to be read. */
-type PartFields = Readonly<Record<string, unknown>>;
+type PartFields = WireRecord;
 
-/** Whether `value` is an object whose fields can be read by name, rather than a primitive or nothing. */
-function isPartFields(value: unknown): value is PartFields {
-  return typeof value === "object" && value !== null;
+/**
+ * Whether `value` is an object whose fields can be read by name, rather than
+ * a primitive or nothing. Note that an array, which a stored part never is,
+ * reads as no part, as it printed nothing when its fields were read.
+ */
+function isPartFields(value: UnparsedWireValue): value is PartFields {
+  return isRecord(value);
 }
 
 function stringField(part: PartFields, key: string): string | undefined {
   const value = part[key];
-  return typeof value === "string" ? value : undefined;
+
+  return Predicate.isString(value) ? value : undefined;
 }
 
 /** What a call acted on, as one short line, from the first input key that names it. */
-function subjectOf(input: unknown): string | undefined {
+function subjectOf(input: UnparsedWireValue): string | undefined {
   if (!isPartFields(input)) return undefined;
+
   for (const key of SUBJECT_KEYS) {
     const value = stringField(input, key)?.trim().split("\n")[0];
+
     if (value !== undefined && value.length > 0) {
       return value.length > MAX_SUBJECT_CHARS ? `${value.slice(0, MAX_SUBJECT_CHARS)}…` : value;
     }
   }
+
   return undefined;
 }
 
@@ -78,16 +93,20 @@ function subjectOf(input: unknown): string | undefined {
 function printedPart(part: PartFields): PrintedPart {
   const type = stringField(part, "type") ?? "";
   const state = stringField(part, "state");
+
   if (type === TEXT_PART.TYPE) {
     return { words: stringField(part, "text") ?? "", settled: state !== TEXT_PART.STREAMING };
   }
+
   const tool =
     type === DYNAMIC_TOOL_PART
       ? stringField(part, "toolName")
       : type.startsWith(TOOL_PART_PREFIX)
         ? type.slice(TOOL_PART_PREFIX.length)
         : undefined;
+
   if (tool === undefined) return undefined;
+
   return {
     tool,
     subject: subjectOf(part.input),
@@ -98,8 +117,11 @@ function printedPart(part: PartFields): PrintedPart {
 /** Who wrote a message, as the line above its words names them: the agent, or whoever sent the developer's line. */
 export function transcriptSpeaker(message: AgentTranscriptMessage): string {
   if (message.role === MESSAGE_ROLE.ASSISTANT) return "Agent";
+
   return message.sentBy?.name ?? "You";
 }
+
+type TranscriptPartLinesResult = { readonly lines: readonly string[]; readonly printed: number };
 
 /**
  * The lines of a message's parts past the first `printed`, and how many of
@@ -111,20 +133,25 @@ export function transcriptPartLines(
   message: AgentTranscriptMessage,
   printed: number,
   ended: boolean,
-): { readonly lines: readonly string[]; readonly printed: number } {
+): TranscriptPartLinesResult {
   const lines: string[] = [];
   let index = printed;
+
   for (; index < message.parts.length; index += 1) {
     const stored = message.parts[index];
     const part = isPartFields(stored) ? printedPart(stored) : undefined;
+
     if (part === undefined) continue;
+
     if (!part.settled && !ended) break;
+
     if ("words" in part) {
       if (part.words.trim().length > 0) lines.push(part.words.trimEnd());
     } else {
       lines.push(`  ▸ ${part.tool}${part.subject === undefined ? "" : ` ${part.subject}`}`);
     }
   }
+
   return { lines, printed: index };
 }
 
@@ -143,24 +170,27 @@ export function transcriptCallPlace(
     const index = message.parts.findIndex(
       (part) => isPartFields(part) && stringField(part, "toolCallId") === callId,
     );
+
     if (index >= 0) return { messageId: message.id, index };
   }
+
   return undefined;
 }
 
 /** A call's input or result as words: a string as it is, anything else as its JSON, indented. */
-function callWords(value: unknown): string {
-  return typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
+function callWords(value: UnparsedWireValue): string {
+  return Predicate.isString(value) ? value : (JSON.stringify(value, null, 2) ?? "");
 }
 
 /** One call read whole as a terminal prints it: its tool and where it stands, its input, and its output or its error, each whole. */
-export function wholeCallLines(stored: unknown): readonly string[] {
+export function wholeCallLines(stored: WireValue): readonly string[] {
   const part = isPartFields(stored) ? stored : {};
   const printed = printedPart(part);
   const tool = printed !== undefined && "tool" in printed ? printed.tool : "call";
   const state = stringField(part, "state");
   const error = stringField(part, "errorText");
   const output = part.output;
+
   return [
     `${tool}${state === undefined ? "" : ` (${state})`}`,
     "",

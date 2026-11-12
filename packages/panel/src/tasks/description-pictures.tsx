@@ -87,6 +87,7 @@ function sectionOfPicture(text: string, taskId: string, id: string): string | un
   return descriptionSections(text).find((section) =>
     taskPicturesIn(section.text).some((address) => {
       const named = descriptionAttachmentOf(address);
+
       return named?.taskId === taskId && named.attachmentId === id;
     }),
   )?.heading;
@@ -117,11 +118,13 @@ export function DescriptionPictures({
   // for a change to another's words.
   const shownText = useRef(text);
   shownText.current = text;
+
   const read = useCallback(
     (owner: string, id: string) =>
       askAct(ACT_KIND.TASKS_PICTURE_READ, { planId: owner, attachmentId: id }),
     [],
   );
+
   const door = useMemo<DescriptionPicturesDoor>(
     () => ({
       taskId,
@@ -131,12 +134,16 @@ export function DescriptionPictures({
       open: (id) => {
         const shown = descriptionAttachmentIdsIn(shownText.current, taskId).flatMap((each) => {
           const state = pictureNow(queryClient, taskId, each);
+
           if (state.kind !== PICTURE_STATE.READY) return [];
+
           return [
             { id: each, chip: chipOf(state.url, names.current.get(each) || UNNAMED_PICTURE) },
           ];
         });
+
         const at = shown.findIndex((each) => each.id === id);
+
         if (at !== -1) {
           setViewing({
             ids: shown.map((each) => each.id),
@@ -148,8 +155,10 @@ export function DescriptionPictures({
     }),
     [taskId, read, queryClient],
   );
+
   const shownId = viewing?.ids[viewing.at];
   const heading = shownId === undefined ? undefined : sectionOfPicture(text, taskId, shownId);
+
   return (
     <DescriptionPicturesContext.Provider value={door}>
       {children}
@@ -183,6 +192,7 @@ function DescriptionPicture({
   const state = usePicture(pictureQuery(owner, id, door.read), pictureUnread);
   door.name(id, alt);
   const own = owner === door.taskId;
+
   return (
     <PictureBlock
       state={state}
@@ -204,6 +214,7 @@ function OutsidePicture({
   openLink: (href: string) => void;
 }): React.JSX.Element {
   const words = alt === "" ? UNNAMED_PICTURE : alt;
+
   return (
     <TextLink href={href} words={words} onOpen={openLink}>
       <ImageIcon className={OUTSIDE_GLYPH_CLASS} aria-hidden="true" />
@@ -221,11 +232,15 @@ export function useDescriptionPicturesDoor(): DescriptionPicturesDoor | undefine
 export function useDescriptionPictureDrawer(): PictureDrawer | undefined {
   const door = useContext(DescriptionPicturesContext);
   const openLink = useOpenLink();
+
   return useMemo(() => {
     if (door === undefined) return undefined;
+
     const drawer: PictureDrawer = (src, alt, title) => {
       const named = descriptionAttachmentOf(src);
+
       if (named === undefined) return <OutsidePicture href={src} alt={alt} openLink={openLink} />;
+
       return (
         <DescriptionPicture
           door={door}
@@ -236,6 +251,7 @@ export function useDescriptionPictureDrawer(): PictureDrawer | undefined {
         />
       );
     };
+
     return drawer;
   }, [door, openLink]);
 }

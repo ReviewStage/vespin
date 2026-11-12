@@ -327,6 +327,7 @@ export function openIntegrationInstallIntent(
       expiresAt: DateTime.toDateUtc(DateTime.addDuration(now, INTEGRATION_INSTALL_INTENT_LIFETIME)),
       now: DateTime.toDateUtc(now),
     });
+
     return state;
   });
 }

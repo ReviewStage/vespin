@@ -69,22 +69,28 @@ const encodeNotification = Schema.encodeEffect(SyncNotificationSchema);
 
 const readSyncObjects = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const triggerRows = yield* sql<{ table: string; name: string; definition: string }>`
     select c.relname as "table", t.tgname as "name", pg_get_triggerdef(t.oid) as "definition"
     from pg_trigger t join pg_class c on c.oid = t.tgrelid
     where not t.tgisinternal and starts_with(t.tgname, ${SYNC_OBJECT_PREFIX})
   `;
+
   const functionRows = yield* sql<{ name: string; definition: string }>`
     select p.proname as "name", pg_get_functiondef(p.oid) as "definition"
     from pg_proc p
     where p.pronamespace = 'public'::regnamespace and starts_with(p.proname, ${SYNC_OBJECT_PREFIX})
   `;
+
   const triggers: SyncTriggers = new Map();
+
   for (const row of triggerRows) {
     const ofTable = triggers.get(row.table) ?? new Map<string, string>();
     triggers.set(row.table, ofTable.set(row.name, row.definition));
   }
+
   const functions = new Map(functionRows.map((row) => [row.name, row.definition]));
+
   return { triggers, functions } satisfies SyncObjects;
 });
 
@@ -94,8 +100,10 @@ export const installSyncTables = (
 ): Effect.Effect<void, SqlError, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     for (const table of tables) {
       const capture = renderSyncTable(table);
+
       for (const statement of [...capture.drop, ...capture.create]) yield* sql.unsafe(statement);
     }
   });
@@ -107,6 +115,7 @@ const renderedSyncObjects = (tables: readonly SyncTable[]) =>
       .withTransaction(
         Effect.gen(function* () {
           yield* installSyncTables(tables);
+
           return yield* new RenderedSyncObjects({ objects: yield* readSyncObjects });
         }),
       )
@@ -121,6 +130,7 @@ function declaredDrift(
 ): readonly SyncDrift[] {
   return tables.flatMap((table) => {
     const name = syncFunctionName(table);
+
     const objects = [
       {
         object: name,
@@ -133,6 +143,7 @@ function declaredDrift(
         rendered: rendered.triggers.get(table.name)?.get(trigger),
       })),
     ];
+
     return objects.flatMap((object) =>
       object.installed === object.rendered ? [] : [{ table: table.name, ...object }],
     );
@@ -146,6 +157,7 @@ function undeclaredDrift(
 ): readonly SyncDrift[] {
   const declared = new Set(tables.map((table) => table.name));
   const rendered = new Set<string>(Object.values(SYNC_TRIGGER));
+
   return [...installed.triggers].flatMap(([table, triggers]) =>
     [...triggers].flatMap(([object, definition]) =>
       declared.has(table) && rendered.has(object)
@@ -162,13 +174,16 @@ export const syncDrift = (
   Effect.gen(function* () {
     const installed = yield* readSyncObjects;
     const rendered = yield* renderedSyncObjects(tables);
+
     return [...declaredDrift(tables, installed, rendered), ...undeclaredDrift(tables, installed)];
   });
 
 /** The topics, each once, sorted by kind and then id, so two lists of one set compare equal. */
 function topicSet(topics: readonly SyncTopic[]): readonly SyncTopic[] {
   const byKind = new Map<TopicKind, Set<string>>();
+
   for (const [kind, id] of topics) byKind.set(kind, (byKind.get(kind) ?? new Set()).add(id));
+
   return [...byKind]
     .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([kind, ids]) => [...ids].sort().map((id): SyncTopic => [kind, id]));
@@ -207,14 +222,17 @@ export const expectTopicsFire = <A, E, R>(
       const heard = yield* Effect.forkScoped(heardUntil((yield* listener.listen).payloads, fence));
       const value = yield* write;
       yield* sql`select pg_notify(${SYNC_CHANNEL}, ${yield* encodeNotification({ h: fence })})`;
+
       const changes = (yield* Fiber.join(heard)).flatMap((notification) =>
         "t" in notification ? [notification] : [],
       );
+
       assert.deepEqual(
         topicSet(changes.flatMap((change) => change.t)),
         topicSet(topics),
         "the topics the write notified",
       );
+
       return { value, txids: [...new Set(changes.map((change) => change.x))] };
     }),
   );

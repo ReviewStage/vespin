@@ -21,9 +21,9 @@ import {
   gitHubPageLink,
   LINK_DESTINATION,
   type LinkDestination,
-  type NumberedAddress,
   pullRequestAddressOf,
   readLink,
+  samePullRequest,
 } from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
@@ -63,6 +63,19 @@ const IOS_ROUTE = {
   PULL_REQUEST: "pull",
 } as const;
 
+/** A place the app draws a screen for, which always has a route of the app's. */
+type IosRoutedPlace = Extract<
+  LinkDestination,
+  {
+    readonly kind:
+      | typeof LINK_DESTINATION.INBOX
+      | typeof LINK_DESTINATION.INBOX_ITEM
+      | typeof LINK_DESTINATION.BOARD
+      | typeof LINK_DESTINATION.TASK
+      | typeof LINK_DESTINATION.AGENT;
+  }
+>;
+
 /** A pull request one of the member's agents opened, by the agent and the pull request's page on GitHub. */
 export interface AgentPullRequestLink {
   readonly agentId: string;
@@ -74,20 +87,13 @@ function addressPath(address: string): string {
   return (address.split(/[?#]/u)[0] ?? "").replace(/\/$/u, "");
 }
 
-/** Whether two pull requests on GitHub are one: the same number in the same repository, whatever its case. */
-function samePullRequest(one: NumberedAddress, other: NumberedAddress | undefined): boolean {
-  return (
-    other !== undefined &&
-    one.number === other.number &&
-    one.repository.toLowerCase() === other.repository.toLowerCase()
-  );
-}
-
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
  * web. A task is routed as the link names it, by id or by number, for the
  * task's screen to find.
  */
+export function iosAppRouteOf(place: IosRoutedPlace): string;
+export function iosAppRouteOf(place: LinkDestination): string | undefined;
 export function iosAppRouteOf(place: LinkDestination): string | undefined {
   switch (place.kind) {
     case LINK_DESTINATION.INBOX:
@@ -127,13 +133,15 @@ export function iosAppRouteOfAddress(
   pullRequests: readonly AgentPullRequestLink[],
 ): string | undefined {
   const read = readLink(address);
+
   if (read !== undefined) return iosAppRouteOf(read.place);
   const named = pullRequestAddressOf(address);
+
   if (named === undefined) return undefined;
   const own = gitHubPageLink({ kind: GITHUB_PAGE.PULL_REQUEST, ...named });
+
   if (addressPath(address).toLowerCase() !== own.toLowerCase()) return undefined;
-  const opened = pullRequests.find(({ pullRequest }) =>
-    samePullRequest(named, pullRequestAddressOf(pullRequest.url)),
-  );
+  const opened = pullRequests.find(({ pullRequest }) => samePullRequest(pullRequest.url, address));
+
   return opened === undefined ? undefined : iosPullRequestRoute(opened.agentId, named.number);
 }

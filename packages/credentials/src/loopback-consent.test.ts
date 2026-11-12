@@ -40,6 +40,7 @@ function harness(
   const opened: string[] = [];
   const authorizations: LoopbackAuthorization[] = [];
   const exchanges: LoopbackExchange[] = [];
+
   const consent = loopbackConsent<Grant>({
     callbackPath: "/consent/callback",
     pages: PAGES,
@@ -47,11 +48,13 @@ function harness(
     authorizationUrl: (input) => {
       authorizations.push(input);
       Deferred.doneUnsafe(armed, Exit.succeed(input));
+
       return `https://example.test/consent?state=${encodeURIComponent(input.state)}`;
     },
     exchange: (input) =>
       Effect.sync(() => {
         exchanges.push(input);
+
         return { token: "granted" };
       }),
     openExternal: (url) => {
@@ -59,6 +62,7 @@ function harness(
     },
     ...overrides,
   });
+
   return { consent, opened, authorizations, exchanges };
 }
 
@@ -81,6 +85,7 @@ function armedTrip(
   return Effect.gen(function* () {
     const authorization = yield* Deferred.await(armed);
     yield* Effect.yieldNow;
+
     return authorization;
   });
 }
@@ -96,9 +101,11 @@ function answerCallback(
   parameters: Record<string, string>,
 ): Promise<{ status: number; body: string; location: string | undefined }> {
   const callback = new URL(redirectUri);
+
   for (const [name, value] of Object.entries(parameters)) {
     callback.searchParams.set(name, value);
   }
+
   return new Promise((resolve, reject) => {
     const request = http.get(
       {
@@ -118,6 +125,7 @@ function answerCallback(
         );
       },
     );
+
     request.on("error", reject);
   });
 }
@@ -144,6 +152,7 @@ it.effect("one trip runs press to grant, with the PKCE pair the exchange answers
       state: authorization.state,
       code: "auth-code",
     });
+
     assert.equal(answered.status, 200);
     assert.deepEqual(yield* Fiber.join(waiting), { token: "granted" });
 
@@ -163,12 +172,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const armed = yield* Deferred.make<LoopbackAuthorization>();
+
       const { consent, exchanges } = harness(armed, {
         continueTo: (grant) => Effect.succeed(`https://example.test/next?for=${grant.token}`),
       });
 
       const waiting = yield* trip(consent);
       const authorization = yield* armedTrip(armed);
+
       const answered = yield* callback(authorization.redirectUri, {
         state: authorization.state,
         code: "auth-code",
@@ -184,12 +195,14 @@ it.effect(
 it.effect("a refusal lands on its card whatever the flow would continue to", () =>
   Effect.gen(function* () {
     const armed = yield* Deferred.make<LoopbackAuthorization>();
+
     const { consent } = harness(armed, {
       continueTo: () => Effect.succeed("https://example.test/next"),
     });
 
     const waiting = yield* trip(consent);
     const authorization = yield* armedTrip(armed);
+
     const answered = yield* callback(authorization.redirectUri, {
       state: authorization.state,
       error: "access_denied",
@@ -251,6 +264,7 @@ it.effect("a trip nothing comes back to ends at its deadline as timed out", () =
 it.effect("a sign-in page the browser could not open ends the trip as the browser's", () =>
   Effect.gen(function* () {
     const armed = yield* Deferred.make<LoopbackAuthorization>();
+
     const { consent } = harness(armed, {
       openExternal: () => Promise.reject(new Error("no browser")),
     });
@@ -296,6 +310,7 @@ it.effect("a redirect after a cancel given while the browser opens runs no excha
       state: authorization.state,
       code: "auth-code",
     });
+
     browser.resolve();
 
     assert.equal(late.status, 404);
@@ -316,6 +331,7 @@ it.effect("another path, or a state this trip never issued, is refused without s
       state: "not-it",
       code: "stolen",
     });
+
     assert.equal(forged.status, 404);
 
     const strayPath = new URL(authorization.redirectUri);
@@ -328,6 +344,7 @@ it.effect("another path, or a state this trip never issued, is refused without s
       state: authorization.state,
       code: "auth-code",
     });
+
     assert.equal(genuine.status, 200);
     assert.deepEqual(yield* Fiber.join(waiting), { token: "granted" });
   }),

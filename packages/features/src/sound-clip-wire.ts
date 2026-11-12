@@ -85,11 +85,15 @@ export interface SoundClip {
  */
 export function soundClipOfDataUrl(text: string): SoundClip | undefined {
   const [, contentType, base64] = SOUND_CLIP_DATA_URL.exec(text) ?? [];
+
   if (contentType === undefined || base64 === undefined || !isSoundClipType(contentType)) {
     return undefined;
   }
+
   const bytes = Base64.decode(base64);
+
   if (Result.isFailure(bytes) || sniffAudioType(bytes.success) !== contentType) return undefined;
+
   return { contentType, bytes: bytes.success };
 }
 
@@ -97,6 +101,7 @@ export function soundClipOfDataUrl(text: string): SoundClip | undefined {
 export const soundClipDataUrlSchema = EffectSchema.String.check(
   EffectSchema.makeFilter((text: string) => {
     const clip = soundClipOfDataUrl(text);
+
     return clip !== undefined && clip.bytes.length <= SOUND_CLIP_BOUNDS.MAX_BYTES;
   }),
 );

@@ -201,7 +201,7 @@ export const INBOX_TOOLS = {
       `and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages oldest first, each with when it was written, who wrote it (you, agent for another agent, or a member by name and fromUserId, which their link names them by), ` +
       "its words in Markdown, its files by name, the ask it ends with whole, settled or not, with where it stands (open, answered, replaced by a newer ask, or withdrawn, with why), " +
       "and the answer a member's message carries. older, where earlier messages stand, is the before that reads the page before it, and openAsk is the message whose ask stands open where it is older than the page. " +
-      `A picture stands in the words as its alt and caption, and a page as its link or, on an option, its pageId and version, which ${AGENT_TOOL.READ_PAGE} reads. ` +
+      `A picture stands in the words as ![alt](address "caption"), which ${AGENT_TOOL.LOOK_AT_PICTURE} shows by its address where the words are not enough, and a page as its link or, on an option, its pageId and version, which ${AGENT_TOOL.READ_PAGE} reads. ` +
       "A member may close a thread without answering, which withdraws its ask with no reason; " +
       `where it held an ask open of yours, that reaches you as a developer's message whose first line starts "${INBOX_CLOSE_LEAD}" and names the key: ` +
       "take it as their not wanting what the ask asked.",
@@ -385,6 +385,7 @@ const SETTLED_MESSAGES_TOLD = 3;
 
 const readPost = readEither(inboxThreadPostInputSchema, { excess: EXCESS_KEYS.DROP });
 const readWithdraw = readEither(inboxWithdrawInputSchema, { excess: EXCESS_KEYS.DROP });
+
 // Note that a list refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
 const readList = readEither(inboxListInputSchema);
 const readThreadAsked = readEither(inboxReadThreadInputSchema);
@@ -410,12 +411,14 @@ const OPTION_FILE_REFUSALS: SandboxImageRefusals = {
 /** Who wrote a message, as the agent reads it: itself on its own thread, the thread's agent on another's, or the member by name, or a former member whose account is gone. */
 function writerOf(message: InboxMessage, own: boolean): string {
   if (message.author === INBOX_MESSAGE_AUTHOR.AGENT) return own ? "you" : "agent";
+
   return message.member?.name ?? "a former member";
 }
 
 /** An ask as the agent reads it back: whole while open, and its type and standing, with why it was withdrawn, once settled; as a member's outside agent reads one too (`member-mcp/inbox.ts`). */
 function askLineOf(ask: InboxReadAsk): AgentAskLine {
   if (ask.status === INBOX_ASK_STATUS.OPEN) return ask;
+
   return {
     type: ask.type,
     status: ask.status,
@@ -429,6 +432,7 @@ function askLineOf(ask: InboxReadAsk): AgentAskLine {
 /** An answer as the agent reads it back: how the member answered, without the id of the message it answers, which is the ask before it; as a member's outside agent reads one too. */
 function answersLineOf(answers: InboxAnswers): Omit<InboxAnswers, "ask"> {
   const { ask: _ask, ...answered } = answers;
+
   return answered;
 }
 
@@ -454,9 +458,11 @@ export function threadLineOf(message: InboxMessage, from: string): AgentThreadLi
  */
 function closerOf(item: InboxItem): Pick<AgentInboxLine, "closedBy" | "closedByUserId"> {
   if (item.status !== INBOX_STATUS.CLOSED) return {};
+
   if (item.closedBy !== undefined) {
     return { closedBy: item.closedBy.name, closedByUserId: item.closedBy.userId };
   }
+
   return item.closedReason === undefined ? { closedBy: "a former member" } : {};
 }
 
@@ -470,6 +476,7 @@ function settlementOf(item: InboxItem, messages: readonly InboxMessage[]): Parti
   if (messages.some((message) => message.ask !== undefined || message.answers !== undefined)) {
     return {};
   }
+
   return item.closedReason === undefined ? {} : { closedReason: item.closedReason };
 }
 
@@ -481,11 +488,13 @@ function settlementOf(item: InboxItem, messages: readonly InboxMessage[]): Parti
  */
 export function settledMessages(messages: readonly InboxMessage[]): readonly InboxMessage[] {
   const latest = (has: (message: InboxMessage) => boolean) => messages.findLast(has);
+
   const kept = new Set<InboxMessage | undefined>([
     latest((message) => message.ask !== undefined),
     latest((message) => message.answers !== undefined),
     ...messages.slice(-SETTLED_MESSAGES_TOLD),
   ]);
+
   return messages.filter((message) => kept.has(message));
 }
 
@@ -502,6 +511,7 @@ function lineOf(item: InboxItem, readerId: string): AgentInboxLine {
   const told = open ? messages : settledMessages(messages);
   const earlier = messages.length - told.length;
   const own = item.agentId === readerId;
+
   return {
     key: item.key,
     id: item.id,
@@ -521,6 +531,7 @@ const OPENING_CHARS = 160;
 /** A message's opening line, cut at `OPENING_CHARS`; empty where it carried files alone. */
 function openingOf(text: string): string {
   const [first = ""] = text.trim().split("\n");
+
   return first.length <= OPENING_CHARS ? first : `${first.slice(0, OPENING_CHARS - 1)}…`;
 }
 
@@ -533,14 +544,17 @@ function isoOf(at: number): string {
 function waiterOf(item: InboxItem): Pick<AgentThreadRow, "waitsOn" | "waitsOnUserId"> {
   if (item.status !== INBOX_STATUS.OPEN) return {};
   const waits = inboxWaitsOn(item);
+
   return waits === undefined ? {} : { waitsOn: waits.name, waitsOnUserId: waits.userId };
 }
 
 /** What an answered thread's answer says in a line: how, what was picked, and the opening of the member's words. */
 function answerOf(messages: readonly InboxMessage[]): Pick<AgentThreadRow, "answer"> {
   const answered = messages.findLast((message) => message.answers !== undefined);
+
   if (answered?.answers === undefined) return {};
   const text = openingOf(answered.text);
+
   return {
     answer: { ...answersLineOf(answered.answers), ...(text === "" ? undefined : { text }) },
   };
@@ -553,6 +567,7 @@ function rowOf(item: InboxItem, readerId: string): AgentThreadRow {
   const last = messages.at(-1);
   const asking = item.status === INBOX_STATUS.OPEN ? openAskOf(messages) : undefined;
   const closed = closerOf(item);
+
   return {
     id: item.id,
     key: item.key,
@@ -581,8 +596,9 @@ function rowOf(item: InboxItem, readerId: string): AgentThreadRow {
  */
 function rowsOf(items: readonly InboxItem[], readerId: string): readonly AgentThreadRow[] {
   const order = [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED];
+
   return order.flatMap((status) =>
-    items.filter((item) => item.status === status).map((item) => rowOf(item, readerId)),
+    items.flatMap((item) => (item.status === status ? [rowOf(item, readerId)] : [])),
   );
 }
 
@@ -601,6 +617,7 @@ function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWrit
 /** One message as a read of its thread answers it: its line, when it was written, and its ask whole. */
 function readMessageOf(message: InboxMessage, own: boolean): AgentThreadMessage {
   const { ask: _folded, ...line } = threadLineOf(message, writerOf(message, own));
+
   return {
     ...line,
     at: isoOf(message.createdAt),
@@ -619,6 +636,7 @@ function threadReadOf(
   const asking = item.status === INBOX_STATUS.OPEN ? openAskOf(item.thread ?? []) : undefined;
   const paged = page.messages.some((message) => message.id === asking?.message.id);
   const oldest = page.messages[0];
+
   return {
     id: item.id,
     key: item.key,
@@ -653,12 +671,15 @@ function distinct(labels: readonly string[]): boolean {
 /** An answer's fields' own refusal: a label used twice, a select with no options or one twice, options on a field that takes none, or a recommendation naming none of a select's options. */
 function fieldsRefusal(fields: readonly InboxField[]): string | undefined {
   if (!distinct(fields.map((field) => field.label))) return INBOX_REFUSAL.FIELD_LABELS;
+
   for (const field of fields) {
     const options = field.options;
     const select = field.type === INBOX_FIELD.SELECT;
+
     if (select ? options === undefined || !distinct(options) : options !== undefined) {
       return INBOX_REFUSAL.SELECT_OPTIONS;
     }
+
     if (
       field.recommended !== undefined &&
       !(select && options?.includes(field.recommended) === true)
@@ -666,6 +687,7 @@ function fieldsRefusal(fields: readonly InboxField[]): string | undefined {
       return INBOX_REFUSAL.SELECT_RECOMMENDATION;
     }
   }
+
   return undefined;
 }
 
@@ -674,18 +696,24 @@ function askRefusal(ask: InboxAskInput | undefined): string | undefined {
   switch (ask?.type) {
     case INBOX_ASK.DECIDE: {
       const labels = ask.options.map((option) => option.label);
+
       if (!distinct(labels)) return INBOX_REFUSAL.NO_OPTIONS;
       const media = ask.options.flatMap((option) => option.media ?? []);
+
       if (media.length > 0 && labels.includes(NONE_OF_THESE)) return INBOX_REFUSAL.NONE_OFFERED;
       const recommended = recommendedLabels(ask);
+
       if (!recommended.every((label) => labels.includes(label))) {
         return INBOX_REFUSAL.UNKNOWN_RECOMMENDATION;
       }
+
       if (!distinct(recommended) || (recommended.length > 1 && ask.multiple !== true)) {
         return INBOX_REFUSAL.SEVERAL_RECOMMENDED;
       }
+
       return undefined;
     }
+
     case INBOX_ASK.ANSWER:
       return ask.fields === undefined ? undefined : fieldsRefusal(ask.fields);
     default:
@@ -726,20 +754,27 @@ function bodyFiles(
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<Result.Result<BodyFiles, string>> {
   const paths = inboxSandboxPicturePaths(body);
+
   if (paths.length > INBOX_BOUNDS.MAX_MESSAGE_PICTURES) {
     return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MANY_PICTURES));
   }
+
   return Effect.gen(function* () {
     const read: InboxBodyPicture[] = [];
+
     for (const path of paths) {
       const file = yield* readSandboxBodyFile(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
+
       if (Result.isFailure(file)) return Result.fail(file.failure);
       read.push({ ...file.success, path, name: posix.basename(path) || path });
     }
+
     const pdfs = new Set(
-      read.filter((file) => file.contentType === INBOX_FILE_TYPE.PDF).map((file) => file.path),
+      read.flatMap((file) => (file.contentType === INBOX_FILE_TYPE.PDF ? [file.path] : [])),
     );
+
     const words = pdfs.size === 0 ? body : withoutSandboxPictures(body, (path) => pdfs.has(path));
+
     return Result.succeed({ body: words, files: read });
   });
 }
@@ -767,23 +802,28 @@ function keptOptionMedia(
 > {
   if ("url" in posted) {
     const label = posted.label === undefined ? {} : { label: posted.label };
+
     return Effect.succeed(
       Result.succeed({ media: { type: INBOX_OPTION_MEDIA.LINK, url: posted.url, ...label } }),
     );
   }
+
   if ("page" in posted) return keptOptionPage(agent, posted.page, posted.version);
   const { path } = posted;
+
   return Effect.map(
     readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
     Result.map((read) => {
       const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
       const caption = posted.caption === undefined ? {} : { caption: posted.caption };
+
       const media = {
         type: INBOX_OPTION_MEDIA.FILE,
         attachmentId: file.id,
         mediaType: file.contentType,
         ...caption,
       };
+
       return { media, file };
     }),
   );
@@ -803,7 +843,9 @@ function keptOptionPage(
     Effect.map((found) => {
       if (Option.isNone(found)) return Result.fail(INBOX_REFUSAL.NO_PAGE);
       const { taskId, page } = found.value;
+
       if (taskId !== agent.taskId) return Result.fail(INBOX_REFUSAL.NO_PAGE);
+
       return Result.succeed({
         media: {
           type: INBOX_OPTION_MEDIA.PAGE,
@@ -834,22 +876,30 @@ function optionMedia(
   if (ask?.type !== INBOX_ASK.DECIDE)
     return Effect.succeed(Result.succeed({ media: [], files: [] }));
   const posted = ask.options.map((option) => option.media ?? []);
+
   if (bodyPictures + posted.flat().length > INBOX_BOUNDS.MAX_ASK_MEDIA) {
     return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MUCH_MEDIA));
   }
+
   return Effect.gen(function* () {
     const media: (readonly InboxOptionMedia[] | undefined)[] = [];
     const kept: PostPicture[] = [];
+
     for (const pieces of posted) {
       const own: InboxOptionMedia[] = [];
+
       for (const piece of pieces) {
         const read = yield* keptOptionMedia(agent, piece, sandbox);
+
         if (Result.isFailure(read)) return Result.fail(read.failure);
         own.push(read.success.media);
+
         if (read.success.file !== undefined) kept.push(read.success.file);
       }
+
       media.push(own.length === 0 ? undefined : own);
     }
+
     return Result.succeed({ media, files: kept });
   });
 }
@@ -868,7 +918,9 @@ interface ThreadPlace {
  */
 function threadPost(post: InboxThreadPostInput, place: ThreadPlace, options: KeptOptionMedia) {
   const { ask, to: _to, ...written } = post;
+
   if (ask === undefined) return { ...written, ...place };
+
   return { ...written, ...place, ask: keptInboxAsk(ask, options.media), needsReply: true };
 }
 
@@ -877,6 +929,7 @@ function addresseeOf(to: string): string | undefined {
   const [link] = mentionLinksIn(to);
   const whole = link !== undefined && link.start === 0 && link.end === to.length;
   const mention = decodeMention(whole ? link.target : to, null);
+
   return mention?.kind === MENTION_KIND.PERSON ? mention.userId : undefined;
 }
 
@@ -889,6 +942,7 @@ function addresseeOf(to: string): string | undefined {
 function placeOf(post: InboxThreadPostInput): Result.Result<ThreadPlace, string> {
   if (post.to === undefined) return Result.succeed({});
   const addresseeId = addresseeOf(post.to.trim());
+
   return addresseeId === undefined
     ? Result.fail(INBOX_REFUSAL.NO_MEMBER)
     : Result.succeed({ addresseeId });
@@ -901,27 +955,37 @@ export function postToInbox(
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<InboxWriteResult, never, DatabaseServices> {
   const read = readPost(input);
+
   if (Result.isFailure(read)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
   const post = read.success;
+
   if (post.body.trim() === "") return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
   const refused = askRefusal(post.ask);
+
   if (refused !== undefined) return Effect.succeed(inboxRejected(refused));
   const unread = placeholderLinksIn(post.body);
+
   if (unread.length > 0) {
     return Effect.succeed(inboxRejected(`Not posted: ${placeholderLinksWords(unread)}`));
   }
+
   // A place refused is said before any picture is read, since mending it reads them again.
   const place = placeOf(post);
+
   if (Result.isFailure(place)) return Effect.succeed(inboxRejected(place.failure));
+
   return Effect.gen(function* () {
     const named = yield* bodyFiles(post.body, sandbox);
+
     if (Result.isFailure(named)) return inboxRejected(named.failure);
     const { body, files } = named.success;
     const options = yield* optionMedia(agent, post.ask, files.length, sandbox);
+
     if (Result.isFailure(options)) return inboxRejected(options.failure);
     const thread = threadPost({ ...post, body }, place.success, options.success);
     const wasOpen = yield* threadStandsOpen(agent, thread.key);
     const posted = yield* postInboxThread(agent, thread, files, options.success.files);
+
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
     const { organizationId } = agent;
     yield* afterResponse(
@@ -937,6 +1001,7 @@ export function postToInbox(
       "a thread's push",
       pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
     );
+
     return yield* written(agent, posted.success);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -950,15 +1015,20 @@ export function withdrawAsk(
   input: UnparsedWireValue,
 ): Effect.Effect<InboxWriteResult, never, DatabaseServices> {
   const read = readWithdraw(input);
+
   if (Result.isFailure(read)) {
     return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_WITHDRAW));
   }
+
   const { key, reason } = read.success;
+
   return Effect.gen(function* () {
     const withdrawn = yield* closeInboxItem(agent, key, reason);
+
     if (Option.isNone(withdrawn)) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
     yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
+
     return yield* written(agent, withdrawn.value);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -987,18 +1057,23 @@ export function listThreads(
   input: UnparsedWireValue,
 ): Effect.Effect<InboxListResult, never, DatabaseServices> {
   const asked = readList(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_LIST));
   const { agentId, taskId, status } = asked.success;
+
   if (agentId !== undefined && taskId !== undefined) {
     return Effect.succeed(inboxRejected(INBOX_REFUSAL.BOTH_NAMED));
   }
+
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
+
   const items =
     taskId !== undefined
       ? agentReachedInboxItems(reader, { taskId }, status)
       : agentId === undefined || agentId === agent.agentId
         ? agentInboxItems(agent, status)
         : agentReachedInboxItems(reader, { agentId }, status);
+
   return orUnavailable(
     Effect.map(items, (read) => ({
       status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -1018,20 +1093,26 @@ export function readThread(
   input: UnparsedWireValue,
 ): Effect.Effect<InboxReadResult, never, DatabaseServices> {
   const asked = readThreadAsked(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_READ));
   const { threadId, before } = asked.success;
+
   return orUnavailable(
     Effect.gen(function* () {
       const home = yield* readInboxItemHome(agent.userId, threadId);
+
       if (Option.isNone(home) || home.value.workspaceId !== agent.organizationId) {
         return inboxRejected(INBOX_REFUSAL.NO_THREAD);
       }
+
       const [stored, page] = yield* Effect.all(
         [readInboxItem(agent.userId, threadId), inboxThreadPage(agent.userId, threadId, before)],
         { concurrency: 2 },
       );
+
       if (Option.isNone(stored) || Option.isNone(page))
         return inboxRejected(INBOX_REFUSAL.NO_THREAD);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         thread: threadReadOf(stored.value.item, page.value, agent.agentId, before === undefined),

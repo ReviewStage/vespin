@@ -117,6 +117,7 @@ const storedOf = Option.match({
   onNone: (): StoredTools | undefined => undefined,
   onSome: ({ tools, toolsListedAt }: typeof StoredRowSchema.Type): StoredTools | undefined => {
     const read = Option.getOrUndefined(decodeTools(tools));
+
     return read === undefined || toolsListedAt === null
       ? undefined
       : { tools: read, listedAt: toolsListedAt };

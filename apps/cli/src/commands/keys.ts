@@ -46,6 +46,7 @@ const SWITCH = { ON: "on", OFF: "off" } as const;
 /** Why a save kept nothing, in the words a person reads; never the provider's, which may quote the key. */
 function rejectionWords(provider: ProviderKeyProvider, plan: boolean, why: ProviderKeyRejection) {
   const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
+
   switch (why) {
     case PROVIDER_KEY_REJECTION.INVALID:
       return plan
@@ -93,6 +94,7 @@ function providersJson(keys: ProviderKeysAnswer) {
           forAgents: plan.forAgents ?? true,
         })),
     ];
+
     return { provider, set: credentials.length > 0, credentials };
   });
 }
@@ -117,6 +119,7 @@ function providersLines(providers: ReturnType<typeof providersJson>): string[] {
 /** The account's keys as an answer: the providers, with the ids of those that hold any for `-q`. */
 function keysAnswer(keys: ProviderKeysAnswer, lines?: readonly string[]) {
   const providers = providersJson(keys);
+
   return answer({
     json: { providers },
     lines: lines ?? providersLines(providers),
@@ -133,6 +136,7 @@ function holds(
 ) {
   const credentials = providersJson(keys).find((row) => row.provider === provider)?.credentials;
   const kind = plan ? PLAN_KIND[provider] : PROVIDER_KEY_KIND.API_KEY;
+
   return (credentials ?? []).some(
     (credential) => credential.kind === kind && (id === undefined || credential.id === id),
   );
@@ -141,6 +145,7 @@ function holds(
 /** A usage failure naming the key or plan the account does not hold. */
 function notHeld(provider: ProviderKeyProvider, plan: boolean, id: string | undefined) {
   const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
+
   return new CommandFailed({
     exit: CLI_EXIT.REFUSED,
     message:
@@ -196,28 +201,35 @@ const setCommand = Command.make(
             "A ChatGPT plan connects through its sign-in in the app's Settings, never a pasted key.",
         });
       }
+
       const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
+
       const key = yield* readSecret(
         plan ? "Paste what claude setup-token printed:" : `Paste your ${name}:`,
       );
+
       if (!pastedKeyFits(key)) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `That is too short or too long to be an ${name}. Nothing was saved.`,
         });
       }
+
       const { hosted } = yield* session;
+
       const saved = yield* askService(hosted.account.saveProviderKey, {
         provider,
         key,
         ...(plan ? { kind: PLAN_KIND[provider] } : undefined),
       });
+
       if (saved.rejected !== undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
           message: rejectionWords(provider, plan, saved.rejected),
         });
       }
+
       yield* keysAnswer(saved, [plan ? `Saved your ${name}.` : `Added your ${name}.`]);
     }),
 ).pipe(
@@ -258,9 +270,11 @@ const removeCommand = Command.make(
       const { hosted } = yield* session;
       const named = Option.getOrUndefined(id);
       const before = yield* askService(hosted.account.providerKeys, undefined);
+
       if (!holds(before, provider, plan, named)) return yield* notHeld(provider, plan, named);
       const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
       yield* confirmOrYes(`Remove your ${name}? Agents it pays for stop running on it.`, yes);
+
       const removed = yield* askService(hosted.account.removeProviderKey, {
         query: {
           provider,
@@ -268,11 +282,13 @@ const removeCommand = Command.make(
           ...(named === undefined ? undefined : { subscriptionId: named }),
         },
       });
+
       if (removed.revocationUnconfirmed === true) {
         yield* note(
           "OpenAI did not confirm the sign-in revoked; disconnect the app in ChatGPT's settings to end it there.",
         );
       }
+
       yield* keysAnswer(removed, [`Removed your ${name}.`]);
     }),
 ).pipe(
@@ -301,12 +317,14 @@ const forAgentsCommand = Command.make(
     Effect.gen(function* () {
       const { hosted } = yield* session;
       const named = Option.getOrUndefined(id);
+
       const set = yield* askService(hosted.account.setProviderKeyForAgents, {
         provider,
         kind: PLAN_KIND[provider],
         forAgents: turned === SWITCH.ON,
         ...(named === undefined ? undefined : { subscriptionId: named }),
       });
+
       // Note that a plan the account does not hold changes nothing, and the answer shows it absent.
       if (!holds(set, provider, true, named)) return yield* notHeld(provider, true, named);
       const name = PROVIDER_WORDS[provider].plan;

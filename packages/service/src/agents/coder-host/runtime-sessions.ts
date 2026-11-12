@@ -90,17 +90,6 @@ export const RUNNER_ANSWER = {
 
 export type RunnerAnswer = (typeof RUNNER_ANSWER)[keyof typeof RUNNER_ANSWER];
 
-/** What a repository added beside a native agent's own came to at the place it runs in. */
-export const RUNNER_CHECKOUT = {
-  /** The credential was set for the whole set and the repository cloned into the running place. */
-  CHECKED_OUT: "checked_out",
-  /** No place runs now; the next launch clones it with the credential it sets. */
-  NOT_LIVE: "not_live",
-  FAILED: "failed",
-} as const;
-
-export type RunnerCheckout = (typeof RUNNER_CHECKOUT)[keyof typeof RUNNER_CHECKOUT];
-
 /** What a queued turn's hand-over to its agent's runner came to (`turnHandedOver`). */
 export const TURN_HANDOVER = {
   /** A runner reads the turn's lines: one already up, one launched for them now, or none needed, nothing of them waiting. */
@@ -129,8 +118,6 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
     conversationId: string,
     line: ApprovalLine,
   ) => Effect.Effect<RunnerAnswer>;
-  /** The agent's credential set afresh for every repository it works in and each one the running place does not hold cloned there (`runner-sessions.ts`); not live where no place runs. */
-  readonly checkOut: (sessionId: string, conversationId: string) => Effect.Effect<RunnerCheckout>;
   /** The session's runner ended, keeping its sandbox and the harness's session, so the next message relaunches it; whether no runner runs now. */
   readonly halt: (sessionId: string, conversationId: string) => Effect.Effect<boolean>;
   /**
@@ -231,6 +218,7 @@ export const sessionsRouter: Effect.Effect<SessionsRouter, never, DatabaseServic
   function* () {
     const store = yield* Effect.context<DatabaseServices>();
     const native = yield* Effect.serviceOption(NativeAgentSessions);
+
     return <Turn extends SessionTurn>(account: string) => routed<Turn>(account, store, native);
   },
 );
@@ -243,9 +231,11 @@ function routed<Turn extends SessionTurn>(
   const routeOf = (conversationId: string) =>
     Effect.gen(function* () {
       const agent = yield* readAgentHeaderOfConversation(account, conversationId);
+
       if (Option.isNone(agent)) return ENDED_ROUTE;
       const routing = yield* readAgentRouting(account, agent.value.id);
       const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
       return runtime === undefined ? ENDED_ROUTE : { runtime, starter: agent.value.userId };
     }).pipe(Effect.provideContext(store));
 
@@ -270,56 +260,75 @@ function routed<Turn extends SessionTurn>(
     boot: (conversationId) =>
       Effect.gen(function* () {
         const read = yield* routeOrUnread(conversationId);
+
         if (Option.isNone(read)) return UNREAD;
         const route = read.value;
+
         if ("ended" in route) return ENDED;
         const reached = harness(route.runtime, route.starter);
+
         if (Option.isNone(reached)) return NOT_HERE;
+
         return yield* (yield* reached.value).boot(conversationId);
       }),
 
     open: (message) =>
       Effect.gen(function* () {
         const read = yield* routeOrUnread(message.conversationId);
+
         if (Option.isNone(read)) return UNREAD;
         const route = read.value;
+
         if ("ended" in route) return ENDED;
         const reached = harness(route.runtime, route.starter);
+
         if (Option.isNone(reached)) return NOT_HERE;
+
         return yield* (yield* reached.value).open(message);
       }),
 
     send: (sessionId, message) =>
       Effect.gen(function* () {
         const read = yield* routeOrUnread(message.conversationId);
+
         if (Option.isNone(read)) return UNREAD;
         const route = read.value;
+
         if ("ended" in route) return ENDED;
         const reached = harness(route.runtime, route.starter);
+
         if (Option.isNone(reached)) return NOT_HERE;
+
         return yield* (yield* reached.value).send(sessionId, message);
       }),
 
     cancel: (sessionId, turnId) => {
       const runtime = nativeRuntimeOfSession(sessionId);
+
       if (runtime === undefined) return Effect.succeed(NO_TURN);
       const reached = harness(runtime, account);
+
       if (Option.isNone(reached)) {
         return Effect.succeed({ ...NOT_HERE, outcome: SESSION_CANCEL_OUTCOME.FAILED });
       }
+
       return Effect.flatMap(reached.value, (each) => each.cancel(sessionId, turnId));
     },
 
     reset: (sessionId) => {
       const runtime = nativeRuntimeOfSession(sessionId);
+
       if (runtime === undefined) return Effect.succeed(NO_SESSION);
       const reached = harness(runtime, account);
+
       if (Option.isNone(reached)) {
         return Effect.succeed({ ...NOT_HERE, outcome: SESSION_RESET_OUTCOME.FAILED });
       }
+
       return Effect.flatMap(reached.value, (each) => each.reset(sessionId));
     },
   };
+
   return sessions;
 }
 
@@ -341,17 +350,22 @@ export const runnerChoiceApplied = (agent: {
   Effect.gen(function* () {
     const routing = yield* readAgentRouting(agent.userId, agent.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
     if (runtime === undefined) return RUNNER_CHOICE.NOT_LIVE;
     const native = yield* Effect.serviceOption(NativeAgentSessions);
     const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+
     if (Option.isNone(reached)) return RUNNER_CHOICE.NOT_LIVE;
+
     const sessionId = yield* recordedRuntimeSession({
       userId: agent.userId,
       conversationId: agent.conversationId,
     });
+
     if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
       return RUNNER_CHOICE.NOT_LIVE;
     }
+
     return yield* (yield* reached.value).retune(sessionId, agent.conversationId);
   }).pipe(
     Effect.catch((failure) =>
@@ -380,65 +394,28 @@ export const runnerApprovalAnswered = (
   Effect.gen(function* () {
     const routing = yield* readAgentRouting(agent.userId, agent.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
     if (runtime === undefined) return RUNNER_ANSWER.NOT_LIVE;
     const native = yield* Effect.serviceOption(NativeAgentSessions);
     const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+
     if (Option.isNone(reached)) return RUNNER_ANSWER.FAILED;
+
     const sessionId = yield* recordedRuntimeSession({
       userId: agent.userId,
       conversationId: agent.conversationId,
     });
+
     if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
       return RUNNER_ANSWER.NOT_LIVE;
     }
+
     return yield* (yield* reached.value).answer(sessionId, agent.conversationId, line);
   }).pipe(
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(`a member's answer did not reach its runner: ${failureKind(failure)}`),
         RUNNER_ANSWER.FAILED,
-      ),
-    ),
-    Effect.annotateLogs(agentLogIds(agent)),
-  );
-
-/**
- * A repository added beside the agent's own, already written among its
- * repositories, handed to the place its session runs in now, acting for the
- * agent's starter as every native call does: its credential set afresh for
- * the whole set and the repository cloned there. An agent on no harness, one
- * whose session never claimed its record, one whose place is not running,
- * and a function that cannot reach the harness clone nothing now, since the
- * next launch clones it. Nothing here fails its caller: the row already
- * holds the repository.
- */
-export const runnerCheckedOut = (agent: {
-  readonly id: string;
-  readonly userId: string;
-  readonly conversationId: string;
-}): Effect.Effect<RunnerCheckout, never, DatabaseServices> =>
-  Effect.gen(function* () {
-    const routing = yield* readAgentRouting(agent.userId, agent.id);
-    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
-    if (runtime === undefined) return RUNNER_CHECKOUT.NOT_LIVE;
-    const native = yield* Effect.serviceOption(NativeAgentSessions);
-    const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
-    if (Option.isNone(reached)) return RUNNER_CHECKOUT.NOT_LIVE;
-    const sessionId = yield* recordedRuntimeSession({
-      userId: agent.userId,
-      conversationId: agent.conversationId,
-    });
-    if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
-      return RUNNER_CHECKOUT.NOT_LIVE;
-    }
-    return yield* (yield* reached.value).checkOut(sessionId, agent.conversationId);
-  }).pipe(
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `a native agent's added repository did not reach its place: ${failureKind(failure)}`,
-        ),
-        RUNNER_CHECKOUT.FAILED,
       ),
     ),
     Effect.annotateLogs(agentLogIds(agent)),
@@ -459,19 +436,25 @@ export const turnHandedOver = (turn: {
 }): Effect.Effect<TurnHandover, { readonly _tag: string }, DatabaseServices> =>
   Effect.gen(function* () {
     const agent = yield* readAgentHeaderOfConversation(turn.userId, turn.conversationId);
+
     if (Option.isNone(agent)) return TURN_HANDOVER.UNREACHED;
     const routing = yield* readAgentRouting(turn.userId, agent.value.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
     if (runtime === undefined) return TURN_HANDOVER.UNREACHED;
     const native = yield* Effect.serviceOption(NativeAgentSessions);
+
     const reached = Option.flatMap(native, (service) =>
       service.sessions(runtime, agent.value.userId),
     );
+
     if (Option.isNone(reached)) return TURN_HANDOVER.UNREACHED;
     const sessionId = yield* recordedRuntimeSession(turn);
+
     if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
       return TURN_HANDOVER.UNREACHED;
     }
+
     return yield* (yield* reached.value).deliverTurn(sessionId, turn.conversationId);
   }).pipe(Effect.annotateLogs(agentLogIds({ conversationId: turn.conversationId })));
 
@@ -494,14 +477,18 @@ export const runnerWarmed = (agent: {
     if (agent.machine === AGENT_MACHINE.DEVICE || agent.archivedAt !== null) return;
     const routing = yield* readAgentRouting(agent.userId, agent.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
     if (runtime === undefined) return;
     const native = yield* Effect.serviceOption(NativeAgentSessions);
     const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+
     if (Option.isNone(reached)) return;
+
     const sessionId = yield* recordedRuntimeSession({
       userId: agent.userId,
       conversationId: agent.conversationId,
     });
+
     if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) return;
     yield* (yield* reached.value).warm(sessionId, agent.conversationId);
   }).pipe(
@@ -526,7 +513,9 @@ export const runnerHalted = (
   Effect.gen(function* () {
     const native = yield* Effect.serviceOption(NativeAgentSessions);
     const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+
     if (Option.isNone(reached)) return false;
+
     return yield* (yield* reached.value).halt(sessionId, agent.conversationId);
   });
 
@@ -550,26 +539,37 @@ export function failedCallRefusal(failed: {
   readonly keyRefusal?: KeyRefusal | undefined;
 }): HostedRefusal {
   if (failed.keyRefusal === KEY_REFUSAL.UNREADABLE) return HOSTED_REFUSAL.AGENT_API_KEY_UNREADABLE;
+
   if (failed.keyRefusal === KEY_REFUSAL.MISSING) return HOSTED_REFUSAL.AGENT_CREDENTIAL_MISSING;
+
   if (failed.planRefusal === PLAN_REFUSAL.UNREACHABLE) {
     return HOSTED_REFUSAL.AGENT_PLAN_UNREACHABLE;
   }
+
   if (failed.planRefusal === PLAN_REFUSAL.LIMIT_REACHED) {
     return planLimitReached(failed.planResetsAt);
   }
+
   if (failed.planRefusal === PLAN_REFUSAL.INELIGIBLE) return HOSTED_REFUSAL.AGENT_PLAN_INELIGIBLE;
+
   if (failed.planRefusal !== undefined) return HOSTED_REFUSAL.AGENT_PLAN_SIGNED_OUT;
+
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.ENDED) return HOSTED_REFUSAL.AGENT_RETIRED;
+
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.NOT_HERE)
     return HOSTED_REFUSAL.NATIVE_AGENT_NOT_HERE;
+
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.DEVICE_REMOVED)
     return HOSTED_REFUSAL.DEVICE_REMOVED;
+
   // Note that an away device refuses a message as it refuses a Start, so the words are the same.
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.DEVICE_AWAY) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
   }
+
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.MODES_UNSUPPORTED) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.PERMISSION_MODES);
   }
+
   return HOSTED_REFUSAL.UNAVAILABLE;
 }

@@ -30,6 +30,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -52,6 +53,7 @@ test("a bar beside words that say the same is hidden from a reader", () => {
   const view = render(
     createElement("p", null, "12 of 40 MB", createElement(Progress, { value: 30 })),
   );
+
   assert.equal(view.querySelector('[role="progressbar"]'), null);
   assert.equal(view.querySelector('[aria-hidden="true"]')?.textContent, "");
   assert.equal(view.textContent, "12 of 40 MB");

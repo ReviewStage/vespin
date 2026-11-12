@@ -41,6 +41,7 @@
  * editor it keeps the caret's cursor, since there it is words being written.
  */
 
+import { Predicate } from "effect";
 import type { FocusEventHandler, MouseEvent, PointerEventHandler, ReactNode } from "react";
 import { ArrowUpRightIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
@@ -110,6 +111,7 @@ function linkClass(
   linked: boolean,
 ): string {
   const { rest, lit } = LOOK_CLASS[look];
+
   return [
     LINK_BASE,
     rest,
@@ -141,7 +143,7 @@ const OUT_HELD = "ui-text-link-out-held whitespace-nowrap";
 
 /** A link's words with the ↗ after them, held to their last letter where the words are plain text. */
 function outWords(children: ReactNode): ReactNode {
-  if (typeof children !== "string" || children === "") {
+  if (!Predicate.isString(children) || children === "") {
     return (
       <>
         {children}
@@ -149,9 +151,11 @@ function outWords(children: ReactNode): ReactNode {
       </>
     );
   }
+
   // Note that we split by code point, so a letter outside the basic plane stays whole.
   const letters = Array.from(children);
   const last = letters.pop();
+
   return (
     <>
       {letters.join("")}
@@ -213,13 +217,16 @@ export function TextLink({
       {external ? outWords(children) : children}
     </>
   );
+
   const press = pulseOnPress(onClick, PRESS_PULSE.WORDS);
+
   const face = {
     "data-look": look,
     "data-variant": variant,
     "data-font": font,
     "data-height": height,
   };
+
   if (href === undefined) {
     return (
       <span className={linkClass(look, variant, font, height, false)} {...face} {...hint}>
@@ -227,6 +234,7 @@ export function TextLink({
       </span>
     );
   }
+
   return (
     <a
       className={linkClass(look, variant, font, height, true)}

@@ -28,6 +28,7 @@ const PERSONAL: Workspace = {
   role: WORKSPACE_ROLE.OWNER,
   github: null,
 };
+
 const ACME: Workspace = {
   id: "workspace-acme",
   name: "acme",
@@ -35,6 +36,7 @@ const ACME: Workspace = {
   role: WORKSPACE_ROLE.MEMBER,
   github: null,
 };
+
 const CONNECTED: Workspace = {
   ...ACME,
   role: WORKSPACE_ROLE.ADMIN,
@@ -62,6 +64,7 @@ function mount(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const render = (inSight: boolean) =>
     act(() =>
       root.render(
@@ -83,7 +86,9 @@ function mount(
         ),
       ),
     );
+
   render(true);
+
   return {
     switcher: () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]'),
     fold: () => render(false),
@@ -119,6 +124,7 @@ function choose(label: string): void {
 
 test("the menu offers the workspaces, the listed one checked, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
   const pressed: unknown[] = [];
+
   const page = mount(
     {
       workspaces: [PERSONAL, CONNECTED],
@@ -165,10 +171,12 @@ test("a workspace's row hangs its card while the pointer rests on it: its name a
       disconnect(): void {}
     },
   );
+
   const page = mount({
     workspaces: [PERSONAL, { ...ACME, memberCount: 5 }],
     workspace: PERSONAL,
   });
+
   open(page.switcher());
   const row = menuItems().find((item) => labelOf(item) === "acme") ?? assert.fail("no acme row");
 
@@ -226,13 +234,16 @@ test("each workspace in the menu wears its tile, its first letter, and a rename 
   const tiles = (workspaces: readonly Workspace[]) => {
     const page = mount({ workspaces, workspace: workspaces[0] });
     open(page.switcher());
+
     const drawn = menuItems()
-      .map((item) => item.querySelector(".ui-avatar[data-shape='tile']"))
+      .map((item) => item.querySelector(".ui-avatar[data-outline='tile']"))
       .filter((tile) => tile !== null)
       .map((tile) => [tile.textContent, tile.getAttribute("data-hue")]);
+
     // Each reading stands alone, so the next finds only its own menu.
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.innerHTML = "";
+
     return drawn;
   };
 
@@ -252,6 +263,7 @@ test("each workspace in the menu wears its tile, its first letter, and a rename 
 test("each workspace in the menu says who shares it under its name, to the eye and to a screen reader, as the head does: the account's own first workspace of one as personal, a team's members counted, and nothing where the service counts none", () => {
   const solo: Workspace = { ...ACME, id: "workspace-solo", name: "Solo", memberCount: 1 };
   const uncounted: Workspace = { ...ACME, id: "workspace-uncounted", name: "Uncounted" };
+
   const page = mount({
     workspaces: [
       { ...PERSONAL, memberCount: 1 },
@@ -263,6 +275,7 @@ test("each workspace in the menu says who shares it under its name, to the eye a
   });
 
   open(page.switcher());
+
   const rows = menuItems()
     .slice(0, 4)
     .map((item) => [
@@ -282,14 +295,18 @@ test("each workspace in the menu says who shares it under its name, to the eye a
 test("the head says who shares the workspace to a screen reader: its members counted, the account's own first workspace of one as personal, a team of one as its one member, and nothing where the service counts none", () => {
   const shared = (memberCount?: number, first = true) => {
     const workspace = memberCount === undefined ? ACME : { ...ACME, memberCount };
+
     const page = mount({
       workspaces: first ? [workspace, PERSONAL] : [PERSONAL, workspace],
       workspace,
     });
+
     const head = page.switcher();
     const heard = head?.getAttribute("aria-label");
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.innerHTML = "";
+
     return heard;
   };
 

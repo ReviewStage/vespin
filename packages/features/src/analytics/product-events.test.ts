@@ -47,6 +47,7 @@ test("nothing on the envelope survives except what the allowlist names", () => {
       $ip: "203.0.113.7",
     },
   });
+
   assert.deepEqual(event, {
     name: PRODUCT_EVENT.APP_LAUNCH,
     at: AT,
@@ -59,10 +60,12 @@ test("an experiment's switch is counted by its key, on or off, and whose choice 
     [PRODUCT_EVENT_PROPERTY.EXPERIMENT]: PRODUCT_EXPERIMENT.BROWSER,
     [PRODUCT_EVENT_PROPERTY.SETTING_VALUE]: PRODUCT_SETTING_VALUE.ON,
   };
+
   const workspace = {
     ...toggled,
     [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: PRODUCT_EXPERIMENT_SCOPE.WORKSPACE,
   };
+
   assert.deepEqual(
     productEventFromWire({ name: PRODUCT_EVENT.EXPERIMENT_TOGGLE, at: AT, properties: workspace }),
     { name: PRODUCT_EVENT.EXPERIMENT_TOGGLE, at: AT, properties: workspace },
@@ -95,6 +98,7 @@ test("a mirror's failure travels its wait on a rung, never as the raw time", () 
     [PRODUCT_EVENT_PROPERTY.ATTEMPT]: 2,
     [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: 120,
   };
+
   assert.deepEqual(
     productEventFromWire({ name: PRODUCT_EVENT.MIRROR_FAIL, at: AT, properties: failed }),
     { name: PRODUCT_EVENT.MIRROR_FAIL, at: AT, properties: failed },

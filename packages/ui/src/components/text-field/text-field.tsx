@@ -296,12 +296,14 @@ function noop(): void {}
 function answerEscape(event: KeyboardEvent, onEscape: (() => void) | undefined): void {
   if (event.key !== "Escape" || onEscape === undefined) return;
   event.preventDefault();
+
   if (!isComposingKey(event)) onEscape();
 }
 
 /** Whether a key is the one that submits a text area, and not an input method's. */
 function submitting(event: KeyboardEvent, key: TextAreaSubmit): boolean {
   if (event.key !== "Enter" || isComposingKey(event)) return false;
+
   return key === TEXT_AREA_SUBMIT.ENTER ? !event.shiftKey : event.metaKey || event.ctrlKey;
 }
 
@@ -367,17 +369,21 @@ export function TextField({
       onChange={(event) => {
         if (props.type !== TEXT_FIELD_TYPE.NUMBER) {
           props.onChange(event.target.value);
+
           // Note that a paste is told by the input it made, so a paste and typing reach the same `onChange` first.
           if (onPasted !== undefined && pastedInput(event.nativeEvent))
             onPasted(event.target.value);
+
           return;
         }
+
         // Note that a half-typed number reads as nothing, and React leaves its text standing, as it compares loosely.
         const typed = event.target.valueAsNumber;
         props.onChange(Number.isFinite(typed) ? typed : undefined);
       }}
       onKeyDown={(event) => {
         answerEscape(event, props.onEscape);
+
         if (event.key !== "Enter" || onEnter === undefined || isComposingKey(event)) return;
         event.preventDefault();
         onEnter();
@@ -451,8 +457,10 @@ export function TextArea({
       onKeyDown={(event) => {
         // Note that a busy area still takes its Escape, so the page behind it stays put while it waits.
         answerEscape(event, busy && props.onEscape !== undefined ? noop : props.onEscape);
+
         if (onSubmit === undefined || !submitting(event, submitKey)) return;
         event.preventDefault();
+
         if (!busy) onSubmit();
       }}
       onPaste={onPaste}

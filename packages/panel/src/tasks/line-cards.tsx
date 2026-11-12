@@ -5,7 +5,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { GITHUB_PAGE, gitHubPageLink, LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import {
   DISCLOSURE_FILL,
   type EventNote,
@@ -96,6 +96,7 @@ function threadLink(
   doors: MentionDoors,
 ): string | undefined {
   if (agentId === undefined || doors.place.workspace === "") return undefined;
+
   return linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId }, doors.place.workspace);
 }
 
@@ -120,10 +121,12 @@ export function ThreadLineHead({
 }): React.JSX.Element {
   const doors = useMentionDoors();
   const href = threadLink(useContext(TranscriptAgent), line.item_id, doors);
+
   const chip =
     href === undefined
       ? undefined
       : linkChip(href, threadLineTitle(words, line.event) ?? href, doors);
+
   return (
     <SubjectLine lead={leadOf(THREAD_LINE_DID[line.event], received)} fit={fit} data-thread-line="">
       {chip}
@@ -143,6 +146,7 @@ const DESCRIPTION_WORDS = "the description";
 /** The link a comment line's chip is read from: the page it is on, or its task's description; none where no task or workspace names it. */
 function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | undefined {
   if (line.task_id === undefined || doors.place.workspace === "") return undefined;
+
   return line.page_id === undefined
     ? linkOf({ kind: LINK_DESTINATION.TASK, planId: line.task_id }, doors.place.workspace)
     : linkOf(
@@ -174,8 +178,10 @@ export function CommentLineHead({
 }): React.JSX.Element {
   const doors = useMentionDoors();
   const href = commentLink(line, doors);
+
   const chip =
     href === undefined ? commentLineSubject(line) : linkChip(href, commentLineSubject(line), doors);
+
   return (
     <SubjectLine lead={leadOf(COMMENT_LINE_LEAD, received)} fit={fit} data-comment-line="">
       {chip}
@@ -209,6 +215,7 @@ export function SlackLineHead({
 }): React.JSX.Element {
   const doors = useMentionDoors();
   const chip = line.url === undefined ? undefined : linkChip(line.url, SLACK_LINE_SUBJECT, doors);
+
   return (
     <SubjectLine lead={leadOf(SLACK_LINE_LEAD, received)} fit={SUBJECT_FIT.OWN} data-slack-line="">
       {chip ?? SLACK_LINE_SUBJECT}
@@ -219,6 +226,7 @@ export function SlackLineHead({
 /** Where a check a GitHub line names stands in the Pull request tab's own words, which its row is drawn by: one that failed as failed, one that passed as passed, and the rest as skipped, as the tab reads them. */
 function checkStateOf(conclusion: GitHubCheckConclusion): CheckState {
   if (isFailingConclusion(conclusion)) return CHECK_STATE.FAILED;
+
   return conclusion === GITHUB_CHECK_CONCLUSION.SUCCESS ? CHECK_STATE.PASSED : CHECK_STATE.SKIPPED;
 }
 
@@ -250,9 +258,11 @@ function CardMark({ ink, children }: { ink: MarkInk; children: ReactNode }): Rea
 function checksStanding(line: GitHubLineMetadata, words: string): CheckState {
   if (githubChecksFailed(line, words)) return CHECK_STATE.FAILED;
   const checks = line.checks ?? [];
+
   const nonePassed =
     checks.length > 0 &&
     checks.every((check) => check.conclusion !== GITHUB_CHECK_CONCLUSION.SUCCESS);
+
   return nonePassed ? CHECK_STATE.SKIPPED : CHECK_STATE.PASSED;
 }
 
@@ -292,6 +302,7 @@ function ChecksMark({ standing }: { standing: CheckState }): React.JSX.Element {
       </CardMark>
     );
   }
+
   return standing === CHECK_STATE.SKIPPED ? (
     <CardMark ink={MARK_INK.QUIET}>
       <CircleSlashIcon />
@@ -312,8 +323,14 @@ function commentsWords(count: number): string {
 function pullRequestPage(line: GitHubLineMetadata): string {
   const reviewed =
     line.event === GITHUB_LINE_EVENT.REVIEW || line.event === GITHUB_LINE_EVENT.COMMENT;
+
   if (reviewed || line.number === undefined) return line.url;
-  return `https://github.com/${line.repository}/pull/${line.number}`;
+
+  return gitHubPageLink({
+    kind: GITHUB_PAGE.PULL_REQUEST,
+    repository: line.repository,
+    number: line.number,
+  });
 }
 
 /** A picture drawer that draws none, each picture standing as its link, where no agent's transcript is drawn to read it as. */
@@ -335,7 +352,9 @@ function GitHubLineWords({
 }): React.JSX.Element {
   const agentId = useContext(TranscriptAgent);
   const drawn = usePictureDrawer(agentId ?? "");
+
   if (html === undefined) return <TranscriptWords text={words} />;
+
   return (
     <EntryPictures html={html}>
       <GitHubWords html={html} picture={agentId === undefined ? NO_PICTURE : drawn} />
@@ -349,6 +368,7 @@ function commentNote(
   at: number,
 ): EventNote {
   const name = comment.path.split("/").at(-1) ?? comment.path;
+
   return {
     key: String(at),
     glyph: <FileTypeIcon name={name} />,
@@ -370,6 +390,7 @@ function commentNote(
 /** The checks a check event names, failures first, as the Pull request tab's own rows, each saying how it ended. */
 function GitHubCheckRows({ line }: { line: GitHubLineMetadata }): React.JSX.Element {
   const agentId = useContext(TranscriptAgent) ?? "";
+
   return (
     <CheckList>
       {githubLineChecks(line).map((check, at) => (
@@ -426,13 +447,16 @@ export function GitHubLineCard({
   const rows = checks.length > 0 && !githubChecksPassed(line, words);
   const folds = said !== "" || comments.length > 0 || rows;
   const count = comments.length === 0 ? "" : commentsWords(comments.length);
+
   // Note that a check event's head is its words alone, capitalized, as its copy reads, because what failed or passed is no act of whoever posted the checks: "github-actions a check failed on" reads as no sentence.
   const checked =
     line.event === GITHUB_LINE_EVENT.CHECK_FAILED ||
     line.event === GITHUB_LINE_EVENT.CHECKS_COMPLETED;
+
   const by = checked ? null : sender;
   const does = checked ? head.event : head.does;
   const named = checked ? `${head.event} ${head.target}` : `${line.by} ${head.does} ${head.target}`;
+
   return (
     <Plan
       data-github-line={line.event}

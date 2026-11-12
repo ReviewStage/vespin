@@ -193,6 +193,7 @@ export const TASK_PICTURE_FILE_REFUSAL = {
 /** The task a call names, or nothing where it names none that reads, which refuses it whole. */
 export function editedTaskOf(input: UnparsedWireValue): string | undefined {
   const read = readEditedTask(input);
+
   return Result.isSuccess(read) ? read.success.taskId : undefined;
 }
 
@@ -203,6 +204,7 @@ export function editedTaskOf(input: UnparsedWireValue): string | undefined {
 function notesOf(input: UnparsedWireValue): readonly DescriptionNote[] | undefined {
   if (!isRecord(input) || !Array.isArray(input.notes)) return undefined;
   const { notes, unread } = readNotes(input);
+
   return unread > 0 ? undefined : notes;
 }
 
@@ -212,8 +214,10 @@ function notesOf(input: UnparsedWireValue): readonly DescriptionNote[] | undefin
  */
 function picturesOf(input: UnparsedWireValue): readonly TaskPicture[] | undefined {
   if (!isRecord(input)) return undefined;
+
   if (input.pictures === undefined) return [];
   const read = readPictures(input.pictures);
+
   return Result.isSuccess(read) ? read.success : undefined;
 }
 
@@ -270,8 +274,10 @@ function conflictReason(why: NoteMiss): string {
 /** A note that missed, in the words the model reads: its kind and where it was aimed, a long find cut. */
 function missedNote(note: DescriptionNote): string {
   if (note.kind === NOTE_KIND.ADD) return `${note.kind} under ${note.section}`;
+
   const find =
     note.find.length > MISSED_FIND_CHARS ? `${note.find.slice(0, MISSED_FIND_CHARS)}…` : note.find;
+
   return `${note.kind} ${find}`;
 }
 
@@ -293,17 +299,21 @@ function readPictureFiles(
 ): Effect.Effect<Result.Result<readonly PictureRead[], string>> {
   return Effect.gen(function* () {
     const read: PictureRead[] = [];
+
     for (const picture of pictures) {
       const { path } = picture;
+
       const file = yield* readSandboxMedia(
         sandbox,
         CODER.CHECKOUT_PATH,
         path,
         TASK_PICTURE_FILE_REFUSAL,
       );
+
       if (Result.isFailure(file)) return Result.fail(file.failure);
       read.push({ picture, file: file.success });
     }
+
     return Result.succeed(read);
   });
 }
@@ -338,14 +348,18 @@ function picturesInSandbox(
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<Result.Result<PicturesRead, string>, StoreFailure, DatabaseServices> {
   if (pictures.length === 0) return Effect.succeed(Result.succeed(NO_PICTURES));
+
   return Effect.gen(function* () {
     const stored = yield* readTaskHeader(binding.userId, binding.taskId);
+
     if (Option.isNone(stored)) return Result.fail(DESCRIPTION_SAVE_REFUSAL.NO_TASK);
     const task = stored.value;
     const workspace = yield* workspaceOf(binding.userId, task.workspaceId);
     const slug = Option.getOrUndefined(workspace)?.slug ?? task.workspaceId;
     const files = yield* readPictureFiles(pictures, sandbox);
+
     if (Result.isFailure(files)) return Result.fail(files.failure);
+
     return Result.succeed({ slug, files: files.success });
   });
 }
@@ -361,31 +375,38 @@ function keptAsNotes(
 ): Effect.Effect<readonly DescriptionNote[], EditRefused | StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const notes: DescriptionNote[] = [];
+
     for (const { picture, file } of read.files) {
       const kept = yield* keepDescriptionAttachment(binding.userId, binding.taskId, file);
+
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY) {
         return yield* new EditRefused({
           refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
         });
       }
+
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS) {
         return yield* new EditRefused({
           refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_VIDEOS),
         });
       }
+
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.NO_TASK) {
         return yield* new EditRefused({ refusal: refused(DESCRIPTION_EDIT_REFUSAL.TASK_GONE) });
       }
+
       const address = descriptionAttachmentAddress(
         { taskId: binding.taskId, attachmentId: kept.id },
         read.slug,
       );
+
       notes.push({
         kind: NOTE_KIND.ADD,
         section: picture.section,
         text: taskPictureMarkdown(address, picture.alt, picture.caption),
       });
     }
+
     return notes;
   });
 }
@@ -405,22 +426,27 @@ function savedEdit(
   const saved = Effect.gen(function* () {
     const all = [...notes, ...(yield* keptAsNotes(binding, read))];
     const save = yield* saveNotes(binding, all, writer);
+
     if (save.status === DESCRIPTION_SAVE_STATUS.CONFLICT) {
       const refusal = {
         ...refused(conflictReason(save.why)),
         missed: missedNote(save.missed),
         current: save.current,
       };
+
       return yield* new EditRefused({ refusal });
     }
+
     if (save.status !== DESCRIPTION_SAVE_STATUS.SAVED) {
       return yield* new EditRefused({ refusal: refused(save.reason) });
     }
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       taken: all.length,
     } satisfies DescriptionEditResult;
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(saved)).pipe(
     Effect.catchTag("EditRefused", ({ refusal }) => Effect.succeed(refusal)),
     Effect.tapError(logStoreFailure),
@@ -446,20 +472,28 @@ export function recordDescriptionEdit(
 ): Effect.Effect<DescriptionEditResult, never, DatabaseServices> {
   const notes = notesOf(input);
   const pictures = picturesOf(input);
+
   if (notes === undefined || pictures === undefined) {
     return Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.UNREADABLE));
   }
+
   if (takenInTurn + notes.length + pictures.length > DESCRIPTION_EDIT.MAX_NOTES_PER_TURN) {
     return Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY));
   }
+
   const unread = notes.flatMap((note) => placeholderLinksIn(note.text));
+
   if (unread.length > 0) {
     return Effect.succeed(descriptionEditRejected(`Not saved: ${placeholderLinksWords(unread)}`));
   }
+
   const writer = { actor: DESCRIPTION_ACTOR.AGENT, agentId: author.agentId } as const;
+
   return Effect.gen(function* () {
     const read = yield* picturesInSandbox(binding, pictures, sandbox);
+
     if (Result.isFailure(read)) return descriptionEditRejected(read.failure);
+
     return yield* savedEdit(binding, writer, notes, read.success);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -482,7 +516,9 @@ export function recordMemberDescriptionNotes(
   input: UnparsedWireValue,
 ): Effect.Effect<DescriptionEditResult, never, DatabaseServices> {
   const notes = notesOf(input);
+
   if (notes === undefined)
     return Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.UNREADABLE));
+
   return savedEdit(binding, { actor: DESCRIPTION_ACTOR.DEVELOPER }, notes, NO_PICTURES);
 }

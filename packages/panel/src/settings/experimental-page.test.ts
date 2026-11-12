@@ -44,6 +44,7 @@ const ACME: Workspace = {
 
 /** Each act the page sent, by its kind, as its payload carried it. */
 let sent: { readonly kind: string; readonly payload: unknown }[] = [];
+
 /** Which experiment each Send feedback opened the dialog about. */
 let feedbackAbout: Experiment[] = [];
 const roots: Root[] = [];
@@ -56,6 +57,7 @@ beforeEach(() => {
   fakeActPort({
     [SETTINGS_ACT_KIND.EXPERIMENT_SET]: (payload) => {
       sent.push({ kind: SETTINGS_ACT_KIND.EXPERIMENT_SET, payload });
+
       return Promise.resolve({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: appSettingsWire(settingsView()),
@@ -63,6 +65,7 @@ beforeEach(() => {
     },
     [WORKSPACE_ACT_KIND.WORKSPACE_EXPERIMENT_SET]: (payload) => {
       sent.push({ kind: WORKSPACE_ACT_KIND.WORKSPACE_EXPERIMENT_SET, payload });
+
       return Promise.resolve(ACME);
     },
   });
@@ -96,6 +99,7 @@ function draw(props: Partial<Parameters<typeof ExperimentalPage>[0]>): HTMLEleme
       ),
     ),
   );
+
   return container;
 }
 
@@ -139,7 +143,6 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Run actions",
       "Task descriptions",
       "Memory",
-      "Bring your own machine",
       "Skills",
     ],
   );
@@ -178,10 +181,12 @@ test("a member who is no admin sees the workspace's switches locked, saying only
   await act(async () => memory.click());
 
   assert.equal(memory.getAttribute("aria-readonly"), "true");
+
   const described = (memory.getAttribute("aria-describedby") ?? "")
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent)
     .join(" ");
+
   assert.match(described, /Only an admin can change this/u);
   assert.equal(document.querySelector('[role="alertdialog"]'), null);
   assert.deepEqual(sent, []);
@@ -208,6 +213,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   const feedback = [...page.querySelectorAll("button")].filter(
     (button) => button.textContent === "Send feedback",
   );
+
   act(() => {
     for (const button of feedback) button.click();
   });
@@ -217,7 +223,6 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.MEMORY,
-    EXPERIMENT.BRING_YOUR_OWN_HOST,
     EXPERIMENT.SKILLS,
   ]);
 });

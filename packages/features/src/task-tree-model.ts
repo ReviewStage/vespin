@@ -114,33 +114,42 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const { view, workspaceId, readerId } = input;
   const listed = workspaceTasks(view.tasks, workspaceId);
   const every = tasksById(listed);
+
   const pinned = inPinOrder(
     listed.filter((task) => task.pinnedAt !== undefined),
     (task) => ({ position: task.pinPosition, at: task.pinnedAt ?? 0 }),
   );
+
   const free = listed.filter((task) => task.pinnedAt === undefined);
   const sectioned = sectionedTasks(view.taskSections ?? NO_TASK_SECTIONS, workspaceId, free);
+
   const sections = sectioned.sections.map((drawn) =>
     sectionInView(drawn, DEFAULT_TASK_LIST_VIEW, readerId),
   );
+
   const rest = tasksAssignedTo(
     free.filter((task) => !sectioned.taskIds.has(task.id)),
     DEFAULT_TASK_LIST_VIEW.assignedTo,
     readerId,
   ).filter((task) => taskInView(task, DEFAULT_TASK_LIST_VIEW));
+
   const grouped = taskSections(
     rest,
     TASK_GROUPING.REPOSITORY,
     (view.repositoryPins ?? []).map((pin) => pin.repository),
   );
+
   const groups = grouped.grouping === TASK_GROUPING.REPOSITORY ? grouped.groups : [];
+
   const homed = homedTaskRows(
     [pinned, ...sections.map((drawn) => drawn.tasks), ...groups.map((group) => group.tasks)],
     every,
     1 + sections.length,
   );
+
   const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
   const headings = repositoryHeadingsDrawn(groups);
+
   return {
     pinned:
       pinned.length === 0
@@ -185,7 +194,9 @@ export function searchedTasks(input: {
   readonly tokens: readonly string[];
 }): readonly TaskSummary[] {
   const { tokens, workspaceName } = input;
+
   if (tokens.length === 0) return [];
+
   const found = workspaceTasks(input.tasks, input.workspaceId).filter((task) =>
     matchesTokens(
       [
@@ -198,6 +209,7 @@ export function searchedTasks(input: {
       tokens,
     ),
   );
+
   return orderTasks(found);
 }
 
@@ -221,6 +233,7 @@ export function taskRowLook(
   taskPullRequests: TasksView["taskPullRequests"],
 ): TaskRowLook {
   const at = taskTime(task, TASK_ORDER.UPDATED);
+
   return {
     unread: readsUnread(task, at),
     needsYou: waiting > 0,
@@ -229,23 +242,27 @@ export function taskRowLook(
   };
 }
 
-/** One task of a group with the sub-tasks standing under it, each a node of its own. */
-export interface TaskTreeNode {
-  readonly task: TaskSummary;
-  readonly children: readonly TaskTreeNode[];
-}
+/**
+ * A group's rows as the phone draws them under its folds: each parent row
+ * open where `opened` says so and shut otherwise, and every row under a
+ * shut one, however deep, left out, so a list draws each row it keeps as a
+ * row of its own and can recycle them.
+ */
+export function foldedTaskRows(
+  rows: readonly DrawnTaskRow[],
+  opened: (taskId: string) => boolean,
+): readonly DrawnTaskRow[] {
+  const shown: DrawnTaskRow[] = [];
+  let shutAt: number | undefined;
 
-/** A group's rows as the nodes they nest into: each row under the nearest row above it standing one less deep. */
-export function taskTreeNodes(rows: readonly DrawnTaskRow[]): readonly TaskTreeNode[] {
-  const tops: { task: TaskSummary; children: TaskTreeNode[] }[] = [];
-  const open: { depth: number; node: { task: TaskSummary; children: TaskTreeNode[] } }[] = [];
-  for (const { task, depth } of rows) {
-    const node = { task, children: [] };
-    while ((open.at(-1)?.depth ?? -1) >= depth) open.pop();
-    const parent = open.at(-1);
-    if (parent === undefined) tops.push(node);
-    else parent.node.children.push(node);
-    open.push({ depth, node });
+  for (const row of rows) {
+    // Note that a row under a shut parent stands deeper than it, and the first row back at its depth or above ends the fold.
+    if (shutAt !== undefined && row.depth > shutAt) continue;
+
+    const open = row.open === undefined ? undefined : opened(row.task.id);
+    shown.push({ ...row, open });
+    shutAt = open === false ? row.depth : undefined;
   }
-  return tops;
+
+  return shown;
 }

@@ -28,20 +28,26 @@ const json =
 function service(answers: Array<() => Response>) {
   const requests: RecordedRequest[] = [];
   let call = 0;
+
   const fetchLike = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     requests.push({ url, init });
     const answer = answers[Math.min(call, answers.length - 1)];
     call += 1;
+
     if (!answer) throw new Error("no scripted answer");
+
     return answer();
   };
+
   return { requests, client: client(fetchLike) };
 }
 
 /** What an admin outside the native-agents cohort may open, and what nobody may. */
 const ADMIN: AppAccessSlice = { admin: true };
+
 /** What stands for an account whose access is not read, or no longer held. */
 const UNREAD: AppAccessSlice = NO_ACCESS;
+
 /** A read that answered, or failed, as no admin. */
 const NOT_ADMIN: AppAccessSlice = { admin: false };
 
@@ -58,11 +64,13 @@ function client(fetchLike: Parameters<typeof fakeHttpClientLayer>[0]) {
 function holder(accessClient: AccountAccessClient, signedIn: string | undefined) {
   const account = { key: signedIn };
   const published: AppAccessSlice[] = [];
+
   const held = accountAccessHolder({
     client: accessClient,
     accountKey: () => account.key,
     publish: (access) => published.push(access),
   });
+
   return { held, account, published };
 }
 
@@ -85,6 +93,7 @@ it.effect("a read that carries a grant of support access holds it beside the adm
         supportAccessUntil: 1_800_000_000_000,
       }),
     ]);
+
     assert.deepEqual(yield* client.readAccess(), {
       admin: false,
       supportAccessUntil: 1_800_000_000_000,
@@ -98,6 +107,7 @@ it.effect("grants and revokes support access under the account's session, not it
       json({ supportAccessUntil: 1_800_000_000_000 }),
       json({ supportAccessUntil: null }),
     ]);
+
     assert.deepEqual(yield* client.writeSupportAccess(true), {
       supportAccessUntil: 1_800_000_000_000,
     });
@@ -170,10 +180,13 @@ it.effect("a read answered after the account changed is kept for nobody", () =>
   Effect.gen(function* () {
     // The account signs out while the service is still answering.
     let whileAnswering = () => undefined;
+
     const accessClient = client(async () => {
       whileAnswering();
+
       return jsonResponse({ admin: true });
     });
+
     const { held, account, published } = holder(accessClient, "admin@app.test");
     whileAnswering = () => {
       account.key = undefined;
@@ -192,6 +205,7 @@ it.effect("a read still out across a sign-out and the same account's return is d
   Effect.gen(function* () {
     // The service answers at once, but holds its body open until the test lets it go.
     let body: ReadableStreamDefaultController<Uint8Array> | undefined;
+
     const held = service([
       () =>
         new Response(
@@ -203,9 +217,11 @@ it.effect("a read still out across a sign-out and the same account's return is d
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     ]);
+
     const { held: access, published } = holder(held.client, "admin@app.test");
 
     const reading = yield* Effect.forkChild(access.refresh);
+
     for (let turn = 0; turn < 1_000 && body === undefined; turn += 1) yield* Effect.yieldNow;
     // The gate closes and the same account signs back in while the read is out.
     yield* access.forget;
@@ -230,14 +246,17 @@ it.effect("a read that fails, or answers no flag, is no admin", () =>
       json({}),
       () => new Response("not json", { status: 200 }),
     ];
+
     for (const failure of failures) {
       const { held } = holder(service([failure]).client, "admin@app.test");
       yield* held.refresh;
       assert.deepEqual(held.current(), NOT_ADMIN);
     }
+
     const refused = client(async () => {
       throw new Error("offline");
     });
+
     assert.deepEqual(yield* refused.readAccess(), NOT_ADMIN);
   }),
 );

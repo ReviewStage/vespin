@@ -9,13 +9,7 @@
 import { LIMIT_REACHED_WORDS } from "./agent-failure-words.js";
 import { harnessNameOf } from "./agent-runtime-models.js";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "./agent-view.js";
-import {
-  EXTRA_REPOSITORY_REFUSAL,
-  type ExtraRepositoryRefusal,
-  LOCAL_AGENT_REFUSAL,
-  type LocalAgentRefusal,
-  type RefusedDevice,
-} from "./agent-wire.js";
+import { LOCAL_AGENT_REFUSAL, type LocalAgentRefusal, type RefusedDevice } from "./agent-wire.js";
 import { DEVICE_PLATFORM, type DevicePlatform } from "./device-agent-wire.js";
 import { devicePlatformOf } from "./device-platform.js";
 import type { ModelProvider } from "./models-wire.js";
@@ -67,6 +61,12 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What a refused archive or delete says of an agent still starting, or with a message awaiting its turn, which has no turn to stop yet. */
+export const ARCHIVE_NOT_READY = "The agent is still starting its turn. Try again in a moment.";
+
+/** What an agent's delete the service refused says, wherever it was asked; one that landed says nothing, since the agent leaving its list says it. */
+export const DELETE_FAILED = "The agent could not be deleted. Try again.";
+
 /** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
 export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
 
@@ -81,8 +81,6 @@ export interface RefusedCall {
   readonly provider?: ModelProvider | undefined;
   readonly localAgentRefusal?: LocalAgentRefusal | undefined;
   readonly refusedDevice?: RefusedDevice | undefined;
-  readonly extraRepositoryRefusal?: ExtraRepositoryRefusal | undefined;
-  readonly refusedRepository?: string | undefined;
 }
 
 /** The device a Start would run its agent on, as a refusal names it: its name, its platform where the service said, and its owner where it is another member's and the service said. */
@@ -104,13 +102,6 @@ const DEVICE_WAKE = {
   [DEVICE_PLATFORM.LINUX]: "Check that it's on, connected, and running vespin-host",
 } as const satisfies Record<DevicePlatform, string>;
 
-/** How a device whose setup failed tries it again, by its platform: Bring your own machine turned off and on in Settings › Machines on a Mac, whose desktop app keeps its host running, or a Linux server's own `vespin-host` restarted. */
-const SETUP_RETRY = {
-  [DEVICE_PLATFORM.DARWIN]:
-    "Open Settings › Machines on that Mac and turn Bring your own machine off and on",
-  [DEVICE_PLATFORM.LINUX]: "Run systemctl --user restart vespin-host on that server",
-} as const satisfies Record<DevicePlatform, string>;
-
 /**
  * Why the device a Start would run its agent on would not take it, as New
  * task and an agent's Start alike say it, naming the device where the
@@ -122,6 +113,7 @@ export function localAgentRefusalWords(
   device: RefusingDevice | undefined,
 ): string {
   const name = device?.name ?? UNNAMED_DEVICE;
+
   switch (refusal) {
     case LOCAL_AGENT_REFUSAL.MAC_AWAY:
       return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
@@ -132,7 +124,7 @@ export function localAgentRefusalWords(
     case LOCAL_AGENT_REFUSAL.PREPARING:
       return `${name} is still getting ready for local agents. Try again in a few minutes.`;
     case LOCAL_AGENT_REFUSAL.SETUP_FAILED:
-      return `${name} couldn't set up local agents. ${SETUP_RETRY[devicePlatformOf(device ?? {})]} to try again, ${RUN_IN_CLOUD}.`;
+      return `${name} couldn't set up local agents. Try again in a few minutes, ${RUN_IN_CLOUD}.`;
     // Note that no way out is offered, because the cloud is the owner's to set and a teammate can change nothing here.
     case LOCAL_AGENT_REFUSAL.NOT_OWNER:
       return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;
@@ -155,80 +147,6 @@ export function deviceAwayWords(device: RefusingDevice | undefined): string {
   return `${device?.name ?? UNNAMED_DEVICE} is offline. Unpushed changes stay on it.`;
 }
 
-/** Why a repository beside an agent's own is refused, as New task and Add repository… both say it. */
-const EXTRA_REPOSITORY_WHY = {
-  token: (named: string) =>
-    `${named} is reached on your own GitHub token. An agent's repositories must all be reached through the GitHub App.`,
-  otherInstallation: (named: string) =>
-    `${named} is on another GitHub account than the agent's repository. An agent's repositories must share one.`,
-} as const;
-
-/** What Add repository… says where the service answered no reason it names. */
-const NOT_ADDED = "The repository couldn't be added. Try again.";
-
-/**
- * Why a repository added to a running agent was refused, as Add
- * repository… says it under its chooser, naming the repository where the
- * service named one; a refusal it named no reason for says it was not
- * added. The words a Start's extras are refused with stand for what both
- * are refused for (`EXTRA_REPOSITORY_WHY`).
- */
-export function addRepositoryFailureWords(refused: RefusedCall): string {
-  const named = refused.refusedRepository ?? "That repository";
-  if (refused.failure === AGENT_CALL_FAILURE.NOT_PERMITTED) {
-    return "Only the member who started this agent can add a repository to it.";
-  }
-  if (refused.failure === AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE) {
-    return "The workspace's GitHub App doesn't reach that repository.";
-  }
-  if (refused.failure !== AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) return NOT_ADDED;
-  switch (refused.extraRepositoryRefusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return "This agent works in no repository of its own. Start an agent in that repository instead.";
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return "Only an agent in the cloud works in several repositories.";
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return EXTRA_REPOSITORY_WHY.token(named);
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return EXTRA_REPOSITORY_WHY.otherInstallation(named);
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-      return `${named} is already among this agent's repositories.`;
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-      return "This agent already works in as many repositories as it can.";
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-    case undefined:
-      return NOT_ADDED;
-  }
-}
-
-/**
- * Why the repositories a Start named beside its agent's own were refused, as
- * New task says it, naming the repository where the service named one. A
- * refusal the service named no reason for says they could not be used.
- */
-export function extraRepositoryRefusalWords(
-  refusal: ExtraRepositoryRefusal | undefined,
-  repository: string | undefined,
-): string {
-  const named = repository ?? "One of the other repositories";
-  switch (refusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return "Choose the agent's repository before adding others.";
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return "An agent in several repositories runs only in the cloud. Start it in the cloud, or remove the other repositories.";
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return EXTRA_REPOSITORY_WHY.token(named);
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return EXTRA_REPOSITORY_WHY.otherInstallation(named);
-    // Note that a Start is refused none of these, which only a repository added to a running agent is.
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-    case undefined:
-      return "These repositories can't be used together. Remove the others to start the agent.";
-  }
-}
-
 /** What a missing credential keeps the developer from: starting an agent, or messaging one. */
 export const ACTION = { START: "start an agent", MESSAGE: "message this agent" } as const;
 
@@ -238,6 +156,7 @@ export function credentialMissingWords(
   action: (typeof ACTION)[keyof typeof ACTION],
 ): string {
   const harness = provider === undefined ? "Claude or Codex" : harnessNameOf(provider);
+
   return `Connect ${harness} in Settings to ${action}.`;
 }
 
@@ -285,8 +204,6 @@ export function startFailureWords(failure: AgentCallFailure): string {
       return keyUnreadableWords(ACTION.START);
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
       return localAgentRefusalWords(undefined, undefined);
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
-      return extraRepositoryRefusalWords(undefined, undefined);
   }
 }
 
@@ -320,7 +237,6 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
     case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
     // Note that a model change asks no files back, so never meets a rewind's refusal.
     case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
@@ -339,7 +255,6 @@ export function messageFailureWords(failure: AgentCallFailure): string {
       return "This agent no longer exists.";
     // A message names no repository, no model, no clip, and no sign-in, so none of these refusals is its own.
     case AGENT_CALL_FAILURE.NO_REPOSITORY:
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
     case AGENT_CALL_FAILURE.INVALID_CHOICE:
     case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
     case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:

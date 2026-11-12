@@ -44,16 +44,19 @@ export function linkRoute(
     case LINK_DESTINATION.SETTINGS: {
       const home = workspaceOfSlug(window.workspaces, workspace);
       const known = settingsViewNamed(place.page);
+
       // Note that a link naming no page this window knows names the page list, which stands on its first page.
       const page =
         known === undefined
           ? { page: SETTINGS_VIEW.ACCOUNT, listed: true as const }
           : { page: known };
+
       return {
         kind: LINK_ROUTE.SETTINGS,
         settings: home === undefined ? page : { ...page, workspaceId: home.id },
       };
     }
+
     case LINK_DESTINATION.ADMIN:
       return window.adminOn ? { kind: LINK_ROUTE.TASKS } : { kind: LINK_ROUTE.NOT_PERMITTED };
     default:

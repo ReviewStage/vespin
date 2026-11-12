@@ -33,13 +33,17 @@ const BOOT_STALL_MS = 15 * 60 * 1000;
  */
 export function sandboxStandingAt(sandbox: AgentSandbox | undefined, now: number): SandboxState {
   if (sandbox === undefined) return SANDBOX_STATE.OFF;
+
   if (sandbox.state === SANDBOX_STATE.RUNNING) {
     const { runsUntil } = sandbox;
+
     return runsUntil !== null && runsUntil > now ? SANDBOX_STATE.RUNNING : SANDBOX_STATE.OFF;
   }
+
   if (sandbox.state === SANDBOX_STATE.BOOTING) {
     return sandbox.stateAt + BOOT_STALL_MS > now ? SANDBOX_STATE.BOOTING : SANDBOX_STATE.OFF;
   }
+
   return SANDBOX_STATE.OFF;
 }
 
@@ -54,11 +58,13 @@ export function sandboxStandingEdge(
   now: number,
 ): number | undefined {
   if (sandbox === undefined) return undefined;
+
   const edge =
     sandbox.state === SANDBOX_STATE.RUNNING
       ? sandbox.runsUntil
       : sandbox.state === SANDBOX_STATE.BOOTING
         ? sandbox.stateAt + BOOT_STALL_MS
         : null;
+
   return edge !== null && edge > now ? edge : undefined;
 }

@@ -1,3 +1,4 @@
+import { encodedPath, GITHUB_ORIGIN } from "./link-grammar.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import {
   TASK_BOUNDS,
@@ -87,13 +88,18 @@ export function documentRegion(
   held: HeldDocumentRead | undefined,
 ): DocumentRegion {
   const { activeTaskId } = view;
+
   if (activeTaskId === undefined) return { kind: DOCUMENT_REGION.NONE };
   const rows = held?.rows;
+
   if (rows !== undefined && !("task" in rows)) return { kind: DOCUMENT_REGION.MISSING };
+
   if (rows !== undefined && rows.task.id === activeTaskId) {
     return { kind: DOCUMENT_REGION.READY, task: rows.task };
   }
+
   if (rows === undefined && held?.failed === true) return { kind: DOCUMENT_REGION.FAILED };
+
   return { kind: DOCUMENT_REGION.READING };
 }
 
@@ -105,11 +111,15 @@ export function documentRegion(
  */
 export function recentRepositories(tasks: TasksView["tasks"]): string[] {
   const recent: string[] = [];
+
   for (const task of tasks) {
     const { repository } = task;
+
     if (repository !== null && !recent.includes(repository)) recent.push(repository);
+
     if (recent.length === RECENT_REPOSITORY_LIMIT) break;
   }
+
   return recent;
 }
 
@@ -127,6 +137,7 @@ export function workspaceReaches(
 ): boolean {
   const { github } = workspace;
   const [owner] = repository.split("/");
+
   return github != null && github.active && github.login.toLowerCase() === owner?.toLowerCase();
 }
 
@@ -142,9 +153,12 @@ export function strandedTaskHome(
   workspaces: readonly Workspace[],
 ): Workspace | undefined {
   const { repository } = task;
+
   if (repository === null) return undefined;
   const own = workspaces.find((workspace) => workspace.id === task.workspaceId);
+
   if (own === undefined || workspaceReaches(own, repository)) return undefined;
+
   return workspaces.find(
     (workspace) => workspace.id !== task.workspaceId && workspaceReaches(workspace, repository),
   );
@@ -152,12 +166,12 @@ export function strandedTaskHome(
 
 /** The page of a repository on GitHub, which Open on GitHub opens. */
 export function repositoryPageUrl(repository: string): string {
-  return `https://github.com/${repository}`;
+  return `${GITHUB_ORIGIN}/${encodedPath(repository)}`;
 }
 
 /** The page of a GitHub account by its login, a person's profile or an organization's. */
 export function githubAccountPageUrl(login: string): string {
-  return `https://github.com/${encodeURIComponent(login)}`;
+  return `${GITHUB_ORIGIN}/${encodeURIComponent(login)}`;
 }
 
 /**
@@ -245,12 +259,14 @@ export type TaskNames = ReadonlyMap<string, string>;
 /** `task` with the name given for it drawn in place of its own, the very task where none is given. */
 function named<Named extends { id: string; name: string }>(task: Named, renames: TaskNames): Named {
   const name = renames.get(task.id);
+
   return name === undefined ? task : { ...task, name };
 }
 
 /** The view with each name given drawn in place of the one it replaces in the list. */
 export function renamedView(view: TasksView, renames: TaskNames): TasksView {
   if (renames.size === 0) return view;
+
   return { ...view, tasks: view.tasks.map((task) => named(task, renames)) };
 }
 
@@ -258,6 +274,7 @@ export function renamedView(view: TasksView, renames: TaskNames): TasksView {
 export function renamedRegion(region: DocumentRegion, renames: TaskNames): DocumentRegion {
   if (region.kind !== DOCUMENT_REGION.READY) return region;
   const task = named(region.task, renames);
+
   return task === region.task ? region : { ...region, task };
 }
 
@@ -322,13 +339,30 @@ export function deleteTaskWords(
   task: Pick<TaskSummary, "status"> | undefined,
 ): StopAgentsWords {
   const lost = `“${name}” and its board and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+
   const settled =
     task !== undefined &&
     (!settleOffered(task, SETTLED_STATUS.DONE) || !settleOffered(task, SETTLED_STATUS.CANCELED));
+
   return {
     title: "Permanently delete task?",
     body: settled ? lost : `${lost} To keep it out of the way instead, mark it done.`,
     verb: "Permanently delete task",
+  };
+}
+
+/**
+ * What Permanently delete asks of an agent named `name`: what goes, and, on
+ * an agent not archived, that archiving it keeps it out of the way instead.
+ * Every client's confirm asks it in these words.
+ */
+export function deleteAgentWords(name: string, archived: boolean): StopAgentsWords {
+  const lost = `“${name}” and its transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+
+  return {
+    title: "Permanently delete agent?",
+    body: archived ? lost : `${lost} To keep it out of the way instead, archive it.`,
+    verb: "Permanently delete agent",
   };
 }
 
@@ -346,10 +380,13 @@ export interface FiledTask {
  */
 export function filedTaskOf(words: string): FiledTask | undefined {
   const kept = words.trim();
+
   if (kept === "") return undefined;
   const line = kept.split("\n", 1)[0]?.trim() ?? "";
   const name = line.slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
+
   if (name === kept) return { name };
+
   return { name, brief: kept.slice(0, TASK_BOUNDS.MAX_BRIEF_CHARS) };
 }
 
@@ -372,9 +409,9 @@ export function settleChanges(
   tasks: readonly Pick<TaskSummary, "id" | "status">[],
   status: TaskStatus,
 ): readonly StatusChange[] {
-  return tasks
-    .filter((task) => standingStatus(task) !== status)
-    .map((task) => ({ taskId: task.id, status }));
+  return tasks.flatMap((task) =>
+    standingStatus(task) === status ? [] : [{ taskId: task.id, status }],
+  );
 }
 
 /** Whether the task menu offers settling the task at a status: not where it already stands there. */
@@ -423,12 +460,14 @@ const STATUS_NOTES = {
 export function settledNote(status: TaskStatus, landed: number, refused: number): string {
   const notes = STATUS_NOTES[status];
   const kept = landed === 1 ? notes.one : `${landed} ${notes.many}`;
+
   return refused === 0 ? kept : `${kept}, ${refused} could not be`;
 }
 
 /** What the toast says when the service refused every task a press set at a status. */
 export function settleFailedNote(status: TaskStatus, refused: number): string {
   const notes = STATUS_NOTES[status];
+
   return refused === 1 ? notes.failedOne : notes.failedMany;
 }
 
@@ -471,6 +510,8 @@ export function sidebarTasks(tasks: readonly TaskSummary[]): SidebarTasks {
   const pinned = tasks
     .filter((task) => task.pinnedAt !== undefined)
     .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0));
+
   const rest = tasks.filter((task) => task.pinnedAt === undefined);
+
   return { pinned, rest };
 }

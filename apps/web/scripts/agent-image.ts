@@ -61,20 +61,24 @@ export async function agentImageContext(): Promise<readonly ContextFile[]> {
   const runner = await Promise.all(
     RUNNER_FILES.map(async ({ name, inContext }) => {
       const path = join(SOURCE.RUNNER_DIST, name);
+
       const contents = await readFile(path).catch(() => {
         throw new Error(
           `${relative(WEB, path)} is missing: run \`pnpm --filter @repo/agent-runner build\` first`,
         );
       });
+
       return { name: inContext, contents };
     }),
   );
+
   const committed = await Promise.all(
     SOURCE.COMMITTED.map(async (name) => ({
       name,
       contents: await readFile(join(SOURCE.DIRECTORY, name)),
     })),
   );
+
   return [
     ...committed,
     ...runner,
@@ -85,8 +89,10 @@ export async function agentImageContext(): Promise<readonly ContextFile[]> {
 /** The context's tag: a digest of each file's name and bytes, every field ended by a NUL so none runs into the next. */
 function agentImageTag(context: readonly ContextFile[]): string {
   const digest = createHash("sha256");
+
   for (const file of context)
     digest.update(file.name).update("\0").update(file.contents).update("\0");
+
   return digest.digest("hex").slice(0, TAG_DIGITS);
 }
 
@@ -98,9 +104,12 @@ function agentImageTag(context: readonly ContextFile[]): string {
 export function shippedBesideFunctions(context: readonly ContextFile[]): readonly ContextFile[] {
   const runner = RUNNER_FILES.map(({ inContext }) => {
     const file = context.find((each) => each.name === inContext);
+
     if (file === undefined) throw new Error(`the image's context holds no ${inContext}`);
+
     return file;
   });
+
   return [
     {
       name: AGENT_IMAGE_FILE,
@@ -120,12 +129,15 @@ async function stageAgentImage(directory: string): Promise<string> {
       await writeFile(path, file.contents);
     }),
   );
+
   return agentImageTag(context);
 }
 
 const executedPath = process.argv[1];
+
 if (executedPath && import.meta.url === pathToFileURL(executedPath).href) {
   const directory = process.argv[2];
+
   if (directory === undefined) throw new Error("usage: tsx scripts/agent-image.ts <directory>");
   // biome-ignore lint/suspicious/noConsole: the tag is the script's answer, which CI reads off its output.
   console.log(await stageAgentImage(directory));

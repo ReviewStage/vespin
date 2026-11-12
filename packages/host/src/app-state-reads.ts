@@ -35,6 +35,8 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
+import { Predicate } from "effect";
+import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHostRead,
   type AppStateDelivery,
@@ -103,14 +105,18 @@ export function followAppStateOver(
   let held: AppStateSnapshot | undefined;
   let early: AppStateDelivery[] = [];
   let reading = false;
+
   const readWhole = (): Promise<void> => {
     reading = true;
+
     return bridge.requestAppState().then(
       (read) => {
         reading = false;
+
         if (!following) return undefined;
         held = early.reduce(adoptAppStateDelivery, read);
         early = [];
+
         return write(held);
       },
       (cause: unknown) => {
@@ -119,22 +125,29 @@ export function followAppStateOver(
       },
     );
   };
+
   const stopHearing = bridge.onAppState((delivered) => {
     if (held === undefined) {
       early.push(delivered);
+
       if (!reading) {
         readWhole().catch((cause: unknown) => {
           report("The window's state could not be read; the next delivery asks again.", cause);
         });
       }
+
       return;
     }
+
     const next = adoptAppStateDelivery(held, delivered);
+
     if (next === held) return;
     held = next;
     write(next);
   });
+
   const written = readWhole();
+
   return {
     written,
     held: () => held,
@@ -177,10 +190,12 @@ export function sameAccount(
   other: SignedInAccount | undefined,
 ): boolean {
   if (one === undefined || other === undefined) return one === other;
+
   return one.id !== undefined && other.id !== undefined
     ? one.id === other.id
     : one.email === other.email;
 }
+
 export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 export const selectTasks = (state: AppStateSnapshot) => state.tasks;
@@ -188,8 +203,10 @@ export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiting;
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
+
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
+
 export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
@@ -222,10 +239,14 @@ export const LIVE_MARK_WORDS = {
 /** What may be behind now, or none, which redraws its readers only as it turns. */
 export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined => {
   const { network } = state;
+
   if (!network.online) return LIVE_MARK.MAC_OFFLINE;
   const live = state.tasks.live;
+
   if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
+
   if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
+
   return undefined;
 };
 
@@ -283,8 +304,10 @@ export interface SupportAccessStanding {
 export function supportAccessStanding(state: AppStateSnapshot, now: number): SupportAccessStanding {
   const until = state.access.supportAccessUntil;
   const granted = until !== undefined && until > now;
+
   const impersonated =
     state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.account.impersonated === true;
+
   return {
     granted,
     grantable: !granted && !impersonated && state.access.pending !== true,
@@ -308,10 +331,14 @@ export function selectExperiment(
   experiment: AccountExperiment,
 ): (state: AppStateSnapshot) => boolean {
   const held = experimentSelects.get(experiment);
+
   if (held !== undefined) return held;
+
   const select = (state: AppStateSnapshot): boolean =>
     experimentOn(selectExperimentChoices(state), experiment);
+
   experimentSelects.set(experiment, select);
+
   return select;
 }
 
@@ -325,9 +352,11 @@ const capabilitySelects = new Map<HostCapability, (state: AppStateSnapshot) => b
  */
 export function selectCapability(capability: HostCapability): (state: AppStateSnapshot) => boolean {
   const held = capabilitySelects.get(capability);
+
   if (held !== undefined) return held;
   const select = (state: AppStateSnapshot): boolean => state.run.capabilities.includes(capability);
   capabilitySelects.set(capability, select);
+
   return select;
 }
 
@@ -346,12 +375,16 @@ export function memoizedSelect<Inputs extends unknown[], A>(
   derive: (...inputs: Inputs) => A,
 ): (state: AppStateSnapshot) => A {
   let held: { readonly inputs: Inputs; readonly answer: A } | undefined;
+
   return (state) => {
     const next = inputs(state);
+
     if (held !== undefined && next.every((input, at) => input === held?.inputs[at])) {
       return held.answer;
     }
+
     held = { inputs: next, answer: derive(...next) };
+
     return held.answer;
   };
 }
@@ -360,19 +393,20 @@ export function memoizedSelect<Inputs extends unknown[], A>(
 const SHARE_DEPTH = 500;
 
 /** Whether `value` is an array with no holes and no keys of its own beside its items. */
-function isPlainArray(value: unknown): value is readonly unknown[] {
+function isPlainArray<T>(value: T): value is T & readonly unknown[] {
   return Array.isArray(value) && value.length === Object.keys(value).length;
 }
 
 /** Whether `value` is an object of any kind, which a walk may go into. */
-function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
+function isObject<T>(value: T): value is T & object {
+  return Predicate.isObjectOrArray(value);
 }
 
 /** Whether `value` is an object literal's kind: one made by `{}` or with no prototype at all. */
-function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
+function isPlainObject<T>(value: T): value is T & ReadonlyRecord<string, unknown> {
   if (!isObject(value)) return false;
   const prototype: unknown = Object.getPrototypeOf(value);
+
   return prototype === Object.prototype || prototype === null;
 }
 
@@ -393,35 +427,51 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
  * stopping at the first identical object. A node with any part kept from
  * `held` is still a copy, so a write's unchanged parts keep their identity.
  */
-export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
-  if (held === next) return held as T;
+export function shareAppState<T>(held: T, next: T, depth = 0): T {
+  if (held === next) return next;
+
   if (depth > SHARE_DEPTH) return next;
   const array = isPlainArray(held) && isPlainArray(next);
+
   if (!array && !(isPlainObject(held) && isPlainObject(next))) return next;
   // SAFETY: both are plain arrays or plain objects, each read by its own keys.
-  const before = held as Readonly<Record<PropertyKey, unknown>>;
-  const after = next as Readonly<Record<PropertyKey, unknown>>;
+  const before = held as ReadonlyRecord<string, unknown>;
+  // SAFETY: both are plain arrays or plain objects, each read by its own keys.
+  const after = next as ReadonlyRecord<string, unknown>;
+  // SAFETY: where `array` holds, both are plain arrays.
   const heldSize = array ? (held as readonly unknown[]).length : Object.keys(before).length;
   const nextKeys = array ? undefined : Object.keys(after);
+  // SAFETY: `nextKeys` is absent only where `array` holds, so `next` is a plain array.
   const nextSize = nextKeys?.length ?? (next as readonly unknown[]).length;
   const parts: unknown[] = [];
   let keptHeld = 0;
   let keptNext = 0;
+
   for (let at = 0; at < nextSize; at++) {
     const key = nextKeys?.[at] ?? at;
     const heldItem = before[key];
     const nextItem = after[key];
+
     // Note that a part that is the same, or no object on either side, needs no walk of its own.
     const shared =
       heldItem === nextItem || !isObject(heldItem) || !isObject(nextItem)
         ? nextItem
         : shareAppState(heldItem, nextItem, depth + 1);
+
     parts.push(shared);
+
     if (shared === heldItem && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
+
     if (shared === nextItem) keptNext++;
   }
-  if (keptHeld === heldSize && nextSize === heldSize) return held as T;
+
+  if (keptHeld === heldSize && nextSize === heldSize) {
+    // SAFETY: every part of `held` was kept as the same part of `next`, and they are as many, so `held` is `next` in another node.
+    return held as T;
+  }
+
   if (keptNext === nextSize) return next;
+
   // SAFETY: the copy is `next`'s shape, by its keys in its order, each part `next`'s or one equal to it.
   return (
     array ? parts : Object.fromEntries(nextKeys?.map((key, at) => [key, parts[at]]) ?? [])
@@ -434,6 +484,7 @@ const NO_INBOX_READS: InboxReads = new Map();
 /** The account's feed of every item as the list model reads it: each task's items by the task's id. */
 function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
   const rows = feed.rows;
+
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN]));
 }
 
@@ -458,7 +509,9 @@ export function selectInboxGroupsIn(
   workspaceId: string | undefined,
 ): (state: AppStateSnapshot) => readonly InboxGroup[] {
   const held = inboxGroupSelects.get(workspaceId);
+
   if (held !== undefined) return held;
+
   const select = memoizedSelect(
     (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox, state.tasks.tasks],
     (feed, inbox, listed): readonly InboxGroup[] =>
@@ -470,7 +523,9 @@ export function selectInboxGroupsIn(
             : listed.filter((task) => task.workspaceId === workspaceId),
       }),
   );
+
   inboxGroupSelects.set(workspaceId, select);
+
   return select;
 }
 
@@ -497,6 +552,7 @@ export const selectAgentHarnesses = memoizedSelect(
     new Map(
       (tasks.taskAgents ?? []).flatMap(({ id, model }) => {
         const harness = providerOf(model);
+
         return harness === undefined ? [] : [[id, harness] as const];
       }),
     ),
@@ -519,7 +575,9 @@ export type InboxFeed = (typeof INBOX_FEED)[keyof typeof INBOX_FEED];
  */
 export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
+
   if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
+
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
 }
 
@@ -530,7 +588,9 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
  */
 export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
   const rows = state[LIVE_READ.INBOX_ITEMS].rows;
+
   if (rows === undefined || itemId === undefined) return false;
+
   return Object.values(rows[INBOX_SCOPE_KIND.PLAN]).some((items) =>
     items.some((item) => item.id === itemId),
   );
@@ -549,6 +609,7 @@ export function workspaceExperimentChoices(
 ): WorkspaceExperimentChoices {
   if (workspaceId === undefined) return NO_WORKSPACE_EXPERIMENTS;
   const workspace = workspaces.find((each) => each.id === workspaceId);
+
   return workspace === undefined
     ? NO_WORKSPACE_EXPERIMENTS
     : workspaceExperimentChoicesFrom(workspace.experiments);
@@ -561,6 +622,7 @@ export function workspaceExperimentOnIn(
   experiment: WorkspaceExperiment,
 ): boolean {
   const workspaces = state?.tasks.workspaces ?? [];
+
   return experimentOn(workspaceExperimentChoices(workspaces, workspaceId), experiment);
 }
 
@@ -593,6 +655,7 @@ export function selectTranscript(
 /** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */
 export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
   const accountId = signedInAccountId(state.account);
+
   return accountId === undefined ? undefined : state[LIVE_READ.MODELS][accountId];
 }
 
@@ -601,6 +664,7 @@ export function selectIntegrations(
   state: AppStateSnapshot,
 ): AppHostRead<IntegrationStatusesAnswer> | undefined {
   const accountId = signedInAccountId(state.account);
+
   return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
 }
 
@@ -616,8 +680,10 @@ export function selectAgentPinned(agentId: string): (state: AppStateSnapshot) =>
  */
 export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undefined {
   const accountId = signedInAccountId(state.account);
+
   if (accountId === undefined) return undefined;
   const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
+
   return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
 }
 

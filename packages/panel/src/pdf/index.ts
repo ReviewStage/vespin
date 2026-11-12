@@ -46,15 +46,20 @@ let started: Worker | undefined;
 function worker(): Worker | undefined {
   if (started !== undefined) return started;
   const text = workerText();
+
   if (text === undefined || text.length === 0) return undefined;
   const address = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
+
   try {
     started = new Worker(address, { type: "module", name: "pdf" });
   } catch {
     URL.revokeObjectURL(address);
+
     return undefined;
   }
+
   started.addEventListener("message", () => URL.revokeObjectURL(address), { once: true });
+
   return started;
 }
 

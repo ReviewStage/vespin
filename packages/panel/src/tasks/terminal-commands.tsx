@@ -41,6 +41,7 @@ export function useOpenTerminal(
   onShown: () => void,
 ): (agentId: string, ask: TerminalAsk) => void {
   const open = useOpenTerminalTab(TERMINAL_KIND.CLOUD, sidePanel, onShown);
+
   return (agentId, ask) => open(agentId, ask === TERMINAL_ASK.NEW);
 }
 
@@ -64,28 +65,34 @@ export function TerminalCommands({
   const repositoryRemedy = useRepositoryRemedy();
   const [asking, setAsking] = useState<TerminalAsk | undefined>(undefined);
   const open = useOpenTerminal(sidePanel, onShown);
+
   const target = () =>
     terminalTarget({
       here,
       agents: (agents.agents ?? []).map((agent) => agent.id),
       lastUsed: sidePanel.lastTerminal,
     });
+
   const run = (ask: TerminalAsk) => {
     const landed = target();
+
     if (landed.kind === TERMINAL_TARGET.AGENT) return open(landed.agentId, ask);
     // A task with no agent offers to start one; one whose agents are not read yet waits on them.
     setAsking(ask);
   };
+
   // The task's agents read while the command waits on them: it lands on one where there is one.
   const waiting = asking !== undefined && agents.agents !== undefined && agents.agents.length > 0;
   useEffect(() => {
     if (!waiting) return;
     setAsking(undefined);
     const landed = target();
+
     if (landed.kind === TERMINAL_TARGET.AGENT) open(landed.agentId, asking);
   });
   useAppCommand(APP_COMMAND.SHOW_TERMINAL, () => run(TERMINAL_ASK.SHOW));
   useAppCommand(APP_COMMAND.NEW_TERMINAL, () => run(TERMINAL_ASK.NEW));
+
   // A refused start says why on the toast, its repository's remedy as its action where it has one,
   // since the palette that pressed it has closed; a move starts the agent again once it lands.
   const startAgent = () => {
@@ -93,11 +100,13 @@ export function TerminalCommands({
       if (failure === undefined) return;
       const label = remedyLabel(failure);
       const remedy = repositoryRemedy(failure, startAgent);
+
       const shown = {
         surface: FAILURE_SURFACE.AGENT_START,
         cause: failure.cause ?? { failure: failure.reason },
         about: { taskId: "taskId" in failure ? failure.taskId : undefined },
       };
+
       toast(
         label === undefined || remedy === undefined
           ? {
@@ -114,6 +123,7 @@ export function TerminalCommands({
       );
     });
   };
+
   return (
     <TerminalPicker
       open={asking !== undefined && !waiting}

@@ -53,6 +53,7 @@ function Harness({
   opened: string | undefined;
 }): React.JSX.Element {
   marked.push(useFailedRunsMark(runs, "workspace-acme", opened, false));
+
   return createElement(Fragment);
 }
 
@@ -62,9 +63,12 @@ function mount(runs: readonly AccountFailedRun[], opened?: string) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (next: readonly AccountFailedRun[], open: string | undefined) =>
     act(() => root.render(withQueryClient(createElement(Harness, { runs: next, opened: open }))));
+
   draw(runs, opened);
+
   return draw;
 }
 
@@ -112,10 +116,13 @@ test("an automation of another workspace left open does not see its own failure 
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   function Other(): React.JSX.Element {
     marked.push(useFailedRunsMark([theirs], "workspace-other", undefined, false));
+
     return createElement(Fragment);
   }
+
   act(() => root.render(withQueryClient(createElement(Other))));
   assert.equal(marked.at(-1), true, "its own workspace still marks it");
 });

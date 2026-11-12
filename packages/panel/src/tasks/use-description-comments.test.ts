@@ -53,10 +53,13 @@ test("a reply whose mentioned agent could not take the thread posts, and its thr
   });
   let control: DescriptionCommentsControl | undefined;
   const subject = { taskId: PLAN };
+
   function Probe() {
     control = useDescriptionComments(subject);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root.render(withQueryClient(createElement(Probe))));
 
@@ -90,16 +93,20 @@ test("an edit the service refused keeps its words as the comment's draft, which 
   let control: DescriptionCommentsControl | undefined;
   let drafted = "";
   const subject = { taskId: PLAN };
+
   const place = {
     kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
     planId: PLAN,
     on: { threadId: THREAD.id, entryId },
   } as const;
+
   function Probe() {
     control = useDescriptionComments(subject);
     drafted = useDraft(place).draft.text;
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root.render(withQueryClient(createElement(Probe))));
 

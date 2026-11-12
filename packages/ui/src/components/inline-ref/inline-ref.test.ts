@@ -56,11 +56,13 @@ function draw(element: ReactNode): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(element));
+
   return container;
 }
 
 test("handed a press, it is a button named by its words that answers a click", () => {
   let pressed = 0;
+
   const view = draw(
     createElement(InlineRef, {
       look: INLINE_REF_LOOK.PILL,
@@ -72,6 +74,7 @@ test("handed a press, it is a button named by its words that answers a click", (
       },
     }),
   );
+
   const button = view.querySelector("button") ?? assert.fail("the token is a button");
   assert.equal(button.textContent, "Rollout planOpen");
   act(() => button.click());
@@ -80,6 +83,7 @@ test("handed a press, it is a button named by its words that answers a click", (
 
 test("in running words its press is still a button to a reader, which Enter presses, and Space once as it is let go", () => {
   let pressed = 0;
+
   const view = draw(
     createElement(InlineRef, {
       look: INLINE_REF_LOOK.PILL,
@@ -90,12 +94,15 @@ test("in running words its press is still a button to a reader, which Enter pres
       },
     }),
   );
+
   const token = view.querySelector<HTMLElement>("[role='button']") ?? assert.fail("a button");
   assert.equal(token.tabIndex, 0, "the keyboard reaches it");
+
   const key = (type: string, init: KeyboardEventInit) =>
     act(() => {
       token.dispatchEvent(new KeyboardEvent(type, { ...init, bubbles: true }));
     });
+
   key("keydown", { key: "Enter" });
   assert.equal(pressed, 1, "Enter presses as it goes down");
   key("keydown", { key: " " });
@@ -116,6 +123,7 @@ test("a press that says more than the name is named by what it does", () => {
       onPress: () => {},
     }),
   );
+
   const button = view.querySelector("button") ?? assert.fail("the token is a button");
   assert.equal(button.getAttribute("aria-label"), "Open src/app.ts, lines 4–9");
   assert.equal(button.textContent, "src/app.ts4–9");
@@ -139,11 +147,13 @@ test("a name drawn nowhere is still heard, with the words after it, and a standi
       onPress: () => {},
     }),
   );
+
   assert.equal(view.querySelector("button")?.textContent, "Lee Park (former member)");
 });
 
 test("a gone subject keeps its name and its press, and a reader hears that it is gone", () => {
   let pressed = 0;
+
   const view = draw(
     createElement(InlineRef, {
       look: INLINE_REF_LOOK.PILL,
@@ -154,6 +164,7 @@ test("a gone subject keeps its name and its press, and a reader hears that it is
       },
     }),
   );
+
   const button = view.querySelector("button") ?? assert.fail("the token is a button");
   assert.equal(button.textContent, "Risks (gone)");
   act(() => button.click());
@@ -171,6 +182,7 @@ test("a reader hears its kind before its name, where its glyph says it to the ey
       onPress: () => {},
     }),
   );
+
   const button = view.querySelector("button") ?? assert.fail("the token is a button");
   assert.equal(button.querySelector(".ui-inline-ref-glyph")?.getAttribute("aria-hidden"), "true");
   assert.equal(button.textContent, "pull request #42 Fix the refreshOpen");
@@ -178,6 +190,7 @@ test("a reader hears its kind before its name, where its glyph says it to the ey
 
 test("a press that leaves the app is a link to its address, which the press opens rather than the browser", () => {
   const opened: string[] = [];
+
   const view = draw(
     createElement(InlineRef, {
       look: INLINE_REF_LOOK.PILL,
@@ -189,6 +202,7 @@ test("a press that leaves the app is a link to its address, which the press open
       },
     }),
   );
+
   assert.equal(view.querySelector("button"), null);
   const link = view.querySelector("a") ?? assert.fail("the token is a link");
   assert.equal(link.getAttribute("href"), "https://linear.app/acme/issue/ACME-142");
@@ -198,6 +212,7 @@ test("a press that leaves the app is a link to its address, which the press open
 
 test("a middle-click on a link that leaves the app is opened by its press, as a click is, not by the browser", () => {
   const opened: string[] = [];
+
   const view = draw(
     createElement(InlineRef, {
       look: INLINE_REF_LOOK.PILL,
@@ -209,6 +224,7 @@ test("a middle-click on a link that leaves the app is opened by its press, as a 
       },
     }),
   );
+
   const link = view.querySelector("a") ?? assert.fail("the token is a link");
   let followed = true;
   act(() => {
@@ -229,6 +245,7 @@ test("a press that opens in the app stays a button, though it names an address",
       onPress: () => {},
     }),
   );
+
   assert.equal(view.querySelector("a"), null);
   assert.notEqual(view.querySelector("button"), null);
 });
@@ -252,8 +269,10 @@ test("words that hang a card take the focus, so the keyboard reaches the card, a
       }),
     ),
   );
+
   const carded =
     view.querySelector<HTMLElement>("[data-carded]") ?? assert.fail("the carded token");
+
   act(() => carded.focus());
   assert.equal(document.activeElement, carded);
   assert.equal(document.body.dataset.hinted, "Fix auth flow");
@@ -275,8 +294,10 @@ test("words that hang a card inside a control take no focus of their own, the co
       }),
     ),
   );
+
   const carded =
     view.querySelector<HTMLElement>("[data-carded]") ?? assert.fail("the carded token");
+
   act(() => carded.focus());
   assert.notEqual(document.activeElement, carded);
 });
@@ -291,6 +312,7 @@ test("its hint is handed its name, or its own words where the place gives them, 
       onPress: () => {},
     }),
   );
+
   assert.equal(view.querySelector("output")?.textContent, ".agents/skills/feature-branch/SKILL.md");
   const button = view.querySelector("button") ?? assert.fail("the token is a button");
   act(() => button.focus());
@@ -306,5 +328,6 @@ test("its hint is handed the card the place gives in place of its name", () => {
       card: "The agent's card",
     }),
   );
+
   assert.equal(view.querySelector("output")?.textContent, "The agent's card");
 });

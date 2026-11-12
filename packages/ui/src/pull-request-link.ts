@@ -1,4 +1,4 @@
-import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { samePullRequest } from "@repo/features/link-grammar";
 
 /**
  * pull-request-link.ts -- which agent's pull request a link names, so a press on it opens the agent's Pull request tab rather than GitHub.
@@ -16,24 +16,15 @@ export interface OpenedPullRequest {
   readonly url: string;
 }
 
-/** A page's address without its fragment, its query, or a trailing slash, as two spellings of one pull request's page compare. */
-function pageAddress(href: string): string {
-  const cuts = [href.indexOf("#"), href.indexOf("?")].filter((at) => at >= 0);
-  let address = cuts.length === 0 ? href : href.slice(0, Math.min(...cuts));
-  // Note that the slashes are taken off one at a time rather than by a pattern, since a pattern anchored at the end backtracks over a long run of them.
-  while (address.endsWith("/")) address = address.slice(0, -1);
-  return address;
-}
-
-/** The agent that opened the pull request whose page the link is, however its address is spelled; nothing where none of them did. */
+/** The agent that opened the pull request whose page, or a page under it, the link is, however its address is spelled (`samePullRequest`); nothing where none of them did. */
 export function pullRequestAgentOf(
   href: string,
   pullRequests: Iterable<OpenedPullRequest>,
 ): string | undefined {
-  const address = pageAddress(href);
   for (const each of pullRequests) {
-    if (pageAddress(each.url) === address) return each.agentId;
+    if (samePullRequest(each.url, href)) return each.agentId;
   }
+
   return undefined;
 }
 
@@ -60,27 +51,11 @@ export function listedPullRequestOf(
     const opened = task.pullRequests.flatMap(({ url, agentId }) =>
       url === undefined || agentId === undefined ? [] : [{ agentId, url }],
     );
+
     const agentId = pullRequestAgentOf(href, opened);
+
     if (agentId !== undefined) return { taskId: task.taskId, agentId };
   }
-  return undefined;
-}
 
-/**
- * The number of the pull request of the repository given whose page on
- * GitHub the link is, or any page under it, whatever the case its owner and
- * name are spelled in; none for any other address, a pull request of another
- * repository among them. A place opens such a pull request in a Pull request
- * tab of one of its agents by its number, where none of them opened it from
- * the branch it stands on.
- */
-export function repositoryPullRequestOf(
-  href: string,
-  repository: string | null | undefined,
-): number | undefined {
-  if (repository === null || repository === undefined) return undefined;
-  const address = pullRequestAddressOf(href);
-  return address !== undefined && address.repository.toLowerCase() === repository.toLowerCase()
-    ? address.number
-    : undefined;
+  return undefined;
 }

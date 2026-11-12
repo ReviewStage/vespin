@@ -50,16 +50,22 @@ export const taskParentOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const header = yield* readTaskHeader(userId, parentTaskId);
+
   if (Option.isNone(header) || header.value.workspaceId !== workspaceId) {
     return yield* new TaskParentUnreached();
   }
+
   const { repository } = header.value;
+
   if (repositoryAsked !== undefined && !sameRepository(repositoryAsked, repository)) {
     return yield* new TaskParentRepositoryDiffers({ repository });
   }
+
   // Note that a member who has left is dropped rather than refused, since the store would refuse the child for them.
   const { assigneeId } = header.value;
+
   const assignable =
     assigneeId !== null && (yield* isWorkspaceMember(assigneeId, workspaceId)) ? assigneeId : null;
+
   return { id: parentTaskId, repository, assigneeId: assignable };
 });

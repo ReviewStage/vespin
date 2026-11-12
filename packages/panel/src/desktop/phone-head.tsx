@@ -68,12 +68,15 @@ export function useAskedMenu(
   }, [ask, show]);
 }
 
-/** A page's own menu the ⋯ opens in its place: the ask, and the door that makes one from the ⋯. */
-export function useMenuAsk(): {
+type UseMenuAskResult = {
   ask: MenuAsk | undefined;
   onAsk: (opener: HTMLElement) => void;
-} {
+};
+
+/** A page's own menu the ⋯ opens in its place: the ask, and the door that makes one from the ⋯. */
+export function useMenuAsk(): UseMenuAskResult {
   const [ask, setAsk] = useState<MenuAsk | undefined>(undefined);
+
   return {
     ask,
     onAsk: (opener) => setAsk((was) => ({ opener, turn: (was?.turn ?? 0) + 1 })),
@@ -161,6 +164,7 @@ export function PhoneBack({ back }: { back: TaskHeadBack }): React.JSX.Element {
  */
 export function phoneFindGroups(): MenuAction[][] {
   if (!appCommandOffered(APP_COMMAND.FIND)) return [];
+
   return [
     [
       {
@@ -179,6 +183,7 @@ export function phoneFindGroups(): MenuAction[][] {
  */
 export function PhoneFindButton(): React.JSX.Element {
   const { label } = APP_SHORTCUTS[APP_COMMAND.FIND];
+
   return (
     <Tooltip label={label} command={APP_COMMAND.FIND}>
       <IconButton
@@ -214,6 +219,7 @@ export function PlaceMore({
 }): React.JSX.Element {
   const menu = useMenu(shown);
   const drawn = menu.drawn === undefined ? undefined : ends?.();
+
   return (
     <>
       <MoreButton thing={thing} {...menu.trigger()} />

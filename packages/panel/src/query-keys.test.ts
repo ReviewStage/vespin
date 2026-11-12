@@ -42,11 +42,14 @@ test("a task's tree one account read is not drawn to the next account once the w
   let reader = "one.ts";
   fakeAppBridge({});
   fakeActPort({ [ACT_KIND.TASKS_TREE]: () => Promise.resolve(listing(reader)) });
+
   function Tree() {
     const read = useQuery(taskTreeQueryOptions({ taskId: "task-1" }, ""));
     const entries = read.data === undefined ? [] : read.data.folder.entries;
+
     return createElement("p", null, entries.map((entry) => entry.name).join(","));
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

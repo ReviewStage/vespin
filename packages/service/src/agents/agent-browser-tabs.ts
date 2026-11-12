@@ -97,7 +97,9 @@ const reachedTab = /* @__PURE__ */ Effect.fnUntraced(function* (
   tabId: string,
 ): Effect.fn.Return<ReachedBrowserTab, HostedRefusal, DatabaseServices> {
   const reached = yield* hostedStoreOrUnavailable(readBrowserTab(userId, place, tabId));
+
   if (Option.isNone(reached)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return reached.value;
 });
 
@@ -108,6 +110,7 @@ const tabAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   tabId: string,
 ) {
   const reached = yield* reachedTab(userId, place, tabId);
+
   return { tab: browserTabOf(reached, yield* DateTime.nowAsDate) };
 });
 
@@ -128,18 +131,26 @@ const openedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const { agent } = yield* reachedAgentById(userId, agentId);
+
   if (taskId !== undefined && agent.taskId !== taskId) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   // Note that an agent on a task is opened in only by a member who reaches the task too, as its tabs are listed.
   const visible = yield* hostedStoreOrUnavailable(readVisibleAgentWorkspace(userId, agent.id));
+
   if (Option.isNone(visible)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
+
   const [session] = yield* hostedStoreOrUnavailable(
     standingSessionsOf(agent.userId, [agent.conversationId]),
   );
+
   if (session === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+
   return { conversationId: agent.conversationId, sessionId: session.sessionId };
 });
 
@@ -187,8 +198,10 @@ export const listAgentBrowserTabs = /* @__PURE__ */ Effect.fnUntraced(function* 
   place: BrowserTabsPlace,
 ) {
   const listed = yield* hostedStoreOrUnavailable(listBrowserTabs(userId, place));
+
   if (Option.isNone(listed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const now = yield* DateTime.nowAsDate;
+
   return { tabs: listed.value.map((reached) => browserTabOf(reached, now)) };
 });
 
@@ -204,6 +217,7 @@ export const openAgentBrowserTab = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (!isBrowserAddress(open.address)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const { conversationId, sessionId } = yield* openedAgent(userId, open.agentId, open.taskId);
   const targetId = yield* openedPage(sessionId, conversationId, open.address);
+
   // Note that the page is kept at the address asked, its title too, until the agent's next look at it
   // reads the page's own, and the member stands as its opener though the agent's `list` wrote it first.
   const tab = yield* hostedStoreOrUnavailable(
@@ -215,10 +229,12 @@ export const openAgentBrowserTab = /* @__PURE__ */ Effect.fnUntraced(function* (
       userId,
     }),
   );
+
   const now = yield* DateTime.nowAsDate;
   const heldUntil = new Date(now.getTime() + BROWSER_TAKEOVER_HOLD_MS);
   yield* hostedStoreOrUnavailable(takeOverBrowserTab(tab.id, userId, heldUntil, now));
   yield* browserActed(userId, open.agentId, SERVER_AGENT_TOOL.BROWSER);
+
   return yield* tabAnswer(userId, { agentId: open.agentId }, tab.id);
 });
 
@@ -229,12 +245,15 @@ export const takeOverAgentBrowserTab = /* @__PURE__ */ Effect.fnUntraced(functio
   tabId: string,
 ) {
   const { tab, agent } = yield* reachedTab(userId, place, tabId);
+
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const now = yield* DateTime.nowAsDate;
   const heldUntil = new Date(now.getTime() + BROWSER_TAKEOVER_HOLD_MS);
   // Note that a tab another member drives is answered as it stands, their takeover named, rather than refused.
   const taken = yield* hostedStoreOrUnavailable(takeOverBrowserTab(tab.id, userId, heldUntil, now));
+
   if (taken) yield* browserActed(userId, agent.id, SERVER_AGENT_TOOL.BROWSER_TAKEOVER);
+
   return yield* tabAnswer(userId, place, tabId);
 });
 
@@ -246,6 +265,8 @@ export const handBackAgentBrowserTab = /* @__PURE__ */ Effect.fnUntraced(functio
 ) {
   const { tab, agent } = yield* reachedTab(userId, place, tabId);
   const released = yield* hostedStoreOrUnavailable(handBackBrowserTab(tab.id, userId));
+
   if (released) yield* browserActed(userId, agent.id, SERVER_AGENT_TOOL.BROWSER_HANDBACK);
+
   return yield* tabAnswer(userId, place, tabId);
 });

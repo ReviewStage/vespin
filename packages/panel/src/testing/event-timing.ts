@@ -55,10 +55,12 @@ export function keyPressed(target: Node, wait: KeystrokeWait): void {
     ...wait,
     toJSON: () => ({ ...wait }),
   };
+
   const list: PerformanceObserverEntryList = {
     getEntries: () => [timing],
     getEntriesByName: (name) => (name === timing.name ? [timing] : []),
     getEntriesByType: (type) => (type === timing.entryType ? [timing] : []),
   };
+
   for (const callback of heard) callback(list, new ReportedObserver(() => undefined));
 }

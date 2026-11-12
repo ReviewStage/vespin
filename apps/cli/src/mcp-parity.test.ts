@@ -16,8 +16,11 @@ interface CommandNode {
 function reaches(commands: ReadonlyArray<CommandNode>, path: ReadonlyArray<string>): boolean {
   const [head, ...rest] = path;
   const command = commands.find((candidate) => candidate.name === head);
+
   if (command === undefined) return false;
+
   if (rest.length === 0) return true;
+
   return reaches(
     command.subcommands.flatMap((group) => group.commands),
     rest,
@@ -29,6 +32,7 @@ describe("MEMBER_MCP_CLI_PARITY", () => {
     const missing = Object.values(MEMBER_MCP_CLI_PARITY).flatMap((row) =>
       "command" in row && !reaches(COMMANDS, row.command) ? [row.command.join(" ")] : [],
     );
+
     expect(missing).toEqual([]);
   });
 });

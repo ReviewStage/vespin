@@ -95,6 +95,7 @@ const NESTED = "ui-resources-name block overflow-hidden ps-resource-nest";
 /** A process's name, marked while its cell cuts it short, so it fades out at its end rather than stopping on a cut letter. */
 function ResourceName({ name, depth }: { name: string; depth: number }): React.JSX.Element {
   const [measured, clipped] = useClipped(name);
+
   return (
     <span
       ref={measured}
@@ -122,6 +123,7 @@ function Heading({
   children: string;
 }): React.JSX.Element {
   const direction = column === sort ? SORT_WAY[column] : undefined;
+
   return (
     <TableHead className={figure ? FIGURE : NAME} aria-sort={direction}>
       <SortHeading direction={direction} onPress={() => onSort(column)}>
@@ -207,6 +209,7 @@ export function ResourcesPopover({
 }): React.JSX.Element {
   // Note that the card itself takes the focus as it opens, because a press that only means to look should not light its Copy.
   const card = useRef<HTMLDivElement>(null);
+
   return (
     <PopoverIconButton
       icon={<GLYPH.RAM />}

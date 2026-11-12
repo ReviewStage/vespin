@@ -107,6 +107,7 @@ describe("sanitizer", () => {
       text: `as someone@example.org with ${fakeClaudeToken}`,
       email: "someone@example.org",
     };
+
     const once = sanitizer({ secrets: [], replacements: [] })(value);
 
     expect(sanitizer({ secrets: [], replacements: [] })(once)).toEqual(once);
@@ -116,6 +117,7 @@ describe("sanitizer", () => {
 describe("fixtureLeaks", () => {
   it("names nothing in a sanitized stream", () => {
     const scrub = sanitizer({ secrets: ["plain-secret-value"], replacements: [] });
+
     const text = JSON.stringify(
       scrub({
         session_id: SESSION,

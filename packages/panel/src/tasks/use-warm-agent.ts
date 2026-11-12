@@ -40,6 +40,7 @@ export function useWarmAgent(agent: AgentSummary | undefined): void {
   const warmId = focused && agent !== undefined && warmable(agent) ? agent.id : undefined;
   useEffect(() => {
     if (warmId === undefined) return undefined;
+
     return rendererFork(
       Effect.repeat(
         Effect.sync(() => {

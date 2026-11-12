@@ -48,5 +48,6 @@ export const readSetupStatus = (stateRoot: string) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const text = yield* fileSystem.readFileString(path.join(stateRoot, STATUS_FILE));
+
     return decodeSetupStatus(text);
   }).pipe(Effect.orElseSucceed(() => Option.none<SetupStatus>()));

@@ -53,6 +53,7 @@ export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
   // Note that the query is read rather than the param, which binds a `since` left out as empty, and one named empty is refused.
   admit: (_params, query) => {
     const since = query[ACCOUNT_INBOX_ITEMS.SINCE];
+
     return since === undefined || /^\d{1,15}$/.test(since)
       ? Effect.void
       : Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);

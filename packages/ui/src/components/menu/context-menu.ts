@@ -39,6 +39,7 @@ function heardBoth<E>(
   menu: ((event: E) => void) | undefined,
 ): ((event: E) => void) | undefined {
   if (own === undefined || menu === undefined) return own ?? menu;
+
   return (event) => {
     own(event);
     menu(event);
@@ -56,6 +57,7 @@ export function withContextMenu<T extends HTMLElement>(
   own: ContextMenuCarrier<T>,
 ): ContextMenuCarrier<T> & { "data-long-press"?: "" } {
   if (contextMenu === undefined) return own;
+
   return {
     "data-long-press": contextMenu["data-long-press"],
     onContextMenu: heardBoth(own.onContextMenu, contextMenu.onContextMenu),

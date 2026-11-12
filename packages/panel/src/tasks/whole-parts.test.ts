@@ -99,6 +99,7 @@ let root: Root | undefined;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
   return Effect.runPromise(markdownHtmlParserLanded);
 });
 
@@ -128,6 +129,7 @@ async function drawnTab(answer: (index: number) => Promise<AgentPartView>) {
   fakeActPort({
     [ACT_KIND.AGENTS_PART]: (payload: AgentPartParams) => {
       asked.push(payload);
+
       return answer(payload.index);
     },
   });
@@ -137,10 +139,12 @@ async function drawnTab(answer: (index: number) => Promise<AgentPartView>) {
   pushedTranscripts(() => [
     { messages: [CUT_TURN], cursor: "1:0", status: AGENT.status, title: null },
   ]);
+
   const control = agentsControl({
     agents: [AGENT],
     me: DEAN.userId,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -164,6 +168,7 @@ async function drawnTab(answer: (index: number) => Promise<AgentPartView>) {
   // A finished turn folds its work under one line, which a reader opens first.
   press(container.querySelector<HTMLElement>("[data-turn-fold] > summary"));
   await settled();
+
   return { container, asked };
 }
 
@@ -176,12 +181,14 @@ function press(summary: HTMLElement | null): void {
 
 test("a cut command output is read whole only as its fold opens, says it is reading meanwhile, and is then drawn whole", async () => {
   let land: (part: AgentPartView) => void = () => undefined;
+
   const { container, asked } = await drawnTab(
     () =>
       new Promise((resolve) => {
         land = resolve;
       }),
   );
+
   assert.deepEqual(asked, []);
 
   press(container.querySelector<HTMLElement>('[data-call-id="call-build"] summary'));
@@ -222,8 +229,10 @@ test("a cut thought is read whole as its fold opens, and one whose read fails dr
     assert.doesNotMatch(container.textContent ?? "", /Reading the whole output/u),
   );
   assert.equal(asked.length, 2);
+
   const output =
     container.querySelector('[data-call-id="call-build"] [data-tool-terminal]')?.textContent ?? "";
+
   assert.match(output, /compiled the first file/u);
   assert.match(output, /compiled the last file/u);
   assert.doesNotMatch(output, /compiled the middle file/u);
@@ -240,8 +249,10 @@ test("a read that answers some other call than the one cut, as an index read acr
   await vi.waitFor(() =>
     assert.doesNotMatch(container.textContent ?? "", /Reading the whole output/u),
   );
+
   const output =
     container.querySelector('[data-call-id="call-build"] [data-tool-terminal]')?.textContent ?? "";
+
   assert.match(output, /compiled the first file/u);
   assert.doesNotMatch(output, /compiled the middle file/u);
 });

@@ -23,6 +23,7 @@ test("a route's head replaces the changelog template's title, description, addre
     },
     undefined,
   );
+
   assert.match(html, /<title>Changelog, page 2 — Vespin<\/title>/);
   assert.equal(metaContent(html, "og:title"), "Changelog, page 2 — Vespin");
   assert.equal(metaContent(html, "twitter:title"), "Changelog, page 2 — Vespin");
@@ -45,6 +46,7 @@ test("a release shares its own screenshot, at its own size, in place of the site
     },
     { width: 2400, height: 1591 },
   );
+
   assert.equal(
     metaContent(html, "og:image"),
     "https://vespin.dev/changelog/0.12.0/the-call-tab.png",

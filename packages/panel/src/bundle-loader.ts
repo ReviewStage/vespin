@@ -115,6 +115,7 @@ export type SideBundle<A> = ReturnType<typeof bundleQuery<A>>;
 /** The bundles, each imported through the importer given and the rest through their own entries. */
 export function sideBundles(importers: Partial<SideBundleImporters> = {}): SideBundles {
   const reach: SideBundleImporters = { ...SIDE_BUNDLE_IMPORTERS, ...importers };
+
   return {
     descriptionEditor: bundleQuery("descriptionEditor", reach.descriptionEditor),
     fileTree: bundleQuery("fileTree", reach.fileTree),
@@ -144,6 +145,7 @@ export function useSideBundles(): SideBundles {
 export function usePrefetchEditorBundle(): () => void {
   const client = useQueryClient();
   const { descriptionEditor } = useSideBundles();
+
   return useCallback(() => {
     void client.prefetchQuery(descriptionEditor);
   }, [client, descriptionEditor]);

@@ -76,6 +76,7 @@ import {
 import { CODER_SHOW_PAGE_TOOL } from "../../tasks/page-tool.js";
 import {
   LOOK_AT_PICTURE_TOOL,
+  lookAtPictureToolOf,
   lookNamedOnly,
   PICTURE_LOOK_STATUS,
   pictureNotLooked,
@@ -312,12 +313,15 @@ function agentTool<const Name extends string>(
     if (Option.isNone(standing.agent)) {
       return Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT));
     }
+
     const agent = standing.agent.value;
     const descriptionsOn = standing.open.has(TOOL_GATE.DESCRIPTIONS);
+
     return Effect.gen(function* () {
       const clientKey = yield* callKey;
       // Each agent the tools reach is answered by the runtime its conversation runs on (`../coder-host/runtime-sessions.ts`).
       const agentSessionsAs = yield* sessionsRouter;
+
       const call: AgentCall = {
         caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn },
         agentSessions: agentSessionsAs(agent.userId),
@@ -326,9 +330,11 @@ function agentTool<const Name extends string>(
         clientKey,
         summaryModel: seams.summaryModel,
       };
+
       return yield* run(call, input);
     });
   };
+
   return served(spec, door, options);
 }
 
@@ -367,6 +373,7 @@ function lookedPictureContent(result: WorkspaceMcpToolResult): readonly McpConte
   if (isLooked(result)) {
     return [LOOKED_TEXT, { type: "image", data: result.image, mimeType: result.mediaType }];
   }
+
   return [{ type: "text", text: JSON.stringify(lookNamedOnly(unparsedWire(result))) }];
 }
 
@@ -384,10 +391,13 @@ function browserContent(result: WorkspaceMcpToolResult): readonly McpContent[] {
   const output = unparsedWire(result);
   const shown = browserModelOutput(output);
   const text: McpContent = { type: "text", text: JSON.stringify(storedBrowserOutput(output)) };
+
   if (shown.type !== "content") return [text];
+
   const images = shown.value.flatMap((part): readonly McpContent[] =>
     part.type === "file" ? [{ type: "image", data: part.data.data, mimeType: part.mediaType }] : [],
   );
+
   return [text, ...images];
 }
 
@@ -399,7 +409,9 @@ function browserContent(result: WorkspaceMcpToolResult): readonly McpContent[] {
  */
 function runAgentBrowser(admitted: AdmittedConversation, input: UnparsedWireValue) {
   const session = admitted.runtimeSessionId;
+
   if (session === undefined) return Effect.succeed(browserNotRun(BROWSER_TOOL_REFUSAL.NO_SANDBOX));
+
   const call = {
     browserSession: session,
     conversationId: admitted.target.conversationId,
@@ -407,6 +419,7 @@ function runAgentBrowser(admitted: AdmittedConversation, input: UnparsedWireValu
     transcript: admitted.target,
     openSandbox: () => Promise.resolve(),
   };
+
   return runBrowserTool(call, input);
 }
 
@@ -435,12 +448,14 @@ function runTurnCappedEditDescription(
 ) {
   const { userId, conversationId } = admitted.target;
   const requested = requestedNotes(input);
+
   return Effect.acquireUseRelease(
     reserveTurnDescriptionNotes(userId, conversationId, requested),
     (turn) => {
       if (Option.isSome(turn)) {
         return runAgentEditDescription(admitted, input, turn.value.taken - requested, sandbox);
       }
+
       return requested > 0
         ? Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.NO_TURN))
         : runAgentEditDescription(admitted, input, 0, sandbox);
@@ -449,6 +464,7 @@ function runTurnCappedEditDescription(
       if (Option.isNone(turn)) return Effect.void;
       const answer = Exit.isSuccess(exit) ? exit.value : undefined;
       const saved = answer?.status === ACTION_RESULT_STATUS.ACCEPTED ? answer.taken : 0;
+
       return settleTurnDescriptionNotes(userId, turn.value.turnId, requested, saved).pipe(
         Effect.tapError(logStoreFailure),
         Effect.ignore,
@@ -479,9 +495,12 @@ function portTool<const Name extends string>(
     if (Option.isNone(standing.agent)) {
       return Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT));
     }
+
     const { userId, id } = standing.agent.value;
+
     return run({ userId, agentId: id }, input);
   };
+
   return served(spec, door, { gate: TOOL_GATE.SANDBOX });
 }
 
@@ -525,13 +544,19 @@ const CATALOG = [
     (admitted, input, { sandbox }) => runTurnCappedEditDescription(admitted, input, sandbox),
     { gate: TOOL_GATE.DESCRIPTIONS, alwaysLoad: true },
   ),
-  served(LOOK_AT_PICTURE_TOOL, (admitted, input) => runAgentLookAtPicture(admitted, input), {
-    gate: TOOL_GATE.DESCRIPTIONS,
-    reads: true,
-    content: lookedPictureContent,
-    // Note that a look answers in its own shape, with the gate's words.
-    refused: pictureNotLooked,
-  }),
+  // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
+  served(
+    LOOK_AT_PICTURE_TOOL,
+    (admitted, input, { standing }) =>
+      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS)),
+    {
+      reads: true,
+      variant: lookAtPictureToolOf,
+      content: lookedPictureContent,
+      // Note that a look answers in its own shape, with the gate's words.
+      refused: pictureNotLooked,
+    },
+  ),
   served(
     SHOW_IMAGE_TOOL,
     (admitted, input, { sandbox }) => runAgentShowImage(admitted, input, sandbox),
@@ -604,9 +629,9 @@ export const TOOL_CATALOG: ReadonlyMap<ServedTool, CatalogTool<ServedTool>> = ne
 const SERVED_NAMES: ReadonlySet<string> = new Set(TOOL_CATALOG.keys());
 
 /** The tools a Claude Code agent's worker may not call: every one that does more than read (`CatalogTool`'s `reads`). */
-export const WORKER_DENIED_TOOLS: readonly ServedTool[] = CATALOG.filter(
-  (tool: CatalogTool<ServedTool>) => tool.reads !== true,
-).map((tool) => tool.name);
+export const WORKER_DENIED_TOOLS: readonly ServedTool[] = CATALOG.flatMap(
+  (tool: CatalogTool<ServedTool>) => (tool.reads === true ? [] : [tool.name]),
+);
 
 /** Whether a name a harness called is one of the catalog's tools. */
 export function isServedTool(name: string): name is ServedTool {
@@ -616,6 +641,7 @@ export function isServedTool(name: string): name is ServedTool {
 /** Whether the agent is offered the tool: one behind no gate always, and a gated one where its gate is open to the agent. */
 export function offers(standing: AgentStanding, tool: ServedTool): boolean {
   const gate = TOOL_CATALOG.get(tool)?.gate;
+
   return gate === undefined || standing.open.has(gate);
 }
 
@@ -631,6 +657,7 @@ export function listedTool(
 ): Pick<CatalogTool, "description" | "inputSchema"> {
   if (tool.variant === undefined) return tool;
   const spec = tool.variant(standing.experiments);
+
   return { description: spec.description, inputSchema: emitJsonSchema(spec.inputSchema) };
 }
 
@@ -656,6 +683,7 @@ const REFUSED_STATUSES: ReadonlySet<string> = new Set([
 /** Whether a door's answer is its refusal, which the server answers as a tool error the agent reads. */
 export function refusedByDoor(result: WorkspaceMcpToolResult): boolean {
   const { status } = result;
+
   return (
     status !== undefined && (REFUSED_STATUSES.has(status) || status.startsWith(NOT_DONE_PREFIX))
   );
@@ -672,6 +700,7 @@ export interface ToolCallAnswer {
 function gateRefusal(tool: CatalogTool, gate: ToolGate): WorkspaceMcpToolResult {
   const { refusal } = GATES[gate];
   const rejected = { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
+
   return tool.refused?.(refusal) ?? rejected;
 }
 
@@ -699,12 +728,16 @@ export function callTool(
   context: WorkspaceMcpCallContext,
 ): Effect.Effect<ToolCallAnswer, unknown, WorkspaceMcpToolServices> {
   const tool = TOOL_CATALOG.get(name);
+
   if (tool === undefined) return Effect.die(new Error(`${name} has no catalog entry`));
+
   return Effect.flatMap(standingOf(admitted), (standing) => {
     const { gate } = tool;
+
     if (gate !== undefined && !standing.open.has(gate)) {
       return Effect.succeed(answerOf(tool, gateRefusal(tool, gate)));
     }
+
     return Effect.map(tool.run(admitted, input, { ...context, standing }), (result) =>
       answerOf(tool, result),
     );

@@ -67,6 +67,7 @@ function unheardStop(): ToastNotice {
     status: 503,
     code: "sk-fixturecode01",
   });
+
   return {
     words: "The agent could not be stopped.",
     tone: STATUS_TONE.DANGER,
@@ -96,6 +97,7 @@ function Shower({ account }: { account: string | undefined }): null {
   useToastsOwner(account);
   show = useToast();
   work = useWorkingToast();
+
   return null;
 }
 
@@ -103,6 +105,7 @@ function Shower({ account }: { account: string | undefined }): null {
 function mount(account?: string): (next: string) => void {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const render = (signedIn: string | undefined) =>
     act(() =>
       root?.render(
@@ -116,7 +119,9 @@ function mount(account?: string): (next: string) => void {
         ),
       ),
     );
+
   render(account);
+
   return render;
 }
 
@@ -147,6 +152,7 @@ function toastButton(label: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>(`${STANDING_TOAST} button`)].find(
     (button) => button.textContent === label,
   );
+
   return found ?? assert.fail(`a toast button named ${label}`);
 }
 
@@ -163,16 +169,21 @@ const PINNED_TASK = {
 /** A pin of the task pressed as its menu presses it and drawn as the host draws it once kept, each undo it is sent kept in `sent`. */
 function pinPressed(sent: TasksPinParams[] = []): PressedRows {
   let drawn: TasksView = { ...IDLE_TASKS_VIEW, tasks: [PINNED_TASK] };
+
   const sendPin = (payload: TasksPinParams) => {
     sent.push(payload);
+
     return Promise.resolve(true);
   };
+
   const pressed = pressRows(
     ROW_WRITE.TASK_PIN,
     { rows: () => ({ tasks: drawn, held: undefined }), send: sendPin },
     [{ id: PINNED_TASK.id, after: { pinned: true, position: null } }],
   );
+
   drawn = { ...IDLE_TASKS_VIEW, tasks: [{ ...PINNED_TASK, pinnedAt: 3 }] };
+
   return pressed;
 }
 
@@ -180,6 +191,7 @@ test("a toast with an action carries a Dismiss button the keyboard reaches, and 
   mount();
   act(() => show?.(persisting("Retry the webhook finished")));
   act(() => show?.(persisting("Nightly upgrade couldn't start")));
+
   const dismissButtons = () =>
     [...document.querySelectorAll<HTMLButtonElement>(`${STANDING_TOAST} button`)]
       .filter((button) => button.getAttribute("aria-label") === "Dismiss")
@@ -229,9 +241,11 @@ test("a failure toast reports what failed: an unexpected one as an error line an
   mount();
   const issues: { error: Error; hint: unknown }[] = [];
   const lines: { level: string; message: string; attributes: unknown }[] = [];
+
   const recording: ShownFailureSentry = {
     captureException: (error, hint) => {
       issues.push({ error, hint });
+
       return "";
     },
     logger: {
@@ -240,6 +254,7 @@ test("a failure toast reports what failed: an unexpected one as an error line an
     },
     ...TRACED,
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
@@ -264,6 +279,7 @@ test("a failure toast reports what failed: an unexpected one as an error line an
     "app.online": true,
     "app.account": "unread",
   };
+
   assert.deepEqual(lines, [
     {
       level: "error",
@@ -314,6 +330,7 @@ test("a failure toast for a hosted call that never answered reports what the hos
   fakeAppPlatform(copyingInto(copied));
   mount();
   const lines: { message: string; attributes: unknown }[] = [];
+
   const recording: ShownFailureSentry = {
     captureException: () => "",
     logger: {
@@ -322,6 +339,7 @@ test("a failure toast for a hosted call that never answered reports what the hos
     },
     ...TRACED,
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
@@ -363,9 +381,11 @@ test("a failure toast for a hosted call that never answered reports what the hos
       },
     },
   ]);
+
   const copy = document.querySelector<HTMLButtonElement>(
     `${STANDING_TOAST} button[aria-label="Copy details"]`,
   );
+
   await act(async () => copy?.click());
   assert.ok(
     copied[0]?.split("\n").includes("hosted.trace_id: 4bf92f3577b34da6a3ce929d0e0e4736"),
@@ -407,15 +427,18 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
   mount();
+
   const recording: ShownFailureSentry = {
     captureException: () => "event-fixture",
     logger: { warn: () => undefined, error: () => undefined },
     ...TRACED,
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
   );
+
   act(() => show?.(unheardStop()));
   act(() => show?.(refusedStart()));
   uninstall();
@@ -425,7 +448,9 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
       `${STANDING_TOAST} button[aria-label="Copy details"]`,
     ),
   ];
+
   assert.equal(copies.length, 1, "the refusal's toast offers no copy");
+
   for (const copy of copies) await act(async () => copy.click());
 
   assert.deepEqual(copied, [

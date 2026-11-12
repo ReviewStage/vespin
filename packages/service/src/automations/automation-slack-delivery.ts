@@ -24,18 +24,21 @@ import { slackClipped, slackEscaped, slackMarkdownBlock } from "../slack/slack-m
 /** The most characters of the final message the notification's plain text says; the blocks hold more. */
 const NOTIFICATION_CHARS = 2500;
 
+type Outcome = { readonly plain: string; readonly words?: string };
+
 /** What the message says of the run: its final message where it finished, that it failed and why, or that it was stopped. */
-function outcomeOf(
-  turn: SettledAgentTurn,
-  words: string | undefined,
-): { readonly plain: string; readonly words?: string } {
+function outcomeOf(turn: SettledAgentTurn, words: string | undefined): Outcome {
   // A run its plan's usage limit stopped is said so, not that it failed.
   if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return { plain: LIMIT_REACHED_WORDS };
+
   if (turn.status === TURN_STATUS.FAILED) {
     return { plain: turn.failure === null ? "Run failed." : `Run failed: ${turn.failure}.` };
   }
+
   if (turn.status === TURN_STATUS.CANCELED) return { plain: "Run stopped." };
+
   if (words === undefined) return { plain: "Run finished." };
+
   return { plain: slackClipped(words, NOTIFICATION_CHARS), words };
 }
 
@@ -52,6 +55,7 @@ export function runResultContent(
 ): SlackMessageContent {
   const outcome = outcomeOf(turn, words);
   const heading = `*${slackEscaped(automationName)}*`;
+
   const said: SlackBlock[] =
     outcome.words === undefined
       ? [
@@ -64,6 +68,7 @@ export function runResultContent(
           { type: "section", text: { type: "mrkdwn", text: heading } },
           slackMarkdownBlock(outcome.words),
         ];
+
   return {
     text: `${automationName}: ${outcome.plain}`,
     blocks: [

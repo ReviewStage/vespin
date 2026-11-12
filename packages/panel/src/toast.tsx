@@ -176,7 +176,9 @@ function standsOn(notice: ToastNotice): boolean {
 /** Marks the toast `id` on its way out, and tells whoever showed one that persists that the developer sent it away, where the host did not close it itself. */
 function closed(id: string, notice: KeptNotice): void {
   const byHost = closingByHost.delete(id);
+
   if (kept.get(id)?.notice === notice) kept.set(id, { notice, leaving: true });
+
   if (!byHost && notice.persists === true) notice.onDismiss?.();
 }
 
@@ -214,12 +216,14 @@ function toastOptions(id: string, notice: KeptNotice) {
 function replace(id: string, notice: KeptNotice): void {
   const was = kept.get(id);
   kept.set(id, { notice, leaving: false });
+
   if (was !== undefined && was.notice !== notice) was.notice.onGone?.();
 }
 
 /** Closes the toast `id` as the host's own act, which no one is told is a dismissal. */
 function closeByHost(id: string): void {
   const standing = kept.get(id);
+
   if (standing === undefined || standing.leaving) return;
   closingByHost.add(id);
   toastManager.close(id);
@@ -235,7 +239,9 @@ function closeByHost(id: string): void {
 function reportSaid(notice: ToastNotice): KeptNotice | undefined {
   if (notice.tone !== STATUS_TONE.DANGER) return notice;
   const details = reportShownFailure(notice.failure, Date.now());
+
   if (notice.action === undefined && failureOfConnection(notice.failure)) return undefined;
+
   return { ...notice, details };
 }
 
@@ -248,10 +254,12 @@ function reportSaid(notice: ToastNotice): KeptNotice | undefined {
  */
 export function forgetToasts(): void {
   const forgotten = [...kept.values()];
+
   for (const id of kept.keys()) closingByHost.add(id);
   toastManager.close();
   closingByHost.clear();
   kept.clear();
+
   for (const { notice } of forgotten) notice.onGone?.();
 }
 
@@ -277,6 +285,7 @@ export function useToastsOwner(account: string | undefined): void {
  */
 export function showToast(notice: ToastNotice): void {
   const said = reportSaid(notice);
+
   if (said === undefined) return;
   const id = said.subject ?? crypto.randomUUID();
   replace(id, said);
@@ -307,15 +316,21 @@ export function useWorkingToast(): (words: string) => (notice: ToastNotice) => v
  */
 function settleWork(subject: string, notice: ToastNotice): void {
   const said = reportSaid(notice);
+
   if (said === undefined) {
     closeByHost(subject);
+
     return;
   }
+
   const standing = kept.get(subject);
+
   if (standing === undefined || standing.leaving) {
     showToast(said);
+
     return;
   }
+
   replace(subject, said);
   toastManager.update(subject, toastOptions(subject, said));
 }
@@ -324,6 +339,7 @@ function settleWork(subject: string, notice: ToastNotice): void {
 function showWorkingToast(words: string): (notice: ToastNotice) => void {
   const subject = crypto.randomUUID();
   showToast({ words, tone: STATUS_TONE.WORKING, subject });
+
   return (notice: ToastNotice) => settleWork(subject, { ...notice, subject });
 }
 
@@ -340,12 +356,15 @@ export function withdrawToast(subject: string): void {
 /** One toast the manager keeps: the ui card, its notice's words, and its action, copy, and ×. */
 function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.Element | null {
   const notice = toast.data?.notice;
+
   if (notice === undefined) return null;
   const { action, details } = notice;
+
   const copy: ToastCopy | undefined =
     details === undefined
       ? undefined
       : { text: details, what: DETAILS_WHAT, copy: (text) => appPlatform().copyText(text) };
+
   return (
     <Toast
       toast={toast}
@@ -382,8 +401,10 @@ export function ToastHost(): React.JSX.Element {
     for (const [id, standing] of kept) {
       if (!standing.leaving) toastManager.add({ id, ...toastOptions(id, standing.notice) });
     }
+
     return forgetToasts;
   }, []);
+
   return (
     <ToastStack manager={toastManager} label={STACK_LABEL}>
       {(toast) => <ToastCard key={toast.id} toast={toast} />}

@@ -24,6 +24,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import type { DescriptionCommentsControl } from "@repo/ui/description-comments";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -74,6 +75,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -99,6 +101,7 @@ function answerSources(read: ReadPageSource): void {
 /** The account signed in to the window, as the panel's root hands it what the window keeps for it, a review's held comments among it. */
 function SignedIn(): null {
   useDraftsOwner({ id: "u-dean", email: "dean@example.com" });
+
   return null;
 }
 
@@ -118,11 +121,13 @@ function mount(
   // What the tab hands the strip's one ⋯, as its groups' names.
   let held: TabActionGroups | undefined;
   const handed = () => (held ?? []).map((group) => group.map((each) => each.label));
+
   const chooseHanded = (label: string) => {
     const item = held?.flat().find((each) => each.label === label);
     assert.ok(item !== undefined && "onSelect" in item, `the ⋯ is handed ${label}`);
     act(() => item.onSelect());
   };
+
   const render = (listed: PageLine) =>
     act(() =>
       root.render(
@@ -149,22 +154,29 @@ function mount(
         ),
       ),
     );
+
   render(page);
+
   const frame = () => {
     const found = container.querySelector("iframe");
     assert.ok(found);
+
     return found;
   };
+
   const press = async (label: string) => {
     const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
     assert.ok(button);
     await act(async () => button.click());
   };
+
   // The source's lines as drawn, each its number then its text, once Pierre has drawn them.
   const sourceLines = async () => {
     await wholeFileDrawn(container);
+
     return wholeFileLines(container);
   };
+
   return { container, frame, press, render, sourceLines, handed, chooseHanded };
 }
 
@@ -250,7 +262,7 @@ test("over the source, View settings offers the settings its lines follow, and t
   const { container, press, handed } = mount(FUNNEL);
   assert.deepEqual(handed(), [
     ["Open in browser"],
-    ["Zoom in", "Zoom out", "Actual size"],
+    ["Zoom out", "Actual size", "Zoom in"],
     ["Reload page"],
   ]);
   assert.equal(container.querySelector('button[aria-label="View options"]'), null);
@@ -282,6 +294,31 @@ test("over the source, View settings offers the settings its lines follow, and t
     "the bar draws no ⋯ of its own beside the strip's",
   );
   assert.deepEqual(handed(), [["Open in browser"], ["Copy source"], ["Reload page"]]);
+});
+
+test("a page drawn larger or smaller says its size in the bar, and pressing it draws the page at actual size", async () => {
+  const { container, chooseHanded } = mount(FUNNEL);
+
+  const sized = () =>
+    [...container.querySelectorAll("button")].find((button) =>
+      /^\d+%$/.test(button.textContent ?? ""),
+    );
+
+  assert.equal(sized(), undefined, "nothing is said at actual size");
+
+  chooseHanded("Zoom in");
+
+  assert.equal(sized()?.textContent, "110%");
+
+  sized()?.focus();
+  await act(async () => sized()?.click());
+
+  assert.equal(sized(), undefined);
+  assert.equal(
+    document.activeElement?.getAttribute("aria-label"),
+    "View source",
+    "the keys move on to the bar's next press",
+  );
 });
 
 test.each([{ holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` }])(
@@ -316,6 +353,7 @@ test("the source stays shown while the versions are stepped, each version's own"
 
 test("a source the service did not answer says so in its place, and Retry reads it again", async () => {
   let answered = false;
+
   const { press, sourceLines, container } = mount(FUNNEL, (version) =>
     Promise.resolve(
       answered ? { lines: sourceOf(version) } : { failure: TASK_CALL_FAILURE.UNANSWERED },
@@ -332,9 +370,11 @@ test("a source the service did not answer says so in its place, and Retry reads 
   );
 
   answered = true;
+
   const retry = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Retry",
   );
+
   assert.ok(retry);
   await act(async () => retry.click());
 
@@ -364,6 +404,7 @@ function framePosts(frame: HTMLIFrameElement): unknown[] {
   vi.spyOn(window, "postMessage").mockImplementation((message) => {
     posted.push(message);
   });
+
   return posted;
 }
 
@@ -477,8 +518,10 @@ test("⌘F over the source finds in its lines, the window's own, rather than thr
 
 test("a source read before a Reload that answers after it does not replace the fresh read", async () => {
   const answers: ((html: string) => void)[] = [];
+
   const { press, sourceLines } = mount(FUNNEL, () => {
     const answer = new Promise<string>((resolve) => answers.push(resolve));
+
     return answer.then((html) => ({ lines: [[{ text: html }]] }));
   });
 
@@ -492,6 +535,7 @@ test("a source read before a Reload that answers after it does not replace the f
 
 test("on a phone the page draws no bar, and the task's header's ⋯ offers every control of it, the version said under its steps", async () => {
   answerSources(readSource);
+
   const { element, handed } = onPhone(
     createElement(PagePane, {
       place: { taskId: TASK },
@@ -499,6 +543,7 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
       findActive: true,
     }),
   );
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -511,9 +556,9 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
     "Later version",
     "View source",
     "Reload page",
-    "Zoom in",
     "Zoom out",
     "Actual size",
+    "Zoom in",
   ]);
   assert.deepEqual(handed.item("Later version"), { disabled: true, detail: "Version 3 of 3" });
   assert.deepEqual(handed.item("Actual size"), { disabled: true, detail: "100%" });
@@ -540,6 +585,7 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
 
 test("Comment asks the frame for an element, an element holding threads is pinned, the element picked opens a comment quoting its words, and a press in the page lets go of it, pinning one left with words where it was started to open again", async () => {
   const path = "body > p:nth-of-type(1)";
+
   const thread: DescriptionCommentThread = {
     id: "8c1d3e5f-7a9b-4c2d-8e4f-6a8b0c2d4e61",
     scope: DESCRIPTION_COMMENT_SCOPE.ELEMENT,
@@ -560,6 +606,7 @@ test("Comment asks the frame for an element, an element holding threads is pinne
     updatedAt: 1,
     revision: 1,
   };
+
   const control: DescriptionCommentsControl = {
     planId: TASK,
     threads: [thread],
@@ -570,6 +617,7 @@ test("Comment asks the frame for an element, an element holding threads is pinne
     start: async () => ({ note: "not in this test" }),
     act: async () => true,
   };
+
   const { container, frame, press } = mount(
     FUNNEL,
     readSource,
@@ -580,6 +628,7 @@ test("Comment asks the frame for an element, an element holding threads is pinne
       doors: { agents: undefined, me: "u-dean" },
     },
   );
+
   const posted = framePosts(frame());
   const box = { left: 10, top: 20, right: 200, bottom: 40 };
 
@@ -616,9 +665,11 @@ test("Comment asks the frame for an element, an element holding threads is pinne
 
   // A press in the page, selecting nothing, is a press away, which lets go of a comment holding no words of its own.
   postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, pressed: true });
+
   const standing = container.querySelector(
     ".ui-rect-float:not([data-leaving]) .page-comment-float",
   );
+
   assert.ok(standing === null, "the comment being started goes");
   assert.ok(
     container.querySelector('button[aria-label="Draft comment"]') === null,
@@ -642,9 +693,11 @@ test("Comment asks the frame for an element, an element holding threads is pinne
     ],
   });
   await press("Draft comment");
+
   const reopened = container.querySelector<HTMLElement>(
     '.ui-rect-float:not([data-leaving]) .composer-editor[aria-label="Add a comment"]',
   );
+
   assert.equal(reopened === null ? undefined : composerWords(reopened), "Split by team?");
   assert.match(container.querySelector(".page-comment-float")?.textContent ?? "", /Totals/);
   // Emptied, the draft goes, so no later test opens on its words.
@@ -670,6 +723,7 @@ function holdOnElement(control: DescriptionCommentsControl, words: string) {
       doors: { agents: undefined, me: "u-dean" },
     },
   );
+
   const { container, frame } = mounted;
   const box = { left: 10, top: 20, right: 200, bottom: 40 };
   act(() => {
@@ -687,12 +741,15 @@ function holdOnElement(control: DescriptionCommentsControl, words: string) {
     type: PAGE_PICK_TYPE,
     picked: { path: "body > h2:nth-of-type(1)", quote: "Totals", section: "", box },
   });
+
   const field = container.querySelector<HTMLElement>(
     '.composer-editor[aria-label="Add a comment"]',
   );
+
   assert.ok(field, "the comment is started by the element");
   writeInComposer(field, words);
   act(() => buttonNamed(container, "Start a review").click());
+
   return mounted;
 }
 
@@ -708,6 +765,7 @@ test("a comment held in a review stands in the Review panel under its element's 
   const starts: DescriptionCommentStart[] = [];
   // Note that the service refuses the summary the first time it is sent.
   let refusals = 1;
+
   const control: DescriptionCommentsControl = {
     planId: TASK,
     threads: [],
@@ -717,10 +775,13 @@ test("a comment held in a review stands in the Review panel under its element's 
     notes: new Map(),
     start: async (start) => {
       starts.push(start);
+
       if (start.words === "Ship it once these are in." && refusals > 0) {
         refusals -= 1;
+
         return { note: "The service is unavailable." };
       }
+
       return {
         thread: {
           id: start.id ?? start.clientKey,
@@ -737,6 +798,7 @@ test("a comment held in a review stands in the Review panel under its element's 
     },
     act: async () => true,
   };
+
   const { container, press } = holdOnElement(control, "Per week?");
 
   await press("Show comments");
@@ -755,6 +817,7 @@ test("a comment held in a review stands in the Review panel under its element's 
   assert.ok(held, "the panel lists the held comment");
   assert.match(held.textContent ?? "", /Totals/, "under its element's words");
   assert.match(held.textContent ?? "", /Per week\?/);
+
   // The summary's editor stands once its bundle has loaded, a turn after the panel opens.
   const summary = await vi.waitFor(
     () =>
@@ -762,6 +825,7 @@ test("a comment held in a review stands in the Review panel under its element's 
         `${EDITOR_ROOT_SELECTOR}[aria-label="Review comment"]`,
       )?.editor ?? assert.fail("the panel takes a summary"),
   );
+
   act(() => {
     summary.commands.setContent("Ship it once these are in.", { contentType: "markdown" });
   });
@@ -833,11 +897,13 @@ function buttonNamed(within: ParentNode, words: string): HTMLButtonElement {
   const found = [...within.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.textContent?.trim() === words,
   );
+
   return found ?? assert.fail(`a button named ${words}`);
 }
 
 test("a reply held in a review stands Pending as its thread's last comment, and Send review replies held, then sends the summary naming its thread along", async () => {
   const path = "body > p:nth-of-type(1)";
+
   const thread: DescriptionCommentThread = {
     id: "8c1d3e5f-7a9b-4c2d-8e4f-6a8b0c2d4e71",
     scope: DESCRIPTION_COMMENT_SCOPE.ELEMENT,
@@ -858,7 +924,9 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
     updatedAt: 1,
     revision: 1,
   };
-  const sent: Record<string, unknown>[] = [];
+
+  const sent: Readonly<Record<string, WireBoundaryInput>>[] = [];
+
   const control: DescriptionCommentsControl = {
     planId: TASK,
     threads: [thread],
@@ -868,13 +936,16 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
     notes: new Map(),
     start: async (start) => {
       sent.push({ start: start.words, along: "along" in start ? start.along : undefined });
+
       return { thread: { ...thread, id: start.clientKey, entries: [] } };
     },
     act: async (threadId, action) => {
       sent.push({ threadId, ...action });
+
       return true;
     },
   };
+
   const { container, press } = mount(
     FUNNEL,
     readSource,
@@ -882,6 +953,7 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
     { taskId: TASK },
     { control, doors: { agents: undefined, me: "u-dean" } },
   );
+
   await press("Show comments");
   const column = container.querySelector<HTMLElement>(".page-comments-column");
   assert.ok(column, "the comments column stands");
@@ -899,12 +971,14 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
   const panel = document.querySelector<HTMLElement>('[role="dialog"]');
   assert.ok(panel, "Review opens its panel");
   assert.match(panel.querySelector("ol")?.textContent ?? "", /Invites sent.*Weekly, yes\./u);
+
   const summary = await vi.waitFor(
     () =>
       panel.querySelector<TiptapEditorHTMLElement>(
         `${EDITOR_ROOT_SELECTOR}[aria-label="Review comment"]`,
       )?.editor ?? assert.fail("the panel takes a summary"),
   );
+
   act(() => {
     summary.commands.setContent("That's all.", { contentType: "markdown" });
   });
@@ -936,6 +1010,7 @@ test("words replied to start a comment quoting them in its field, and two held o
     start: async () => ({ note: "not in this test" }),
     act: async () => true,
   };
+
   const { container, frame } = mount(
     FUNNEL,
     readSource,
@@ -943,6 +1018,7 @@ test("words replied to start a comment quoting them in its field, and two held o
     { taskId: TASK },
     { control, doors: { agents: undefined, me: "u-dean" } },
   );
+
   const posted = framePosts(frame());
   const path = "body > ol > li:nth-of-type(2)";
   const box = { left: 10, top: 20, right: 200, bottom: 40 };
@@ -956,15 +1032,18 @@ test("words replied to start a comment quoting them in its field, and two held o
     userAgent: navigator.userAgent,
     userActivation: { isActive: true },
   });
+
   const replyTo = (quote: string, words: string, hold: string) => {
     postFrom(frame().contentWindow, {
       type: PAGE_PICK_TYPE,
       selected: { path, quote, section: "", box, words: true },
     });
     act(() => buttonNamed(document.body, "Reply").click());
+
     const field = container.querySelector<HTMLElement>(
       '.page-comment-float .composer-editor[aria-label="Add a comment"]',
     );
+
     assert.ok(field, "Reply starts a comment by the words");
     assert.equal(
       field.querySelector("blockquote")?.textContent,
@@ -975,12 +1054,15 @@ test("words replied to start a comment quoting them in its field, and two held o
       composerEditor(field).editor?.commands.focus("end");
     });
     typeInComposer(field, words);
+
     // Note that the box's send is a press labeled with its act, where Start a review is one of words beside it.
     const holding =
       container.querySelector<HTMLButtonElement>(`button[aria-label="${hold}"]`) ??
       buttonNamed(container, hold);
+
     act(() => holding.click());
   };
+
   replyTo("Turn states on rows.", "Which rows?", "Start a review");
   replyTo("without opening anything", "Even the Inbox?", "Add to review");
 
@@ -995,6 +1077,7 @@ test("words replied to start a comment quoting them in its field, and two held o
   postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, marks: [{ path, box }] });
   // The pointer over the element in the page tells its comments as the pointer over its pin does, each under the words it quotes.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, over: path });
     act(() => {
@@ -1003,15 +1086,18 @@ test("words replied to start a comment quoting them in its field, and two held o
   } finally {
     vi.useRealTimers();
   }
+
   const told = document.querySelector(".ui-hover-card")?.textContent ?? "";
   assert.match(
     told,
     /Turn states on rows\.[\s\S]*Which rows\?[\s\S]*without opening anything[\s\S]*Even the Inbox\?/u,
   );
   act(() => buttonLabeled(container, "2 comments in your review").click());
+
   const card = document.querySelector<HTMLElement>(
     ".ui-rect-float:not([data-leaving]) .page-comment-float",
   );
+
   assert.ok(card, "the held pin opens its comments by the element");
   const said = [...card.querySelectorAll("[data-pending]")].map((each) => each.textContent ?? "");
   assert.equal(said.length, 2);

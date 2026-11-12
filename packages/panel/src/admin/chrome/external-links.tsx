@@ -34,6 +34,7 @@ type ExternalPress = (href: string) => ((event: MouseEvent<HTMLAnchorElement>) =
 /** What a link to a page outside the dashboard presses with, by its address (`ExternalPress`). */
 export function useExternalPress(): ExternalPress {
   const openLink = useAdminDoorsIfAny()?.openLink;
+
   return (href) =>
     openLink === undefined
       ? undefined
@@ -46,6 +47,7 @@ export function useExternalPress(): ExternalPress {
 /** One page outside the dashboard, its provider's mark leading its words inside the one link. */
 export function ExternalLink({ place }: { place: ExternalPlace }): React.JSX.Element {
   const pressOf = useExternalPress();
+
   return (
     <TextLink
       href={place.href}
@@ -67,6 +69,7 @@ export function ExternalLinks({
   places: readonly ExternalPlace[];
 }): React.JSX.Element | null {
   if (places.length === 0) return null;
+
   return (
     <Inline gap={GAP.FIELD}>
       {places.map((place) => (

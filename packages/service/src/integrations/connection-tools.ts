@@ -79,16 +79,20 @@ interface RemoteTool {
 function remoteToolIn(connection: string, remoteTool: string): RemoteTool | undefined {
   // Note that a connection is named for its account, the first after its provider (`integration-wire.ts`'s `mintIntegrationConnectionName`).
   const account = integrationConnectionOf(connection);
+
   if (account === undefined || !isRemoteToolWord(remoteTool)) return undefined;
+
   return { ...account, connection, remoteTool };
 }
+
+type StoredAsResult = { readonly name: string; readonly input: UnparsedWireValue };
 
 /** A call of a remote tool as the record keeps it: under its integration's fixed name, its envelope naming the call it ran under. */
 function storedAs(
   remote: RemoteTool,
   input: UnparsedWireValue,
   parentCallId: string,
-): { readonly name: string; readonly input: UnparsedWireValue } {
+): StoredAsResult {
   return {
     name: INTEGRATION_REMOTE_TOOL[remote.provider],
     // An object was sent, so an empty one stands for an input it never had.
@@ -116,5 +120,6 @@ export function storedServerCall(
   callId: string,
 ): { readonly name: string; readonly input: UnparsedWireValue } | undefined {
   const remote = remoteToolIn(connection, remoteTool);
+
   return remote === undefined ? undefined : storedAs(remote, input, callId);
 }

@@ -20,12 +20,15 @@ afterEach(() => {
 function titleFor(input: Parameters<typeof useWindowTitle>[0]): string {
   function Window() {
     useWindowTitle(input);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   act(() => root.render(createElement(Window)));
   const title = document.title;
   act(() => root.unmount());
+
   return title;
 }
 

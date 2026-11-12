@@ -112,6 +112,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
   sweeps: MaintenanceSweeps,
 ): Effect.fn.Return<MaintenanceSweepAnswer, unknown, DatabaseServices | Sandbox> {
   const now = yield* Clock.currentTimeMillis;
+
   return {
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
     turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
@@ -130,16 +131,20 @@ export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaint
     options: MaintenanceSweepOptions,
   ): Effect.fn.Return<Response, unknown, DatabaseServices | Sandbox> {
     const { request } = options;
+
     if (request.method !== "GET") {
       return errorResponse(
         HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
         HOSTED_API_ERROR.METHOD_NOT_ALLOWED,
       );
     }
+
     const secret = options.cronSecret;
+
     if (secret === undefined) {
       return errorResponse(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE);
     }
+
     if (!bearerMatchesSecret(request, secret)) {
       return errorResponse(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN);
     }
@@ -162,6 +167,7 @@ export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaint
           failure instanceof SweepsFailed ? Effect.succeed(failure) : Effect.fail(failure),
         ),
       );
+
     return ran instanceof SweepsFailed
       ? jsonResponse(HOSTED_HTTP_STATUS.INTERNAL_ERROR, ran.answer)
       : jsonResponse(HOSTED_HTTP_STATUS.OK, ran);

@@ -60,6 +60,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -72,6 +73,7 @@ const openSharedTask = Effect.gen(function* () {
   yield* joinWorkspace(workspace, teammate);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
   yield* saveDescriptionText(owner, taskId, DESCRIPTION_TEXT);
+
   return { owner, teammate, outsider, taskId };
 });
 
@@ -87,6 +89,7 @@ const member = (userId: string): DescriptionCommentWriterRef => ({
 function startOn(text: string, words: string, comment: string): DescriptionCommentStartRequest {
   const from = text.indexOf(words);
   assert.ok(from >= 0);
+
   return {
     clientKey: randomUUID(),
     scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
@@ -101,6 +104,7 @@ function startOn(text: string, words: string, comment: string): DescriptionComme
 function threadOf(outcome: DescriptionCommentOutcome): DescriptionCommentThread {
   assert.equal(outcome.status, DESCRIPTION_COMMENT_OUTCOME.DONE);
   assert.ok("thread" in outcome.answer, JSON.stringify(outcome.answer));
+
   return outcome.answer.thread;
 }
 
@@ -108,6 +112,7 @@ function threadOf(outcome: DescriptionCommentOutcome): DescriptionCommentThread 
 function withoutTxid(outcome: DescriptionCommentOutcome): DescriptionCommentOutcome {
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE) return outcome;
   const { txid: _txid, ...said } = outcome;
+
   return said;
 }
 
@@ -168,6 +173,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         const unsaved = DESCRIPTION_TEXT.replace(
           "## Goal\n\n",
           "## Goal\n\nInvites replace the admin-only flow.\n\n",
@@ -206,10 +212,12 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, outsider, taskId } = yield* openSharedTask;
+
         const { id: elsewhere } = yield* createTask(outsider, {
           organizationId: yield* openWorkspace(outsider),
           name: "Elsewhere",
         });
+
         yield* saveDescriptionText(outsider, elsewhere, DESCRIPTION_TEXT);
         const id = randomUUID();
 
@@ -217,10 +225,12 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           ...startOn(DESCRIPTION_TEXT, "teammate", "Or a guest?"),
           id,
         });
+
         const again = yield* startDescriptionCommentThread(member(owner), taskId, {
           ...startOn(DESCRIPTION_TEXT, "teammate", "Or a guest?"),
           id,
         });
+
         const taken = yield* startDescriptionCommentThread(member(outsider), elsewhere, {
           ...startOn(DESCRIPTION_TEXT, "teammate", "Mine now"),
           id,
@@ -265,6 +275,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
         const words = "Admins can withdraw an invite from the members page.";
+
         const started = threadOf(
           yield* startDescriptionCommentThread(
             member(owner),
@@ -277,6 +288,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           "## Goal\n\n",
           "## Context\n\nOnly admins add people.\n\n## Goal\n\n",
         );
+
         yield* moveDescriptionCommentAnchors(taskId, DESCRIPTION_TEXT, moved);
         assert.equal(anchoredIn(moved, yield* readOne(owner, taskId)), words);
 
@@ -312,6 +324,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
+
         const started = threadOf(
           yield* startDescriptionCommentThread(
             member(teammate),
@@ -319,6 +332,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             startOn(DESCRIPTION_TEXT, "email", "Or a link?"),
           ),
         );
+
         const [comment] = started.entries;
         assert.ok(comment);
 
@@ -329,11 +343,13 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             words: "Email, for v1.",
           }),
         );
+
         const resolved = threadOf(
           yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.RESOLVE,
           }),
         );
+
         const reopened = threadOf(
           yield* actOnDescriptionCommentThread(member(teammate), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.REOPEN,
@@ -363,6 +379,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             answer: { refused: DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS },
           },
         );
+
         const edited = threadOf(
           yield* actOnDescriptionCommentThread(member(teammate), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.EDIT,
@@ -370,6 +387,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             words: "Or a link, too?",
           }),
         );
+
         assert.equal(edited.entries[0]?.words, "Or a link, too?");
         assert.ok(edited.entries[0]?.editedAt !== undefined);
       }),
@@ -400,6 +418,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         const first = threadOf(
           yield* startDescriptionCommentThread(
             member(owner),
@@ -407,6 +426,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             startOn(DESCRIPTION_TEXT, "email", "One"),
           ),
         );
+
         const second = threadOf(
           yield* startDescriptionCommentThread(
             member(owner),
@@ -414,12 +434,15 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             startOn(DESCRIPTION_TEXT, "invite", "Two"),
           ),
         );
+
         const clientKey = randomUUID();
+
         const reply = {
           action: DESCRIPTION_COMMENT_ACTION.REPLY,
           clientKey,
           words: "Again",
         } as const;
+
         yield* actOnDescriptionCommentThread(member(owner), taskId, first.id, reply);
 
         assert.deepEqual(
@@ -442,6 +465,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         const started = threadOf(
           yield* startDescriptionCommentThread(
             member(owner),
@@ -449,7 +473,9 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             startOn(DESCRIPTION_TEXT, "email", "Toggle"),
           ),
         );
+
         let last = started;
+
         for (
           let turn = 0;
           turn < DESCRIPTION_COMMENT_BOUNDS.MAX_ENTRIES_PER_THREAD + 2;
@@ -457,6 +483,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
         ) {
           const action =
             turn % 2 === 0 ? DESCRIPTION_COMMENT_ACTION.RESOLVE : DESCRIPTION_COMMENT_ACTION.REOPEN;
+
           last = threadOf(
             yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, { action }),
           );
@@ -464,11 +491,13 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
 
         assert.equal(last.status, DESCRIPTION_COMMENT_STATUS.OPEN);
         assert.equal(last.entries.length, DESCRIPTION_COMMENT_BOUNDS.MAX_ENTRIES_PER_THREAD + 1);
+
         const replied = yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, {
           action: DESCRIPTION_COMMENT_ACTION.REPLY,
           clientKey: randomUUID(),
           words: "Still taken",
         });
+
         assert.equal(threadOf(replied).entries.at(-1)?.words, "Still taken");
       }),
     // Note that the bound is two hundred writes, which outlasts the default timeout on a loaded machine.
@@ -478,6 +507,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
   it.effect("deleting a thread's first comment, or the thread, deletes the thread", () =>
     Effect.gen(function* () {
       const { owner, teammate, taskId } = yield* openSharedTask;
+
       const first = threadOf(
         yield* startDescriptionCommentThread(
           member(teammate),
@@ -485,6 +515,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           startOn(DESCRIPTION_TEXT, "email", "One"),
         ),
       );
+
       const second = threadOf(
         yield* startDescriptionCommentThread(
           member(teammate),
@@ -492,6 +523,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           startOn(DESCRIPTION_TEXT, "invite", "Two"),
         ),
       );
+
       const [comment] = first.entries;
       assert.ok(comment);
 
@@ -527,6 +559,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
+
         const agentId = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId,
@@ -539,10 +572,12 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent.id;
+
         const deleteWhole = (writer: DescriptionCommentWriterRef, threadId: string) =>
           actOnDescriptionCommentThread(writer, taskId, threadId, {
             action: DESCRIPTION_COMMENT_ACTION.DELETE_THREAD,
           });
+
         const theirs = threadOf(
           yield* startDescriptionCommentThread(
             member(teammate),
@@ -550,6 +585,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             startOn(DESCRIPTION_TEXT, "email", "Mine"),
           ),
         );
+
         const agents = threadOf(
           yield* startDescriptionCommentThread(
             { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, userId: owner, agentId },
@@ -585,6 +621,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
+
         const shown = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -593,11 +630,13 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         yield* startDescriptionCommentThread(
           member(owner),
           taskId,
           startOn(DESCRIPTION_TEXT, "seven days", "On the description."),
         );
+
         const onElement = {
           clientKey: randomUUID(),
           page: { id: shown.id, version: 1 },
@@ -608,6 +647,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
         const started = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, onElement),
         );
+
         const whole = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, {
             clientKey: randomUUID(),
@@ -619,6 +659,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
         const onPage = Option.getOrThrow(
           yield* readDescriptionCommentThreads(owner, taskId, shown.id),
         );
+
         // Note that the two may be started in one millisecond, which orders them by their ids, so they are compared in the order of their scopes.
         const byScope = [...onPage].sort((a, b) => a.scope.localeCompare(b.scope));
         assert.deepEqual(
@@ -668,6 +709,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, outsider, taskId } = yield* openSharedTask;
         const notes = new TextEncoder().encode("expiry: 7 days\n");
+
         const started = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, {
             ...startOn(DESCRIPTION_TEXT, "seven days", "See the attached."),
@@ -685,6 +727,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             ],
           }),
         );
+
         const reply = threadOf(
           yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.REPLY,
@@ -730,22 +773,28 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
+
         const text = (name: string) => ({
           name,
           mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
           data: Buffer.from(`${name}\n`).toString("base64"),
         });
+
         const started = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, {
             ...startOn(DESCRIPTION_TEXT, "seven days", "See the attached."),
             attachments: [text("a.txt"), text("b.txt"), text("c.txt")],
           }),
         );
+
         const entry = started.entries[0]?.id ?? "";
+
         const named = (thread: DescriptionCommentThread) =>
           thread.entries[0]?.files?.map((file) => file.name);
+
         const idOf = (thread: DescriptionCommentThread, name: string) =>
           thread.entries[0]?.files?.find((file) => file.name === name)?.attachmentId ?? "";
+
         const edit = (words: string, files: { keep?: string[]; attachments?: AgentAttachment[] }) =>
           actOnDescriptionCommentThread(member(teammate), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.EDIT,
@@ -755,12 +804,14 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           });
 
         const dropped = idOf(started, "a.txt");
+
         const edited = threadOf(
           yield* edit("See these.", {
             keep: [idOf(started, "c.txt"), idOf(started, "b.txt")],
             attachments: [text("d.txt")],
           }),
         );
+
         assert.deepEqual(named(edited), ["c.txt", "b.txt", "d.txt"]);
         assert.ok(Option.isNone(yield* readDescriptionCommentFile(owner, taskId, dropped)));
 

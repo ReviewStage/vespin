@@ -25,5 +25,6 @@ export function useSettledSearch(term: string | undefined): string | undefined {
       ),
     );
   }, [term, rest]);
+
   return rested;
 }

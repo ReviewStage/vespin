@@ -36,17 +36,23 @@ const GRACE_COOKIE = "__Secure-better-auth.session_token=session-of-grace";
 /** The account store as the scenario has it: Ada's bearer and cookie name Ada, Grace's cookie names Grace, and every read is kept. */
 function accounts() {
   const read: RelayCredential[] = [];
+
   const named = (credential: RelayCredential): string | undefined => {
     if ("bearer" in credential) return credential.bearer === ADA_BEARER ? ADA : undefined;
     const cookie = credential.page.get("cookie");
+
     if (cookie === ADA_COOKIE) return ADA;
+
     return cookie === GRACE_COOKIE ? GRACE : undefined;
   };
+
   const resolveUserId = (credential: RelayCredential) =>
     Effect.sync(() => {
       read.push(credential);
+
       return Option.fromUndefinedOr(named(credential));
     });
+
   return { read, resolveUserId };
 }
 
@@ -63,6 +69,7 @@ const ADA_AGENT_READ: RelayAgent = {
 function agents() {
   const reached: { readonly userId: string; readonly agentId: string }[] = [];
   const unused = () => Effect.die("nothing past the reach stands here");
+
   const sandbox: AgentSandboxService = {
     terminals: unused,
     listeningPorts: unused,
@@ -74,16 +81,18 @@ function agents() {
     rename: unused,
     kill: unused,
     run: unused,
-    interrupt: unused,
+    stop: unused,
     resume: unused,
     attach: unused,
     open: unused,
     setCredential: unused,
   };
+
   const dependencies: RelayDependencies = {
     reach: (userId, agentId) =>
       Effect.sync(() => {
         reached.push({ userId, agentId });
+
         return userId === ADA && agentId === ADA_AGENT
           ? Option.some(ADA_AGENT_READ)
           : Option.none();
@@ -95,6 +104,7 @@ function agents() {
     renewedAt: unused,
     releaseRenewal: unused,
   };
+
   return { reached, dependencies };
 }
 
@@ -124,12 +134,14 @@ const standing = (
     });
     // SAFETY: a listening TCP server answers its bound address as AddressInfo, never a pipe path.
     const { port } = relay.server.address() as AddressInfo;
+
     const query = new URLSearchParams({
       [TERMINAL_RELAY.QUERY.AGENT]: ADA_AGENT,
       [TERMINAL_RELAY.QUERY.TERMINAL]: SHELL,
       [TERMINAL_RELAY.QUERY.COLUMNS]: "120",
       [TERMINAL_RELAY.QUERY.ROWS]: "32",
     });
+
     return `ws://127.0.0.1:${port}${TERMINAL_RELAY.PATH}?${query}`;
   });
 
@@ -137,11 +149,13 @@ const standing = (
 const upgraded = (url: string, headers: Readonly<Record<string, string>>) =>
   Effect.callback<{ readonly refused: number } | { readonly closed: number }>((resume) => {
     let settled = false;
+
     const settle = (end: { readonly refused: number } | { readonly closed: number }) => {
       if (settled) return;
       settled = true;
       resume(Effect.succeed(end));
     };
+
     const socket = new WebSocket(url, { headers: { ...headers } });
     socket.once("unexpected-response", (_request, response) => {
       settle({ refused: response.statusCode ?? 0 });
@@ -150,6 +164,7 @@ const upgraded = (url: string, headers: Readonly<Record<string, string>>) =>
     socket.once("close", (code: number) => settle({ closed: code }));
     // A close follows every error, and it is the close that is read.
     socket.on("error", () => undefined);
+
     return Effect.sync(() => socket.terminate());
   });
 

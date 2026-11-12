@@ -140,7 +140,9 @@ function gapHintOf(path: readonly EventTarget[]): GapHint | undefined {
     (target): target is HTMLElement =>
       target instanceof HTMLElement && target.hasAttribute(GAP_CONTROL_ATTRIBUTE),
   );
+
   const label = anchor?.getAttribute("aria-label");
+
   return anchor === undefined || label == null ? undefined : { anchor, label };
 }
 
@@ -172,6 +174,7 @@ function offerAt(selected: DiffTextSelection, lines: string, box: DOMRect): Text
   const middle = (rect.left + rect.right) / 2 - box.left;
   const x = Math.min(Math.max(middle, OFFER_INSET), Math.max(OFFER_INSET, box.width - OFFER_INSET));
   const below = rect.top - box.top < OFFER_ROOM;
+
   return {
     picked: selected.picked,
     lines,
@@ -196,7 +199,9 @@ const LIST_FILES = new WeakMap<DiffListEntry, DiffListFile>();
 /** An entry as the bundle is handed it: its place, patch, fold, and its notes' places. */
 function listFileOf(entry: DiffListEntry): DiffListFile {
   const kept = LIST_FILES.get(entry);
+
   if (kept !== undefined) return kept;
+
   const file = {
     path: entry.path,
     patch: entry.patch,
@@ -207,7 +212,9 @@ function listFileOf(entry: DiffListEntry): DiffListFile {
     hidden: entry.hidden,
     annotations: entry.notes.map(placeOf),
   };
+
   LIST_FILES.set(entry, file);
+
   return file;
 }
 
@@ -217,6 +224,7 @@ function sameFiles(a: readonly DiffListFile[], b: readonly DiffListFile[]): bool
     a.length === b.length &&
     a.every((file, at) => {
       const other = b[at];
+
       return (
         file === other ||
         (other !== undefined &&
@@ -242,10 +250,12 @@ const HEAD_SLOT = "diff-list-head-slot";
 /** The element kept by `key` in `held`, made with `className` the first time it is asked for. */
 function keptElement(held: Map<string, HTMLDivElement>, key: string, className: string) {
   const kept = held.get(key);
+
   if (kept !== undefined) return kept;
   const element = document.createElement("div");
   element.className = className;
   held.set(key, element);
+
   return element;
 }
 
@@ -305,31 +315,38 @@ export function PierreDiffList({
   const hintId = useId();
   // The pill is drawn through its exit as it last stood, so letting the hint go fades it rather than snapping it away.
   const [hintDrawn, setHintDrawn] = useState<GapHint | undefined>(hint);
+
   if (hint !== undefined && hint !== hintDrawn) setHintDrawn(hint);
   const pill = useDisclosure(hint !== undefined);
   // Note that the hint waits the window's rest before it is drawn, as every
   // other hint does, so the pointer crossing the gaps mounts nothing.
   const { rest, stop } = useHintRest();
   const aimed = useRef<HTMLElement | undefined>(undefined);
+
   const hang = useCallback(
     (event: Event) => {
       const next = gapHintOf(event.composedPath());
+
       if (next?.anchor === aimed.current) return;
       aimed.current = next?.anchor;
       setHint(undefined);
+
       if (next === undefined) stop();
       else rest(() => setHint(next));
     },
     [rest, stop],
   );
+
   const letGoHint = useCallback(() => {
     aimed.current = undefined;
     stop();
     setHint(undefined);
   }, [stop]);
+
   const module = loaded.data;
   const host = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement | null>(null);
+
   const holdBox = useCallback(
     (element: HTMLDivElement | null) => {
       box.current = element;
@@ -337,11 +354,13 @@ export function PierreDiffList({
     },
     [boxRef],
   );
+
   // The press floating over code selected as text, where a comment may be on its lines.
   const [offer, setOffer] = useState<TextOffer | undefined>(undefined);
   const offerBox = useRef<HTMLDivElement>(null);
   const commentable = useRef(commentOn);
   commentable.current = commentOn;
+
   const tellText = useCallback((selected: DiffTextSelection | undefined) => {
     const lines = selected === undefined ? undefined : commentable.current?.(selected.picked);
     const area = box.current?.getBoundingClientRect();
@@ -351,21 +370,26 @@ export function PierreDiffList({
         : offerAt(selected, lines, area),
     );
   }, []);
+
   const handle = useRef<DiffListHandle | undefined>(undefined);
   // Note that each header and note is drawn into an element of its own, kept
   // for the list's life, because Pierre stands the same element again when
   // a file scrolls back into view.
   const headers = useRef(new Map<string, HTMLDivElement>());
   const notes = useRef(new Map<string, Map<string, HTMLDivElement>>());
+
   const renderHeader = useCallback(
     (path: string) => keptElement(headers.current, path, HEAD_SLOT),
     [],
   );
+
   const renderAnnotation = useCallback((path: string, key: string) => {
     const file = notes.current.get(path) ?? new Map<string, HTMLDivElement>();
     notes.current.set(path, file);
+
     return keptElement(file, key, "diff-note");
   }, []);
+
   const topFile = useRef(onTopFile);
   topFile.current = onTopFile;
   const tellTop = useCallback((path: string) => topFile.current(path), []);
@@ -374,12 +398,15 @@ export function PierreDiffList({
   const tellComment = useCallback((picked: DiffListSelection) => comment.current?.(picked), []);
   const texts = useRef(readTexts);
   texts.current = readTexts;
+
   const askTexts = useCallback(
     (path: string) => texts.current?.(path) ?? Promise.resolve(undefined),
     [],
   );
+
   const files = entries.map(listFileOf);
   const topRoom = useContext(DiffListTopRoomContext);
+
   const props: DiffListProps = {
     files,
     look,
@@ -393,17 +420,20 @@ export function PierreDiffList({
     onDrawn,
     topRoom,
   };
+
   // What the list was last drawn with; the mount reads the latest, so it is mounted once.
   const drawn = useRef(props);
   const latest = useRef(props);
   latest.current = props;
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
     drawn.current = latest.current;
     const mounted = module.mountList(element, latest.current);
     handle.current = mounted;
     door.current = { reveal: (path) => mounted.reveal(path) };
+
     return () => {
       door.current = null;
       handle.current = undefined;
@@ -417,21 +447,26 @@ export function PierreDiffList({
   const [filesDrawn, setFilesDrawn] = useState(false);
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
+
     const look = (watch: MutationObserver) => {
       if (element.querySelector(`.${HEAD_SLOT}`) === null) return;
       watch.disconnect();
       setFilesDrawn(true);
     };
+
     const watch = new MutationObserver((_changes, self) => look(self));
     watch.observe(element, { childList: true, subtree: true });
     look(watch);
+
     return () => watch.disconnect();
   }, [module]);
 
   useEffect(() => {
     if (handle.current === undefined) return;
     const was = drawn.current;
+
     if (
       sameFiles(was.files, files) &&
       sameLook(was.look, look) &&
@@ -449,10 +484,13 @@ export function PierreDiffList({
   const revealed = useRef<number | undefined>(undefined);
   useEffect(() => {
     const mounted = handle.current;
+
     if (mounted === undefined || reveal === undefined || revealed.current === reveal.ask) return;
     const file = drawn.current.files.find((each) => each.path === reveal.path);
+
     if (file === undefined || file.collapsed) return;
     revealed.current = reveal.ask;
+
     if (reveal.at === undefined) mounted.reveal(reveal.path);
     else mounted.revealLine(reveal.path, reveal.at.side, reveal.at.line);
   });
@@ -460,10 +498,12 @@ export function PierreDiffList({
   // The keyboard's focus on a gap's control hangs its hint, and a key pressed lets it go, since a control pressed is drawn anew, or gone with its gap; the focus hangs it again on the one drawn anew.
   useEffect(() => {
     const element = box.current;
+
     if (element === null) return undefined;
     element.addEventListener("focusin", hang);
     element.addEventListener("focusout", letGoHint);
     element.addEventListener("keydown", letGoHint);
+
     return () => {
       element.removeEventListener("focusin", hang);
       element.removeEventListener("focusout", letGoHint);
@@ -475,10 +515,13 @@ export function PierreDiffList({
   const flashed = useRef<number | undefined>(undefined);
   useEffect(() => {
     const mounted = handle.current;
+
     if (mounted === undefined || flash === undefined || flashed.current === flash.ask) return;
     const file = drawn.current.files.find((each) => each.path === flash.range.path);
+
     if (file === undefined || file.collapsed) return;
     flashed.current = flash.ask;
+
     if (file.lead) mounted.reveal(flash.range.path);
     else mounted.revealLines(flash.range);
   });
@@ -502,6 +545,7 @@ export function PierreDiffList({
       </ErrorState>
     );
   }
+
   // Note that the area holds no React of its own, because Pierre draws the
   // list into it as the scroller it virtualizes over and empties it when
   // taken down; the headers and notes reach their slots through portals.

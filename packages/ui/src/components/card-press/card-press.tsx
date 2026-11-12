@@ -210,33 +210,44 @@ export function CardPress({
   const choosable = selecting !== undefined && selectKey !== undefined;
   const chosen = choosable && selecting.selected.has(selectKey);
   const own = useRef<HTMLButtonElement | null>(null);
+
   const held = useCallback(
     (element: HTMLButtonElement | null) => {
       own.current = element;
+
       if (ref !== undefined) ref.current = element;
     },
     [ref],
   );
+
   // Note that the listener reads the latest props, so it is added once per card rather than once per render.
   const latest = useRef({ onPress, alsoPressedBy, disabled });
   latest.current = { onPress, alsoPressedBy, disabled };
   useEffect(() => {
     const card = reach === CARD_PRESS_REACH.CARD ? own.current?.parentElement : null;
+
     if (card === null || card === undefined) return undefined;
+
     // Note that it hears the click as it goes down, because a chip that presses the card too stops its own press from going further.
     const heard = (event: MouseEvent) => {
       const { onPress: press, alsoPressedBy: through, disabled: refused } = latest.current;
       const target = event.target instanceof Element ? event.target : null;
+
       if (refused || target === null || own.current?.contains(target)) return;
       const pressesCard = through !== undefined && target.closest(through) !== null;
       const control = target.closest(CONTROL);
+
       if (!pressesCard && control !== null && card.contains(control)) return;
+
       if (own.current !== null) pulseCard(own.current);
       press(event);
     };
+
     card.addEventListener("click", heard, true);
+
     return () => card.removeEventListener("click", heard, true);
   }, [reach]);
+
   return (
     <>
       <button
@@ -255,8 +266,10 @@ export function CardPress({
         {...middleOpensTab(onOpenInTab, choosable ? holdRun : undefined)}
         onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
           pulseCard(event.currentTarget);
+
           // Note that a ⌘- or ⇧-click that chose rows is no press of the card.
           if (!choosable) selecting?.passOver(event);
+
           if (!(choosable && selecting.press(selectKey, event))) onPress(event);
           onClick?.(event);
         }}

@@ -147,6 +147,7 @@ test("a patch past the view's bound is left out as too large with its counts kep
       `@@ -0,0 +1,${lines} @@`,
       ...Array.from({ length: lines }, (_, index) => `+line ${index}`),
     ].join("\n");
+
   const large = checkoutDiffFiles(fileOf("big.ts", CHANGES_BOUNDS.MAX_PATCH_CHARS / 4));
   assert.deepEqual(
     large.files.map(({ path, additions, patch, omitted }) => ({ path, additions, patch, omitted })),
@@ -161,6 +162,7 @@ test("a patch past the view's bound is left out as too large with its counts kep
   );
 
   const whole = fileOf("first.ts", 1);
+
   // A diff of two-byte characters reaches the bound at about half the characters, which the reading counts in bytes.
   const wide = [
     "diff --git a/second.ts b/second.ts",
@@ -169,9 +171,11 @@ test("a patch past the view's bound is left out as too large with its counts kep
     `@@ -0,0 +1,${CHECKOUT_DIFF_BOUNDS.MAX_BYTES / 64} @@`,
     ...Array.from({ length: CHECKOUT_DIFF_BOUNDS.MAX_BYTES / 64 }, () => `+${"é".repeat(60)}`),
   ].join("\n");
+
   const cut = checkoutDiffFiles(
     `${whole}\n${wide}`.slice(0, (CHECKOUT_DIFF_BOUNDS.MAX_BYTES * 17) / 32),
   );
+
   assert.deepEqual(
     [cut.truncated, cut.files.map((file) => file.path)],
     [true, ["first.ts"]],
@@ -183,6 +187,7 @@ test("a patch past the view's bound is left out as too large with its counts kep
       fileOf(`file-${index}.ts`, 1),
     ).join("\n"),
   );
+
   assert.deepEqual([many.truncated, many.files.length], [true, CHANGES_BOUNDS.MAX_FILES]);
 });
 

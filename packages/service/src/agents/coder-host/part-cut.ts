@@ -81,12 +81,16 @@ interface HeavyField {
 /** The field of a part a page may cut, as words; none for a part that has none. */
 function heavyFieldOf(part: WireValue): HeavyField | undefined {
   if (!isRecord(part) || !isWireString(part.type)) return undefined;
+
   if (part.type === REASONING_PART_TYPE) {
     return isWireString(part.text) ? { field: PART_CUT_FIELD.TEXT, words: part.text } : undefined;
   }
+
   const tool = toolPartName(part.type);
+
   if (tool === undefined || !CUT_TOOLS.has(tool) || part.output === undefined) return undefined;
   const { output } = part;
+
   return {
     field: PART_CUT_FIELD.OUTPUT,
     words: isWireString(output) ? output : JSON.stringify(output),
@@ -99,11 +103,14 @@ function cutPart(
   index: number,
 ): { readonly part: WireValue; readonly cut: PartCut } | undefined {
   const heavy = heavyFieldOf(part);
+
   if (heavy === undefined || heavy.words.length <= AGENT_BOUNDS.MAX_PART_CHARS) {
     return undefined;
   }
+
   if (!isRecord(part)) return undefined;
   const { [heavy.field]: _whole, ...rest } = part;
+
   return {
     part: rest,
     cut: {
@@ -119,12 +126,16 @@ function cutPart(
 /** A message as a page asked cut carries it: each part past the bound without its field, and the cuts beside them; the message itself where none is. */
 export function cutMessage(message: AgentTranscriptMessage): AgentTranscriptMessage {
   const cuts: PartCut[] = [];
+
   const parts = message.parts.map((part, index) => {
     const cut = cutPart(part, index);
+
     if (cut === undefined) return part;
     cuts.push(cut.cut);
+
     return cut.part;
   });
+
   return cuts.length === 0 ? message : { ...message, parts, cutParts: cuts };
 }
 
@@ -145,6 +156,7 @@ export function wholePartOf(
     (read) => {
       // SAFETY: every part is the JSON its row stored, which the SDK's part types only name more narrowly.
       const parts = (read.ok ? (read.value[0]?.message.parts ?? []) : []) as readonly WireValue[];
+
       return Option.fromNullishOr(parts[index]);
     },
   );

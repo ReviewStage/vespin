@@ -26,6 +26,7 @@ function Sample({
   start?: string;
 }): React.JSX.Element {
   const [value, setValue] = useState(start);
+
   return (
     <SecretField
       label={label}

@@ -271,8 +271,10 @@ export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {
     const prefix = `mcp__${server}__`;
+
     if (name.startsWith(prefix)) return name.slice(prefix.length);
   }
+
   return undefined;
 }
 

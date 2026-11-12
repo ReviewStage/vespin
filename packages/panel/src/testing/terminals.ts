@@ -17,6 +17,7 @@ import {
 export function windowTerminals(): Terminals {
   const terminals = createTerminals();
   onTestFinished(() => terminals.sessions.dispose());
+
   return terminals;
 }
 

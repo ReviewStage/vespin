@@ -58,7 +58,9 @@ const BUSY_SPINNER_BOX = "ui-spinner inline-flex flex-none size-spinner col-star
  */
 export function SpinnerRing({ size }: { size?: SpinnerSize }): React.JSX.Element {
   const ring = <ShadcnSpinner />;
+
   if (size === undefined) return ring;
+
   return (
     <span className={SPINNER_BOX} data-size={size} aria-hidden="true">
       {ring}
@@ -79,6 +81,7 @@ export function Spinner({
   delay?: boolean;
 }): React.JSX.Element {
   const settled = useSettled(delay);
+
   return (
     <span className={SPINNER_BOX} data-size={size} data-ink={ink} role="status">
       {delay && !settled ? null : <SpinnerRing />}
@@ -121,8 +124,10 @@ export function BusyLabel({
   children: ReactNode;
 }): React.JSX.Element {
   const settled = useSettled(busy && delay);
+
   if (!busy) return <>{children}</>;
   const ringShown = !delay || settled;
+
   return (
     <span className="ui-busy-label inline-grid items-center justify-items-center gap-[inherit]">
       <span

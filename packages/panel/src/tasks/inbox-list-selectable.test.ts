@@ -89,6 +89,7 @@ function mount() {
     },
   );
   const opened: string[] = [];
+
   function Inbox() {
     return createElement(InboxList, {
       view: VIEW,
@@ -105,9 +106,11 @@ function mount() {
       onChoose: (listed) => opened.push(listed.item.id),
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
   act(() => root.render(withQueryClient(createElement(Inbox))));
+
   return {
     root: container,
     opened: () => opened,

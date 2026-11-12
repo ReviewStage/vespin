@@ -35,6 +35,7 @@ const loaded = (
       { address, fresh, platform, open: (link) => opened.push(link) },
       ORIGIN,
     ).pipe(Effect.provide(service.layer));
+
     return opened;
   });
 

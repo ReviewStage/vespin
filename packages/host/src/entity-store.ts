@@ -210,7 +210,7 @@ export interface EntityStoreOptions {
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
-const shapesHash: Effect.Effect<string> = Effect.map(
+const keptRowsHash: Effect.Effect<string> = Effect.map(
   Effect.promise(() =>
     crypto.subtle.digest(
       "SHA-256",
@@ -233,15 +233,19 @@ function byWorkspaceOf<Read extends KeptByWorkspace>(
 /** `reads` with every read kept per workspace cut to the workspaces the kept list names, where it names any. */
 function withinWorkspaces(reads: Partial<KeptRows>): Partial<KeptRows> {
   const listed = reads[KEPT_READ.WORKSPACES];
+
   if (listed === undefined) return reads;
   const named = new Set(listed.map((workspace) => workspace.id));
+
   const cut = <Rows>(byWorkspace: Readonly<Record<string, Rows>>) =>
     Object.fromEntries(Object.entries(byWorkspace).filter(([id]) => named.has(id)));
+
   const {
     [KEPT_READ.MEMBERS]: members,
     [KEPT_READ.INVITATIONS]: invitations,
     [KEPT_READ.AUTOMATIONS]: automations,
   } = reads;
+
   return {
     ...reads,
     ...(members === undefined ? undefined : { [KEPT_READ.MEMBERS]: cut(members) }),
@@ -255,7 +259,9 @@ function opened(cipher: SecretCipher, text: string): Envelope | undefined {
   const plain = Result.flatMap(Base64.decode(text.trim()), (bytes) =>
     Result.try(() => cipher.decrypt(bytes)),
   );
+
   if (Result.isFailure(plain)) return undefined;
+
   return Result.getOrUndefined(decodeEnvelope(plain.success));
 }
 
@@ -287,15 +293,19 @@ export function openEntityStore(
   return Effect.gen(function* () {
     const { directory, cipher, accountId } = options;
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
-    const hash = yield* shapesHash;
+    const hash = yield* keptRowsHash;
+
     const text = yield* Effect.orElseSucceed(
       readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),
       () => undefined,
     );
+
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
+
     const kept =
       ours && read.hash === hash ? Result.getOrUndefined(decodeReads(read.reads)) : undefined;
+
     // Note that a file that is not this account's at these shapes is deleted before anything reads it, so no other account's rows are ever drawn.
     if (text !== undefined && kept === undefined) yield* removed(directory);
     const stored: Partial<KeptRows> = kept ?? {};
@@ -310,6 +320,7 @@ export function openEntityStore(
     let forgotten = false;
     const lock = yield* Semaphore.make(1);
     let savedAt = yield* Clock.currentTimeMillis;
+
     const save = (closing: boolean) =>
       lock.withPermits(1)(
         Effect.flatMap(Clock.currentTimeMillis, (now) => {
@@ -317,11 +328,13 @@ export function openEntityStore(
           const waitingText = JSON.stringify(waiting);
           const listsDue = dirty && (closing || now - savedAt >= Duration.toMillis(SAVE_EVERY));
           const moved = listsDue || waitingText !== savedQueue;
+
           if (!(moved || (closing && unmoved)) || forgotten) return Effect.void;
           dirty = false;
           unmoved = false;
           savedQueue = waitingText;
           savedAt = now;
+
           return encodeKept({ hash, accountId, reads, queue: waiting }).pipe(
             Effect.map((plain) => Base64.encode(cipher.encrypt(plain))),
             Effect.flatMap((sealed) =>
@@ -335,9 +348,11 @@ export function openEntityStore(
           );
         }),
       );
+
     /** Wakes the saver to look again, a burst of wakes waking it once. */
     const wake = yield* Queue.sliding<void>(1);
     const woken = Effect.asVoid(Queue.offer(wake, undefined));
+
     /**
      * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
      * once lists moved, one when `SAVE_EVERY` has passed since the last save,
@@ -351,6 +366,7 @@ export function openEntityStore(
           yield* Effect.sleep(QUEUE_SETTLE);
         } else if (dirty) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
+
           if (left > 0) {
             yield* Effect.raceFirst(Effect.sleep(Duration.millis(left)), Queue.take(wake));
             continue;
@@ -359,10 +375,12 @@ export function openEntityStore(
           yield* Queue.take(wake);
           continue;
         }
+
         yield* Queue.clear(wake);
         yield* save(false);
       }
     });
+
     if (options.queueMoves !== undefined) {
       yield* Effect.forkScoped(
         Stream.runForEach(options.queueMoves, () => woken),
@@ -371,13 +389,17 @@ export function openEntityStore(
         },
       );
     }
+
     yield* Effect.forkScoped(saver, { startImmediately: true });
     yield* Effect.addFinalizer(() => save(true));
+
     /** `read`'s rows laid among those kept, the workspaces' leaving with them every read kept per workspace of one they no longer name. */
     const laid = <Read extends KeptRead>(kept: Read, rows: KeptRows[Read]) => {
       reads = { ...reads, [kept]: rows };
+
       if (kept === KEPT_READ.WORKSPACES) reads = withinWorkspaces(reads);
     };
+
     return {
       stored: (read) => stored[read],
       queue,
@@ -404,18 +426,22 @@ export function openEntityStore(
         Effect.suspend(() => {
           // Note that a late answer for a workspace the kept list no longer names is not kept, so a workspace left never comes back with it.
           const listed = reads[KEPT_READ.WORKSPACES];
+
           if (listed !== undefined && !listed.some((workspace) => workspace.id === workspaceId)) {
             return Effect.void;
           }
+
           const byWorkspace = { ...byWorkspaceOf<Read>(reads, kept), [workspaceId]: rows };
           // SAFETY: the read `kept` names is set to a record of its own rows, each workspace's `KeptRows[Read][string]`.
           reads = { ...reads, [kept]: byWorkspace };
           dirty = true;
+
           return woken;
         }),
       forget: lock.withPermits(1)(
         Effect.suspend(() => {
           forgotten = true;
+
           return Effect.andThen(woken, Effect.provideContext(removed(directory), services));
         }),
       ),

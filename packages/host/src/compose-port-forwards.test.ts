@@ -39,6 +39,7 @@ const scriptedConnection = Effect.gen(function* () {
   const inbound = yield* Queue.unbounded<Uint8Array, Cause.Done>();
   const written: string[] = [];
   const state = { closed: false };
+
   const connection: LoopbackConnection = {
     received: Stream.fromQueue(inbound),
     write: (bytes) => Effect.sync(() => void written.push(decode(bytes))),
@@ -49,8 +50,11 @@ const scriptedConnection = Effect.gen(function* () {
       Queue.end(inbound),
     ),
   };
+
   return { connection, send: (text: string) => Queue.offer(inbound, encode(text)), written, state };
 });
+
+type Told = { last?: unknown };
 
 /** The composer over the scripted service, loopback, and relay. */
 function subject(options: { taken?: number[] } = {}) {
@@ -64,14 +68,17 @@ function subject(options: { taken?: number[] } = {}) {
     const taken = new Set(options.taken);
     /** Each listener standing, by the local port it holds: what it accepts. */
     const listeners = new Map<number, Queue.Queue<LoopbackConnection, Cause.Done>>();
+
     /** Each relay socket opened, in order: its address, what the host sent on it, and its arrivals. */
     const tunnels: {
       url: string;
       sent: TerminalSocketFrame[];
       inbound: Queue.Queue<TerminalSocketArrival, Cause.Done>;
     }[] = [];
+
     /** What the concern last told the windows of how forwarding stands. */
-    const told: { last?: unknown } = {};
+    const told: Told = {};
+
     const composer = yield* composePortForwards({
       kernel: {
         runMode: { sendsNetwork: true },
@@ -99,11 +106,13 @@ function subject(options: { taken?: number[] } = {}) {
           Effect.sync(() => {
             const url = `https://sb-${port}.share.test`;
             shares.set(agentId, { port, url });
+
             return { url };
           }),
         unshare: (agentId) =>
           Effect.sync(() => {
             shares.delete(agentId);
+
             return { shared: null };
           }),
         shared: (agentId) => Effect.sync(() => ({ shared: shares.get(agentId) ?? null })),
@@ -113,6 +122,7 @@ function subject(options: { taken?: number[] } = {}) {
           const inbound = yield* Queue.unbounded<TerminalSocketArrival, Cause.Done>();
           const sent: TerminalSocketFrame[] = [];
           tunnels.push({ url, sent, inbound });
+
           return {
             socket: {
               arrivals: Stream.fromQueue(inbound),
@@ -134,9 +144,11 @@ function subject(options: { taken?: number[] } = {}) {
               Effect.sync(() => void listeners.delete(port)),
             ),
           );
+
           return Stream.fromQueue(accepted);
         }),
     }).pipe(Effect.provide(noNetwork));
+
     return {
       /** Forwarding turned on or off, as the panel's Forward to localhost asks it. */
       set: composer.acts.PORT_FORWARD_SET,
@@ -165,6 +177,7 @@ function subject(options: { taken?: number[] } = {}) {
       connect: (localPort: number, connection: LoopbackConnection) => {
         const listener = listeners.get(localPort);
         assert.ok(listener, `nothing listens on ${localPort}`);
+
         return Queue.offer(listener, connection);
       },
     };
@@ -175,6 +188,7 @@ function subject(options: { taken?: number[] } = {}) {
 function readFrame(frame: TerminalSocketFrame) {
   assert.ok("text" in frame);
   const read = JSON.parse(frame.text);
+
   return read.type === TUNNEL_FRAME.DATA
     ? { ...read, data: Buffer.from(read.data, "base64").toString() }
     : read;
@@ -252,6 +266,7 @@ it.effect(
         agentId: OTHER_AGENT_ID,
         on: true,
       });
+
       yield* settle;
       assert.deepEqual([...listeners.keys()], [8080]);
       assert.deepEqual(told(), {
@@ -315,6 +330,7 @@ it.effect(
         { type: TUNNEL_FRAME.OPEN, channel: 0 },
         { type: TUNNEL_FRAME.DATA, channel: 0, data: "GET / HTTP/1.1" },
       ]);
+      // SAFETY: the last thing told is the agent's forwards, as the composer builds them.
       const [forwarded] = (told() as { ports: unknown[] }).ports;
       assert.deepEqual(forwarded, {
         port: 3000,
@@ -375,6 +391,7 @@ it.effect("two turn-ons that interleave leave one agent's ports forwarded", () =
     yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
     yield* settle;
 
+    // SAFETY: the last thing told names the agent it was told for.
     const { agentId } = told() as { agentId: string };
     assert.deepEqual([...listeners.keys()], [agentId === OTHER_AGENT_ID ? 4000 : 5000]);
   }),

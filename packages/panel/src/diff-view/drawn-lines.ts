@@ -22,6 +22,7 @@ type DrawnFile = Pick<FileDiff<string, undefined>, "fileDiff" | "isLineRenderabl
 /** The lines of `hidden`, lines of the new side between the file's hunks, that `drawn` draws now, in their order. */
 export function drawnAmong(drawn: DrawnFile, hidden: readonly number[]): readonly number[] {
   if (hidden.length === 0 || drawn.fileDiff?.isPartial !== false) return [];
+
   return hidden.filter((line) => drawn.isLineRenderable(line));
 }
 
@@ -42,12 +43,15 @@ export function drawnTeller(
   onDrawn: (path: string, lines: readonly number[]) => void,
 ): DrawnTeller {
   const told = new Map<string, readonly number[]>();
+
   const tell = (path: string, lines: readonly number[]) => {
     if (sameLines(told.get(path) ?? NO_LINES, lines)) return;
+
     if (lines.length === 0) told.delete(path);
     else told.set(path, lines);
     onDrawn(path, lines);
   };
+
   return {
     tell,
     forget: (kept) => {

@@ -43,6 +43,7 @@ export interface AppLinkInbox {
 /** Whether an argument is a link in the app's own scheme, or one it was once handed links in. */
 function isAppLink(argument: string): boolean {
   const colon = argument.indexOf(":");
+
   return colon > 0 && isAppLinkProtocol(argument.slice(0, colon + 1));
 }
 
@@ -88,7 +89,9 @@ export function appLinkClaim(launch: {
   readonly live: boolean;
 }): AppLinkClaim {
   if (launch.packaged) return APP_LINK_CLAIM.CLAIM;
+
   if (launch.live) return APP_LINK_CLAIM.RELEASE;
+
   return APP_LINK_CLAIM.LEAVE;
 }
 
@@ -97,16 +100,20 @@ export function appLinkInbox(): AppLinkInbox {
   const held: ShownLink[] = [];
   let opener: AppLinkOpener | undefined;
   let closed = false;
+
   return {
     arrive: (url) => {
       const link = placeOfAppLink(url);
+
       if (link === undefined || closed) return;
+
       if (opener !== undefined) opener(link);
       else if (held.length < MAX_HELD) held.push(link);
     },
     ready: (open) => {
       if (closed) return;
       opener = open;
+
       for (const link of held.splice(0)) open(link);
     },
     close: () => {

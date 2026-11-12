@@ -123,24 +123,30 @@ export function readSocketTables(): CommandAsk {
     `sudo -n node -e '${LISTENERS_SOURCE}' 2>/dev/null`,
     "true",
   ].join("; ");
+
   return { command: "sh", args: ["-c", script] };
 }
 
 /** The port a row listens on and its socket's inode, where it is a listener the list keeps. */
 function keptSocket(row: string): KeptSocket | undefined {
   const columns = row.trim().split(/\s+/);
+
   if (columns[COLUMN.STATE] !== LISTEN_STATE || columns[COLUMN.UID] === ROOT_UID) return undefined;
   const port = Number.parseInt(columns[COLUMN.LOCAL_ADDRESS]?.split(":").at(-1) ?? "", 16);
+
   return OWN_PORTS.has(port) ? undefined : { port, inode: columns[COLUMN.INODE] ?? "" };
 }
 
 /** The listeners the script printed, by their socket's inode; a line it could not have printed is passed over. */
 function listenersOf(lines: readonly string[]): Map<string, Listener> {
   const listeners = new Map<string, Listener>();
+
   for (const line of lines) {
     const read = readListenerLine(line);
+
     if (Result.isSuccess(read)) listeners.set(read.success.inode, read.success);
   }
+
   return listeners;
 }
 
@@ -154,14 +160,19 @@ function labelsOf(
   listeners: ReadonlyMap<string, Listener>,
 ): PortLabel[] {
   const made = new Map<number, { readonly ran: string; readonly own: string | undefined }>();
+
   for (const { port, inode } of sockets) {
     const listener = listeners.get(inode);
+
     if (listener === undefined || made.has(port)) continue;
     const own = labelOf(listener.listener);
     const ran = labelOf(listener.command) ?? own;
+
     if (ran !== undefined) made.set(port, { ran, own });
   }
+
   const readings = [...made.values()].map(({ ran }) => ran);
+
   return [...made]
     .map(([port, { ran, own }]) => ({
       port,
@@ -182,8 +193,10 @@ export function listeningPortsOf(
   const mark = run.stdout.indexOf(`${LISTENERS_MARK}\n`);
   const tables = mark === -1 ? run.stdout : run.stdout.slice(0, mark);
   const printed = mark === -1 ? "" : run.stdout.slice(mark + LISTENERS_MARK.length + 1);
+
   if (!tables.includes(TABLE_HEADER)) return undefined;
   const sockets = tables.split("\n").flatMap((row) => keptSocket(row) ?? []);
   const ports = [...new Set(sockets.map(({ port }) => port))].sort((a, b) => a - b);
+
   return { ports, labels: labelsOf(sockets, listenersOf(printed.split("\n"))) };
 }

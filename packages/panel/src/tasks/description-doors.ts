@@ -24,7 +24,9 @@ export function useDescriptionEdit(
   taskId: string | undefined,
 ): DescriptionEditMutation | undefined {
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+
   if (taskId === undefined) return undefined;
+
   return descriptionEditMutation(taskId, (request) =>
     fixture
       ? Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED })
@@ -35,6 +37,7 @@ export function useDescriptionEdit(
 /** Reads `taskId`'s description again after its read failed; nothing with no task. */
 export function useDescriptionRetry(taskId: string | undefined): () => void {
   const { mutate } = useMutation(descriptionDocumentRetryMutation());
+
   return useCallback(() => {
     if (taskId !== undefined) mutate({ taskId });
   }, [mutate, taskId]);

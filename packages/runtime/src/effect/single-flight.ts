@@ -44,6 +44,7 @@ export function singleFlightEffect<E>(
             flight = undefined;
             Deferred.doneUnsafe(own, exit);
           });
+
           return own;
         }),
       ),

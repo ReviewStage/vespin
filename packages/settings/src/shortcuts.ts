@@ -355,7 +355,9 @@ const MODIFIER_SPELLING = {
 
 function modifierGlyph(name: string): string {
   const { names } = MODIFIER_SPELLING[commandKey];
+
   if (!Object.hasOwn(names, name)) return name;
+
   // SAFETY: Object.hasOwn narrows name to a key the glyph table documents.
   return names[name as keyof typeof names];
 }
@@ -1370,6 +1372,7 @@ export const WRITING_GROUP_TITLE = "Writing";
 /** The writing actions the Keyboard shortcuts page lists: each one a chord or a Markdown rule reaches, in the vocabulary's order. */
 export const WRITING_ACTIONS_LISTED: readonly WritingAction[] = WRITING_ACTIONS.filter((action) => {
   const shortcut: WritingShortcut = WRITING_SHORTCUTS[action];
+
   return shortcut.chord !== undefined || shortcut.markdown !== undefined;
 });
 
@@ -1401,10 +1404,13 @@ export function shortcutShown(
   capabilities: readonly HostCapability[],
 ): boolean {
   const shortcut: AppShortcut = APP_SHORTCUTS[command];
+
   const experimentStands =
     shortcut.experiment === undefined || experimentOn(experiments, shortcut.experiment);
+
   const capabilityStands =
     shortcut.capability === undefined || capabilities.includes(shortcut.capability);
+
   return experimentStands && capabilityStands;
 }
 
@@ -1413,6 +1419,7 @@ export function shortcutWorkspaceExperiment(
   command: KeyedCommand,
 ): WorkspaceExperiment | undefined {
   const { experiment }: AppShortcut = APP_SHORTCUTS[command];
+
   return experiment !== undefined && isWorkspaceExperiment(experiment) ? experiment : undefined;
 }
 
@@ -1423,10 +1430,13 @@ export function shortcutWorkspaceExperiment(
  */
 export function experimentsOffered(commands: readonly AppCommand[]): WorkspaceExperimentChoices {
   const on: Partial<Record<WorkspaceExperiment, boolean>> = {};
+
   for (const command of commands) {
     const experiment = isKeyedCommand(command) ? shortcutWorkspaceExperiment(command) : undefined;
+
     if (experiment !== undefined) on[experiment] = true;
   }
+
   return on;
 }
 
@@ -1434,6 +1444,7 @@ export function experimentsOffered(commands: readonly AppCommand[]): WorkspaceEx
 export function shortcutLabel(command: KeyedCommand, experiments: ExperimentChoices): string {
   const shortcut: AppShortcut = APP_SHORTCUTS[command];
   const { renamed } = shortcut;
+
   return renamed !== undefined && experimentOn(experiments, renamed.experiment)
     ? renamed.label
     : shortcut.label;
@@ -1445,6 +1456,7 @@ export function inContextShown(
   capabilities: readonly HostCapability[],
 ): boolean {
   const shortcut: InContextShortcut = IN_CONTEXT_SHORTCUTS[key];
+
   return shortcut.capability === undefined || capabilities.includes(shortcut.capability);
 }
 
@@ -1463,20 +1475,25 @@ export function shownShortcutGroups(
   readonly commands: readonly KeyedCommand[];
   readonly keys: readonly InContextKey[];
 }[] {
-  return APP_SHORTCUT_GROUPS.map((group) => ({
-    title: group.title,
-    commands: group.commands.filter(
-      (command) =>
-        !shortcutLayered(APP_SHORTCUTS[command].chord) &&
-        shortcutShown(command, experiments, capabilities),
-    ),
-    keys: group.keys.filter((key) => inContextShown(key, capabilities)),
-  })).filter((group) => group.commands.length + group.keys.length > 0);
+  return APP_SHORTCUT_GROUPS.flatMap((group) => {
+    const shown = {
+      title: group.title,
+      commands: group.commands.filter(
+        (command) =>
+          !shortcutLayered(APP_SHORTCUTS[command].chord) &&
+          shortcutShown(command, experiments, capabilities),
+      ),
+      keys: group.keys.filter((key) => inContextShown(key, capabilities)),
+    };
+
+    return shown.commands.length + shown.keys.length > 0 ? [shown] : [];
+  });
 }
 
 /** A command's name as the window says it, keyed, the menu bar's own, or ⌘K's own. */
 export function appCommandLabel(command: AppCommand): string {
   if (isKeyedCommand(command)) return APP_SHORTCUTS[command].label;
+
   return isMenuCommand(command) ? MENU_COMMAND_LABELS[command] : PALETTE_COMMAND_LABELS[command];
 }
 
@@ -1493,6 +1510,7 @@ function pressedNow(chord: ShortcutChord): PressedChord {
 /** The chord as Electron's accelerator, for the menu bar, and as every chord is drawn: the one the window presses (`pressedNow`). */
 export function shortcutAccelerator(shortcut: ShortcutChord): string {
   const chord = pressedNow(shortcut);
+
   return [
     chord.control ? "Control" : undefined,
     chord.option ? "Alt" : undefined,
@@ -1508,6 +1526,7 @@ export function shortcutAccelerator(shortcut: ShortcutChord): string {
 export function installCommandKey(key: CommandKey): () => void {
   const before = commandKey;
   commandKey = key;
+
   return () => {
     commandKey = before;
   };
@@ -1530,6 +1549,7 @@ export function shortcutGlyphs(accelerator: string): readonly string[] {
   // A name no modifier answers to is kept, ahead of the ones that do, rather than dropped.
   const unknown = [...held].filter((glyph) => !order.some((each) => each === glyph));
   const ordered = order.filter((glyph) => held.has(glyph));
+
   return [...unknown, ...ordered, KEY_GLYPHS.get(key) ?? key];
 }
 
@@ -1537,6 +1557,7 @@ export function shortcutGlyphs(accelerator: string): readonly string[] {
 export function installBrowserChords(browser: boolean): () => void {
   const before = inBrowser;
   inBrowser = browser;
+
   return () => {
     inBrowser = before;
   };
@@ -1563,6 +1584,7 @@ export function surfaceKeepsPress(press: { ctrlKey: boolean; metaKey: boolean })
 /** The chord as `aria-keyshortcuts` spells it, its Command as the window's command key. */
 export function shortcutAria(shortcut: ShortcutChord): string {
   const chord = pressedNow(shortcut);
+
   // Note that a set, because where Command is Ctrl a chord naming Control too names one key.
   const held = new Set([
     commandless(chord) ? undefined : COMMAND_ARIA[commandKey],
@@ -1570,6 +1592,7 @@ export function shortcutAria(shortcut: ShortcutChord): string {
     chord.option ? "Alt" : undefined,
     chord.shift ? "Shift" : undefined,
   ]);
+
   return [
     ...held,
     chord.key.aria ?? (chord.key.key.length === 1 ? chord.key.key.toUpperCase() : chord.key.key),
@@ -1605,11 +1628,15 @@ interface ShortcutKeyPress {
 function heldAsChord(chord: PressedChord, event: ShortcutKeyPress): boolean {
   const command = !commandless(chord);
   const control = chord.control === true;
+
   if (commandKey === COMMAND_KEY.META)
     return event.metaKey === command && event.ctrlKey === control;
+
   // Note that a chord naming both, the system's ⌃⌘F, has no spelling where Ctrl is Command, and that AltGr is typing, never Ctrl and Alt.
   if (command && control) return false;
+
   if (event.getModifierState?.("AltGraph") === true) return false;
+
   return !event.metaKey && event.ctrlKey === (command || control);
 }
 
@@ -1626,14 +1653,20 @@ function heldAsChord(chord: PressedChord, event: ShortcutKeyPress): boolean {
  */
 export function shortcutMatches(shortcut: ShortcutChord, event: ShortcutKeyPress): boolean {
   const chord = pressedNow(shortcut);
+
   if (!heldAsChord(chord, event)) return false;
   const shiftFree = chord.key.unshifted !== undefined;
+
   if (event.altKey !== (chord.option === true)) return false;
+
   if (!shiftFree && event.shiftKey !== (chord.shift === true)) return false;
+
   if (event.altKey || (chord.plain === true && chord.key.placed === true)) {
     return event.code === chord.key.code;
   }
+
   const pressed = event.key.toLowerCase();
+
   return pressed === chord.key.key.toLowerCase() || pressed === chord.key.unshifted;
 }
 

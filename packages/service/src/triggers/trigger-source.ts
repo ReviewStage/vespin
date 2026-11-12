@@ -113,16 +113,21 @@ const ENCODED_DIGEST = {
  */
 export function hmacVerifier(signature: HmacSignature) {
   const prefix = signature.prefix ?? "";
+
   return (request: TriggerRequest, body: Uint8Array, secret: Redacted.Redacted): boolean => {
     const header = request.headers[signature.header.toLowerCase()]?.trim();
+
     if (header === undefined || !header.startsWith(prefix)) return false;
     const encoded = header.slice(prefix.length);
+
     if (!ENCODED_DIGEST[signature.encoding].test(encoded)) return false;
     // The secret is revealed here alone, into the HMAC the compare reads.
     const key = Redacted.value(secret);
+
     if (key.length === 0) return false;
     const offered = Buffer.from(encoded, signature.encoding);
     const wanted = createHmac("sha256", key).update(body).digest();
+
     return offered.length === wanted.length && timingSafeEqual(offered, wanted);
   };
 }
@@ -143,11 +148,14 @@ export function integrationFiltersMatch(
   attributes: TriggerAttributes,
 ): boolean {
   if (filters === undefined) return true;
+
   return Object.entries(filters).every(([field, named]) => {
     const wanted = valuesOf(named);
+
     if (wanted.length === 0) return true;
     // SAFETY: the filters' keys are the catalog's filter fields, which the schema holds them to.
     const carried = valuesOf(attributes[field as IntegrationTriggerFilter]);
+
     return carried.some((value) => wanted.includes(value));
   });
 }

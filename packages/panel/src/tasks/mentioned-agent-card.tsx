@@ -4,6 +4,7 @@ import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { type ReactNode, useCallback } from "react";
 import { tabCard } from "../desktop/tab-card.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
@@ -61,7 +62,7 @@ type Listed = AgentSummary | (typeof UNLISTED)[keyof typeof UNLISTED];
 
 /** The agent the list carries; none where it carries none. */
 function agentOf(listed: Listed): AgentSummary | undefined {
-  return typeof listed === "string" ? undefined : listed;
+  return Predicate.isString(listed) ? undefined : listed;
 }
 
 /**
@@ -72,8 +73,10 @@ function agentOf(listed: Listed): AgentSummary | undefined {
  */
 function listedAgentOf(tasks: TasksView | undefined, agentId: string): Listed {
   const onTask = tasks?.taskAgents?.find((agent) => agent.id === agentId);
+
   if (onTask !== undefined) return onTask;
   const answered = tasks?.taskAgents !== undefined || tasks?.listStatus === TASKS_READ.FAILED;
+
   return answered ? UNLISTED.ABSENT : UNLISTED.READING;
 }
 
@@ -83,6 +86,7 @@ function useListedAgent(agentId: string): Listed {
     (state: AppStateSnapshot) => listedAgentOf(state.tasks, agentId),
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data ?? UNLISTED.READING;
 }
 
@@ -92,6 +96,7 @@ function useListedModel(agentId: string): string | undefined {
     (state: AppStateSnapshot) => agentOf(listedAgentOf(state.tasks, agentId))?.model,
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -116,8 +121,10 @@ export function ReadAgentModel({
 /** What a card of an agent's says of the task it works on: its name as the window lists it, or another the window does not list. */
 function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
+
   if (agent === undefined) return undefined;
   const task = tasks.get(agent.planId);
+
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }
 
@@ -156,8 +163,11 @@ export function MentionedAgentCard({
   const listed = useListedAgent(agentId);
   const agent = agentOf(listed);
   const foot = useTaskFoot(agent);
+
   if (listed === UNLISTED.READING) return reading;
+
   if (agent === undefined) return fallback;
+
   return tabCard({
     kind: TAB_KIND.AGENT,
     subject: listedSubject(agent, place),
@@ -176,9 +186,11 @@ interface OwnedPullRequest {
 /** The agent that opened the pull request a link names, among the tasks the window lists; none where none of them did. */
 function useOwnedPullRequest(url: string): OwnedPullRequest | undefined {
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+
   if (tasks === undefined) return undefined;
   const number = pullRequestAddressOf(url)?.number;
   const listed = listedPullRequestOf(url, tasks.taskPullRequests ?? []);
+
   return listed === undefined ? undefined : { ...listed, number };
 }
 
@@ -203,10 +215,13 @@ function OwnedPullRequestCard({
   const { agentId, taskId, number } = owned;
   const listed = useListedAgent(agentId);
   const pullRequest = useListedPullRequest(agentId);
+
   if (listed === UNLISTED.READING) return reading;
   const agent = agentOf(listed);
   const another = number !== undefined && pullRequest?.number !== number;
+
   if (agent === undefined || pullRequest === undefined || another) return fallback;
+
   const card = tabCard({
     kind: TAB_KIND.CHANGES,
     subject: listedSubject(agent, place),
@@ -220,6 +235,7 @@ function OwnedPullRequestCard({
         agentId,
       }),
   });
+
   return card ?? fallback;
 }
 
@@ -241,7 +257,9 @@ export function PullRequestChipCard({
   fallback: ReactNode;
 }): ReactNode {
   const owned = useOwnedPullRequest(url);
+
   if (owned === undefined) return fallback;
+
   return <OwnedPullRequestCard owned={owned} reading={reading} fallback={fallback} />;
 }
 

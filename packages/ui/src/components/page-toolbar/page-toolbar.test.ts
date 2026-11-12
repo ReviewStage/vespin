@@ -34,6 +34,7 @@ function draw(props: Parameters<typeof PageToolbar>[0]): HTMLElement {
   root = createRoot(container);
   act(() => root?.render(createElement(PageToolbar, props)));
   const banner = container.querySelector("header") ?? assert.fail("no strip");
+
   return banner;
 }
 

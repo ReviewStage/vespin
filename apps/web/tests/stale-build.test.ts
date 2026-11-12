@@ -4,6 +4,8 @@ import { expect } from "vitest";
 import { pageLeave } from "../src/app/page-leave";
 import { failedChunkAnswer, type StaleBuildTab } from "../src/app/stale-build";
 
+type Seen = { reloads: number; asks: (() => void)[]; dismisses: (() => void)[] };
+
 /**
  * stale-build.test.ts -- a tab whose chunk failed to load asks once to
  * reload and never reloads unasked, asks nothing offline, and its Reload
@@ -13,7 +15,13 @@ import { failedChunkAnswer, type StaleBuildTab } from "../src/app/stale-build";
 /** A tab online or not, its reloads, asks, and each ask's dismissal kept. */
 function tabWith(options: { online?: boolean } = {}) {
   const leave = pageLeave(new EventTarget());
-  const seen = { reloads: 0, asks: [] as (() => void)[], dismisses: [] as (() => void)[] };
+
+  const seen: Seen = {
+    reloads: 0,
+    asks: [],
+    dismisses: [],
+  };
+
   const tab: StaleBuildTab = {
     online: () => options.online ?? true,
     leave,
@@ -25,6 +33,7 @@ function tabWith(options: { online?: boolean } = {}) {
       seen.dismisses.push(dismissed);
     },
   };
+
   return { answer: failedChunkAnswer(tab), leave, seen };
 }
 

@@ -54,6 +54,7 @@ const isMessage = Schema.is(
 /** Whether the first lines' config continues a harness's session. */
 export function sessionResumed(stdin: string): boolean {
   const config = readLine(stdin.split("\n")[0] ?? "");
+
   return Option.exists(config, (line) => RESUME_KEYS.some((key) => line[key] !== undefined));
 }
 
@@ -66,21 +67,28 @@ export function sessionResumed(stdin: string): boolean {
 export function notedFirstLines(stdin: string, notes: readonly string[], fresh: boolean): string {
   if (notes.length === 0 && !fresh) return stdin;
   let said = notes.length === 0;
+
   const lines = stdin.split("\n").map((text, at) => {
     const line = readLine(text);
+
     if (Option.isNone(line)) return text;
+
     if (at === 0) {
       if (!fresh) return text;
+
       return writeLine(
         Object.fromEntries(
           Object.entries(line.value).filter(([key]) => !RESUME_KEYS.some((each) => each === key)),
         ),
       );
     }
+
     if (said || !isMessage(line.value)) return text;
     said = true;
     const note: ContentBlock = { type: "text", text: [NOTES_LEAD, ...notes].join("\n\n") };
+
     return writeLine({ ...line.value, content: [note, ...line.value.content] });
   });
+
   return lines.join("\n");
 }

@@ -49,6 +49,7 @@ const IssueSchema = Schema.Struct({
 /** Where an issue stands, as its mark draws it. */
 function stateOf(record: typeof IssueSchema.Type): IssueState {
   if (record.state !== GITHUB_CLOSED) return ISSUE_STATE.OPEN;
+
   return NOT_PLANNED_REASONS.has(record.state_reason ?? "")
     ? ISSUE_STATE.NOT_PLANNED
     : ISSUE_STATE.CLOSED;
@@ -62,6 +63,7 @@ export function issueByNumber(
 ): Effect.Effect<Option.Option<GitHubIssueSummary>, GitHubUnavailable, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`;
+
   return Effect.scoped(
     Effect.flatMap(send(githubRead(path, token)), (response) => {
       if (
@@ -70,6 +72,7 @@ export function issueByNumber(
       ) {
         return Effect.succeed(Option.none<GitHubIssueSummary>());
       }
+
       return Effect.map(readBody(response, IssueSchema), (record) =>
         record.pull_request === undefined
           ? Option.some({

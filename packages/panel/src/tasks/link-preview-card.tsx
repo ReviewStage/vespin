@@ -77,6 +77,7 @@ function dataUrlOf(picture: LinkPreviewPicture): string {
 /** The line under the title: the site's name over its host, or the host alone where the page names no site or names it as its host. */
 function subOf(host: string, site: string | undefined): string {
   if (site === undefined || site.toLowerCase() === host.toLowerCase()) return host;
+
   return `${site}${SEPARATOR}${host}`;
 }
 
@@ -85,9 +86,11 @@ export function LinkPreviewCard({ href }: { href: string }): React.JSX.Element {
   const host = siteName(href) ?? href;
   const { data, isPending } = useQuery(linkPreviewQuery(href));
   const globe = <GLYPH.WEBSITE />;
+
   if (isPending) {
     return <HoverCardSkeleton glyph={globe} name={host} sub notes={2} data-link-preview="" />;
   }
+
   // Note that an ask the port refused, as one that failed, says the host, as a page with no preview does.
   if (data === undefined || !("preview" in data)) {
     return (
@@ -97,13 +100,16 @@ export function LinkPreviewCard({ href }: { href: string }): React.JSX.Element {
       </HoverCard>
     );
   }
+
   const { preview } = data;
+
   const icon =
     preview.icon === undefined ? (
       globe
     ) : (
       <img src={dataUrlOf(preview.icon)} alt="" draggable={false} />
     );
+
   return (
     <HoverCard data-link-preview="" data-link-preview-state="read">
       <HoverCardHead

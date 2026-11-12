@@ -15,6 +15,7 @@ import { LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 
 export const CHANGELOG_PATH = "/changelog";
+
 /** The changelog's RSS feed, every release an item linking to its own page. */
 export const CHANGELOG_FEED_PATH = "/changelog/rss.xml";
 const CHANGELOG_FEED_TITLE = `${PRODUCT_NAME} changelog`;
@@ -89,6 +90,7 @@ export interface ChangelogRoute {
 function shortened(text: string): string {
   if (text.length <= DESCRIPTION_LIMIT) return text;
   const cut = text.slice(0, DESCRIPTION_LIMIT);
+
   return `${cut.slice(0, cut.lastIndexOf(" "))}…`;
 }
 
@@ -109,6 +111,7 @@ export function changelogReleasePath(version: string): string {
 
 function pageView(releases: readonly Release[], page: number): ChangelogView {
   const start = (page - 1) * CHANGELOG_PAGE_SIZE;
+
   return {
     kind: CHANGELOG_VIEW.PAGE,
     page,
@@ -119,7 +122,9 @@ function pageView(releases: readonly Release[], page: number): ChangelogView {
 
 function releaseView(releases: readonly Release[], index: number): ChangelogView | undefined {
   const release = releases[index];
+
   if (release === undefined) return undefined;
+
   return {
     kind: CHANGELOG_VIEW.RELEASE,
     release,
@@ -139,14 +144,20 @@ export function changelogViewForPath(
   pathname: string,
 ): ChangelogView | undefined {
   const path = pathname.replace(/\/+$/, "").replace(/\.html$/, "");
+
   if (path === CHANGELOG_PATH) return pageView(releases, 1);
   const pageMatch = PAGE_PATH.exec(path);
+
   if (pageMatch?.[1] !== undefined) {
     const page = Number(pageMatch[1]);
+
     return page >= 2 && page <= changelogPageCount(releases) ? pageView(releases, page) : undefined;
   }
+
   const releaseMatch = RELEASE_PATH.exec(path);
+
   if (releaseMatch?.[1] === undefined) return undefined;
+
   return releaseView(
     releases,
     releases.findIndex((release) => release.version === releaseMatch[1]),
@@ -188,9 +199,12 @@ export function changelogRoutes(releases: readonly Release[]): readonly Changelo
       head: pageHead(page),
     }),
   );
+
   const singles = releases.flatMap((release, index): ChangelogRoute[] => {
     const view = releaseView(releases, index);
+
     if (view === undefined) return [];
+
     return [
       {
         path: changelogReleasePath(release.version),
@@ -200,6 +214,7 @@ export function changelogRoutes(releases: readonly Release[]): readonly Changelo
       },
     ];
   });
+
   return [...pages, ...singles];
 }
 
@@ -230,6 +245,7 @@ const rssDate = (date: string) => new Date(`${date}T00:00:00Z`).toUTCString();
 export function changelogFeed(releases: readonly Release[]): string {
   const items = releases.map((release) => {
     const url = `${SITE_ORIGIN}${changelogReleasePath(release.version)}`;
+
     return [
       "    <item>",
       `      <title>${escapeXml(releaseTitle(release))}</title>`,
@@ -240,7 +256,9 @@ export function changelogFeed(releases: readonly Release[]): string {
       "    </item>",
     ].join("\n");
   });
+
   const newest = releases[0];
+
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',

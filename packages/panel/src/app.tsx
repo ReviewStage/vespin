@@ -6,15 +6,9 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE } from "@repo/host/app-state";
-import {
-  APP_SETTING_SCHEMA,
-  EXPERIMENT,
-  type Experiment,
-  type HostCapability,
-} from "@repo/settings";
+import { APP_SETTING_SCHEMA, type Experiment, type HostCapability } from "@repo/settings";
 import {
   agentKeyLink,
-  SETTINGS_SECTION,
   SETTINGS_VIEW,
   type SettingsLink,
   type SettingsView,
@@ -116,7 +110,6 @@ import {
   selectAdminAccess,
   selectAdminAccessPending,
   selectAppSettingsView,
-  selectExperiment,
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
@@ -175,8 +168,10 @@ function SettingsShell({
   doors: SettingsDoors;
 }): React.JSX.Element | null {
   const settings = useSettingsPanel(doors);
+
   // Note that there is none only before the first read, which the window draws nothing over.
   if (settings === undefined) return null;
+
   return <DesktopShell {...shell} settings={settings} />;
 }
 
@@ -188,6 +183,7 @@ function SettingsPalette({
   doors: SettingsDoors;
 }): React.JSX.Element {
   const settings = useSettingsPanel(doors);
+
   return (
     <CommandPalette
       {...palette}
@@ -207,24 +203,28 @@ function SettingsPalette({
  */
 function UpdatedToast(): null {
   useUpdatedToast(useShownUpdate());
+
   return null;
 }
 
 /** The toast a release downloaded and waiting on its restart is said in, with Restart. */
 function ReadyToast(): null {
   useReadyToast();
+
   return null;
 }
 
 /** The toast that says the changes made offline the service refused once it answered again. */
 function OfflineRefusedToast(): null {
   useOfflineRefusedToast();
+
   return null;
 }
 
 /** The toasts that say each MCP server whose sign-in expired, until it is reconnected. */
 function ExpiredServerToasts(): null {
   useExpiredServerToasts();
+
   return null;
 }
 
@@ -239,6 +239,7 @@ export function App(): React.JSX.Element {
   const landed = useTasksFixtureLanded(fixtureMode);
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const accountKey = windowAccountOf(account);
+
   // Note that the account's key is read above the window, because every message box's Dictate reads it, and every terminal and cloud Browser tab is held under it.
   // The window's ticks run here, once, for as long as it stands.
   return (
@@ -259,9 +260,11 @@ export function App(): React.JSX.Element {
 function AppWindow(): React.JSX.Element {
   const { mutateAsync: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const { mutateAsync: sendSignOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
+
   const { mutateAsync: requestMicrophoneAccess } = useMutation(
     actMutation(ACT_KIND.MICROPHONE_REQUEST),
   );
+
   // What main holds, each slice read on its own, so the window is drawn again
   // for a slice it draws from and for no other: a setting that moves draws
   // Settings and ⌘K, which read their own (`app-settings.ts`), and leaves the
@@ -269,8 +272,10 @@ function AppWindow(): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
+
   const unseenAgents =
     useQuery({ ...appStateQuery, select: selectUnseenAgents }).data ?? NO_UNSEEN_AGENTS;
+
   const settingsHeld = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
   // A picture, and each read keyed by no account, is read as the account signed in, so the window lets go of every one it read once that account changes, and of every write it would undo, which is its presser's own.
   const accountKey = windowAccountOf(account);
@@ -301,6 +306,7 @@ function AppWindow(): React.JSX.Element {
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>();
   /** The experiment that note is about, where an experiment's row opened it. */
   const [feedbackAbout, setFeedbackAbout] = useState<Experiment>();
+
   const openFeedbackAbout = useCallback((about: Experiment) => {
     setFeedbackAbout(about);
     setFeedbackKind(FEEDBACK_KIND.FEEDBACK);
@@ -317,6 +323,7 @@ function AppWindow(): React.JSX.Element {
     appPlatform().unsavedDescriptionWords?.(descriptionWordsUnsaved);
   }, [descriptionWordsUnsaved]);
   const { arrive } = placeLeave;
+
   /**
    * Opens Settings at the place a link names (`settings-link.ts`), and once
    * the move lands, counts the tab changed where Settings was not standing,
@@ -326,6 +333,7 @@ function AppWindow(): React.JSX.Element {
   const goSettings = useCallback(
     (link: SettingsLink, landed: () => void = NOTHING_MORE) => {
       const route = settingsRoute.current;
+
       if (route === undefined) return;
       const entering = !route.standing;
       arrive(
@@ -336,24 +344,29 @@ function AppWindow(): React.JSX.Element {
               panel_tab: PANEL_TAB.SETTINGS,
             });
           }
+
           landed();
+
           if (link.section !== undefined) landOnSettingsRow(link.section);
         },
       );
     },
     [arrive],
   );
+
   // The Tasks tab counted as brought forward over a place standing beside its own.
   const countTasksTab = useCallback(() => {
     appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
       panel_tab: PANEL_TAB.TASKS,
     });
   }, []);
+
   // Note that Home and the task's own place are the Tasks tab's own places, of no task bound and of the task bound, so neither is a routed place the tab leaves.
   const routedStanding =
     routedHere !== undefined &&
     routedHere.place !== ROUTED_PLACE.HOME &&
     routedHere.place !== ROUTED_PLACE.TASK;
+
   // Arriving at Settings is arriving at its page list and its first page, Profile; the Tasks tab is the place the window's
   // state says, which a routed place standing is left for by the router's move there, held by its blocker as a routed
   // place's close is (`places/routed-doors.ts`), and counted once it lands. Note that a door pressed with the tab moves
@@ -364,12 +377,15 @@ function AppWindow(): React.JSX.Element {
   // `APP_PANEL_TAB`'s own set, which `PanelTab` aliases.
   const { history: routerHistory } = useRouter();
   const { stayed } = placeLeave;
+
   const changeTab = useCallback(
     (next: PanelTab) => {
       if (next === PANEL_TAB.SETTINGS) {
         goSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true });
+
         return;
       }
+
       if (!routedStanding) return;
       const from = routedHere.address;
       const kept = stayed();
@@ -388,6 +404,7 @@ function AppWindow(): React.JSX.Element {
       countTasksTab,
     ],
   );
+
   /**
    * Opens Settings at the place a link names: the workspace it names, which
    * the Workspace page shows while Settings stays open; its page; and its
@@ -395,18 +412,10 @@ function AppWindow(): React.JSX.Element {
    */
   // Note that the link is one move, so its page, workspace, and section all wait on the ask it makes.
   const openSettings = useCallback((link: SettingsLink) => goSettings(link), [goSettings]);
-  // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself; while
-  // Bring your own host is off, which stands nowhere then, it lands on that experiment's row alone.
+  // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself.
   const openHostConnect = useOpenHostConnect();
+
   const openAccountLink = useSteadyDoor(({ place }: AccountLink) => {
-    const state = queryClient.getQueryData(appStateQuery.queryKey);
-    if (state === undefined || !selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST)(state)) {
-      openSettings({
-        page: SETTINGS_VIEW.EXPERIMENTAL,
-        section: SETTINGS_SECTION.BRING_YOUR_OWN_HOST,
-      });
-      return;
-    }
     // Note that the code is handed only once the move lands, so a page kept for a draft is not asked over later.
     goSettings({ page: SETTINGS_VIEW.HOSTS }, () => openHostConnect(place.code));
   });
@@ -415,6 +424,7 @@ function AppWindow(): React.JSX.Element {
     () => openSettings({ page: SETTINGS_VIEW.INTEGRATIONS }),
     [openSettings],
   );
+
   const openApiKeys = useCallback(
     (provider: ModelProvider | undefined) => openSettings(agentKeyLink(provider)),
     [openSettings],
@@ -472,6 +482,7 @@ function AppWindow(): React.JSX.Element {
   const visitTask = useRef<TaskVisits["onVisitTask"]>(() => false);
   const startStands = useRef<TaskVisits["onStartStands"]>(() => undefined);
   const leaveStart = useRef<TaskVisits["onLeaveStart"]>(() => false);
+
   const tasks = useTasksTab({
     tasks: planning ?? IDLE_TASKS_VIEW,
     run: run ?? IDLE_RUN,
@@ -496,6 +507,7 @@ function AppWindow(): React.JSX.Element {
     startStands: () => startStands.current(),
     leaveStart: () => leaveStart.current(),
   });
+
   // Note that a workspace an older service named no slug for is named in its address by its id (`workspace-routes.ts`).
   listedSlug.current =
     tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
@@ -509,6 +521,7 @@ function AppWindow(): React.JSX.Element {
   useEffect(() => {
     const owner = placeOwner.current;
     placeOwner.current = accountKey;
+
     if (owner === undefined || owner === accountKey) return;
     leavePast(onGoHome);
   }, [accountKey, leavePast, onGoHome]);
@@ -518,23 +531,28 @@ function AppWindow(): React.JSX.Element {
     useQuery({ ...appStateQuery, select: selectSessionReplay }).data,
     tasks.workspace?.id,
   );
+
   // Settings as the router stands it: its page, its list, and the workspace its address names, else the sidebar's.
   const settingsPlace = useSettingsRoute({
     workspaces: tasks.workspaces,
     listedId: tasks.workspace?.id,
     narrow: room === SHELL_ROOM.NARROW,
   });
+
   settingsRoute.current = settingsPlace;
   // The page Settings shows, which a link to one the platform does not offer leaves on Profile.
   const experiments = useExperimentsIn(settingsPlace.workspaceId);
+
   const shownView = shownSettingsView(
     settingsPlace.view,
     run?.capabilities ?? NO_CAPABILITIES,
     experiments,
   );
+
   // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
   // work, as entering Settings is; one turned within Settings leaves no page, so it asks nothing.
   const chooseSettingsView = useSteadyDoor((view: SettingsView) => goSettings({ page: view }));
+
   // The links the window can copy now: ⌥⌘C copies the first, and ⌘K offers each (`links-at-hand.ts`).
   const copyLink = useCopyLink(
     tasks,
@@ -550,6 +568,7 @@ function AppWindow(): React.JSX.Element {
     adminView.open ? adminView.view : undefined,
     routedHere?.place,
   );
+
   // A fixture run's profile opens the window on its place once, as a link to it would; an Automations page once its workspace is listed, whose address it stands under.
   const launchedOnce = useRef(false);
   const listedForLaunch = tasks.workspace !== undefined;
@@ -557,35 +576,45 @@ function AppWindow(): React.JSX.Element {
   const openAdmin = useAdminDoor(tasks).open;
   useEffect(() => {
     if (launchedOnce.current || launched === undefined) return;
+
     if ("automations" in launched && !listedForLaunch) return;
     launchedOnce.current = true;
+
     if ("settings" in launched) goSettings(launched.settings);
     else if ("admin" in launched) adminView.onOpen();
     else openAutomations(launched.automations);
   }, [launched, goSettings, adminView, listedForLaunch, openAutomations]);
+
   // An app link, handed by the system or pressed in the window, opens where its place stands (`@repo/ui/link-route`).
   // A pull request a listed task's agent opened opens in that agent's Pull request tab wherever it is pressed (`use-open-link.ts`).
   const listedTasks = useMemo(() => {
     const ids = new Set(tasks.tasks.map((task) => task.id));
+
     return (planning?.taskPullRequests ?? []).filter((each) => ids.has(each.taskId));
   }, [tasks.tasks, planning?.taskPullRequests]);
+
   // An Admin link opens while the account's access is still being read, the
   // place waiting on it, and never for an account that is no admin
   // (`link-route.ts`).
   const adminOn = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
+
   const adminPending =
     useQuery({ ...appStateQuery, select: selectAdminAccessPending }).data ?? true;
+
   // The account's workspaces, which a link's slug is read against, are read once some are listed, as every account holds
   // its own workspace, or once their read failed.
   const workspacesUnread = tasks.workspaces.length === 0 && !tasks.listFailed;
+
   // Note that the door stands across draws, so every part that reads it (`useOpenLink`), each section of the open description among them, holds while the window is drawn again.
   const openAppLink = useSteadyDoor((link: ReadLink) => {
     const route = linkRoute(link, {
       workspaces: tasks.workspaces,
       adminOn: adminOn || adminPending,
     });
+
     if (route.kind === LINK_ROUTE.NOT_PERMITTED) return;
     const { place } = link;
+
     if (route.kind === LINK_ROUTE.SETTINGS) {
       openSettings(route.settings);
     } else if (place.kind === LINK_DESTINATION.ADMIN) {
@@ -599,9 +628,11 @@ function AppWindow(): React.JSX.Element {
         routedHere?.place === ROUTED_PLACE.INBOX ||
         routedHere?.place === ROUTED_PLACE.AGENT ||
         routedHere?.place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
+
       tasks.onOpenLink(link, routedStanding && !inTaskPlace ? countTasksTab : undefined);
     }
   });
+
   // An app link the system handed the app opens once sign-in no longer stands in the way, and
   // the account's workspaces are read, since a link's slug is read against them (every account
   // holds its own workspace, so none read means none read yet).
@@ -626,6 +657,7 @@ function AppWindow(): React.JSX.Element {
   const known = run !== undefined && !accountGated && !workspacesUnread;
   const routedViews = useRoutedViews();
   const backs = useNarrowBacks(room === SHELL_ROOM.NARROW);
+
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
@@ -637,6 +669,7 @@ function AppWindow(): React.JSX.Element {
     room,
     tasks,
   });
+
   routedExits.leave = tasks.onLeaveRouted;
   // The narrow rooms' ways back read the history as they are pressed (`places/narrow-backs.ts`).
   routedExits.behind = history.behind;
@@ -689,17 +722,21 @@ function AppWindow(): React.JSX.Element {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || isComposingKey(event)) return;
+
       // A field or dialog that took the press for itself is the nearest layer
       // of all, ahead of the sign-in wait and every page: an Escape
       // that clears a search or withdraws a question has been answered, and
       // an input method's own is never the window's.
       if (event.defaultPrevented) return;
+
       // Escape on a gate waiting for the browser withdraws the sign-in, as
       // its Cancel does: the wait is the only thing on screen.
       if (signIn.signInWait) {
         signIn.cancelSignIn();
+
         return;
       }
+
       // Otherwise it closes the nearest thing that is open, one layer at a
       // time: Settings, a description's version history, an agent's or a person's page, the Automations page, or the Board, back to wherever it was
       // opened from, then an agent's threads back to its transcript, then a side panel filling the window back beside its
@@ -711,13 +748,21 @@ function AppWindow(): React.JSX.Element {
       // steps back to its list, and there the press stops, rather than
       // reaching the plan the Inbox stands over.
       if (runAppCommand(APP_COMMAND.EXIT_SETTINGS)) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY)) return;
+
       if (runAppCommand(APP_COMMAND.INBOX_LIST) || inboxView.open) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_AGENT_PAGE)) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_PERSON_PAGE)) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS)) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_BOARD)) return;
+
       if (runAppCommand(APP_COMMAND.EXIT_ADMIN)) return;
+
       // An agent's card showing its threads goes back to its transcript before the task is left.
       if (runAppCommand(APP_COMMAND.EXIT_AGENT_THREADS)) return;
       // An open task steps back through the history, as the toolbar's Back
@@ -726,7 +771,9 @@ function AppWindow(): React.JSX.Element {
       // standing only full screen shuts through the history, as its Close does.
       shellDoors.current.back();
     };
+
     window.addEventListener("keydown", handleKey);
+
     return () => window.removeEventListener("keydown", handleKey);
   }, [signIn.cancelSignIn, signIn.signInWait, inboxView.open]);
 
@@ -746,11 +793,14 @@ function AppWindow(): React.JSX.Element {
       ),
     [requestMicrophoneAccess],
   );
+
   const leftWorkspace = useSteadyDoor((workspaceId: string) => {
     tasks.onLeftWorkspace(workspaceId);
     changeTab(PANEL_TAB.TASKS);
   });
+
   const workspacesRead = useWorkspacesRead();
+
   // The Workspace page shows the workspace the sidebar lists, or one a link named.
   const workspace = useMemo(
     () => ({
@@ -770,6 +820,7 @@ function AppWindow(): React.JSX.Element {
       workspacesRead.onRetry,
     ],
   );
+
   // What Settings and ⌘K answer through; the settings themselves they read where they draw them.
   const settingsDoors = useMemo<SettingsDoors>(
     () => ({
@@ -783,6 +834,7 @@ function AppWindow(): React.JSX.Element {
   );
 
   const openWorkspaceGitHub = useOpenWorkspaceGitHub(openSettings);
+
   // A remedy under a refused start or message mends the task's repository through the Tasks tab's doors.
   const repositoryRemedies = useMemo<RepositoryRemedyDoors>(
     () => ({
@@ -793,11 +845,14 @@ function AppWindow(): React.JSX.Element {
     }),
     [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask],
   );
+
   const gitHubConnect = useAccountGitHub();
+
   const messageReveal = useMemo(
     () => ({ reveal: tasks.messageReveal, onRevealed: tasks.onMessageRevealed }),
     [tasks.messageReveal, tasks.onMessageRevealed],
   );
+
   const threadReveal = useMemo(
     () => ({ reveal: tasks.threadReveal, onRevealed: tasks.onThreadRevealed }),
     [tasks.threadReveal, tasks.onThreadRevealed],
@@ -808,7 +863,9 @@ function AppWindow(): React.JSX.Element {
   const openPerson = useSteadyDoor((userId: string, name?: string, workspaceId?: string) =>
     tasks.onOpenPerson(userId, name, workspaceId),
   );
+
   const personDoor = usePersonDoor(tasks);
+
   const preloadPerson = useSteadyDoor((userId: string, workspaceId?: string) =>
     personDoor.preload(userId, workspaceId),
   );
@@ -831,11 +888,14 @@ function AppWindow(): React.JSX.Element {
       signIn.cancelSignIn,
     ],
   );
+
   const connected = useConnected();
+
   // A narrow room's page of Settings is a step after its list, which its way back steps back to (`places/narrow-backs.ts`).
   const settingsBack = useSteadyDoor(() =>
     backs.list(ROUTED_PLACE.SETTINGS, settingsPlace.listAddress, settingsPlace.list),
   );
+
   const settingsStep = useMemo(
     () => ({ listed: settingsPlace.listed, onList: settingsBack }),
     [settingsPlace.listed, settingsBack],

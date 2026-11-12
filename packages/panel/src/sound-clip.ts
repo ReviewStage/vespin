@@ -45,6 +45,7 @@ const CLIP_REFUSAL = {
 /** A file's name without its extension, cut to a sound's name bound, as the name a sound added from it starts from. */
 export function soundNameOfFile(file: File): string {
   const stem = file.name.replace(/\.[^.]+$/u, "").trim();
+
   return (stem === "" ? file.name : stem).slice(0, SOUND_CLIP_BOUNDS.MAX_NAME_CHARS);
 }
 
@@ -80,10 +81,13 @@ export async function clipOfFile(file: File): Promise<ClipRead> {
     return { refusal: CLIP_REFUSAL.TOO_LARGE(file.name) };
   const bytes = new Uint8Array(await file.arrayBuffer());
   const type = sniffAudioType(bytes);
+
   if (type === undefined) return { refusal: CLIP_REFUSAL.KIND(file.name) };
+
   if ((await soundClipSeconds(bytes)) === undefined) {
     return { refusal: CLIP_REFUSAL.UNREADABLE(file.name) };
   }
+
   return { clip: `data:${type};base64,${Base64.encode(bytes)}`, bytes };
 }
 
@@ -91,6 +95,7 @@ export async function clipOfFile(file: File): Promise<ClipRead> {
 export function clipLoaded(slot: SoundClipSlot, sha256: string, bytes: Uint8Array): Promise<void> {
   loaded.set(slot, sha256);
   wanted.set(slot, sha256);
+
   return setCustomSoundClip(CLIP_SOUND_OF_SLOT[slot], bytes);
 }
 
@@ -98,6 +103,7 @@ export function clipLoaded(slot: SoundClipSlot, sha256: string, bytes: Uint8Arra
 function clipLetGo(slot: SoundClipSlot): Promise<void> {
   loaded.delete(slot);
   wanted.delete(slot);
+
   return setCustomSoundClip(CLIP_SOUND_OF_SLOT[slot], undefined);
 }
 
@@ -106,8 +112,10 @@ export async function soundBytes(
   id: string,
 ): Promise<{ readonly sha256: string; readonly bytes: Uint8Array } | undefined> {
   const answer = await askAct(ACT_KIND.SOUND_READ, { id }).catch(() => undefined);
+
   if (answer === undefined || "failure" in answer || answer.clip === null) return undefined;
   const bytes = Base64.decode(answer.clip.base64);
+
   return Result.isFailure(bytes) ? undefined : { sha256: answer.clip.sha256, bytes: bytes.success };
 }
 
@@ -122,11 +130,15 @@ export async function soundBytes(
 async function loadClip(slot: SoundClipSlot, id: string, sha256: string): Promise<void> {
   wanted.set(slot, sha256);
   const read = await soundBytes(id);
+
   if (wanted.get(slot) !== sha256) return;
+
   if (read === undefined || read.sha256 !== sha256) {
     if (loaded.has(slot)) await clipLetGo(slot);
+
     return;
   }
+
   await clipLoaded(slot, sha256, read.bytes);
 }
 
@@ -149,11 +161,14 @@ function useClipLoaded(
   const sha256 = sound?.sha256;
   useEffect(() => {
     if (!read) return;
+
     if (id === undefined || sha256 === undefined) {
       if (loaded.has(slot)) clipLetGo(slot).catch(() => undefined);
       else wanted.delete(slot);
+
       return;
     }
+
     // Note that a slot set back to a built-in sound forgets the fetch still out, so it never lands as the slot is set to its own again.
     if (!chosen) wanted.delete(slot);
     else if (sha256 !== loaded.get(slot)) loadClip(slot, id, sha256).catch(() => undefined);
@@ -166,6 +181,7 @@ export function chosenSound(
   slot: SoundClipSlot,
 ): Sound | undefined {
   const id = sounds?.choices[slot];
+
   return id === undefined ? undefined : sounds?.list.find((sound) => sound.id === id);
 }
 

@@ -48,6 +48,7 @@ const CHARLES: WorkspaceMember = {
   email: "charles@example.com",
   role: WORKSPACE_ROLE.MEMBER,
 };
+
 const WORKSPACE = { id: "workspace-acme", memberCount: 2 };
 
 const AGENT: AgentSummary = {
@@ -118,6 +119,7 @@ async function draw(element: ReactElement): Promise<HTMLElement> {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await peopleRead();
+
   return container;
 }
 
@@ -171,7 +173,9 @@ function card(people: AgentChangesPeople | undefined): ReactElement {
     people,
     onOpenAgent: () => undefined,
   });
+
   assert.ok(hung, "the tab hangs its pull request's card");
+
   return hung;
 }
 
@@ -191,6 +195,7 @@ test("a pull request's card says who opened it and lists its reviewers by where 
   const opener =
     strip.querySelector(".ui-hover-card-row [data-actor-ref]") ??
     assert.fail("who opened it is named");
+
   assert.deepEqual(
     [opener.querySelector(".ui-inline-ref-label")?.textContent, opener.getAttribute("data-kind")],
     ["luke-agent", "github"],
@@ -218,12 +223,15 @@ test("who opened the pull request is named alone, whoever the agent wrote as", a
     handMembers(() => ({ rows: { members: [CHARLES] } }));
     const drawn = await draw(card(people));
     const row = drawn.querySelector(".ui-hover-card-row");
+
     const named = [
       row?.querySelector(".ui-inline-ref-label")?.textContent,
       /as the GitHub App/u.test(row?.textContent ?? ""),
     ];
+
     act(() => root?.unmount());
     document.body.innerHTML = "";
+
     return named;
   };
 
@@ -259,6 +267,7 @@ test("Files changed names nobody, with files or without, since the Pull request 
   const names = async (readChanges: () => Promise<AgentChangesAnswerView>) => {
     fakeActPort(answeringChanges(readChanges));
     handMembers(() => ({ rows: { members: [CHARLES] } }));
+
     const tab = await draw(
       createElement(ChangesTabReading, {
         agentId: AGENT.id,
@@ -268,13 +277,17 @@ test("Files changed names nobody, with files or without, since the Pull request 
         tree: { open: false, onToggle: () => undefined },
       }),
     );
+
     const named =
       tab.querySelector("[data-actor-ref], .actor-stack") !== null ||
       /Opened by|Reviewers|Commits by/u.test(tab.textContent ?? "");
+
     act(() => root?.unmount());
     document.body.innerHTML = "";
+
     return named;
   };
+
   const noFiles = () =>
     Promise.resolve({
       pullRequest: { url: PULL_REQUEST.url, truncated: false, files: [], ...PEOPLE },
@@ -288,6 +301,7 @@ test("the people an agent's Changes tab read are named on its pull request's car
   function HungCard(): ReactElement {
     return card(peopleOf(useChangesPeople(AGENT.id), PULL_REQUEST));
   }
+
   const strip = await draw(
     createElement(
       Fragment,
@@ -321,6 +335,7 @@ test("a pull request's card hung over its tab lists every reviewer, scrolling wi
     by: { login: `reviewer${at}`, bot: false },
     state: REVIEW_STATE.APPROVED,
   }));
+
   const tab = await draw(
     createElement(Tooltip, {
       label: "Changes: Expiry job",
@@ -336,6 +351,7 @@ test("a pull request's card hung over its tab lists every reviewer, scrolling wi
       ),
     }),
   );
+
   hover(tab.querySelector("button") ?? assert.fail("the tab stands"));
   const list = document.querySelector('.ui-tooltip-card [aria-label="Reviewers"]');
   assert.equal(list?.children.length, 50, "every reviewer is listed, none counted");

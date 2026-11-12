@@ -59,10 +59,13 @@ export function agentSandboxDoors<R>(
   /** One call of the agent's machine, run on the edge's runner. */
   const ask = <A, E>(call: (machine: AgentMachineService) => Effect.Effect<A, E>) =>
     run(Effect.flatMap(AgentMachine, call).pipe(Effect.provide(machine)));
+
   return (admitted) => {
     const sessionId = admitted.runtimeSessionId;
     const unfound = () => Promise.reject(new SandboxUnavailable({}));
+
     if (sessionId === undefined) return { files: unfound };
+
     return {
       files: () =>
         Promise.resolve({
@@ -70,6 +73,7 @@ export function agentSandboxDoors<R>(
             const bytes = await ask((each) =>
               each.readFile(sessionId, path, SANDBOX_DOOR_MAX_BYTES),
             );
+
             return bytes === undefined ? null : streamOf(bytes);
           },
           phoneVideo: async ({ path }: { readonly path: string }) =>

@@ -100,11 +100,13 @@ function CommandWords({
 /** The denial's field, with Deny and Cancel after it. */
 function DenyNote({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
   const [words, setWords] = useState("");
+
   const deny = () => {
     if (busy) return;
     const message = words.trim();
     onDeny(message === "" ? undefined : message);
   };
+
   return (
     <Inline gap={GAP.CONTROL} grow>
       <Inline gap={GAP.CONTROL} grow>
@@ -163,12 +165,14 @@ export function ApprovalActions({
 }): React.JSX.Element {
   const [denying, setDenying] = useState(false);
   const out = answering !== undefined;
+
   const doors: DenyNoteDoors = {
     busy: answering === APPROVAL_ACTION.DENY,
     maxLength: noteMaxLength,
     onDeny: (message) => onAnswer(APPROVAL_ACTION.DENY, message),
     onCancel: () => setDenying(false),
   };
+
   return (
     <Stack gap={GAP.TIGHT}>
       {denying ? (

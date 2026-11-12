@@ -1,4 +1,4 @@
-import { SKELETON_SHAPE, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 import { PDF_PAGE_RATIO, PdfColumn, PdfSheet } from "./pdf-sheet.js";
 
 /**
@@ -17,7 +17,7 @@ export function PdfPagesSkeleton({ label }: { label: string }): React.JSX.Elemen
     <PdfColumn label={label}>
       <SkeletonRegion label={OPENING_LABEL}>
         <PdfSheet ratio={PDF_PAGE_RATIO}>
-          <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+          <Skeleton kind={SKELETON_KIND.BLOCK} />
         </PdfSheet>
       </SkeletonRegion>
     </PdfColumn>

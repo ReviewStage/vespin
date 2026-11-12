@@ -54,7 +54,9 @@ export function redirectOf(specifier, importer) {
   if (PIERRE_MARKUP.test(specifier)) {
     return importer !== undefined && PIERRE_MODULE.test(importer) ? DIFF_MARKUP : undefined;
   }
+
   const target = REDIRECTS.get(specifier);
+
   return target === undefined || importer === target ? undefined : target;
 }
 
@@ -92,6 +94,7 @@ export function lucideWholeModule(file) {
 // where WebAssembly is refused, and never with Shiki's own WebAssembly.
 const HIGHLIGHT_WORKER_LEFT_OUT =
   /^(?:shiki\/langs|shiki\/wasm|@pierre\/highlights\/themes\/loader|@pierre\/theming\/themes)$/;
+
 const highlightWorkerSetsLeftOut = {
   name: "highlight-worker-sets-left-out",
   setup(build) {

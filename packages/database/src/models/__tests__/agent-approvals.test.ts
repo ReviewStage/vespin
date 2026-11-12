@@ -42,6 +42,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -55,10 +56,12 @@ const openRunningAgent = Effect.gen(function* () {
     yield* openAccount,
     yield* openAccount,
   ];
+
   const workspace = yield* openWorkspace(starter);
   yield* joinWorkspace(workspace, teammate);
   yield* openWorkspace(outsider);
   const task = yield* createTask(starter, { organizationId: workspace, name: "Checkout" });
+
   const started = yield* createAgent(starter, {
     taskId: task.id,
     descriptionSnapshot: "# Checkout",
@@ -69,6 +72,7 @@ const openRunningAgent = Effect.gen(function* () {
     repository: "acme/shop",
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const { agent } = Option.getOrThrow(started);
   const target: ConversationTarget = { userId: starter, conversationId: agent.conversationId };
   const writer = yield* storeWriter({ tools: {} });
@@ -77,9 +81,11 @@ const openRunningAgent = Effect.gen(function* () {
     { text: "Fix the checkout.", clientKey: "first", sender: { kind: MESSAGE_SENDER.APP } },
     Effect.succeed(true),
   );
+
   const [turn] = yield* Database.use((db) =>
     db.select({ id: turns.id }).from(turns).where(eq(turns.conversationId, agent.conversationId)),
   );
+
   assert.ok(turn !== undefined);
   yield* writer.consume(target, {
     kind: RUN_EVENT.TURN_STARTED,
@@ -91,6 +97,7 @@ const openRunningAgent = Effect.gen(function* () {
     at: yield* Clock.currentTimeMillis,
     attempt: 0,
   });
+
   return { starter, teammate, outsider, agent, target, turnId: turn.id };
 });
 
@@ -172,6 +179,7 @@ it.layer(getTestDB())("a coding agent's asks", (it) => {
         yield* asked(agent.conversationId, turnId, "a");
         const [pending] = yield* listPendingApprovals(teammate, agent.id);
         assert.ok(pending !== undefined);
+
         const answer = (status: ApprovalStatus) =>
           Effect.gen(function* () {
             return yield* answerApproval({
@@ -286,6 +294,7 @@ it.layer(getTestDB())("a coding agent's asks", (it) => {
 
       assert.deepEqual(yield* listPendingApprovals(outsider, agent.id), []);
       assert.ok(Option.isNone(yield* readApproval(outsider, agent.id, pending.id)));
+
       const answered = yield* answerApproval({
         userId: outsider,
         agentId: agent.id,
@@ -293,6 +302,7 @@ it.layer(getTestDB())("a coding agent's asks", (it) => {
         status: APPROVAL_STATUS.ALLOWED,
         at: new Date(yield* Clock.currentTimeMillis),
       });
+
       assert.ok(Option.isNone(answered));
       assert.deepEqual(yield* standingOf(agent.conversationId), [
         ["a", APPROVAL_STATUS.PENDING, null],

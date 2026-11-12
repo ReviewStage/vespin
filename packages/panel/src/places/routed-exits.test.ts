@@ -28,10 +28,13 @@ afterEach(() => {
 test("an Inbox item one caller holds and an automation it saw deleted are the window's, which another caller reads", async () => {
   const held = windowRouter();
   const callers: { inbox: InboxRoute; automations: AutomationsRoute }[] = [];
+
   function Caller({ at }: { readonly at: number }) {
     callers[at] = { inbox: useInboxRoute(), automations: useAutomationsRoute({ narrow: false }) };
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() =>

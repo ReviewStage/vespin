@@ -35,6 +35,7 @@ export function ReadFailed({
 export function replayMaskedError(error: ShownError | undefined): ShownError | undefined {
   // Note that words saying nothing stay as they are, so the row still draws no line for them.
   const { words } = error ?? {};
+
   if (
     error === undefined ||
     words === undefined ||
@@ -44,5 +45,6 @@ export function replayMaskedError(error: ShownError | undefined): ShownError | u
   ) {
     return error;
   }
+
   return { ...error, words: <ReplayMask>{words}</ReplayMask> };
 }

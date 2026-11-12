@@ -126,6 +126,7 @@ function layGlassOnceLoaded(window: BrowserWindow): void {
   window.webContents.once("did-finish-load", () => {
     if (window.isDestroyed()) return;
     window.setWindowButtonVisibility(true);
+
     if (!layLiquidGlass(window)) window.setVibrancy(DESKTOP_WINDOW.MATERIAL);
   });
 }
@@ -135,6 +136,7 @@ function desktopBounds(display: Display): Rectangle {
   const area = display.workArea;
   const width = Math.min(DESKTOP_WINDOW.WIDTH, area.width - DESKTOP_WINDOW.MARGIN * 2);
   const height = Math.min(DESKTOP_WINDOW.HEIGHT, area.height - DESKTOP_WINDOW.MARGIN * 2);
+
   return {
     x: Math.round(area.x + (area.width - width) / 2),
     y: Math.round(area.y + (area.height - height) / 2),
@@ -199,6 +201,7 @@ export class PanelManager {
   reconcile(): void {
     const wanted = this.#system.screen.getPrimaryDisplay().id;
     const [held] = [...this.#windows.keys()];
+
     if (held === undefined) this.#create(wanted);
     else if (held !== wanted) this.#rebind(held, wanted);
   }
@@ -219,6 +222,7 @@ export class PanelManager {
    */
   pushToOne<Name extends EventPushName>(push: Name, payload: PushPayload<Name>): void {
     const window = this.windows().find((each) => each.isFocused()) ?? this.primaryPanel();
+
     if (window !== undefined) windowPushes.push(window.webContents, push, payload);
   }
 
@@ -227,6 +231,7 @@ export class PanelManager {
     for (const window of this.#windows.values()) {
       if (!window.isDestroyed()) return window;
     }
+
     return undefined;
   }
 
@@ -254,11 +259,13 @@ export class PanelManager {
       this.#hidden.add(window);
       this.#holdState(window);
     };
+
     const shown = () => {
       if (window.isDestroyed()) return;
       this.#hidden.delete(window);
       this.#holdState(window);
     };
+
     window.on("hide", hidden);
     window.on("minimize", hidden);
     window.on("show", shown);
@@ -274,9 +281,11 @@ export class PanelManager {
   /** Every living panel's renderer, for a payload composed per window. */
   senders(): readonly WebContents[] {
     const senders: WebContents[] = [];
+
     for (const window of this.#windows.values()) {
       if (!window.isDestroyed()) senders.push(window.webContents);
     }
+
     return senders;
   }
 
@@ -285,6 +294,7 @@ export class PanelManager {
     for (const [displayId, window] of this.#windows) {
       if (!window.isDestroyed() && window.webContents === sender) return displayId;
     }
+
     return undefined;
   }
 
@@ -304,7 +314,9 @@ export class PanelManager {
   /** How many panel windows stand — the count the process's lifetime is decided by. */
   get standing(): number {
     let count = 0;
+
     for (const window of this.#windows.values()) if (!window.isDestroyed()) count += 1;
+
     return count;
   }
 
@@ -313,6 +325,7 @@ export class PanelManager {
     for (const window of this.#windows.values()) {
       if (!window.isDestroyed() && window.webContents === webContents) return true;
     }
+
     return false;
   }
 
@@ -321,6 +334,7 @@ export class PanelManager {
     for (const window of this.#windows.values()) {
       if (!window.isDestroyed() && window.webContents === webContents) return window.isFullScreen();
     }
+
     return false;
   }
 
@@ -334,6 +348,7 @@ export class PanelManager {
   /** Re-keys the living window under another display. */
   #rebind(fromDisplayId: number, toDisplayId: number): void {
     const window = this.#windows.get(fromDisplayId);
+
     if (!window) return;
     this.#windows.delete(fromDisplayId);
     this.#windows.set(toDisplayId, window);
@@ -346,6 +361,7 @@ export class PanelManager {
    */
   #focusWindow(window: BrowserWindow | undefined): void {
     if (!window || window.isDestroyed() || !this.#runMode.takesFocus) return;
+
     if (process.platform === "darwin") this.#system.app.focus({ steal: true });
     window.show();
     window.focus();
@@ -367,18 +383,22 @@ export class PanelManager {
 
   #create(displayId: number): void {
     const display = this.display(displayId);
+
     if (!display) return;
+
     const placement = placeWindow({
       saved:
         this.#placementPath === undefined ? undefined : readWindowPlacement(this.#placementPath),
       workAreas: this.#system.screen.getAllDisplays().map((each) => each.workArea),
       first: desktopBounds(display),
     });
+
     // Created at the stored zoom, so the first frame is drawn at the size it
     // keeps rather than jumping to it once the page has loaded.
     const zoomFactor = this.#zoomFactor();
 
     const material = this.#material;
+
     const windowOptions: BrowserWindowConstructorOptions = {
       ...placement.bounds,
       // Only ever set when true, because a false here takes the green
@@ -407,9 +427,11 @@ export class PanelManager {
         zoomFactor,
       },
     };
+
     const window = new this.#system.BrowserWindow(windowOptions);
     this.#windows.set(displayId, window);
     const page = window.webContents;
+
     if (material === WINDOW_MATERIAL.LIQUID_GLASS) layGlassOnceLoaded(window);
 
     refuseForeignNavigation(window, this.#rendererUrl);
@@ -419,15 +441,19 @@ export class PanelManager {
     // answer again and the panel holds what the developer was doing. One whose renderer died has lost that already.
     this.#followResponsiveness?.(window);
     const revival = this.#followDeaths(window);
+
     const drew = () => {
       if (window.isDestroyed()) return;
       revival.loaded();
     };
+
     window.webContents.on("did-finish-load", drew);
     window.once("ready-to-show", () => {
       if (window.isDestroyed()) return;
       drew();
+
       if (placement.zoomed) window.maximize();
+
       // A capture run is a camera, not a person: it shows the window without
       // taking the keyboard from whatever else is running.
       if (this.#runMode.takesFocus) this.#focusWindow(window);
@@ -438,6 +464,7 @@ export class PanelManager {
     // and ⌘N bring the window back (`app-menu.ts`). Only a quit lets it go.
     window.on("close", (event) => {
       this.#keepPlacement(window);
+
       if (this.#closing()) return;
       event.preventDefault();
       window.hide();
@@ -445,12 +472,14 @@ export class PanelManager {
     // A named instance's window says which instance it is wherever macOS
     // lists it, after the title the page gives it.
     const instance = this.#instance;
+
     if (instance !== undefined) {
       window.on("page-title-updated", (event, title) => {
         event.preventDefault();
         window.setTitle(`${title} (${instance})`);
       });
     }
+
     window.on("enter-full-screen", () => this.#onFullScreenChanged?.());
     window.on("leave-full-screen", () => this.#onFullScreenChanged?.());
     // A mouse's back and forward buttons arrive as a swipe under Logi Options+.
@@ -460,10 +489,12 @@ export class PanelManager {
     window.on("closed", () => {
       revival.stop();
       windowPushes.holdState(page, false);
+
       for (const [id, candidate] of [...this.#windows]) {
         if (candidate !== window) continue;
         this.#windows.delete(id);
       }
+
       if (this.#windows.size === 0) this.#onAllClosed?.();
     });
     this.#load(window);
@@ -491,7 +522,9 @@ export class PanelManager {
         this.#onRendererGone?.(`${reason} It stopped reloading, so the developer was asked.`);
         void askReloadPanel(window, this.#system).then((reload) => {
           if (window.isDestroyed() || this.#closing()) return;
+
           if (!reload) this.#system.app.quit();
+
           // Note that a quit held for its question leaves the launch
           // standing, and declining it keeps it so, so the page is loaded
           // once more rather than left blank with no question on it.
@@ -499,10 +532,12 @@ export class PanelManager {
         });
       },
     });
+
     onRendererDeath(window.webContents, "panel", (reason) => {
       if (window.isDestroyed() || this.#closing()) return;
       revival.gone(reason);
     });
+
     return revival;
   }
 }

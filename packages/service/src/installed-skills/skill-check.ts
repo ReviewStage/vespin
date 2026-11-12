@@ -29,7 +29,7 @@ import {
 import type { SkillFile } from "./skill-source.js";
 
 /** The repository check's provider-credential shapes, kept in step with `scripts/repository-checks.sh`. */
-const CREDENTIAL_SHAPES: readonly RegExp[] = [
+const CREDENTIAL_PATTERNS: readonly RegExp[] = [
   /sk_live_[0-9A-Za-z]{24,}/u,
   /gh[pousr]_[A-Za-z0-9]{36}/u,
   /github_pat_[A-Za-z0-9_]{22,}/u,
@@ -53,6 +53,7 @@ export function fileText(bytes: Uint8Array): string {
 /** What the `SKILL.md` text says of its skill: the name it declares, else the one given; its description; and whether a member may pick it. */
 export function skillHead(markdown: string, fallbackName: string): SkillHead {
   const keys = readSkillFile(markdown)?.keys;
+
   return {
     name: keys?.get(SKILL_KEY.NAME)?.trim() || fallbackName,
     description: keys?.get(SKILL_KEY.DESCRIPTION)?.trim() ?? "",
@@ -66,7 +67,9 @@ export function skillRefusal(
   files: readonly SkillFile[],
 ): InstalledSkillRefusal | undefined {
   const main = files.find((file) => file.path === INSTALLED_SKILL_MAIN_FILE);
+
   if (main === undefined) return INSTALLED_SKILL_REFUSAL.NO_SKILL_FILE;
+
   // Note that a `SKILL.md` is held to a repository's bound besides, as the table's check holds it (`installed_skill_file_bytes_bound`).
   if (
     holdsFileTooLarge(files.map((file) => file.bytes.byteLength)) ||
@@ -74,12 +77,16 @@ export function skillRefusal(
   ) {
     return INSTALLED_SKILL_REFUSAL.TOO_LARGE;
   }
+
   if (!SKILL_NAME_RULE.test(head.name) || head.description === "") {
     return INSTALLED_SKILL_REFUSAL.SKILL_FILE_INVALID;
   }
+
   const texts = files.map((file) => fileText(file.bytes));
-  if (texts.some((text) => CREDENTIAL_SHAPES.some((shape) => shape.test(text)))) {
+
+  if (texts.some((text) => CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text)))) {
     return INSTALLED_SKILL_REFUSAL.CREDENTIAL;
   }
+
   return undefined;
 }

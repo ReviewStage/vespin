@@ -92,7 +92,9 @@ const STANDING_WORDS = {
 /** The label's words, by where the device stands. */
 function macWords(name: string, standing: DeviceStanding | undefined): string {
   if (standing === undefined || standing === DEVICE_STANDING.ONLINE) return name;
+
   if (standing === DEVICE_STANDING.CHECKING) return name;
+
   return `${name} · ${STANDING_WORDS[standing]}`;
 }
 
@@ -118,7 +120,9 @@ function cloudFacts(
     icon: <GLYPH.SANDBOX_STATE aria-hidden="true" />,
     value: <SandboxStateWords state={state} />,
   };
+
   if (vcpus === undefined) return [status];
+
   return [
     status,
     { label: CLOUD_WORDS.CPU, icon: <GLYPH.CPU aria-hidden="true" />, value: `${vcpus} vCPUs` },
@@ -156,6 +160,7 @@ function CloudChip({
   const menu = useMoveMenu(CLOUD_ROW, move);
   const stateWords = SANDBOX_STATE_WORDS[state];
   const glyph = <SandboxStateGlyph state={state} />;
+
   const moveMenu =
     menu === undefined
       ? undefined
@@ -164,6 +169,7 @@ function CloudChip({
           ...menu,
           rows: menu.rows.map((row) => (row.id === CLOUD_ROW ? { ...row, icon: glyph } : row)),
         };
+
   return (
     <ChipPopover
       label={RUNS_ON_WORDS.LABEL}
@@ -194,7 +200,9 @@ export function AgentPlace({
       <CloudChip sandbox={agent.sandbox} vcpus={agent.sandboxVcpus} move={move} narrow={narrow} />
     );
   }
+
   if (agent.mac === undefined) return null;
+
   return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
 }
 
@@ -222,11 +230,14 @@ function useMoveMenu(
   const book = useDevicePresence(listed.length > 0);
   const thisMac = useThisMac();
   const openSettings = useOpenSettings();
+
   if (move === undefined) return undefined;
+
   const places = runsOnRows(listed, book, thisMac).map(
     (row): MenuRow =>
       row.id === here || move.detail === undefined ? row : { detail: move.detail, ...row },
   );
+
   const setUp: readonly MenuRow[] =
     move.devices.length > 0
       ? []
@@ -238,12 +249,14 @@ function useMoveMenu(
             detail: SET_UP_WORDS.DETAIL,
           },
         ];
+
   return {
     rows: [...places, ...setUp],
     value: here,
     noMatch: RUNS_ON_WORDS.NO_MATCH,
     onPick: (id) => {
       if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
+
       if (id !== here) move.moveTo(rowRequest(id));
     },
   };
@@ -273,6 +286,7 @@ function PlaceMenuChip({
   narrow: boolean;
 }): React.JSX.Element {
   const menu = useMoveMenu(here, move);
+
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
@@ -320,6 +334,7 @@ function PlaceChip({
       <HoverCardNote>{note}</HoverCardNote>
     </HoverCard>
   );
+
   if (move !== undefined) {
     return (
       <PlaceMenuChip
@@ -332,6 +347,7 @@ function PlaceChip({
       />
     );
   }
+
   return (
     <Tooltip label={`${RUNS_ON}${words}`} card={card}>
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
@@ -358,13 +374,16 @@ function MacChip({
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
   const standing = presenceStanding(presence, mac.deviceId);
+
   const quiet =
     standing === undefined ||
     standing === DEVICE_STANDING.ONLINE ||
     standing === DEVICE_STANDING.CHECKING;
+
   const name = machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
   // Note that the platform is read off the move's list, because the agent's own record names none.
   const listed = move?.devices.find((device) => device.deviceId === mac.deviceId);
+
   return (
     <PlaceChip
       here={mac.deviceId}

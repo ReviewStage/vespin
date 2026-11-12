@@ -30,6 +30,7 @@ const PERSONAL: Workspace = {
   role: WORKSPACE_ROLE.OWNER,
   github: null,
 };
+
 const ACME: Workspace = {
   id: "ws-acme",
   name: "Acme",
@@ -64,9 +65,11 @@ async function settle(): Promise<void> {
 /** What the service answers each workspace's repositories with: Acme's installation's, and none for Personal, which has no GitHub. */
 function listOf(workspace: string): RepositoriesRead {
   const installationUrl = "https://github.com/apps/luke/installations/new";
+
   if (workspace !== ACME.id) {
     return { repositories: { installed: false, repositories: [], installationUrl } };
   }
+
   return {
     repositories: {
       installed: true,
@@ -88,9 +91,11 @@ function listOf(workspace: string): RepositoriesRead {
 /** The chooser each workspace's repository chip is handed, the host holding Acme's installation's repositories and Personal's none. */
 function chooserFor(workspaceId: string | undefined): RepositoryChooser {
   const base = NO_REPOSITORIES;
+
   if (workspaceId !== ACME.id) {
     return { ...base, scope: workspaceId };
   }
+
   return { ...base, recent: ["acme-corp/relay"], scope: ACME.id };
 }
 
@@ -102,11 +107,13 @@ test("New task offers no workspace picker, and its head row's repository chip li
   assert.ok(head?.contains(dialog.repositoryChip()), "the repository chip stands in the head row");
   act(() => dialog.repositoryChip().click());
   await settle();
+
   const listed = [...document.querySelectorAll('[role="option"]')].map((row) =>
     [".ui-combobox-option-detail", ".ui-combobox-option-label"]
       .map((part) => row.querySelector(part)?.textContent)
       .join("/"),
   );
+
   act(() => dialog.repositoryChip().click());
   await settle();
   await dialog.create();
@@ -121,6 +128,7 @@ async function openNewTask(workspaceId: string, preset?: string) {
   const control = tasksControl();
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = (listed: string) =>
     act(() =>
       root.render(
@@ -135,6 +143,7 @@ async function openNewTask(workspaceId: string, preset?: string) {
               repositoriesIn: chooserFor,
               start: (_name, repository, startsIn) => {
                 starts.push([repository, startsIn]);
+
                 return Promise.resolve(undefined);
               },
             },
@@ -142,21 +151,26 @@ async function openNewTask(workspaceId: string, preset?: string) {
         ),
       ),
     );
+
   draw(workspaceId);
   await settle();
+
   const repositoryChip = () =>
     document.querySelector<HTMLButtonElement>(".repository-chip .ui-chip") ??
     assert.fail("the repository chip stands");
+
   // ⌘Return on the empty box: a bare task, which starts on no repository as on one.
   const create = async () => {
     pressInComposer(document, "Enter", { metaKey: true });
     await settle();
   };
+
   /** Stands the card again with the owner listing another workspace. */
   const rehome = async (listed: string) => {
     draw(listed);
     await settle();
   };
+
   return { starts, repositoryChip, create, rehome };
 }
 

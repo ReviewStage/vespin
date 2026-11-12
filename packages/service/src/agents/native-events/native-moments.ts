@@ -105,6 +105,7 @@ export const NATIVE_ENDING = {
   /** The harness or its runner failed, or stopped short of the end. */
   FAILED: "failed",
 } as const;
+
 type NativeEnding = (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING];
 
 /** How a turn found the plan, as its row keeps it (`setPlanStatus`). */
@@ -114,6 +115,7 @@ export const PLAN_STATUS = {
   LIMIT_REACHED: PROVIDER_KEY_STATUS.LIMIT_REACHED,
   INELIGIBLE: PROVIDER_KEY_STATUS.INELIGIBLE,
 } as const;
+
 export type PlanStatus = (typeof PLAN_STATUS)[keyof typeof PLAN_STATUS];
 
 export type NativeMoment =

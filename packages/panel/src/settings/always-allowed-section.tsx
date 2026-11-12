@@ -20,7 +20,7 @@ import {
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsAddRow,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -98,12 +98,12 @@ const WRITE_FAILED = {
 } as const;
 
 /** The add row's shape, then one command's, as the loaded section draws them. */
-const ADD_ROW_SKELETON: SettingsRowSkeletonShape = {
+const ADD_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   controls: [SETTINGS_SKELETON_CONTROL.FIELD, SETTINGS_SKELETON_CONTROL.BUTTON],
 };
 
-const COMMAND_ROW_SKELETON: SettingsRowSkeletonShape = {
+const COMMAND_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],
@@ -129,6 +129,7 @@ function writeRefusal(
   otherwise: string,
 ): string | undefined {
   if (!("failure" in answer)) return undefined;
+
   return answer.failure === ALLOWED_COMMANDS_WRITE_FAILURE.ALLOWED_COMMANDS_FULL
     ? WRITE_FAILED.FULL
     : otherwise;
@@ -170,6 +171,7 @@ const REMOVE_UNDO = {
 function useAddedBy(agentId: string): Actor {
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const listed = listedAgentIn(tasks, agentId);
+
   if (listed === undefined) {
     return {
       kind: ACTOR_KIND.AGENT,
@@ -178,6 +180,7 @@ function useAddedBy(agentId: string): Actor {
       state: ACTOR_STATE.REST,
     };
   }
+
   return { ...agentActor(listed, agentName(listed)), agentId };
 }
 
@@ -190,6 +193,7 @@ function AddedLine({ command }: { command: AllowedCommand }): React.JSX.Element 
       {` ${SECTION.BY} `}
     </>
   );
+
   return (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN} block wrap>
       {command.agentId === null ? (
@@ -213,6 +217,7 @@ function AgentAddedLine({
   agentId: string;
 }): React.JSX.Element {
   const actor = useAddedBy(agentId);
+
   return (
     <ActorLine>
       {added}
@@ -233,6 +238,7 @@ function CommandRow({
   onRemove: () => void;
 }): React.JSX.Element {
   const words = allowedCommandWords(command.prefix);
+
   return (
     <MenuRow
       thing={words}
@@ -264,41 +270,53 @@ function CommandRows({ commands }: { commands: CommandRows }): React.JSX.Element
   // Note that an Undo reads the commands as they stand when it is pressed, since it lands renders after the removal.
   const latest = useRef(commands);
   latest.current = commands;
+
   // Note that a send that never reached the host answers unanswered, so a removal or its Undo says why in its toast rather than leaving its row hidden.
   const doors: RowDoors<CommandRows, typeof ACT_KIND.ALLOWED_COMMANDS_WRITE> = {
     rows: () => latest.current,
     send: (write) => send(write).catch(() => UNANSWERED),
   };
+
   const add = (value: string) => {
     const typedPrefix = typedCommandPrefix(value);
+
     if ("refused" in typedPrefix) {
       setProblem(inputProblem(ADD_REFUSED[typedPrefix.refused]));
+
       return;
     }
+
     setAdding(true);
     setProblem(undefined);
     void doors.send({ add: [...typedPrefix.prefix] }).then((answer) => {
       setAdding(false);
       const refusal = writeRefusal(answer, WRITE_FAILED.ADD);
+
       if (refusal !== undefined) {
         setProblem(refusedShown(refusal, FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE));
+
         return;
       }
+
       setTyped("");
       setLanded(typedPrefix.prefix);
     });
   };
+
   const remove = (command: AllowedCommand) => {
     setRemoving((was) => new Set(was).add(command.id));
     void pressWrite(REMOVE_UNDO, doors, command).finally(() =>
       setRemoving((was) => {
         const left = new Set(was);
         left.delete(command.id);
+
         return left;
       }),
     );
   };
+
   const shown = commands.filter((command) => !removing.has(command.id)).reverse();
+
   return (
     <>
       <SettingsAddRow
@@ -332,6 +350,7 @@ export function AlwaysAllowedSection(): React.JSX.Element {
   const read = useQuery(allowedCommandsQuery(accountId));
   const retry = useMutation(allowedCommandsRetryMutation());
   const commands = read.data?.commands;
+
   return (
     <SettingsSection
       title={SECTION.TITLE}

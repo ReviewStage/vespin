@@ -24,6 +24,7 @@ const POINTER = { LIGHT: BRAND_PALETTE.LIGHT.ACCENT, DARK: BRAND_PALETTE.DARK.AC
 /** A `#rrggbb` color as `rgba()` at an opacity written as the source writes it (`.42`), for the glow round the pointer. */
 function rgba(hex: string, alpha: string): string {
   const value = Number.parseInt(hex.slice(1), 16);
+
   return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
 }
 

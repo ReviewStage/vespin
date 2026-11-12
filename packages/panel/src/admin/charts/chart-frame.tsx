@@ -17,7 +17,7 @@ import {
   GAP,
   Inline,
   JUSTIFY,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   Stack,
   TEXT_ELEMENT,
@@ -228,7 +228,7 @@ export function ChartFrameSkeleton({
       legend={legend}
     >
       <PlotBox height={plot}>
-        <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+        <Skeleton kind={SKELETON_KIND.BLOCK} />
       </PlotBox>
     </ChartFrame>
   );

@@ -22,6 +22,7 @@ export function entryFor(
   position?: string,
 ): TaskSectionEntry {
   const where = position === undefined ? undefined : { position };
+
   return { taskId, sectionId, addedAt, ...where };
 }
 
@@ -34,11 +35,14 @@ function placed(
 ): TaskSections {
   const { sectionId, position } = write;
   const others = state.entries.filter((entry) => entry.taskId !== taskId);
+
   if (sectionId === null) return { ...state, entries: others };
+
   if (!state.sections.some((section) => section.id === sectionId)) return state;
   const standing = state.entries.find((entry) => entry.taskId === taskId);
   const kept = standing?.sectionId === sectionId ? standing : undefined;
   const where = position ?? kept?.position;
+
   return {
     ...state,
     entries: [...others, entryFor(taskId, sectionId, kept?.addedAt ?? now, where)],
@@ -61,6 +65,7 @@ export function applySectionWrite(
     case TASK_SECTION_WRITE.CREATE: {
       if (state.sections.some((section) => section.id === write.id)) return state;
       const { id, workspaceId, title, icon } = write;
+
       const made: TaskSection = {
         id,
         workspaceId,
@@ -68,14 +73,17 @@ export function applySectionWrite(
         createdAt: now,
         ...(icon === undefined ? undefined : { icon }),
       };
+
       return { ...state, sections: [...state.sections, made] };
     }
+
     case TASK_SECTION_WRITE.EDIT:
       return {
         ...state,
         sections: state.sections.map((section) => {
           if (section.id !== write.id) return section;
           const { icon: _, ...rest } = section;
+
           return {
             ...rest,
             title: write.title,

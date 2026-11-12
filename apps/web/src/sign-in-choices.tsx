@@ -44,15 +44,18 @@ export function useSocialSignIn(
   const opening = useMutation({
     mutationFn: async (provider: SocialProvider) => {
       const result = await client.signIn.social({ provider, callbackURL: callbackURL() });
+
       if (result.error) throw new Error("The sign-in could not start.");
     },
     onMutate: () => onBegin?.(),
     onSuccess: () => onStarted?.(),
   });
+
   const begin = (provider: SocialProvider) => {
     if (opening.isPending || opening.isSuccess) return;
     opening.mutate(provider);
   };
+
   return {
     pending: opening.isPending || opening.isSuccess ? opening.variables : undefined,
     failed: opening.isError,

@@ -79,6 +79,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -91,6 +92,7 @@ function glyph(): React.ReactElement {
 function Members(): React.JSX.Element {
   const [open, setOpen] = useState<string | undefined>(undefined);
   const [heard, setHeard] = useState<string[]>([]);
+
   return createElement(
     "div",
     null,
@@ -125,7 +127,9 @@ function button(within: HTMLElement, name: string): HTMLButtonElement {
   const found = [...within.querySelectorAll("button")].find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`No button named ${name}`);
+
   return found;
 }
 
@@ -168,6 +172,7 @@ function walked(names: readonly string[], off: readonly string[] = []): React.Re
 /** Places, each with a button beside the list that turns its row unavailable. */
 function Unavailable({ names }: { names: readonly string[] }): React.JSX.Element {
   const [off, setOff] = useState<readonly string[]>([]);
+
   return createElement(
     Fragment,
     null,
@@ -186,9 +191,11 @@ test("a row's press and its acts are separate buttons in its item, neither insid
   const container = draw(createElement(Members));
   const buttons = [...container.querySelectorAll("button")];
   expect(buttons.length).toBe(4);
+
   for (const each of buttons) {
     expect(each.parentElement?.closest("button")).toBeNull();
   }
+
   const row = button(container, "Ada Lovelaceada@example.comOwner");
   const more = button(container, "More for ada");
   expect(row.closest("li")).toBe(more.closest("li"));
@@ -242,6 +249,7 @@ test("a row whose metadata ends its title's line reads it after the title and be
       }),
     }),
   );
+
   expect(button(container, "Ada LovelaceOwnerada@example.com")).toBeTruthy();
 });
 
@@ -259,10 +267,12 @@ test("a row's lead stands on the line under its title, before the description's 
       }),
     }),
   );
+
   const row = button(
     container,
     "Retry the webhook?2hBilling usage alerts for every workspaceChoice · 2 options",
   );
+
   const lead = row.querySelector(".ui-list-row-lead");
   expect(lead?.querySelector("svg")?.closest('[aria-hidden="true"]')).not.toBeNull();
 });
@@ -282,10 +292,12 @@ test("a row's lead may stand on a line of its own over its title, read first wit
       }),
     }),
   );
+
   const row = button(
     container,
     "Billing usage alerts for every workspace2hRetry the webhook?Choice · 2 options",
   );
+
   const lead = row.querySelector(".ui-list-row-lead");
   expect(lead?.querySelector("svg")?.closest('[aria-hidden="true"]')).not.toBeNull();
 });
@@ -304,6 +316,7 @@ test("a row's lead may lead its description in plain words, read before the desc
       }),
     }),
   );
+
   const row = button(container, "Fix the flaky testNightly flaky-test sweep · Finished2h");
   const lead = row.querySelector(".ui-list-row-lead");
   expect(lead?.querySelector("svg")?.closest('[aria-hidden="true"]')).not.toBeNull();
@@ -321,17 +334,20 @@ test("a row whose lead stands on a line of its own draws it with no description 
       }),
     }),
   );
+
   expect(button(container, "Billing usage alertsRetry the webhook?")).toBeTruthy();
 });
 
 test("Tab meets the list's one row, then each row's acts, the other rows left to the arrows", () => {
   const container = draw(createElement(Members));
+
   const order = [
     "Ada Lovelaceada@example.comOwner",
     "More for ada",
     "Grace Hoppergrace@example.comAdmin",
     "More for grace",
   ].map((name) => button(container, name));
+
   expect([...container.querySelectorAll("button")]).toEqual(order);
   expect(tabStops(container)).toEqual([order[0], order[1], order[3]]);
 });
@@ -348,10 +364,13 @@ test("Tab enters a list once, at its first row, and comes back to the row it lef
 test("↑↓ step between rows, Home and End go to the first and the last", () => {
   const container = draw(walked(["Inbox", "Tasks", "Board", "Automations"]));
   act(() => button(container, "Inbox").focus());
+
   const visited = ["ArrowDown", "ArrowDown", "ArrowUp", "End", "Home"].map((name) => {
     key(name);
+
     return document.activeElement?.textContent;
   });
+
   expect(visited).toEqual(["Tasks", "Board", "Tasks", "Automations", "Inbox"]);
 });
 
@@ -385,6 +404,7 @@ test("the Tab stop moves on when its row turns unavailable", async () => {
 
 test("an arrow held with ⌘, ⌥, Ctrl, or ⇧ is left to the app's own shortcut", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(
       "div",
@@ -392,10 +412,13 @@ test("an arrow held with ⌘, ⌥, Ctrl, or ⇧ is left to the app's own shortcu
       walked(["Inbox", "Tasks", "Board"]),
     ),
   );
+
   act(() => button(container, "Inbox").focus());
+
   for (const held of ["metaKey", "altKey", "ctrlKey", "shiftKey"] as const) {
     key("ArrowDown", { [held]: true });
   }
+
   expect(document.activeElement).toBe(button(container, "Inbox"));
   expect(heard).toEqual(["false", "false", "false", "false"]);
 });
@@ -409,6 +432,7 @@ test("a row that says its own Tab stop is left out of the arrows' walk", () => {
       ),
     }),
   );
+
   expect(tabStops(container)).toEqual([]);
   act(() => button(container, "create_issue").focus());
   key("ArrowDown");
@@ -418,6 +442,7 @@ test("a row that says its own Tab stop is left out of the arrows' walk", () => {
 /** Two lists of places in one box, as a rail's groups stand, whose rows join the box's walk. */
 function Rail(): React.JSX.Element {
   const roving = useRovingKeys<HTMLDivElement>();
+
   return createElement(
     "div",
     roving,
@@ -461,6 +486,7 @@ test("a row that opens nothing is no control, its acts still are", () => {
       }),
     }),
   );
+
   expect(
     [...container.querySelectorAll("button")].map((each) => each.getAttribute("aria-label")),
   ).toEqual(["Run again"]);
@@ -477,12 +503,14 @@ test("a row that opens nothing is still announced as current", () => {
       }),
     }),
   );
+
   const current = container.querySelector('[aria-current="true"]');
   expect(current?.textContent).toBe("Running review");
 });
 
 test("focus is handed back to a row's press through its ref", () => {
   let row: HTMLElement | null = null;
+
   const container = draw(
     createElement(List, {
       label: "Members",
@@ -495,12 +523,14 @@ test("focus is handed back to a row's press through its ref", () => {
       }),
     }),
   );
+
   act(() => row?.focus());
   expect(document.activeElement).toBe(button(container, "Ada Lovelace"));
 });
 
 test("a row that opens nothing hands its item to its ref", () => {
   let row: HTMLElement | null = null;
+
   const container = draw(
     createElement(List, {
       label: "Members",
@@ -512,11 +542,13 @@ test("a row that opens nothing hands its item to its ref", () => {
       }),
     }),
   );
+
   expect(row).toBe(container.querySelector("li"));
 });
 
 test("a key pressed on a row reaches its handler", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Members",
@@ -528,6 +560,7 @@ test("a key pressed on a row reaches its handler", () => {
       }),
     }),
   );
+
   act(() => {
     button(container, "Ada Lovelace").dispatchEvent(
       new KeyboardEvent("keydown", { key: "j", bubbles: true }),
@@ -540,12 +573,14 @@ test("a key pressed on a row reaches its handler", () => {
 function Folding(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [heard, setHeard] = useState<string[]>([]);
+
   const child = createElement(ListRow, {
     key: "child",
     title: "Child",
     depth: 1,
     onPress: ignore,
   });
+
   return createElement(
     "div",
     null,
@@ -596,6 +631,7 @@ test("a nested row is read at its level and its place among the rows under the s
       nest: { position, size: 2 },
       onPress: ignore,
     });
+
   const container = draw(
     createElement(List, {
       label: "Tasks",
@@ -607,10 +643,12 @@ test("a nested row is read at its level and its place among the rows under the s
       ],
     }),
   );
+
   const read = [...container.querySelectorAll("li")].map(
     (item) =>
       `${item.querySelector("button")?.textContent}: level ${item.getAttribute("aria-level")}, ${item.getAttribute("aria-posinset")} of ${item.getAttribute("aria-setsize")}`,
   );
+
   expect(read).toEqual([
     "Parent: level 1, 1 of 2",
     "First child: level 2, 1 of 2",
@@ -621,6 +659,7 @@ test("a nested row is read at its level and its place among the rows under the s
 
 test("a row that opens nothing hears no keys, not even its acts'", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Members",
@@ -631,6 +670,7 @@ test("a row that opens nothing hears no keys, not even its acts'", () => {
       }),
     }),
   );
+
   act(() => {
     button(container, "More for ada").dispatchEvent(
       new KeyboardEvent("keydown", { key: "j", bubbles: true }),
@@ -650,12 +690,14 @@ test("a row current as the page shown beside the list is announced as the page",
       }),
     }),
   );
+
   expect(button(container, "Review the release").getAttribute("aria-current")).toBe("page");
 });
 
 /** A hint that says its words beside the press while the press holds the keyboard. */
 const SayingHint: ListRowHint = ({ label, children }) => {
   const [shown, setShown] = useState(false);
+
   return createElement(
     "div",
     null,
@@ -666,6 +708,7 @@ const SayingHint: ListRowHint = ({ label, children }) => {
 
 test("the app's hint hung from a row's press raises its words while the press holds the keyboard, and the press still opens the row", () => {
   const heard: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Inbox items",
@@ -677,6 +720,7 @@ test("the app's hint hung from a row's press raises its words while the press ho
       }),
     }),
   );
+
   const row = button(container, "Review the release2h");
   expect(container.querySelector("output")).toBeNull();
   act(() => row.focus());
@@ -687,6 +731,7 @@ test("the app's hint hung from a row's press raises its words while the press ho
 
 test("a row that keeps focus, pressed with the pointer, leaves the focus on the field and is pressed", () => {
   const pressed: string[] = [];
+
   const container = draw(
     createElement(
       "div",
@@ -710,18 +755,23 @@ test("a row that keeps focus, pressed with the pointer, leaves the focus on the 
       }),
     ),
   );
+
   const field = container.querySelector("input");
+
   if (field === null) throw new Error("not drawn");
   act(() => field.focus());
+
   // Note that jsdom moves no focus on a mousedown, so the browser's move is read as the press's default action.
   const pointerPress = (row: HTMLButtonElement) => {
     const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
     act(() => {
       row.dispatchEvent(down);
+
       if (!down.defaultPrevented) row.focus();
       row.click();
     });
   };
+
   pointerPress(button(container, "create_issue"));
   expect(document.activeElement).toBe(field);
   pointerPress(button(container, "list_issues"));
@@ -732,6 +782,7 @@ test("a row that keeps focus, pressed with the pointer, leaves the focus on the 
 test("a row out of the tab order is skipped by Tab, yet takes the focus handed to it and its press", () => {
   const pressed: string[] = [];
   let handed: HTMLElement | null = null;
+
   const container = draw(
     createElement(List, {
       label: "Tools",
@@ -745,6 +796,7 @@ test("a row out of the tab order is skipped by Tab, yet takes the focus handed t
       }),
     }),
   );
+
   const row = button(container, "create_issue");
   expect(row.tabIndex).toBe(-1);
   act(() => handed?.focus());
@@ -755,6 +807,7 @@ test("a row out of the tab order is skipped by Tab, yet takes the focus handed t
 
 test("an unavailable row refuses its press and takes no focus", () => {
   const pressed: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Tasks",
@@ -765,6 +818,7 @@ test("an unavailable row refuses its press and takes no focus", () => {
       }),
     }),
   );
+
   const row = button(container, "Ship the release");
   press(row);
   act(() => row.focus());
@@ -787,6 +841,7 @@ test("a field driving the list names a row by its id, which finds that row's wor
       }),
     ),
   );
+
   const active = container.querySelector("input")?.getAttribute("aria-activedescendant");
   expect(document.getElementById(active ?? "")?.textContent).toBe("list_issues");
 });
@@ -803,6 +858,7 @@ test("a row's chevron says nothing to a reader, so the row still reads as its wo
       }),
     }),
   );
+
   const row = button(container, "create_issueOpens an issue");
   expect(row.querySelector("svg")?.closest('[aria-hidden="true"]')).not.toBeNull();
 });
@@ -831,6 +887,7 @@ function standInResizeObserver(): () => void {
       }
     },
   );
+
   return () => {
     for (const callback of [...watching]) callback();
   };
@@ -839,6 +896,7 @@ function standInResizeObserver(): () => void {
 test("acts shown only on hover are still met by Tab after their row, and pressed without it", () => {
   standInResizeObserver();
   const heard: string[] = [];
+
   const container = draw(
     createElement(List, {
       label: "Shells",
@@ -855,6 +913,7 @@ test("acts shown only on hover are still met by Tab after their row, and pressed
       }),
     }),
   );
+
   const order = [button(container, "zshRunning"), button(container, "End zsh")];
   expect([...container.querySelectorAll("button")]).toEqual(order);
   press(button(container, "End zsh"));
@@ -887,6 +946,7 @@ test("a regular row's description says it is cut short once its words run past i
   const resized = standInResizeObserver();
   vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(320);
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(200);
+
   const container = draw(
     createElement(List, {
       label: "Inbox",
@@ -897,6 +957,7 @@ test("a regular row's description says it is cut short once its words run past i
       }),
     }),
   );
+
   act(() => resized());
   const description = container.querySelector(".ui-list-row-description");
   expect(description?.getAttribute("data-overflow")).toBe("true");
@@ -905,6 +966,7 @@ test("a regular row's description says it is cut short once its words run past i
 test("a row a run draws stands where the run places it, at the top level and nested alike", () => {
   const keys = ["first", "nested", "last"];
   const scroller = createRef<HTMLDivElement>();
+
   const container = draw(
     createElement(
       "div",
@@ -925,6 +987,7 @@ test("a row a run draws stands where the run places it, at the top level and nes
       }),
     ),
   );
+
   const rows = [...container.querySelectorAll<HTMLElement>("li[data-row-key]")];
   expect(rows.map((row) => row.dataset.rowKey)).toEqual(keys);
   // Note that the run places each row out of the flow and writes its top itself, so a row the flow stands is drawn below its own place.
@@ -936,6 +999,7 @@ test("a row a run draws stands where the run places it, at the top level and nes
 test("a row that ticks a box is read as a checkbox, checked as its owner holds it, and its press turns it", () => {
   function Ticks() {
     const [ticked, setTicked] = useState(false);
+
     return createElement(
       List,
       { label: "Follow-ups" },
@@ -946,6 +1010,7 @@ test("a row that ticks a box is read as a checkbox, checked as its owner holds i
       }),
     );
   }
+
   const container = draw(createElement(Ticks));
   const row = button(container, "Show pending invitations");
   expect(row.getAttribute("role")).toBe("checkbox");
@@ -959,6 +1024,7 @@ test("a row taken away with the pointer on its press is heard as the pointer lea
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
+
   const list = (rows: readonly string[]) =>
     createElement(
       List,
@@ -972,6 +1038,7 @@ test("a row taken away with the pointer on its press is heard as the pointer lea
         }),
       ),
     );
+
   act(() => root.render(list(["ada", "grace"])));
   // Note that React hears the pointer come onto an element from the `pointerover` it bubbles.
   act(() => {

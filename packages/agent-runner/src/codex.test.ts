@@ -17,6 +17,7 @@ import {
   Layer,
   Logger,
   Match,
+  Predicate,
   Queue,
   Stream,
 } from "effect";
@@ -71,11 +72,13 @@ it.effect(
       // Note that in a sandbox this is the launch's placeholder, the key itself set at its firewall, which the runner reads alike.
       const apiKey = "openai-api-key-for-tests";
       const service = fakeService("sleep 600");
+
       // On its API key it asks no token.
       const { spawned, write, run } = yield* launch([STOPPED], service, {
         ...SANDBOX_ENV,
         [RUNNER_ENV.OPENAI_API_KEY]: apiKey,
       });
+
       yield* write({ ...CONFIG, model: "gpt-6.1-sol", fast: true });
       yield* write({ type: INPUT_LINE.MODEL, fast: true, ultrafast: true });
       yield* write(message("Run sleep 600.", LINE.FIRST));
@@ -124,6 +127,7 @@ it.effect(
 );
 
 const TOKEN_URL = "https://app.test/api/agents/runner-token";
+
 /** A launch on a host, which runs Codex on the machine's own login. */
 const ENV = {
   [RUNNER_ENV.BEARER]: BEARER,
@@ -157,24 +161,30 @@ const CONFIG: CodexConfig = {
 /** A message line of text alone, under the service's id for the line where one is given. */
 function message(text: string, uuid?: string): InputLine {
   const line = { type: INPUT_LINE.MESSAGE, content: [{ type: "text" as const, text }] };
+
   return uuid === undefined ? line : { ...line, uuid };
 }
 
 /** P16's first phase: initialize, initialized, thread/start, turn/start, turn/steer, turn/start, turn/interrupt. */
 const FIRST = recordedExchanges("first");
+
 /** P16's resumed phase, after a restart: initialize, initialized, thread/resume, turn/start. */
 const RESUMED = recordedExchanges("resumed");
 
 function exchange(exchanges: readonly Exchange[], index: number): Exchange {
   const found = exchanges[index];
+
   if (found === undefined) throw new Error(`the recording has no exchange ${index}`);
+
   return found;
 }
 
 const OPEN = [exchange(FIRST, 0), exchange(FIRST, 1), exchange(FIRST, 2)];
 const RESUME = [exchange(RESUMED, 0), exchange(RESUMED, 1), exchange(RESUMED, 2)];
+
 /** The probe's first turn: an edit, a scan, an MCP call, then the CI watch a steer lands in, then completed. */
 const WORKFLOW: Script = { exchanges: [...OPEN, exchange(FIRST, 3), exchange(FIRST, 4)] };
+
 /** The probe's `sleep 600` turn, interrupted. */
 const STOPPED: Script = { exchanges: [...OPEN, exchange(FIRST, 5), exchange(FIRST, 6)] };
 
@@ -222,11 +232,14 @@ function launch(
     const claude = yield* fakeClaudeCode([]);
     const probe = extra.probe ?? fakeProbe();
     const logged: string[] = [];
+
     const recorder = Logger.make(({ message: logMessage }) => {
       logged.push(JSON.stringify(logMessage));
     });
+
     const stdin = yield* Queue.unbounded<string, Cause.Done>();
     const write = (line: CodexConfig | InputLine) => Queue.offer(stdin, JSON.stringify(line));
+
     const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -241,6 +254,7 @@ function launch(
       ),
       Effect.forkScoped,
     );
+
     return {
       spawned: server.spawned,
       write,
@@ -268,10 +282,12 @@ it.effect(
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(folder, { recursive: true })));
       const skills = join(folder, INSTALLED_SKILLS.SKILLS);
       mkdirSync(join(skills, "pr-style"), { recursive: true });
+
       const extraRoots: Exchange = {
         method: "skills/extraRoots/set",
         reply: [{ id: 0, result: {} }],
       };
+
       const withRoot: Script = {
         exchanges: [
           exchange(FIRST, 0),
@@ -290,6 +306,7 @@ it.effect(
           yield* service.seen;
           yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
           assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+
           return spawned[0];
         });
 
@@ -322,6 +339,7 @@ it.effect(
         ],
         fakeService(),
       );
+
       yield* relaunched.write({ ...CONFIG, threadId: THREAD, installedSkills: folder });
       yield* relaunched.closeStdin;
       assert.equal(yield* Fiber.join(relaunched.run), RUNNER_END.INPUT_CLOSED);
@@ -362,7 +380,9 @@ it.effect(
         catalog.models.map((model: { slug: string }) => model.slug),
         JSON.parse(CODEX_BUNDLED_MODELS_JSON).models.map((model: { slug: string }) => model.slug),
       );
-      assert.ok(catalog.models.every((model: object) => !("multi_agent_version" in model)));
+      assert.ok(
+        catalog.models.every((model: { slug: string }) => !("multi_agent_version" in model)),
+      );
       yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
@@ -476,10 +496,12 @@ it.effect(
       yield* write({ ...CONFIG, warm: true });
       yield* write(message("The probe's first turn.", LINE.FIRST));
       yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
+
       for (let step = 0; step < 5_000; step += 1) {
         if (kinds(service.applied).includes(RUNNER_EVENT.IDLE)) break;
         yield* Effect.yieldNow;
       }
+
       assert.equal(run.pollUnsafe(), undefined, "the launch stays up past its turn");
 
       yield* write({ type: INPUT_LINE.RETIRE });
@@ -556,19 +578,23 @@ it.effect(
       const segment = subpath.replace(".jsonl", "_01a1c22e-c54f-77b3-8748-7037accf178c.jsonl");
       // A subpath another agent's runner appended, carried with its copy, names a place outside the home.
       const escaping = "../escaped.jsonl";
+
       const kept = [
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
       ];
+
       const segmentKept = [
         {
           type: "session_meta",
           payload: { id: THREAD, history_base: { end_ordinal_exclusive: 1 } },
         },
       ];
+
       // The store answers the thread's file a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
+
         const answer = Match.value(call.call).pipe(
           Match.when("listSubkeys", () => ({ subkeys: [subpath, segment, escaping] })),
           Match.when("loadPage", () =>
@@ -580,13 +606,16 @@ it.effect(
           ),
           Match.orElse(() => ({})),
         );
+
         return new Response(JSON.stringify(answer));
       });
       const service = fakeService("What exact line");
+
       const { write, run } = yield* launch([{ exchanges: [...RESUME, RESUMED_TURN] }], service, {
         ...ENV,
         CODEX_HOME: home,
       });
+
       yield* write({
         ...CONFIG,
         threadId: THREAD,
@@ -595,8 +624,10 @@ it.effect(
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+
       const lines = (entries: readonly unknown[]) =>
         entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
+
       assert.deepEqual(
         [readFileSync(join(home, subpath), "utf8"), readFileSync(join(home, segment), "utf8")],
         [lines(kept), lines(segmentKept)],
@@ -612,6 +643,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService("What exact line");
+
       const script: Script = {
         exchanges: [
           ...RESUME,
@@ -626,6 +658,7 @@ it.effect(
           RESUMED_TURN,
         ],
       };
+
       const { spawned, write, run } = yield* launch([script], service);
       yield* write({ ...CONFIG, threadId: THREAD });
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
@@ -662,10 +695,12 @@ it.effect(
       );
       // The refused steer's line is said taken when the next turn takes it, not before.
       assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+
       const steeredAt = service.applied.findIndex(
         ({ message: posted }) =>
           "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED && posted.uuid === LINE.STEERED,
       );
+
       const firstCompletedAt = kinds(service.applied).indexOf("turn/completed");
       assert.ok(steeredAt > firstCompletedAt);
     }),
@@ -675,6 +710,7 @@ it.effect("forks a thread app-server will not resume on this launch's model prov
   Effect.gen(function* () {
     const service = fakeService("What exact line");
     const resumed = exchange(RESUMED, 2);
+
     const mismatch: RecordedMessage = {
       id: 3,
       error: {
@@ -687,6 +723,7 @@ it.effect("forks a thread app-server will not resume on this launch's model prov
         },
       },
     };
+
     const script: Script = {
       exchanges: [
         exchange(RESUMED, 0),
@@ -696,6 +733,7 @@ it.effect("forks a thread app-server will not resume on this launch's model prov
         RESUMED_TURN,
       ],
     };
+
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD });
     yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
@@ -714,6 +752,7 @@ it.effect("forks a thread app-server will not resume on this launch's model prov
 /** The resumed launch, its second message's steer refused as said, then, where it waits, run as the next turn. */
 function refusedSteer(error: NonNullable<RecordedMessage["error"]>, waits: boolean): Script {
   const refusal: RecordedMessage = { id: 4, error };
+
   return {
     exchanges: [
       ...RESUME,
@@ -727,6 +766,7 @@ function refusedSteer(error: NonNullable<RecordedMessage["error"]>, waits: boole
 it.effect("sends a steer refused by a turn that cannot be steered as the next turn", () =>
   Effect.gen(function* () {
     const service = fakeService("What exact line");
+
     const script = refusedSteer(
       {
         code: -32600,
@@ -739,6 +779,7 @@ it.effect("sends a steer refused by a turn that cannot be steered as the next tu
       },
       true,
     );
+
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD });
     yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
@@ -793,14 +834,17 @@ it.effect("ends the launch as failed when app-server refuses a steer for any oth
 it.effect("ends the launch as stopped when app-server never answers the stop's interrupt", () =>
   Effect.gen(function* () {
     const service = fakeService("sleep 600");
+
     const hung: Script = {
       exchanges: [...OPEN, exchange(FIRST, 5), { method: "turn/interrupt", reply: [] }],
     };
+
     const { spawned, write, run } = yield* launch([hung], service);
     yield* write(CONFIG);
     yield* write(message("Run `sleep 600` and wait for it to finish."));
     yield* service.seen;
     yield* write({ type: INPUT_LINE.STOP });
+
     while (received(spawned[0], "turn/interrupt").length === 0) yield* Effect.yieldNow;
     yield* Effect.yieldNow.pipe(Effect.repeat({ times: 50 }));
     yield* TestClock.adjust(Duration.minutes(1));
@@ -817,10 +861,12 @@ it.effect("ends the launch as stopped when app-server never answers the stop's i
 it.effect("ends the launch as failed when app-server exits, its secrets taken out of why", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const { write, run } = yield* launch(
       [{ exchanges: [...OPEN, exchange(FIRST, 3)], exitWith: `panic: bad token ${BEARER}` }],
       service,
     );
+
     yield* write(CONFIG);
     yield* write(message("The probe's first turn."));
 
@@ -855,7 +901,9 @@ it.effect("compacts the thread in a compaction line's place, its words dropped",
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
     const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+
     if (started === undefined) throw new Error("the resumed turn has no turn/started");
+
     const script: Script = {
       exchanges: [
         ...RESUME,
@@ -865,6 +913,7 @@ it.effect("compacts the thread in a compaction line's place, its words dropped",
         },
       ],
     };
+
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD });
     yield* write({
@@ -888,7 +937,9 @@ it.effect("starts the next turn for a message Vespin sent just before the turn c
     const service = fakeService("turn/completed");
     const release = yield* Deferred.make<void>();
     const userMessage = RESUMED_TURN.reply.find((line) => line.method === "item/started");
+
     if (userMessage === undefined) throw new Error("the resumed turn has no user message");
+
     const script: Script = {
       exchanges: [
         ...RESUME,
@@ -906,6 +957,7 @@ it.effect("starts the next turn for a message Vespin sent just before the turn c
         RESUMED_TURN,
       ],
     };
+
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD });
     yield* write(message("What exact line did you first write to PROBE.md?"));
@@ -930,6 +982,7 @@ it.effect("starts the next turn for a message Vespin sent just before the turn c
 /** The value of the `-c` override `key` a process was started with, where it has one. */
 function override(process: Spawned | undefined, key: string): string | undefined {
   const prefix = `${key}=`;
+
   return process?.args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
 }
 
@@ -941,11 +994,14 @@ function override(process: Spawned | undefined, key: string): string | undefined
 function fakeTokenRoute(chatgptAccountId?: string) {
   const bearers: (string | null)[] = [];
   let issued = 0;
+
   const respond = async (_url: string, init: RequestInit) => {
     bearers.push(new Headers(init.headers).get("authorization"));
     issued += 1;
+
     return Response.json({ accessToken: `plan-token-${issued}`, chatgptAccountId });
   };
+
   return { bearers, respond };
 }
 
@@ -965,19 +1021,24 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService();
       const route = fakeTokenRoute(WORKSPACE);
+
       const http = fakeHttpClientLayer((url, init) =>
         url === TOKEN_URL ? route.respond(url, init) : service.respond(url, init),
       );
+
       const login: Exchange = {
         method: "account/login/start",
         reply: [{ id: 0, result: { type: "chatgptAuthTokens" } }],
       };
+
       // App-server asks for fresh tokens as the thread resumes, and the turn goes out once the runner answered.
       const resumed: Exchange = {
         ...exchange(RESUMED, 2),
         reply: [REFRESH_REQUEST, ...exchange(RESUMED, 2).reply],
       };
+
       const answered: RecordedMessage[] = [];
+
       const turn: Exchange = {
         ...RESUMED_TURN,
         beforeReply: (process) =>
@@ -985,12 +1046,14 @@ it.effect(
             answered.push(answer);
           }),
       };
+
       const { spawned, write, run, logged } = yield* launch(
         [{ exchanges: [exchange(RESUMED, 0), exchange(RESUMED, 1), login, resumed, turn] }],
         service,
         SANDBOX_ENV,
         { http },
       );
+
       yield* write({ ...CONFIG, threadId: THREAD });
       yield* write(message("What exact line did you first write to PROBE.md?"));
 
@@ -1021,6 +1084,7 @@ it.effect(
       assert.equal(override(process, "model_provider"), undefined);
 
       const posted = service.bodies.join("\n");
+
       for (const secret of ["plan-token-1", "plan-token-2"]) {
         assert.ok(!posted.includes(secret));
         assert.ok(!logged.some((line) => line.includes(secret)));
@@ -1058,11 +1122,13 @@ const REVERTED: Exchange = {
 it.effect("reverts a rewound thread to before the turn that took the line the rewind dropped", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const page = turnsPage([
       { id: "turn-3", line: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e09" },
       { id: "turn-2", line: LINE.STEERED },
       { id: "turn-1", line: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e08" },
     ]);
+
     const script: Script = { exchanges: [...RESUME, page, REVERTED, RESUMED_TURN] };
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD, rewindBefore: LINE.STEERED });
@@ -1170,22 +1236,28 @@ it.effect.each([
   Effect.gen(function* () {
     const home = mkdtempSync(join(tmpdir(), "codex-home-"));
     const paths = files.map((file) => join(home, file));
+
     // Codex writes each file as it answers, so it stands with lines the store has none of.
     for (const path of paths) {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, FRESH_LINES.map((line) => `${JSON.stringify(line)}\n`).join(""));
     }
+
     const appended: unknown[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const call = JSON.parse(String(init?.body));
+
       if (call.call === "append") appended.push({ key: call.key, entries: call.entries });
+
       return new Response(JSON.stringify(call.call === "listSubkeys" ? { subkeys: [] } : {}));
     });
     const script: Script = { exchanges: [...exchanges(paths), RESUMED_TURN] };
+
     const { spawned, write, run } = yield* launch([script], fakeService(), {
       ...ENV,
       CODEX_HOME: home,
     });
+
     yield* write({
       ...CONFIG,
       ...config,
@@ -1235,9 +1307,10 @@ function lostTurn(httpStatusCode: number | null): Exchange {
   const completed = RESUMED_TURN.reply.at(-1);
   assert.ok(completed?.method === "turn/completed");
   const params = completed.params;
-  assert.ok(typeof params === "object" && params !== null && "turn" in params);
+  assert.ok(Predicate.isObjectKeyword(params) && "turn" in params);
   const turn = params.turn;
-  assert.ok(typeof turn === "object" && turn !== null);
+  assert.ok(Predicate.isObjectKeyword(turn));
+
   return {
     method: "turn/start",
     reply: [
@@ -1266,6 +1339,7 @@ function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
   return Effect.gen(function* () {
     const posted = () =>
       service.applied.some(({ message }) => "type" in message && message.type === type);
+
     for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
     assert.ok(posted(), `the service took no ${type}`);
   });
@@ -1277,9 +1351,11 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService();
       const script: Script = { exchanges: [...RESUME, lostTurn(null), RESUMED_TURN] };
+
       const { spawned, write, run, probed } = yield* launch([script], service, ENV, {
         probe: fakeProbe(1),
       });
+
       yield* write({ ...CONFIG, threadId: THREAD });
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -1289,10 +1365,12 @@ it.effect(
       yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
       assert.equal(probed.targets.length, 2);
+
       const restored = service.applied.find(
         ({ message: posted }) =>
           "type" in posted && posted.type === RUNNER_EVENT.CONNECTION_RESTORED,
       )?.message;
+
       assert.ok(restored !== undefined && "type" in restored);
       assert.deepEqual(restored, {
         type: RUNNER_EVENT.CONNECTION_RESTORED,
@@ -1317,9 +1395,11 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService();
       const script: Script = { exchanges: [...RESUME, lostTurn(null)] };
+
       const { write, run, probed } = yield* launch([script], service, ENV, {
         probe: fakeProbe(Number.POSITIVE_INFINITY),
       });
+
       yield* write({ ...CONFIG, threadId: THREAD });
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -1328,6 +1408,7 @@ it.effect(
         if (run.pollUnsafe() !== undefined) break;
         yield* TestClock.adjust(RUNNER_RECONNECT.LONGEST_WAIT_MS);
       }
+
       assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
       assert.deepEqual(service.applied.at(-1)?.message, {
         type: RUNNER_EVENT.END,
@@ -1392,6 +1473,7 @@ const ELICITATION: RecordedMessage = {
 /** The sleep turn with what app-server asks the client after the command starts. */
 function sleepTurnAsking(...asked: readonly RecordedMessage[]): Script {
   const turn = exchange(FIRST, 5);
+
   return {
     exchanges: [...OPEN, { ...turn, reply: [...turn.reply, ...asked] }, exchange(FIRST, 6)],
   };
@@ -1409,10 +1491,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
+
       const { spawned, write, run } = yield* launch(
         [sleepTurnAsking(COMMAND_ASK, ELICITATION)],
         service,
       );
+
       yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.ASK });
       yield* write(message("Run sleep 600.", LINE.FIRST));
       yield* service.seen;
@@ -1532,6 +1616,7 @@ it.effect(
       const [process] = spawned;
       assert.equal(override(process, "approvals_reviewer"), '"auto_review"');
       assert.equal(received(process, "turn/start")[0]?.approvalsReviewer, "auto_review");
+
       const declined = service.applied.flatMap(({ message: each }) =>
         "method" in each &&
         each.method === "item/completed" &&
@@ -1539,6 +1624,7 @@ it.effect(
           ? [each.params.item]
           : [],
       );
+
       assert.deepEqual(
         declined.map((item) =>
           item.type === "commandExecution" ? item.aggregatedOutput : undefined,

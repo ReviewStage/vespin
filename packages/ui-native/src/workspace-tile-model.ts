@@ -19,6 +19,7 @@ const NO_LETTER_SYMBOL = "square.fill";
  */
 export function tileSymbol(name: string): SfSymbol {
   const letter = identityLetter(name).toLowerCase();
+
   // SAFETY: SF Symbols names a filled square for every letter and digit `SQUARED` passes.
   return (SQUARED.test(letter) ? `${letter}.square.fill` : NO_LETTER_SYMBOL) as SfSymbol;
 }
@@ -26,5 +27,6 @@ export function tileSymbol(name: string): SfSymbol {
 /** The hue a workspace's letter stands on, read off its id, in the light theme or the dark. */
 export function tileHue(id: string, dark: boolean): string {
   const hues = dark ? IDENTITY_HUE.DARK : IDENTITY_HUE.LIGHT;
+
   return hues[identityHue(id) - 1] ?? hues[0];
 }

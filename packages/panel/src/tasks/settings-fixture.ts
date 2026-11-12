@@ -68,6 +68,7 @@ import type { WorkspaceVariable } from "@repo/features/workspace-environment-wir
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -118,6 +119,7 @@ const WORKSPACE = { PERSONAL: "workspace-personal", ACME: "workspace-acme" } as 
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ACCOUNT_ID = "user-ada";
+
 const ACCOUNT: AccountSnapshot = {
   status: ACCOUNT_STATUS.SIGNED_IN,
   id: ACCOUNT_ID,
@@ -129,9 +131,8 @@ const ACCOUNT: AccountSnapshot = {
 /** An admin of the service, read, so Admin stands rather than waiting on the read. */
 const ADMIN_ACCESS = { admin: true } as const;
 
-/** The account's own experiments the staged pages stand behind: Hosts' page and Skills'. Memory's is its workspaces' (`tasks-fixture.ts`). */
+/** The account's own experiments the staged pages stand behind: Skills'. Memory's is its workspaces' (`tasks-fixture.ts`). */
 const STAGED_EXPERIMENTS = {
-  [EXPERIMENT.BRING_YOUR_OWN_HOST]: true,
   [EXPERIMENT.SKILLS]: true,
 } as const;
 
@@ -231,6 +232,7 @@ const MEMBERS: ReadonlyMap<string, readonly WorkspaceMember[]> = new Map([
  */
 export function settingsTasksView(profile: string, list: TasksView): TasksView | undefined {
   if (!SETTINGS_LINKS.has(profile)) return undefined;
+
   return {
     ...list,
     // Note that Memory's page and Agents' Always allowed name the agents that kept their memories and commands, so the list carries them, as it carries every task's agents.
@@ -298,12 +300,15 @@ function integrationAccount(
 
 /** Each provider's first account's word, which a provider with none answers disconnected. */
 function integrationStatuses(): Record<IntegrationProvider, IntegrationStatus> {
+  // SAFETY: the entries are one per provider in INTEGRATION_PROVIDER_LIST, which lists every IntegrationProvider.
   const statuses = Object.fromEntries(
     INTEGRATION_PROVIDER_LIST.map((provider) => [provider, INTEGRATION_STATUS.DISCONNECTED]),
   ) as Record<IntegrationProvider, IntegrationStatus>;
+
   for (const account of INTEGRATION_ACCOUNTS) {
     if (account.connection === account.provider) statuses[account.provider] = account.status;
   }
+
   return statuses;
 }
 
@@ -341,8 +346,10 @@ const MODELS: readonly CatalogModel[] = [
 
 /** Every connected staged server's tools, as the host holds them for the windows. */
 const STAGED_TOOLS: AppIntegrationTools = Object.fromEntries(
-  INTEGRATION_ACCOUNTS.filter((account) => account.status === INTEGRATION_STATUS.CONNECTED).map(
-    (account) => [account.connection, { rows: { tools: TOOLS } }],
+  INTEGRATION_ACCOUNTS.flatMap((account) =>
+    account.status === INTEGRATION_STATUS.CONNECTED
+      ? [[account.connection, { rows: { tools: TOOLS } }] as const]
+      : [],
   ),
 );
 
@@ -410,7 +417,9 @@ function skills(workspaceId: string): InstalledSkillSummary[] {
 /** One staged skill read whole: its `SKILL.md`, its frontmatter naming it, and its one file; none for an id no staged skill has. */
 function skillContent(id: string) {
   const skill = skills("").find((each) => each.id === id);
+
   if (skill === undefined) return undefined;
+
   const skillFile = [
     "---",
     `name: ${skill.name}`,
@@ -422,6 +431,7 @@ function skillContent(id: string) {
     skill.description,
     "",
   ].join("\n");
+
   return { id, skillFile, files: [{ path: "SKILL.md", bytes: skillFile.length }] };
 }
 
@@ -542,20 +552,24 @@ function trailingDays(days: number): readonly string[] {
 /** A count that rises over the window and dips at weekends, so a chart of it reads as a real one. */
 function wave(index: number, base: number, step: number): number {
   const weekend = index % 7 === 5 || index % 7 === 6;
+
   return Math.round((base + index * step) * (weekend ? 0.4 : 1) + ((index * 7) % 5));
 }
 
 /** Six weekly cohorts, each retained a little less week on week, the newest still accruing. */
 function cohorts(): AdminRetentionCohort[] {
   const weeks = 6;
+
   return Array.from({ length: weeks }, (_, cohort) => {
     const size = 18 + cohort * 4;
     const reached = weeks - cohort;
+
     return {
       weekStart: new Date(NOW - (weeks - cohort) * 7 * DAY).toISOString().slice(0, 10),
       size,
       cells: Array.from({ length: reached }, (_, offset) => {
         const activeAccounts = offset === 0 ? size : Math.round(size * (0.62 - offset * 0.07));
+
         return {
           offset,
           activeAccounts,
@@ -598,13 +612,17 @@ const NON_ADMIN_ACCOUNTS = 640;
 function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
   const windowDays =
     adminMetricsWindow(query[ADMIN_METRICS_WINDOW_PARAM]) ?? ADMIN_METRICS_WINDOW_DEFAULT;
+
   const adminsHidden =
     adminMetricsScope(query[ADMIN_METRICS_SCOPE_PARAM]) !== ADMIN_METRICS_SCOPE.ALL;
+
   // A month's active days scaled to the window, at least one and never more than the window holds.
   const activeIn = (monthly: number) =>
     Math.min(windowDays, Math.max(1, Math.round((monthly * windowDays) / 30)));
+
   const days = trailingDays(windowDays);
   const retention = { weeks: 6, cohorts: cohorts() };
+
   const funnel = [
     [FUNNEL_STEP.SIGNED_UP, 64],
     [FUNNEL_STEP.GITHUB_CONNECTED, 51],
@@ -613,9 +631,11 @@ function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
     [FUNNEL_STEP.OPENED_PR, 19],
     [FUNNEL_STEP.MERGED_PR, 14],
   ] as const;
+
   // The signups are the daily series summed, as the service counts them, so the total and the funnel's base agree with the bars.
   const dailySignups = days.map((day, index) => ({ day, count: wave(index, 1, 0.08) }));
   const signedUp = dailySignups.reduce((sum, day) => sum + day.count, 0);
+
   const reach = [
     [REACH_FEATURE.TASKS, 38],
     [REACH_FEATURE.AGENTS, 33],
@@ -623,13 +643,16 @@ function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
     [REACH_FEATURE.INTEGRATIONS, 29],
     [REACH_FEATURE.AUTOMATIONS, 9],
   ] as const;
+
   const activeDevelopers = adminsHidden ? 42 : 42 + ADMIN_ACCOUNTS;
+
   const topAccounts = [
     topAccount("user-maya", "Maya Okafor", activeIn(27)),
     topAccount(ACCOUNT_ID, "Ada Lovelace", activeIn(24), true),
     topAccount("user-theo", "Theo Lindqvist", activeIn(19)),
     topAccount("user-priya", "Priya Raman", activeIn(12)),
   ];
+
   return {
     generatedAt: NOW,
     windowDays,
@@ -671,6 +694,7 @@ function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
       funnel: funnel.map(([step, monthly]) => {
         // Each step keeps its month's share of the signups, so no step outnumbers the one before it.
         const accounts = Math.round((signedUp * monthly) / 64);
+
         return { step, accounts, share: signedUp === 0 ? null : accounts / signedUp };
       }),
       reach: {
@@ -727,6 +751,7 @@ let acmeVariables: readonly WorkspaceVariable[] = [
 /** The variables a write leaves, in name order as the service answers them. */
 function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   acmeVariables = [...variables].sort((one, other) => one.name.localeCompare(other.name));
+
   return { variables: acmeVariables };
 }
 
@@ -794,6 +819,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
           id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
           label: "Storybook",
           command: "cd packages/ui && pnpm storybook",
+          availableIn: RUN_ACTION_AVAILABILITY.LOCAL,
         },
       ],
       updatedAt: NOW - HOUR,
@@ -806,24 +832,30 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
   const others = (acmeSandboxSetup.runActions ?? []).filter(
     (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
   );
+
   const keepable = new Set(
     (acmeSandboxSetup.runActions ?? [])
       .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
       .flatMap((each) => each.actions.map((action) => action.id)),
   );
-  const named = actions.map(({ id, label, command }) => ({
+
+  const named = actions.map(({ id, label, command, availableIn }) => ({
     id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
     label,
     command,
+    ...(availableIn === undefined ? undefined : { availableIn }),
   }));
+
   const lists =
     named.length === 0 ? others : [...others, { repository, actions: named, updatedAt: NOW }];
+
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
     runActions: lists.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
+
   return acmeSandboxSetup;
 }
 
@@ -834,25 +866,32 @@ function sandboxSetupAnswer(
   kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
 ) {
   const removes = script.trim() === "";
+
   if (repository === undefined) {
     acmeSandboxSetup = {
       ...acmeSandboxSetup,
       install: removes ? null : { ...acmeSandboxSetup.install, script, updatedAt: NOW },
     };
+
     return acmeSandboxSetup;
   }
+
   const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
+
   const named = (each: { readonly repository: string }) =>
     each.repository.toLowerCase() === repository.toLowerCase();
+
   const others = acmeSandboxSetup[list].filter((each) => !named(each));
   // A save keeps the script's last run, which ran before it.
   const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+
   const saved = {
     repository,
     script,
     updatedAt: NOW,
     ...(lastRun === undefined ? undefined : { lastRun }),
   };
+
   const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
@@ -860,6 +899,7 @@ function sandboxSetupAnswer(
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
+
   return acmeSandboxSetup;
 }
 
@@ -869,8 +909,10 @@ type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /** Every read the staged pages ask, answered as the service would answer it for this account. */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
     name: "fra-02",
@@ -881,11 +923,13 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   }),
   [ACT_KIND.WORKSPACE_SLACK_BOT_NOTIFICATIONS]: ({ notifications }) => {
     acmeSlackBot = { ...acmeSlackBot, notifications };
+
     return acmeSlackBot;
   },
   [ACT_KIND.WORKSPACE_SLACK_BOT_REPOSITORY]: ({ repository }) => {
     const { defaultRepository: _cleared, ...rest } = acmeSlackBot;
     acmeSlackBot = repository === null ? rest : { ...rest, defaultRepository: repository };
+
     return acmeSlackBot;
   },
   [ACT_KIND.WORKSPACE_SLACK_BOT_CHANNEL]: ({ channelId, member, repository }) => {
@@ -895,11 +939,14 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
       const joined = member ?? channel.member;
       // A channel the bot left keeps no repository, as the service forgets it.
       const kept = !joined || repository === null ? undefined : (repository ?? channel.repository);
+
       return kept === undefined
         ? { ...plain, member: joined }
         : { ...plain, member: joined, repository: kept };
     });
+
     acmeSlackBot = { ...acmeSlackBot, channels };
+
     return acmeSlackBot;
   },
   [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
@@ -1107,16 +1154,19 @@ function allowedCommandWritten(write: AllowedCommandWriteParams): AllowedCommand
         agentId: null,
         addedAt: Date.now(),
       };
+
       stagedCommands = [...stagedCommands, added];
     }
   } else {
     stagedCommands = stagedCommands.filter((each) => !samePrefix(each.prefix, write.remove));
   }
+
   stagedAllowedCommands = heldCommands(stagedCommands);
   // Note that the document is laid at once, as the host lays a write's answer, since nothing else delivers it under a fixture run.
   fixtureClient()?.setQueryData(appStateQuery.queryKey, (doc) =>
     doc === undefined ? doc : { ...doc, [LIVE_READ.ALLOWED_COMMANDS]: stagedAllowedCommands },
   );
+
   return { commands: stagedCommands };
 }
 
@@ -1211,6 +1261,7 @@ function beatsStaged(): AppDevicePresences {
       rows: { beats: BEATING_HOSTS.map((deviceId) => ({ deviceId, beatAt: at })), askedAt: at },
     },
   };
+
   return stagedBeats;
 }
 
@@ -1241,7 +1292,9 @@ const STAGED_INTEGRATIONS: AppIntegrations = {
  */
 export function settingsAppState(profile: string, state: AppStateSnapshot): AppStateSnapshot {
   const held = { ...state, [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS };
+
   if (!SIGNED_IN_PROFILES.has(profile)) return held;
+
   return {
     ...held,
     account: ACCOUNT,
@@ -1277,9 +1330,11 @@ function stagedSettings(
   settings: NonNullable<AppStateSnapshot["settings"]>,
 ): NonNullable<AppStateSnapshot["settings"]> {
   const held = STAGED_SETTINGS.get(settings);
+
   if (held !== undefined) return held;
   const staged = { ...settings, experiments: { ...settings.experiments, ...STAGED_EXPERIMENTS } };
   STAGED_SETTINGS.set(settings, staged);
+
   return staged;
 }
 
@@ -1296,5 +1351,6 @@ export function settingsActAnswer(
   if (!SIGNED_IN_PROFILES.has(profile)) return undefined;
   // SAFETY: the table is keyed by kind, each answer taking that kind's payload and answering its result.
   const answer = ANSWERS[kind] as StagedAnswer<PortActKind> | undefined;
+
   return answer === undefined ? undefined : { answer: answer(payload) };
 }

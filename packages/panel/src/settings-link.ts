@@ -70,24 +70,30 @@ export function useSettingsRoute(input: {
   const listed = standing && page === undefined;
   // Note that its list stands on the page last shown, which a narrow room's way back to it marks; Settings entered anew stands on Profile.
   const lastPage = useRef<string | undefined>(undefined);
+
   if (!standing) lastPage.current = undefined;
   else if (page !== undefined) lastPage.current = page;
   const shownPage = page ?? lastPage.current;
   const view = settingsViewNamed(shownPage) ?? SETTINGS_VIEW.ACCOUNT;
+
   const listAddress = !standing
     ? undefined
     : slug === undefined
       ? router.buildLocation({ to: "/app/settings" }).href
       : router.buildLocation({ to: "/$workspace/settings", params: { workspace: slug } }).href;
+
   // Settings goes under the workspace a link named, else the one it stands under, else the one the sidebar lists.
   const slugFor = (workspace: string | undefined): string | undefined =>
     workspaces.find((each) => each.id === workspace)?.slug ?? slug;
+
   const go = (to: string | undefined, under: string | undefined, replace: boolean) => {
     if (under === undefined) {
       if (to === undefined) void navigate({ to: "/app/settings", replace });
       else void navigate({ to: "/app/settings/$page", params: { page: to }, replace });
+
       return;
     }
+
     if (to === undefined) {
       void navigate({ to: "/$workspace/settings", params: { workspace: under }, replace });
     } else {
@@ -98,6 +104,7 @@ export function useSettingsRoute(input: {
       });
     }
   };
+
   const open = (link: SettingsLink) => {
     // Note that entering Settings in a narrow room stands it on its page list, which a link to the list keeps.
     const to = link.listed === true ? undefined : link.page;
@@ -107,8 +114,10 @@ export function useSettingsRoute(input: {
     const replace = (standing && !(narrow && listed && to !== undefined)) || fromPairing;
     go(to, slugFor(link.workspaceId ?? workspaceId ?? listedId), replace);
   };
+
   const list = () => {
     if (standing) go(undefined, slug, true);
   };
+
   return { standing, view, listed, workspaceId, listAddress, open, list };
 }

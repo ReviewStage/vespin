@@ -31,6 +31,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -44,6 +45,7 @@ function switchNamed(page: HTMLElement, name: string): HTMLElement {
 /** A switch whose state the caller holds. */
 function Notify(): React.JSX.Element {
   const [on, setOn] = useState(false);
+
   return createElement(Switch, {
     checked: on,
     label: "Notify when an agent finishes",
@@ -63,19 +65,23 @@ test("a switch is named by its label and each press asks for the other state", (
 test("a labeled switch writes its name beside it, and a press on the words turns it", () => {
   function Words(): React.JSX.Element {
     const [on, setOn] = useState(false);
+
     return createElement(LabeledSwitch, { checked: on, label: "Auto-merge", onChange: setOn });
   }
+
   const page = render(createElement(Words));
   const control = switchNamed(page, "Auto-merge");
   const words = page.querySelector("label")?.lastElementChild ?? assert.fail("no words");
   assert.equal(words.textContent, "Auto-merge");
-  act(() => (words as HTMLElement).click());
+  assert.ok(words instanceof HTMLElement);
+  act(() => words.click());
   assert.equal(control.getAttribute("aria-checked"), "true");
 });
 
 test("the drawing alone is hidden from a reader, and the row around it is the switch", () => {
   function Row(): React.JSX.Element {
     const [on, setOn] = useState(true);
+
     return createElement(
       "button",
       { type: "button", role: "menuitemcheckbox", "aria-checked": on, onClick: () => setOn(!on) },
@@ -83,6 +89,7 @@ test("the drawing alone is hidden from a reader, and the row around it is the sw
       createElement(SwitchMark, { checked: on }),
     );
   }
+
   const page = render(createElement("div", { role: "menu" }, createElement(Row)));
   assert.equal(page.querySelectorAll('[role="switch"]').length, 0);
   const row = page.querySelector<HTMLElement>('[role="menuitemcheckbox"]') ?? assert.fail("no row");
@@ -111,6 +118,7 @@ test("a switch is described by the words its caller points it at, by either name
       }),
     ),
   );
+
   for (const name of ["Alerts", "Digest"]) {
     const described = switchNamed(page, name).getAttribute("aria-describedby") ?? "";
     assert.equal(document.getElementById(described)?.textContent, "Sends one notice an hour.");
@@ -119,6 +127,7 @@ test("a switch is described by the words its caller points it at, by either name
 
 test("a locked switch keeps the keyboard and the pointer but takes no press, and says why it is locked", () => {
   const asked: boolean[] = [];
+
   const page = render(
     createElement(Switch, {
       checked: true,
@@ -127,6 +136,7 @@ test("a locked switch keeps the keyboard and the pointer but takes no press, and
       onChange: (next) => asked.push(next),
     }),
   );
+
   const control = switchNamed(page, "Task descriptions");
 
   act(() => control.click());
@@ -135,9 +145,11 @@ test("a locked switch keeps the keyboard and the pointer but takes no press, and
   assert.equal(control.getAttribute("aria-checked"), "true");
   assert.equal(control.getAttribute("aria-readonly"), "true");
   assert.equal(control.hasAttribute("disabled"), false);
+
   const described = (control.getAttribute("aria-describedby") ?? "")
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent)
     .join(" ");
+
   assert.match(described, /Only an admin can change this/u);
 });

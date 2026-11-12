@@ -91,6 +91,7 @@ function protoDefining(of: Node | AbstractRange, name: string): object {
   ) {
     if (Object.hasOwn(proto, name)) return proto;
   }
+
   return assert.fail(`nothing up the chain defines ${name}`);
 }
 
@@ -101,12 +102,14 @@ function drawServed(html: string): DrawnPage {
   const framed = frame.contentWindow ?? assert.fail("the frame has no window");
   const page = framed.document;
   page.documentElement.innerHTML = html;
+
   // Note that a script written as markup never runs, so each is written again as an element.
   for (const parsedScript of [...page.querySelectorAll("script")]) {
     const script = page.createElement("script");
     script.textContent = parsedScript.textContent;
     parsedScript.replaceWith(script);
   }
+
   const posted: Posted[] = [];
   vi.spyOn(framed.parent, "postMessage").mockImplementation((message) => {
     posted.push(readAnswer(message));
@@ -122,10 +125,13 @@ function drawServed(html: string): DrawnPage {
       scrolled.push(this.id);
     },
   });
+
   const ask = (asked: PageFindAsk | PagePickAsk, from: MessageEventSource | null = framed.parent) =>
     framed.dispatchEvent(new MessageEvent("message", { data: asked, source: from }));
+
   const drawnPage = { frame, posted, scrolled, ask };
   drawn.push(drawnPage);
+
   return drawnPage;
 }
 
@@ -197,6 +203,7 @@ it.effect(
       const { frame, ask, scrolled } = yield* draw(
         '<!doctype html><div style="overflow-y: auto"><p id="inner">Invites sent</p></div>',
       );
+
       const framed = frame.contentWindow ?? assert.fail();
       const page = frame.contentDocument ?? assert.fail();
       const scroller = page.querySelector("div") ?? assert.fail();
@@ -290,6 +297,7 @@ it.effect(
       const framed = frame.contentWindow ?? assert.fail();
       const seen: string[] = [];
       framed.addEventListener("keydown", (event) => seen.push(event.key));
+
       const press = (key: string, shiftKey = false, repeat = false) => {
         const event = new KeyboardEvent("keydown", {
           key,
@@ -299,7 +307,9 @@ it.effect(
           bubbles: true,
           cancelable: true,
         });
+
         frame.contentDocument?.body.dispatchEvent(event);
+
         return event.defaultPrevented;
       };
 
@@ -354,10 +364,13 @@ it.effect(
           "<script>addEventListener('click', (event) => { if (event.target.id === 'delegated') event.preventDefault(); });</script>",
         ].join("\n"),
       );
+
       const page = frame.contentDocument ?? assert.fail();
+
       const press = (id: string) => {
         const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
         page.getElementById(id)?.dispatchEvent(event);
+
         return event.defaultPrevented;
       };
 
@@ -395,8 +408,10 @@ it.effect(
           "<script>addEventListener('click', () => { document.body.dataset.pressed = 'yes'; });</script>",
         ].join("\n"),
       );
+
       const page = frame.contentDocument ?? assert.fail();
       const pressed = page.querySelectorAll("p")[1] ?? assert.fail();
+
       const press = () =>
         pressed.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 

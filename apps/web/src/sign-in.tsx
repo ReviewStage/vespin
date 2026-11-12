@@ -38,11 +38,13 @@ function providerHint(): SocialProvider | undefined {
  */
 function SignIn(): React.JSX.Element {
   const [provider] = useState(providerHint);
+
   const { pending, failed, begin } = useSocialSignIn(authClient, {
     // Note that a preview's sign-in step sends its browser here and asks to be returned to, so it can go on to the preview.
     callbackURL: () => previewSignInReturn(window.location.search),
     onBegin: () => captureSiteEvent(SITE_EVENT.SIGN_IN_START),
   });
+
   const startedFromHint = useRef(false);
 
   useEffect(() => {
@@ -62,6 +64,7 @@ function SignIn(): React.JSX.Element {
       />
     );
   }
+
   return (
     <AuthPage
       mark={<AuthMark provider={provider} />}

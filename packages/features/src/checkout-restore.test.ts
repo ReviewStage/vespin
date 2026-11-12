@@ -42,6 +42,7 @@ function restore(cwd: string, snapshot: Parameters<typeof checkoutRestoreEnv>[0]
     encoding: "utf8",
     env: { ...GIT_ENV, ...checkoutRestoreEnv(snapshot) },
   });
+
   return ran.status ?? -1;
 }
 
@@ -92,6 +93,7 @@ function repositoryAfterATurn() {
   mkdirSync(join(cwd, "out"));
   writeFileSync(join(cwd, "out", "built.txt"), "ignored\n");
   git(cwd, "checkout", "--quiet", "-b", "experiment");
+
   return { cwd, head, later, snapshot: { commit, head, branch: "main" } };
 }
 

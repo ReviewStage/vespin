@@ -1,13 +1,10 @@
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  EXPERIMENT,
-  SETTINGS_PAGE as SETTINGS_VIEW,
-  type SettingsPage as SettingsView,
-} from "@repo/settings";
-import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { SETTINGS_PAGE as SETTINGS_VIEW, type SettingsPage as SettingsView } from "@repo/settings";
+import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 
 export type { SettingsView };
+
 /**
  * Which page of the Settings tab is showing. App state rather than panel state
  * for the same reason the tab is — a shortcut or a button elsewhere in the
@@ -91,6 +88,7 @@ const FOLDED_INTO: ReadonlyMap<string, SettingsView> = new Map([
  */
 export function settingsViewNamed(page: string | undefined): SettingsView | undefined {
   if (page === undefined) return undefined;
+
   return SETTINGS_PAGE_LIST.find((view) => view === page) ?? FOLDED_INTO.get(page);
 }
 
@@ -160,8 +158,6 @@ export const SETTINGS_SECTION = {
   CODEX: SETTINGS_SEARCH_ROW.API_KEY_OPENAI,
   /** The account's GitHub personal access token row, where a member saves the token that adds repositories to a workspace. */
   GITHUB_TOKEN: SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
-  /** Bring your own host's row on Experimental, which a pairing's link lands on while the account has it off. */
-  BRING_YOUR_OWN_HOST: EXPERIMENT_ANCHOR[EXPERIMENT.BRING_YOUR_OWN_HOST],
 } as const;
 
 type SettingsSection = (typeof SETTINGS_SECTION)[keyof typeof SETTINGS_SECTION];
@@ -193,5 +189,6 @@ const HARNESS_SECTION = {
  */
 export function agentKeyLink(provider: ModelProvider | undefined): SettingsLink {
   if (provider === undefined) return { page: SETTINGS_VIEW.AGENTS };
+
   return { page: SETTINGS_VIEW.AGENTS, section: HARNESS_SECTION[provider] };
 }

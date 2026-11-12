@@ -27,20 +27,25 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sent: { url: string; body: string }[] = [];
+
       const services = Layer.merge(
         fakeHttpClientLayer(async (url, init) => {
           sent.push({ url, body: await new Response(init.body).text() });
+
           return new Response(null, { status: HOSTED_HTTP_STATUS.OK });
         }),
         ConfigProvider.layer(ConfigProvider.fromUnknown({ [SENTRY_ENVIRONMENT.DSN]: OWN_DSN })),
       );
+
       const web = HttpRouter.toWebHandler(
         sentryTunnelApp().pipe(HttpRouter.provideRequest(services)),
         {
           disableLogger: true,
         },
       );
+
       yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
       const post = (body: string) =>
         Effect.promise(() =>
           web.handler(new Request(`${ORIGIN}${SENTRY_TUNNEL.ROUTE}`, { method: "POST", body })),

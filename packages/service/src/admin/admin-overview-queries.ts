@@ -314,6 +314,7 @@ const findActiveDevelopers = SqlSchema.findOneOption({
   execute: (request) => {
     const actions = meaningfulActions(request.priorStart);
     const recent = sql`${actions.at} >= ${instant(request.recentStart)}`;
+
     return Database.use((db) =>
       db
         .select({
@@ -345,6 +346,7 @@ export const findDailyCounts = SqlSchema.findAll({
   execute: (request) => {
     const rows = dailyCountRows(request.since, request.until);
     const day = utcDay(rows.at);
+
     return Database.use((db) =>
       db
         .select({ tag: rows.tag, day, value: count() })
@@ -398,6 +400,7 @@ const findFunnel = SqlSchema.findOneOption({
   }),
   execute: (request) => {
     const agentOf = eq(agentTable.userId, user.id);
+
     return Database.use((db) =>
       db
         .select({
@@ -451,6 +454,7 @@ const findReach = SqlSchema.findAll({
   execute: (request) => {
     const rows = reachRows(request.since);
     const actions = meaningfulActions(request.since);
+
     return Database.use((db) =>
       db
         .select({ tag: rows.tag, value: countDistinct(rows.userId) })
@@ -482,6 +486,7 @@ const findTopAccounts = SqlSchema.findAll({
   execute: (request) => {
     const actions = meaningfulActions(request.since);
     const activeDays = sql<number>`count(distinct ${utcDay(actions.at)})`;
+
     return Database.use((db) =>
       db
         .select({
@@ -584,9 +589,12 @@ const readAccountCounts = /* @__PURE__ */ Effect.fn("web/readOverviewAccountCoun
 ): Effect.fn.Return<AdminOverviewSource["accountCounts"], StoreFailure, DatabaseServices> {
   if (userIds.length === 0) {
     const none = new Map<string, number>();
+
     return { tasks: none, agents: none, prsMerged: none, lastSeenAt: none };
   }
+
   const request = { userIds, since };
+
   const [tasks, agents, prsMerged, seen] = yield* Effect.all(
     [
       findTasksBy(request),
@@ -596,8 +604,11 @@ const readAccountCounts = /* @__PURE__ */ Effect.fn("web/readOverviewAccountCoun
     ],
     { concurrency: "unbounded" },
   );
+
   const lastSeenAt = new Map<string, number>();
+
   for (const row of seen) if (row.seenAt) lastSeenAt.set(row.userId, row.seenAt.getTime());
+
   return {
     tasks: countsByUser(tasks),
     agents: countsByUser(agents),
@@ -621,6 +632,7 @@ const findMeaningfulCohortActivity = SqlSchema.findAll({
   execute: (request) => {
     const actions = meaningfulActions(request.oldestWeekStart);
     const activityWeek = sql<string>`to_char(date_trunc('week', ${actions.at} at time zone 'UTC'), 'YYYY-MM-DD')`;
+
     return Database.use((db) =>
       db
         .select({
@@ -643,6 +655,7 @@ const readMeaningfulRetention = /* @__PURE__ */ Effect.fn("web/readMeaningfulRet
   const oldestWeekStart = dayStart(
     lastNWeekStartKeys(now, ADMIN_RETENTION_WEEKS)[0] ?? utcWeekStartKey(now),
   );
+
   const [sizeRows, activeRows] = yield* Effect.all(
     [
       findCohortSizes({ oldestWeekStart, scope }),
@@ -650,6 +663,7 @@ const readMeaningfulRetention = /* @__PURE__ */ Effect.fn("web/readMeaningfulRet
     ],
     { concurrency: "unbounded" },
   );
+
   return cohortRetention(sizeRows, activeRows);
 });
 
@@ -685,12 +699,14 @@ export function readAdminOverviewSource(input: {
         ],
         { concurrency: "unbounded" },
       );
+
     const accountCounts = yield* readAccountCounts(
       ranked.map((row) => row.id),
       windowStart,
     );
 
     const daily = new Map<DailyCount, Map<string, number>>();
+
     for (const row of dailyRows) {
       const byDay = daily.get(row.tag) ?? new Map<string, number>();
       byDay.set(row.day, row.value);

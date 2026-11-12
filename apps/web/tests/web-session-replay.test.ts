@@ -63,6 +63,7 @@ function drawPage(): void {
 function usePage(): void {
   document.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   const input = document.querySelector("input");
+
   if (!input) return;
   input.value = "typed-secret, again";
   input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -71,13 +72,17 @@ function usePage(): void {
 /** The recording as rrweb wrote it, its gzipped snapshot fields opened. */
 function opened(value: WireValue): WireValue {
   const asText = text(value);
+
   if (asText !== undefined) {
     return asText.startsWith(GZIP_MAGIC)
       ? valueFromJsonText(gunzipSync(Buffer.from(asText, "latin1")).toString("utf8"))
       : value;
   }
+
   if (Array.isArray(value)) return value.map(opened);
+
   if (!isRecord(value)) return value;
+
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, opened(entry)]));
 }
 
@@ -128,15 +133,19 @@ test("a production build with the site's key records the tab under the desktop's
   await vi.advanceTimersByTimeAsync(10_000);
   const snapshots = jsonRoundTrip(sent.filter((event) => event.event === "$snapshot"));
   const recorded = JSON.stringify(snapshots === undefined ? undefined : opened(snapshots));
+
   for (const tag of ["h1", "a", "button", "input"]) {
     assert.ok(recorded.includes(`"tagName":"${tag}"`), tag);
   }
+
   // Every event says the tab is at the app's own address, and is filed as the web's.
   const everything = JSON.stringify(sent.map((event) => event.properties));
+
   for (const word of WORDS) {
     assert.ok(!recorded.includes(word), word);
     assert.ok(!everything.includes(word), word);
   }
+
   const identify = sent.find((event) => event.event === "$identify");
   assert.equal(identify?.properties.app_name, "web");
   assert.equal(identify?.properties.$current_url, `${location.origin}/app`);

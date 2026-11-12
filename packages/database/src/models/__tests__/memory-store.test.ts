@@ -53,6 +53,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -62,6 +63,7 @@ const openTeam = Effect.gen(function* () {
   const teammate = yield* openAccount;
   const workspaceId = yield* openWorkspace(owner);
   yield* joinWorkspace(workspaceId, teammate);
+
   return { owner, teammate, workspaceId };
 });
 
@@ -72,6 +74,7 @@ const DEPLOYS_CORRECTED = "Deployments go out from the release branch through Ve
 /** The id of the memory a keep or a correction wrote. */
 function keptId(outcome: MemoryOutcome): string {
   assert.ok("memory" in outcome, `nothing was written: ${outcome.kind}`);
+
   return outcome.memory.id;
 }
 
@@ -98,6 +101,7 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         yield* rememberMemory(workspaceId, teammate, DEPLOYS, undefined);
         yield* TestClock.adjust(Duration.seconds(1));
+
         // A teammate's call settling the same fact, spelled a little differently, is the same memory.
         const again = yield* rememberMemory(
           workspaceId,
@@ -150,6 +154,7 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         const corrector = yield* openAgentOnOwnTask(teammate, workspaceId);
         const keepersLine = randomUUID();
         const correctorsLine = randomUUID();
+
         const id = keptId(
           yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, {
             agentId: keeper,
@@ -184,18 +189,22 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         const { owner, teammate, workspaceId } = yield* openTeam;
         const elsewhere = yield* openWorkspace(owner);
         const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+
         const [agent] = yield* db
           .select({ taskId: agentTable.taskId })
           .from(agentTable)
           .where(eq(agentTable.id, agentId));
+
         assert.ok(agent !== undefined);
         const line = randomUUID();
+
         const agents = keptId(
           yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, {
             agentId,
             messageId: line,
           }),
         );
+
         const members = keptId(yield* rememberMemory(workspaceId, teammate, TESTS_RUN, undefined));
 
         const shared = yield* readMemorySources(teammate, workspaceId, [agents, members]);
@@ -220,6 +229,7 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
     Effect.gen(function* () {
       const { owner, workspaceId } = yield* openTeam;
       const old = keptId(yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined));
+
       const standing = keptId(
         yield* rememberMemory(workspaceId, owner, DEPLOYS_CORRECTED, undefined),
       );
@@ -280,15 +290,18 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         const third = yield* openAccount;
         yield* joinWorkspace(workspaceId, third);
         const owners = keptId(yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined));
+
         const teammates = keptId(
           yield* rememberMemory(workspaceId, teammate, TESTS_RUN, undefined),
         );
 
         const refused = yield* forgetMemory(workspaceId, owners, { userId: third, manages: false });
+
         const ownWords = yield* forgetMemory(workspaceId, teammates, {
           userId: teammate,
           manages: false,
         });
+
         const managed = yield* forgetMemory(workspaceId, owners, { userId: third, manages: true });
 
         assert.equal(refused.outcome, MEMORY_FORGET.NOT_PERMITTED);
@@ -360,6 +373,7 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         const afterDeleting = yield* listMemories(workspaceId);
         const orphan = afterDeleting.find((kept) => kept.text === TESTS_RUN);
         assert.ok(orphan !== undefined);
+
         const byMember = yield* forgetMemory(workspaceId, orphan.id, {
           userId: owner,
           manages: false,

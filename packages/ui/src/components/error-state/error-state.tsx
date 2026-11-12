@@ -195,8 +195,10 @@ export function ErrorState(
   const onRetry = useContext(RetryOffered) ? props.onRetry : undefined;
   const Line = props.as ?? ERROR_STATE_ELEMENT.PARAGRAPH;
   const placement = props.placement ?? ERROR_STATE_PLACEMENT.INLINE;
+
   if (placement === ERROR_STATE_PLACEMENT.CENTERED) {
     const again = onRetry === undefined ? undefined : { label: WORDS.RETRY, onClick: onRetry };
+
     return (
       <EmptyState
         icon={<AlertIcon />}
@@ -209,7 +211,9 @@ export function ErrorState(
       </EmptyState>
     );
   }
+
   const look = LINE[placement];
+
   return (
     <Line
       className={`ui-error-state box-border flex min-w-0 gap-icon-gap text-caption text-muted-foreground ${look.line}`}

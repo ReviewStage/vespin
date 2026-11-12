@@ -23,6 +23,7 @@ export interface RepositoryPinsProcedureSeams {
 /** The pins resource: the account's pins, and one pinned or unpinned (`repository-pins.ts`). */
 export function repositoryPinsProcedures(seams: RepositoryPinsProcedureSeams) {
   const pins = hosted.repositoryPins.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: pins.list.effect(function* ({ context }) {
       return yield* readRepositoryPins(context.userId);

@@ -61,10 +61,12 @@ export async function startMobileHost(
   const httpClient = options.httpClient ?? FetchHttpClient.layer;
   // Note that a count is forked only once the host stands, by which time the runtime is set.
   let runtime: ManagedRuntime.ManagedRuntime<MobileHostTag, unknown>;
+
   // A defect in a count is reported, as the desktop's acts are.
   const fork = (effect: Effect.Effect<void>): void => {
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
+
   // The reporters stand beneath the host, so every fiber it forks and every act reports through them.
   runtime = ManagedRuntime.make(
     Layer.provideMerge(
@@ -81,15 +83,19 @@ export async function startMobileHost(
       options.errorReporting ?? Layer.empty,
     ),
   );
+
   try {
     const host = await runtime.runPromise(MobileHostTag);
+
     // A follow runs on the host's runtime, opened again as it breaks, until its stop interrupts it.
     const follow: HostFollow = (open, take) => {
       const fiber = runtime.runFork(followStream(open, take));
+
       return () => {
         runtime.runFork(Fiber.interrupt(fiber));
       };
     };
+
     return { bridge: host.bridge, acts: host.acts, follow, close: () => runtime.dispose() };
   } catch (error) {
     await runtime.dispose();

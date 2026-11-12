@@ -84,9 +84,11 @@ const answer = (session: SessionUserIdResolver, path: string, headers: Record<st
   Effect.gen(function* () {
     // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
     const services = Context.empty() as Context.Context<WebServices>;
+
     const response = yield* Effect.promise(() =>
       hostedFetch(routerOver(session))(new Request(`${ORIGIN}${path}`, { headers }), services),
     );
+
     return { status: response.status, text: yield* Effect.promise(() => response.text()) };
   });
 
@@ -111,6 +113,7 @@ const openSessions = Effect.gen(function* () {
       .insert(user)
       .values([ada, grace].map((id) => ({ id, name: "Test User", email: `${id}@app.test` }))),
   ).pipe(Effect.provide(plugin.database));
+
   return {
     plugin,
     ada,
@@ -151,8 +154,10 @@ it.effect(
         yield* answer(nobody, SESSION_PATH, { cookie: "session=s1" }),
         UNAUTHENTICATED,
       );
+
       const down: SessionUserIdResolver = () =>
         Effect.fail(new Cause.UnknownError("the auth service is down"));
+
       assert.deepEqual(yield* answer(down, SESSION_PATH, { cookie: "session=s1" }), {
         status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
         text: '{"error":"unavailable"}',
@@ -166,8 +171,10 @@ it.effect(
     Effect.gen(function* () {
       // A session read that names anyone, and one that is down, so a refusal is unauthenticated only where neither was asked.
       const anyone: SessionUserIdResolver = () => Effect.succeedSome(USER_ID);
+
       const down: SessionUserIdResolver = () =>
         Effect.fail(new Cause.UnknownError("the auth service is down"));
+
       for (const headers of [{}, { cookie: "" }, { cookie: "   " }, { origin: ORIGIN }]) {
         for (const session of [anyone, down]) {
           assert.deepEqual(
@@ -194,6 +201,7 @@ it.effect(
         }),
         Option.some(ada),
       );
+
       for (const authorization of [junk, "Basic YWRhOmxvdmVsYWNl", ""]) {
         assert.deepEqual(
           yield* answer(plugin.resolveSessionUserId, SESSION_PATH, {
@@ -261,32 +269,39 @@ it.effect.each(CALLER_TRACES)(
   "a procedure's span and log lines continue the caller's trace and sampling from $carried",
   ({ headers, traceId, sampled }) =>
     Effect.gen(function* () {
-      const annotations: Array<Readonly<Record<string, unknown>>> = [];
+      const annotations: Array<{ readonly traceId?: unknown }> = [];
       const spans: Array<{ readonly traceId: string; readonly sampled: boolean }> = [];
+
       const recorded = Logger.make(({ fiber }) => {
         annotations.push(fiber.getRef(References.CurrentLogAnnotations));
       });
+
       const router = {
         account: {
           providerKeys: hosted.account.providerKeys.effect(function* () {
             const span = yield* Effect.orDie(Effect.currentSpan);
             spans.push({ traceId: span.traceId, sampled: span.sampled });
             yield* Effect.logInfo("asked for the provider keys");
+
             return { keys: [] };
           }),
         },
       };
+
       const sentry = recordingSentry();
+
       // SAFETY: the procedure yields no service, so the tracer and the logger stand in for the web runtime's.
       const services = (yield* Effect.context().pipe(
         Effect.provide(Layer.merge(sentry.layer, Logger.layer([recorded]))),
       )) as Context.Context<WebServices>;
+
       const response = yield* Effect.promise(() =>
         hostedFetch(router)(
           new Request(`${ORIGIN}${HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS}`, { headers }),
           services,
         ),
       );
+
       assert.equal(response.status, HOSTED_HTTP_STATUS.OK);
       assert.deepEqual(spans, [{ traceId, sampled }]);
       assert.deepEqual(

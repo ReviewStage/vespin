@@ -97,15 +97,21 @@ function webTarget(words: string): InlineCodeTarget | undefined {
   if (WEB_SCHEME.test(words)) {
     return URL.canParse(words) ? { kind: INLINE_CODE_TARGET.WEB, href: words } : undefined;
   }
+
   const slash = words.indexOf("/");
+
   if (slash <= 0) return undefined;
   const [name = "", port, ...rest] = words.slice(0, slash).split(":");
+
   if (rest.length > 0 || (port !== undefined && !PORT.test(port))) return undefined;
   const labels = name.split(".");
   const last = labels.at(-1) ?? "";
+
   if (labels.length < 2 || !TOP_LEVEL_DOMAIN.test(last)) return undefined;
+
   if (!labels.every((label) => HOST_LABEL.test(label))) return undefined;
   const href = `https://${words}`;
+
   return URL.canParse(href) ? { kind: INLINE_CODE_TARGET.WEB, href } : undefined;
 }
 
@@ -113,18 +119,25 @@ function webTarget(words: string): InlineCodeTarget | undefined {
 function fileTarget(words: string): InlineCodeTarget | undefined {
   const suffix = LINE_SUFFIX.exec(words);
   const written = suffix === null ? words : words.slice(0, suffix.index);
+
   if (!PATH_ONLY_CHARACTERS.test(written) || written.startsWith("~")) return undefined;
   const path = checkoutRelativePath(written);
+
   if (path === undefined) return undefined;
   const name = path.slice(path.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");
   const extension = dot < 0 ? "" : name.slice(dot + 1);
+
   if (!EXTENSION.test(extension)) return undefined;
+
   if (!written.includes("/") && !BARE_NAME_EXTENSIONS.has(extension.toLowerCase())) {
     return undefined;
   }
+
   const line = suffix === null ? undefined : Number(suffix[1]);
+
   if (line === 0) return undefined;
+
   return { kind: INLINE_CODE_TARGET.FILE, path, line };
 }
 
@@ -140,5 +153,6 @@ export function inlineCodeTarget(words: string): InlineCodeTarget | undefined {
   if (words.length === 0 || words.length > MAX_CHARS || !PATH_CHARACTERS.test(words)) {
     return undefined;
   }
+
   return webTarget(words) ?? fileTarget(words);
 }

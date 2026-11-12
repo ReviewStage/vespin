@@ -51,6 +51,7 @@ const STACK_SERIES = Object.entries(STACKED_CHART).map(([key, entry]) => ({
 
 function DailyBarsExample(): React.JSX.Element {
   const [opened, setOpened] = useState<string | undefined>(undefined);
+
   return (
     <>
       <CatalogSection id="daily-bars-one" title="One series, today faded">

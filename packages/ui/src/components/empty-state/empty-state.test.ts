@@ -42,16 +42,19 @@ function draw(props: {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(EmptyState, { icon: createElement(SearchIcon), ...props })));
+
   return container;
 }
 
 test("an empty place shows its heading and line, and its way on answers a press", () => {
   const pressed: string[] = [];
+
   const container = draw({
     title: "Not found",
     action: { label: "Close task", onClick: () => pressed.push("close") },
     children: LINE,
   });
+
   const heading = container.querySelector("h1, h2, h3, h4, h5, h6");
   expect(heading?.textContent).toBe("Not found");
   expect(container.textContent).toContain(LINE);
@@ -63,10 +66,12 @@ test("an empty place shows its heading and line, and its way on answers a press"
 
 test("a way on unavailable for now still stands, and a press does nothing", () => {
   const pressed: string[] = [];
+
   const container = draw({
     action: { label: "New issue", disabled: true, onClick: () => pressed.push("new") },
     children: "No issues yet",
   });
+
   const button = container.querySelector("button");
   expect(button?.textContent).toBe("New issue");
   expect(button?.disabled).toBe(true);
@@ -87,6 +92,7 @@ test("an empty place with a line alone shows no heading and no button", () => {
 
 test("a place a failure left empty is one alert, its way on a press within it", () => {
   const pressed: string[] = [];
+
   const container = draw({
     alert: true,
     action: {
@@ -96,6 +102,7 @@ test("a place a failure left empty is one alert, its way on a press within it", 
     },
     children: "The changes could not be read.",
   });
+
   const alerts = container.querySelectorAll("[role='alert']");
   expect(alerts).toHaveLength(1);
   expect(alerts[0]?.textContent).toBe("The changes could not be read.Retry");

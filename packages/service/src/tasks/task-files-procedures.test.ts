@@ -37,6 +37,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -47,6 +48,7 @@ const keepAs = (userId: string, taskId: string) =>
     const services = (yield* Effect.context<never>().pipe(
       Effect.provide(ANALYTICS.layer),
     )) as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       taskFiles: taskFilesProcedures({
         resolveUserId: (incoming) =>
@@ -55,6 +57,7 @@ const keepAs = (userId: string, taskId: string) =>
           ),
       }),
     });
+
     const response = yield* Effect.promise(() =>
       handle(
         new Request(new URL(`/api/plans/${taskId}/attachments`, ORIGIN), {
@@ -65,6 +68,7 @@ const keepAs = (userId: string, taskId: string) =>
         services,
       ),
     );
+
     return response.status;
   });
 
@@ -81,12 +85,14 @@ it.layer(getTestDB())("the plan files route", (it) => {
 
         assert.equal(refused, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal(kept, HOSTED_HTTP_STATUS.CREATED);
+
         const countedFor = (userId: string) =>
           ANALYTICS.recorded
             .filter(
               (event) => event.userId === userId && event.name === SERVER_EVENT.AGENT_TOOL_OPEN,
             )
             .map((event) => ({ workspaceId: event.workspaceId, ...event.properties }));
+
         assert.deepEqual(countedFor(starter), [
           { workspaceId: task.workspaceId, tool: SERVER_AGENT_TOOL.ADD_TO_DESCRIPTION },
         ]);

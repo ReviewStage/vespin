@@ -1,9 +1,9 @@
 // provider-button.tsx -- a way to sign in through a provider: the system's bordered capsule across its column, the provider's mark beside its words, as the web's sign-in buttons carry it.
 
 import { HStack, Image, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
-  buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
@@ -49,12 +49,13 @@ type ProviderButtonProps = {
  */
 export function ProviderButton({ label, mark, disabled = false, onPress }: ProviderButtonProps) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
         buttonStyle("bordered"),
-        buttonBorderShape("capsule"),
+        SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("large"),
         tint(colors.TEXT),
         disabledModifier(disabled),

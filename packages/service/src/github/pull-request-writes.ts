@@ -98,11 +98,13 @@ const refusedStatus = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
     return yield* new GitHubTokenRefused();
   }
+
   const refusal = yield* HttpClientResponse.schemaBodyJson(RefusalSchema)(response).pipe(
     Effect.mapError(
       () => new GitHubUnavailable({ reason: GITHUB_FAILURE.STATUS, status: response.status }),
     ),
   );
+
   return yield* refusalOf([refusal.message]);
 });
 
@@ -121,11 +123,15 @@ const readWrite = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
   data: Schema.Codec<A, unknown>,
 ): Effect.fn.Return<A, GitHubWriteFailure> {
   if (!succeeded(response)) return yield* refusedStatus(response);
+
   const answer = yield* HttpClientResponse.schemaBodyJson(GraphqlAnswerSchema)(response).pipe(
     Effect.mapError(() => unreadable(response.status)),
   );
+
   const errors = answer.errors ?? [];
+
   if (errors.length > 0) return yield* refusalOf(errors.map((error) => error.message));
+
   return yield* Schema.decodeUnknownEffect(data)(answer.data).pipe(
     Effect.mapError(() => unreadable(response.status)),
   );
@@ -177,7 +183,9 @@ export const pullRequestNodeId = /* @__PURE__ */ Effect.fn("web/pullRequestNodeI
   const [owner = "", name = ""] = fullName.split("/");
   const read = yield* githubWrite(token, NODE_ID_QUERY, { owner, name, number }, NodeIdSchema);
   const id = read.repository?.pullRequest?.id;
+
   if (id === undefined) return yield* refusalOf([NOT_RESOLVED]);
+
   return id;
 });
 
@@ -328,6 +336,7 @@ export const setReviewRequested = /* @__PURE__ */ Effect.fn("web/setReviewReques
     reviewer.kind === REVIEWER_KIND.TEAM
       ? { team_reviewers: [reviewer.name] }
       : { reviewers: [reviewer.name] };
+
   yield* githubRestWrite(
     token,
     requested ? REST_METHOD.POST : REST_METHOD.DELETE,
@@ -381,6 +390,7 @@ const threadOnPullRequest = /* @__PURE__ */ Effect.fnUntraced(function* (
     { id: threadId },
     ThreadPullRequestSchema,
   );
+
   if (read.node?.pullRequest?.id !== pullRequestId) return yield* refusalOf([NOT_THIS_THREAD]);
 });
 
@@ -492,8 +502,10 @@ export const setAutoMerge = /* @__PURE__ */ Effect.fn("web/setAutoMerge")(functi
 ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
   if (autoMerge === undefined) {
     yield* githubWrite(token, DISABLE_AUTO_MERGE_MUTATION, { id: pullRequestId }, Schema.Unknown);
+
     return;
   }
+
   yield* githubWrite(
     token,
     ENABLE_AUTO_MERGE_MUTATION,
@@ -556,6 +568,7 @@ export interface LineComment {
 /** The thread's place and words, which every line comment's document names alike. */
 const THREAD_VARIABLES =
   "$path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide";
+
 const THREAD_FIELDS =
   "path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide";
 
@@ -612,6 +625,7 @@ export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(fu
   comment: LineComment,
 ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
   const thread = threadVariables(comment);
+
   if (comment.mode === REVIEW_COMMENT_MODE.SINGLE) {
     yield* githubWrite(
       token,
@@ -619,9 +633,12 @@ export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(fu
       { id: pullRequestId, commit: comment.headSha, ...thread },
       Schema.Unknown,
     );
+
     return;
   }
+
   const own = yield* ownPendingReview(token, pullRequestId);
+
   if (own === undefined) {
     yield* githubWrite(
       token,
@@ -629,12 +646,16 @@ export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(fu
       { id: pullRequestId, commit: comment.headSha, ...thread },
       Schema.Unknown,
     );
+
     return;
   }
+
   const started = own.commit?.oid;
+
   if (started !== undefined && started !== comment.headSha) {
     return yield* refusalOf([PENDING_ON_OTHER_COMMIT]);
   }
+
   yield* githubWrite(token, REVIEW_THREAD_MUTATION, { review: own.id, ...thread }, Schema.Unknown);
 });
 
@@ -656,6 +677,7 @@ export const discardPendingReview = /* @__PURE__ */ Effect.fn("web/discardPendin
     pullRequestId: string,
   ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
     const own = yield* ownPendingReview(token, pullRequestId);
+
     if (own === undefined) return yield* refusalOf([NO_PENDING_REVIEW]);
     yield* githubWrite(token, DISCARD_REVIEW_MUTATION, { id: own.id }, Schema.Unknown);
   },
@@ -698,11 +720,14 @@ const ownPendingComment = /* @__PURE__ */ Effect.fn("web/ownPendingComment")(fun
     { id: commentId },
     ReviewCommentSchema,
   );
+
   const comment = read.node;
+
   const own =
     comment?.viewerDidAuthor === true &&
     comment.state === "PENDING" &&
     comment.pullRequest?.id === pullRequestId;
+
   if (!own) return yield* refusalOf([NOT_OWN_PENDING_COMMENT]);
 });
 
@@ -826,13 +851,16 @@ export const setPullRequestDescription = /* @__PURE__ */ Effect.fn("web/setPullR
       { id: pullRequestId },
       DescriptionSchema,
     );
+
     if (read.node === null) return yield* refusalOf([NOT_RESOLVED]);
+
     if (comparable(read.node.body ?? "") !== comparable(edit.expectedBody)) {
       return yield* new GitHubWriteRefused({
         words: DESCRIPTION_CHANGED,
         reason: PULL_REQUEST_REFUSAL.DESCRIPTION_CHANGED,
       });
     }
+
     yield* githubWrite(
       token,
       DESCRIPTION_MUTATION,
@@ -888,15 +916,18 @@ export const reactOnPullRequest = /* @__PURE__ */ Effect.fn("web/reactOnPullRequ
   reaction: { readonly subject: string; readonly content: string; readonly add: boolean },
 ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
   const { subject, content, add } = reaction;
+
   const read = yield* githubWrite(
     token,
     SUBJECT_PULL_REQUEST_QUERY,
     { id: subject },
     SubjectPullRequestSchema,
   );
+
   const node = read.node;
   // Note that the pull request itself answers its own id; anything on it answers its pull request's.
   const on = node?.pullRequest?.id ?? node?.issue?.id ?? node?.id;
+
   if (on !== pullRequestId) return yield* refusalOf([NOT_THIS_SUBJECT]);
   yield* githubWrite(
     token,
@@ -1002,6 +1033,7 @@ export const pullRequestViewedStates = /* @__PURE__ */ Effect.fn("web/pullReques
     const [owner = "", name = ""] = fullName.split("/");
     const files: FileViewed[] = [];
     let after: string | null = null;
+
     while (files.length < PULL_REQUEST_WRITE_BOUNDS.MAX_VIEWED_FILES) {
       const page: typeof ViewedPageSchema.Type = yield* githubWrite(
         token,
@@ -1009,14 +1041,19 @@ export const pullRequestViewedStates = /* @__PURE__ */ Effect.fn("web/pullReques
         { owner, name, number, after },
         ViewedPageSchema,
       );
+
       const listed = page.repository?.pullRequest?.files;
+
       if (listed === undefined || listed === null) return yield* refusalOf([NOT_RESOLVED]);
+
       for (const node of listed.nodes) {
         files.push({ path: node.path, state: GRAPHQL_VIEWED_STATE[node.viewerViewedState] });
       }
+
       if (!listed.pageInfo.hasNextPage || listed.pageInfo.endCursor === null) break;
       after = listed.pageInfo.endCursor;
     }
+
     return files.slice(0, PULL_REQUEST_WRITE_BOUNDS.MAX_VIEWED_FILES);
   },
 );

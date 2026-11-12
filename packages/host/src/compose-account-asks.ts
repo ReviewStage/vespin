@@ -201,6 +201,7 @@ function liveFollows(
   return Effect.gen(function* () {
     const { client, kernel, accountId, pool } = dependencies;
     const gate = gateOf(dependencies);
+
     const memories = yield* heldMemories({
       seal: (workspaceId, userId, poll, after) =>
         asked(
@@ -215,6 +216,7 @@ function liveFollows(
       pool,
       tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.MEMORIES_FOLLOW),
     });
+
     const hosts = yield* heldHosts({
       seal: (userId, poll, after) =>
         asked(client.liveRead(HOSTS_READ, { userId }, poll ? { after } : undefined)),
@@ -223,6 +225,7 @@ function liveFollows(
       pool,
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.HOSTS_FOLLOW),
     });
+
     return { memories, hosts, hostsHold: yield* accountHeld(hosts, accountId) };
   });
 }
@@ -240,6 +243,7 @@ function fetchedPresence(
   asked: Asked,
 ): Effect.Effect<HeldFetch<string, AppDevicePresence>, never, Scope.Scope> {
   const { client, kernel, focus, accountId } = dependencies;
+
   return heldFetch<typeof LIVE_READ.DEVICE_PRESENCE, string>({
     empty: NO_KEYS_HELD,
     path: (userId) => [userId],
@@ -252,7 +256,9 @@ function fetchedPresence(
         // Note that a read past its deadline fails like any other, so a window says it cannot check rather than letting every device age away while it hangs.
         const answer = yield* asked(client.devicePresence());
         const askedAt = yield* Clock.currentTimeMillis;
+
         if (!("failure" in answer)) return Option.some(presenceOf(answer, askedAt));
+
         return held === undefined
           ? Option.none()
           : Option.some({ beats: held.beats, askedAt, stale: true as const });
@@ -276,6 +282,7 @@ function fetchedReads(
     const { client, kernel, focus, accountId } = dependencies;
     const gate = gateOf(dependencies);
     const presence = yield* fetchedPresence(dependencies, asked);
+
     const keys = yield* heldFetch<typeof LIVE_READ.PROVIDER_KEYS, string>({
       empty: NO_KEYS_HELD,
       path: (userId) => [userId],
@@ -288,11 +295,13 @@ function fetchedReads(
               const list = keyListOf(answer);
               // Note that the first answer asks nothing of the models, which are asked as a window holds them.
               const moved = held !== undefined && JSON.stringify(held) !== JSON.stringify(list);
+
               return Effect.as(moved ? dependencies.modelsMoved : Effect.void, Option.some(list));
             })
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.PROVIDER_KEYS_FOLLOW),
     });
+
     const token = yield* heldFetch<typeof LIVE_READ.GITHUB_TOKEN, string>({
       empty: NO_KEYS_HELD,
       path: (userId) => [userId],
@@ -306,6 +315,7 @@ function fetchedReads(
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.GITHUB_TOKEN_FOLLOW),
     });
+
     const commands = yield* heldFetch<typeof LIVE_READ.ALLOWED_COMMANDS, string>({
       empty: NO_KEYS_HELD,
       path: (userId) => [userId],
@@ -319,6 +329,7 @@ function fetchedReads(
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.ALLOWED_COMMANDS_FOLLOW),
     });
+
     return {
       presence,
       presenceHold: yield* accountHeld(presence, accountId),
@@ -341,10 +352,12 @@ function writesAnswered(
   const keysAnswered = (answer: ProviderKeysAnswerView) =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
+
       return userId === undefined || !("keys" in answer)
         ? Effect.void
         : Effect.andThen(keys.answered(userId, keyListOf(answer)), dependencies.modelsMoved);
     });
+
   return {
     /**
      * A write's answer of the account's always-allowed commands, laid as the
@@ -357,6 +370,7 @@ function writesAnswered(
       Effect.as(
         Effect.suspend(() => {
           const userId = dependencies.accountId();
+
           return userId === undefined || userId !== sentFor || "failure" in answer
             ? Effect.void
             : commands.answered(userId, { commands: answer.commands });
@@ -382,6 +396,7 @@ function writesAnswered(
         Effect.suspend(() => {
           if ("failure" in answer) return Effect.void;
           const userId = dependencies.accountId();
+
           return Effect.andThen(
             dependencies.repositoriesMoved ?? Effect.void,
             userId === undefined ? Effect.void : token.answered(userId, { token: answer.token }),
@@ -419,12 +434,15 @@ function allowedCommandWrite(
         ? call()
         : Effect.succeed(COMMANDS_UNANSWERED),
     );
+
   if ("add" in write) return forSender(() => asked(client.addAllowedCommand(write.add)));
+
   return Effect.flatMap(
     forSender(() => asked(client.readAllowedCommands())),
     (answer) => {
       if ("failure" in answer) return Effect.succeed(answer);
       const kept = answer.commands.find((each) => samePrefix(each.prefix, write.remove));
+
       return kept === undefined
         ? Effect.succeed(answer)
         : forSender(() => asked(client.removeAllowedCommand(kept.id)));
@@ -439,6 +457,7 @@ function retriedFor(
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
     const userId = accountId();
+
     return userId === undefined ? Effect.void : read.retry(userId);
   });
 }
@@ -452,10 +471,12 @@ function actsOf(
   commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
   const { client, pool } = dependencies;
+
   const { keysWritten, deviceAnswered, tokenWritten, commandsWritten } = writesAnswered(
     dependencies,
     fetched,
   );
+
   return {
     PROVIDER_KEYS_SAVE: (save) => Effect.flatMap(asked(client.saveProviderKey(save)), keysWritten),
     PROVIDER_KEYS_REMOVE: (removal) =>
@@ -471,6 +492,7 @@ function actsOf(
     CHATGPT_DEVICE_WAIT: ({ loginId, intervalSeconds }) => {
       const interval = Duration.seconds(intervalSeconds);
       const poll = Effect.suspend(() => asked(client.pollChatGptDeviceLogin({ loginId })));
+
       return Effect.andThen(
         Effect.sleep(interval),
         Effect.repeat(poll, { schedule: Schedule.spaced(interval), until: deviceSettled }),
@@ -484,6 +506,7 @@ function actsOf(
     ALLOWED_COMMANDS_WRITE: (write) =>
       Effect.suspend(() => {
         const sentFor = dependencies.accountId();
+
         return commandsInTurn(
           Effect.flatMap(allowedCommandWrite(dependencies, asked, write, sentFor), (answer) =>
             commandsWritten(sentFor, answer),
@@ -567,8 +590,10 @@ export function composeAccountAsks(
     const follows = yield* liveFollows(dependencies, asked);
     const fetched = yield* fetchedReads(dependencies, asked);
     const { memories, hosts, hostsHold } = follows;
+
     const { presence, presenceHold, keys, keysHold, token, tokenHold, commands, commandsHold } =
       fetched;
+
     return {
       methods: {},
       acts: actsOf(

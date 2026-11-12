@@ -1,17 +1,16 @@
 // form-rows.tsx -- the rows a composing sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker.
 
 import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
-  contentShape,
   font,
   frame,
   lineLimit,
   listRowBackground,
   pickerStyle,
-  shapes,
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -53,6 +52,7 @@ export function WordsField({
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(initialWords);
+
   return (
     <TextField
       text={text}
@@ -91,6 +91,7 @@ type AttachRowProps = {
  */
 export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }: AttachRowProps) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT * 2}
@@ -116,7 +117,7 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
             pictures.length === 0
               ? [
                   frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-                  contentShape(shapes.rectangle()),
+                  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
                 ]
               : []
           }
@@ -142,6 +143,7 @@ type PickRowProps = {
  */
 export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
   const colors = useColors();
+
   return (
     <Picker<string | null>
       label={label}

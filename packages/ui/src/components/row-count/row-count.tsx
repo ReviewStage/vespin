@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { StatusTone } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
@@ -27,12 +28,13 @@ export function RowCount({
   tone?: StatusTone | undefined;
 }): React.JSX.Element | null {
   if (value === 0) return null;
+
   return (
     <span
       className="ui-row-count flex-none text-caption-inline text-muted-foreground tabular-nums data-[tone]:text-tone-ink"
       data-tone={tone}
     >
-      {typeof value === "number" ? <CountFigure value={value} /> : value}
+      {Predicate.isNumber(value) ? <CountFigure value={value} /> : value}
       {noun === undefined ? null : <VisuallyHidden> {noun}</VisuallyHidden>}
     </span>
   );

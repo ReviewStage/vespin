@@ -18,6 +18,7 @@ let pullRequestTabLanded = false;
 const loadPullRequestTab = () =>
   import("../tasks/agent-pull-request-tab.js").then((loaded) => {
     pullRequestTabLanded = true;
+
     return loaded;
   });
 

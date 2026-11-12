@@ -78,6 +78,7 @@ function standInMedia(video: HTMLVideoElement): () => number {
       value: () => {
         paused = false;
         video.dispatchEvent(new Event("play"));
+
         return Promise.resolve();
       },
     },
@@ -89,6 +90,7 @@ function standInMedia(video: HTMLVideoElement): () => number {
     },
   });
   act(() => video.dispatchEvent(new Event("loadedmetadata")));
+
   return () => at;
 }
 
@@ -121,26 +123,34 @@ function mountPlayer(
     ),
   );
   const video = container.querySelector("video");
+
   if (video === null) throw new Error("the player draws its video");
   const playhead = standInMedia(video);
   const frame = video.parentElement;
+
   if (frame === null) throw new Error("the video stands in a frame");
+
   const press = (key: string, on: HTMLElement = frame, repeat = false) =>
     act(() =>
       on.dispatchEvent(
         new KeyboardEvent("keydown", { key, repeat, bubbles: true, cancelable: true }),
       ),
     );
+
   const toggleLabel = () =>
     container
       .querySelector('button[aria-label="Play"], button[aria-label="Pause"]')
       ?.getAttribute("aria-label");
+
   const seekAt = () => container.querySelector<HTMLInputElement>('input[aria-label="Seek"]')?.value;
+
   const pressButton = (label: string) => {
     const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
     if (button === null) throw new Error(`the bar has a ${label}`);
     act(() => button.click());
   };
+
   return { container, video, press, pressButton, toggleLabel, seekAt, playhead, reached };
 }
 
@@ -186,7 +196,9 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
   expect(seekAt()).toBe("0");
   expect(flash()).toBe("10 seconds");
   const seek = container.querySelector<HTMLInputElement>('input[aria-label="Seek"]');
+
   if (seek === null) throw new Error("the bar has a scrubber");
+
   for (const _ of [1, 2, 3, 4, 5]) press("ArrowRight", seek);
   expect(seekAt()).toBe(String(LENGTH_S));
   expect(reached).toEqual([]);
@@ -195,6 +207,7 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
 test("Space on one of the bar's buttons is the button's, and other keys pass on to the place around the player", () => {
   const { container, press, toggleLabel, reached } = mountPlayer(() => undefined);
   const expand = container.querySelector<HTMLButtonElement>('button[aria-label="Expand"]');
+
   if (expand === null) throw new Error("the bar has an Expand");
   press(" ", expand);
   expect(toggleLabel()).toBe("Play");
@@ -206,9 +219,11 @@ test("Space on one of the bar's buttons is the button's, and other keys pass on 
 test("a held Space or K plays or pauses once, while a held arrow goes on seeking", () => {
   const { press, toggleLabel, seekAt } = mountPlayer(undefined, HELD_URL);
   press("k");
+
   for (const _ of [1, 2, 3]) press("k", undefined, true);
   expect(toggleLabel()).toBe("Pause");
   press(" ");
+
   for (const _ of [1, 2, 3, 4]) press(" ", undefined, true);
   expect(toggleLabel()).toBe("Play");
   press("ArrowRight");
@@ -221,6 +236,7 @@ test("comma and period, like the frame buttons, pause the video and step one fra
     undefined,
     TENTH_FRAME_URL,
   );
+
   press("k");
   press(".");
   // Each step lands in the middle of its frame: the second frame, a tenth long, spans 0.1 to 0.2.
@@ -280,6 +296,7 @@ function mountInViewer(): HTMLVideoElement {
       }),
     ),
   );
+
   return container.querySelector("video") ?? expect.unreachable("the player draws its video");
 }
 

@@ -70,6 +70,7 @@ type OverPaneToggle = RefObject<HTMLElement | null> | readonly RefObject<HTMLEle
 function onToggle(toggle: OverPaneToggle | undefined, target: Node): boolean {
   if (toggle === undefined) return false;
   const all = "current" in toggle ? [toggle] : toggle;
+
   return all.some((each) => each.current?.contains(target) === true);
 }
 
@@ -107,6 +108,7 @@ const PANE =
  */
 function exitDuration(): number {
   const value = getComputedStyle(document.body).getPropertyValue(MOTION_TOKEN.DURATION_PANE);
+
   return value.trim() === "" ? MOTION_DURATION_MS.PANE : milliseconds(value);
 }
 
@@ -119,18 +121,23 @@ function useLeaving(open: boolean): boolean {
   const wait = useWait();
   const [shown, setShown] = useState(open);
   const [leaving, setLeaving] = useState(false);
+
   if (shown !== open) {
     setShown(open);
     setLeaving(!open);
   }
+
   useLayoutEffect(() => {
     if (!leaving) return undefined;
     const delay = exitDuration();
+
     // Note that reduced motion leaves 1ms rather than none, which is no motion either.
     if (delay <= 1) {
       setLeaving(false);
+
       return undefined;
     }
+
     // The pane goes once its slide out has run.
     wait.start(
       Effect.andThen(
@@ -138,14 +145,17 @@ function useLeaving(open: boolean): boolean {
         Effect.sync(() => setLeaving(false)),
       ),
     );
+
     return wait.stop;
   }, [leaving, wait]);
+
   return leaving;
 }
 
 /** Whether the keyboard stands nowhere, or in `box`, so handing it back takes it from no one. */
 function heldIn(box: HTMLElement | null): boolean {
   const now = document.activeElement;
+
   return now === null || now === document.body || (box?.contains(now) ?? false);
 }
 
@@ -166,20 +176,25 @@ function useHeldKeyboard(
   const before = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const box = pane.current;
+
     if (open) {
       before.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
       (initialFocus?.current ?? box)?.focus({ preventScroll: true });
+
       return;
     }
+
     const back = before.current;
     before.current = null;
+
     if (back?.isConnected === true && heldIn(box)) back.focus({ preventScroll: true });
   }, [open, pane, initialFocus]);
   // A pane its owner lets go while it is open hands the keyboard back too.
   useEffect(
     () => () => {
       const back = before.current;
+
       if (back?.isConnected === true && heldIn(null)) back.focus({ preventScroll: true });
     },
     [],
@@ -206,16 +221,21 @@ function usePressOutside(
   useEffect(() => {
     if (!open) return undefined;
     within.current = false;
+
     const press = (event: PointerEvent) => {
       const own = within.current;
       within.current = false;
       const target = event.target;
+
       if (own || (target instanceof Node && onToggle(toggles.current, target))) return;
       close.current();
     };
+
     document.addEventListener("pointerdown", press);
+
     return () => document.removeEventListener("pointerdown", press);
   }, [open]);
+
   return useCallback(() => {
     within.current = true;
   }, []);
@@ -234,14 +254,18 @@ function useEscapedPeek(peeking: boolean, onClose: () => void): void {
   close.current = onClose;
   useEffect(() => {
     if (!peeking) return undefined;
+
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
       const target = event.target instanceof Element ? event.target : null;
+
       if (target?.closest(`${KEY_LAYERS}, .ui-over-pane`) != null) return;
       event.preventDefault();
       close.current();
     };
+
     window.addEventListener("keydown", onEscape);
+
     return () => window.removeEventListener("keydown", onEscape);
   }, [peeking]);
 }
@@ -282,14 +306,18 @@ export function OverPane({
   useHeldKeyboard(open && !peek, pane, initialFocus);
   const pin = usePressOutside(open, toggle, onClose);
   useEscapedPeek(open && peek, onClose);
+
   if (!open && !leaving) return null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "Tab") {
       if (!peek) trappedTab(event);
+
       return;
     }
+
     if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
+
     if (event.target instanceof Element && event.target.closest(KEY_LAYERS) !== null) return;
     // Note that the key goes no further, so a layer behind the tab keeps standing.
     event.preventDefault();

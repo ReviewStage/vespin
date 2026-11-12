@@ -60,15 +60,19 @@ interface MentionsState {
 /** The `@` word the caret ends in plain text, outside code; nothing while the editor has no caret or the caret ends none. */
 function triggerAt(view: EditorView): TaskTrigger | undefined {
   const { selection, doc } = view.state;
+
   if (!selection.empty || !view.hasFocus()) return undefined;
   const { $from } = selection;
+
   if ($from.parent.type.spec.code === true) return undefined;
   const { parent, parentOffset } = $from;
   const before = parent.textBetween(0, parentOffset, undefined, LEAF_CHARACTER);
   const after = parent.textBetween(parentOffset, parent.content.size, undefined, LEAF_CHARACTER);
   const word = atWordAround(before, after);
+
   if (word === undefined) return undefined;
   const from = $from.start() + before.length - word.query.length - 1;
+
   if (
     doc
       .resolve(from + 1)
@@ -77,6 +81,7 @@ function triggerAt(view: EditorView): TaskTrigger | undefined {
   )
     return undefined;
   const box = view.coordsAtPos(from);
+
   return {
     trigger: {
       start: from,
@@ -96,6 +101,7 @@ function reported(
 ): void {
   state.found = triggerAt(view);
   const next = state.found?.trigger;
+
   if (sameTrigger(next, state.reported)) return;
   state.reported = next;
   mentions.onTrigger(next);
@@ -119,6 +125,7 @@ function headingWords(
 ): string {
   const line =
     sourceOf(node)?.split("\n")[0] ?? manager.serialize({ type: "doc", content: [node.toJSON()] });
+
   return line
     .trim()
     .replace(/^#{1,6}\s+/u, "")
@@ -129,11 +136,14 @@ function headingWords(
 /** Where a position stands after every change, or nothing where the block after it went. */
 function mappedThrough(transactions: readonly Transaction[], position: number): number | undefined {
   let at = position;
+
   for (const tr of transactions) {
     const mapped = tr.mapping.mapResult(at, 1);
+
     if (mapped.deletedAfter) return undefined;
     at = mapped.pos;
   }
+
   return at;
 }
 
@@ -165,13 +175,17 @@ function headingsChange(
       is.push(headingWords(manager, sourceOf, node));
     }
   });
+
   if (was.length === is.length && was.every((heading, at) => heading === is[at])) return undefined;
   const kept = new Map<number, number>();
+
   for (const [offset, at] of opened) {
     const now = mappedThrough(transactions, offset);
     const place = now === undefined ? undefined : placed.get(now);
+
     if (place !== undefined) kept.set(at, place);
   }
+
   return { before: was, after: is, kept };
 }
 
@@ -185,6 +199,7 @@ function retargeted(
   state.doc.descendants((node, position) => {
     if (node.type.name !== MENTION_NODE) return;
     const named = mentions.retarget(String(node.attrs.target), change);
+
     if (
       named !== undefined &&
       (named.target !== node.attrs.target || named.name !== node.attrs.name)
@@ -192,6 +207,7 @@ function retargeted(
       tr.setNodeMarkup(position, undefined, { ...node.attrs, ...named });
     }
   });
+
   return tr.docChanged ? tr : undefined;
 }
 
@@ -202,12 +218,15 @@ export function descriptionMentions(
   mentions: DescriptionEditorMentions,
 ) {
   const state: MentionsState = { found: undefined, reported: undefined };
+
   const plugin = new Plugin({
     key: new PluginKey("description-mentions"),
     appendTransaction: (transactions, before, after) => {
       if (!transactions.some((tr) => tr.docChanged)) return undefined;
+
       if (transactions.some((tr) => tr.getMeta(RETARGETED_META) === true)) return undefined;
       const change = headingsChange(manager, sourceOf, transactions, before.doc, after.doc);
+
       return change === undefined ? undefined : retargeted(after, change, mentions);
     },
     view: () => ({ update: (view) => reported(view, state, mentions) }),
@@ -215,23 +234,28 @@ export function descriptionMentions(
       handleDOMEvents: {
         focus: (view) => {
           reported(view, state, mentions);
+
           return false;
         },
         blur: (view) => {
           reported(view, state, mentions);
+
           return false;
         },
       },
     },
   });
+
   /** The `@` word the caret ends written as the mention chosen, spaced as every chip is (`spacedChip`). */
   const choose = (editor: Editor, mention: MentionNode): void => {
     const word = state.found;
+
     if (word === undefined) return;
     const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
     const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
     editor.view.dispatch(spacedChip(tr, word.from, word.from + chip.nodeSize).scrollIntoView());
     editor.view.focus();
   };
+
   return { plugin, choose };
 }

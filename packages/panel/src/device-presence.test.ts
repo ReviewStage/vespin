@@ -28,6 +28,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -38,6 +39,7 @@ const deviceOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12
 /** What a surface draws of each device it names: its standing as the shared book says it, or nothing where the book does not name it. */
 function Standings({ ids }: { ids: readonly string[] }): React.JSX.Element {
   const book = useDevicePresence(true);
+
   return createElement("p", null, ids.map((id) => presenceStanding(book, id) ?? "none").join(","));
 }
 
@@ -53,6 +55,7 @@ async function draw(ids: readonly string[]): Promise<HTMLElement> {
   await vi.waitFor(() =>
     assert.equal(container.textContent?.includes(DEVICE_STANDING.CHECKING), false),
   );
+
   return container;
 }
 

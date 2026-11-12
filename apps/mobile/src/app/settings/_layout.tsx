@@ -17,6 +17,7 @@ export const unstable_settings = { anchor: "index" };
  */
 export default function SettingsLayout() {
   const colors = useColors();
+
   return (
     <Stack
       screenOptions={{
@@ -37,6 +38,7 @@ export default function SettingsLayout() {
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
       />
       <Stack.Screen name="agents" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS] }} />
+      <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
     </Stack>
   );
 }

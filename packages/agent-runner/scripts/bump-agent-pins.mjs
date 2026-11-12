@@ -28,6 +28,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Predicate } from "effect";
 import * as pins from "../src/pins.ts";
 
 /** How long npm must have held a release before it is taken, so one pulled for a fault within the day is never pinned. */
@@ -91,19 +92,23 @@ function run(command, args, cwd = repositoryRoot) {
 
 async function registryJson(name) {
   const answer = await fetch(`${REGISTRY}/${name}`);
+
   if (!answer.ok) throw new Error(`${REGISTRY}/${name} answered ${answer.status}`);
+
   return answer.json();
 }
 
 /** A stable `x.y.z` as numbers, or undefined for a prerelease or a platform build (`0.167.0-linux-x64`). */
 function stable(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(version);
+
   return match ? match.slice(1).map(Number) : undefined;
 }
 
 function newer(left, right) {
   const [a, b] = [stable(left), stable(right)];
   const index = a.findIndex((part, at) => part !== b[at]);
+
   return index !== -1 && a[index] > b[index];
 }
 
@@ -112,6 +117,7 @@ async function chooseRelease(name) {
   const packument = await registryJson(name);
   const latest = packument["dist-tags"].latest;
   const before = Date.now() - MIN_AGE_HOURS * 3_600_000;
+
   const settled = Object.keys(packument.versions).filter(
     (version) =>
       stable(version) &&
@@ -119,7 +125,9 @@ async function chooseRelease(name) {
       Date.parse(packument.time[version]) <= before &&
       !packument.versions[version].deprecated,
   );
+
   if (settled.length === 0) throw new Error(`${name} has no stable release ${MIN_AGE_HOURS}h old`);
+
   return settled.reduce((best, version) => (newer(version, best) ? version : best));
 }
 
@@ -133,30 +141,38 @@ async function chooseRelease(name) {
 function pinnedExecutables(root, members, files) {
   const folders = new Set(files.map((file) => path.dirname(file)));
   const found = [];
+
   for (const member of members) {
     const at = path.join(root, member);
+
     const entries = statSync(at).isDirectory()
       ? readdirSync(at, { recursive: true, withFileTypes: true }).map((entry) =>
           path.join(entry.parentPath, entry.name),
         )
       : [at];
+
     for (const file of entries) {
       const info = statSync(file, { throwIfNoEntry: false });
       const relative = path.relative(root, file);
       const executable = info?.isFile() && (info.mode & 0o111) !== 0;
+
       if (executable && folders.has(path.dirname(relative))) found.push(relative);
     }
   }
+
   return found.sort();
 }
 
 /** The team a CodeDirectory names, or undefined where its version carries none. */
 function codeDirectoryTeam(bytes, directory) {
   if (bytes.readUInt32BE(directory) !== MACH_O.CODE_DIRECTORY) throw new Error("no CodeDirectory");
+
   if (bytes.readUInt32BE(directory + 8) < MACH_O.SUPPORTS_TEAM_ID) return undefined;
   const offset = bytes.readUInt32BE(directory + 48);
+
   if (offset === 0) return undefined;
   const start = directory + offset;
+
   return bytes.toString("latin1", start, bytes.indexOf(0, start));
 }
 
@@ -164,12 +180,15 @@ function codeDirectoryTeam(bytes, directory) {
 function signatureTeam(bytes, blob) {
   if (bytes.readUInt32BE(blob) !== MACH_O.EMBEDDED_SIGNATURE) throw new Error("no signature");
   const count = bytes.readUInt32BE(blob + 8);
+
   for (let index = 0; index < count; index += 1) {
     const entry = blob + 12 + index * 8;
+
     if (bytes.readUInt32BE(entry) === 0) {
       return codeDirectoryTeam(bytes, blob + bytes.readUInt32BE(entry + 4));
     }
   }
+
   throw new Error("a signature with no CodeDirectory");
 }
 
@@ -177,10 +196,13 @@ function signatureTeam(bytes, blob) {
 function arm64Slice(bytes) {
   if (bytes.readUInt32BE(0) !== MACH_O.FAT_MAGIC) return 0;
   const count = bytes.readUInt32BE(4);
+
   for (let index = 0; index < count; index += 1) {
     const arch = 8 + index * 20;
+
     if (bytes.readUInt32BE(arch) === MACH_O.CPU_TYPE_ARM64) return bytes.readUInt32BE(arch + 8);
   }
+
   throw new Error("a universal binary with no arm64 slice");
 }
 
@@ -193,15 +215,19 @@ function arm64Slice(bytes) {
 function machOTeam(file) {
   const bytes = readFileSync(file);
   const base = arm64Slice(bytes);
+
   if (bytes.readUInt32LE(base) !== MACH_O.MAGIC_64) throw new Error(`${file} is no 64-bit Mach-O`);
   const commands = bytes.readUInt32LE(base + 16);
   let at = base + 32;
+
   for (let index = 0; index < commands; index += 1) {
     if (bytes.readUInt32LE(at) === MACH_O.LC_CODE_SIGNATURE) {
       return signatureTeam(bytes, base + bytes.readUInt32LE(at + 8));
     }
+
     at += bytes.readUInt32LE(at + 4);
   }
+
   throw new Error(`${file} is not signed`);
 }
 
@@ -212,16 +238,21 @@ function sha256(bytes) {
 /** An archive npm keeps, fetched and held to npm's own integrity before anything is read off it. */
 async function fetchArchive(name, version, archive) {
   const manifest = await registryJson(`${name}/${version}`);
+
   if (manifest.dist.tarball !== archive) {
     throw new Error(`the pin's address ${archive} is not npm's ${manifest.dist.tarball}`);
   }
+
   const answer = await fetch(archive);
+
   if (!answer.ok) throw new Error(`${archive} answered ${answer.status}`);
   const bytes = Buffer.from(await answer.arrayBuffer());
   const [algorithm, digest] = manifest.dist.integrity.split("-");
+
   if (createHash(algorithm).update(bytes).digest("base64") !== digest) {
     throw new Error(`${archive} does not match npm's integrity`);
   }
+
   return bytes;
 }
 
@@ -235,20 +266,26 @@ async function readHostPin([label, pin, name, suffix], from, to) {
   say(`  ${label}: ${archive}`);
   const bytes = await fetchArchive(name, `${to}${suffix}`, archive);
   const scratch = mkdtempSync(path.join(tmpdir(), "agent-pin-"));
+
   try {
     writeFileSync(path.join(scratch, "archive.tgz"), bytes);
     run("tar", ["-xzf", "archive.tgz"], scratch);
     const root = path.join(scratch, pin.ROOT);
     const pinned = Object.keys(pin.FILES ?? {}).sort();
     const kept = pinnedExecutables(root, pin.MEMBERS, pinned);
+
     if (kept.join() !== pinned.join()) {
       throw new Error(`${label} keeps executables ${kept.join(", ")}, not ${pinned.join(", ")}`);
     }
+
     const team = pin.TEAM && machOTeam(path.join(root, pin.BINARY));
+
     if (team !== pin.TEAM) throw new Error(`${label} is signed by ${team}, not ${pin.TEAM}`);
+
     const files = Object.fromEntries(
       pinned.map((file) => [file, sha256(readFileSync(path.join(root, file)))]),
     );
+
     return { label, pin, sha256: sha256(bytes), bytes: bytes.length, files };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -263,8 +300,10 @@ function sizeLiteral(bytes) {
 /** `text` with `from` replaced by `to`, where `from` stands exactly once. */
 function replaceOnce(text, from, to, where) {
   const count = text.split(from).length - 1;
+
   if (count !== 1)
     throw new Error(`${where} names ${JSON.stringify(from)} ${count} times, not once`);
+
   return text.replace(from, () => to);
 }
 
@@ -277,9 +316,11 @@ function writeHostPin(text, read) {
     `BYTES: ${sizeLiteral(read.bytes)},`,
     "pins.ts",
   );
+
   for (const [file, digest] of Object.entries(read.files)) {
     next = replaceOnce(next, `"${read.pin.FILES[file]}"`, `"${digest}"`, "pins.ts");
   }
+
   return next;
 }
 
@@ -306,6 +347,7 @@ function versionEdits(tool, from, to, claude) {
       ],
     };
   }
+
   return {
     pins: [
       [`  VERSION: "${from}",`, `  VERSION: "${to}",`],
@@ -318,9 +360,11 @@ function versionEdits(tool, from, to, claude) {
 /** The `claude` binary a release of the SDK carries, as the SDK's own manifest names it. */
 async function claudeCodeVersion(version) {
   const manifest = await registryJson(`${SDK}/${version}`);
-  if (typeof manifest.claudeCodeVersion !== "string") {
+
+  if (!Predicate.isString(manifest.claudeCodeVersion)) {
     throw new Error(`${SDK}@${version} names no claudeCodeVersion`);
   }
+
   return manifest.claudeCodeVersion;
 }
 
@@ -335,6 +379,7 @@ async function bump(tool, to) {
   const claude = tool === "claude" ? await claudeCodeVersion(to) : undefined;
   say(`${spec.title}: ${from} -> ${to}${claude ? ` (claude ${claude})` : ""}`);
   const reads = [];
+
   for (const hostPin of spec.hostPins) reads.push(await readHostPin(hostPin, from, to));
   const edits = versionEdits(tool, from, to, claude);
   rewrite(PINS_FILE, (text) =>
@@ -347,6 +392,7 @@ async function bump(tool, to) {
     edits.image.reduce((next, [old, now]) => replaceOnce(next, old, now, "the Dockerfile"), text),
   );
   run("pnpm", ["exec", "biome", "format", "--write", PINS_FILE]);
+
   if (tool === "claude") {
     rewrite(PACKAGE_FILE, (text) =>
       replaceOnce(text, `"${SDK}": "${from}"`, `"${SDK}": "${to}"`, "package.json"),
@@ -357,18 +403,23 @@ async function bump(tool, to) {
   } else {
     run("node", [path.join(packageRoot, "scripts", "generate-codex-protocol.mjs")]);
   }
-  return { tool, from, to, ...(claude ? { claude } : {}) };
+
+  return { tool, from, to, ...(claude && { claude }) };
 }
 
 /** The tools asked for, each with the version named or undefined for the newest settled release. */
 function requested(args) {
   const asked = args.length > 0 ? args : Object.keys(TOOLS);
+
   return asked.map((arg) => {
     const [tool, version] = arg.split("@");
+
     if (!(tool in TOOLS))
       throw new Error(`no tool ${tool}: name ${Object.keys(TOOLS).join(" or ")}`);
+
     if (version !== undefined && !stable(version))
       throw new Error(`${arg} names no stable release`);
+
     return { tool, version };
   });
 }
@@ -377,11 +428,13 @@ async function main(args) {
   for (const { tool, version } of requested(args)) {
     const spec = TOOLS[tool];
     const to = version ?? (await chooseRelease(spec.package));
+
     // Note that a pin is moved only forward from a newest release, since npm's `latest` can briefly point back.
     if (version === undefined && !newer(to, spec.current())) {
       say(`${spec.title}: ${spec.current()} is current (${to} is the newest settled release)`);
       continue;
     }
+
     process.stdout.write(`${JSON.stringify(await bump(tool, to))}\n`);
   }
 }

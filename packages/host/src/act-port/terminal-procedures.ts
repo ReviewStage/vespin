@@ -109,27 +109,34 @@ export function terminalProcedures<Sender>(
     Effect.suspend(() => {
       byConnection.get(connectionId)?.close();
       byConnection.delete(connectionId);
+
       return host.terminalDisconnect({ connectionId });
     });
 
   /** What the panel sent on one connection's port, read and handed to the host; anything else is dropped. */
   const heard = (connectionId: string, message: WireBoundaryInput): Effect.Effect<void> => {
     const read = readInbound(unparsedWire(message));
+
     if (Result.isFailure(read)) return Effect.void;
     const inbound = read.success;
+
     if (inbound.type === TERMINAL_PORT_MESSAGE.INPUT) {
       return host.terminalInput({ connectionId, data: inbound.data });
     }
+
     if (inbound.type === TERMINAL_PORT_MESSAGE.RESIZE) {
       return host.terminalResize({ connectionId, cols: inbound.cols, rows: inbound.rows });
     }
+
     if (inbound.type === TERMINAL_PORT_MESSAGE.SHOWN) return host.terminalShown({ connectionId });
+
     return host.terminalAck({ connectionId, bytes: inbound.bytes });
   };
 
   /** The panel's attached shells, its page's end watched for the first time it attaches any. */
   const attachedOf = (sender: Sender) => {
     const held = panels.get(sender);
+
     if (held !== undefined) return held;
     const fresh = new Map<string, HostTerminalPort>();
     panels.set(sender, fresh);
@@ -137,6 +144,7 @@ export function terminalProcedures<Sender>(
       panels.delete(sender);
       fork(Effect.forEach([...fresh.keys()], release, { discard: true }));
     });
+
     return fresh;
   };
 
@@ -144,30 +152,35 @@ export function terminalProcedures<Sender>(
     [TERMINAL_ACT_KIND.TERMINAL_LIST]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_LIST].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
         return yield* answeredOr(host.terminalList(input), () => errors.REFUSED());
       },
     ),
     [TERMINAL_ACT_KIND.TERMINAL_CREATE]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_CREATE].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
         return yield* answeredOr(host.terminalCreate(input), () => errors.REFUSED());
       },
     ),
     [TERMINAL_ACT_KIND.TERMINAL_RENAME]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_RENAME].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
         return yield* answeredOr(host.terminalRename(input), () => errors.REFUSED());
       },
     ),
     [TERMINAL_ACT_KIND.TERMINAL_KILL]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_KILL].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
         return yield* answeredOr(host.terminalKill(input), () => errors.REFUSED());
       },
     ),
     [TERMINAL_ACT_KIND.TERMINAL_RESUME]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_RESUME].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
         return yield* answeredOr(host.terminalResume(input), () => errors.REFUSED());
       },
     ),
@@ -176,10 +189,12 @@ export function terminalProcedures<Sender>(
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
         const held = attachedOf(context.actor.sender);
         const connectionId = createId();
+
         const port = ports.open(context.actor.sender, {
           agentId: input.agentId,
           terminalId: input.terminalId,
         });
+
         held.set(connectionId, port);
         byConnection.set(connectionId, port);
         port.onMessage((message) => fork(heard(connectionId, message)));
@@ -189,9 +204,11 @@ export function terminalProcedures<Sender>(
           fork(release(connectionId));
         });
         const taken = yield* host.terminalConnect({ connectionId, ...input });
+
         if (taken) return;
         held.delete(connectionId);
         yield* release(connectionId);
+
         return yield* Effect.fail(errors.REFUSED());
       },
     ),

@@ -58,6 +58,7 @@ function groupsFor(heard: Heard): CommandGroup[] {
     words,
     onSelect: () => heard.chosen.push(words),
   });
+
   return [
     {
       id: "tasks",
@@ -84,6 +85,7 @@ function Owner({
   extra: Partial<CommandDialogProps> | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return createElement(
     "div",
     {
@@ -121,12 +123,15 @@ function openPalette(
     opener.focus();
     opener.click();
   });
+
   return heard;
 }
 
 function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find((each) => each.textContent === name);
+
   if (found === undefined) throw new Error(`no button ${name}`);
+
   return found;
 }
 
@@ -136,7 +141,9 @@ function dialog(): HTMLElement | null {
 
 function field(): HTMLInputElement {
   const found = dialog()?.querySelector<HTMLInputElement>("input");
+
   if (found === null || found === undefined) throw new Error("no field");
+
   return found;
 }
 
@@ -212,9 +219,11 @@ test("the arrows move the lit row, wrapping, and Return chooses it", () => {
 
 test("a press on a row chooses it", () => {
   const heard = openPalette();
+
   const row = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
     (each) => each.textContent === "Open settings",
   );
+
   act(() => row?.click());
   expect(heard.chosen).toEqual(["Open settings"]);
   expect(heard.presses).toBe(0);
@@ -223,10 +232,13 @@ test("a press on a row chooses it", () => {
 test("each group stands under its heading with its note after its rows", () => {
   openPalette();
   const groups = [...document.querySelectorAll<HTMLElement>('[role="group"]')];
+
   const named = groups.map((group) => {
     const heading = document.getElementById(group.getAttribute("aria-labelledby") ?? "");
+
     return [heading?.textContent, [...group.querySelectorAll('[role="option"]')].length];
   });
+
   expect(named).toEqual([
     ["Tasks", 2],
     ["Actions", 2],
@@ -272,6 +284,7 @@ test("Escape puts the palette away, hands focus back, and reaches no window behi
 
 test("⌘W puts the palette away, but not while an input method composes with it", () => {
   openPalette();
+
   const closeTab = (composing: boolean) =>
     act(() => {
       field().dispatchEvent(
@@ -285,6 +298,7 @@ test("⌘W puts the palette away, but not while an input method composes with it
         }),
       );
     });
+
   closeTab(true);
   expect(dialog()).not.toBeNull();
   closeTab(false);

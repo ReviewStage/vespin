@@ -60,6 +60,7 @@ const FACE_GLYPHS = {
 /** Names the people as the members around the caller say. */
 export function useNamer(): (person: GitHubPerson) => Actor {
   const { members, readerId, former } = useMemberDirectory();
+
   return useCallback(
     (person: GitHubPerson) => githubActor(person, { members, readerId, former }),
     [members, readerId, former],
@@ -136,10 +137,12 @@ function ReviewerPile({
   drawn: number;
 }): React.JSX.Element {
   const name = useNamer();
+
   const faces: StackFace[] = reviewers.map(({ state }) => ({
     says: REVIEW_WORDS[state],
     badge: <FaceBadge state={state} />,
   }));
+
   return (
     <ActorStack
       actors={reviewers.map(({ by }) => name(by))}
@@ -168,6 +171,7 @@ export function OpenedLine({
   merged: ReactNode | undefined;
 }): React.JSX.Element {
   const verb = person === undefined ? "Opened" : "opened";
+
   return (
     <span className="pull-request-opened inline-flex min-w-0 items-center gap-tight-gap whitespace-nowrap">
       {person === undefined ? null : <PersonRef person={person} />}

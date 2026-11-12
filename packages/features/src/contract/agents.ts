@@ -29,7 +29,6 @@ import {
 import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
-  agentAddRepositoryRequestSchema,
   agentAnswerSchema,
   agentArchiveRequestSchema,
   agentChangesAnswerSchema,
@@ -122,18 +121,12 @@ const AGENT_STOP_REFUSALS = [
 
 /**
  * What one change of an agent refuses: an archive's Stop, a key already
- * written under (`writeReceiptMiddleware`), a repository added refused
- * by why (`agent-repository-add.ts`), out of reach, unread off GitHub, or
- * its branch gone, and a permission mode that asks for an agent whose
+ * written under (`writeReceiptMiddleware`), and a permission mode that asks for an agent whose
  * harness never asks. A choice the catalog refuses is an invalid request.
  */
 const CHANGE_REFUSALS = [
   ...STOP_REFUSALS,
   HOSTED_API_ERROR.ALREADY_WRITTEN,
-  HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED,
-  HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
-  HOSTED_API_ERROR.GITHUB_UNANSWERED,
-  HOSTED_API_ERROR.BRANCH_NOT_FOUND,
   HOSTED_API_ERROR.PERMISSION_MODE_REFUSED,
 ] as const;
 
@@ -154,7 +147,7 @@ const APPROVAL_ANSWER_REFUSALS = [
  * What a Start refuses, on a task or from an agent (`coder-host/start.ts`,
  * `takeover.ts`): a task or a source agent not found or not the caller's to
  * start from, no repository to check out, a branch gone, a repository out
- * of reach or unread off GitHub, extras refused by why, and why the
+ * of reach or unread off GitHub, and why the
  * agent's sessions would not take it (`runtime-sessions.ts`'s
  * `failedCallRefusal`): its device away or removed, a plan or a key that
  * cannot pay, its harness not reached, or the agent gone from its routing.
@@ -167,7 +160,6 @@ const START_REFUSALS = [
   HOSTED_API_ERROR.BRANCH_NOT_FOUND,
   HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
   HOSTED_API_ERROR.GITHUB_UNANSWERED,
-  HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED,
   HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
   HOSTED_API_ERROR.DEVICE_REMOVED,
   HOSTED_API_ERROR.AGENT_CREDENTIAL_MISSING,
@@ -226,8 +218,7 @@ const archivedQuery = EffectSchema.optionalKey(EffectSchema.String);
 
 /**
  * One change of an agent (PATCH): its title, its archive, its pin, the
- * reader's read mark, its MCP servers, a repository added beside its own,
- * its permission mode, or its model and effort, tried in that order.
+ * reader's read mark, its MCP servers, its permission mode, or its model and effort, tried in that order.
  */
 const agentChangeRequestSchema = EffectSchema.Union([
   agentRenameRequestSchema,
@@ -235,7 +226,6 @@ const agentChangeRequestSchema = EffectSchema.Union([
   agentPinRequestSchema,
   agentReadRequestSchema,
   agentServersRequestSchema,
-  agentAddRepositoryRequestSchema,
   agentPermissionModeRequestSchema,
   modelChoiceSchema,
 ]);

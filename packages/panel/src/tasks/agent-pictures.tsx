@@ -89,12 +89,14 @@ export function useAgentPictureDoor(agentId: string, callId?: string): AgentPict
       }),
     [agentId, callId],
   );
+
   return useMemo(() => ({ owner: callId ?? agentId, read }), [agentId, callId, read]);
 }
 
 /** What the viewer saves a picture as: its words, or its file's name, under its type's extension. */
 function viewerName(words: string, picture: KeptPicture): string {
   const extension = picture.mediaType.slice(picture.mediaType.indexOf("/") + 1);
+
   return `${words.replaceAll(/[/\\:]/gu, "-")}.${extension}`;
 }
 
@@ -132,8 +134,10 @@ function heldFiles(
 ): readonly HeldFile[] {
   return items.flatMap(({ picture, words }, index) => {
     const state = states[index];
+
     if (state?.kind !== PICTURE_STATE.READY) return [];
     const file = { name: viewerName(words, picture), mediaType: picture.mediaType, url: state.url };
+
     return [{ file, id: picture.id }];
   });
 }
@@ -174,14 +178,17 @@ function OpenViewer({
     door,
     items.map((each) => each.picture.id),
   );
+
   const files = heldFiles(items, states);
   const at = files.findIndex((each) => each.id === id);
+
   return at < 0 ? null : (
     <AttachmentViewer
       files={files.map((each) => each.file)}
       at={at}
       onAt={(next) => {
         const shown = files[next];
+
         if (shown !== undefined) onId(shown.id);
       }}
       onClose={onClose}
@@ -193,13 +200,16 @@ function OpenViewer({
 /** The viewer over a set's pictures, from the one named, until it is closed. */
 function useViewer(door: AgentPictureDoor | undefined): PictureViewer {
   const addToDescription = useAddToDescription();
+
   const [viewing, setViewing] = useState<
     { readonly items: readonly ViewedPicture[]; readonly id: string } | undefined
   >();
+
   const open = useCallback(
     (items: readonly ViewedPicture[], id: string) => setViewing({ items, id }),
     [],
   );
+
   const viewer =
     viewing === undefined || door === undefined ? null : (
       <OpenViewer
@@ -211,6 +221,7 @@ function useViewer(door: AgentPictureDoor | undefined): PictureViewer {
         action={addToDescription}
       />
     );
+
   return { open, viewer };
 }
 
@@ -227,6 +238,7 @@ function ShownOne({
   const state = usePicture(pictureQuery(door.owner, shown.picture.id, door.read), pictureUnread);
   // Note that a picture is described by its file's name, since its caption is drawn beside it, but a video's player is named by the caption, because "Video: flow" says nothing of what it shows.
   const video = state.kind === PICTURE_STATE.READY && isVideoDataUrl(state.url);
+
   return (
     <PictureBlock
       state={state}
@@ -248,6 +260,7 @@ function ShownTile({
   onOpen: (id: string) => void;
 }): ReactNode {
   const words = shown.caption === "" ? shown.name : shown.caption;
+
   if (shown.picture === undefined) {
     return (
       <PictureSetTile
@@ -257,6 +270,7 @@ function ShownTile({
       />
     );
   }
+
   return (
     <KeptTile
       door={door}
@@ -297,6 +311,7 @@ function KeptTile({
 /** A picture of a set past the six drawn, read all the same, so the viewer walks the whole set. */
 function UnseenPicture({ door, picture }: { door: AgentPictureDoor; picture: KeptPicture }): null {
   usePicture(pictureQuery(door.owner, picture.id, door.read), pictureUnread);
+
   return null;
 }
 
@@ -330,7 +345,9 @@ export function ShownPictures({
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const all = shownPicturesOf(input, output);
+
   if (door === undefined || all.length === 0) return null;
+
   return <ShownSet door={door} shown={all} />;
 }
 
@@ -357,13 +374,16 @@ function ShownSet({
   const { open, viewer } = useViewer(door);
   const videos = shown.filter(isShownVideo);
   const stills = shown.filter((each) => !isShownVideo(each));
+
   // Note that the viewer walks them in the order they are drawn, videos first, rather than the order the call named them.
   const kept = [...videos, ...stills].flatMap((each) =>
     each.picture === undefined
       ? []
       : [{ picture: each.picture, words: each.caption === "" ? each.name : each.caption }],
   );
+
   const openAt = (id: string) => open(kept, id);
+
   return (
     <>
       {videos.map((each, index) => (
@@ -387,16 +407,21 @@ function ShownStills({
   openAt: (id: string) => void;
 }): ReactNode {
   const [only] = shown;
+
   if (shown.length === 1 && only !== undefined && only.picture === undefined) {
     const caption = only.caption === "" ? undefined : only.caption;
+
     return (
       <PictureBlock state={{ kind: PICTURE_STATE.READING }} alt={only.name} caption={caption} />
     );
   }
+
   if (shown.length === 1 && only?.picture !== undefined) {
     const picture = only.picture;
+
     return <ShownOne door={door} shown={{ ...only, picture }} onOpen={() => openAt(picture.id)} />;
   }
+
   return (
     <div className="my-block-gap">
       <PictureSet label={SHOWN_LABEL} count={shown.length}>
@@ -439,13 +464,18 @@ export function CallPictures({
   const { open, viewer } = useViewer(door);
   const called = calledPicturesOf(tool, input, output);
   const recorded = recordedVideosOf(tool, output);
+
   if (door === undefined || (called.length === 0 && recorded.length === 0)) return null;
   const videos = recorded.length === 0 ? null : <ShownSet door={door} shown={recorded} />;
+
   if (called.length === 0) return <>{videos}</>;
+
   const kept = called.flatMap((each) =>
     each.kept ? [{ picture: each.picture, words: each.name }] : [],
   );
+
   const openAt = (id: string) => open(kept, id);
+
   // Note that a call's set draws every picture it answered, never six and a count, because one not kept says why only on its own tile and the viewer walks none of those.
   return (
     <>
@@ -488,9 +518,11 @@ function attachmentOfData(name: string, url: string): AgentAttachment | undefine
   const read = /^data:([^;,]+);base64,(.+)$/u.exec(url);
   const mediaType = read?.[1];
   const data = read?.[2];
+
   if (mediaType === undefined || data === undefined || !isAgentAttachmentType(mediaType)) {
     return undefined;
   }
+
   return { name, mediaType, data };
 }
 
@@ -500,6 +532,11 @@ export interface LineAttachment {
   readonly attachment: AgentAttachment;
 }
 
+type UseLineAttachmentsResult = {
+  readonly attachments: readonly LineAttachment[];
+  readonly reading: boolean;
+};
+
 /**
  * A line's files as a message to the agent carries them again, for Edit to
  * send: each one the line holds inline, and each one kept as a picture whose
@@ -507,19 +544,20 @@ export interface LineAttachment {
  * picture is still being read, which joins them once it lands. One that
  * is gone is left out.
  */
-export function useLineAttachments(message: AgentTranscriptMessage): {
-  readonly attachments: readonly LineAttachment[];
-  readonly reading: boolean;
-} {
+export function useLineAttachments(message: AgentTranscriptMessage): UseLineAttachmentsResult {
   const door = useContext(AgentPicturesContext);
   const files = messageFileChips(message);
+
   const states = usePictureStates(
     door,
     files.map(({ pictureId }) => pictureId),
   );
+
   let reading = false;
+
   const attachments = files.flatMap(({ name, url, pictureId }, index): LineAttachment[] => {
     const state = pictureId === undefined || door === undefined ? undefined : states[index];
+
     if (
       state !== undefined &&
       state.kind !== PICTURE_STATE.READY &&
@@ -527,12 +565,15 @@ export function useLineAttachments(message: AgentTranscriptMessage): {
     ) {
       reading = true;
     }
+
     const attachment = attachmentOfData(
       name,
       state?.kind === PICTURE_STATE.READY ? state.url : url,
     );
+
     return attachment === undefined ? [] : [{ key: String(index), attachment }];
   });
+
   return { attachments, reading };
 }
 
@@ -557,12 +598,15 @@ export function MessageFileChips({
 /** A line's files as chips, each one kept as a picture read through the agent's pictures, its bytes once they land. */
 function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
   const door = useContext(AgentPicturesContext);
+
   const states = usePictureStates(
     door,
     files.map(({ pictureId }) => pictureId),
   );
+
   return files.map(({ pictureId, ...chip }, index): FileChip => {
     const state = states[index];
+
     return pictureId !== undefined && state?.kind === PICTURE_STATE.READY
       ? { ...chip, url: state.url }
       : chip;
@@ -609,7 +653,9 @@ export function WordFilesOf({
   children: ReactNode;
 }): ReactNode {
   const shown = useWordFiles(useKeptChips(files), words);
+
   if (shown.named === undefined) return children;
+
   return (
     <WordFilesContext.Provider value={shown.named}>
       {children}
@@ -636,5 +682,6 @@ export function KeptFileChips({
   // marker draws the first file of its name alone, so a later file of that name stays here.
   const drawn = new Set(useContext(WordFilesContext)?.names);
   const chips = useKeptChips(files.filter((file) => !drawn.delete(file.name)));
+
   return <AttachedFileChips files={chips} uploading={sending} />;
 }

@@ -76,9 +76,9 @@ function reloadTab(): void {
  * Hands a failure an error boundary caught to the tab's own error event, as
  * React does with one no boundary caught, so Sentry's SDK hears it there.
  */
-function reportCaught(thrown: unknown): void {
-  console.error("The tab's panel failed to render.", thrown);
-  reportError(thrown);
+function reportCaught(cause: unknown): void {
+  console.error("The tab's panel failed to render.", cause);
+  reportError(cause);
 }
 
 /**
@@ -89,6 +89,7 @@ function reportCaught(thrown: unknown): void {
  */
 function liftLoadingFrame(rootElement: HTMLElement): void {
   const frame = rootElement.querySelector<HTMLElement>(BOOT_FRAME.SELECTOR);
+
   if (frame?.dataset.bootMark !== BOOT_FRAME.LIVE) return;
   document.body.append(frame);
   frame.dispatchEvent(new Event(BOOT_FRAME.LEAVE));
@@ -119,15 +120,18 @@ export async function mountWebApp(
   // Never awaited: the SDK is a chunk of its own, and what is reported before it lands waits for it.
   const sentry = startWebSentry(options.sentry ?? webSentryBuild());
   const httpClient = options.httpClient ?? FetchHttpClient.layer;
+
   // Note that a count is forked only once the host stands, by which time the runtime is set.
   let runtime: ManagedRuntime.ManagedRuntime<
     WebHostTag | HostTag,
     DuplicateGatewayMethod | DuplicateHostAct
   >;
+
   // A defect in a count is reported, as the desktop's acts are.
   const fork = (effect: Effect.Effect<void>): void => {
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
+
   // Sentry's reporter stands beneath the host, so every fiber it forks and every act reports through it.
   runtime = ManagedRuntime.make(
     Layer.provideMerge(
@@ -137,9 +141,11 @@ export async function mountWebApp(
   );
   // What the tab installed, taken down again in the reverse order as it closes.
   const installed: (() => void)[] = [() => tabHistory.destroy()];
+
   const uninstall = () => {
     for (const undo of installed.splice(0).reverse()) undo();
   };
+
   try {
     const web = await runtime.runPromise(WebHostTag);
     // The address the tab was opened at is said once, as the link it is.
@@ -168,8 +174,10 @@ export async function mountWebApp(
     createRoot(rootElement).render(
       <ReloadState failure={TAB_FAILED} room={RELOAD_ROOM.WINDOW} onReload={reloadTab} />,
     );
+
     return undefined;
   }
+
   liftLoadingFrame(rootElement);
   const router = createPanelRouter(tabHistory, queryClient);
   const root = createRoot(rootElement, { onCaughtError: reportCaught });
@@ -197,6 +205,7 @@ export async function mountWebApp(
       httpClient,
     ),
   );
+
   return {
     close: async () => {
       root.unmount();

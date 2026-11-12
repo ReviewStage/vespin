@@ -86,10 +86,10 @@ function connectLabel(provider: ModelProvider | undefined): string {
 }
 
 /** A press's rejection as a failure only Retry answers: an `Error`'s message, else the value itself. */
-export function rejectedFailure(rejected: unknown): Failure {
+export function rejectedFailure(cause: unknown): Failure {
   return {
     reason: FAILURE_REASON.OTHER,
-    text: rejected instanceof Error ? rejected.message : String(rejected),
+    text: cause instanceof Error ? cause.message : String(cause),
   };
 }
 

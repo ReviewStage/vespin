@@ -77,7 +77,9 @@ export const settledTurnListener: Layer.Layer<
     const reach = yield* Effect.context<
       HttpClient.HttpClient | GitHubApp | HostedEnvironment | SlackBot | Sandbox
     >();
+
     const apns = yield* Effect.serviceOption(ApnsSender);
+
     const reported = (turn: SettledAgentTurn) =>
       afterResponse(
         "a started agent's final message",
@@ -86,11 +88,13 @@ export const settledTurnListener: Layer.Layer<
           outsideTransaction,
         ),
       );
+
     const posted = (turn: SettledAgentTurn) =>
       afterResponse(
         "an agent's turn on Slack",
         postTurnToSlack(turn).pipe(Effect.provideContext(reach), outsideTransaction),
       );
+
     const pushed = (turn: SettledAgentTurn) =>
       afterResponse(
         "a failed turn's push",
@@ -102,6 +106,7 @@ export const settledTurnListener: Layer.Layer<
             ),
         }),
       );
+
     const refreshed = (turn: SettledAgentTurn) =>
       afterResponse(
         "a settled turn's live activity",
@@ -115,16 +120,19 @@ export const settledTurnListener: Layer.Layer<
             ),
         }),
       );
+
     const archived = (turn: SettledAgentTurn) =>
       afterResponse(
         "a finished automation run's archive",
         outsideTransaction(reconsiderRunArchiveAfterTurn(turn)),
       );
+
     const handedOn = (turn: SettledAgentTurn) =>
       afterResponse(
         "a coding agent's queue",
         queueAfterSettle(turn).pipe(Effect.provideContext(reach), outsideTransaction),
       );
+
     return {
       heard: (turn) =>
         Effect.all(

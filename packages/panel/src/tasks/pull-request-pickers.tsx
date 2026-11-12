@@ -93,6 +93,7 @@ const REVIEWER_ACTIONS: readonly PullRequestAction[] = [
   PULL_REQUEST_ACTION.REQUEST_REVIEW,
   PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST,
 ];
+
 const LABEL_ACTIONS: readonly PullRequestAction[] = [
   PULL_REQUEST_ACTION.ADD_LABEL,
   PULL_REQUEST_ACTION.REMOVE_LABEL,
@@ -129,6 +130,7 @@ export function useReviewOptions(agentId: string): ReviewOptions {
   const held = useQuery(reviewOptionsQuery(asked === agentId ? { agentId } : undefined));
   const { mutateAsync: retry } = useMutation(pullRequestPartRetryMutation());
   const answer = held.data;
+
   const read: OptionsRead =
     asked !== agentId
       ? { kind: OPTIONS.UNASKED }
@@ -137,14 +139,17 @@ export function useReviewOptions(agentId: string): ReviewOptions {
         : answer === undefined || "failure" in answer
           ? { kind: OPTIONS.FAILED }
           : { kind: OPTIONS.LANDED, value: answer };
+
   const ask = useCallback(() => {
     if (asked !== agentId) return setAsked(agentId);
+
     if (read.kind !== OPTIONS.FAILED) return;
     setRetrying(true);
     void retry({ part: PULL_REQUEST_PART.REVIEW_OPTIONS, agentId })
       .catch(() => undefined)
       .finally(() => setRetrying(false));
   }, [agentId, asked, read.kind, retry]);
+
   return { read, ask };
 }
 
@@ -163,7 +168,9 @@ function optionsNote(options: ReviewOptions, offered: number, none: string): Rea
       />
     );
   }
+
   if (options.read.kind !== OPTIONS.LANDED) return <Spinner delay label={PICKER_WORDS.READING} />;
+
   return offered === 0 ? none : undefined;
 }
 
@@ -200,11 +207,18 @@ function pickedOver<T>(
 ): readonly T[] {
   if (picks.size === 0) return held;
   const kept = held.filter((each) => picks.get(keyOf(each))?.value !== null);
+
   const added = [...picks.values()].flatMap(({ value }) =>
     value === null || heldOf(held, keyOf, keyOf(value)) !== null ? [] : [value],
   );
+
   return [...kept, ...added];
 }
+
+type Picked<T> = {
+  readonly shown: readonly T[];
+  readonly draw: (chosen: T, on: boolean) => () => void;
+};
 
 /**
  * One list's picks over what the read holds of it: the list drawn, and the
@@ -213,27 +227,29 @@ function pickedOver<T>(
  * or its time runs out (`@repo/ui/pending-values`), so one GitHub took
  * never flickers back while the pull request is read again.
  */
-function usePicks<T>(
-  held: readonly T[],
-  keyOf: (each: T) => string,
-): { readonly shown: readonly T[]; readonly draw: (chosen: T, on: boolean) => () => void } {
+function usePicks<T>(held: readonly T[], keyOf: (each: T) => string): Picked<T> {
   const [picks, setPicks] = useState<Picks<T>>(() => new Map());
   const now = usePendingNow(picks.size > 0);
   useEffect(() => {
     setPicks((was) => pendingSettled(was, (key) => heldOf(held, keyOf, key), samePick, now));
   }, [held, keyOf, now]);
   const shown = useMemo(() => pickedOver(held, picks, keyOf), [held, picks, keyOf]);
+
   const draw = (chosen: T, on: boolean) => {
     const key = keyOf(chosen);
+
     const asked = pendingValue(
       picks.get(key),
       on ? chosen : null,
       heldOf(held, keyOf, key),
       samePick,
     );
+
     setPicks((was) => new Map(was).set(key, asked));
+
     return () => setPicks((was) => pendingWithout(was, key, asked));
   };
+
   return { shown, draw };
 }
 
@@ -263,10 +279,12 @@ export function usePullRequestPicks(
   const people = usePicks(held?.requested ?? NO_PEOPLE, loginOf);
   const teams = usePicks(held?.requestedTeams ?? NO_TEAMS, slugOf);
   const labels = usePicks(held?.labels ?? NO_LABELS, nameOf);
+
   const send = (letGo: () => void, request: PullRequestActionRequest) =>
     void writes.write(request).then((outcome) => {
       if (!outcome.done) letGo();
     });
+
   const review = (
     on: boolean,
     reviewer: { kind: typeof REVIEWER_KIND.USER | typeof REVIEWER_KIND.TEAM; name: string },
@@ -274,6 +292,7 @@ export function usePullRequestPicks(
     on
       ? { action: PULL_REQUEST_ACTION.REQUEST_REVIEW, reviewer }
       : { action: PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST, reviewer };
+
   return {
     requested: people.shown,
     requestedTeams: teams.shown,
@@ -295,6 +314,7 @@ export function usePullRequestPicks(
 /** A label's color as the dot its item leads with; a quiet dot for one GitHub spelled otherwise. */
 function LabelDot({ color }: { color: string }): React.JSX.Element {
   const hex = /^[0-9a-f]{6}$/iu.test(color) ? `#${color}` : undefined;
+
   return (
     <span
       className="inline-block size-label-dot rounded-ui-full border border-border bg-label-dot"
@@ -343,6 +363,7 @@ function PickerButton({
     "aria-expanded": open,
     "aria-controls": open ? menuId : undefined,
   } as const;
+
   if (held) {
     return (
       <Tooltip label={open ? undefined : label}>
@@ -360,6 +381,7 @@ function PickerButton({
       </Tooltip>
     );
   }
+
   return (
     <Tooltip label={open ? undefined : label}>
       <Button
@@ -418,11 +440,13 @@ function OptionsPicker({
   const box = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const busy = writes.pending !== undefined && busyOn.includes(writes.pending);
+
   // Note that we hand focus back to the press, as a native menu returns it to its button, because closing takes the focused menu away with it.
   const close = () => {
     setOpen(false);
     button.current?.focus();
   };
+
   return (
     <span className="pull-request-picker relative inline-flex" ref={box}>
       <PickerButton
@@ -488,6 +512,7 @@ export function ReviewerPicker({
   const askedTeams = new Set(picks.requestedTeams.map((team) => team.slug));
   const name = useNamer();
   const actions = reviewerActions(options, author, asked, askedTeams, picks, name);
+
   return (
     <OptionsPicker
       label={PICKER_WORDS.REVIEWERS}
@@ -520,9 +545,12 @@ function reviewerActions(
   name: (person: GitHubPerson) => Actor,
 ): readonly MenuAction[] {
   const { read } = options;
+
   if (read.kind !== OPTIONS.LANDED) return [];
+
   const teams = read.value.teams.map((team): MenuAction => {
     const on = askedTeams.has(team.slug);
+
     return {
       label: team.name,
       replayMasked: true,
@@ -532,11 +560,13 @@ function reviewerActions(
       onSelect: () => picks.pickTeam(team, !on),
     };
   });
+
   const people = read.value.users
     .filter((user) => user.login !== author)
     .map((user): MenuAction => {
       const on = asked.has(user.login);
       const actor = name(user);
+
       return {
         label: user.login,
         replayMasked: true,
@@ -546,6 +576,7 @@ function reviewerActions(
         onSelect: () => picks.pickPerson(user, !on),
       };
     });
+
   return [...teams, ...people];
 }
 
@@ -569,6 +600,7 @@ export function LabelPicker({
 }): React.JSX.Element {
   const on = new Set(picks.labels.map((label) => label.name));
   const actions = labelActions(options, on, picks);
+
   return (
     <OptionsPicker
       label={PICKER_WORDS.LABELS}
@@ -598,9 +630,12 @@ function labelActions(
   picks: PullRequestPicks,
 ): readonly MenuAction[] {
   const { read } = options;
+
   if (read.kind !== OPTIONS.LANDED) return [];
+
   return read.value.labels.map((label): MenuAction => {
     const labeled = on.has(label.name);
+
     return {
       label: label.name,
       replayMasked: true,

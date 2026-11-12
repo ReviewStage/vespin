@@ -36,16 +36,20 @@ export function planOf(
         // because its placeholders would be read as the explain's own, and that each is handed a
         // null, which a generic plan never looks at.
         yield* client.unsafe(`prepare ${PLANNED} as ${statement}`);
+
         const [prepared] = yield* client.unsafe<{ readonly parameters: number }>(
           "select cardinality(parameter_types) as parameters from pg_prepared_statements where name = $1",
           [PLANNED],
         );
+
         const nulls = Array.from({ length: prepared?.parameters ?? 0 }, () => "null").join(", ");
+
         const rows = yield* client.unsafe<{ readonly "QUERY PLAN": string }>(
           nulls.length === 0
             ? `explain execute ${PLANNED}`
             : `explain execute ${PLANNED}(${nulls})`,
         );
+
         return rows.map((row) => row["QUERY PLAN"]).join("\n");
       }).pipe(Effect.ensuring(Effect.ignore(client.unsafe(`deallocate ${PLANNED}`)))),
     ),
@@ -64,11 +68,14 @@ export function plansOf<A, E, R>(
     yield* Effect.provideService(call, Statement.CurrentTransformer, (statement) =>
       Effect.sync(() => {
         ran.push(statement.compile()[0]);
+
         return statement;
       }),
     );
     const planned: PlannedStatement[] = [];
+
     for (const sql of ran) planned.push({ sql, plan: yield* planOf(sql) });
+
     return planned;
   });
 }

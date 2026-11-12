@@ -28,12 +28,15 @@ const foldersBefore = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-inbox-read-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(MIGRATION) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -78,12 +81,15 @@ it.effect(
             ask: { type: INBOX_ASK.ANSWER },
           },
         );
+
         assert.ok(Result.isSuccess(posted));
+
         const unread = (reader: string, itemId: string) =>
           Effect.map(
             readInboxItem(reader, itemId),
             (found) => Option.getOrThrow(found).item.unread,
           );
+
         assert.deepEqual(
           [yield* unread("dean", standing), yield* unread("charles", standing)],
           [false, false],
@@ -92,9 +98,11 @@ it.effect(
           [yield* unread("dean", posted.success.id), yield* unread("charles", posted.success.id)],
           [true, true],
         );
+
         const markers = yield* sql<{
           readonly count: number;
         }>`select count(*)::int as count from inbox_item_read`;
+
         assert.deepEqual(markers, [{ count: 0 }], "no marker was written for the items standing");
       }),
     ).pipe(Effect.provide(Layer.provideMerge(unmigratedPgliteSqlClient, NodeServices.layer))),

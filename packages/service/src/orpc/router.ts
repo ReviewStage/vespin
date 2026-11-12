@@ -178,6 +178,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
 export function hostedRouter(seams: HostedRouterSeams) {
   // One cache of the kept published answers for every resource that reads them or lets them go.
   const published = { ...seams, published: instancePublishedCache() };
+
   return hosted.router({
     account: accountProcedures(seams),
     admin: adminProcedures(seams),

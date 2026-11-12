@@ -88,26 +88,32 @@ function resolvedColors(host: Element, tokens: readonly string[]): Map<string, s
   const declared = getComputedStyle(host);
   const probe = host.appendChild(host.ownerDocument.createElement("span"));
   const colors = new Map<string, string>();
+
   for (const token of tokens) {
     if (declared.getPropertyValue(token).trim() === "") continue;
     probe.style.color = `var(${token})`;
     colors.set(token, getComputedStyle(probe).color);
   }
+
   probe.remove();
+
   return colors;
 }
 
 /** An opaque computed color, `rgb(r, g, b)`, as `#rrggbb`; any other text as it stands. */
 function hexOf(color: string): string {
   const channels = OPAQUE_RGB.exec(color);
+
   if (channels === null) return color;
   const hex = channels.slice(1).map((channel) => Number(channel).toString(16).padStart(2, "0"));
+
   return `#${hex.join("")}`;
 }
 
 /** A find's tints as the tokens resolve on `host` now, as the search reads them, in the `#rrggbb` the search asks for. */
 export function terminalFindTints(host: Element): FindTints {
   const colors = resolvedColors(host, Object.values(FIND_TOKENS));
+
   return {
     match: hexOf(colors.get(FIND_TOKENS.match) ?? ""),
     current: hexOf(colors.get(FIND_TOKENS.current) ?? ""),
@@ -118,11 +124,15 @@ export function terminalFindTints(host: Element): FindTints {
 function dimmed(color: string, ground: string | undefined, keep: number): string {
   const own = OPAQUE_RGB.exec(color);
   const under = ground === undefined ? null : OPAQUE_RGB.exec(ground);
+
   if (own === null || under === null) return color;
+
   const channels = own.slice(1).map((channel, at) => {
     const base = Number(under[at + 1]);
+
     return Math.round(base + (Number(channel) - base) * keep);
   });
+
   return `rgb(${channels.join(", ")})`;
 }
 
@@ -136,10 +146,13 @@ function dimmed(color: string, ground: string | undefined, keep: number): string
 export function terminalTheme(host: Element, dim: boolean): ITheme {
   const colors = resolvedColors(host, Object.values(THEME_TOKENS));
   const ground = colors.get(THEME_TOKENS.background);
+
   return Object.fromEntries(
     Object.entries(THEME_TOKENS).flatMap(([color, token]) => {
       const value = colors.get(token);
+
       if (value === undefined) return [];
+
       return [[color, dim && DIMMED_COLORS.has(color) ? dimmed(value, ground, DIM_KEEP) : value]];
     }),
   );

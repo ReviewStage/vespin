@@ -68,9 +68,11 @@ export function FormField({
   const errorId = `${id}error`;
   const failed = error !== undefined && said(error.words);
   const described = said(description);
+
   const describedBy = [described ? descriptionId : undefined, failed ? errorId : undefined]
     .filter((part) => part !== undefined)
     .join(" ");
+
   const labeled = (
     <FieldLabel className="ui-field-label" id={labelId} htmlFor={controlId}>
       {/* Note that the words stand in a span of their own, which a readable region lets select where the label itself may not. */}
@@ -78,6 +80,7 @@ export function FormField({
       {optional ? <span className={OPTIONAL_MARK}>{FIELD_WORDS.OPTIONAL}</span> : null}
     </FieldLabel>
   );
+
   return (
     <Field data-invalid={failed}>
       {count === undefined ? (

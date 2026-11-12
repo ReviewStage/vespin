@@ -91,15 +91,18 @@ function drawn(links: Partial<SectionLinks> = {}) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const sectionLinks: SectionLinks = {
     workspace: WORKSPACE,
     onOpen: (mention) => opened.push(mention),
     reveal: undefined,
     ...links,
   };
+
   act(() =>
     root.render(withQueryClient(createElement(DescriptionBody, { task: TASK, sectionLinks }))),
   );
+
   return { container, opened };
 }
 
@@ -107,7 +110,9 @@ function chipNamed(container: HTMLElement, name: string): HTMLButtonElement {
   const chip = [...container.querySelectorAll<HTMLButtonElement>("[data-mention-ref]")].find(
     (each) => each.querySelector(".ui-inline-ref-label")?.textContent === name,
   );
+
   assert.ok(chip, `a chip named ${name}`);
+
   return chip;
 }
 
@@ -137,9 +142,11 @@ test("a section's Copy link button, named for its heading, copies the section's 
   const rollout = [...container.querySelectorAll<HTMLElement>(".description-unit-attributed")].find(
     (unit) => unit.textContent?.startsWith("Rollout"),
   );
+
   const more = rollout?.querySelector<HTMLButtonElement>(
     '.description-unit-more button[aria-label="Copy link to Rollout"]',
   );
+
   assert.ok(more, "the Rollout section has a Copy link button named for it");
   await act(async () => more.click());
 
@@ -148,9 +155,11 @@ test("a section's Copy link button, named for its heading, copies the section's 
 
 test("an ask to show a section scrolls the document to it, and an ask for one it no longer holds to its top", () => {
   const { container } = drawn();
+
   const scroller = container.querySelector<HTMLElement>(
     ".description-document-body",
   )?.parentElement;
+
   assert.ok(scroller);
   const units = container.querySelectorAll<HTMLElement>(".description-unit");
   // The layout jsdom has none of: the document's top at 100, the Rollout section's at 700.
@@ -160,10 +169,12 @@ test("an ask to show a section scrolls the document to it, and an ask for one it
   vi.spyOn(rollout, "getBoundingClientRect").mockReturnValue(DOMRect.fromRect({ y: 700 }));
   const root = roots[0];
   assert.ok(root);
+
   const render = (sectionLinks: SectionLinks) =>
     act(() =>
       root.render(withQueryClient(createElement(DescriptionBody, { task: TASK, sectionLinks }))),
     );
+
   const onOpen = () => undefined;
 
   const revealed: number[] = [];
@@ -185,6 +196,7 @@ test("no attribute of the plan's page carries what a mention names", () => {
     for (const attribute of element.attributes) {
       if (["aria-label", "title"].includes(attribute.name)) continue;
       assert.equal(/luke:|vespin|github\.com/u.test(attribute.value), false, attribute.name);
+
       if (attribute.name.startsWith("data-")) {
         assert.equal(/Rollout|Old plan/u.test(attribute.value), false, attribute.name);
       }
@@ -207,6 +219,7 @@ test("off a plan's own page a mention stays its words", () => {
 
 test("a section whose heading is formatted is copied as a link that is drawn as its chip", () => {
   const heading = "Rollout *draft*";
+
   const task: Task = {
     ...TASK,
     document: {
@@ -214,6 +227,7 @@ test("a section whose heading is formatted is copied as a link that is drawn as 
       assumptions: [],
     },
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -265,14 +279,17 @@ function drawnEditable(): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
 test("copying a section's link from its button opens no editor, as a click into its words does", async () => {
   const container = drawnEditable();
+
   const rollout = [...container.querySelectorAll<HTMLElement>(".description-unit-attributed")].find(
     (unit) => unit.textContent?.startsWith("Rollout"),
   );
+
   const more = rollout?.querySelector<HTMLButtonElement>(UNIT_LINK);
   assert.ok(more);
 
@@ -339,6 +356,7 @@ function drawnFiles(
       ),
     ),
   );
+
   return container;
 }
 
@@ -365,6 +383,7 @@ test("a mention of a file as its page on GitHub opens its tab, at the lines it p
       assumptions: [],
     },
   };
+
   const opened: [string, OpenFileLines | undefined][] = [];
   const onGitHub: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, openGitHub: (url) => onGitHub.push(url) });
@@ -382,6 +401,24 @@ test("a mention of a file as its page on GitHub opens its tab, at the lines it p
   assert.deepEqual(onGitHub, ["https://github.com/acme/other/blob/HEAD/other.ts"]);
 });
 
+test("where no File tab opens it, a mention of a file as its page on GitHub, written in http, opens that page", () => {
+  const page = "http://github.com/acme/relay/blob/HEAD/apps/web/session-store.ts";
+
+  const task: Task = {
+    ...TASK,
+    repository: PLACE.repository,
+    document: { body: `## Goal\nMove [@session-store.ts](${page}).`, assumptions: [] },
+  };
+
+  const onWeb: string[] = [];
+  fakeAppPlatform({ ...QUIET_PANEL, openWeb: (url) => onWeb.push(url) });
+  const container = drawnFiles(undefined, task);
+
+  act(() => chipNamed(container, "session-store.ts").click());
+
+  assert.deepEqual(onWeb, [page]);
+});
+
 test("a heading the description bears twice: a mention of the second opens the second, and each ⋯ copies its own", async () => {
   const task: Task = {
     ...TASK,
@@ -390,6 +427,7 @@ test("a heading the description bears twice: a mention of the second opens the s
       assumptions: [],
     },
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -411,6 +449,7 @@ test("a heading the description bears twice: a mention of the second opens the s
   );
 
   act(() => chipNamed(container, "Notes").click());
+
   for (const more of sectionLinks(container)) {
     await act(async () => more.click());
   }
@@ -459,9 +498,11 @@ test("a click on a folder's chip in a description that can be edited opens no ed
       ),
     ),
   );
+
   const folder = [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].find(
     (chip) => chip.querySelector(".ui-inline-ref-label")?.textContent === "auth/",
   );
+
   assert.ok(folder);
 
   act(() => folder.dispatchEvent(new MouseEvent("click", { bubbles: true })));
@@ -475,6 +516,7 @@ function drawnTitled() {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   function TitledPlan(): React.JSX.Element {
     return createElement(DescriptionBody, {
       task: TASK,
@@ -486,11 +528,13 @@ function drawnTitled() {
       sectionLinks: { workspace: WORKSPACE, onOpen: () => undefined, reveal: undefined },
     });
   }
+
   act(() => root.render(withQueryClient(createElement(TitledPlan))));
   const block = container.querySelector<HTMLElement>('[role="group"][aria-label="Title"]');
   const more = container.querySelector<HTMLButtonElement>(TITLE_LINK);
   assert.ok(block, "the title is a block");
   assert.ok(more, "the title has a Copy link button");
+
   return { container, block, more };
 }
 

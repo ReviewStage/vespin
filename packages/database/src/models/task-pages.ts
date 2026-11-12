@@ -117,6 +117,7 @@ const findPageLines = SqlSchema.findAll({
       .where(and(ownedBy(owner), taskReachableBy(userId)))
       .orderBy(taskPageVersion.pageId, desc(taskPageVersion.version))
       .as("newest");
+
     return Database.use((db) => db.select().from(newest).orderBy(desc(newest.at), newest.pageId));
   },
 });
@@ -213,13 +214,17 @@ export function writePage(
       Effect.gen(function* () {
         const admitted = yield* Schema.decodeUnknownEffect(pageWriteSchema)(write);
         const locked = yield* lockTask({ userId, taskId: owner.taskId });
+
         if (Option.isNone(locked)) return Option.none<PageLine>();
+
         const newest =
           admitted.pageId === undefined
             ? Option.some({ version: 0 })
             : yield* findNewestVersion({ owner, pageId: admitted.pageId });
+
         if (Option.isNone(newest)) return Option.none<PageLine>();
         const at = yield* DateTime.nowAsDate;
+
         // An insert that returned no row is the database breaking its own contract, not an outcome.
         const row = yield* insertVersion({
           taskId: owner.taskId,
@@ -231,6 +236,7 @@ export function writePage(
           shownBy,
           at,
         }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
         return Option.some(lineOf(row));
       }),
     ),
@@ -274,9 +280,11 @@ export function readPageById(
 ): TaskStoreEffect<Option.Option<FoundPage>> {
   return Effect.gen(function* () {
     const found = yield* findPageById({ userId, pageId, version: version ?? null });
+
     if (Option.isNone(found)) return Option.none();
     const { taskId, html, ...line } = found.value;
     const newest = yield* findNewestVersion({ owner: { kind: PAGE_OWNER.TASK, taskId }, pageId });
+
     return Option.some({
       taskId,
       page: { ...lineOf(line), html },

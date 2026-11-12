@@ -71,12 +71,14 @@ export type LinkRowTone = (typeof LINK_ROW_TONE)[keyof typeof LINK_ROW_TONE];
 /** The ink a press-through row's words and glyph stand in. */
 function linkInk(colors: BrandColors, tone: LinkRowTone): string {
   if (tone === LINK_ROW_TONE.ATTENTION) return colors.ATTENTION;
+
   return colors.TEXT_BODY;
 }
 
 /** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
+
   return (
     <Text
       modifiers={[
@@ -192,6 +194,7 @@ function PullRequestLink({
 }) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequest.state];
+
   return (
     <SwiftUIButton
       onPress={pullRequest.onPress}
@@ -221,6 +224,7 @@ function PullRequestLink({
 /** What an agent's line says of its state: the spinner and Working, or the alert and Failed. */
 function AgentStateWords({ working }: { readonly working: boolean }) {
   const colors = useColors();
+
   return (
     <HStack spacing={SPACE.TIGHT}>
       {working ? <WorkingMark /> : <FailedMark />}
@@ -247,6 +251,7 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
+
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
       <RowHead
@@ -275,6 +280,7 @@ export function AgentRow(props: AgentRowProps) {
       )}
     </VStack>
   );
+
   return (
     <RowFrame id={id} row={row} trailingActions={props.trailingActions} preview={props.preview} />
   );
@@ -291,6 +297,7 @@ type RelationRowProps = {
 /** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
 export function RelationRow({ id, name, status, relation }: RelationRowProps) {
   const colors = useColors();
+
   const row: ReactElement = (
     <RowHead
       unread={false}
@@ -307,6 +314,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
       end={<EndWords words={relation} />}
     />
   );
+
   return (
     <RowFrame
       id={id}
@@ -345,6 +353,7 @@ export function LinkRow({
 }: LinkRowProps) {
   const colors = useColors();
   const ink = linkInk(colors, tone);
+
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -377,6 +386,7 @@ type GroupRowProps = {
 /** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
 export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
   const colors = useColors();
+
   const row: ReactElement = (
     <RowHead
       unread={false}
@@ -387,8 +397,11 @@ export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
       end={count === undefined ? undefined : <EndWords words={String(count)} />}
     />
   );
+
   const heard = { label: title, value: count === undefined ? [] : [String(count)] };
+
   if (testId === undefined) return <RowFrame id={id} row={row} heard={heard} />;
+
   return (
     <RowFrame
       id={id}

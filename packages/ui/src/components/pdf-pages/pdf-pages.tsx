@@ -76,6 +76,7 @@ function bytesOf(base64: string): Uint8Array {
 /** A page's width over its height, read at its own size. */
 function ratioOf(page: PDFPageProxy): number {
   const box = page.getViewport({ scale: 1 });
+
   return box.width / box.height;
 }
 
@@ -85,6 +86,7 @@ function emptied(holder: HTMLElement): void {
     canvas.width = 0;
     canvas.height = 0;
   }
+
   holder.replaceChildren();
 }
 
@@ -93,13 +95,18 @@ function useWidth(element: HTMLElement | null): number {
   const [width, setWidth] = useState(0);
   useEffect(() => {
     if (element === null) return undefined;
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries.at(-1);
+
       if (entry !== undefined) setWidth(Math.round(entry.contentRect.width));
     });
+
     observer.observe(element);
+
     return () => observer.disconnect();
   }, [element]);
+
   return width;
 }
 
@@ -120,9 +127,10 @@ function PdfPage({
   const [sheet, setSheet] = useState<HTMLElement | null>(null);
   const [canvasHolder, setCanvasHolder] = useState<HTMLDivElement | null>(null);
   const [textHolder, setTextHolder] = useState<HTMLDivElement | null>(null);
-  const [shape, setShape] = useState(ratio);
+  const [pageRatio, setPageRatio] = useState(ratio);
   const [scale, setScale] = useState(1);
   const width = useWidth(sheet);
+
   const place = useCallback(
     (element: HTMLElement | null) => {
       placeNear(element);
@@ -135,13 +143,16 @@ function PdfPage({
     if (!view.near || canvasHolder === null || textHolder === null || width === 0) {
       return undefined;
     }
+
     let left = false;
     let render: RenderTask | undefined;
     let words: TextLayer | undefined;
+
     const draw = async () => {
       const page = await pdf.getPage(number);
+
       if (left) return;
-      setShape(ratioOf(page));
+      setPageRatio(ratioOf(page));
       const fitted = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
       const pixels = window.devicePixelRatio || 1;
       const canvas = document.createElement("canvas");
@@ -154,6 +165,7 @@ function PdfPage({
         transform: pixels === 1 ? undefined : [pixels, 0, 0, pixels, 0, 0],
       });
       await render.promise;
+
       if (left) return;
       emptied(canvasHolder);
       canvasHolder.append(canvas);
@@ -167,6 +179,7 @@ function PdfPage({
         viewport: fitted,
       });
       await words.render();
+
       if (left) return;
       // A block under the words, raised over the whole page while a drag selects, so the gaps between lines hold the selection where it is.
       const end = document.createElement("div");
@@ -174,8 +187,10 @@ function PdfPage({
       layer.append(end);
       textHolder.replaceChildren(layer);
     };
+
     // Note that a draw cut short by the page going away or the width changing rejects, and is left there.
     draw().catch(() => undefined);
+
     return () => {
       left = true;
       render?.cancel();
@@ -190,6 +205,7 @@ function PdfPage({
     const stop = () => textHolder.removeAttribute("data-selecting");
     textHolder.addEventListener("pointerdown", start);
     document.addEventListener("pointerup", stop);
+
     return () => {
       textHolder.removeEventListener("pointerdown", start);
       document.removeEventListener("pointerup", stop);
@@ -204,7 +220,7 @@ function PdfPage({
   }, [view.near, canvasHolder, textHolder]);
 
   return (
-    <PdfSheet ratio={shape} sheetRef={place} label={`Page ${String(number)}`}>
+    <PdfSheet ratio={pageRatio} sheetRef={place} label={`Page ${String(number)}`}>
       <div ref={setCanvasHolder} className="ui-pdf-pixels" />
       <div
         ref={setTextHolder}
@@ -234,6 +250,7 @@ export function PdfPages({ base64, label, worker, refused }: PdfPagesProps): Rea
   useEffect(() => {
     let left = false;
     let task: ReturnType<typeof getDocument> | undefined;
+
     // Note that bytes that are no base64, or a document pdf.js refuses to start on, are refused as a file it cannot open is.
     const opening = (async () => {
       task = getDocument({
@@ -243,11 +260,14 @@ export function PdfPages({ base64, label, worker, refused }: PdfPagesProps): Rea
       });
       const document = await task.promise;
       const first = await document.getPage(1);
+
       if (!left) setOpened({ kind: OPENED.OPEN, document, ratio: ratioOf(first) });
     })();
+
     opening.catch(() => {
       if (!left) setOpened({ kind: OPENED.REFUSED });
     });
+
     return () => {
       left = true;
       setOpened(OPENING);
@@ -256,7 +276,9 @@ export function PdfPages({ base64, label, worker, refused }: PdfPagesProps): Rea
   }, [base64, worker]);
 
   if (opened.kind === OPENED.REFUSED) return <>{refused}</>;
+
   if (opened.kind === OPENED.OPENING) return <PdfPagesSkeleton label={label} />;
+
   return (
     <PdfColumn label={label}>
       {Array.from({ length: opened.document.numPages }, (_, at) => (

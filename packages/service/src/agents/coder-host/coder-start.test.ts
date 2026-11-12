@@ -3,44 +3,34 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { agentQueueNow } from "@repo/database/models/agent-queue-store";
-import {
-  readAgentRepositories,
-  recordAgentRepositoryHead,
-} from "@repo/database/models/agent-repositories";
 import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
-import { registerDevice } from "@repo/database/models/device-store";
 import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_KIND, AGENT_MACHINE, EXTRA_REPOSITORY_REFUSAL } from "@repo/features/agent-wire";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
+import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { MESSAGE_ROLE, RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
 import { keptAfterResponse } from "../../http/after-response.js";
-import { extraRepositoryRefused, HOSTED_REFUSAL } from "../../http/http-effect.js";
+import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
-  GITHUB_APP_WITH_TOKENS,
-  GITHUB_FIXTURE_MEMBER,
   githubReaching,
   type InstallationFixture,
-  memberRepositoryJson,
   openGithubUser,
-  openTokenMember,
-  type SentToGitHub,
 } from "../../testing/github-app-fake.js";
 import {
   type AgentSessions,
@@ -56,6 +46,9 @@ import {
 } from "../sessions/agent-sessions.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+
+/** The attributes an error reporter is handed beside the failure it reports. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
@@ -76,6 +69,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
+
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
 const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 }, (_, index) => ({
   id: 8_000 + index,
@@ -83,6 +77,7 @@ const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 },
   accountId: 80_000 + index,
   repositories: [RELAY],
 }));
+
 let installationsConnected = 0;
 
 const TASK = "Find the flakiest test in CI this week and fix it.";
@@ -90,6 +85,7 @@ const TASK = "Find the flakiest test in CI this week and fix it.";
 /** The agent's sessions, writing down the first message of every session opened. */
 function fakeAgentSessions() {
   const opened: SessionMessage[] = [];
+
   const sessions: AgentSessions = {
     // Note that the machine is up at once, so the first message the Start queued goes as its boot answers.
     boot: () =>
@@ -101,17 +97,21 @@ function fakeAgentSessions() {
     open: (message) =>
       Effect.sync(() => {
         opened.push(message);
+
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
       }),
     send: (sessionId, message) =>
       Effect.sync(() => {
         opened.push(message);
+
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
       }),
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   };
+
   const agentSessions = Effect.succeed(sessions);
+
   return { opened, sessions, agentSessions };
 }
 
@@ -136,6 +136,7 @@ const openConnectedWorkspace = Effect.gen(function* () {
   const installation = INSTALLATIONS[installationsConnected++];
   assert.ok(installation);
   yield* connectWorkspaceGitHub(workspaceId, installation);
+
   return { owner, workspaceId };
 });
 
@@ -182,6 +183,7 @@ const openedLineTaken = (
     assert.equal(Result.getOrUndefined(taken)?.length, 1);
 
     const db = yield* Database;
+
     const lines = yield* db
       .select({
         sender: messages.sender,
@@ -193,6 +195,7 @@ const openedLineTaken = (
       .where(
         and(eq(messages.conversationId, conversationId), eq(messages.role, MESSAGE_ROLE.USER)),
       );
+
     return { lines, heard: yield* heardFromAnotherAccount(target) };
   });
 
@@ -245,6 +248,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         const theirs = yield* startAgent(agentSessions, teammate, ask).pipe(
           Effect.provide(services),
         );
+
         const refused = yield* Effect.result(
           startAgent(agentSessions, outsider, { ...ask, idempotencyKey: randomUUID() }).pipe(
             Effect.provide(services),
@@ -263,11 +267,13 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const booting = (up: Effect.Effect<BootFailure | MachineUp>) =>
           Effect.gen(function* () {
             const { opened, agentSessions } = fakeAgentSessions();
             const sessions = yield* agentSessions;
             const after = keptAfterResponse();
+
             const { agent } = yield* startAgent(
               Effect.succeed<AgentSessions>({
                 ...sessions,
@@ -279,11 +285,14 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
               owner,
               yield* promptAsk(owner, workspaceId),
             ).pipe(Effect.provide(Layer.merge(services, after.layer)));
+
             const queuedWhileBooting = (yield* agentQueueNow(agent.id)).messages.map(
               (message) => message.text,
             );
+
             const sentWhileBooting = opened.length;
             yield* after.run;
+
             return {
               queuedWhileBooting,
               sentWhileBooting,
@@ -336,11 +345,13 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
         const unreached = yield* promptAsk(owner, workspaceId);
+
         const refused = yield* Effect.result(
           startAgent(Effect.fail(HOSTED_REFUSAL.UNAVAILABLE), owner, unreached).pipe(
             Effect.provide(services),
           ),
         );
+
         // Each Start is held where it never gets past, and interrupted there. Note that one held while
         // its open is asked waits out its first line's hand-over deadline, as a send's does, which the
         // clock is moved past.
@@ -350,22 +361,29 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           Effect.gen(function* () {
             const reached = yield* Deferred.make<void>();
             const ask = yield* promptAsk(owner, workspaceId);
+
             const starting = yield* startAgent(agentSessions(reached), owner, ask).pipe(
               Effect.provide(services),
               Effect.forkChild,
             );
+
             yield* Deferred.await(reached);
             const interrupting = yield* Effect.forkChild(Fiber.interrupt(starting));
+
             for (let second = 0; second <= 30; second += 1) {
               yield* Effect.yieldNow;
               yield* TestClock.adjust("1 second");
             }
+
             yield* Fiber.join(interrupting);
+
             return yield* readAgentByKey(owner, ask.idempotencyKey);
           });
+
         const beforeAsking = yield* cutAt((reached) =>
           Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
         );
+
         const whileAsking = yield* cutAt((reached) =>
           Effect.succeed({
             ...fakeAgentSessions().sessions,
@@ -386,17 +404,20 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
+
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {
             reported.push(attributes);
           }),
         ]);
+
         const refusing = (failed: SessionFailed) =>
           Effect.succeed<AgentSessions>({
             ...fakeAgentSessions().sessions,
             boot: () => Effect.succeed(failed),
           });
+
         const started = (failed: SessionFailed) =>
           Effect.flatMap(promptAsk(owner, workspaceId), (ask) =>
             Effect.result(
@@ -419,8 +440,8 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
 
         assert.equal(reported.length, 1);
         assert.equal(reported[0]?.reason, HOSTED_REFUSAL.NATIVE_AGENT_NOT_HERE.error);
-        assert.equal(typeof reported[0]?.agentId, "string");
-        assert.equal(typeof reported[0]?.conversationId, "string");
+        assert.ok(Predicate.isString(reported[0]?.agentId));
+        assert.ok(Predicate.isString(reported[0]?.conversationId));
       }),
   );
 
@@ -429,14 +450,18 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const openedTaken = (ask: StartAsk) =>
           Effect.gen(function* () {
             const { opened, agentSessions } = fakeAgentSessions();
+
             const { agent } = yield* startAgent(agentSessions, owner, ask).pipe(
               Effect.provide(services),
             );
+
             return yield* openedLineTaken(owner, agent.conversationId, opened);
           });
+
         const ranFor = (firing: AutomationFiring) =>
           Effect.map(
             promptAsk(owner, workspaceId),
@@ -460,13 +485,17 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           "the prompt is the conversation's one line",
         );
         assert.equal(byHand.heard, false, "by hand");
+
         const scheduled = yield* openedTaken(
           yield* ranFor({ kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 }),
         );
+
         assert.equal(scheduled.heard, false, "a schedule's run, its owner's prompt alone");
+
         const hooked = yield* openedTaken(
           yield* ranFor({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }),
         );
+
         assert.equal(hooked.heard, true, "a webhook's run, its caller's body beside the prompt");
       }),
   );
@@ -486,6 +515,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const made = (status: TaskStatus) =>
           createTask(owner, {
             organizationId: workspaceId,
@@ -493,6 +523,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             repository: RELAY_REPOSITORY,
             status,
           });
+
         const filed = yield* made(TASK_STATUS.BACKLOG);
         const todo = yield* made(TASK_STATUS.TODO);
         const done = yield* made(TASK_STATUS.DONE);
@@ -504,6 +535,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
 
         const statusOf = (taskId: string) =>
           Effect.map(readTask(owner, taskId), (read) => Option.getOrUndefined(read)?.task.status);
+
         assert.equal(yield* statusOf(filed.id), TASK_STATUS.IN_PROGRESS);
         assert.equal(yield* statusOf(todo.id), TASK_STATUS.IN_PROGRESS);
         assert.equal(yield* statusOf(done.id), TASK_STATUS.IN_PROGRESS);
@@ -514,6 +546,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const made = (assigneeId?: string) =>
           createTask(owner, {
             organizationId: workspaceId,
@@ -521,6 +554,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             repository: RELAY_REPOSITORY,
             ...(assigneeId === undefined ? undefined : { assigneeId }),
           });
+
         const byHand = yield* made();
         const byAutomation = yield* made();
         const { agentSessions } = fakeAgentSessions();
@@ -540,6 +574,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             readTask(owner, taskId),
             (read) => Option.getOrUndefined(read)?.task.assignee?.userId,
           );
+
         assert.equal(yield* assigneeOf(byHand.id), owner);
         assert.equal(yield* assigneeOf(byAutomation.id), undefined);
       }),
@@ -548,11 +583,13 @@ it.layer(SUITE)("an agent started on a task", (it) => {
   it.effect("on a task stored in pilot mode with no agent, a Start makes a coder", () =>
     Effect.gen(function* () {
       const { owner, workspaceId } = yield* openConnectedWorkspace;
+
       const made = yield* createTask(owner, {
         organizationId: workspaceId,
         name: "Invites",
         repository: RELAY_REPOSITORY,
       });
+
       // Note that nothing writes pilot mode now, so the task is made one in place, as a release before stored it.
       yield* Database.use((db) =>
         db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, made.id)),
@@ -564,167 +601,6 @@ it.layer(SUITE)("an agent started on a task", (it) => {
       );
 
       assert.equal(started.agent.kind, AGENT_KIND.CODER);
-    }),
-  );
-});
-
-const WEB = { owner: RELAY.owner, name: "Web" } as const;
-const DOCS = { owner: "Globex", name: "Docs" } as const;
-const SECRET = { owner: RELAY.owner, name: "Secret" } as const;
-
-/** Installations on the repository's account reaching it and its neighbor, one per test, and one on another account. */
-const SEVERAL: readonly InstallationFixture[] = Array.from({ length: 6 }, (_, index) => ({
-  id: 8_100 + index,
-  login: RELAY.owner,
-  accountId: 81_000 + index,
-  repositories: [RELAY, WEB],
-}));
-const ELSEWHERE: InstallationFixture = {
-  id: 8_200,
-  login: DOCS.owner,
-  accountId: 82_000,
-  repositories: [DOCS],
-};
-let severalConnected = 0;
-
-/** GitHub as a member's own token reads a repository no installation reaches, which it may push to. */
-function memberReachesSecret(sent: SentToGitHub): Response | undefined {
-  if (sent.headers.get("authorization") !== `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`) {
-    return undefined;
-  }
-  return new URL(sent.url).pathname === `/repos/${SECRET.owner}/${SECRET.name}`
-    ? Response.json(memberRepositoryJson(SECRET, true))
-    : undefined;
-}
-
-/** What a Start in several repositories reaches: GitHub with every installation above and the member's token, and the catalog. */
-const severalServices = Layer.mergeAll(
-  githubReaching([...SEVERAL, ELSEWHERE], GITHUB_APP_WITH_TOKENS, {}, memberReachesSecret).layer,
-  catalog,
-);
-
-/** A workspace connected to an installation reaching the repository and its neighbor, and its owner, who saved their own token. */
-const openSeveralWorkspace = () =>
-  Effect.gen(function* () {
-    const owner = yield* openTokenMember();
-    yield* connectAgentApiKeys(owner);
-    const workspaceId = yield* openWorkspace(owner);
-    const installation = SEVERAL[severalConnected++];
-    assert.ok(installation);
-    yield* connectWorkspaceGitHub(workspaceId, installation);
-    return { owner, workspaceId };
-  });
-
-/** A Start that was refused as given, having made no agent under its key. */
-const refusedStart = (owner: string, ask: StartAsk) =>
-  Effect.gen(function* () {
-    const { agentSessions, opened } = fakeAgentSessions();
-    const refused = yield* startAgent(agentSessions, owner, ask).pipe(
-      Effect.provide(severalServices),
-      Effect.flip,
-    );
-    assert.ok(Option.isNone(yield* readAgentByKey(owner, ask.idempotencyKey)));
-    assert.deepEqual(opened, []);
-    return refused;
-  });
-
-it.layer(SUITE)("an agent started in several repositories", (it) => {
-  it.effect(
-    "a Start naming repositories beside its own keeps them after it, as GitHub spells them",
-    () =>
-      Effect.gen(function* () {
-        const { owner, workspaceId } = yield* openSeveralWorkspace();
-        const { agentSessions } = fakeAgentSessions();
-
-        const started = yield* startAgent(agentSessions, owner, {
-          ...(yield* promptAsk(owner, workspaceId)),
-          alsoRepositories: [{ repository: "acme/web" }],
-        }).pipe(Effect.provide(severalServices));
-
-        assert.deepEqual(
-          (yield* readAgentRepositories(owner, started.agent.id)).map((each) => each.repository),
-          [RELAY_REPOSITORY, `${WEB.owner}/${WEB.name}`],
-        );
-      }),
-  );
-
-  it.effect(
-    "a continue works in the repositories its source worked in beside its own, at the branches they started on and with none of its pull requests",
-    () =>
-      Effect.gen(function* () {
-        const { owner, workspaceId } = yield* openSeveralWorkspace();
-        const { agentSessions } = fakeAgentSessions();
-        const web = `${WEB.owner}/${WEB.name}`;
-        const ask = yield* promptAsk(owner, workspaceId);
-        const source = yield* startAgent(agentSessions, owner, {
-          ...ask,
-          alsoRepositories: [{ repository: web }],
-        }).pipe(Effect.provide(severalServices));
-        yield* recordAgentRepositoryHead(owner, source.agent.id, web, "agent/invite");
-
-        const continued = yield* startAgent(agentSessions, owner, {
-          ...ask,
-          idempotencyKey: randomUUID(),
-          prompt: undefined,
-          from: { agentId: source.agent.id },
-        }).pipe(Effect.provide(severalServices));
-
-        assert.deepEqual(yield* readAgentRepositories(owner, continued.agent.id), [
-          { repository: RELAY_REPOSITORY, baseBranch: null, headBranch: null, pullRequest: null },
-          { repository: web, baseBranch: null, headBranch: null, pullRequest: null },
-        ]);
-      }),
-  );
-
-  it.effect("refuses them to an agent that would run on a device", () =>
-    Effect.gen(function* () {
-      const { owner, workspaceId } = yield* openSeveralWorkspace();
-      const deviceId = randomUUID();
-      yield* registerDevice(owner, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
-
-      const refused = yield* refusedStart(owner, {
-        ...(yield* promptAsk(owner, workspaceId)),
-        alsoRepositories: [{ repository: `${WEB.owner}/${WEB.name}` }],
-        runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
-      });
-
-      assert.deepEqual(refused, extraRepositoryRefused(EXTRA_REPOSITORY_REFUSAL.DEVICE));
-    }),
-  );
-
-  it.effect("refuses one reached only on the member's own token, naming it", () =>
-    Effect.gen(function* () {
-      const { owner, workspaceId } = yield* openSeveralWorkspace();
-
-      const refused = yield* refusedStart(owner, {
-        ...(yield* promptAsk(owner, workspaceId)),
-        alsoRepositories: [{ repository: `${SECRET.owner}/${SECRET.name}` }],
-      });
-
-      assert.deepEqual(
-        refused,
-        extraRepositoryRefused(EXTRA_REPOSITORY_REFUSAL.TOKEN, `${SECRET.owner}/${SECRET.name}`),
-      );
-    }),
-  );
-
-  it.effect("refuses one on another installation of the App, naming it", () =>
-    Effect.gen(function* () {
-      const { owner, workspaceId } = yield* openSeveralWorkspace();
-      yield* connectWorkspaceGitHub(workspaceId, ELSEWHERE);
-
-      const refused = yield* refusedStart(owner, {
-        ...(yield* promptAsk(owner, workspaceId)),
-        alsoRepositories: [{ repository: `${DOCS.owner}/${DOCS.name}` }],
-      });
-
-      assert.deepEqual(
-        refused,
-        extraRepositoryRefused(
-          EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION,
-          `${DOCS.owner}/${DOCS.name}`,
-        ),
-      );
     }),
   );
 });

@@ -54,24 +54,27 @@ const REPORTED_KEYS = [
 export function agentLogIds(
   agent: Partial<Pick<Agent, "id" | "conversationId" | "taskId">>,
   sessionId?: string,
-): Readonly<Record<string, string>> {
+) {
   return {
     ...(agent.id === undefined ? undefined : { agentId: agent.id }),
     ...(agent.conversationId === undefined ? undefined : { conversationId: agent.conversationId }),
     ...(agent.taskId === undefined ? undefined : { taskId: agent.taskId }),
     ...(sessionId === undefined ? undefined : { sessionId }),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** Where the agent's machine runs it, a line is annotated with: the sandbox's run, on a sandbox. */
-export function runningLogId(running: string): Readonly<Record<string, string>> {
-  return { sandboxSessionId: running };
+export function runningLogId(running: string) {
+  return { sandboxSessionId: running } satisfies Readonly<Record<string, string>>;
 }
 
 /** A failure's own words as a line or a turn's record may keep them: every credential-shaped run redacted, then cut. */
 export function keptFailureWords(words: string): string {
   return redactCredentials(words).slice(0, AGENT_FAILURE_CHARS);
 }
+
+/** The attributes a report carries, as Effect's reporter types them. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
 
 /**
  * A coding agent's Start or launch that failed with nothing to explain it,
@@ -82,7 +85,7 @@ export function keptFailureWords(words: string): string {
 class AgentStartFailed extends Data.TaggedError("AgentStartFailed")<{
   readonly message: string;
   readonly reason: string;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: ReportedAttributes;
 }> {
   override readonly name = `AgentStartFailed(${this.reason})`;
 
@@ -105,11 +108,14 @@ export function agentFailureSaid(
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     yield* Effect.logError(said);
+
     if (!reported) return;
     const annotated = yield* References.CurrentLogAnnotations;
+
     const annotations = Object.fromEntries(
       REPORTED_KEYS.flatMap((key) => (key in annotated ? [[key, annotated[key]]] : [])),
     );
+
     yield* ErrorReporter.report(
       Cause.fail(new AgentStartFailed({ message: said, reason, annotations })),
     );

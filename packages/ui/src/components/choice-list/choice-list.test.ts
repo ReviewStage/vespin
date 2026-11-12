@@ -45,6 +45,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -62,6 +63,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -87,6 +89,7 @@ function Held({
 }): React.JSX.Element {
   const [value, setValue] = useState<readonly Retry[]>(start);
   const [heard, setHeard] = useState<string[]>([]);
+
   return createElement(
     "div",
     null,
@@ -149,6 +152,7 @@ test("Tab lands on the checked row alone, or the first open one while none is ch
     rows(page)
       .filter((each) => each.tabIndex === 0)
       .map((each) => each.textContent?.slice(0, 11));
+
   assert.deepEqual(tabStops(render(createElement(Held, { start: ["never"] }))), ["Never retry"]);
   assert.deepEqual(tabStops(render(createElement(Held))), ["Retry 3 tim"]);
 });
@@ -241,6 +245,7 @@ test("a numbered list wears each row's number after its badge and names it as th
   const boxes = render(
     createElement(Held, { look: CHOICE_LOOK.MARKED, select: CHOICE_SELECT.MANY, numbered: true }),
   );
+
   assert.deepEqual(
     rows(boxes).map((each) => each.getAttribute("aria-keyshortcuts")),
     ["1", "2", "3"],
@@ -265,6 +270,7 @@ test("a read-only list keeps its pick checked and takes no press, key, or Tab, y
     const page = render(
       createElement(Held, { select, readOnly: true, look: CHOICE_LOOK.MARKED, start: ["three"] }),
     );
+
     assert.deepEqual(
       rows(page).map((each) => [each.getAttribute("aria-checked"), each.tabIndex]),
       [
@@ -280,6 +286,7 @@ test("a read-only list keeps its pick checked and takes no press, key, or Tab, y
     row(page, "Never retry").querySelector(".ui-choice-label")?.dispatchEvent(down);
     assert.equal(down.defaultPrevented, false, "the pointer starts a selection on its words");
   }
+
   const page = render(createElement(Held, { readOnly: true, start: ["never"] }));
   assert.equal(page.querySelector('[role="radiogroup"]')?.getAttribute("aria-readonly"), "true");
 });
@@ -294,6 +301,7 @@ test("a settled list names each option, the pick beside its note and the rest wi
       pickedNote: "Your pick",
     }),
   );
+
   const list = page.querySelector("ul") ?? assert.fail("no list");
   assert.equal(list.getAttribute("aria-label"), "What was offered");
   assert.deepEqual(
@@ -326,6 +334,7 @@ test.each([CHOICE_LOOK.CARD, CHOICE_LOOK.ROWS])(
         ],
       }),
     );
+
     const cards = [...container.querySelectorAll(".ui-choice-card")];
     assert.equal(cards.length, 2);
     assert.ok(cards[0]?.querySelector(".ui-choice-aside a"));
@@ -372,9 +381,11 @@ test("a card's own field keeps its caret as focus lands in it", () => {
       ],
     }),
   );
+
   const input =
     container.querySelector<HTMLInputElement>('input[aria-label="Token"]') ??
     assert.fail("no field");
+
   act(() => input.focus());
   assert.deepEqual([input.selectionStart, input.selectionEnd], [7, 7]);
 });

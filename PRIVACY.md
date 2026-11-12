@@ -71,12 +71,13 @@ Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
 repositories where the App is installed. A cloud agent works on a checkout of
 the repository in its own Vercel Sandbox: on a drive of its own where it was
-forked from its repository's default-branch drive or from the drive of the agent
-it was continued from, and in the sandbox otherwise; an agent on your own
-machine keeps its work there. A workspace
-repository's default branch may be kept on a drive cloud agents start from.
-Each workspace also keeps one drive holding the default branch of every
-repository it connects, kept for its cloud agents to start from: those its
+forked from its workspace's drive or from the drive of the agent it was
+continued from, and in the sandbox otherwise; an agent on your own machine
+keeps its work there. A workspace repository's default branch may also remain
+on a drive of its own made before workspace drives, which nothing reads or
+writes any more. Each workspace keeps one drive holding the default branch
+of every repository it connects, which each new cloud agent forks, so an
+agent's sandbox holds those repositories beside its own checkout: those its
 installation grants and those a member added on their own token alike, the
 latter cloned with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
@@ -94,7 +95,7 @@ with a server-only secret held outside the database. We keep a short hint
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
 recordings. We never send one to your devices, except to run an agent on your
-own machine with Bring your own machine (see Agents on your own machines below).
+own machine (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -128,8 +129,8 @@ token, key, or file contents, that goes too.
 
 ### Agents on your own machines
 
-If you turn on Bring your own machine, agents can run directly on This Mac or on
-another machine you add, with full access to everything that machine's account
+Agents can run directly on This Mac, once you turn on its toggle in Machines,
+or on another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
 their harness's own session, its thinking text included, as a cloud agent's
@@ -299,18 +300,20 @@ it) in one Keychain item that only the app and its share sheet can read. That
 item stays on this iPhone, never syncs to iCloud or moves to another device,
 holds the time the token stops being sent, a little under an hour after it
 was issued, is rewritten each time the token is renewed, and is deleted when
-you sign out. When you share text or a link to Vespin from another app and press
-Start, the share sheet sends **the words you shared and edited**, with the
-workspace and repository you picked, to the Service under that token, exactly
+you sign out. When you share text, a link or up to four pictures to Vespin from another
+app and press Start, the share sheet sends **the words you shared and
+edited, and the pictures you kept**, made smaller as the app's New task
+makes a photo, with the workspace and repository you picked, to the Service under that token, exactly
 as the app's New task does, and the task starts there. Where you allow
 Vespin's notifications, the share sheet then posts one on the phone itself,
 never through Apple's push service, which says "Task started" and nothing
 of the task, and carries the ids of the task and its agent for the app to
 open when you tap it. Where the task
 doesn't start, because the token has expired, the Service refuses it, or the
-Service doesn't answer, the share sheet keeps those words and picks as a
-draft in the same folder instead, which the app opens New task on the next
-time you open the app, then deletes. Signing out deletes the files and the
+Service doesn't answer, the share sheet keeps those words, pictures and
+picks as a draft in the same folder instead, which the app opens New task on
+the next time you open the app, then deletes, the pictures once New task
+has read them. Signing out deletes the files and the
 Keychain item. Deleting the app deletes the files at once, but iOS keeps an
 app's Keychain items after the app is deleted, so the item stays on the
 iPhone until the app is installed and opened again, which deletes it; by
@@ -437,11 +440,11 @@ data with:
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
 Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
-checkout on a drive of its own, and a copy of each workspace repository's
-default branch, with its dependencies installed, on a drive its agents start
-from, and one drive per workspace holding the default branch of every
-repository it connects, member-token ones included, kept for its cloud agents
-to start from.
+checkout on a drive of its own, and one drive per workspace holding the default
+branch of every repository it connects, member-token ones included, which each
+new cloud agent forks. A copy of a workspace repository's default branch, with
+its dependencies installed, may also remain on a drive of its own made before
+workspace drives, which nothing reads or writes any more.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -461,11 +464,13 @@ agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. A repository's default-branch drive, and
-the workspace's drive of every repository it connects, are kept for the
-workspace's agents until the workspace is deleted, and a
-repository snapshot made before default-branch drives expires thirty days after
-its last use. When you delete your account:
+seven days after they were last used. The workspace's drive of every
+repository it connects is kept for the workspace's agents until the workspace
+is deleted. A repository's default-branch drive made before workspace drives
+is no longer read; deleting its workspace asks Vercel to delete it where one of
+the workspace's agents still names its repository, and where none does, or the
+delete fails or does not finish in time, it may remain. A repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, your sounds, integration records, your phones' push
@@ -480,8 +485,9 @@ its last use. When you delete your account:
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding
-  their checkouts and the copy of each of their repositories' default branches
-  on a drive their agents start from, and to stop their scheduled automations;
+  their checkouts, the workspace's drive of every repository it connects, and
+  the default-branch drive made before it of each repository one of their
+  agents still names, and to stop their scheduled automations;
   where that fails or does not finish in time, the workspace is deleted anyway
   and a drive may remain. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those

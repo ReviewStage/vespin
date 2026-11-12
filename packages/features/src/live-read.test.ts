@@ -21,9 +21,11 @@ describe("liveRead", () => {
   it("keeps the rows that read and leaves out one that does not, and writes rows as they are", () => {
     const first = { id: "a", count: 1 };
     const last = { id: "c", count: 3 };
+
     const read = Schema.decodeUnknownSync(READ.rows)({
       things: [first, { id: "b", count: "three" }, last],
     });
+
     expect(read).toEqual({ things: [first, last] });
     expect(Schema.encodeSync(READ.rows)(read)).toEqual({ things: [first, last] });
   });

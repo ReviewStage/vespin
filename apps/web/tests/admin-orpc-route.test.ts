@@ -36,6 +36,7 @@ type Sent = string;
 /** The admin resource's seams: the viewer given, a roster of one account, and a star that lands and is read back. */
 function seams(viewer: AdminViewer | null, written: string[]): AdminProcedureSeams {
   const unread = () => Effect.die(new Error("this screen reads only the roster"));
+
   return {
     resolveViewer: () => Effect.succeed(viewer ?? undefined),
     readUsers: (now, _scope, _viewerId, windowDays, search) =>
@@ -67,6 +68,7 @@ function seams(viewer: AdminViewer | null, written: string[]): AdminProcedureSea
     writeFavorite: (adminId, userId, favorite) =>
       Effect.sync(() => {
         written.push(`${adminId} ${userId} ${favorite}`);
+
         return true;
       }),
     readMetrics: unread,
@@ -93,6 +95,7 @@ function serve(handed: AdminProcedureSeams, sent: Sent[]): void {
     sent.push(
       `${method} ${url.pathname}${url.search} ${init?.credentials} ${new Headers(init?.headers).get("content-type")}`,
     );
+
     // Note that the page's own abort signal is jsdom's, which Node's `Request` refuses, so the route is handed the rest.
     return route(
       new Request(url, { method, headers: init?.headers ?? {}, body: init?.body ?? null }),
@@ -133,6 +136,7 @@ async function mount(): Promise<HTMLElement> {
     );
   });
   await readLanded(page);
+
   return page;
 }
 
@@ -194,7 +198,9 @@ test("an answer that came through a redirect is said as something in front of th
       status: 200,
       headers: { "content-type": "text/html" },
     });
+
     Object.defineProperty(login, "redirected", { value: true });
+
     return login;
   });
   const page = await mount();

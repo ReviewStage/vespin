@@ -66,6 +66,7 @@ export function taskPaneOf(input: {
   readonly column: MainTab | undefined;
 }): TaskPane {
   if (input.open) return TASK_PANE.PANEL;
+
   return isOverviewTab(input.column) ? TASK_PANE.OVERVIEW : TASK_PANE.AGENT;
 }
 
@@ -89,6 +90,7 @@ export function screenBack(label: string, onPress: () => void): TaskHeadBack {
  */
 export function awayBack(away: AwayStep | undefined, onLeave: () => void): TaskHeadBack {
   const label = away === undefined ? HOME_BACK : (away.title?.label ?? BACK);
+
   return { label, onPress: onLeave };
 }
 
@@ -124,6 +126,7 @@ export function TaskHead({
 }): React.JSX.Element {
   // Note that the row draws the picked-up heading as its own title, in a phone header's title type, rather than the bar's larger page title.
   const named = title ?? (pickUp?.shown === true ? pickUp.name : undefined);
+
   return (
     <PhoneHead
       place="task"

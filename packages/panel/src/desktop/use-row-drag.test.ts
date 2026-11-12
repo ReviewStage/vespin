@@ -21,6 +21,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   scrolled = 0;
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
   vi.restoreAllMocks();
@@ -38,6 +39,7 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
   function List() {
     const all = useRowDrag(places === undefined ? onMove : undefined);
     const run = useRunRowDrag(places === undefined ? undefined : onMove);
+
     return createElement(
       "ul",
       { onPointerDown: places === undefined ? all : run },
@@ -50,6 +52,7 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
       ),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -57,13 +60,16 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.matches("ul")) return DOMRect.fromRect({ y: -scrolled, width: 200 });
     const list = this.parentElement;
+
     if (!this.matches("li") || list === null) return DOMRect.fromRect();
     const at = [...list.children].indexOf(this);
+
     return DOMRect.fromRect({ y: at * ROW_HEIGHT - scrolled, width: 200, height: ROW_HEIGHT });
   });
   const list = container.querySelector("ul") ?? assert.fail("the list stands");
   // jsdom captures no pointer; the drag asks the list to, as the window's would.
   Object.assign(list, { setPointerCapture: () => undefined });
+
   return list;
 }
 
@@ -95,6 +101,7 @@ test("in a list that reorders, the placeholder slides to where the row would lan
     grip(list, 0).dispatchEvent(at("pointerdown", 10));
     window.dispatchEvent(at("pointermove", 72));
     carried = copyAt();
+
     for (const row of list.querySelectorAll("li")) shifts.push(row.style.transform);
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   });
@@ -112,6 +119,7 @@ test("a row let go off to the side lands its copy on the row's place on both axe
       plays.push(keyframes);
       const played = { onfinish: () => undefined };
       finish = () => played.onfinish();
+
       return played;
     },
   });
@@ -245,6 +253,7 @@ function inColumn(height: number, moves: [number, number][]): HTMLElement {
   laid.mockImplementation(function (this: Element) {
     return this === column ? DOMRect.fromRect({ width: 200, height }) : rowsLaid.call(this);
   });
+
   return list;
 }
 
@@ -298,8 +307,10 @@ test("a column too short for both edges' reach runs only toward the nearer edge,
 function layOutByBoxes(): void {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const box = this.getAttribute("data-box");
+
     if (box === null) return DOMRect.fromRect();
     const [top = 0, height = 0] = box.split(" ").map(Number);
+
     return DOMRect.fromRect({ y: top, width: 200, height });
   });
 }
@@ -319,12 +330,14 @@ function twoZones(
     const drag = useRowDrag(reorders ? () => undefined : undefined, {
       onDropOut: (from, zone, at) => outs.push([from, zone, at]),
     });
+
     const row = (top: number, name: string) =>
       createElement(
         "li",
         { key: name, "data-box": `${top} 30` },
         createElement("button", { type: "button" }, name),
       );
+
     return createElement(
       "div",
       null,
@@ -351,6 +364,7 @@ function twoZones(
       ),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -358,6 +372,7 @@ function twoZones(
   layOutByBoxes();
   const list = container.querySelector("ul") ?? assert.fail("the list stands");
   Object.assign(list, { setPointerCapture: () => undefined });
+
   return container;
 }
 
@@ -470,8 +485,10 @@ test("a copy carried into the gap between two zones follows the pointer, every r
 test("a copy carried far past the foot of the column that scrolls its list stands outside the column, drawn under its scope's classes, and the row never leaves its list", () => {
   vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
   vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+
   function Column() {
     const drag = useRowDrag(undefined, { onDropOut: () => undefined });
+
     return createElement(
       "div",
       { className: "scope-look", "data-row-drop-scope": "" },
@@ -496,6 +513,7 @@ test("a copy carried far past the foot of the column that scrolls its list stand
       ),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -540,8 +558,10 @@ test("a zone in a drop scope takes no row from a list outside it, and is never m
 
 test("a list dragged by a handle starts no drag from a press outside it", () => {
   const moves: [number, number][] = [];
+
   function Groups() {
     const drag = useRowDrag((from, to) => moves.push([from, to]), { handle: "h2" });
+
     return createElement(
       "ul",
       { onPointerDown: drag },
@@ -555,6 +575,7 @@ test("a list dragged by a handle starts no drag from a press outside it", () => 
       ),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -562,6 +583,7 @@ test("a list dragged by a handle starts no drag from a press outside it", () => 
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (!this.matches("li") || this.parentElement === null) return DOMRect.fromRect();
     const index = [...this.parentElement.children].indexOf(this);
+
     return DOMRect.fromRect({ y: index * ROW_HEIGHT, width: 200, height: ROW_HEIGHT });
   });
   const list = container.querySelector("ul") ?? assert.fail("the list stands");

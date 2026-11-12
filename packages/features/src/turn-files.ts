@@ -38,6 +38,7 @@ export interface TurnFiles {
 /** How many lines a written file holds: none for an empty one, and a last line with no newline counted. */
 function writtenLines(content: string): number {
   if (content === "") return 0;
+
   return content.endsWith("\n") ? content.split("\n").length - 1 : content.split("\n").length;
 }
 
@@ -46,27 +47,35 @@ function filesOfCall(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
 ): readonly TurnFile[] {
   const view = toolCallView({ tool: part.tool, input: part.input, output: part.output });
+
   if (view.kind === CALL_KIND.EDIT) {
     // A patch names another checkout's files as none of the task's, which the view already read out.
     const named = new Set(view.files ?? []);
+
     return view.input.kind === TOOL_BLOCK.PATCH
       ? patchFiles(view.input.text).filter((file) => named.has(file.path))
       : [];
   }
+
   if (view.kind === CALL_KIND.WRITE_FILE) {
     const path = view.files?.[0];
+
     if (path === undefined) return [];
     const content = view.input.kind === TOOL_BLOCK.TEXT ? view.input.text : "";
+
     return [{ path, added: writtenLines(content), removed: 0 }];
   }
+
   return [];
 }
 
 /** The files the turn's parts changed, as above; none where the turn changed no file. */
 export function turnFiles(parts: readonly AgentPart[]): TurnFiles | undefined {
   const byPath = new Map<string, { added: number; removed: number }>();
+
   for (const part of parts) {
     if (part.kind !== AGENT_PART.TOOL || part.state !== TOOL_STATE.OUTPUT_AVAILABLE) continue;
+
     for (const file of filesOfCall(part)) {
       const standing = byPath.get(file.path) ?? { added: 0, removed: 0 };
       standing.added += file.added;
@@ -74,8 +83,10 @@ export function turnFiles(parts: readonly AgentPart[]): TurnFiles | undefined {
       byPath.set(file.path, standing);
     }
   }
+
   if (byPath.size === 0) return undefined;
   const files = [...byPath].map(([path, counts]) => ({ path, ...counts }));
+
   return {
     files,
     added: files.reduce((sum, file) => sum + file.added, 0),
@@ -94,12 +105,15 @@ export function turnLinesOf(
 ): ReadonlyMap<string, string> {
   const lines = new Map<string, string>();
   let opened: string | undefined;
+
   for (const message of messages) {
     if (message.role === MESSAGE_ROLE.USER) {
       if (message.arrivedIn === undefined) opened = message.id;
       continue;
     }
+
     if (opened !== undefined) lines.set(message.id, opened);
   }
+
   return lines;
 }

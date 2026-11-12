@@ -26,7 +26,7 @@ function doors(openLink: ((href: string) => void) | undefined): AdminDoors {
     gate: {} as AdminDoors["gate"],
     // SAFETY: as above.
     address: {} as AdminDoors["address"],
-    ...(openLink === undefined ? {} : { openLink }),
+    ...(openLink !== undefined && { openLink }),
   };
 }
 
@@ -64,6 +64,7 @@ function press(mounted: AdminDoors): boolean {
     { once: true },
   );
   act(() => container.querySelector("a")?.click());
+
   return followed;
 }
 

@@ -47,6 +47,7 @@ function layOut(folded: boolean): void {
     const read = style.getPropertyValue.bind(style);
     style.getPropertyValue = (name) =>
       name === "--ui-fold" ? (folded ? "folded" : "") : read(name);
+
     return style;
   });
 }
@@ -71,6 +72,7 @@ function hover() {
   );
   const button = container.querySelector("button") ?? assert.fail("no button");
   restOn(button);
+
   return { button, presses: () => presses };
 }
 

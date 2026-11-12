@@ -7,12 +7,14 @@ import type { SearchBarCommands } from "react-native-screens";
 function refillingRef(text: string): RefObject<SearchBarCommands | null> {
   let held = text;
   let field: SearchBarCommands | null = null;
+
   return {
     get current() {
       return field;
     },
     set current(next) {
       field = next;
+
       if (next === null || held === "") return;
       next.setText(held);
       held = "";
@@ -32,5 +34,6 @@ function refillingRef(text: string): RefObject<SearchBarCommands | null> {
  */
 export function useRefilledSearchField(text: string): RefObject<SearchBarCommands | null> {
   const [field] = useState(() => refillingRef(text));
+
   return field;
 }

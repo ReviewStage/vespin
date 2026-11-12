@@ -83,9 +83,12 @@ interface SkillsOffered {
 /** The skills offered for the `/` word the words end with, from the read as it stands. */
 function offeredSkills(read: SkillsRead | undefined, query: string): Omit<SkillsOffered, "pick"> {
   if (read === undefined) return { skills: [], empty: SKILL_LIST_NOTE.READING };
+
   if ("unread" in read) return { skills: [], empty: read.unread };
+
   if (read.skills.length === 0) return { skills: [], empty: SKILL_LIST_NOTE.NONE };
   const found = matchingSkills(read.skills, query);
+
   return {
     skills: found.map((skill) => ({
       name: skill.name,
@@ -106,6 +109,7 @@ interface Sending {
 /** What a queue change the host took back says, with where the message went where the service said it left the queue. */
 function queueRefusalWords(change: AgentQueueChange["change"], failure: AgentCallFailure): string {
   const words = QUEUE_REFUSED_WORDS[change] ?? messageFailureWords(failure);
+
   return failure === AGENT_CALL_FAILURE.NOT_FOUND ? `${words} ${QUEUE_LEFT_WORDS}` : words;
 }
 
@@ -156,10 +160,12 @@ export function useAgentComposer(
 ): AgentComposer {
   const acts = useHostActs();
   const write = useWrite();
+
   const { data: enterQueues = false } = useQuery({
     ...appStateQuery,
     select: (state) => selectAppSettingsView(state)?.agentEnter === AGENT_ENTER.QUEUE,
   });
+
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const [words, setWords] = useState("");
   const [sending, setSending] = useState<readonly Sending[]>([]);
@@ -169,26 +175,32 @@ export function useAgentComposer(
   const writing = status !== undefined && agentStillWriting(status);
   // Note that an agent on the retired runtime keeps no queue, and only its starter changes one.
   const starter = agent?.startedBy;
+
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
+
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = writing && enterQueues && controlsQueue;
   const mention = useMemo(() => mentionAt(words, words.length), [words]);
   const planId = agent?.planId;
+
   const { data: skillsRead } = useQuery({
     queryKey: ["agent-composer-skills", planId],
     enabled: mention !== undefined && planId !== undefined,
     staleTime: SKILLS_FRESH_MS,
     queryFn: (): Promise<SkillsRead> =>
-      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (error: unknown) => {
-        console.error("The task's skills were not read.", error);
+      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (cause: unknown) => {
+        console.error("The task's skills were not read.", cause);
+
         return { unread: SKILLS_UNANSWERED };
       }),
   });
+
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
   }, [writing]);
+
   // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said.
   const handBack = (sent: Sending, refusal: string) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
@@ -196,28 +208,37 @@ export function useAgentComposer(
     pictures.putBack(sent.pictures);
     setNote(refusal);
   };
+
   const settled = (sent: Sending) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
   };
+
   const send = () => {
     const text = words.trim();
+
     if (text === "" && pictures.files === undefined) return;
+
     if (pictures.refusal !== undefined) {
       setNote(pictures.refusal);
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+
     const sent: Sending = { id: randomUUID(), words: text, pictures: pictures.take() };
     setSending((out) => [...out, sent]);
     setWords("");
     setNote(undefined);
+
     // A send refused says why in the composer, where its words go back, rather than in the notice.
     const saying = {
       inPlace: (words: string) => handBack(sent, words),
       went: BUZZ.SUCCESS,
     } as const;
+
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
       write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change }), {
@@ -228,14 +249,17 @@ export function useAgentComposer(
       }).then((went) => {
         if (went) settled(sent);
       });
+
       return;
     }
+
     const message = acts[ACT_KIND.AGENTS_MESSAGE]({
       agentId,
       text,
       clientKey: sent.id,
       ...attachments,
     });
+
     onMessage?.(
       message.then(
         (answer) => !("failure" in answer),
@@ -250,6 +274,7 @@ export function useAgentComposer(
       if (went) settled(sent);
     });
   };
+
   const stop = () => {
     setStopping(true);
     setNote(undefined);
@@ -261,6 +286,7 @@ export function useAgentComposer(
             setStopping(false);
             setNote(STOP_NOTHING_YET);
           }
+
           return answer;
         }),
       {
@@ -273,6 +299,7 @@ export function useAgentComposer(
       },
     );
   };
+
   const change = (next: AgentQueueChange) => {
     setNote(undefined);
     write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next }), {
@@ -282,8 +309,10 @@ export function useAgentComposer(
       inPlace: setNote,
     });
   };
+
   const queue = transcript?.word?.queue;
   const held = queue?.messages ?? [];
+
   const queued: readonly QueuedLine[] = [
     ...held.map((message) => ({
       id: message.id,
@@ -299,6 +328,7 @@ export function useAgentComposer(
         sending: true,
       })),
   ];
+
   return {
     placeholder: PLACEHOLDER,
     sendQueues,

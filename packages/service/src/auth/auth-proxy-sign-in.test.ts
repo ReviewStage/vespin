@@ -96,6 +96,7 @@ function endFor(deployment: AuthDeployment, secret: string, trail: Trail) {
 
 function ends() {
   const trail: Trail = { urls: [], logs: [] };
+
   const production = endFor(
     authDeployment({
       VERCEL_ENV: "production",
@@ -105,6 +106,7 @@ function ends() {
     "production-session-secret-of-enough-length",
     trail,
   );
+
   const preview = endFor(
     authDeployment({
       VERCEL_ENV: "preview",
@@ -115,6 +117,7 @@ function ends() {
     "preview-session-secret-of-enough-length",
     trail,
   );
+
   return { trail, production, preview };
 }
 
@@ -126,6 +129,7 @@ function json(body: WireValue): Response {
 function fakeGitHub(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const url = new URL(input instanceof Request ? input.url : input);
   const headers = new Headers(input instanceof Request ? input.headers : init?.headers);
+
   if (url.href === "https://github.com/login/oauth/access_token") {
     return Promise.resolve(
       json({
@@ -135,13 +139,17 @@ function fakeGitHub(input: string | URL | Request, init?: RequestInit): Promise<
       }),
     );
   }
+
   assert.equal(headers.get("authorization"), `Bearer ${GITHUB_TOKEN}`);
+
   if (url.href === "https://api.github.com/user") {
     return Promise.resolve(json({ id: Number(GITHUB_ACCOUNT_ID), login: "octocat", email: null }));
   }
+
   if (url.href === "https://api.github.com/user/emails") {
     return Promise.resolve(json([{ email: GITHUB_EMAIL, primary: true, verified: true }]));
   }
+
   throw new Error(`this test reaches no network: ${url.href}`);
 }
 
@@ -157,6 +165,7 @@ function location(response: Response, trail: Trail): string {
   const next = response.headers.get("location");
   assert.ok(next, `expected a redirect, got ${response.status}`);
   trail.urls.push(next);
+
   return next;
 }
 
@@ -165,12 +174,14 @@ async function githubReturns(ends: Ends, authorize: URL, query: string) {
   const callback = new URL(`${authorize.searchParams.get("redirect_uri")}?${query}`);
   callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
   ends.trail.urls.push(callback.href);
+
   return location(await ends.production.handler(new Request(callback)), ends.trail);
 }
 
 /** The browser navigating to a Preview URL, as a top-level navigation sends it. */
 async function land(ends: Ends, relayed: string, cookie?: string) {
   const navigation = { accept: "text/html", "sec-fetch-mode": "navigate" };
+
   return ends.preview.handler(
     new Request(relayed, {
       headers: cookie === undefined ? navigation : { ...navigation, cookie },
@@ -192,6 +203,7 @@ afterEach(() => {
 test("the desktop's sign-in on a Preview, proxied through production, hands the desktop its code", async () => {
   const both = ends();
   const loopback = "http://127.0.0.1:54698/callback";
+
   const authorizeQuery = new URLSearchParams({
     response_type: "code",
     client_id: DESKTOP_OAUTH_CLIENT.id,
@@ -201,11 +213,13 @@ test("the desktop's sign-in on a Preview, proxied through production, hands the 
     code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
     code_challenge_method: "S256",
   });
+
   const toLogin = await both.preview.handler(
     new Request(`${PREVIEW_URL}/api/auth/oauth2/authorize?${authorizeQuery}`, {
       headers: { accept: "text/html", "sec-fetch-mode": "navigate" },
     }),
   );
+
   const loginPage = new URL(location(toLogin, both.trail), PREVIEW_URL);
   assert.equal(loginPage.pathname, "/sign-in.html");
 
@@ -217,6 +231,7 @@ test("the desktop's sign-in on a Preview, proxied through production, hands the 
       body: JSON.stringify({ provider: "github", oauth_query: loginPage.search.slice(1) }),
     }),
   );
+
   const authorize = new URL(decodeStarted(await started.json()).url);
   assert.equal(authorize.searchParams.get("redirect_uri"), REGISTERED_CALLBACK);
   const relayed = await githubReturns(both, authorize, `code=${GITHUB_CODE}`);
@@ -225,9 +240,11 @@ test("the desktop's sign-in on a Preview, proxied through production, hands the 
   // The browser follows the Preview's own redirects, carrying the session it was just given, until one leaves it.
   let next = new URL(location(landed, both.trail), PREVIEW_URL);
   const session = cookiesFrom(landed);
+
   for (let hop = 0; next.origin === PREVIEW_URL && hop < 3; hop += 1) {
     next = new URL(location(await land(both, next.href, session), both.trail), PREVIEW_URL);
   }
+
   const desktop = next;
   assert.equal(`${desktop.origin}${desktop.pathname}`, loopback);
   assert.equal(desktop.searchParams.get("state"), "desktop-state");

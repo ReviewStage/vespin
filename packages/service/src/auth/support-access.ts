@@ -36,7 +36,7 @@ import {
   getSessionFromCtx,
   sessionMiddleware,
 } from "better-auth/api";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   SUPPORT_ACCESS_GRANT_SECONDS,
   SUPPORT_ACCESS_PATH,
@@ -116,6 +116,7 @@ async function standingGrant(
   userId: string,
 ): Promise<number | null> {
   const member = await ctx.context.internalAdapter.findUserById(userId);
+
   return standingSupportAccess(hasGrant(member) ? member.supportAccessUntil : null, Date.now());
 }
 
@@ -124,7 +125,9 @@ const refuseAtMintingDoor = createAuthMiddleware(async (ctx) => {
   if (carriesAuthorization(ctx)) {
     throw refuse(SUPPORT_ACCESS_ERROR.BROWSER_ONLY, "Only a browser's own session may do this.");
   }
+
   const session = await getSessionFromCtx(ctx);
+
   if (isImpersonation(session?.session)) {
     throw refuse(
       SUPPORT_ACCESS_ERROR.IMPERSONATION_REFUSED,
@@ -148,9 +151,11 @@ const refuseUnconsentedImpersonation = createAuthMiddleware(async (ctx) => {
       "A support sign-in starts only from a browser's own session.",
     );
   }
+
   if ((await getSessionFromCtx(ctx)) === null) return;
   const userId: unknown = ctx.body?.userId;
-  if (typeof userId !== "string" || (await standingGrant(ctx, userId)) === null) {
+
+  if (!Predicate.isString(userId) || (await standingGrant(ctx, userId)) === null) {
     throw notGranted();
   }
 });
@@ -163,16 +168,20 @@ const refuseUnconsentedImpersonation = createAuthMiddleware(async (ctx) => {
  */
 const holdToGrant = createAuthMiddleware(async (ctx) => {
   const started = ctx.context.returned;
+
   if (!isStartedImpersonation(started)) return;
   const { token, userId, expiresAt } = started.session;
   const until = await standingGrant(ctx, userId);
+
   if (until === null) {
     await ctx.context.internalAdapter.deleteSession(token);
     throw notGranted();
   }
+
   if (until >= expiresAt.getTime()) return;
   const capped = new Date(until);
   await ctx.context.internalAdapter.updateSession(token, { expiresAt: capped });
+
   return ctx.json({ ...started, session: { ...started.session, expiresAt: capped } });
 });
 
@@ -220,14 +229,17 @@ export const supportAccess = () =>
         { method: "POST", use: [sessionMiddleware] },
         async (ctx) => {
           const { session } = ctx.context.session;
+
           if (isImpersonation(session)) {
             throw refuse(
               SUPPORT_ACCESS_ERROR.IMPERSONATION_REFUSED,
               "A support sign-in cannot grant support access.",
             );
           }
+
           const supportAccessUntil = new Date(Date.now() + SUPPORT_ACCESS_GRANT_SECONDS * 1000);
           await ctx.context.internalAdapter.updateUser(session.userId, { supportAccessUntil });
+
           return ctx.json({ supportAccessUntil });
         },
       ),
@@ -243,12 +255,15 @@ export const supportAccess = () =>
           const { userId } = ctx.context.session.session;
           await ctx.context.internalAdapter.updateUser(userId, { supportAccessUntil: null });
           const sessions = await ctx.context.internalAdapter.listSessions(userId);
+
           const impersonations = sessions.flatMap((row) =>
             isImpersonation(row) ? [row.token] : [],
           );
+
           if (impersonations.length > 0) {
             await ctx.context.internalAdapter.deleteSessions(impersonations);
           }
+
           return ctx.json({ supportAccessUntil: null });
         },
       ),

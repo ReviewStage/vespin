@@ -66,6 +66,7 @@ test("a message GitHub sent while the turn ran is copied between the steps befor
       ],
     },
   ];
+
   const copied = agentTranscript({
     title: "Tile",
     messages,
@@ -103,6 +104,7 @@ test("another agent's message is copied under the agent that sent it, never as t
     metadata: { channel: "agent_message" },
     sentBy: { name: "Invite emails", agent: true },
   };
+
   const transcript = agentTranscript({
     title: "Add teammate invitations",
     brief: undefined,
@@ -113,6 +115,7 @@ test("another agent's message is copied under the agent that sent it, never as t
       { ...notice, id: "notice-2" },
     ],
   });
+
   assert.equal(
     transcriptMarkdown(transcript, TRANSCRIPT_COPY.CONCISE),
     [
@@ -147,11 +150,13 @@ test("another agent's message in its whole shape is copied as its words alone, w
     metadata: { channel: "agent_message" },
     sentBy: { name: "Invite emails", agent: true },
   };
+
   const transcript = agentTranscript({
     title: "Add teammate invitations",
     brief: undefined,
     messages: [said("plan", MESSAGE_ROLE.USER, "Build invitations."), message],
   });
+
   assert.equal(
     transcriptMarkdown(transcript, TRANSCRIPT_COPY.CONCISE),
     [
@@ -177,11 +182,13 @@ test("a thread's answer is copied led by what the member did, without the header
       item_id: "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
     },
   };
+
   const transcript = agentTranscript({
     title: "Add teammate invitations",
     brief: undefined,
     messages: [said("plan", MESSAGE_ROLE.USER, "Build invitations."), answer],
   });
+
   assert.equal(
     transcriptMarkdown(transcript, TRANSCRIPT_COPY.CONCISE),
     [
@@ -221,11 +228,13 @@ test("GitHub's review is copied as its card reads, from its metadata, without th
       ],
     },
   };
+
   const transcript = agentTranscript({
     title: "Add teammate invitations",
     brief: undefined,
     messages: [said("plan", MESSAGE_ROLE.USER, "Build invitations."), review],
   });
+
   assert.equal(
     transcriptMarkdown(transcript, TRANSCRIPT_COPY.CONCISE),
     [
@@ -258,11 +267,13 @@ test("a check line kept before its metadata said a check failed is copied as its
       sha: "c0ffee5",
     },
   };
+
   const transcript = agentTranscript({
     title: "Add teammate invitations",
     brief: undefined,
     messages: [said("plan", MESSAGE_ROLE.USER, "Build invitations."), checks],
   });
+
   assert.match(
     transcriptMarkdown(transcript, TRANSCRIPT_COPY.CONCISE),
     /## Developer\n\nSome checks failed on #42\n$/u,
@@ -298,6 +309,7 @@ test("an agent started from another is copied as its brief, the source's steps i
     ],
     brief: AGENT_BRIEF.PROMPT,
   });
+
   const concise = transcriptMarkdown(copied, TRANSCRIPT_COPY.CONCISE);
   assert.equal(
     concise,
@@ -320,6 +332,7 @@ test("an agent started from another is copied as its brief, the source's steps i
       "**Agent:** Ran: pnpm test\n\n```\nbash(pnpm test)\n→ exit 1 (output trimmed)\n```",
     ),
   );
+
   for (const copy of [concise, full]) {
     assert.ok(!copy.includes("<!--"), copy);
     assert.ok(!copy.includes("This is the work you continue from."), copy);
@@ -333,6 +346,7 @@ test("an agent started from another that has done nothing yet previews no step, 
     messages: [said("first", MESSAGE_ROLE.USER, FORKED_FIRST)],
     brief: AGENT_BRIEF.DESCRIPTION,
   });
+
   assert.equal(latestActivity(copied), undefined);
 });
 
@@ -348,11 +362,13 @@ test("a summary Vespin wrote of the source's oldest steps is copied under its li
     },
     undefined,
   );
+
   const copied = agentTranscript({
     title: "Tile (2)",
     messages: [said("first", MESSAGE_ROLE.USER, first)],
     brief: AGENT_BRIEF.PROMPT,
   });
+
   assert.equal(
     transcriptMarkdown(copied, TRANSCRIPT_COPY.CONCISE),
     [
@@ -369,11 +385,13 @@ test("a summary Vespin wrote of the source's oldest steps is copied under its li
 
 test("a replay longer than the card draws at first is copied whole, every kept step in order, whatever the card shows", () => {
   const count = REPLAY_PAGE * 3 + 5;
+
   const steps = Array.from({ length: count }, (_, at) => ({
     kind: REPLAY_STEP_KIND.SAID,
     summary: `Said: Step ${at + 1}.`,
     words: `Step ${at + 1}.`,
   }));
+
   const first = firstMessageText(
     "Fix the tile.",
     {
@@ -384,11 +402,13 @@ test("a replay longer than the card draws at first is copied whole, every kept s
     },
     undefined,
   );
+
   const copied = agentTranscript({
     title: "Tile (2)",
     messages: [said("first", MESSAGE_ROLE.USER, first)],
     brief: AGENT_BRIEF.PROMPT,
   });
+
   for (const copy of [TRANSCRIPT_COPY.CONCISE, TRANSCRIPT_COPY.FULL]) {
     const markdown = transcriptMarkdown(copied, copy);
     const copiedSteps = [...markdown.matchAll(/Step (\d+)\./gu)].map((match) => Number(match[1]));
@@ -408,6 +428,7 @@ test("an agent's inbox posts and withdrawals from version 5 are copied as the ro
     input,
     output: { status: "accepted", inbox: [] },
   });
+
   const messages: readonly AgentTranscriptMessage[] = [
     said("task", MESSAGE_ROLE.USER, "Ask about invites."),
     {
@@ -430,11 +451,13 @@ test("an agent's inbox posts and withdrawals from version 5 are copied as the ro
       ],
     },
   ];
+
   const copied = agentTranscript({
     title: "Invites",
     messages,
     brief: AGENT_BRIEF.PROMPT,
   });
+
   const markdown = transcriptMarkdown(copied, TRANSCRIPT_COPY.CONCISE);
   assert.ok(
     markdown.includes(
@@ -450,6 +473,7 @@ test("an agent's inbox posts and withdrawals from version 5 are copied as the ro
 
 test("an agent started blank is copied with no brief, its first line, spoken on a call, copied as the developer's words", () => {
   const spoken = { channel: "voice", voice_session_id: "call-1", from_ms: 0, to_ms: 900 };
+
   const copied = agentTranscript({
     title: "Export",
     messages: [

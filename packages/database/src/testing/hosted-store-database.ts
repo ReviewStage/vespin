@@ -59,8 +59,10 @@ export async function openHostedStoreTestDatabase({
   const connectionString = process.env[STORE_TEST_DATABASE_ENVIRONMENT.URL];
   const opened = connectionString ? await openNodePostgres(connectionString) : await openPglite();
   const runtime = ManagedRuntime.make(opened.sql);
+
   const run: HostedStoreTestRun = (effect) =>
     runtime.runPromise(at === undefined ? effect : atInstant(at)(effect));
+
   return {
     sql: opened.sql,
     run,
@@ -68,6 +70,7 @@ export async function openHostedStoreTestDatabase({
     store: hostedStore(),
     createUser() {
       const id = `user-${randomUUID()}`;
+
       return run(
         Effect.asVoid(
           Database.use((db) =>
@@ -91,6 +94,7 @@ interface OpenedDatabase {
 
 async function openPglite(): Promise<OpenedDatabase> {
   const client = await openMigratedPglite();
+
   return {
     sql: sqlClientOverPglite(client),
     anotherConnection: undefined,
@@ -101,6 +105,7 @@ async function openPglite(): Promise<OpenedDatabase> {
 /** Migrates nothing: `db:migrate` is what applies the migrations to the Postgres this clones. */
 async function openNodePostgres(connectionString: string): Promise<OpenedDatabase> {
   const clone = await cloneStoreTestPostgres(connectionString);
+
   return {
     sql: sqlClientOverUrl(clone.connectionString),
     anotherConnection: () => sqlClientOverUrl(clone.connectionString),

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import { ChevronDownIcon } from "../../icons/lucide-glyphs.js";
 import { OneLine } from "../one-line/one-line.js";
@@ -66,7 +67,7 @@ function TitleWords({ glyph, title }: { glyph: ReactNode; title: ReactNode }): R
   return (
     <>
       {glyph === undefined ? null : <span className={GLYPH}>{glyph}</span>}
-      {typeof title === "string" ? <OneLine hint={wholeWordsHint(title)}>{title}</OneLine> : title}
+      {Predicate.isString(title) ? <OneLine hint={wholeWordsHint(title)}>{title}</OneLine> : title}
     </>
   );
 }

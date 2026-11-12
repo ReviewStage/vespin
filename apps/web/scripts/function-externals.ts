@@ -20,6 +20,7 @@ const WEB = join(import.meta.dirname, "..");
 const MODE = { WRITE: "--write" } as const;
 
 const mode = process.argv[2];
+
 if (mode !== MODE.WRITE) {
   console.error(`usage: function-externals.ts ${MODE.WRITE}`);
   exit(2);
@@ -28,7 +29,9 @@ if (mode !== MODE.WRITE) {
 const task = await functionBundlePlan(WEB);
 const result = await build({ ...task.options, write: false });
 const actual = externalsByBundle(result.metafile, WEB);
+
 await writeFile(join(WEB, FUNCTION_EXTERNALS_FILE), externalsSource(actual));
+
 // biome-ignore lint/suspicious/noConsole: a script's output is its log.
 console.log(
   `recorded the externals of ${Object.keys(actual).length} bundles in ${FUNCTION_EXTERNALS_FILE}`,

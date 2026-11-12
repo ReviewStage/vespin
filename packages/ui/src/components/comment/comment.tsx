@@ -1,7 +1,7 @@
 import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import { drawsSomething } from "../../said.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarShape } from "../avatar/avatar.js";
-import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarOutline } from "../avatar/avatar.js";
+import { SKELETON_KIND, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 
@@ -54,7 +54,7 @@ export interface CommentAuthor {
   /** Their picture's address; none stands their letter on their hue. */
   readonly picture?: string | undefined;
   /** A person's circle, or an agent's or an app's square. */
-  readonly shape?: AvatarShape | undefined;
+  readonly outline?: AvatarOutline | undefined;
   /** What stands on a square in place of the letter: an agent's or an app's glyph. */
   readonly glyph?: ReactNode;
 }
@@ -65,18 +65,23 @@ const FRAME = "ui-comment grid grid-cols-[auto_minmax(0,1fr)] gap-x-icon-gap gap
 /** How wide a skeleton's face stands: a row's disc, as `Comment` draws the face. */
 const SKELETON_FACE = "var(--spacing-avatar-row)";
 const FACE = "ui-comment-face col-start-1 row-start-1 inline-flex self-center";
+
 const HEAD =
   "ui-comment-head col-start-2 row-start-1 flex min-w-0 items-baseline gap-icon-gap text-label";
+
 const NAME = "ui-comment-name min-w-0";
+
 // Note that a name followed by what its writer did is cut on its own, because a long name, as an agent's often is, would otherwise cut what they did off the line.
 const NAME_SAYING = "ui-comment-name flex min-w-0 items-baseline";
 const WHO = "ui-comment-who";
 const SAID = "ui-comment-said flex-none whitespace-pre font-ui-regular text-muted-foreground";
 const STATUS = "ui-comment-status inline-flex flex-none items-baseline";
 const TIME = "ui-comment-time flex-none";
+
 // Note that the trailing slot is the head's line tall, its controls centered on it and standing over its edges, because a control's height would push every comment's words down by a different amount.
 const TRAILING =
   "ui-comment-trailing ms-auto inline-flex h-lh flex-none items-center gap-control-gap self-start";
+
 const BODY = "ui-comment-body col-start-2 row-start-2 min-w-0 text-body";
 
 /**
@@ -147,6 +152,7 @@ export function Comment({
 } & Omit<HTMLAttributes<HTMLElement>, "children" | "className" | "style">): React.JSX.Element {
   // Note that a glyph drawn conditionally may arrive as nothing to draw, which is no glyph, so the letter still stands.
   const glyph = drawsSomething(author.glyph) ? author.glyph : undefined;
+
   return (
     <Frame as={Element} ref={ref} {...attributes}>
       <FaceCell>
@@ -154,7 +160,7 @@ export function Comment({
           name={author.name}
           {...(author.id === undefined ? {} : { id: author.id })}
           src={author.picture}
-          shape={author.shape ?? AVATAR_SHAPE.CIRCLE}
+          outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
           glyph={glyph}
           tiled={glyph !== undefined}
           size={AVATAR_SIZE.ROW}
@@ -210,7 +216,7 @@ export function CommentSkeleton({
   return (
     <Frame as={COMMENT_ELEMENT.DIV}>
       <FaceCell>
-        <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_FACE} />
+        <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_FACE} />
       </FaceCell>
       <HeadLine>
         <Skeleton width={name} />

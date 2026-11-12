@@ -3,7 +3,7 @@ import {
   Badge,
   IconButton,
   Inline,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   TEXT_ELEMENT,
@@ -79,6 +79,7 @@ interface AccountsFavorite<Row> {
  */
 function favoriteColumn<Row extends AccountsTableRow>(favorite: AccountsFavorite<Row>) {
   const column = createDataTableColumnHelper<Row>();
+
   return column.accessor((row) => favorite.starred(row), {
     id: FAVORITE_COLUMN,
     header: "Favorite",
@@ -87,6 +88,7 @@ function favoriteColumn<Row extends AccountsTableRow>(favorite: AccountsFavorite
     cell: ({ row }) => {
       const account = row.original;
       const label = `${favorite.starred(account) ? "Unfavorite" : "Favorite"} ${account.name || account.email}`;
+
       return (
         <Tooltip label={label}>
           <IconButton
@@ -127,7 +129,7 @@ function AccountCellFrame({
 export function AccountCellSkeleton(): React.JSX.Element {
   return (
     <AccountCellFrame
-      avatar={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
+      avatar={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
       name={
         <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.LABEL}>
           <Skeleton width={SKELETON_NAME_WIDTH} />
@@ -157,6 +159,7 @@ export function AccountCell({
   onOpen: (id: string) => void;
 }): React.JSX.Element {
   const href = useAdminDoorsIfAny()?.address.accountHref(account.id);
+
   const content = (
     <AccountCellFrame
       avatar={
@@ -181,11 +184,13 @@ export function AccountCell({
       }
     />
   );
+
   // Where the mount keeps no address, the account opens on a press alone,
   // so nothing poses as a link a modified click could open elsewhere.
   if (href === undefined) {
     return <TextButton onClick={() => onOpen(account.id)}>{content}</TextButton>;
   }
+
   return (
     <TextLink
       href={href}
@@ -201,7 +206,7 @@ export function AccountCell({
 }
 
 /** What one account table draws besides its rows, which its skeleton draws too. */
-interface AccountsTableShape<Row extends AccountsTableRow> {
+interface AccountsTableFrame<Row extends AccountsTableRow> {
   windowDays: number;
   minWidth: AccountsTableMinWidth;
   onOpen: (id: string) => void;
@@ -236,8 +241,9 @@ function accountsColumns<Row extends AccountsTableRow>({
   trailingColumns = [],
   sortable = false,
   favorite,
-}: Omit<AccountsTableShape<Row>, "minWidth">): DataTableColumns<Row> {
+}: Omit<AccountsTableFrame<Row>, "minWidth">): DataTableColumns<Row> {
   const column = createDataTableColumnHelper<Row>();
+
   const numericColumn = (detail: AccountsDetailColumn<Row>) =>
     column.accessor((row) => detail.sortValue(row) ?? undefined, {
       id: detail.key,
@@ -247,6 +253,7 @@ function accountsColumns<Row extends AccountsTableRow>({
       ...sortSettings(detail.key, sortable),
       cell: ({ row }) => detail.cell(row.original),
     });
+
   return column.columns([
     ...(favorite ? [favoriteColumn(favorite)] : []),
     // Note that an account sorts by the name its row shows, falling back to the email exactly as the cell does.
@@ -286,7 +293,7 @@ function useAccountsColumns<Row extends AccountsTableRow>({
   trailingColumns,
   sortable,
   favorite,
-}: AccountsTableShape<Row>): DataTableColumns<Row> {
+}: AccountsTableFrame<Row>): DataTableColumns<Row> {
   return useMemo(
     () =>
       accountsColumns({ windowDays, onOpen, detailColumns, trailingColumns, sortable, favorite }),
@@ -304,13 +311,16 @@ function rememberedSorting<Row extends AccountsTableRow>(
   sortable: boolean,
 ): SortingState {
   const sort = sortable ? ACCOUNTS_SORT.read() : undefined;
+
   if (sort === undefined || !columns.some((column) => column.id === sort.key)) return [];
+
   return [{ id: sort.key, desc: sort.direction === SORT_DIRECTION.DESCENDING }];
 }
 
 /** Remembers the order a heading's press chose, for the next visit. */
 function rememberSorting([sort]: SortingState): void {
   const key = Object.values(ACCOUNTS_SORT_KEY).find((candidate) => candidate === sort?.id);
+
   if (sort === undefined || key === undefined) return;
   ACCOUNTS_SORT.write({
     key,
@@ -333,14 +343,15 @@ const ACCOUNTS_TABLE_LABEL = "Accounts";
 export function AccountsTable<Row extends AccountsTableRow>({
   rows,
   emptyText,
-  ...shape
-}: AccountsTableShape<Row> & {
+  ...frame
+}: AccountsTableFrame<Row> & {
   rows: readonly Row[];
   emptyText: string;
 }): React.JSX.Element {
-  const { sortable = false, favorite } = shape;
-  const columns = useAccountsColumns(shape);
+  const { sortable = false, favorite } = frame;
+  const columns = useAccountsColumns(frame);
   const [initialSorting] = useState(() => rememberedSorting(columns, sortable));
+
   return (
     <DataTable
       label={ACCOUNTS_TABLE_LABEL}
@@ -348,30 +359,30 @@ export function AccountsTable<Row extends AccountsTableRow>({
       rows={rows}
       getRowId={(row) => row.id}
       empty={emptyText}
-      minWidth={shape.minWidth}
+      minWidth={frame.minWidth}
       initialSorting={initialSorting}
       leadingSorting={favorite ? STARRED_FIRST : undefined}
       onSortingChange={rememberSorting}
-      onRowPress={(row) => shape.onOpen(row.id)}
+      onRowPress={(row) => frame.onOpen(row.id)}
     />
   );
 }
 
 /**
  * The table while its `rows` rows are read: the same columns the table
- * draws for `shape`, its headings as themselves and each account's cell its
+ * draws for `frame`, its headings as themselves and each account's cell its
  * avatar's and two lines' bones, so every row stands as tall as an account's.
  */
 export function AccountsTableSkeleton<Row extends AccountsTableRow>({
   rows,
-  ...shape
-}: AccountsTableShape<Row> & { rows: number }): React.JSX.Element {
+  ...frame
+}: AccountsTableFrame<Row> & { rows: number }): React.JSX.Element {
   return (
     <DataTableSkeleton
       label={ACCOUNTS_TABLE_LABEL}
-      columns={useAccountsColumns(shape)}
+      columns={useAccountsColumns(frame)}
       rows={rows}
-      minWidth={shape.minWidth}
+      minWidth={frame.minWidth}
       cells={{ [ACCOUNTS_SORT_KEY.ACCOUNT]: <AccountCellSkeleton /> }}
     />
   );

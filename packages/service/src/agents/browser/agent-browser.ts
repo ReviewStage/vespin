@@ -59,6 +59,7 @@ import {
   Exit,
   Layer,
   Match,
+  Predicate,
   PubSub,
   Ref,
   Result,
@@ -256,6 +257,7 @@ const sandboxUnavailable = () => unreachable(BROWSER_UNREACHABLE.SANDBOX_UNAVAIL
 /** The bridge did not come up, logged by how; the failure every caller sees is the same. */
 function bridgeFailed(how: string, word?: string) {
   const said = word === undefined ? "" : ` (${word})`;
+
   return Effect.andThen(
     Effect.logWarning(`The browser bridge did not come up: ${how}${said}`),
     Effect.fail(unreachable(BROWSER_UNREACHABLE.BRIDGE_FAILED)),
@@ -265,7 +267,9 @@ function bridgeFailed(how: string, word?: string) {
 /** The browser's page targets, as `Target.getTargets` answers them. */
 function pagesOf(result: UnparsedWireValue): readonly PageTarget[] | undefined {
   const read = readPages(result);
+
   if (Result.isFailure(read)) return undefined;
+
   return read.success.targetInfos
     .filter((target) => target.type === "page")
     .map(({ targetId, url, title }) => ({ targetId, url, title }));
@@ -285,13 +289,16 @@ function cdpSessionOver(
       number,
       { readonly answer: Deferred.Deferred<UnparsedWireValue, CdpFailure>; readonly method: string }
     >();
+
     const nextId = yield* Ref.make(0);
     const closed = yield* Ref.make(false);
+
     // How the bridge did not come up, where it did not, and its own word for why.
     const ready = yield* Deferred.make<
       void,
       { readonly how: string; readonly word?: string | undefined }
     >();
+
     // Each event the browser sent, and `null` once as the connection ends.
     const events = yield* PubSub.sliding<CdpEvent | null>(AGENT_BROWSER.EVENT_BACKLOG);
 
@@ -299,22 +306,27 @@ function cdpSessionOver(
       Effect.suspend(() => {
         const command = waiting.get(id);
         waiting.delete(id);
+
         return command === undefined ? Effect.void : Deferred.done(command.answer, exit);
       });
 
     const dispatch = (line: string) =>
       Effect.suspend(() => {
         const read = readLine(jsonOf(line));
+
         // A line that is no message is the PTY's own output, never the browser's.
         if (Result.isFailure(read)) return Effect.void;
         const value = read.success;
+
         if ("bridge" in value) {
           return value.bridge === BRIDGE_WORD.READY
             ? Deferred.succeed(ready, undefined)
             : Deferred.fail(ready, { how: BRIDGE_FAILURE.REFUSED, word: value.reason });
         }
+
         if ("id" in value) {
           const method = waiting.get(value.id)?.method ?? "";
+
           return settle(
             value.id,
             value.error === undefined
@@ -329,10 +341,12 @@ function cdpSessionOver(
                 ),
           );
         }
+
         const event: CdpEvent =
           value.sessionId === undefined
             ? { method: value.method, params: value.params }
             : { method: value.method, params: value.params, sessionId: value.sessionId };
+
         return PubSub.publish(events, event);
       });
 
@@ -340,9 +354,11 @@ function cdpSessionOver(
     const end = Effect.gen(function* () {
       yield* Ref.set(closed, true);
       yield* Deferred.fail(ready, { how: BRIDGE_FAILURE.CLOSED });
+
       for (const [id, { method }] of [...waiting]) {
         yield* settle(id, Exit.fail(new CdpFailure({ kind: CDP_FAILURE.CLOSED, method })));
       }
+
       yield* PubSub.publish(events, null);
     });
 
@@ -366,11 +382,13 @@ function cdpSessionOver(
         const answer = yield* Deferred.make<UnparsedWireValue, CdpFailure>();
         const forget = Effect.sync(() => waiting.delete(id));
         waiting.set(id, { answer, method: command.method });
+
         // Note that the end is read only once the command waits, so an end before it is never missed.
         if (yield* Ref.get(closed))
           return yield* Effect.andThen(forget, failure(CDP_FAILURE.CLOSED));
         const line = JSON.stringify({ id, ...command });
         yield* socket.send({ bytes: new TextEncoder().encode(`${line}\n`) });
+
         return yield* Deferred.await(answer).pipe(
           Effect.timeoutOrElse({
             duration: AGENT_BROWSER.COMMAND_TIMEOUT,
@@ -389,7 +407,9 @@ function cdpSessionOver(
       events: Stream.unwrap(
         Effect.gen(function* () {
           const subscription = yield* PubSub.subscribe(events);
+
           if (yield* Ref.get(closed)) return Stream.empty;
+
           return Stream.fromSubscription(subscription).pipe(
             Stream.takeWhile((event): event is CdpEvent => event !== null),
           );
@@ -397,6 +417,7 @@ function cdpSessionOver(
       ),
       pages: Effect.flatMap(send({ method: "Target.getTargets" }), (result) => {
         const pages = pagesOf(result);
+
         return pages === undefined
           ? Effect.fail(malformed("Target.getTargets"))
           : Effect.succeed(pages);
@@ -404,6 +425,7 @@ function cdpSessionOver(
       openPage: (url) =>
         Effect.flatMap(send({ method: "Target.createTarget", params: { url } }), (result) => {
           const created = readCreated(result);
+
           return Result.isFailure(created)
             ? Effect.fail(malformed("Target.createTarget"))
             : Effect.succeed(created.success.targetId);
@@ -424,6 +446,7 @@ function ownScope<A, E>(
 ): Effect.Effect<A, E, Scope.Scope> {
   return Effect.gen(function* () {
     const child = yield* Scope.fork(yield* Effect.scope);
+
     return yield* effect.pipe(
       Scope.provide(child),
       Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(child, exit) : Effect.void)),
@@ -452,10 +475,13 @@ export function agentBrowserOver(
   const reopened = (sessionId: string) =>
     Effect.gen(function* () {
       const sandbox = yield* agentSandboxOf(api, sessionId);
+
       if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
+
       const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
         openAgentSandboxPromptly(of),
       ).pipe(Effect.provideService(AgentImage, image), Effect.provideService(Sandbox, api));
+
       return opened.sandbox;
     });
 
@@ -465,10 +491,13 @@ export function agentBrowserOver(
       const sandbox = yield* agentSandboxOf(api, sessionId).pipe(
         Effect.mapError(sandboxUnavailable),
       );
+
       if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
+
       if (sandbox.status === SANDBOX_STATUS.RUNNING && sandbox.running !== undefined) {
         return { name: sandbox.name, running: sandbox.running };
       }
+
       // Note that each try reads the sandbox again and opens it, which answers a sandbox already
       // coming up as it stands, and that a refusal is tried again too, since a sandbox still stopping
       // may refuse its resume; the last try's failure is the answer, so an outage still says the
@@ -482,13 +511,17 @@ export function agentBrowserOver(
             : Effect.fail(unreachable(BROWSER_UNREACHABLE.NOT_RESUMED)),
         ),
       );
+
       return yield* resumed.pipe(
         Effect.retry({
           schedule: Schedule.spaced(AGENT_BROWSER.RESUME_SPACING),
           times: AGENT_BROWSER.RESUME_TRIES,
           while: (failure) =>
-            failure._tag === "BrowserUnreachable" ||
-            !(failure._tag === "SnapshotGone" || failure._tag === "ImageNotReady"),
+            Predicate.isTagged(failure, "BrowserUnreachable") ||
+            !(
+              Predicate.isTagged(failure, "SnapshotGone") ||
+              Predicate.isTagged(failure, "ImageNotReady")
+            ),
         }),
         Effect.mapError((failure) =>
           Match.value(failure).pipe(
@@ -507,12 +540,14 @@ export function agentBrowserOver(
       const running = yield* runningSession(sessionId);
       const run = yield* api.run(running, startBrowser()).pipe(Effect.mapError(sandboxUnavailable));
       const start = browserStartOf(run);
+
       if (start.ok) {
         return {
           standing: { sandboxSessionId: running.running, started: start.started },
           running,
         };
       }
+
       return yield* unreachable(
         start.exitCode === BROWSER_START_EXIT.NO_CHROMIUM
           ? BROWSER_UNREACHABLE.NO_CHROMIUM
@@ -526,32 +561,42 @@ export function agentBrowserOver(
   const startRecordingIn = (sessionId: string, maxSeconds: number, maxBytes: number) =>
     Effect.gen(function* () {
       const { running } = yield* ensured(sessionId);
+
       const run = yield* api
         .run(running, startRecording(maxSeconds, maxBytes))
         .pipe(Effect.mapError(sandboxUnavailable));
+
       return recordingStartOf(run);
     });
 
   const stopRecordingIn = (sessionId: string, maxBytes: number) =>
     Effect.gen(function* () {
       const { running } = yield* ensured(sessionId);
+
       const run = yield* api
         .run(running, stopRecording())
         .pipe(Effect.mapError(sandboxUnavailable));
+
       const stopped = recordingStopOf(run);
+
       if (!stopped.ok) return stopped;
+
       const read = yield* api
         .run(running, readRecording(maxBytes))
         .pipe(Effect.mapError(sandboxUnavailable));
+
       const file = recordingBytesOf(read, maxBytes);
+
       if (file === undefined) {
         return { ok: false, reason: RECORDING_FAILURE.ENCODER } satisfies BrowserRecordingRead;
       }
+
       // Note that a copy the sandbox could not make leaves the recording its WebM alone, never refused.
       const mp4Bytes = yield* api.run(running, phoneVideoAsk(file.path)).pipe(
         Effect.map(phoneVideoOf),
         Effect.catch(() => Effect.succeed(undefined)),
       );
+
       return {
         ok: true,
         seconds: stopped.seconds,
@@ -572,13 +617,16 @@ export function agentBrowserOver(
         ownScope(
           Effect.gen(function* () {
             const { running } = yield* ensured(sessionId);
+
             // The run's own PTY, which never resumes the sandbox.
             const shell = yield* api
               .openInteractive(running)
               .pipe(Effect.mapError(sandboxUnavailable));
+
             const socket = yield* pty
               .connect(shell)
               .pipe(Effect.catch(() => bridgeFailed(BRIDGE_FAILURE.NO_PTY)));
+
             const bridge = browserBridge();
             yield* socket.send({
               text: JSON.stringify({
@@ -591,6 +639,7 @@ export function agentBrowserOver(
                 rows: AGENT_BROWSER.PTY.ROWS,
               }),
             });
+
             return yield* cdpSessionOver(socket);
           }),
         ).pipe(
@@ -623,6 +672,7 @@ export const agentBrowserServices: Layer.Layer<AgentBrowser, never, Sandbox | Ag
     AgentBrowser,
     Effect.gen(function* () {
       const sandbox = yield* Sandbox;
+
       return agentBrowserOver(sandbox, sandboxPtyOf(sandbox), yield* AgentImage);
     }),
   );

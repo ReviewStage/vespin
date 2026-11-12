@@ -135,6 +135,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         ...(github === undefined ? undefined : { github }),
         ...(agentSessions === undefined ? undefined : { agentSessions }),
       });
+
       const source = readAnswer(
         agentAnswerSchema,
         HOSTED_HTTP_STATUS.CREATED,
@@ -147,8 +148,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ),
       ).agent;
+
       const stored = Option.getOrThrow(yield* readAgent(opened.owner, source.id));
       yield* transcriptRow(stored, 2, MESSAGE_ROLE.USER, [text("Use the mailer.")]);
+
       const firstTurn = yield* transcriptRow(stored, 3, MESSAGE_ROLE.ASSISTANT, [
         { type: "reasoning", text: "A thought of its own.", state: "done" },
         text("On it."),
@@ -160,9 +163,11 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           output: "ok",
         },
       ]);
+
       const laterLine = yield* transcriptRow(stored, 4, MESSAGE_ROLE.USER, [
         text("Also add tests."),
       ]);
+
       yield* transcriptRow(stored, 5, MESSAGE_ROLE.ASSISTANT, [text("Done.")]);
       yield* updateAgentBranch(opened.owner, source.id, PUBLISHED.branch);
       yield* openedPullRequest(
@@ -181,8 +186,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         stored.repository ?? RELAY_FULL_NAME,
         PUBLISHED.branch,
       );
+
       return { ...opened, source, stored, firstTurn, laterLine };
     });
+
   const sourceAgent = sourceAgentOn();
 
   afterEach(() => {
@@ -195,12 +202,15 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, source, stored, laterLine } = yield* sourceAgent;
         const db = yield* Database;
+
         const rowsOf = () =>
           db
             .select({ id: messages.id })
             .from(messages)
             .where(eq(messages.conversationId, stored.conversationId));
+
         const before = yield* rowsOf();
+
         const asked = () =>
           ask(
             request(AGENT_REWIND, owner, {
@@ -235,6 +245,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, source, laterLine } = yield* sourceAgent;
+
         const asked = () =>
           ask(request(AGENT_TURN_CHANGES, owner, { id: source.id, messageId: laterLine }));
 
@@ -272,6 +283,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId: source.id } }),
           ),
         ).agent;
+
         const { text: handed, parts } = openedParts(agentSessions);
 
         assert.deepEqual(started.from, { agentId: source.id, steps: 5, totalSteps: 5 });
@@ -320,11 +332,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           handed,
           "the agent keeps the first message it was handed",
         );
+
         const listed = readAnswer(
           agentListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASK_AGENTS, owner, { id: task.id })),
         );
+
         const fromOf = new Map(listed.agents.map((agent) => [agent.id, agent.from]));
         assert.deepEqual(
           [fromOf.has(source.id), fromOf.get(source.id), fromOf.get(started.id)],
@@ -344,6 +358,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         { projectKey: "-workspace-repository", sessionId: session },
         [{ type: "user", uuid: randomUUID(), parentUuid: null }],
       );
+
       return session;
     });
 
@@ -404,11 +419,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [opening],
         );
         const rollout = { type: "session_meta" };
+
         const rolloutKey = {
           projectKey: "codex",
           sessionId: "thread",
           subpath: "sessions/rollout.jsonl",
         };
+
         yield* appendSessionEntries(owner, stored.conversationId, rolloutKey, [rollout]);
 
         const started = readAnswer(
@@ -446,9 +463,11 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions, source, stored, firstTurn, laterLine } =
           yield* sourceAgent;
+
         const session = yield* heldSession(stored);
         // The later line opened a turn of its own, so the session holds it.
         const turnId = randomUUID();
+
         const [line] = yield* Database.use((db) =>
           db
             .insert(turns)
@@ -482,6 +501,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             }),
           ),
         ).agent;
+
         const { parts } = openedParts(agentSessions);
 
         const forked = Option.getOrThrow(yield* readAgent(owner, started.id));
@@ -555,6 +575,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           .set({ turnId })
           .where(eq(messages.conversationId, stored.conversationId)),
       );
+
       return sessionId;
     });
 
@@ -563,16 +584,20 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, task, ask, source, stored, firstTurn } = yield* sourceAgentOn(
           undefined,
           agentSessions,
         );
+
         const sessionId = yield* sourceRunning(stored, agentSessions);
+
         const startFrom = (from: { agentId: string; messageId?: string }) =>
           Effect.map(
             ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from })),
             (answered) => readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answered).agent,
           );
+
         const sourceStatus = Effect.map(
           ask(request(AGENT, owner, { id: source.id })),
           (answered) =>
@@ -614,11 +639,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
 
         assert.deepEqual(started.from?.agentId, source.id);
         assert.deepEqual(agentSessions.canceled, [[sessionId, "turn_0"]]);
+
         const page = readAnswer(
           agentPageAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT, owner, { id: source.id })),
         ).agent;
+
         assert.equal(page.status, AGENT_STATUS.RUNNING);
       }),
   );
@@ -628,6 +655,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, source, firstTurn } = yield* sourceAgent;
+
         const titleFrom = (from: { agentId: string; messageId?: string }) =>
           Effect.map(
             ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from })),
@@ -656,22 +684,28 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, task, ask, source, stored, firstTurn } = yield* sourceAgentOn(
           undefined,
           agentSessions,
         );
+
         yield* sourceRunning(stored, agentSessions);
+
         const startFrom = (from: { agentId: string; messageId?: string }) =>
           Effect.map(
             ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from })),
             (answered) => readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answered).agent,
           );
+
         const continued = yield* startFrom({ agentId: source.id });
         const forked = yield* startFrom({ agentId: source.id, messageId: firstTurn });
+
         // Note that the two start within one instant here, so they are compared in the order of their ids.
         const byId = <Named extends { readonly agentId: string }>(
           named: readonly Named[] | undefined,
         ) => [...(named ?? [])].sort((a, b) => a.agentId.localeCompare(b.agentId));
+
         const expected = byId([
           { agentId: continued.id, title: null, forked: false },
           { agentId: forked.id, title: null, forked: true, messageId: firstTurn },
@@ -682,15 +716,19 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASK_AGENTS, owner, { id: task.id })),
         );
+
         const continuedByOf = new Map(listed.agents.map((agent) => [agent.id, agent.continuedBy]));
         assert.deepEqual(byId(continuedByOf.get(source.id)), expected);
         assert.equal(continuedByOf.get(continued.id), undefined);
+
         const page = readAnswer(
           agentPageAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT, owner, { id: source.id })),
         ).agent;
+
         assert.deepEqual(byId(page.continuedBy), expected);
+
         const archived = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -698,6 +736,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             request(AGENT, owner, { method: "PATCH", id: source.id, body: { archived: true } }),
           ),
         ).agent;
+
         assert.deepEqual(byId(archived.continuedBy), expected);
       }),
   );
@@ -709,11 +748,14 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
       const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
+
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
       );
+
       yield* claimRuntimeSession(opened.stored, SOURCE_SANDBOX.SESSION, new Date());
       yield* sourceIdle(opened.stored);
+
       const continued = Effect.gen(function* () {
         const started = readAnswer(
           agentAnswerSchema,
@@ -725,11 +767,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             }),
           ),
         ).agent;
+
         return {
           started,
           preamble: openedParts(opened.agentSessions).parts.replay?.preamble ?? "",
         };
       });
+
       return { ...opened, checkout, sandbox, continued };
     });
 
@@ -749,6 +793,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       fresh,
     );
     checkout.sh(fresh, "sh", "-c", fetch);
+
     return fresh;
   };
 
@@ -787,12 +832,14 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         assert.equal(started.from?.branch, undefined);
         assert.ok(preamble.includes("Your checkout is a copy of its own"), preamble);
         assert.deepEqual([sandbox.ran, sandbox.stops, sandbox.state.status], [[], [], "stopped"]);
+
         const row = yield* Database.use((db) =>
           db
             .select({ startedFrom: agentTable.startedFrom })
             .from(agentTable)
             .where(eq(agentTable.id, started.id)),
         );
+
         assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName(SOURCE_SANDBOX.SESSION));
       }),
   );
@@ -812,9 +859,11 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         assert.ok(preamble.includes("open no new pull request"), preamble);
         assert.ok(!preamble.includes("open your pull request from it"), preamble);
         const fresh = fetchedAsHanded(checkout, preamble);
+
         const [, carry = ""] = [...preamble.matchAll(/`(git remote set-branches [^`]+)`/gu)].map(
           (match) => match[1],
         );
+
         const merge = /`(git merge --ff-only [^`]+)`/u.exec(preamble)?.[1] ?? "";
         checkout.sh(fresh, "sh", "-c", `${carry} && ${merge}`);
         assert.equal(checkout.sh(fresh, "git", "branch", "--show-current"), PUBLISHED.branch);
@@ -833,10 +882,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         const merged: RepositoryScript = async (sent) => {
           const answered = await publishedPullRequest(sent);
           const pathname = new URL(sent.url).pathname;
+
           if (answered === undefined || !pathname.endsWith(`/pulls/${PUBLISHED.number}`)) {
             return answered;
           }
+
           const pull = await answered.json();
+
           return Response.json({
             ...pull,
             state: "closed",
@@ -844,6 +896,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             merged_at: "2026-10-16T09:00:00Z",
           });
         };
+
         const { continued } = yield* copyScenario(t, merged);
 
         const { preamble } = yield* continued;
@@ -893,9 +946,11 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions, source, stored, firstTurn, laterLine } =
           yield* sourceAgent;
+
         const patch = (files: readonly string[]) => ({
           patchText: `*** Begin Patch\n${files.map((file) => `*** Update File: ${file}\n@@\n-a\n+b`).join("\n")}\n*** End Patch`,
         });
+
         yield* transcriptRow(stored, 6, MESSAGE_ROLE.ASSISTANT, [
           {
             type: "tool-apply_patch",
@@ -951,6 +1006,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             output: { status: "completed" },
           },
         ]);
+
         const fork = (messageId: string) =>
           ask(
             startAs(owner, task.id, {
@@ -964,6 +1020,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           HOSTED_HTTP_STATUS.CREATED,
           yield* fork(firstTurn),
         ).agent;
+
         const { parts } = openedParts(agentSessions);
 
         assert.deepEqual(started.from, {
@@ -981,6 +1038,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           parts.replay?.preamble ?? "",
           /may be ahead of the message you were forked at\. After that message it edited `src\/invites\.ts`, `src\/expiry\.ts`, `src\/mailer\.ts`, `src\/old\.ts`, `src\/new\.ts`, `src\/claude\.ts`, `src\/codex\.ts`; undo/u,
         );
+
         for (const named of [laterLine, randomUUID()]) {
           assert.deepEqual(
             yield* fork(named),
@@ -1004,6 +1062,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           origin: TURN_ORIGIN.TYPED,
           runtimeTurnId: "turn_1",
         });
+
         const bodies = [
           {
             kind: RUN_EVENT.TURN_STARTED,
@@ -1020,6 +1079,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             at: 1,
           },
         ] as const;
+
         for (const [index, body] of bodies.entries()) {
           yield* writer.consume(target, { ...turn, ...body, sequence: index + 1 });
         }
@@ -1047,6 +1107,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions, source, stored } = yield* sourceAgent;
+
         const write = (callId: string, filePath: string) => ({
           type: "tool-write_file",
           toolCallId: callId,
@@ -1054,6 +1115,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           input: { filePath, content: "x" },
           output: "ok",
         });
+
         const writing = yield* transcriptRow(stored, 6, MESSAGE_ROLE.ASSISTANT, [
           { type: "step-start" },
           text("Writing the expiry first."),
@@ -1062,6 +1124,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           text("Now the mailer."),
           write("call-8", "src/mailer.ts"),
         ]);
+
         const fork = (messageSteps: number | undefined, messageStepParts?: number) =>
           Effect.gen(function* () {
             const started = readAnswer(
@@ -1079,6 +1142,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
                 }),
               ),
             ).agent;
+
             return { started, replay: openedParts(agentSessions).parts.replay };
           });
 
@@ -1137,6 +1201,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, other, task, ask, agentSessions, source } = yield* sourceAgent;
         const elsewhere = yield* startTask(owner, { name: "Billing", repository: RELAY_FULL_NAME });
+
         const away = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: elsewhere.id,
@@ -1149,6 +1214,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent;
+
         const opened = agentSessions.opened.length;
 
         assert.deepEqual(
@@ -1183,11 +1249,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, other, task, ask, agentSessions } = yield* openTask();
         const BRIEF = "Sweep the flaky tests.";
+
         const sweep = yield* createTask(owner, {
           organizationId: task.workspaceId,
           name: "Flaky tests",
           repository: RELAY_FULL_NAME,
         });
+
         const made = yield* createAgent(owner, {
           taskId: sweep.id,
           descriptionSnapshot: null,
@@ -1198,25 +1266,32 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           repository: RELAY_FULL_NAME,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const source = Option.getOrThrow(made).agent;
         yield* transcriptRow(source, 1, MESSAGE_ROLE.USER, [text(BRIEF)]);
+
         const firstTurn = yield* transcriptRow(source, 2, MESSAGE_ROLE.ASSISTANT, [
           text("Fixed the shared temp dir."),
         ]);
+
         yield* transcriptRow(source, 3, MESSAGE_ROLE.USER, [text("Now the clock.")]);
         yield* transcriptRow(source, 4, MESSAGE_ROLE.ASSISTANT, [text("Fixed the clock read.")]);
+
         const startFromAs = (bearer: string, agentId: string, body: WireBoundaryInput) =>
           ask(request(AGENT_STARTS, bearer, { method: "POST", id: agentId, body }));
+
         const replayed = () =>
           (openedParts(agentSessions).parts.replay?.steps ?? []).map((step) => step.summary);
 
         const key = randomUUID();
         const continueBody = { idempotencyKey: key, from: { agentId: source.id } };
+
         const continued = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* startFromAs(owner, source.id, continueBody),
         ).agent;
+
         const stored = Option.getOrThrow(yield* readAgent(owner, continued.id));
         assert.deepEqual(
           [stored.taskId, stored.organizationId, stored.repository, stored.descriptionSnapshot],
@@ -1235,11 +1310,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         );
         assert.deepEqual(continued.from, { agentId: source.id, steps: 3, totalSteps: 3 });
         const opened = agentSessions.opened.length;
+
         const again = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* startFromAs(owner, source.id, continueBody),
         ).agent;
+
         assert.equal(again.id, continued.id);
         assert.equal(agentSessions.opened.length, opened, "a retry opens no session");
         assert.deepEqual(
@@ -1264,6 +1341,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             from: { agentId: source.id, messageId: firstTurn },
           }),
         ).agent;
+
         assert.equal(forked.planId, sweep.id);
         assert.deepEqual(replayed(), ["Said: Fixed the shared temp dir."]);
 
@@ -1293,6 +1371,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
 
         // A source on a task in no repository is continued on that task, in none.
         const bareTask = yield* createTask(owner, { organizationId: task.workspaceId });
+
         const bare = yield* createAgent(owner, {
           taskId: bareTask.id,
           descriptionSnapshot: null,
@@ -1303,7 +1382,9 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           repository: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const bareId = Option.getOrThrow(bare).agent.id;
+
         const fromBare = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1312,6 +1393,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             from: { agentId: bareId },
           }),
         ).agent;
+
         const bareStored = Option.getOrThrow(yield* readAgent(owner, fromBare.id));
         assert.deepEqual(
           [bareStored.taskId, bareStored.organizationId, bareStored.repository],
@@ -1324,6 +1406,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const fromTask = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1332,16 +1415,19 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             from: { agentId: onTask.id },
           }),
         ).agent;
+
         assert.equal(fromTask.planId, task.id);
         assert.equal(Option.getOrThrow(yield* readAgent(owner, fromTask.id)).taskId, task.id);
 
         // A retry is answered with the agent its key made though the source is gone since.
         yield* Database.use((db) => db.delete(agentTable).where(eq(agentTable.id, source.id)));
+
         const retried = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* startFromAs(owner, source.id, continueBody),
         ).agent;
+
         assert.equal(retried.id, continued.id);
       }),
   );
@@ -1359,6 +1445,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     assert.ok(Array.isArray(message), "the session opened on parts");
     const [first] = message;
     assert.ok(first?.type === "text", "the first part is the words");
+
     return {
       parts: firstMessageParts(first.text),
       files: message.flatMap((part) => (part.type === "file" ? [part.filename] : [])),
@@ -1374,6 +1461,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           text(`Look in ${serverMention(INTEGRATION_PROVIDER.NOTION, "Notion")} too.`),
         ]);
         const note = `Now check ${serverMention(INTEGRATION_PROVIDER.LINEAR, "Linear")} first.`;
+
         const png = {
           name: "flow.png",
           mediaType: AGENT_ATTACHMENT_TYPE.PNG,
@@ -1392,6 +1480,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             }),
           ),
         ).agent;
+
         const { parts, files } = openedWithFiles(agentSessions);
 
         assert.deepEqual(parts.note, {
@@ -1414,6 +1503,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions } = yield* openTask();
         const data = Buffer.from(PNG).toString("base64");
+
         const source = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: task.id,
@@ -1426,10 +1516,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent;
+
         const shots = Array.from(
           { length: AGENT_BOUNDS.MAX_ATTACHMENTS },
           (_, at) => `screen-${at}.png`,
         );
+
         yield* transcriptRow(source, 1, MESSAGE_ROLE.USER, [
           text("Match these screens."),
           ...shots.map((filename) => ({
@@ -1461,6 +1553,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions } = yield* openTask();
         const data = Buffer.from(SIZED_PNG).toString("base64");
+
         const source = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1472,13 +1565,16 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             }),
           ),
         ).agent;
+
         const stored = Option.getOrThrow(yield* readAgent(owner, source.id));
+
         const [first] = yield* Database.use((db) =>
           db
             .select({ parts: messages.parts })
             .from(messages)
             .where(eq(messages.conversationId, stored.conversationId)),
         );
+
         assert.deepEqual(
           (first?.parts ?? []).flatMap((part) =>
             part.type === "file"
@@ -1511,6 +1607,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openTask();
         const prompt = `Triage ${serverMention(INTEGRATION_PROVIDER.LINEAR, "Linear")} daily.`;
+
         const run = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: task.id,
@@ -1554,12 +1651,15 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions, source } = yield* sourceAgent;
+
         const png = {
           name: "flow.png",
           mediaType: AGENT_ATTACHMENT_TYPE.PNG,
           data: Buffer.from(PNG).toString("base64"),
         };
+
         const opened = agentSessions.opened.length;
+
         for (const body of [
           { note: "Carry on." },
           { from: { agentId: source.id }, attachments: [png] },
@@ -1573,6 +1673,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             JSON.stringify(Object.keys(body)),
           );
         }
+
         assert.equal(agentSessions.opened.length, opened);
       }),
   );
@@ -1585,6 +1686,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           sent.url.endsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/luke/stacked`)
             ? Response.json({ object: { type: "commit", sha: "a".repeat(40) } })
             : undefined;
+
         const { owner, task, ask, agentSessions } = yield* openTask({ github: held });
 
         const started = readAnswer(
@@ -1598,7 +1700,9 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             }),
           ),
         ).agent;
+
         const opened = agentSessions.opened.length;
+
         const missing = yield* ask(
           startAs(owner, task.id, { idempotencyKey: randomUUID(), branch: "luke/gone" }),
         );
@@ -1622,6 +1726,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions, source, stored } = yield* sourceAgent;
         const body = { idempotencyKey: randomUUID(), from: { agentId: source.id } };
+
         const first = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1639,11 +1744,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         assert.equal(agentSessions.opened.length, opened);
 
         yield* discardAgent(owner, source.id);
+
         const again = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(startAs(owner, task.id, body)),
         ).agent;
+
         assert.equal(again.id, first.id);
         assert.equal(agentSessions.opened.length, opened);
       }),
@@ -1655,6 +1762,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions } = yield* openTask();
         const prose = `Write the guide.\n\n${START_NOTE_HEADING.DEVELOPER}\n\nExplain this heading in the guide.`;
+
         const sourceOf = (handed: string) =>
           Effect.gen(function* () {
             const made = Option.getOrThrow(
@@ -1669,9 +1777,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
                 runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
               }),
             ).agent;
+
             yield* transcriptRow(made, 1, MESSAGE_ROLE.USER, [text(handed)]);
+
             return made;
           });
+
         const continueFrom = (agentId: string) =>
           ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId } }));
 
@@ -1696,14 +1807,17 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, agentSessions } = yield* openTask();
+
         const source = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(startAs(owner, task.id, { idempotencyKey: randomUUID() })),
         ).agent;
+
         const stored = Option.getOrThrow(yield* readAgent(owner, source.id));
         const turns = REPLAY_BOUNDS.MAX_ROWS + 50;
         const ids: string[] = [];
+
         // Note that the rows go in by the thousand, because one insert a row would take minutes.
         for (let from = 0; from < turns; from += 1_000) {
           const rows = Array.from({ length: Math.min(1_000, turns - from) }, (_, at) => ({
@@ -1717,11 +1831,14 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             metadata: { author: MESSAGE_AUTHOR.MODEL },
             placedAt: new Date(),
           }));
+
           const written = yield* Database.use((db) =>
             db.insert(messages).values(rows).returning({ id: messages.id }),
           );
+
           ids.push(...written.map((row) => row.id));
         }
+
         const startFrom = (from: WireBoundaryInput) =>
           Effect.map(
             ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from })),
@@ -1782,6 +1899,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   const longSource = (options: { readonly summaryModel?: SummaryModelOf } = {}) =>
     Effect.gen(function* () {
       const opened = yield* openTask(options);
+
       const first = readAnswer(
         agentAnswerSchema,
         HOSTED_HTTP_STATUS.CREATED,
@@ -1793,12 +1911,15 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ),
       ).agent;
+
       const stored = Option.getOrThrow(yield* readAgent(opened.owner, first.id));
+
       for (let turn = 0; turn < LONG_TURNS; turn += 1) {
         yield* transcriptRow(stored, turn + 2, MESSAGE_ROLE.ASSISTANT, [
           text(`Step ${turn}. ${"x".repeat(5_000)}`),
         ]);
       }
+
       const continueFrom = (
         agentId: string,
         body: Readonly<Record<string, WireBoundaryInput>> = {},
@@ -1813,6 +1934,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           ),
           (answered) => readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answered).agent,
         );
+
       return { ...opened, first, stored, continueFrom };
     });
 
@@ -1840,6 +1962,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId: source.id } }),
           ),
         ).agent;
+
         const steps = openedParts(agentSessions).parts.replay?.steps ?? [];
 
         assert.deepEqual(started.from, { agentId: source.id, steps: 6, totalSteps: 6 });
@@ -1898,12 +2021,14 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       Effect.gen(function* () {
         const asked: { prompt: string; options: string }[] = [];
         const efforts: string[] = [];
+
         const model = new MockLanguageModelV4({
           doGenerate: async (options) => {
             asked.push({
               prompt: JSON.stringify(options.prompt),
               options: JSON.stringify(options.providerOptions),
             });
+
             return {
               content: [{ type: "text", text: "Recap: the developer asked for step after step." }],
               finishReason: { unified: "stop", raw: "stop" },
@@ -1915,10 +2040,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             };
           },
         });
+
         const summaryModel: SummaryModelOf = (_, __, effort) => {
           efforts.push(effort);
+
           return Effect.succeed({ model, providerOptions: {}, counted: Effect.void });
         };
+
         const { agentSessions, first, continueFrom } = yield* longSource({ summaryModel });
         const unsummarized = yield* longSource();
         yield* unsummarized.continueFrom(unsummarized.first.id);
@@ -1961,8 +2089,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             warnings: [],
           }),
         });
+
         const summaryModel: SummaryModelOf = () =>
           Effect.succeed({ model, providerOptions: {}, counted: Effect.void });
+
         const { agentSessions, first, continueFrom } = yield* longSource({ summaryModel });
         const second = yield* continueFrom(first.id);
         const carried = openedParts(agentSessions).parts.replay;
@@ -1993,6 +2123,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
           data: Buffer.from("y".repeat(40_000), "utf8").toString("base64"),
         };
+
         const started = yield* continueFrom(first.id, {
           note: "Look at this.",
           attachments: [notes],
@@ -2009,11 +2140,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         // GitHub holds the source's pull request open, as its row says, when the first continue reads it again.
         const { owner, task, ask, agentSessions, source } =
           yield* sourceAgentOn(publishedPullRequest);
+
         const continueFrom = (agentId: string) =>
           Effect.map(
             ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId } })),
             (answered) => readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answered).agent,
           );
+
         // The middle agent's session never ran a turn: it has no rows, no branch, and no sandbox.
         const never = yield* continueFrom(source.id);
         yield* continueFrom(never.id);
@@ -2047,6 +2180,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, agentSessions, first, continueFrom } = yield* longSource();
+
         const stepAt = (inputTokens: number, at: number) =>
           recordAgentStep(owner, first.id, {
             inputTokens,
@@ -2056,6 +2190,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             briefTokens: 100,
             at,
           });
+
         // Its thirty steps of about five thousand bytes each, as its model last read them whole.
         yield* stepAt(LONG_TURNS * 2_600, 1_000);
         const whole = yield* continueFrom(first.id, { model: SOL, effort: "low" });
@@ -2080,10 +2215,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, first, continueFrom } = yield* longSource();
+
         const unmeasured = yield* continueFrom(first.id, {
           model: SMALL_WINDOW.model,
           effort: "low",
         });
+
         // The runner's events record what Claude Code read, and nothing of instructions the CLI composed.
         yield* recordAgentStep(owner, first.id, {
           inputTokens: LONG_TURNS * 2_600,

@@ -14,7 +14,7 @@
  * the same way.
  */
 
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, flow, Option } from "effect";
 import { iosAgentRoute, iosAppRouteOf } from "./ios-app-links.js";
 import { LINK_DESTINATION } from "./link-grammar.js";
 
@@ -141,18 +141,17 @@ export interface InboxPushAction {
 const decodePush = EffectSchema.decodeUnknownOption(inboxPushSchema);
 
 /** The push a notification's payload carries, or none where it is not one of the service's. */
-export function inboxPushOf(payload: unknown): InboxPush | undefined {
-  const read = decodePush(payload);
-  return read._tag === "Some" ? read.value : undefined;
-}
+export const inboxPushOf = flow(decodePush, Option.getOrUndefined);
 
 /** The route a push opens on. */
 function routeOf(
   push: Exclude<InboxPush, { readonly kind: typeof PUSH_KIND.SETTLED }>,
 ): string | undefined {
   if (push.kind === PUSH_KIND.RUN_FAILED) return iosAgentRoute(push.agentId);
+
   if (push.kind !== PUSH_KIND.SHARE_STARTED)
     return iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: push.itemId });
+
   return push.agentId === undefined
     ? iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: push.taskId })
     : iosAgentRoute(push.agentId);
@@ -165,10 +164,13 @@ function pressOf(
 ): InboxPushPress | undefined {
   if (action.actionId === INBOX_PUSH_ACTION.REPLY) {
     const text = action.text?.trim() ?? "";
+
     return text === "" ? undefined : { kind: INBOX_PUSH_PRESS.REPLY, itemId: push.itemId, text };
   }
+
   if (!OPTION_PLACE.test(action.actionId)) return undefined;
   const option = push.options?.[Number.parseInt(action.actionId, 10)];
+
   return option === undefined
     ? undefined
     : { kind: INBOX_PUSH_PRESS.CHOOSE, itemId: push.itemId, messageId: push.messageId, option };
@@ -179,20 +181,22 @@ function pressOf(
  * sends there: a thread's push opens the thread, with its option or its
  * words where an action pressed one; a failed run opens its agent; a task
  * the share sheet started opens its agent, or the task where none started.
- * None for a payload that is not the service's or a settled thread's
+ * None for no push, a payload that is not the service's, or a settled thread's
  * background push, which nobody taps.
  */
 export function inboxPushResponseOf(
-  payload: unknown,
+  push: InboxPush | undefined,
   action: InboxPushAction,
 ): InboxPushResponse | undefined {
-  const push = inboxPushOf(payload);
   if (push === undefined || push.kind === PUSH_KIND.SETTLED) return undefined;
   const route = routeOf(push);
+
   if (route === undefined) return undefined;
+
   const press =
     push.kind === PUSH_KIND.RUN_FAILED || push.kind === PUSH_KIND.SHARE_STARTED
       ? undefined
       : pressOf(push, action);
+
   return press === undefined ? { route } : { route, press };
 }

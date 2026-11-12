@@ -15,7 +15,7 @@ import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { isRecord, type WireRecord } from "@repo/wire";
+import { isRecord, type UnparsedWireValue, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
   Clock,
@@ -86,6 +86,7 @@ const memberWithLinear = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -97,12 +98,14 @@ const memberWithLinear = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   });
+
   const agent = Option.getOrThrow(started).agent;
   const bearer = randomBytes(32).toString("base64url");
   yield* recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer));
   yield* beginIntegrationSignIn(userId, firstIntegrationAccount(userId, LINEAR), `state-${userId}`);
   assert.equal(yield* completeIntegrationSignIn(userId, LINEAR, `state-${userId}`), true);
   const admitted = Option.getOrThrow(yield* admitRunnerBearer(bearer));
+
   return { userId, agentId: agent.id, admitted, bearer };
 });
 
@@ -126,10 +129,12 @@ const postEvents = (bearer: string, events: readonly RunnerEvent[]) =>
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       NO_GITHUB,
     );
+
     const web = HttpRouter.toWebHandler(
       runnerEventsApp({}).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const response = yield* Effect.promise(() =>
       web.handler(
         new Request(`https://app.test${RUNNER_EVENTS_PATH}`, {
@@ -139,6 +144,7 @@ const postEvents = (bearer: string, events: readonly RunnerEvent[]) =>
         }),
       ),
     );
+
     yield* Effect.promise(() => web.dispose());
     assert.equal(response.status, 200);
   });
@@ -161,12 +167,14 @@ interface ConnectAsked {
  */
 function cachingConnect(cached: string, issued: string, asked: ConnectAsked) {
   let held: string | undefined = cached;
+
   const connector: ConnectorService = {
     ...CONNECTOR_ASKED_NOTHING,
     token: (subject) =>
       Effect.sync(() => {
         asked.reads.push(subject);
         held ??= issued;
+
         return { token: Redacted.make(held), expiresAt: Infinity };
       }),
     evict: (subject) =>
@@ -175,6 +183,7 @@ function cachingConnect(cached: string, issued: string, asked: ConnectAsked) {
         held = undefined;
       }),
   };
+
   return integrationConnectOf((provider) =>
     provider === LINEAR || provider === NOTION
       ? connector
@@ -186,10 +195,12 @@ function cachingConnect(cached: string, issued: string, asked: ConnectAsked) {
 const launch = (admitted: Parameters<typeof nativeAgentConnections>[0]) =>
   Effect.gen(function* () {
     const listed: Record<string, readonly string[]> = {};
+
     for (const name of yield* nativeAgentConnections(admitted)) {
       yield* connectionInstructions(admitted, name);
       listed[name] = (yield* listConnectionTools(admitted, name)).map((tool) => tool.name);
     }
+
     return listed;
   });
 
@@ -197,9 +208,10 @@ const launch = (admitted: Parameters<typeof nativeAgentConnections>[0]) =>
 const SILENT_LINEAR = fakeHttpClientLayer(() => new Promise<Response>(() => {}));
 
 /** The text of a forwarded MCP result's first block. */
-function firstText(result: Result.Result<WireRecord, unknown>): unknown {
+function firstText(result: Result.Result<WireRecord, unknown>): UnparsedWireValue {
   if (Result.isFailure(result)) return undefined;
   const content = result.success.content;
+
   return Array.isArray(content) && isRecord(content[0]) ? content[0].text : undefined;
 }
 
@@ -214,6 +226,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const before = yield* nativeAgentConnections(member.admitted).pipe(
           Effect.provide(services),
         );
+
         yield* updateAgentServers(member.userId, member.agentId, [LINEAR]);
         const after = yield* nativeAgentConnections(member.admitted).pipe(Effect.provide(services));
 
@@ -231,6 +244,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
       Effect.gen(function* () {
         const member = yield* memberWithLinear;
         const services = doorServices(linearTokenOf(member.userId), hearing(), []);
+
         const account = (connectionName: string, connectSubject: string) =>
           Effect.andThen(
             beginIntegrationSignIn(
@@ -244,10 +258,12 @@ it.layer(SUITE)("the integrations' door", (it) => {
               `state-${connectionName}-${member.userId}`,
             ),
           );
+
         yield* account(NOTION, member.userId);
         yield* account("notion-2", `second-${member.userId}`);
         yield* renameIntegrationConnection(member.userId, NOTION, "Work");
         yield* renameIntegrationConnection(member.userId, "notion-2", "Personal");
+
         const told = (name: string) =>
           connectionInstructions(member.admitted, name).pipe(Effect.provide(services));
 
@@ -271,7 +287,9 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const linear = yield* listConnectionTools(member.admitted, LINEAR).pipe(
           Effect.provide(services),
         );
+
         const bearersForLinear = heard.bearers.length;
+
         const notion = yield* listConnectionTools(member.admitted, NOTION).pipe(
           Effect.provide(services),
         );
@@ -300,6 +318,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const member = yield* memberWithLinear;
         const heard = hearing();
         const services = doorServices(linearTokenOf(member.userId), heard, []);
+
         const call = (tool: string, input: WireRecord = {}) =>
           callConnectionTool(member.admitted, LINEAR, tool, input).pipe(Effect.provide(services));
 
@@ -358,11 +377,14 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const unknown = yield* callConnectionTool(member.admitted, LINEAR, "list_issue", {}).pipe(
           Effect.provide(services),
         );
+
         yield* updateAgentServers(member.userId, member.agentId, [LINEAR]);
         const bearersBefore = heard.bearers.length;
+
         const listed = yield* listConnectionTools(member.admitted, LINEAR).pipe(
           Effect.provide(services),
         );
+
         const switchedOff = yield* callConnectionTool(member.admitted, LINEAR, "list_issues", {
           team: "ENG",
         }).pipe(Effect.provide(services));
@@ -392,9 +414,11 @@ it.layer(SUITE)("the integrations' door", (it) => {
       Effect.gen(function* () {
         const member = yield* memberWithLinear;
         const services = doorServices(linearTokenOf(member.userId), hearing(), []);
+
         const listIssues = callConnectionTool(member.admitted, LINEAR, "list_issues", {
           team: "ENG",
         }).pipe(Effect.provide(services));
+
         yield* updateAgentServers(member.userId, member.agentId, [LINEAR]);
         // The developer's message mentions @Linear, which its hand-over writes on the agent's row.
         yield* dispatchMentioningServers(
@@ -442,6 +466,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
       Effect.gen(function* () {
         const member = yield* memberWithLinear;
         const logged: string[] = [];
+
         const services = Layer.mergeAll(
           NO_GITHUB,
           LINEAR_AND_NOTION_CONNECT,
@@ -452,6 +477,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const listing = yield* Effect.forkChild(
           listConnectionTools(member.admitted, LINEAR).pipe(Effect.provide(services)),
         );
+
         yield* TestClock.adjust(Duration.seconds(10));
         const listed = yield* Fiber.join(listing);
 
@@ -476,6 +502,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const listed = yield* listConnectionTools(member.admitted, LINEAR).pipe(
           Effect.provide(services),
         );
+
         const called = yield* callConnectionTool(member.admitted, LINEAR, "list_issues", {}).pipe(
           Effect.provide(services),
         );
@@ -489,6 +516,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
               'Authorization failed for "linear": the service refused the connection\'s credential.',
           }),
         );
+
         for (const said of [JSON.stringify(called), ...logged]) {
           assert.ok(!said.includes(token), said);
           assert.ok(!said.includes(token.slice(0, 16)), said);
@@ -507,6 +535,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         );
         yield* completeIntegrationSignIn(member.userId, NOTION, `state-notion-${member.userId}`);
         const listedAt = yield* DateTime.nowAsDate;
+
         const kept = (provider: typeof LINEAR | typeof NOTION, names: readonly string[]) =>
           storeTools(
             {
@@ -519,10 +548,12 @@ it.layer(SUITE)("the integrations' door", (it) => {
             names.map((name) => ({ name })),
             listedAt,
           );
+
         yield* kept(LINEAR, ["list_issues"]);
         yield* kept(NOTION, ["notion-search"]);
         const asked: ConnectAsked = { reads: [], evicted: [] };
         const token = linearTokenOf(member.userId);
+
         const services = Layer.mergeAll(
           NO_GITHUB,
           cachingConnect(token, token, asked),
@@ -531,9 +562,11 @@ it.layer(SUITE)("the integrations' door", (it) => {
 
         const launched = yield* launch(member.admitted).pipe(Effect.provide(services));
         const readsAtLaunch = asked.reads.length;
+
         const called = yield* callConnectionTool(member.admitted, LINEAR, "list_issues", {
           team: "ENG",
         }).pipe(Effect.provide(services));
+
         const relaunched = yield* launch(member.admitted).pipe(Effect.provide(services));
 
         assert.deepEqual([launched.linear, launched.notion], [["list_issues"], ["notion-search"]]);
@@ -554,11 +587,13 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const member = yield* memberWithLinear;
         const asked: ConnectAsked = { reads: [], evicted: [] };
         const token = linearTokenOf(member.userId);
+
         const services = Layer.mergeAll(
           NO_GITHUB,
           cachingConnect(token, token, asked),
           linearServer(token, hearing()),
         );
+
         const list = listConnectionTools(member.admitted, LINEAR).pipe(Effect.provide(services));
 
         const first = yield* list;
@@ -580,14 +615,17 @@ it.layer(SUITE)("the integrations' door", (it) => {
       Effect.gen(function* () {
         const member = yield* memberWithLinear;
         const token = linearTokenOf(member.userId);
+
         const callOn = (connect: ReturnType<typeof cachingConnect>) =>
           callConnectionTool(member.admitted, LINEAR, "list_issues", { team: "ENG" }).pipe(
             Effect.provide(Layer.mergeAll(NO_GITHUB, connect, linearServer(token, hearing()))),
           );
+
         const stale: ConnectAsked = { reads: [], evicted: [] };
         const revoked: ConnectAsked = { reads: [], evicted: [] };
 
         const recovered = yield* callOn(cachingConnect("lin_oauth_stale", token, stale));
+
         const refused = yield* callOn(
           cachingConnect("lin_oauth_stale", "lin_oauth_revoked", revoked),
         );
@@ -633,6 +671,7 @@ it.layer(SUITE)("the integrations' door", (it) => {
         const refused = yield* callConnectionTool(member.admitted, LINEAR, "list_issues", {
           team: REJECTED_TEAM,
         }).pipe(Effect.provide(services));
+
         const listed = yield* listConnectionTools(member.admitted, LINEAR).pipe(
           Effect.provide(services),
         );
@@ -664,16 +703,19 @@ it.layer(SUITE)("the integrations' door", (it) => {
         );
         const asked: ConnectAsked = { reads: [], evicted: [] };
         const token = linearTokenOf(member.userId);
+
         const services = Layer.mergeAll(
           NO_GITHUB,
           cachingConnect(token, token, asked),
           linearServer(token, hearing(), []),
         );
+
         const list = listConnectionTools(member.admitted, LINEAR).pipe(Effect.provide(services));
 
         const called = yield* callConnectionTool(member.admitted, LINEAR, "list_issues", {}).pipe(
           Effect.provide(services),
         );
+
         const first = yield* list;
         const again = yield* list;
 

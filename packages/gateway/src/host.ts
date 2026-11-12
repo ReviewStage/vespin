@@ -55,15 +55,18 @@ function refused(refusal: GatewayRefusal): GatewayCallResult {
 export function gatewayHost(options: GatewayHostOptions): GatewayHost {
   const listeners = new Map<GatewayEventKind, Set<GatewayEventListener>>();
   const context = { client: options.client };
+
   return {
     call: (method, params = {}) =>
       Effect.suspend(() => {
         const handler = options.methods[method];
+
         if (!handler) {
           return Effect.succeed(
             refused(new UnknownMethodRefusal({ message: `no handler stands for ${method}` })),
           );
         }
+
         return Effect.suspend(() => handler(params, context)).pipe(
           // A handler's refusal is an answer, and its defect a bug, which is
           // reported here, where the defect itself still stands.
@@ -86,6 +89,7 @@ export function gatewayHost(options: GatewayHostOptions): GatewayHost {
       const held = listeners.get(kind) ?? new Set<GatewayEventListener>();
       held.add(listener);
       listeners.set(kind, held);
+
       return () => {
         held.delete(listener);
       };

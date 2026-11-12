@@ -266,8 +266,10 @@ function creatorFor(
   tasks: readonly TaskSummary[],
 ): Actor {
   const member = reader.members?.find((each) => each.userId === creatorId);
+
   if (member !== undefined) return memberActor(member, reader.readerId);
   const named = tasks.find((task) => task.createdBy?.userId === creatorId);
+
   return creatorActor(named ?? { ownerId: creatorId }, reader, undefined);
 }
 
@@ -287,8 +289,10 @@ export function assigneeFor(
   tasks: readonly TaskSummary[],
 ): Actor {
   const member = reader.members?.find((each) => each.userId === assigneeId);
+
   if (member !== undefined) return memberActor(member, reader.readerId);
   const named = tasks.find((task) => task.assignee?.userId === assigneeId)?.assignee;
+
   return personActor(
     named ?? { userId: assigneeId, name: "" },
     reader.members,
@@ -320,12 +324,14 @@ function peopleValues(
 ): readonly FieldValue[] {
   const rows = memberRows(reader.members, reader.readerId);
   const listed = new Set(rows.map((row) => row.member.userId));
+
   const others = [
     ...new Set([
       ...(reader.readerId === undefined ? [] : [reader.readerId]),
       ...[...held].filter((id): id is string => id !== null),
     ]),
   ].filter((id) => !listed.has(id));
+
   return [
     ...rows.map((row) => ({
       value: row.member.userId,
@@ -337,6 +343,7 @@ function peopleValues(
     })),
     ...others.map((id) => {
       const actor = actorOf(id);
+
       return {
         value: id,
         words: actorName(actor),
@@ -365,6 +372,7 @@ function fieldValues(
     ...valueCounts(tasks, field).keys(),
     ...filterValues(filter, field),
   ]);
+
   switch (field) {
     case TASKS_FILTER_FIELD.STATUS:
       return TASK_STATUS_ORDER.map((status) => ({
@@ -484,6 +492,7 @@ function filterEntries(
   const fields: MenuEntry[] = offeredFields(shared).map((field) => {
     const kept = filterValues(filter, field);
     const head = { label: FIELD_WORDS[field], icon: FIELD_ICON[field] };
+
     const values = fieldValues(field, tasks, filter, reader, pictures).map(
       ({ value, words, label, icon, detail, card }): MenuAction => ({
         // Note that a value is keyed by itself, because two repositories, or two people, may be named alike.
@@ -492,7 +501,7 @@ function filterEntries(
         // Note that a person's face draws their letter, so it is masked with their name; none, No assignee or No one, is the app's own.
         icon:
           PERSON_FIELDS.includes(field) && value !== null ? <ReplayMask>{icon}</ReplayMask> : icon,
-        ...(detail === undefined ? {} : { detail, detailPlace: MENU_DETAIL.BESIDE }),
+        ...(detail !== undefined && { detail, detailPlace: MENU_DETAIL.BESIDE }),
         card,
         checked: kept.includes(value),
         stays: true,
@@ -500,9 +509,11 @@ function filterEntries(
         onSelect: () => onFilter(toggledFilter(filter, field, value)),
       }),
     );
+
     // Note that a field naming people or repositories may run to hundreds of values, so it is searched in a panel that draws only those near its view.
     if (namesData(field)) {
       const person = PERSON_FIELDS.includes(field);
+
       return actionSearchPanel(head, {
         label: FIELD_WORDS[field],
         placeholder: person ? SEARCH_MEMBERS : SEARCH_REPOSITORIES,
@@ -513,8 +524,10 @@ function filterEntries(
         replayUnmasked: true,
       });
     }
+
     return { ...head, items: values };
   });
+
   return [
     fields,
     [
@@ -555,6 +568,7 @@ export function TasksFilterButton({
   useAskedMenu(menu.show, asked?.ask);
   const reader = useMemberDirectory();
   const filtered = filteredFields(filter).length > 0;
+
   return (
     <>
       {asked === undefined ? (
@@ -592,6 +606,7 @@ interface ChipValue {
 /** What a field's chip says of its values: up to two by name, a person or a repository masked, the rest counted. */
 function ChipValues({ values }: { values: readonly ChipValue[] }): React.JSX.Element {
   const more = values.length - CHIP_VALUES;
+
   return (
     <>
       {values.slice(0, CHIP_VALUES).map((each, at) => (
@@ -622,9 +637,12 @@ function filterLineEntries(
   reader: ReturnType<typeof useMemberDirectory>,
 ): FilterLineEntry[] {
   const fields = filteredFields(filter);
+
   if (fields.length === 0) return [];
+
   const chips = fields.map((field) => {
     const kept = filterValues(filter, field);
+
     const values = fieldValues(field, tasks, filter, reader, false)
       .filter((each) => kept.includes(each.value))
       .map((each) => ({
@@ -633,8 +651,10 @@ function filterLineEntries(
         // Note that a field's none, No assignee or No repository, is the app's own words.
         masked: namesData(field) && each.value !== null,
       }));
+
     return { key: field, values };
   });
+
   return [...chips, { key: FILTER_LINE.CLEAR }];
 }
 
@@ -661,6 +681,7 @@ function FilterLine({
   // Note that the entries are made once for what they are made from, because `useLeaving` reads a new list as a change.
   const listed = useMemo(() => filterLineEntries(tasks, filter, reader), [tasks, filter, reader]);
   const drawn = useLeaving(listed, (entry) => entry.key);
+
   return (
     <div
       ref={line}
@@ -710,6 +731,7 @@ export function TasksFilterChips({
   onFilter: (filter: TasksFilter) => void;
 }): React.JSX.Element {
   const line = useRef<HTMLDivElement | null>(null);
+
   return (
     <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
       <FilterLine line={line} tasks={tasks} filter={filter} onFilter={onFilter} />
@@ -755,10 +777,12 @@ function displayEntries({
 }): MenuEntry[][] {
   const set = (change: Partial<TasksDisplay>) => onDisplay({ ...display, ...change });
   const grouping = board ? boardGrouping(display.grouping) : display.grouping;
+
   // Note that a grouping by a person kept for a workspace nobody shares now stays offered while it is chosen, so it can be chosen away.
   const groupings = (board ? BOARD_GROUPINGS : Object.values(TASKS_GROUPING)).filter(
     (each) => shared || !PERSON_GROUPINGS.includes(each) || grouping === each,
   );
+
   const toggle = (label: string, checked: boolean, change: Partial<TasksDisplay>): MenuAction => ({
     label,
     checked,
@@ -766,7 +790,9 @@ function displayEntries({
     stays: true,
     onSelect: () => set(change),
   });
+
   const offeredProperties = board ? BOARD_PROPERTIES : TASK_PROPERTY_ORDER;
+
   return [
     [
       {
@@ -867,6 +893,7 @@ export function TasksViewOptions({
 }): React.JSX.Element {
   const menu = useMenu(shown);
   useAskedMenu(menu.show, asked?.ask);
+
   return (
     <>
       {asked === undefined ? (
@@ -898,5 +925,6 @@ export function OlderCompleted({
   onShow: () => void;
 }): React.JSX.Element | null {
   if (older === undefined) return null;
+
   return <ShowMoreRow more={older} shown={false} onToggle={onShow} />;
 }

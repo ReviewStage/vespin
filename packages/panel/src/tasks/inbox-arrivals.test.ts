@@ -50,6 +50,7 @@ function Harness({
   onScreen: boolean;
 }): null {
   useInboxArrivals({ taskId, items, read: true }, onScreen);
+
   return null;
 }
 
@@ -58,9 +59,12 @@ function inbox(taskId: string, items: readonly InboxItem[], onScreen = true) {
   mountAnnouncer();
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const push = (next: readonly InboxItem[], shown = onScreen) =>
     act(() => root?.render(createElement(Harness, { taskId, items: next, onScreen: shown })));
+
   push(items);
+
   return push;
 }
 

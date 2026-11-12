@@ -87,14 +87,14 @@ const GOT_STATUS = /^Status: (\w+)$/m;
 const DELETED = "deleted";
 
 /** A task's status as the wire spells a to-do's: the CLI's `completed` is done, and the rest are spelled alike; nothing for a word that is none of them. */
-const TASK_STATUS: Readonly<Record<string, AgentTodoStatus>> = {
-  pending: AGENT_TODO_STATUS.PENDING,
-  in_progress: AGENT_TODO_STATUS.IN_PROGRESS,
-  completed: AGENT_TODO_STATUS.DONE,
-};
+const TASK_STATUS: ReadonlyMap<string, AgentTodoStatus> = new Map([
+  ["pending", AGENT_TODO_STATUS.PENDING],
+  ["in_progress", AGENT_TODO_STATUS.IN_PROGRESS],
+  ["completed", AGENT_TODO_STATUS.DONE],
+]);
 
 function taskStatus(status: WireValue | undefined): AgentTodoStatus | undefined {
-  return isWireString(status) ? TASK_STATUS[status] : undefined;
+  return isWireString(status) ? TASK_STATUS.get(status) : undefined;
 }
 
 /** The string under a key of the input, or nothing where it holds none. */
@@ -105,7 +105,9 @@ function inputString(input: WireValue | undefined, key: string): string | undefi
 /** The task at a place of the list replaced; the list as it is where the task reads the same. */
 function replaced(fold: TaskFold, at: number, task: FoldedTask): TaskFold {
   const was = fold[at];
+
   if (was !== undefined && was.content === task.content && was.status === task.status) return fold;
+
   return fold.map((each, index) => (index === at ? task : each));
 }
 
@@ -122,13 +124,16 @@ function taskNumber(id: string | undefined): number | undefined {
 /** A task the fold never saw created added at its place among the tasks by its number, so the list keeps creation order; at the end where it has none. */
 function inserted(fold: TaskFold, task: FoldedTask): TaskFold {
   const number = taskNumber(task.id);
+
   const at =
     number === undefined
       ? -1
       : fold.findIndex((each) => {
           const other = taskNumber(each.id);
+
           return other !== undefined && other > number;
         });
+
   return at < 0 ? [...fold, task] : [...fold.slice(0, at), task, ...fold.slice(at)];
 }
 
@@ -139,9 +144,12 @@ function created(
   words: string | undefined,
 ): TaskFold {
   const answered = words === undefined ? undefined : CREATED_ANSWER.exec(words);
+
   if (answered === null) return fold;
   const content = (answered?.[2] ?? inputString(input, "subject") ?? "").trim();
+
   if (content === "") return fold;
+
   return [...fold, { id: answered?.[1], content, status: AGENT_TODO_STATUS.PENDING }];
 }
 
@@ -160,13 +168,16 @@ function updated(
 ): TaskFold {
   if (words !== undefined && !UPDATED_ANSWER.test(words)) return fold;
   const id = inputString(input, "taskId");
+
   if (id === undefined) return fold;
   const status = inputString(input, "status");
   const subject = inputString(input, "subject")?.trim();
   const at = fold.findIndex((task) => task.id === id);
+
   if (status === DELETED) return at < 0 ? fold : fold.filter((_, index) => index !== at);
   const moved = taskStatus(status);
   const was = fold[at];
+
   if (was === undefined) {
     return inserted(fold, {
       id,
@@ -174,6 +185,7 @@ function updated(
       status: moved ?? AGENT_TODO_STATUS.PENDING,
     });
   }
+
   return replaced(fold, at, {
     id,
     content: subject === undefined || subject === "" ? was.content : subject,
@@ -191,24 +203,33 @@ function updated(
  */
 function listed(fold: TaskFold, words: string | undefined): TaskFold {
   if (words === undefined) return fold;
+
   if (words.trim() === NO_TASKS_ANSWER) return fold.length === 0 ? fold : NO_TASKS;
+
   const tasks = new Map(
     words.split("\n").flatMap((line): [string, FoldedTask][] => {
       const read = LISTED_LINE.exec(line);
       const status = taskStatus(read?.[2]);
+
       if (read === null || status === undefined) return [];
       const id = read[1] ?? "";
+
       return [[id, { id, content: (read[3] ?? "").replace(BLOCKED_BY, "").trim(), status }]];
     }),
   );
+
   if (tasks.size === 0) return fold;
+
   const known = fold.flatMap((task) => {
     const answered = task.id === undefined ? undefined : tasks.get(task.id);
+
     return answered === undefined ? [] : [answered];
   });
+
   const seen = new Set(fold.map((task) => task.id));
   const added = [...tasks.values()].filter((task) => !seen.has(task.id));
   const next = [...known, ...added];
+
   return sameFold(fold, next) ? fold : next;
 }
 
@@ -216,17 +237,20 @@ function listed(fold: TaskFold, words: string | undefined): TaskFold {
 function got(fold: TaskFold, words: string | undefined): TaskFold {
   if (words === undefined) return fold;
   const head = GOT_HEAD.exec(words.split("\n")[0] ?? "");
+
   if (head === null) return fold;
   const id = head[1] ?? "";
   const content = (head[2] ?? "").trim();
   const status = taskStatus(GOT_STATUS.exec(words)?.[1]);
   const at = fold.findIndex((task) => task.id === id);
   const was = fold[at];
+
   if (was === undefined) {
     return content === ""
       ? fold
       : inserted(fold, { id, content, status: status ?? AGENT_TODO_STATUS.PENDING });
   }
+
   return replaced(fold, at, {
     id,
     content: content === "" ? was.content : content,
@@ -241,6 +265,7 @@ type TaskCall = DrawnCall & { readonly failed: boolean };
 export function foldTaskCall(fold: TaskFold, call: TaskCall): TaskFold {
   if (call.failed) return fold;
   const words = isWireString(call.output) ? call.output : undefined;
+
   switch (call.tool) {
     case CLAUDE_CODE_TOOL.TASK_CREATE:
       return created(fold, call.input, words);
@@ -261,6 +286,7 @@ function sameTodos(a: readonly FoldedTask[] | Todos, b: readonly FoldedTask[] | 
     a.length === b.length &&
     a.every((todo, index) => {
       const other = b[index];
+
       return other !== undefined && todo.content === other.content && todo.status === other.status;
     })
   );
@@ -307,16 +333,20 @@ function foldMessage(
   if (previous !== undefined && previous.message === message && previous.from === from) {
     return previous;
   }
+
   let fold = from;
   const lists = new Map<string, Todos>();
+
   for (const part of agentParts(message)) {
     if (part.kind !== AGENT_PART.TOOL || !isTaskCall(part.tool)) continue;
     fold = foldTaskCall(fold, taskCallOf(part));
     const was = previous?.lists.get(part.callId);
     lists.set(part.callId, was !== undefined && sameTodos(was, fold) ? was : todosOf(fold));
   }
+
   // Note that the list it ended on is kept as it was where it folds the same, so the message after it reads from the same list and keeps its own.
   const to = previous !== undefined && sameFold(previous.to, fold) ? previous.to : fold;
+
   return { message, from, to, lists };
 }
 
@@ -329,7 +359,9 @@ interface TranscriptFold {
 /** Whether two maps hold the same values under the same keys. */
 function sameEntries<V>(a: ReadonlyMap<string, V>, b: ReadonlyMap<string, V>): boolean {
   if (a.size !== b.size) return false;
+
   for (const [key, value] of a) if (!b.has(key) || !Object.is(b.get(key), value)) return false;
+
   return true;
 }
 
@@ -345,20 +377,25 @@ const transcriptFolds = new WeakMap<AgentTranscriptMessage, TranscriptFold>();
  */
 export function taskTodos(messages: readonly AgentTranscriptMessage[]): ReadonlyMap<string, Todos> {
   const first = messages[0];
+
   if (first === undefined) return NO_LISTS;
   const held = transcriptFolds.get(first);
   const byMessage = new Map<string, MessageFold>();
   let fold = NO_TASKS;
+
   for (const message of messages) {
     const read = foldMessage(message, fold, held?.byMessage.get(message.id));
     byMessage.set(message.id, read);
     fold = read.to;
   }
+
   const lists = new Map<string, Todos>();
+
   for (const read of byMessage.values())
     for (const [callId, todos] of read.lists) lists.set(callId, todos);
   const kept = held !== undefined && sameEntries(held.lists, lists) ? held.lists : lists;
   transcriptFolds.set(first, { byMessage, lists: kept });
+
   return kept;
 }
 
@@ -391,13 +428,17 @@ export function newestTodos(
   for (let at = messages.length - 1; at >= 0; at -= 1) {
     const message = messages[at];
     const parts = message === undefined ? [] : agentParts(message);
+
     for (let index = parts.length - 1; index >= 0; index -= 1) {
       const part = parts[index];
+
       if (part === undefined || !isTodos(part)) continue;
       const todos = todosOfPart(part, lists);
+
       if (todos !== undefined) return { callId: part.callId, todos };
     }
   }
+
   return undefined;
 }
 
@@ -413,5 +454,6 @@ export function dockedTodos(
 ): StandingTodos | undefined {
   if (!working || standing === undefined) return undefined;
   const open = standing.todos.some((todo) => todo.status !== AGENT_TODO_STATUS.DONE);
+
   return open ? standing : undefined;
 }

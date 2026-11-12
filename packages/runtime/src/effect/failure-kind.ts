@@ -15,7 +15,7 @@
  * like an identifier, so a name that was given a sentence is not written
  * either.
  */
-import { Cause, Option, Schema } from "effect";
+import { Cause, Option, Predicate, Schema } from "effect";
 
 /** A tag as a line may carry it: one identifier, nothing shaped like a sentence or a value. */
 const KIND_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -39,17 +39,20 @@ const readTagged = Schema.decodeUnknownOption(Tagged);
 const readReason = Schema.decodeUnknownOption(Schema.Struct({ reason: Tagged }));
 const readIssue = Schema.decodeUnknownOption(Schema.Struct({ issue: Tagged }));
 const readCode = Schema.decodeUnknownOption(Schema.String.check(Schema.isPattern(CODE_PATTERN)));
+
 const readSqlCause = Schema.decodeUnknownOption(
   Schema.Struct({
     _tag: Schema.Literal(SQL_ERROR_TAG),
     reason: Schema.Struct({ cause: Schema.Unknown }),
   }),
 );
+
 const readWrapper = Schema.decodeUnknownOption(Schema.Struct({ cause: Schema.Unknown }));
 
 /** The failure's own tag, or its error name, where either is shaped like an identifier. */
 function tagOf(cause: unknown): Option.Option<string> {
   const tagged = Option.map(readTagged(cause), (read) => read._tag);
+
   return Option.isSome(tagged) || !(cause instanceof Error) ? tagged : readKind(cause.name);
 }
 
@@ -76,10 +79,13 @@ function wrappedOf(cause: unknown): Option.Option<unknown> {
  */
 export function failureKind(cause: unknown): string {
   const wrapped = wrappedOf(cause);
+
   if (Option.isSome(wrapped)) return failureKind(wrapped.value);
   const kind = tagOf(cause);
+
   if (Option.isNone(kind)) return FAILURE_KIND.UNNAMED;
   const beneath = beneathOf(cause);
+
   return Option.isNone(beneath) ? kind.value : `${kind.value}: ${beneath.value}`;
 }
 
@@ -95,15 +101,20 @@ export function failureKind(cause: unknown): string {
  */
 export function failureDetail(cause: unknown): Option.Option<string> {
   const wrapped = wrappedOf(cause);
+
   if (Option.isSome(wrapped)) return failureDetail(wrapped.value);
   const sql = readSqlCause(cause);
+
   if (Option.isNone(sql)) return Option.none();
   const driver = sql.value.reason.cause;
+
   const code = readCode(
-    typeof driver === "object" && driver !== null && "code" in driver ? driver.code : undefined,
+    Predicate.isObjectOrArray(driver) && "code" in driver ? driver.code : undefined,
   );
+
   if (Option.isSome(code)) return Option.some(`code ${code.value}`);
   const name = driver instanceof Error ? readKind(driver.name) : Option.none();
+
   return Option.some(`cause ${Option.getOrElse(name, () => FAILURE_KIND.UNNAMED)}`);
 }
 

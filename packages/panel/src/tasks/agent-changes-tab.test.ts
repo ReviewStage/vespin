@@ -139,6 +139,7 @@ let commits: ReadCommits = {};
 
 /** The pull request's files, in the order GitHub lists them, which is not the tree's. */
 let files: AgentChangedFile[] = [changed("src/seats.ts")];
+
 /** Whether the read stopped short of every file; it did not unless a test says so. */
 let truncated = false;
 
@@ -146,8 +147,10 @@ let truncated = false;
 let viewedAnswer: AgentPullRequestViewedAnswerView = {
   failure: AGENT_CALL_FAILURE.UNANSWERED,
 };
+
 /** How many times the marks were read. */
 let viewedReads = 0;
+
 /** What the next read of the marks waits on, where a test holds it; none answers at once. */
 let viewedHeld: Promise<void> | undefined;
 
@@ -175,8 +178,10 @@ const control = agentsControl({
 
 /** What the stand-in bundle was handed, mount first, each draw after it. */
 let drawn: DiffListProps[] = [];
+
 /** The files the list was scrolled to, in order. */
 let revealed: string[] = [];
+
 /** How wide the box the diff is drawn in lays out, in pixels. */
 let boxWidth = 900;
 let root: Root | undefined;
@@ -191,6 +196,7 @@ const standIn: DiffViewModule = {
   }),
   mountList: (_host, props) => {
     drawn.push(props);
+
     return {
       update: (next) => drawn.push(next),
       reveal: (path) => revealed.push(path),
@@ -204,10 +210,13 @@ const standIn: DiffViewModule = {
 
 /** The doors each tree the view mounted opens a chosen file through, the latest last. */
 let treeOpens: Array<(path: string, newTab: boolean) => void> = [];
+
 /** What each tree the view mounted was handed, the latest last. */
 let treeProps: FileTreeProps[] = [];
+
 /** The marks the trees were handed, the latest last. */
 let treeMarks: Array<readonly FileMark[]> = [];
+
 /** The files the trees marked as the one shown, in order. */
 let treeRevealed: string[] = [];
 
@@ -217,6 +226,7 @@ const treeStandIn: FileTreeModule = {
     treeOpens.push(props.onOpen);
     treeProps.push(props);
     const nothing = () => undefined;
+
     return {
       reveal: (path) => treeRevealed.push(path),
       search: nothing,
@@ -247,6 +257,7 @@ function holdViewedReads(): void {
     [PULL_REQUEST_PART.VIEWED]: () => {
       viewedReads += 1;
       const answer = viewedAnswer;
+
       return (viewedHeld ?? Promise.resolve()).then(() => answer);
     },
   });
@@ -270,6 +281,7 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     const width = this.classList.contains("diff-view") ? boxWidth : 0;
+
     return new DOMRect(0, 0, width, 0);
   });
   fakeAppBridge({});
@@ -287,6 +299,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   vi.useRealTimers();
+
   for (const style of document.head.querySelectorAll("style")) style.remove();
   document.body.style.removeProperty("--ui-duration-pane");
 });
@@ -295,6 +308,7 @@ afterEach(() => {
 function InboxBeside({ onNext }: { onNext: () => void }): null {
   useAppKeymap(true);
   useAppCommand(APP_COMMAND.NEXT_INBOX_ITEM, onNext);
+
   return null;
 }
 
@@ -338,12 +352,14 @@ async function refreshAsTheTab(threads?: ChangesThreads): Promise<void> {
 /** Draws the view again in the root standing, its tree open or not, beside whatever else is given. */
 async function redraw(options: DrawOptions = {}): Promise<DiffListProps> {
   await render(options);
+
   return lastDrawn();
 }
 
 /** Draws the view in the root standing, without asking what it drew. */
 async function render(options: DrawOptions = {}): Promise<void> {
   const { ChangesTabReading } = await import("../testing/changes-tab.js");
+
   const tab = createElement(ChangesTabReading, {
     agentId: AGENT.id,
     control: options.control ?? control,
@@ -355,10 +371,12 @@ async function render(options: DrawOptions = {}): Promise<void> {
       heldReads = reads;
     },
   });
+
   const opening =
     options.openTab === undefined
       ? tab
       : createElement(OpenFileTabProvider, { value: options.openTab }, tab);
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -387,6 +405,7 @@ async function drawTab(options: DrawOptions = {}): Promise<DiffListProps> {
   // Note that the changes land through a query, so the view is read once its read has settled.
   await vi.waitFor(() => assert.equal(heldReads?.answer !== undefined && !heldReads.out, true));
   await flush();
+
   return lastDrawn();
 }
 
@@ -409,6 +428,7 @@ function folds(): Array<[string, boolean]> {
 function press(target: Element, init: KeyboardEventInit): boolean {
   const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
   act(() => target.dispatchEvent(event));
+
   return event.defaultPrevented;
 }
 
@@ -420,6 +440,7 @@ function listBox(): HTMLElement {
 /** The header the view drew for a file, as the bundle stands it at the head of the file. */
 function header(path: string): HTMLElement {
   const slot = lastDrawn().renderHeader(path);
+
   return slot.querySelector<HTMLElement>(".diff-list-head") ?? assert.fail(`${path} has a header`);
 }
 
@@ -428,6 +449,7 @@ function typeSearch(words: string): void {
   const field =
     document.querySelector<HTMLInputElement>('input[aria-label="Search files"]') ??
     assert.fail("the tree's search stands");
+
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setValue?.call(field, words);
@@ -440,7 +462,9 @@ function menuItems(): readonly HTMLButtonElement[] {
   const options = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Files changed actions"]',
   );
+
   act(() => options?.click());
+
   return [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')];
 }
 
@@ -457,11 +481,14 @@ async function pick(popover: HTMLElement, row: string, value: string): Promise<v
     [...popover.querySelectorAll<HTMLButtonElement>("[aria-haspopup]")].find((each) =>
       each.getAttribute("aria-label")?.startsWith(row),
     ) ?? assert.fail(`the settings offer ${row}`);
+
   act(() => trigger.click());
+
   const option =
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (each) => each.textContent === value,
     ) ?? assert.fail(`${row} offers ${value}`);
+
   act(() => option.click());
   await flush();
 }
@@ -487,6 +514,7 @@ function openSettings(appearance: "light" | "dark" = "light"): HTMLElement {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes(appearance) }));
   const button = document.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
   act(() => button?.click());
+
   return (
     document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("the view settings open")
   );
@@ -497,6 +525,7 @@ function settingControl(popover: HTMLElement, selector: string, name: string): H
   const found = [...popover.querySelectorAll<HTMLButtonElement>(selector)].find(
     (each) => each.textContent === name || each.getAttribute("aria-label") === name,
   );
+
   return found ?? assert.fail(`the settings offer ${name}`);
 }
 
@@ -519,6 +548,7 @@ test("a file with no hunks to draw stands in the list as what is said in their p
   files = [
     changed("logo.png", { omitted: PATCH_OMITTED.BINARY, patch: null, additions: 0, deletions: 0 }),
   ];
+
   const props = await drawTab({
     threads: {
       list: [{ ...seatsThread(2, "why-binary"), path: "logo.png" }],
@@ -568,6 +598,7 @@ test("deleted files and lockfiles start folded, and a file's fold and Collapse a
     document.querySelector<HTMLButtonElement>(
       'button[aria-label="Collapse all files"], button[aria-label="Expand all files"]',
     ) ?? assert.fail("the bar offers Collapse all");
+
   assert.equal(foldAll().getAttribute("aria-label"), "Collapse all files");
   act(() => foldAll().click());
   await flush();
@@ -591,9 +622,11 @@ test("the tree's search narrows the list, said over it while the tree is hidden,
   );
 
   await redraw({ treeOpen: false });
+
   const notice = [...document.querySelectorAll(".ui-tab-notice")].find((each) =>
     each.textContent?.includes("Only files whose path holds"),
   );
+
   assert.match(notice?.textContent ?? "", /BILLING/u);
   act(() => notice?.querySelector("button")?.click());
   await flush();
@@ -663,6 +696,7 @@ test("a file chosen with ⌘ where no side panel offers a File tab is scrolled t
 function heldTree(open: boolean, width = 300) {
   const widths: number[] = [];
   const held = { toggles: 0, widths };
+
   const tree: TreeShown = {
     open,
     onToggle: () => {
@@ -670,6 +704,7 @@ function heldTree(open: boolean, width = 300) {
     },
     width: { width, onResize: (asked) => held.widths.push(asked) },
   };
+
   return { tree, held };
 }
 
@@ -705,6 +740,7 @@ test("the tree's edge moves the tree from the width it is drawn at, its share of
     this: HTMLElement,
   ) {
     const width = this.classList.contains("file-view-body") ? 800 : 0;
+
     return new DOMRect(0, 0, width, 0);
   });
   const { tree, held } = heldTree(true, 400);
@@ -713,6 +749,7 @@ test("the tree's edge moves the tree from the width it is drawn at, its share of
   const edge =
     document.querySelector<HTMLElement>('.file-tree-pane [role="separator"]') ??
     assert.fail("an edge");
+
   press(edge, { key: "ArrowRight" });
   assert.deepEqual(
     held.widths,
@@ -734,6 +771,7 @@ test("while the tree is hidden a strip stands in its place, a mark for each file
   const strip =
     document.querySelector<HTMLElement>(".file-tree-strip .ui-mark-strip") ??
     assert.fail("a strip");
+
   assert.deepEqual(
     [...strip.children].map((mark) => [
       mark.getAttribute("data-tone"),
@@ -798,6 +836,7 @@ test("a file's header mounts its hints as the keyboard comes to its fold, which 
     "the fold names its key before its hint is mounted",
   );
   document.documentElement.dataset.keyboard = "true";
+
   try {
     act(() => fold.focus());
     await flush();
@@ -813,8 +852,10 @@ test("the pointer's first arrival on a header's letter hangs its hint, though th
   files = [changed("a.ts")];
   await drawTab();
   document.body.append(lastDrawn().renderHeader("a.ts"));
+
   const letter = () =>
     header("a.ts").querySelector(".file-view-status") ?? assert.fail("the letter stands");
+
   restOn(letter());
   await flush();
   assert.equal(document.querySelector('[role="tooltip"]')?.textContent, "Modified");
@@ -845,6 +886,7 @@ test("on a touch screen a header's hints stand from the start, so a long press o
   document.body.append(lastDrawn().renderHeader("a.ts"));
   const fold = header("a.ts").querySelector("button") ?? assert.fail("the fold stands");
   vi.useFakeTimers();
+
   try {
     act(() => {
       fold.dispatchEvent(
@@ -885,6 +927,7 @@ test("J outside Files changed is still the Inbox's, and inside it is the view's 
 test("a key typed into the tree's search is the field's", async () => {
   files = [changed("a.ts"), changed("b.ts")];
   await drawTab({ treeOpen: true });
+
   const field =
     document.querySelector<HTMLInputElement>('input[aria-label="Search files"]') ??
     assert.fail("the tree's search stands");
@@ -915,8 +958,10 @@ test("every key of Files changed's table answers inside the view", async () => {
   const unanswered = FILES_CHANGED_KEYS.filter((key) => {
     // Each key is pressed with a file stood on, which Escape needs.
     press(listBox(), { key: "j" });
+
     return !press(listBox(), chordPress(FILES_CHANGED_SHORTCUTS[key].chord));
   });
+
   assert.deepEqual(unanswered, []);
 });
 
@@ -930,6 +975,7 @@ test("? inside the view opens a sheet of its keys by group, which Escape or ? ag
     document.getElementById(sheet.getAttribute("aria-labelledby") ?? "")?.textContent,
     "Keyboard shortcuts",
   );
+
   const groups = [...sheet.querySelectorAll("section[aria-labelledby]")].map((section) => [
     document.getElementById(section.getAttribute("aria-labelledby") ?? "")?.textContent,
     [...section.querySelectorAll(".ui-settings-row")].map((row) => [
@@ -937,6 +983,7 @@ test("? inside the view opens a sheet of its keys by group, which Escape or ? ag
       row.querySelector("kbd")?.textContent,
     ]),
   ]);
+
   assert.deepEqual(groups, [
     ["General", [["Show keyboard shortcuts", "⇧/"]]],
     [
@@ -984,6 +1031,7 @@ test("? outside Files changed, or typed into its tree's search, opens no sheet",
     treeOpen: true,
     beside: createElement(InboxBeside, { onNext: () => undefined }),
   });
+
   const field =
     document.querySelector<HTMLInputElement>('input[aria-label="Search files"]') ??
     assert.fail("the tree's search stands");
@@ -1004,6 +1052,7 @@ test("View settings groups its rows under Diff, Lines, and Text, shows one appea
       (control) => control.getAttribute("aria-label")?.split(": ")[0],
     ),
   ]);
+
   assert.deepEqual(groups, [
     ["Diff", ["Layout", "Changed words", "Indicators", "Backgrounds"]],
     ["Lines", ["Word wrap", "Line numbers", "Minimize inline comments"]],
@@ -1044,6 +1093,7 @@ test("the diff settings set the layout, the indicators, and a switch for every d
     ligatures: true,
     backgrounds: false,
   };
+
   await vi.waitFor(() => assert.deepEqual(lastDrawn().look, expected));
   assert.deepEqual((await drawTab()).look, expected);
 });
@@ -1070,6 +1120,7 @@ test("the ⋯ copies and saves the whole pull request's patch, every file with l
     ...copyingInto(copied),
     saveFile: (file) => {
       saved.push(file);
+
       return Promise.resolve(false);
     },
   });
@@ -1087,6 +1138,7 @@ test("the ⋯ copies and saves the whole pull request's patch, every file with l
     PATCH,
     "",
   ].join("\n");
+
   const [copy] = menuItems();
   act(() => copy?.click());
   await flush();
@@ -1104,6 +1156,7 @@ test("a read that stopped short of every file offers no patch, and says why", as
   await drawTab();
 
   const [copy, download] = menuItems();
+
   for (const item of [copy, download]) {
     assert.equal(item?.getAttribute("aria-disabled") ?? String(item?.disabled), "true");
     assert.match(item?.textContent ?? "", /This pull request has more files than were read/u);
@@ -1158,6 +1211,7 @@ function holdSettingWrites(): Array<(sentence: string) => void> {
         held.push((sentence) => reject(new ORPCError(ACT_ERROR.REFUSED, { message: sentence }))),
       ),
   });
+
   return held;
 }
 
@@ -1236,6 +1290,7 @@ test("a review thread is drawn under its line in its file, and one a push outdat
     list: [seatsThread(2, "why-42"), seatsThread(null, "was-3")],
     draw: (thread) => createElement("p", { className: "drawn-thread" }, thread.comments[0]?.body),
   };
+
   const props = await drawTab({ threads });
 
   const [outdated, current] = props.files[0]?.annotations ?? [];
@@ -1253,11 +1308,13 @@ test("a review thread is drawn under its line in its file, and one a push outdat
 test("a refresh that fails after the changes were read keeps the files drawn, says Could not refresh with Retry, and Retry reads again", async () => {
   let failing = false;
   answerChanges = () => (failing ? Promise.reject(new Error("offline")) : readChanges());
+
   /** The alert that says the refresh did not land, none while it did. */
   const refreshNote = () =>
     [...document.querySelectorAll('[role="alert"]')].find((each) =>
       each.textContent?.includes("Could not refresh"),
     );
+
   let threadReads = 0;
   await drawTab({
     threads: {
@@ -1283,9 +1340,11 @@ test("a refresh that fails after the changes were read keeps the files drawn, sa
   );
 
   failing = false;
+
   const retry = [...note.querySelectorAll("button")].find((each) =>
     each.textContent?.includes("Retry"),
   );
+
   const readsBefore = threadReads;
   act(() => retry?.click());
   await vi.waitFor(() => assert.equal(refreshNote() === undefined, true));
@@ -1335,10 +1394,13 @@ function answerImages(refusing: Set<string> = new Set()): string[] {
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_GITHUB_IMAGE]: ({ src }) => {
       asked.push(src);
+
       if (refusing.has(src)) return Promise.reject(refusedOnPort("Unreachable."));
+
       return Promise.resolve({ contentType: "image/png", base64: btoa(src) });
     },
   });
+
   return asked;
 }
 
@@ -1354,6 +1416,7 @@ async function standNearView(path: string): Promise<HTMLElement> {
   await vi.waitFor(() =>
     assert.equal((slot.textContent ?? "").includes("Reading the picture"), false),
   );
+
   return slot;
 }
 
@@ -1395,15 +1458,19 @@ test("a changed image is read at the merge base and the head only once it comes 
   const compare =
     slot.querySelector<HTMLElement>('[role="tablist"][aria-label="Compare images"]') ??
     assert.fail("the comparisons are tabs over the image");
+
   const swipe =
     [...compare.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
       (each) => each.textContent === "Swipe",
     ) ?? assert.fail("Swipe is offered");
+
   act(() => swipe.click());
   assert.equal(swipe.getAttribute("aria-selected"), "true");
+
   const panel =
     document.getElementById(swipe.getAttribute("aria-controls") ?? "") ??
     assert.fail("Swipe controls a panel");
+
   assert.equal(panel.getAttribute("role"), "tabpanel");
   assert.equal(panel.getAttribute("aria-labelledby"), swipe.id, "the panel is named by Swipe");
   assert.ok(panel.querySelector('input[aria-label="Swipe between the two"]'));
@@ -1496,6 +1563,7 @@ test("an image side whose read did not land offers Retry, which reads it again a
   ];
   await drawTab();
   const slot = await standNearView("logo.png");
+
   const retry = [...slot.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => each.textContent === "Retry",
   );
@@ -1537,13 +1605,17 @@ test("the comparison chosen for an image, and how far it is faded, outlast a Ref
   files = [changed("logo.png", { omitted: PATCH_OMITTED.BINARY, patch: null })];
   await drawTab();
   let slot = await standNearView("logo.png");
+
   const onion = [...slot.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
     (each) => each.textContent === "Onion skin",
   );
+
   act(() => onion?.click());
+
   const fade = () =>
     slot.querySelector<HTMLInputElement>('input[aria-label="Fade the after over the before"]') ??
     assert.fail("the fade's slider stands");
+
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setValue?.call(fade(), "80");
@@ -1606,9 +1678,11 @@ function answerMarks(answer: () => PullRequestWriteAnswer): PullRequestActionReq
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
       asked.push(request);
+
       return Promise.resolve(answer());
     },
   });
+
   return asked;
 }
 
@@ -1639,11 +1713,13 @@ test("the member's viewed marks tick their files and fold them; a file changed s
 test("ticking a file's box marks it viewed on GitHub at once and folds it; one GitHub refuses goes back and says why", async () => {
   viewedAnswer = MARKED;
   let refuse = false;
+
   const asked = answerMarks(() =>
     refuse
       ? { outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: "Pull request is locked." }
       : { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE },
   );
+
   files = [changed("a.ts"), changed("b.ts"), changed("c.ts")];
   await drawMarked();
 
@@ -1724,6 +1800,7 @@ function lastMarks(): ReadonlyMap<string, FileMark> {
 test("each tree row is handed its file's lines, how many review threads stand on it, resolved or not, and whether it is viewed", async () => {
   viewedAnswer = MARKED;
   files = [changed("a.ts"), changed("b.ts", { additions: 0, deletions: 7 }), changed("c.ts")];
+
   const threads: ChangesThreads = {
     list: [
       { ...seatsThread(2, "one"), path: "a.ts" },
@@ -1732,12 +1809,14 @@ test("each tree row is handed its file's lines, how many review threads stand on
     ],
     draw: () => null,
   };
+
   await drawMarked({ threads, treeOpen: true });
 
   const marks = lastMarks();
   assert.deepEqual(
     ["a.ts", "b.ts", "c.ts"].map((path) => {
       const mark = marks.get(path);
+
       return [mark?.threads, mark?.lines, mark?.viewed];
     }),
     [
@@ -1806,6 +1885,7 @@ function holdMarks(): Array<{
     readonly request: PullRequestActionRequest;
     readonly answer: (answer: PullRequestWriteAnswer) => void;
   }> = [];
+
   fakeAppBridge({});
   handSettings();
   holdViewedReads();
@@ -1814,9 +1894,11 @@ function holdMarks(): Array<{
     [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
       const answered = Promise.withResolvers<PullRequestWriteAnswer>();
       held.push({ request, answer: answered.resolve });
+
       return answered.promise;
     },
   });
+
   return held;
 }
 
@@ -1948,9 +2030,11 @@ test("a refused mark leaves a fold chosen since, as Collapse all chose it", asyn
 
   act(() => viewedBox("a.ts").click());
   await flush();
+
   const foldAll =
     document.querySelector<HTMLButtonElement>('button[aria-label="Collapse all files"]') ??
     assert.fail("the bar offers Collapse all");
+
   act(() => foldAll.click());
   await flush();
   held[0]?.answer(REFUSED);
@@ -1974,6 +2058,7 @@ test("I turns Minimize inline comments on and off inside Files changed, each lin
         createElement("p", { className: "drawn-thread" }, thread.comments[0]?.body),
       ),
   };
+
   await drawTab({ threads });
   const note = () => lastDrawn().renderAnnotation("src/seats.ts", `${PAGE}#why-42`);
   assert.equal(note().querySelector(".drawn-thread")?.textContent, "why-42");
@@ -1983,9 +2068,11 @@ test("I turns Minimize inline comments on and off inside Files changed, each lin
   await vi.waitFor(() =>
     assert.equal(note().querySelector(".diff-thread-chip-row > summary") === null, false),
   );
+
   const chip =
     note().querySelector<HTMLElement>(".diff-thread-chip-row > summary") ??
     assert.fail("a chip stands");
+
   assert.equal(chip.getAttribute("aria-label"), "1 comment by octo · 1 open, show");
   assert.equal(note().querySelector(".drawn-thread"), null, "minimized, the thread is put away");
   press(document.body, { key: "i" });
@@ -2030,12 +2117,15 @@ test("minimized, the threads on no line take a row of their own for their chip, 
     list: [seatsThread(2, "why-42"), seatsThread(null, "was-3")],
     draw: (thread) => createElement("p", null, thread.comments[0]?.body),
   };
+
   await drawTab({ threads });
   press(listBox(), { key: "i" });
+
   const chipOf = (key: string | undefined) =>
     lastDrawn()
       .renderAnnotation("src/seats.ts", key ?? "")
       .querySelector(".diff-thread-chip-row");
+
   await vi.waitFor(() =>
     assert.equal(
       chipOf(lastDrawn().files[0]?.annotations[0]?.key)?.hasAttribute("data-above"),
@@ -2060,22 +2150,28 @@ const GAPPED_PATCH = [
 test("a review thread on a line between hunks moves onto its line once a gap opened over it draws it, and back above the diff as the gap closes; an outdated one stays above", async () => {
   commits = { headSha: HEAD_SHA };
   files = [changed("src/seats.ts", { patch: GAPPED_PATCH })];
+
   const threads: ChangesThreads = {
     list: [seatsThread(30, "in-gap"), seatsThread(null, "was-3")],
     draw: (thread) => createElement("p", { className: "drawn-thread" }, thread.comments[0]?.body),
   };
+
   await drawTab({ threads });
   const file = () => lastDrawn().files[0] ?? assert.fail("the file is drawn");
+
   const onLines = () =>
     file()
       .annotations.filter((note) => note.line !== 0)
       .map((note) => [note.key, note.side, note.line]);
+
   const aboveWords = () => {
     const above = file().annotations.find((note) => note.line === 0);
+
     return lastDrawn()
       .renderAnnotation("src/seats.ts", above?.key ?? "")
       .querySelector('[aria-label="Comments on lines this diff does not show"]')?.textContent;
   };
+
   assert.deepEqual(file().hidden, [30], "the list is asked to tell of the thread's line");
   assert.deepEqual(onLines(), []);
   assert.equal(aboveWords(), "in-gapwas-3");
@@ -2092,10 +2188,12 @@ test("a review thread on a line between hunks moves onto its line once a gap ope
 
   // Minimized, the thread that moved is its line's chip.
   press(listBox(), { key: "i" });
+
   const gapChip = () =>
     lastDrawn()
       .renderAnnotation("src/seats.ts", `${PAGE}#in-gap`)
       .querySelector(".diff-thread-chip-row > summary");
+
   await vi.waitFor(() =>
     assert.equal(gapChip()?.getAttribute("aria-label"), "1 comment by octo · 1 open, show"),
   );
@@ -2118,13 +2216,16 @@ test("a header's row is named by its file's status and path, its path's copy sta
     }),
   ];
   await drawTab();
+
   const row = (path: string) =>
     header(path).querySelector<HTMLElement>("summary") ?? assert.fail(`${path}'s row stands`);
+
   assert.equal(row("src/seats.ts").getAttribute("aria-label"), "Modified src/seats.ts");
   assert.equal(
     row("src/plan.ts").getAttribute("aria-label"),
     "Renamed src/old/plan.ts to src/plan.ts",
   );
+
   for (const path of ["src/seats.ts", "src/plan.ts"]) {
     assert.equal(row(path).querySelector("button"), null, `no control stands in ${path}'s row`);
   }
@@ -2141,10 +2242,12 @@ test("a header copies the path it names on a press, the path a file moved from a
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
   await drawTab();
+
   const copyButton = (path: string, name: string) =>
     [...header(path).querySelectorAll<HTMLButtonElement>("button")].find((button) =>
       button.getAttribute("aria-label")?.startsWith(name),
     ) ?? assert.fail(`${path} offers ${name}`);
+
   act(() => copyButton("src/seats.ts", "Copy path").click());
   act(() => copyButton("src/plan.ts", "Copy old path").click());
   act(() => copyButton("src/plan.ts", "Copy new path").click());
@@ -2160,8 +2263,10 @@ test("a header copies the path it names on a press, the path a file moved from a
 test("a press anywhere on a header's row folds its file, and \u2325 with a press on the fold folds every file", async () => {
   files = [changed("a.ts"), changed("b.ts"), changed("c.ts")];
   await drawTab();
+
   const row = (path: string) =>
     header(path).querySelector<HTMLElement>("summary") ?? assert.fail("the row stands");
+
   act(() => row("b.ts").dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await flush();
   assert.deepEqual(folds(), [
@@ -2172,6 +2277,7 @@ test("a press anywhere on a header's row folds its file, and \u2325 with a press
 
   const fold =
     header("a.ts").querySelector<HTMLButtonElement>("button") ?? assert.fail("the fold stands");
+
   act(() => fold.dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true })));
   await flush();
   assert.ok(
@@ -2205,7 +2311,9 @@ function answerFileReads(answer: (path: string, ref?: string) => TasksFileAnswer
           (value): FakeActAnswer => ({ status: FAKE_ANSWER.DONE, value }),
         );
       }
+
       if (request.kind === ACT_KIND.TASKS_FILE) asked.push(request);
+
       const outcome: FakeActAnswer = {
         status: FAKE_ANSWER.DONE,
         value:
@@ -2213,10 +2321,12 @@ function answerFileReads(answer: (path: string, ref?: string) => TasksFileAnswer
             ? answer(request.payload.path, request.payload.ref)
             : undefined,
       };
+
       return Promise.resolve(outcome);
     },
   });
   handSettings();
+
   return asked;
 }
 
@@ -2226,9 +2336,11 @@ test("a changed file is read whole at the pull request's head the first time its
     changed("src/seats.ts", { patch: HEAD_PATCH }),
     changed("src/new.ts", { status: CHANGED_FILE_STATUS.ADDED }),
   ];
+
   const asked = answerFileReads((path) => ({
     text: { path, repository: "acme/relay", branch: "a".repeat(40), text: HEAD_TEXT },
   }));
+
   const props = await drawTab();
   const readTexts = props.readTexts ?? assert.fail("the list is handed a way to read files whole");
   assert.equal(asked.length, 0, "nothing is read before a gap is opened");
@@ -2329,10 +2441,13 @@ test("a file whose read is refused closes its gaps and says why, once, above its
       ["src/seats.ts", false],
     ],
   );
+
   const why = (path: string) => {
     const key = drawn.files.find((file) => file.path === path)?.annotations[0]?.key ?? "";
+
     return drawn.renderAnnotation(path, key).textContent;
   };
+
   assert.equal(
     why("src/seats.ts"),
     "Cannot load more of this file: it's too large or not plain text.",
@@ -2415,10 +2530,12 @@ test("a file that only moved, shown whole, draws its review threads on their lin
       text: path === "src/empty.ts" ? "" : HEAD_TEXT,
     },
   }));
+
   const threads: ChangesThreads = {
     list: [{ ...seatsThread(2, "on-2"), path: "src/moved.ts" }],
     draw: (thread) => createElement("p", null, thread.comments[0]?.body),
   };
+
   await drawTab({ threads });
   const drawnAs = (path: string) => lastDrawn().files.find((file) => file.path === path);
   assert.deepEqual(drawnAs("src/moved.ts")?.annotations, [
@@ -2462,6 +2579,7 @@ test("a whole file read for an earlier answer, landing after a refresh, leaves t
           (value): FakeActAnswer => ({ status: FAKE_ANSWER.DONE, value }),
         );
       }
+
       const value =
         request.kind === ACT_KIND.TASKS_FILE
           ? {
@@ -2473,16 +2591,20 @@ test("a whole file read for an earlier answer, landing after a refresh, leaves t
               },
             }
           : undefined;
+
       const outcome: FakeActAnswer = { status: FAKE_ANSWER.DONE, value };
+
       // The first file's read is held until the test lets it land.
       if (request.kind === ACT_KIND.TASKS_FILE && request.payload.path === "src/seats.ts") {
         return new Promise((resolve) => held.push(() => resolve(outcome)));
       }
+
       return Promise.resolve(outcome);
     },
   });
   handSettings();
   await drawTab();
+
   const expand = (path: string) =>
     [...header(path).querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.getAttribute("aria-label") === "Expand full file",
@@ -2514,14 +2636,18 @@ test("a file's header draws the whole file on Expand full file, read once, and b
     }),
     changed("src/new.ts", { status: CHANGED_FILE_STATUS.ADDED }),
   ];
+
   const asked = answerFileReads((path) => ({
     text: { path, repository: "acme/relay", branch: "a".repeat(40), text: HEAD_TEXT },
   }));
+
   await drawTab();
+
   const toggle = (path: string) =>
     [...header(path).querySelectorAll<HTMLButtonElement>("button")].find((button) =>
       ["Expand full file", "Collapse to changes"].includes(button.getAttribute("aria-label") ?? ""),
     );
+
   assert.equal(toggle("src/new.ts"), undefined, "an added file has nothing to expand");
   const drawnAs = (path: string) => lastDrawn().files.find((file) => file.path === path);
   assert.equal(drawnAs("src/moved.ts")?.lead, true, "a file that only moved says so");
@@ -2532,9 +2658,11 @@ test("a file's header draws the whole file on Expand full file, read once, and b
   const lead = lastDrawn().renderAnnotation("src/moved.ts", "lead");
   document.body.append(lead);
   await flush();
+
   const showFile = lead.querySelector<HTMLButtonElement>(
     'button[aria-label="Show file: src/moved.ts"]',
   );
+
   assert.ok(showFile, "what a file that only moved says offers its lines");
   act(() => showFile.click());
   await flush();
@@ -2561,6 +2689,7 @@ test("a file whose diff was too large to send draws it from Load diff, its texts
   const base = "b".repeat(40);
   commits = { headSha: "a".repeat(40), baseSha: base };
   files = [changed("PRIVACY.md", { patch: null, omitted: PATCH_OMITTED.TOO_LARGE })];
+
   const asked = answerFileReads((path, ref) => ({
     text: {
       path,
@@ -2569,6 +2698,7 @@ test("a file whose diff was too large to send draws it from Load diff, its texts
       text: ref === base ? BASE_TEXT : HEAD_TEXT,
     },
   }));
+
   await drawTab();
   const lead = lastDrawn().renderAnnotation("PRIVACY.md", "lead");
   document.body.append(lead);
@@ -2632,9 +2762,11 @@ test("in a narrow panel the tree opens over the list, stays drawn through its ex
 
 test("Escape in the tree floated over the list puts it away and gives the keyboard back to its toggle", async () => {
   await narrowTreeOpened();
+
   const field =
     floatedTree()?.querySelector<HTMLInputElement>('input[aria-label="Search files"]') ??
     assert.fail("the tree's search takes the keyboard as it opens");
+
   assert.equal(document.activeElement, field);
 
   assert.equal(press(field, { key: "Escape" }), true);
@@ -2647,9 +2779,11 @@ test("the pointer leaving the strip for the tree it peeked keeps the tree, and l
   files = [changed("a.ts"), changed("b.ts")];
   const { tree } = heldTree(false);
   await drawTab({ tree });
+
   const strip =
     document.querySelector<HTMLElement>(".file-tree-strip .ui-mark-strip") ??
     assert.fail("a strip");
+
   const leave = (to: Element) =>
     act(() =>
       strip.dispatchEvent(new PointerEvent("pointerout", { bubbles: true, relatedTarget: to })),

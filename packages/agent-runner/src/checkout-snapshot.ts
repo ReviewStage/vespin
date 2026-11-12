@@ -46,7 +46,7 @@ const SNAPSHOT_COMMITTER = {
   EMAIL: "checkout-snapshot@runner.invalid",
 } as const;
 
-export interface CheckoutSnapshotsShape {
+export interface CheckoutSnapshotsService {
   /** The checkout at `cwd` recorded under the line's id, as above; none where it could not be, which is logged. */
   readonly take: (
     cwd: string,
@@ -55,9 +55,10 @@ export interface CheckoutSnapshotsShape {
   ) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
-export class CheckoutSnapshots extends Context.Service<CheckoutSnapshots, CheckoutSnapshotsShape>()(
-  "@repo/agent-runner/CheckoutSnapshots",
-) {}
+export class CheckoutSnapshots extends Context.Service<
+  CheckoutSnapshots,
+  CheckoutSnapshotsService
+>()("@repo/agent-runner/CheckoutSnapshots") {}
 
 /**
  * The snapshot, run in the checkout with the ref's name and how many refs
@@ -105,7 +106,9 @@ const SHA = /^[0-9a-f]{40,64}$/u;
 /** The commit, `HEAD`, and branch the snapshot printed on its three lines; nothing where it printed no commit. */
 function printedSnapshot(stdout: string): CheckoutSnapshot | undefined {
   const [commit, head, branch] = stdout.split("\n");
+
   if (commit === undefined || !SHA.test(commit)) return undefined;
+
   return {
     commit,
     ...(head !== undefined && SHA.test(head) ? { head } : undefined),
@@ -133,6 +136,7 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
   lineId: string,
 ): Effect.fn.Return<CheckoutSnapshot | undefined, never, ChildProcessSpawner.ChildProcessSpawner> {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   const ran = yield* Effect.gen(function* () {
     const handle = yield* spawner.spawn(
       ChildProcess.make(
@@ -161,6 +165,7 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
         },
       ),
     );
+
     const [stdout, stderr, exitCode] = yield* Effect.all(
       [
         handle.stdout.pipe(Stream.decodeText(), Stream.mkString),
@@ -169,6 +174,7 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
       ],
       { concurrency: "unbounded" },
     );
+
     return { stdout, stderr, exitCode: Number(exitCode) };
   }).pipe(
     Effect.scoped,
@@ -176,22 +182,30 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
     Effect.mapError((failure) => String(failure)),
     Effect.result,
   );
+
   if (Result.isFailure(ran)) {
     yield* Effect.logWarning(`agent-runner: the checkout was not snapshotted: ${ran.failure}`);
+
     return undefined;
   }
+
   if (Option.isNone(ran.success)) {
     yield* Effect.logWarning("agent-runner: the checkout was not snapshotted in time");
+
     return undefined;
   }
+
   const { stdout, stderr, exitCode } = ran.success.value;
   const snapshot = exitCode === 0 ? printedSnapshot(stdout) : undefined;
+
   if (snapshot === undefined) {
     yield* Effect.logWarning(
       `agent-runner: the checkout was not snapshotted: the snapshot exited ${exitCode}: ${stderrTail(stderr)}`,
     );
+
     return undefined;
   }
+
   return snapshot;
 });
 

@@ -112,6 +112,7 @@ export function accountSoundsOfLiveRows(
   choices: readonly AccountSoundChoiceLiveRow[],
 ): AccountSounds {
   const of = (slot: SoundClipSlot) => choices.find((row) => row.slot === slot)?.soundId;
+
   return {
     list: orderedLiveRows(ACCOUNT_PREFERENCES_READ.parts.sounds, sounds).map(
       ({ id, name, sha256 }) => ({ id, name, sha256 }),
@@ -154,6 +155,7 @@ export function storedAgentChoice(
 ): ModelChoice | undefined {
   if (row.agentModel === null || row.agentEffort === null) return undefined;
   const standard = row.agentContextWindow === CONTEXT_WINDOW.STANDARD;
+
   return {
     model: row.agentModel,
     effort: row.agentEffort,
@@ -167,6 +169,7 @@ export function accountPreferencesOfLiveRows(
   sounds: AccountSounds,
 ): AccountPreferencesLive {
   const [row] = rows;
+
   return {
     agent: row === undefined ? undefined : storedAgentChoice(row),
     // Note that a stored model no build lists any more reads as Haiku, as a row never written does.
@@ -191,6 +194,8 @@ export function agentDefaultOf(
   models: OfferedModelsRead,
 ): ModelChoice | undefined {
   if (stored !== undefined) return stored;
+
   if (models.rows !== undefined) return agentFallbackChoice(models.rows.models);
+
   return models.failed === true ? AGENT_DEFAULT_CHOICE : undefined;
 }

@@ -156,6 +156,12 @@ const GUTTER_CLASS = {
   [SCROLL_GUTTER.STABLE]: "scrollbar-gutter-stable",
 } as const satisfies Record<ScrollGutter, string>;
 
+type ScrollFadeMarksResult = {
+  className: string;
+  "data-axis": ScrollAxis;
+  "data-fade": ScrollFade;
+};
+
 /**
  * The area's own class and marks for a box that is its own scroller, whose
  * element another owns (`ComboboxList`, cmdk's list, a `ChoiceBar`'s row),
@@ -166,11 +172,7 @@ const GUTTER_CLASS = {
 export function scrollFadeMarks(
   fade: ScrollFade,
   axis: ScrollAxis = SCROLL_AXIS.VERTICAL,
-): {
-  className: string;
-  "data-axis": ScrollAxis;
-  "data-fade": ScrollFade;
-} {
+): ScrollFadeMarksResult {
   return { className: "ui-scroll-area", "data-axis": axis, "data-fade": fade };
 }
 

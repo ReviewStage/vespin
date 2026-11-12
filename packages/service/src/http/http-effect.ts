@@ -1,10 +1,6 @@
 import type { StoreFailure } from "@repo/database/core/query";
 import type { ApprovalStatus } from "@repo/features/agent-approval-wire";
-import type {
-  ExtraRepositoryRefusal,
-  LocalAgentRefusal,
-  RefusedDevice,
-} from "@repo/features/agent-wire";
+import type { LocalAgentRefusal, RefusedDevice } from "@repo/features/agent-wire";
 import type { InstalledSkillRefusal } from "@repo/features/installed-skill-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { RepositoryUnreached } from "@repo/features/repository-reach-wire";
@@ -74,7 +70,6 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.WORKSPACE_SLUG_RESERVED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.HOST_UPGRADE_NEEDED]: HOSTED_HTTP_STATUS.UPGRADE_REQUIRED,
   [HOSTED_API_ERROR.DEVICE_REMOVED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.CHILD_REPOSITORY_LOCKED]: HOSTED_HTTP_STATUS.CONFLICT,
@@ -104,8 +99,6 @@ export type HostedRefusal = {
   readonly skillRefusal?: InstalledSkillRefusal;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
-  readonly extraRepositoryRefusal?: ExtraRepositoryRefusal;
-  readonly refusedRepository?: string;
   readonly minimumVersion?: string;
   readonly heldUntil?: number;
   readonly hostRemoved?: true;
@@ -198,7 +191,6 @@ export const HOSTED_REFUSAL = {
   WORKSPACE_SLUG_TAKEN: { error: HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN },
   /** A Start on This Mac was refused (`localAgentRefused`, which names why); nothing was written. */
   LOCAL_AGENT_REFUSED: { error: HOSTED_API_ERROR.LOCAL_AGENT_REFUSED },
-  EXTRA_REPOSITORY_REFUSED: { error: HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED },
   /** A host's daemon is below the service's floor (`hostUpgradeNeeded`, which names the floor); nothing was read or written. */
   HOST_UPGRADE_NEEDED: { error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED },
   /** The agent ran on a host its starter removed; nothing was sent. */
@@ -245,18 +237,6 @@ export function localAgentRefused(
     ...HOSTED_REFUSAL.LOCAL_AGENT_REFUSED,
     localAgentRefusal,
     ...(refusedDevice === undefined ? undefined : { refusedDevice }),
-  };
-}
-
-/** A Start naming repositories beside its agent's own refused, named so the words can say why, and which repository where one is why. */
-export function extraRepositoryRefused(
-  extraRepositoryRefusal: ExtraRepositoryRefusal,
-  refusedRepository?: string,
-): HostedRefusal {
-  return {
-    ...HOSTED_REFUSAL.EXTRA_REPOSITORY_REFUSED,
-    extraRepositoryRefusal,
-    ...(refusedRepository === undefined ? undefined : { refusedRepository }),
   };
 }
 
@@ -357,6 +337,7 @@ export function playableVideoOf(request: Request): PlayableVideoType {
   const accepted = (request.headers.get("accept") ?? "")
     .split(",")
     .map((range) => range.split(";")[0]?.trim().toLowerCase());
+
   return accepted.includes(PLAYABLE_VIDEO_TYPE.MP4)
     ? PLAYABLE_VIDEO_TYPE.MP4
     : PLAYABLE_VIDEO_TYPE.WEBM;
@@ -404,9 +385,11 @@ export const resolvedUserId = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
 ): Effect.fn.Return<string, HostedRefusal, Scope.Scope> {
   const account = yield* resolvedAccount(seams.resolveUserId, request);
+
   if (Option.isNone(account))
     return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.INVALID_TOKEN);
   yield* Effect.annotateLogsScoped({ userId: account.value });
+
   return account.value;
 });
 
@@ -422,7 +405,9 @@ export const pathUuid = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<string, HostedRefusal> {
   const read = readEither(wireUuidSchema)(unparsedWire(id));
+
   if (Result.isFailure(read)) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
+
   return read.success;
 });
 
@@ -433,9 +418,11 @@ export const uuidOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<string, HostedRefusal> {
   const ids = new URL(request.url).searchParams.getAll(name);
   const [id] = ids;
+
   if (id === undefined || ids.length !== 1) {
     return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return yield* pathUuid(id);
 });
 
@@ -503,6 +490,7 @@ export const effectPassthrough = /* @__PURE__ */ Effect.fn("web/effectPassthroug
   const incoming = yield* HttpServerRequest.HttpServerRequest;
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const answer = yield* Effect.orDie(handle(request));
+
   return incoming.method === HTTP_METHOD.HEAD
     ? bodylessAnswer(answer)
     : HttpServerResponse.raw(answer);
@@ -534,27 +522,33 @@ export const readBodyBytesEffect = /* @__PURE__ */ Effect.fn("web/readBodyBytesE
   const request = yield* HttpServerRequest.HttpServerRequest;
   const chunks: Uint8Array[] = [];
   let counted = 0;
+
   const received = yield* Stream.runForEachWhile(request.stream, (chunk) => {
     chunks.push(chunk);
     counted += chunk.byteLength;
+
     return Effect.succeed(counted <= maximumBytes);
   }).pipe(
     Effect.map(() => counted),
     Effect.mapError((): HostedRefusal => HOSTED_REFUSAL.INVALID_REQUEST),
   );
+
   if (received > maximumBytes) return yield* Effect.fail(HOSTED_REFUSAL.REQUEST_TOO_LARGE);
   const joined = new Uint8Array(received);
   let offset = 0;
+
   for (const chunk of chunks) {
     joined.set(chunk, offset);
     offset += chunk.byteLength;
   }
+
   return joined;
 });
 
 /** A text's JSON, or nothing a reader takes where it is none, as a PTY's stray output or a body that is no JSON is. */
 export function jsonOf(text: string): UnparsedWireValue {
   const parsed = Result.try(() => JSON.parse(text));
+
   return unparsedWire(Result.isSuccess(parsed) ? parsed.success : undefined);
 }
 

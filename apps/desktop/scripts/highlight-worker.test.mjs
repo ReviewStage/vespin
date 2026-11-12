@@ -27,6 +27,7 @@ test("the highlight worker carries no grammar or theme set of its own", async ()
     metafile: true,
     logLevel: "silent",
   });
+
   const inputs = Object.keys(worker.metafile.inputs);
   assert.ok(
     inputs.some((input) => input.includes("@pierre/diffs/dist/worker/")),

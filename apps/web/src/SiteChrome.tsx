@@ -1,7 +1,7 @@
 import { PANEL_PATH } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_VARIANT,
   ButtonLink,
   IconButtonLink,
@@ -19,6 +19,7 @@ import {
 import { captureSiteEvent, SITE_EVENT } from "./analytics";
 
 export const REPOSITORY_URL = "https://github.com/ReviewStage/vespin";
+
 /** The newest release's version-free DMG, named for the product as the Release workflow names it. */
 export const DMG_URL = `${REPOSITORY_URL}/releases/latest/download/${PRODUCT_NAME}.dmg`;
 
@@ -65,6 +66,7 @@ type ChromeProps = { readonly current?: SitePlace };
  */
 function currentOf(page: SitePage, place: SitePlace | undefined): TextLinkCurrent | undefined {
   if (place?.page !== page) return undefined;
+
   return place.beneath === true ? TEXT_LINK_CURRENT.SECTION : TEXT_LINK_CURRENT.PAGE;
 }
 
@@ -159,7 +161,7 @@ export function SiteBarDownload(): React.JSX.Element {
   return (
     <ButtonLink
       variant={BUTTON_VARIANT.PRIMARY}
-      shape={BUTTON_SHAPE.ROUND}
+      corners={BUTTON_CORNERS.ROUND}
       href={DMG_URL}
       label="Download for macOS"
       onClick={() => captureSiteEvent(SITE_EVENT.DOWNLOAD_PRESS)}

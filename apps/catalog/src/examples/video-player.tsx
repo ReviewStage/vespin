@@ -15,6 +15,7 @@ import {
   VIDEO_PLAYER_PLACE,
   VideoPlayer,
 } from "@repo/ui";
+import { Predicate } from "effect";
 import { useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -60,6 +61,7 @@ function recordStandIn(done: (url: string) => void): () => void {
   canvas.width = RECORDING.WIDTH;
   canvas.height = RECORDING.HEIGHT;
   const pen = canvas.getContext("2d");
+
   if (pen === null) return () => undefined;
   const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: "video/webm" });
   const parts: Blob[] = [];
@@ -68,23 +70,30 @@ function recordStandIn(done: (url: string) => void): () => void {
   recorder.onstop = () => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (!gone && typeof reader.result === "string") done(reader.result);
+      if (!gone && Predicate.isString(reader.result)) done(reader.result);
     };
+
     reader.readAsDataURL(new Blob(parts, { type: "video/webm" }));
   };
+
   let at = 0;
   let frame = 0;
+
   const draw = () => {
     drawFrame(pen, at);
     at += 1;
+
     if (at < RECORDING.FRAMES) frame = requestAnimationFrame(draw);
     else recorder.stop();
   };
+
   recorder.start();
   frame = requestAnimationFrame(draw);
+
   return () => {
     gone = true;
     cancelAnimationFrame(frame);
+
     if (recorder.state !== "inactive") recorder.stop();
   };
 }
@@ -99,24 +108,30 @@ export function useStandIn(): StandIn {
   const [standIn, setStandIn] = useState<StandIn>(() =>
     canRecord() ? STAND_IN.RECORDING : STAND_IN.UNSUPPORTED,
   );
+
   useEffect(() => {
     if (!canRecord()) return undefined;
+
     return recordStandIn((url) => setStandIn({ url }));
   }, []);
+
   return standIn;
 }
 
 function VideoPlayers(): React.JSX.Element {
   const standIn = useStandIn();
   const [expanded, setExpanded] = useState(0);
-  if (typeof standIn === "string") {
+
+  if (Predicate.isString(standIn)) {
     return (
       <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
         {STAND_IN_WORDS[standIn]}
       </Text>
     );
   }
+
   const { url } = standIn;
+
   return (
     <>
       <CatalogSection id="video-player-inline" title="In place of a picture">

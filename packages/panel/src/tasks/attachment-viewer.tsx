@@ -194,6 +194,7 @@ function ViewerLink({
   address: string | undefined;
 }): React.JSX.Element | null {
   if (address === undefined) return null;
+
   return (
     <ButtonLink icon={action.icon} href={address} onClick={linkPressOf(action.onOpen, address)}>
       {action.label}
@@ -305,6 +306,7 @@ function viewerGroups(input: {
 }): MenuAction[][] {
   const { file, at, count, walk, text, picture, held, media, zoom, action } = input;
   const place = `${String(at + 1)} of ${String(count)}`;
+
   const walking: MenuAction[] =
     count > 1
       ? [
@@ -322,6 +324,7 @@ function viewerGroups(input: {
           },
         ]
       : [];
+
   const looking: MenuAction[] = [
     ...(text === undefined
       ? []
@@ -356,6 +359,7 @@ function viewerGroups(input: {
         ]
       : []),
   ];
+
   const keeping: MenuAction[] = [
     ...(action === undefined || !media ? [] : actionItems(action, file)),
     ...(held
@@ -368,16 +372,20 @@ function viewerGroups(input: {
         ]
       : []),
   ];
+
   return [walking, looking, keeping].filter((group) => group.length > 0);
 }
 
 /** The place's own action as an item of a phone's ⋯: its press, or the page it opens, none for a file with no page. */
 function actionItems(action: ViewerAction, file: FileChip): MenuAction[] {
   const icon = <>{action.icon}</>;
+
   if (action.address === undefined) {
     return [{ label: action.label, icon, onSelect: () => action.onPress(file) }];
   }
+
   const address = action.address(file);
+
   return address === undefined
     ? []
     : [{ label: action.label, icon, onSelect: () => action.onOpen(address) }];
@@ -405,6 +413,7 @@ function AttachmentBody({
   zoom: ImageZoom;
 }): React.JSX.Element {
   const image = attachmentView(file) === ATTACHMENT_VIEW.IMAGE;
+
   if (image || diagram.picture !== undefined) {
     return (
       // Two fingers anywhere on the frame pinch the picture (`@repo/ui`'s ZoomImage), never the page.
@@ -421,6 +430,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   if (attachmentView(file) === ATTACHMENT_VIEW.VIDEO) {
     return (
       // A video plays on the veil, centered, as large as the card leaves it under its header at its own shape.
@@ -432,6 +442,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   if (text !== undefined) {
     return (
       <div className="attachment-viewer-body min-h-0 flex-auto attachment-viewer-lines mx-auto flex w-viewer-text flex-col bg-card-code">
@@ -459,6 +470,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   if (attachmentView(file) === ATTACHMENT_VIEW.PDF) {
     return (
       <div className="attachment-viewer-body min-h-0 flex-auto flex flex-col">
@@ -466,6 +478,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   return <FileCard file={file} base64={base64} refusal={undefined} />;
 }
 
@@ -508,11 +521,15 @@ function FileCard({
 function PdfBody({ file, base64 }: { file: FileChip; base64: string }): React.JSX.Element {
   const bundle = useQuery(useSideBundles().pdf);
   const refused = <FileCard file={file} base64={base64} refusal={PDF_REFUSED_LINE} />;
+
   if (bundle.isError) return refused;
+
   if (bundle.data === undefined) return <PdfPagesSkeleton label={file.name} />;
   const { PdfPages, worker } = bundle.data;
   const started = worker();
+
   if (started === undefined) return refused;
+
   return <PdfPages base64={base64} label={file.name} worker={started} refused={refused} />;
 }
 
@@ -550,16 +567,20 @@ export function AttachmentViewer({
   const file = files[at];
   const base64 = file === undefined ? "" : chipBase64(file);
   const view = file === undefined ? ATTACHMENT_VIEW.OTHER : attachmentView(file);
+
   const text =
     view === ATTACHMENT_VIEW.TEXT || view === ATTACHMENT_VIEW.DIAGRAM
       ? attachmentText(base64)
       : undefined;
+
   const drawn = useDrawing(view === ATTACHMENT_VIEW.DIAGRAM ? text : undefined, useAppearance());
+
   const diagram: DiagramShown = {
     picture: drawn.drawing?.kind === DIAGRAM_DRAWING.DRAWN ? drawn.drawing.url : undefined,
     refused: drawn.drawing?.kind === DIAGRAM_DRAWING.REFUSED,
     retry: drawn.retry,
   };
+
   // The picture shown, which is zoomed and copied: the file's own, or its diagram's once drawn.
   const picture = view === ATTACHMENT_VIEW.IMAGE ? file?.url : diagram.picture;
   const zoom = useImageZoom(file?.name ?? "", picture ?? file?.url ?? "", opening);
@@ -591,14 +612,18 @@ export function AttachmentViewer({
   // Note that a picture's card fills the room, because a picture is zoomed inside it,
   // and a card of its fitted shape would either show a zoomed tall picture through a slit or resize its header on every zoom.
   const hug = !phone && video;
+
   // The arrows walk the message's files, and a picture's zoom keys zoom it;
   // a key's own default, a copy of the lines selected among them, is left alone.
   const walkKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (image && zoom.keyDown(event)) {
       event.preventDefault();
+
       return;
     }
+
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
     // Note that an arrow on a video or a field, such as a video's scrubber, moves it rather than walking away from it.
     if (event.target instanceof HTMLVideoElement || event.target instanceof HTMLInputElement)
       return;
@@ -787,6 +812,7 @@ export function AttachmentViewer({
               items={files.map((each) => {
                 const view = attachmentView(each);
                 const drawn = view === ATTACHMENT_VIEW.IMAGE || view === ATTACHMENT_VIEW.VIDEO;
+
                 return {
                   name: each.name,
                   image: view === ATTACHMENT_VIEW.IMAGE ? each.url : undefined,

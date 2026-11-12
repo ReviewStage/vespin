@@ -150,6 +150,7 @@ const reachedAndAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { agent } = yield* reachedAgentById(userId, id);
   const number = yield* numberNamed(named);
   const { pullRequest } = yield* askedOfAgent(published, userId, agent, number);
+
   return { agent, pullRequest };
 });
 
@@ -177,10 +178,13 @@ export const overviewPart = <A, R>(
 ) =>
   Effect.gen(function* () {
     if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
+
     const part = yield* Effect.gen(function* () {
       const { token } = yield* agentPullRequestReach(userId, agent);
+
       return yield* read(token, agent, pullRequest, userId);
     }).pipe(githubReadRefusal);
+
     // Note that a part may carry what is the reader's own, such as the reactions they gave or the review they hold pending, which every hosted answer's `private, no-store` keeps from anyone else.
     return { pullRequest: part };
   });
@@ -229,6 +233,7 @@ export const overviewPullRequestRead = (
 ) =>
   Effect.gen(function* () {
     const { repository } = subject;
+
     const [read, merging, rights] = yield* Effect.all(
       [
         pullRequestOverview(token, repository, pullRequest.number, stackable(pullRequest)),
@@ -237,8 +242,10 @@ export const overviewPullRequestRead = (
       ],
       { concurrency: "unbounded" },
     );
+
     if (Option.isNone(read)) return null;
     const named = { ...(yield* namedOverviewPullRequest(subject, read.value)), ...rights };
+
     return Option.isNone(merging) ? named : { ...named, merging: merging.value };
   });
 
@@ -372,8 +379,10 @@ function writeOf(
       });
     case PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT: {
       const { action: _action, ...comment } = request;
+
       return addLineComment(token, id, comment);
     }
+
     case PULL_REQUEST_ACTION.DISCARD_REVIEW:
       return discardPendingReview(token, id);
     case PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT:
@@ -458,6 +467,7 @@ export const agentPullRequestAction = /* @__PURE__ */ Effect.fnUntraced(function
   request: PullRequestActionRequest,
 ) {
   const { pullRequest } = yield* askedOfAgent(published, userId, agent, number);
+
   return yield* actionOnAgentPullRequest(published, userId, agent, pullRequest, request);
 });
 
@@ -476,6 +486,7 @@ export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(functi
   if (pullRequest === null || !hasRepository(agent)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const written = yield* memberPullRequestWrite(
     userId,
     agent,
@@ -484,8 +495,10 @@ export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(functi
   ).pipe(
     Effect.ensuring(Effect.flatMap(published, (kept) => forgetPublished(kept, userId, agent.id))),
   );
+
   // Counted only where GitHub made the change, and under the member: an agent's own pull request work never comes through here.
   const counted = countedAction(request);
+
   if (counted !== undefined && written.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE) {
     yield* recordServerEvent(
       SERVER_EVENT.PULL_REQUEST_ACTION,
@@ -493,6 +506,7 @@ export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(functi
       { action: counted },
     );
   }
+
   return writeAnswerOf(written);
 });
 
@@ -538,17 +552,20 @@ export const viewedOfAgent = (
 export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams) {
   const published = seams.published ?? instancePublishedCache();
   const signedIn = hosted.agentPullRequests.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** What the agent published, from the instance's kept answers; or, where the request names a number, that pull request of its repository. */
     pullRequest: signedIn.pullRequest.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.id);
       const number = yield* numberNamed(input.number);
+
       return yield* askedPublished(yield* published, context.userId, agent, number);
     }),
     /** One change to the pull request asked about, as the asking member (`agentPullRequestAction`). */
     action: signedIn.action.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.params.id);
       const number = yield* numberNamed(input.query?.number);
+
       return yield* agentPullRequestAction(published, context.userId, agent, number, input.body);
     }),
     /** Which of the pull request's files the asking member marked viewed (`viewedOfAgent`). Nothing is let go, as nothing changed. */
@@ -559,6 +576,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
         input.id,
         input.number,
       );
+
       return yield* viewedOfAgent(context.userId, agent, pullRequest);
     }),
     overviewPullRequest: signedIn.overviewPullRequest.effect(function* ({ input, context }) {
@@ -568,6 +586,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
         input.id,
         input.number,
       );
+
       return yield* overviewPart(agent, pullRequest, context.userId, overviewPullRequestRead);
     }),
     overviewChecks: signedIn.overviewChecks.effect(function* ({ input, context }) {
@@ -577,6 +596,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
         input.id,
         input.number,
       );
+
       return yield* overviewPart(agent, pullRequest, context.userId, overviewChecksRead);
     }),
     overviewConversation: signedIn.overviewConversation.effect(function* ({ input, context }) {
@@ -586,6 +606,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
         input.id,
         input.number,
       );
+
       return yield* overviewPart(agent, pullRequest, context.userId, overviewConversationRead);
     }),
   };

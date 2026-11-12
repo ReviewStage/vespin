@@ -60,6 +60,7 @@ const FAILURE_WORDS = {
 /** One chapter as a person reads it: its place and title, its risk, its summary, and its key changes. */
 function chapterLines(chapter: Chapter, index: number): string[] {
   const risk = chapter.risk === null ? "" : `  [${chapter.risk} risk]`;
+
   return [
     `${index + 1}. ${chapter.title}${risk}`,
     ...chapter.summary.split("\n").map((line) => `   ${line}`),
@@ -72,11 +73,14 @@ function chapterLines(chapter: Chapter, index: number): string[] {
 /** The answer as a person reads it: where the chapters stand, then each chapter where they are ready. */
 function answerLines(found: PullRequestChaptersAnswer): string[] {
   const { pullRequest } = found;
+
   if (pullRequest === null) return ["The agent opened no pull request yet."];
   const { chapters, number } = pullRequest;
+
   const unkeyed = pullRequest.generatable
     ? []
     : [`Save an API key in ${PRODUCT_NAME}'s settings to generate chapters.`];
+
   switch (chapters.status) {
     case PULL_REQUEST_CHAPTERS_STATE.NONE:
       return [
@@ -106,6 +110,7 @@ function chaptersOf(argument: string, number: Option.Option<number>, generate: b
   return Effect.gen(function* () {
     const { hosted } = yield* session;
     const ref = cliPullRequestRefOf(argument);
+
     if (ref !== undefined) {
       if (Option.isSome(number)) {
         return yield* new CommandFailed({
@@ -113,12 +118,15 @@ function chaptersOf(argument: string, number: Option.Option<number>, generate: b
           message: "--number goes with an agent's id alone; a pull request's link names its own.",
         });
       }
+
       const { workspace } = yield* resolveWorkspace;
+
       const query = {
         workspaceId: workspace.id,
         repository: ref.repository,
         number: String(ref.number),
       };
+
       return generate
         ? yield* askService(
             hosted.pullRequestChapters.repositoryGenerate,
@@ -133,9 +141,12 @@ function chaptersOf(argument: string, number: Option.Option<number>, generate: b
             CHAPTERS_REFUSAL_WORDS,
           );
     }
+
     const id = argument;
+
     if (generate) {
       const query = Option.isSome(number) ? { number: String(number.value) } : {};
+
       return yield* askService(
         hosted.pullRequestChapters.generate,
         { params: { id }, query },
@@ -143,6 +154,7 @@ function chaptersOf(argument: string, number: Option.Option<number>, generate: b
         GENERATE_REFUSAL_WORDS,
       );
     }
+
     // The tab reads its chapters at the number its own read of the pull request found.
     const found = Option.isSome(number)
       ? number.value
@@ -152,7 +164,9 @@ function chaptersOf(argument: string, number: Option.Option<number>, generate: b
           HOSTED_DEADLINE.USUAL,
           CHAPTERS_REFUSAL_WORDS,
         )).pullRequest?.number;
+
     if (found === undefined) return { pullRequest: null };
+
     return yield* askService(
       hosted.pullRequestChapters.read,
       { id, number: String(found) },

@@ -39,6 +39,7 @@ type AuthPageProps = {
  */
 export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
   const colors = useColors();
+
   return (
     <VStack
       spacing={SPACE.PAGE}

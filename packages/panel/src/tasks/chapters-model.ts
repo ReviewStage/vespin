@@ -61,8 +61,11 @@ export const CHAPTERS_SHOWN = {
 } as const;
 
 type Failure = Extract<PullRequestChaptersAnswerView, { failure: unknown }>["failure"];
+
 type Answered = Extract<PullRequestChaptersAnswerView, { pullRequest: unknown }>;
+
 type Answer = NonNullable<Answered["pullRequest"]>;
+
 type FailureKind = Extract<Answer["chapters"], { failureKind: unknown }>["failureKind"];
 
 /** What the view draws, with what each state draws from. */
@@ -99,14 +102,14 @@ export type ChaptersShown =
     };
 
 /** Every chapters model's label, Claude's and OpenAI's alike, by its provider's id. */
-const MODEL_LABELS: Readonly<Record<string, string>> = {
-  ...CHAPTERS_MODEL_LABEL,
-  ...OPENAI_CHAPTERS_MODEL_LABEL,
-};
+const MODEL_LABELS: ReadonlyMap<string, string> = new Map([
+  ...Object.entries(CHAPTERS_MODEL_LABEL),
+  ...Object.entries(OPENAI_CHAPTERS_MODEL_LABEL),
+]);
 
 /** A chapters model as the view names it, one that told them or one a Generate would run on: its label where Generate offers it, else the id as stored. */
 export function chaptersModelLabel(model: string): string {
-  return Object.hasOwn(MODEL_LABELS, model) ? (MODEL_LABELS[model] ?? model) : model;
+  return MODEL_LABELS.get(model) ?? model;
 }
 
 /**
@@ -137,6 +140,7 @@ export interface ChaptersHeads {
 function chaptersStale(chapters: Answer["chapters"], heads: ChaptersHeads): boolean {
   if (chapters.status === PULL_REQUEST_CHAPTERS_STATE.NONE) return false;
   const { pullRequest, files } = heads;
+
   return (
     files !== chapters.headSha || (pullRequest !== undefined && pullRequest !== chapters.headSha)
   );
@@ -165,11 +169,15 @@ export function chaptersShown(
   if (generating !== undefined) {
     return { kind: CHAPTERS_SHOWN.GENERATING, startedAt: generating, ours: true };
   }
+
   if (answer === undefined) return { kind: CHAPTERS_SHOWN.READING };
+
   if ("failure" in answer) return { kind: CHAPTERS_SHOWN.FAILED, failure: answer.failure };
   const { pullRequest } = answer;
+
   if (pullRequest === null) return { kind: CHAPTERS_SHOWN.NO_PULL_REQUEST };
   const { chapters, generatable } = pullRequest;
+
   switch (chapters.status) {
     case PULL_REQUEST_CHAPTERS_STATE.NONE:
       return {
@@ -259,15 +267,22 @@ export function firstLineRef(
 ): LineRef | undefined {
   const rank = (ref: LineRef) => {
     const at = paths.indexOf(ref.path);
+
     return at === -1 ? paths.length : at;
   };
+
   const sorted = [...refs].sort((a, b) => {
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
+
     if (a.path !== b.path) return 0;
+
     if (a.startLine !== b.startLine) return a.startLine - b.startLine;
+
     if (a.side !== b.side) return SIDE_RANK[a.side] - SIDE_RANK[b.side];
+
     return a.endLine - b.endLine;
   });
+
   return sorted[0];
 }
 
@@ -285,14 +300,19 @@ export function drawnLines(
   ref: LineRef,
 ): DiffLineSpan | undefined {
   if (file === undefined || file.path !== ref.path) return undefined;
+
   if (file.omitted !== null || file.patch === null) return undefined;
   const additions = ref.side === LINE_REF_SIDE.ADDITIONS;
+
   for (const hunk of patchHunks(file.patch) ?? []) {
     const first = additions ? hunk.newStart : hunk.oldStart;
     const last = first + (additions ? hunk.newLines : hunk.oldLines) - 1;
+
     if (ref.startLine < first || ref.startLine > last) continue;
+
     return { side: ref.side, startLine: ref.startLine, endLine: Math.min(ref.endLine, last) };
   }
+
   return undefined;
 }
 

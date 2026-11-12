@@ -47,6 +47,7 @@ export function catalogIdOf(model: string): string {
  */
 export function providerOf(modelId: string): ModelProvider | undefined {
   const prefix = modelId.slice(0, Math.max(0, modelId.indexOf(CATALOG_ID_SEPARATOR)));
+
   return Object.values(MODEL_PROVIDER).find((provider) => provider === prefix);
 }
 
@@ -64,9 +65,11 @@ function withoutMaker(name: string): string {
  */
 export function modelLabel(modelId: string, models?: readonly CatalogModel[]): string {
   const listed = models?.find((model) => model.id === modelId);
+
   if (listed !== undefined) return withoutMaker(listed.name);
   const separator = modelId.indexOf(CATALOG_ID_SEPARATOR);
   const name = separator === -1 ? modelId : modelId.slice(separator + 1);
+
   return withoutMaker(
     name
       .split(MODEL_NAME_SEPARATOR)
@@ -127,7 +130,9 @@ export interface AutomationRun {
  */
 export function automationRun(agent: AutomationStarted): AutomationRun | undefined {
   const name = agent.automationName ?? agent.automationOrigin?.name;
+
   if (name !== undefined) return { name };
+
   // The id covers agents from before the origin column, which name no run.
   return (agent.automationId ?? null) === null ? undefined : {};
 }

@@ -116,9 +116,12 @@ export class AppStateStore {
   #write(write: () => void): void {
     if (this.#queued !== undefined) {
       this.#queued.push(write);
+
       return;
     }
+
     this.#queued = [write];
+
     try {
       for (let next = this.#queued.shift(); next !== undefined; next = this.#queued.shift()) next();
     } finally {
@@ -128,18 +131,23 @@ export class AppStateStore {
 
   #apply(patch: AppStatePatch): void {
     const previous = this.snapshot();
+
     // Note that a slice kept whole is one that says nothing new, which is the
     // one walk that both decides that and shares what did not move.
     const moved = patchEntries(patch).flatMap(([slice, value]) => {
       const kept = keepIdentity(previous[slice], value);
+
       return kept === previous[slice] ? [] : [[slice, kept] as const];
     });
+
     if (moved.length === 0) return;
+
     const next: AppState = {
       ...previous,
       ...Object.fromEntries(moved),
       version: previous.version + 1,
     };
+
     Effect.runSyncWith(this.#services)(SubscriptionRef.set(this.#ref, next));
   }
 }
@@ -214,6 +222,7 @@ export function initialAppState(
   capabilities: readonly HostCapability[],
 ): Omit<AppState, "version"> {
   const { launch, runMode } = config;
+
   return {
     run: {
       profile: launch.profile,

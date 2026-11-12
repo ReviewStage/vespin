@@ -12,6 +12,7 @@ it.effect(
   "a stop that dies is reported to Sentry and on the line, and the services after it still stop",
   () => {
     const sentry = recordingReporter();
+
     return Effect.gen(function* () {
       const reported: string[] = [];
       const stopped: string[] = [];
@@ -25,6 +26,7 @@ it.effect(
               start: () => Promise.resolve(),
               stop: () => {
                 stopped.push("keychain");
+
                 return Promise.resolve();
               },
             },

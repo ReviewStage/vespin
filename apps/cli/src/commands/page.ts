@@ -24,6 +24,7 @@ const pagesOf = Effect.fnUntraced(function* (task: string) {
   const { hosted } = yield* session;
   const id = yield* resolveTaskId(task);
   const { pages } = yield* askService(hosted.taskFiles.pages, { id });
+
   return pages;
 });
 
@@ -32,12 +33,14 @@ const versionOf = Effect.fnUntraced(function* (task: string, page: string, versi
   const { hosted } = yield* session;
   const id = yield* resolveTaskId(task);
   const read = yield* askService(hosted.taskFiles.page, { id, page, version: String(version) });
+
   return read.page;
 });
 
 /** Who showed a page's version, as a line names them. */
 function shownByOf(line: PageLine): string {
   if (line.shownBy === undefined) return "";
+
   return line.shownBy.kind === PAGE_SHOWER.AGENT ? `agent ${line.shownBy.agentId}` : PRODUCT_NAME;
 }
 
@@ -84,14 +87,17 @@ const showCommand = Command.make(
     Effect.gen(function* () {
       const pages = yield* pagesOf(task);
       const line = pages.find((each) => each.id === page);
+
       if (line === undefined) {
         return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: `No page ${page}.` });
       }
+
       const read: PageVersion = yield* versionOf(
         task,
         page,
         Option.getOrElse(version, () => line.version),
       );
+
       yield* answer({
         json: { page: read, newestVersion: line.version },
         lines: [read.html.replace(/\n+$/u, "")],

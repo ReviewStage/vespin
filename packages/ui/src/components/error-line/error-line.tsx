@@ -51,17 +51,21 @@ export function ErrorLine({
   useEffect(() => {
     const now = words.current?.textContent ?? "";
     const first = said.current === undefined;
+
     if (now === said.current) return;
     said.current = now;
     taken.current();
+
     if (!first) taken.current = announce(level, now);
   });
   useEffect(() => () => taken.current(), []);
   // Note that the last words are held drawn through their fade, as anything leaving is.
   const shown = useDisclosure(error !== undefined);
   const last = useRef(error);
+
   if (error !== undefined) last.current = error;
   const drawn = shown.mounted ? (error ?? last.current) : undefined;
+
   return (
     <FieldError
       id={id}

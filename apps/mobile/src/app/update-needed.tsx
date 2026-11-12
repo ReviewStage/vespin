@@ -22,8 +22,8 @@ const UPDATE_WORDS = {
 
 /** Opens TestFlight, saying on the console where it could not, as a device without it answers. */
 function openTestFlight(): void {
-  openURL(TESTFLIGHT_ADDRESS).catch((error: unknown) =>
-    console.error("TestFlight did not open.", error),
+  openURL(TESTFLIGHT_ADDRESS).catch((cause: unknown) =>
+    console.error("TestFlight did not open.", cause),
   );
 }
 

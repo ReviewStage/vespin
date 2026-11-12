@@ -152,21 +152,26 @@ function effortOf(effort: string): CodexEffort | undefined {
   return Object.values(CODEX_EFFORT).find((level) => level === effort);
 }
 
+type SpeedKeys = { readonly fast: boolean; readonly ultrafast?: true };
+
 /**
  * The service tiers the agent's model runs on, as the runner takes them: a
  * fast version on `fast`, and an Ultrafast one on `ultrafast` with `fast`
  * beside it, so a runner from before Ultrafast runs the fast tier rather
  * than the standard one. The runner asks for neither on the plan.
  */
-function speedKeysOf(agent: Agent): { readonly fast: boolean; readonly ultrafast?: true } {
+function speedKeysOf(agent: Agent): SpeedKeys {
   const speed = providerModelOf(agent.model)?.speed;
+
   if (speed === MODEL_SPEED.ULTRAFAST) return { fast: true, ultrafast: true };
+
   return { fast: speed === MODEL_SPEED.FAST };
 }
 
 /** The model Codex is asked for: the agent's own, where it is one of OpenAI's. */
 function codexModelOf(agent: Agent): string | undefined {
   const model = providerModelOf(agent.model);
+
   return model?.provider === MODEL_PROVIDER.OPENAI ? model.modelId : undefined;
 }
 
@@ -189,18 +194,21 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     const environment = yield* HostedEnvironment;
     const ring = environment.providerKeyEncryptionKeys;
     const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
     if (parsed === undefined || Result.isFailure(parsed)) {
       return yield* new LaunchRefused({
         reason: "no key ring",
         planRefusal: PLAN_REFUSAL.UNREADABLE,
       });
     }
+
     const access = yield* refreshChatGptAccess(
       userId,
       parsed.success,
       CODEX_TOKEN_MARGIN,
       subscriptionId,
     );
+
     if (access.outcome !== CHATGPT_ACCESS.READY) {
       return yield* new LaunchRefused({
         reason: `ChatGPT sign-in ${access.outcome}`,
@@ -210,6 +218,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
           : undefined),
       });
     }
+
     return access.plan;
   });
 
@@ -232,16 +241,20 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     Effect.gen(function* () {
       const environment = yield* HostedEnvironment;
       const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.OPENAI, environment, keyId);
+
       if (key === undefined) {
         return yield* new LaunchRefused({ reason: "no API key", keyRefusal: KEY_REFUSAL.MISSING });
       }
+
       if (key === PROVIDER_KEY_UNREADABLE) {
         return yield* new LaunchRefused({
           reason: "API key unreadable",
           keyRefusal: KEY_REFUSAL.UNREADABLE,
         });
       }
+
       const launch: HarnessLaunch = { env: homeOf(layout), credentials: [apiKeyCredential(key)] };
+
       return launch;
     });
 
@@ -262,10 +275,13 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
   const launch = (agent: Agent, layout: MachineLayout) =>
     Effect.gen(function* () {
       const turn = yield* launchPayerOf(userId, agent, MODEL_PROVIDER.OPENAI);
+
       if (turn.payer === AGENT_PAYER.MAC_SIGN_IN) {
         const onMachineLogin: HarnessLaunch = { env: homeOf(layout) };
+
         return onMachineLogin;
       }
+
       return yield* turn.payer === AGENT_PAYER.API_KEY
         ? apiKeyEnv(turn.subscriptionId, layout)
         : planEnv(turn.subscriptionId, layout);
@@ -280,18 +296,24 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
   ) =>
     Effect.gen(function* () {
       const model = codexModelOf(agent);
+
       if (model === undefined) return yield* new LaunchRefused({ reason: "model" });
+
       // Note that a Mac runs only the Codex it checked against the pin, and one that checked none runs no Codex agent.
       if (layout.codexExecutable === undefined) {
         return yield* new LaunchRefused({ reason: "no codex" });
       }
+
       // Note that a device whose runner reads no mode would run one that asks with full access, so it is refused rather than run unasked.
       const mode = launchPermissionMode(agent);
+
       if (mode !== undefined && !layout.permissionModes) {
         return yield* new LaunchRefused({ reason: "permission mode", modesUnsupported: true });
       }
+
       const effort = effortOf(agent.effort);
       const speed = speedKeysOf(agent);
+
       const written: CodexConfig = {
         harness: RUNNER_HARNESS.CODEX,
         cwd: layout.checkoutPath,
@@ -313,6 +335,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
           : { installedSkills: layout.installedSkills }),
         ...mode,
       };
+
       return written;
     });
 
@@ -320,16 +343,19 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
   const ahead = (agent: Agent) => {
     const model = codexModelOf(agent);
     const effort = effortOf(agent.effort);
+
     const choice: InputLine = {
       type: INPUT_LINE.MODEL,
       ...(model === undefined ? undefined : { model, ...speedKeysOf(agent) }),
       ...(effort === undefined ? undefined : { effort }),
     };
+
     // Note that an agent on its API key or its machine's own login has no plan to ask, and its runner holds what it launched with;
     // a plan that refuses stands aside where another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer chooses it.
     const asked = Effect.gen(function* () {
       if (agent.machine === AGENT_MACHINE.DEVICE) return;
       const recorded = yield* recordedPayer(agent);
+
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
       yield* standingPlan(recorded.subscriptionId).pipe(
         Effect.catchTag("LaunchRefused", (refused) =>
@@ -340,6 +366,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         ),
       );
     });
+
     return Effect.as(asked, { lines: [choice] });
   };
 

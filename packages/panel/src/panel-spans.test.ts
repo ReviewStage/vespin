@@ -90,13 +90,16 @@ function recorded(): { name: string; startedAt: number; waited: number; measured
 async function sidebarOver(tasks: TasksControl): Promise<(next: TasksControl) => Promise<void>> {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = async (next: TasksControl) => {
     act(() =>
       root.render(withQueryClient(drawnSidebar({ ...sidebarProps(next), room: SHELL_ROOM.WIDE }))),
     );
     await settle();
   };
+
   await draw(tasks);
+
   return draw;
 }
 
@@ -250,12 +253,14 @@ function InboxTimed({
   useEffect(() => {
     if (pressed !== undefined) timeOpen(pressed);
   }, [pressed, timeOpen]);
+
   return null;
 }
 
 test("the Inbox is timed from its opening to its first rows drawn, and a row chosen to its thread drawn, the one already shown never", () => {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
+
   const draw = (props: Parameters<typeof InboxTimed>[0]) =>
     act(() => root.render(createElement(InboxTimed, props)));
 

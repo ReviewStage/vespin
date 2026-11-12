@@ -163,17 +163,21 @@ function openLocal(localPort: number): void {
   appPlatform().openWeb(`http://${localAddress(localPort)}`);
 }
 
-/** How forwarding stands for the agent: whether it runs in the cloud, and whether this Mac forwards it. */
-function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): {
+type UseForwardingResult = {
   cloud: boolean;
   offered: boolean;
   answer: PortForwardingAnswer;
-} {
+};
+
+/** How forwarding stands for the agent: whether it runs in the cloud, and whether this Mac forwards it. */
+function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): UseForwardingResult {
   const capable =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.PORT_FORWARDS) }).data ===
     true;
+
   const forwarding = useQuery({ ...appStateQuery, select: selectPortForwarding }).data;
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+
   return {
     cloud,
     offered: capable && cloud,
@@ -192,6 +196,7 @@ export function useForwardToast(agent: Pick<AgentSummary, "id" | "machine">): vo
   useEffect(() => {
     const had = hadPorts.current;
     hadPorts.current = first !== undefined;
+
     if (had || first === undefined) return;
     const more = ports.length - 1;
     toast({
@@ -210,6 +215,7 @@ function forwardedPorts(agentId: string, answer: PortForwardingAnswer): PlugPort
   return {
     ports: answer.ports.map(({ port, localPort, state, label }) => {
       const busy = localPort === undefined || state === PORT_FORWARD_STATE.UNAVAILABLE;
+
       return { port, localPort: busy ? undefined : localPort, label, busy };
     }),
     shared: answer.shared,
@@ -256,19 +262,25 @@ async function shareAsked(
   port: number | null,
 ): Promise<void> {
   const { queryKey } = agentSharedPortQuery(agentId, false, false);
+
   if (port === null) {
     const answer = await askAct(ACT_KIND.AGENTS_PORT_UNSHARE, { agentId }).catch(
-      (error: unknown) => ({ error }),
+      (cause: unknown) => ({ error: cause }),
     );
+
     if ("shared" in answer) queryClient.setQueryData(queryKey, answer);
     else shareFailed(ACT_KIND.AGENTS_PORT_UNSHARE, agentId, answer, WORDS.NOT_UNSHARED);
+
     return;
   }
+
   const answer = await askAct(ACT_KIND.AGENTS_PORT_SHARE, { agentId, port }).catch(
-    (error: unknown) => ({ error }),
+    (cause: unknown) => ({ error: cause }),
   );
+
   const linked: AgentSharedPortAnswerView | undefined =
     "url" in answer ? { shared: { port, url: answer.url } } : undefined;
+
   if (linked !== undefined) queryClient.setQueryData(queryKey, linked);
   else shareFailed(ACT_KIND.AGENTS_PORT_SHARE, agentId, answer, WORDS.NOT_SHARED);
 }
@@ -280,6 +292,7 @@ function useHostedPorts(agentId: string, asked: boolean, open: boolean): PlugPor
   const linked = useQuery(agentSharedPortQuery(agentId, asked, asked && open)).data;
   const read = listed === undefined || "failure" in listed ? undefined : listed;
   const labels = new Map((read?.labels ?? []).map(({ port, label }) => [port, label]));
+
   return {
     ports: (read?.ports ?? []).map((port) => ({
       port,
@@ -331,13 +344,12 @@ function sharedItems(
 /** A port's row that offers nothing: dimmed, saying why where it is busy on this Mac, and what serves it otherwise. */
 function dimmedRow(port: number, busy: boolean, label: string | undefined): MenuEntry {
   const detail = busy ? WORDS.BUSY : label;
+
   return {
     key: port,
     label: `:${port}`,
     icon: <GlobeIcon aria-hidden="true" />,
-    ...(detail === undefined
-      ? {}
-      : { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
+    ...(detail !== undefined && { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
     disabled: true,
     onSelect: () => {},
   };
@@ -352,8 +364,10 @@ function dimmedRow(port: number, busy: boolean, label: string | undefined): Menu
  */
 function portRows(view: PlugPorts, copy: (words: string, label: string) => void): MenuEntry[] {
   const { shared } = view;
+
   const rows = view.ports.map(({ port, localPort, label, busy }): MenuEntry => {
     const isShared = shared?.port === port;
+
     const open: MenuAction[] =
       localPort === undefined
         ? []
@@ -362,13 +376,15 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
               label: WORDS.OPEN,
               icon: <GlobeIcon aria-hidden="true" />,
               // Note that the submenu's row names the Mac's port, so where it differs Open says the sandbox's.
-              ...(localPort === port
-                ? {}
-                : { detail: `from :${port}`, detailPlace: MENU_DETAIL.BESIDE }),
+              ...(localPort !== port && {
+                detail: `from :${port}`,
+                detailPlace: MENU_DETAIL.BESIDE,
+              }),
               stays: true,
               onSelect: () => openLocal(localPort),
             },
           ];
+
     const items: MenuAction[] =
       shared !== undefined && isShared
         ? [...open, ...sharedItems(view, shared.url, copy)]
@@ -384,7 +400,9 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
                 onSelect: () => view.share(port),
               },
             ];
+
     if (items.length === 0 || (busy && !isShared)) return dimmedRow(port, busy, label);
+
     return {
       label: localPort === undefined ? `:${port}` : localAddress(localPort),
       detail: label,
@@ -393,6 +411,7 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
       items,
     };
   });
+
   // Note that a shared port the sandbox no longer lists keeps a row, so its link can still be stopped.
   if (shared !== undefined && !view.ports.some(({ port }) => port === shared.port))
     rows.push({
@@ -400,7 +419,9 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
       icon: <LinkIcon aria-hidden="true" />,
       items: sharedItems(view, shared.url, copy),
     });
+
   if (rows.length === 0) return [{ label: view.none, disabled: true, onSelect: () => {} }];
+
   return rows;
 }
 
@@ -421,12 +442,14 @@ export function ForwardChip({
   // Note that while this Mac forwards none of the agent's ports the service lists them, so one can be shared without forwarding, and none offers Open.
   const forwarded = offered && answer.on;
   const hosted = useHostedPorts(agent.id, cloud && !forwarded, menu.drawn !== undefined);
+
   if (!cloud) return null;
   const view = forwarded ? forwardedPorts(agent.id, answer) : hosted;
   const first = reached(answer)[0];
   const labelOf = (port: number) => view.ports.find((each) => each.port === port)?.label;
   const firstLabel = view.ports.find((each) => each.localPort === first)?.label;
   const lit = forwarded || view.shared !== undefined;
+
   const words = forwarded
     ? first === undefined
       ? WORDS.FORWARDING
@@ -436,6 +459,7 @@ export function ForwardChip({
       : offered
         ? WORDS.OFF
         : WORDS.PORTS;
+
   const groups: MenuEntry[][] = [
     portRows(view, copy),
     ...(offered
@@ -453,6 +477,7 @@ export function ForwardChip({
         ]
       : []),
   ];
+
   const chip = (
     <Chip
       look={CHIP_LOOK.TOOLBAR}
@@ -471,6 +496,7 @@ export function ForwardChip({
       <ChipName>{words}</ChipName>
     </Chip>
   );
+
   return (
     <>
       {lit ? chip : <Tooltip label={words}>{chip}</Tooltip>}

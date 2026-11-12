@@ -33,15 +33,20 @@ const onMemberToken =
   (sent: SentToGitHub): Response | undefined => {
     if (sent.headers.get("authorization") !== `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`) return;
     const { pathname } = new URL(sent.url);
+
     if (pathname === `/repos/${SIDE_FULL_NAME}`) {
       return Response.json(memberRepositoryJson(SIDE, true));
     }
+
     if (pathname === `/repos/${SIDE_FULL_NAME}/git/ref/heads/main`) {
       return Response.json({ object: { type: "commit", sha: HEAD } });
     }
+
     if (pathname !== `/repos/${SIDE_FULL_NAME}/contents/README.md`) return;
+
     if (refused) return Response.json({ message: "Bad credentials" }, { status: 401 });
     const content = Buffer.from("# Side\n").toString("base64");
+
     return Response.json({ type: "file", size: 7, encoding: "base64", content });
   };
 
@@ -51,6 +56,7 @@ const readReadme = (refused: boolean) =>
     const userId = yield* openTokenMember();
     const task = yield* startTask(userId, { name: "Side work", repository: SIDE_FULL_NAME });
     const answer = yield* readTaskFile(userId, task.id, README).pipe(Effect.provide(github.layer));
+
     return { userId, answer: Option.getOrUndefined(answer), sent: github.sent };
   });
 

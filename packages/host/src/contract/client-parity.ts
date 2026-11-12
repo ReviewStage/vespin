@@ -7,15 +7,17 @@
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its reminders, its
- * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
+ * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
+ * it, and the Undo of either; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task dragged into a section on an iPad, and a
  * task's description, pages, and comment threads followed, with a reply on a
  * thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
- * followed for those servers, its task's skills read for a `/`, and the
- * agent renamed, pinned, and archived; New agent on a task and
+ * followed for those servers, its task's skills read for a `/`, a part of
+ * its transcript carried cut read whole as its call opens, and the agent
+ * renamed, pinned, archived, and deleted; New agent on a task and
  * New task, a sub-task or a related task among it, or one filed for later
  * with no agent, with the models and the repositories they pick among followed;
  * Settings' Account page: Share usage data, support access, and the
@@ -99,7 +101,10 @@ const WEB = {
 /** The iOS app's gaps, each named for the pull request or wave that would close it, or the reason none will. */
 const IOS = {
   ADMIN: byDesign("iOS v1 opens the admin dashboard in Safari"),
-  AGENTS: notYet("iOS v1 has no agent screens"),
+  AGENTS: notYet("iOS's agent page and lists don't offer this yet"),
+  AGENT_SESSION: notYet(
+    "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
+  ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
   COMPOSER: notYet(
     "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
@@ -128,7 +133,6 @@ const IOS = {
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
-  TRANSCRIPT_FOLLOW_UP: notYet("Left for a follow-up to iOS's agent page (#8008)"),
   UPDATER: byDesign("The App Store updates the app"),
   WAVE_5: notYet("Starting an agent from a thread is iOS wave 5"),
 } as const;
@@ -183,10 +187,12 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.ALLOWED_COMMANDS_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.ALLOWED_COMMANDS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.ALLOWED_COMMANDS_WRITE]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MEMORIES_FOLLOW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MEMORIES_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MEMORIES_FORGET]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MEMORIES_SAVE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.MEMORIES_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MEMORIES_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.MEMORIES_FORGET]: EVERYWHERE,
+  [PORT_ACT_KIND.MEMORIES_SAVE]: panel(
+    notYet("iOS's Memory page reads, searches, and deletes; it adds and edits none yet"),
+  ),
   [PORT_ACT_KIND.SOUND_READ]: panel(IOS.SOUNDS),
   [PORT_ACT_KIND.SOUND_ADD]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
@@ -225,7 +231,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MESSAGES]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_PART]: panel(IOS.TRANSCRIPT_FOLLOW_UP),
+  [PORT_ACT_KIND.AGENTS_PART]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHOOSE]: EVERYWHERE,
@@ -233,12 +239,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_SERVERS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_ADD_REPOSITORY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_STOP]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
+  [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
+  [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_WARM]: panel(IOS.COMPOSER),
   [PORT_ACT_KIND.AGENTS_PORTS]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: panel(IOS.AGENTS),
@@ -248,7 +253,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PIN]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_DELETE]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PAGE]: panel(IOS.AGENTS),
@@ -266,13 +271,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: panel(
-    notYet("iOS settles a notice by a reply; its Got it is not built"),
-  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: panel(
-    notYet("iOS resolves at once; its Undo of a resolve is not built"),
-  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
@@ -328,6 +329,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MAC_SHELL_OPEN]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.MAC_SHELL_ATTACH]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.MAC_SHELL_CLOSE]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.MAC_SHELL_RUN_ACTION]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.MAC_SHELL_STOP_ACTION]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.MAC_SHELL_ACTIONS]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_TERMINAL_LOCAL_AGENT]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
 

@@ -208,10 +208,13 @@ function picture(
   stand: { readonly initial: string; readonly className: string; readonly style: string },
 ): string {
   const box = `width:${side}px;height:${side}px;border-radius:${radius}px`;
+
   if (url !== undefined) {
     const src = escapeHtml(githubAvatarAt(url, side * PICTURE_DENSITY));
+
     return `<img src="${src}" alt="${escapeHtml(alt)}" width="${side}" height="${side}" style="${EMAIL_STYLE.PICTURE};${box}">`;
   }
+
   return table(
     `<td class="${stand.className}" width="${side}" height="${side}" style="${stand.style};${box};line-height:${side}px;${EMAIL_STYLE.FONT}">${stand.initial}</td>`,
   );
@@ -229,6 +232,7 @@ function invitationEmail(letter: InvitationLetter) {
   const font = EMAIL_STYLE.FONT;
   const link = escapeHtml(acceptUrl);
   const site = new URL("/", acceptUrl);
+
   const workspacePicture = picture(
     letter.workspacePictureUrl,
     workspaceName,
@@ -236,6 +240,7 @@ function invitationEmail(letter: InvitationLetter) {
     12,
     { initial: initialOf(workspaceName), className: "v-tile", style: EMAIL_STYLE.TILE },
   );
+
   const inviterPicture = picture(
     letter.inviterPictureUrl,
     "",
@@ -243,6 +248,7 @@ function invitationEmail(letter: InvitationLetter) {
     PICTURE_SIDE.INVITER / 2,
     { initial: initialOf(inviterLabel), className: "v-disc", style: EMAIL_STYLE.DISC },
   );
+
   const html = [
     "<!DOCTYPE html>",
     '<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">',
@@ -266,6 +272,7 @@ function invitationEmail(letter: InvitationLetter) {
     `<tr><td class="v-muted" style="${EMAIL_STYLE.FOOTER};${font}">${escapeHtml(footnote)}<br>${escapeHtml(PRODUCT_NAME)} · <a href="${escapeHtml(site.href)}" class="v-muted" style="${EMAIL_STYLE.FOOTER_LINK}">${escapeHtml(site.host)}</a></td></tr>`,
     "</table></td></tr></table></body></html>",
   ].join("\n");
+
   const text = [
     `${heading}.`,
     "",
@@ -277,6 +284,7 @@ function invitationEmail(letter: InvitationLetter) {
     "",
     footnote,
   ].join("\n");
+
   return { subject, html, text };
 }
 
@@ -297,13 +305,17 @@ export const invitationMailFromEnvironment: Layer.Layer<
   InvitationMail,
   Effect.gen(function* () {
     const sender = yield* readResendSender(INVITATION_MAIL_ENVIRONMENT.FROM);
+
     if (Option.isNone(sender)) {
       yield* Effect.logWarning(MAIL_UNSET);
+
       return { send: () => Effect.void };
     }
+
     const { key, from } = sender.value;
     const client = yield* HttpClient.HttpClient;
     const call = resendCall(key, REQUEST_TIMEOUT_MS);
+
     return {
       send: (letter: InvitationLetter) =>
         Effect.gen(function* () {
@@ -312,6 +324,7 @@ export const invitationMailFromEnvironment: Layer.Layer<
             path: RESEND.EMAILS_PATH,
             body: resendBody(letter, from),
           });
+
           if (callAnswered(answer) && answer.response.ok) return;
           // Note that the status alone is logged, because the letter carries the invitee's address.
           yield* Effect.logWarning(

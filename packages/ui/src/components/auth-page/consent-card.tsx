@@ -54,6 +54,7 @@ function AnswerButton({
   onAnswer: (answer: ConsentAnswer) => void;
 }): React.JSX.Element {
   const words = ANSWER_WORDS[answer];
+
   return (
     <Button
       variant={answer === CONSENT_ANSWER.ALLOW ? BUTTON_VARIANT.PRIMARY : BUTTON_VARIANT.OUTLINE}

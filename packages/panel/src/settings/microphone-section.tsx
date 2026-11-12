@@ -28,6 +28,7 @@ const OPEN_PRIVACY = "Open Privacy & Security in System Settings";
 /** Allow, which waits on the system's answer to the request. */
 function AllowMicrophone({ microphone }: { microphone: MicrophoneControl }): React.JSX.Element {
   const request = useAsyncAction(rejectionWords);
+
   return (
     <Button
       variant={BUTTON_VARIANT.OUTLINE}
@@ -64,6 +65,7 @@ export function MicrophoneSection({
   microphone: MicrophoneControl;
 }): React.JSX.Element {
   const row = microphoneAccessRow(microphone.status);
+
   return (
     <SettingsSection title="Dictation">
       {/* Note that the row stands in a wrapper wearing its search anchor,

@@ -47,6 +47,7 @@ test("a key that came or went moves its record, and the rest of it is still the 
     held,
     added,
   );
+
   const withoutKey = keepIdentity<{ list: (typeof TURN)[]; status?: string }>(held, removed);
 
   assert.deepEqual(withKey, added);
@@ -66,6 +67,7 @@ test("an item appended, prepended, removed, or changed in place leaves every oth
   const appended = keepIdentity(held, [...delivered(held), fourth]);
   const prepended = keepIdentity(held, [zeroth, ...delivered(held)]);
   const removed = keepIdentity(held, delivered([first, third]));
+
   const changed = keepIdentity(
     held,
     delivered([first, { ...second, parts: [{ type: "text", text: "second" }] }, third]),

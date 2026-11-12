@@ -28,12 +28,14 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
 const openAgent = (userId: string) =>
   Effect.gen(function* () {
     const task = yield* startTask(userId, { name: "Invitations", repository: "acme/relay" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -44,6 +46,7 @@ const openAgent = (userId: string) =>
       repository: "acme/relay",
       runtime: CONVERSATION_RUNTIME.CODEX,
     });
+
     return Option.getOrThrow(started).agent.id;
   });
 

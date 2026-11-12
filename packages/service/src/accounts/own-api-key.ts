@@ -59,7 +59,9 @@ export function previewKeysOf(
   environment: Pick<AccountKeyEnvironment, "previewApiKeys">,
 ): TaskStoreEffect<PreviewApiKeys> {
   const keys = environment.previewApiKeys;
+
   if (Object.keys(keys).length === 0) return Effect.succeed(keys);
+
   return Effect.map(readAccountAccess(userId), (access) => (isAdminRole(access.role) ? keys : {}));
 }
 
@@ -73,14 +75,18 @@ function openedOwnKey(
   return Effect.map(listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY), (rows) => {
     const provided = rows.filter((each) => each.provider === provider);
     const row = provided.find((each) => each.id === keyId) ?? provided[0];
+
     if (row === undefined) return undefined;
     const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
     if (parsed === undefined || Result.isFailure(parsed)) return PROVIDER_KEY_UNREADABLE;
+
     const opened = openProviderKey(
       parsed.success,
       { userId, provider, kind: PROVIDER_KEY_KIND.API_KEY },
       row,
     );
+
     return Result.isFailure(opened) ? PROVIDER_KEY_UNREADABLE : opened.success;
   });
 }
@@ -94,8 +100,10 @@ export function ownApiKeyOf(
 ): TaskStoreEffect<OwnApiKey> {
   return Effect.gen(function* () {
     const own = yield* openedOwnKey(userId, provider, environment.providerKeyEncryptionKeys, keyId);
+
     if (Redacted.isRedacted(own)) return own;
     const standIns = yield* previewKeysOf(userId, environment);
+
     return standIns[provider] ?? own;
   });
 }

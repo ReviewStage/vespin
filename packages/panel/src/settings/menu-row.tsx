@@ -90,6 +90,7 @@ function grouped(actions: MenuRowActions): actions is readonly (readonly MenuAct
 /** The row's acts as the menu draws them: in groups, none of them empty. */
 function groupsOf(actions: MenuRowActions): readonly (readonly MenuAction[])[] {
   const groups = grouped(actions) ? actions : [actions];
+
   return groups.filter((group) => group.length > 0);
 }
 
@@ -119,6 +120,7 @@ export function MenuRow({
   const groups = groupsOf(actions);
   const only = alone && groups.length === 1 && groups[0]?.length === 1 ? groups[0][0] : undefined;
   const acting = groups.length > 0 && only === undefined;
+
   const more =
     only !== undefined ? (
       <Tooltip label={only.label}>
@@ -132,6 +134,7 @@ export function MenuRow({
     ) : acting ? (
       <MoreButton ref={door} thing={thing} {...menu.trigger()} />
     ) : null;
+
   // Note that the menu hangs under the row but hands focus back to what held the keyboard, the ⋯ or a control beside it, since the row itself takes none.
   const keyMenu = (event: KeyboardEvent<HTMLElement>) => {
     if (!opensMenu(event)) return;
@@ -139,6 +142,7 @@ export function MenuRow({
     const held = event.target instanceof HTMLElement ? event.target : event.currentTarget;
     menu.show(dropBelowStart(event.currentTarget), held);
   };
+
   return (
     <>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the right-click and the menu key are further doors to the ⋯ beside it. */}
@@ -162,10 +166,22 @@ export function MenuRow({
             indent={row.indent}
             leading={row.leading}
             label={row.label}
+            adornment={row.adornment}
             description={row.description}
             foldLabel={row.fold.label}
             defaultOpen={row.fold.defaultOpen}
             actions={() => more}
+            controls={row.controls}
+            control={
+              row.control === undefined && row.describedControl === undefined
+                ? undefined
+                : (control) => (
+                    <>
+                      {row.control}
+                      {row.describedControl?.(control)}
+                    </>
+                  )
+            }
           >
             {row.fold.body}
           </SettingsFoldRow>

@@ -8,9 +8,11 @@ import { BANNER_GLYPH, BANNER_LOOK, Banner } from "./banner.js";
 /** What the notice says under the loss: that the agent waits, or when the host answered again. */
 function connectionLostCaption(notice: Notice, now: number = Date.now()): string {
   if (notice.restoredAt === null) return "Carries on when it's back";
+
   const at = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(
     notice.restoredAt,
   );
+
   // Note that a restore in the future reads as now: the clocks differ, not the order of events.
   return notice.restoredAt > now ? "Back now" : `Back at ${at}`;
 }

@@ -49,8 +49,10 @@ beforeAll(() => {
 });
 
 const TASK = DOCUMENT_TASK.id;
+
 /** A File tab of the task. */
 const README = fileTab("README.md");
+
 /** Another File tab of the task. */
 const NOTES = fileTab("docs/notes.md");
 
@@ -110,11 +112,13 @@ const INBOX = placeScreen(ROUTED_PLACE.INBOX, "/acme/inbox", { label: "Inbox" })
 /** The window's steps, most recent first, the first the one it stands on, and every visit asked for. */
 function windowSteps(screens: readonly Omit<RecentStep, "standing">[]) {
   const visits: Place[] = [];
+
   const steps: RecentSteps = {
     recent: () => screens.map((screen, at) => ({ ...screen, standing: at === 0 })),
     standingStep: () => screens[0]?.place,
     onVisitStep: (to) => visits.push(to),
   };
+
   return { steps, visits };
 }
 
@@ -132,6 +136,7 @@ async function mounted(
   const root = createRoot(host);
   roots.push(root);
   const { provide } = windowRouter();
+
   // Note that the window's state lands on a later render, as main delivers it, so the switcher is drawn twice, as a window settles.
   for (let drawn = 0; drawn < 2; drawn += 1) {
     act(() =>
@@ -150,11 +155,13 @@ function key(type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent 
   act(() => {
     document.body.dispatchEvent(event);
   });
+
   return event;
 }
 
 const tab = (shift = false) =>
   key("keydown", { key: "Tab", code: "Tab", ctrlKey: true, shiftKey: shift });
+
 const letGo = () => key("keyup", { key: "Control", code: "ControlLeft" });
 
 function cards(): HTMLElement[] {
@@ -189,11 +196,13 @@ test("a quick tap goes to the screen before this one as a visit, without drawing
 
 test("held, the cards show with the screen here first and dimmed; ⇧ steps back around, and Escape goes nowhere", async () => {
   handCapabilities(DESKTOP_CAPABILITIES);
+
   const { steps, visits } = windowSteps([
     taskScreen(undefined, README),
     taskScreen(undefined, NOTES),
     INBOX,
   ]);
+
   await mounted(steps);
 
   tab();
@@ -229,6 +238,7 @@ async function heldOnField() {
   await mounted(windowSteps([taskScreen(undefined, README), INBOX]).steps);
   tab();
   tab();
+
   return field;
 }
 
@@ -344,6 +354,7 @@ test("the screen left is taken as a still of the work area for its card, drawn a
   fakeActPort({
     [ACT_KIND.WINDOW_CAPTURE]: (part) => {
       taken.push(part);
+
       return new Promise<string>((resolve) => {
         answer = resolve;
       });
@@ -427,12 +438,15 @@ function listedAgent(status: AgentStatus): ListedAgent {
 /** The switcher's cards, held over the Inbox with the agent's page the screen behind, the window listing the agent. */
 async function agentCardAfter(agent: ListedAgent): Promise<HTMLElement | undefined> {
   handCapabilities(DESKTOP_CAPABILITIES);
+
   const page = placeScreen(ROUTED_PLACE.AGENT, `/acme/agents/${agent.id}`, undefined, {
     agentId: agent.id,
   });
+
   await mounted(windowSteps([INBOX, page]).steps, { ...tasksControl(), liveAgents: [agent] });
   tab();
   tab();
+
   return cards().find((card) => card.textContent?.includes(agent.title ?? ""));
 }
 
@@ -454,6 +468,7 @@ test("an automation's agent on its run's task is named by its title and its auto
     automationId: "automation-standup",
     automationName: "Daily standup",
   });
+
   // The card is found by the agent's title, so a bare "Agent" finds none.
   assert.match(card?.textContent ?? "", /Daily standup/);
 });

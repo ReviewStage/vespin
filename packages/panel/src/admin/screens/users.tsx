@@ -110,6 +110,7 @@ function UsersSections({
     () => ({ starred: (row: AdminUserListRow) => row.favorite, onToggle: onToggleFavorite }),
     [onToggleFavorite],
   );
+
   const roster = {
     windowDays: list?.windowDays ?? windowDays,
     minWidth: ACCOUNTS_TABLE_MIN_WIDTH.ROSTER,
@@ -119,9 +120,11 @@ function UsersSections({
     sortable: true,
     favorite,
   };
+
   // Note that a miss may lie past a truncated roster's rows, so its note stays.
   const truncatedTo =
     list !== undefined && list.total > list.rows.length ? list.rows.length : undefined;
+
   return (
     <>
       <AdminSection>
@@ -174,6 +177,7 @@ export function UsersScreen({
   // keystrokes.
   const { reads, gate, address } = useAdminDoors();
   const [query, setQuery] = useState(address.search);
+
   // Note that the query is held to the service's own bound, as a field's
   // `maxLength` would, so a pasted run past it never reaches the read.
   const changeQuery = (typed: string) => {
@@ -181,6 +185,7 @@ export function UsersScreen({
     setQuery(next);
     address.keepSearch(next.trim());
   };
+
   useEffect(() => address.onSearchMoved(() => setQuery(address.search())), [address]);
 
   const asked = usersReadQuery(hideAdmins, windowDays, useSettledSearch(searchTerm(query)));
@@ -191,6 +196,7 @@ export function UsersScreen({
   // The star answers the press at once, while its write carries the press to
   // the service and redraws its outcome.
   const favorite = useFavoriteMutation(reads);
+
   const toggleFavorite = (id: string, starred: boolean) =>
     favorite.mutate({ id, favorite: starred });
 
@@ -218,6 +224,7 @@ export function UsersScreen({
         {...content}
       />,
     );
+
   const search = (
     <SearchField
       label="Search accounts by name or email"
@@ -262,10 +269,12 @@ export function UsersScreen({
       // that answer lands, the same needle filters the rows already loaded, so
       // the box stays instant between refetches.
       const tokens = searchTokens(query);
+
       const rows =
         tokens.length > 0
           ? list.rows.filter((row) => matchesTokens([row.name, row.email], tokens))
           : list.rows;
+
       return page({
         // Note that the count stands beside the field rather than in it, so a
         // narrow page wraps it under the field instead of crowding the query.

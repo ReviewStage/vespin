@@ -58,9 +58,11 @@ function timedGitHub(
           Effect.gen(function* () {
             arrivals.push([request.method, yield* Clock.currentTimeMillis]);
             arrived();
+
             if (request.method === "GET" && readsAnswered !== undefined) {
               yield* Effect.promise(() => readsAnswered);
             }
+
             return HttpClientResponse.fromWeb(request, Response.json({}));
           }),
         ),
@@ -96,6 +98,7 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
     Effect.gen(function* () {
       // The file's cases share one clock, so the reset is an hour on from where this case starts.
       const anHourOn = (yield* Clock.currentTimeMillis) / 1000 + 3600;
+
       const exhausted = () =>
         Response.json(
           { message: "API rate limit exceeded" },
@@ -104,14 +107,17 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
             headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(anHourOn) },
           },
         );
+
       const statuses = yield* Effect.gen(function* () {
         const refused = yield* asked;
         yield* TestClock.adjust("3599 seconds");
         const held = yield* asked;
         yield* TestClock.adjust("1 second");
         const sent = yield* asked;
+
         return [refused, held, sent];
       }).pipe(Effect.provide(scriptedGitHub([exhausted])), holdingNothing);
+
       assert.deepEqual(statuses, [403, 429, 200]);
     }),
   );
@@ -128,8 +134,10 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
           const heldLonger = yield* asked;
           yield* TestClock.adjust("1 minute");
           const sent = yield* asked;
+
           return [first, second, heldLonger, sent];
         }).pipe(Effect.provide(scriptedGitHub([secondary, secondary])), holdingNothing);
+
         assert.deepEqual(statuses, [403, 403, 429, 200]);
       }),
   );
@@ -142,8 +150,10 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
         const again = yield* asked;
         yield* TestClock.adjust("1 minute");
         const sent = yield* asked;
+
         return [first, again, sent];
       }).pipe(Effect.provide(scriptedGitHub([secondary, secondary])), holdingNothing);
+
       assert.deepEqual(statuses, [403, 403, 200]);
     }),
   );
@@ -156,8 +166,10 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
         const heldElsewhere = yield* Effect.provide(asked, elsewhere);
         yield* TestClock.adjust("1 minute");
         const sentElsewhere = yield* Effect.provide(asked, elsewhere);
+
         return [refused, heldElsewhere, sentElsewhere];
       }).pipe(holdingNothing);
+
       assert.deepEqual(statuses, [403, 429, 200]);
     }),
   );
@@ -171,8 +183,10 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
           const held = yield* asked;
           yield* TestClock.adjust("1 minute");
           const sent = yield* asked;
+
           return [refused, held, sent];
         }).pipe(Effect.provide(scriptedGitHub([secondary])), Effect.provide(noDatabase));
+
         assert.deepEqual(statuses, [403, 429, 200]);
       }),
   );
@@ -182,21 +196,26 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
       const arrivals: Array<readonly [string, number]> = [];
       const answered = Promise.withResolvers<void>();
       const first = Promise.withResolvers<void>();
+
       const seen = yield* Effect.gen(function* () {
         const both = yield* Effect.forkChild(
           Effect.all([pullRequestAsked, pullRequestAsked], { concurrency: "unbounded" }),
         );
+
         yield* Effect.promise(() => first.promise);
+
         // Note that the second request is given every chance to reach GitHub while the first is out.
         for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
         const whileFirstOut = arrivals.length;
         answered.resolve();
         yield* Fiber.join(both);
+
         return [whileFirstOut, arrivals.length];
       }).pipe(
         Effect.provide(timedGitHub(arrivals, () => first.resolve(), answered.promise)),
         holdingNothing,
       );
+
       assert.deepEqual(seen, [1, 2]);
     }),
   );
@@ -208,22 +227,27 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
         const arrivals: Array<readonly [string, number]> = [];
         const answered = Promise.withResolvers<void>();
         const first = Promise.withResolvers<void>();
+
         const seen = yield* Effect.gen(function* () {
           const background = yield* Effect.forkChild(
             pullRequestAsked.pipe(Effect.provideService(GitHubBackground, true)),
           );
+
           yield* Effect.promise(() => first.promise);
           yield* pullRequestAsked.pipe(Effect.forkChild);
+
           // Note that the member's read is given every chance to reach GitHub while the background one is out.
           for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
           const whileBackgroundOut = arrivals.length;
           answered.resolve();
           yield* Fiber.join(background);
+
           return whileBackgroundOut;
         }).pipe(
           Effect.provide(timedGitHub(arrivals, () => first.resolve(), answered.promise)),
           holdingNothing,
         );
+
         assert.equal(seen, 2);
       }),
   );
@@ -233,16 +257,20 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
       const arrivals: Array<readonly [string, number]> = [];
       const start = yield* Clock.currentTimeMillis;
       const firstThree = Promise.withResolvers<void>();
+
       const arrived = () => {
         if (arrivals.length === 3) firstThree.resolve();
       };
+
       yield* Effect.gen(function* () {
         const comment = sentAs(HttpClientRequest.post(COMMENTS));
+
         const all = yield* Effect.forkChild(
           Effect.all([comment, comment, pullRequestAsked, pullRequestAsked], {
             concurrency: "unbounded",
           }),
         );
+
         // Note that the second write is waiting its turn once both reads and the first write are at GitHub.
         yield* Effect.promise(() => firstThree.promise);
         yield* TestClock.adjust("1 second");
@@ -269,16 +297,22 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
       const readsAnswered = Promise.withResolvers<void>();
       const laneTaken = Promise.withResolvers<void>();
       const firstWrite = Promise.withResolvers<void>();
+
       const arrived = () => {
         const methods = arrivals.map(([method]) => method);
+
         if (methods.includes("GET")) laneTaken.resolve();
+
         if (methods.includes("POST")) firstWrite.resolve();
       };
+
       yield* Effect.gen(function* () {
         const comment = sentAs(HttpClientRequest.post(COMMENTS));
+
         const all = yield* Effect.forkChild(
           Effect.all([pullRequestAsked, comment, comment], { concurrency: "unbounded" }),
         );
+
         // Note that the read holds the identity's lane until GitHub answers it, so both writes wait past their second.
         yield* Effect.promise(() => laneTaken.promise);
         yield* TestClock.adjust("2 seconds");
@@ -291,7 +325,7 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
         holdingNothing,
       );
       assert.deepEqual(
-        arrivals.filter(([method]) => method === "POST").map(([, at]) => at - start),
+        arrivals.flatMap(([method, at]) => (method === "POST" ? [at - start] : [])),
         [2000, 3000],
       );
     }),
@@ -303,17 +337,23 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
       const start = yield* Clock.currentTimeMillis;
       const firstWrite = Promise.withResolvers<void>();
       const read = Promise.withResolvers<void>();
+
       const arrived = () => {
         const methods = arrivals.map(([method]) => method);
+
         if (methods.includes("POST")) firstWrite.resolve();
+
         if (methods.includes("GET")) read.resolve();
       };
+
       yield* Effect.gen(function* () {
         const comment = sentAs(HttpClientRequest.post(COMMENTS));
         const writes = Array.from({ length: 7 }, () => comment);
+
         const all = yield* Effect.forkChild(
           Effect.all([...writes, pullRequestAsked], { concurrency: "unbounded" }),
         );
+
         yield* Effect.promise(() => firstWrite.promise);
         // Note that a second on, a write waiting its turn has been sent, so a read stuck behind the waiting writes is sent too.
         yield* TestClock.adjust("1 second");
@@ -341,22 +381,28 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
               }),
             ),
           );
+
           // Note that a read first leaves the instance's read of the shared hold standing, so no write waits on the database.
           yield* asked;
+
           const all = yield* Effect.forkChild(
             Effect.all(
               turns.map(() => comment),
               { concurrency: "unbounded" },
             ),
           );
+
           const [first, ...later] = turns.map((turn) => turn.promise);
           yield* Effect.promise(() => first ?? Promise.resolve());
+
           for (const [index, turn] of later.entries()) {
             yield* TestClock.adjust("1 second");
             yield* Effect.promise(() => turn);
+
             // Another instance is refused once two writes are out and the rest are waiting, holding every instance.
             if (index === 0) yield* Effect.provide(asked, scriptedGitHub([secondary]));
           }
+
           yield* Fiber.join(all);
         }).pipe(Effect.provide(scriptedGitHub([])), holdingNothing);
         assert.equal(answered.at(-1), 429);
@@ -367,11 +413,14 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
     Effect.gen(function* () {
       const forbidden = () =>
         Response.json({ message: "Resource not accessible by integration" }, { status: 403 });
+
       const [message, next] = yield* Effect.gen(function* () {
         const refused = yield* pullRequestAsked;
         const body = yield* refused.json;
+
         return [body, yield* asked] as const;
       }).pipe(Effect.provide(scriptedGitHub([forbidden])), holdingNothing);
+
       assert.deepEqual(
         [message, next],
         [{ message: "Resource not accessible by integration" }, 200],

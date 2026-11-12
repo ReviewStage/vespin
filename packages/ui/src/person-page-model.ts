@@ -61,10 +61,14 @@ function agentsOf(
   agents: readonly ListedAgent[],
 ): PersonAgent[] {
   const byId = new Map(tasks.map((task) => [task.id, task]));
+
   return agents.flatMap((agent) => {
     const task = byId.get(agent.planId);
+
     if (task === undefined || agent.archivedAt !== undefined) return [];
+
     if (agent.startedBy?.userId !== userId) return [];
+
     return [{ task, agent, at: agentLastMovedAt(agent) }];
   });
 }
@@ -80,9 +84,12 @@ export function personPage(
 ): PersonPage {
   const theirs = agentsOf(userId, tasks, agents ?? []);
   const newest = (a: PersonAgent, b: PersonAgent) => b.at - a.at;
+
   const latest = (a: TaskSummary, b: TaskSummary) =>
     taskTime(b, TASK_ORDER.UPDATED) - taskTime(a, TASK_ORDER.UPDATED);
+
   const assignedToThem = (task: TaskSummary) => task.assignee?.userId === userId;
+
   return {
     working: theirs.filter(({ agent }) => AT_WORK.has(agent.status)).toSorted(newest),
     assigned: tasks.filter(assignedToThem).toSorted(latest),
@@ -108,9 +115,12 @@ export function personRef(
 ): { readonly userId: string; readonly name: string } | undefined {
   for (const task of tasks) {
     if (task.createdBy?.userId === userId) return task.createdBy;
+
     if (task.assignee?.userId === userId) return task.assignee;
   }
+
   const listed = new Set(tasks.map((task) => task.id));
+
   return agents?.find((agent) => listed.has(agent.planId) && agent.startedBy?.userId === userId)
     ?.startedBy;
 }

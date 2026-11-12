@@ -52,6 +52,7 @@ export function SelectionRegion({
   children: ReactNode;
 }): React.JSX.Element {
   const chooser = useListSelection(selection, order, bringIn, plain);
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the region only hears the keys its rows' presses raise, which bubble to it; the presses are the controls.
     <div

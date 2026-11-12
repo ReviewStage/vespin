@@ -41,12 +41,15 @@ const foldersBut = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "but-eve-archive-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name !== MIGRATION,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -62,12 +65,15 @@ it.effect(
         );
         const workspaceId = yield* openWorkspace("dean");
         const { id: taskId } = yield* createTask("dean", { organizationId: workspaceId });
+
         const agentOn = (runtime: string | null) =>
           Effect.gen(function* () {
             const agentId = yield* openTaskAgent("dean", workspaceId, taskId);
             yield* sql`update conversations set runtime = ${runtime} where id = (select conversation_id from agent where id = ${agentId})`;
+
             return agentId;
           });
+
         const onRetired = yield* agentOn("eve");
         const unnamed = yield* agentOn(null);
         const onClaudeCode = yield* agentOn("claude_code");
@@ -75,6 +81,7 @@ it.effect(
         yield* archiveAgent("dean", putAway, true);
         const question = yield* openInboxItem("dean", workspaceId, taskId, onRetired, true);
         const notice = yield* openInboxItem("dean", workspaceId, taskId, onRetired, false);
+
         const nativeQuestion = yield* openInboxItem(
           "dean",
           workspaceId,
@@ -84,20 +91,24 @@ it.effect(
         );
 
         yield* runWebMigrations();
+
         const archivedAt = (agentId: string) =>
           Effect.map(readAgent("dean", agentId), (agent) => Option.getOrThrow(agent).archivedAt);
+
         const stamped = yield* archivedAt(onRetired);
         yield* sql`delete from __drizzle_migrations where name = ${MIGRATION}`;
         yield* runWebMigrations();
 
         const archivedBy = (agentId: string) =>
           Effect.map(readAgent("dean", agentId), (agent) => Option.getOrThrow(agent).archivedBy);
+
         // Note that the migration stores the app as `luke`, its word then, which reads as the app's.
         const retired = {
           by: "app",
           userId: "dean",
           reason: "Its runtime was retired. Continue it in a new agent to go on from its work.",
         };
+
         assert.deepEqual(yield* archivedBy(onRetired), retired);
         assert.deepEqual(yield* archivedBy(unnamed), retired);
         assert.equal(yield* archivedBy(onClaudeCode), null);
@@ -114,15 +125,18 @@ it.effect(
               readonly status: string;
               readonly closedReason: string | null;
             }>`select status, closed_reason as "closedReason" from inbox_item where id = ${itemId}`;
+
             const asks = yield* sql<{
               readonly ask: { readonly status: string; readonly withdrawnReason?: string } | null;
             }>`select ask from inbox_message where item_id = ${itemId} and ask is not null`;
+
             return {
               status: item?.status,
               closedReason: item?.closedReason,
               asks: asks.map(({ ask }) => [ask?.status, ask?.withdrawnReason]),
             };
           });
+
         assert.deepEqual(yield* standing(question), {
           status: "closed",
           closedReason: "Its agent was archived.",

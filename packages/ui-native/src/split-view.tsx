@@ -171,6 +171,7 @@ function Column({
   readonly sidebar?: boolean | undefined;
 }) {
   const text = useNativeState(bar.search?.text ?? "");
+
   const stacked = (
     <ZStack
       modifiers={
@@ -182,6 +183,7 @@ function Column({
       {view}
     </ZStack>
   );
+
   const barred = !barHolds(bar) ? (
     stacked
   ) : (
@@ -214,7 +216,9 @@ function Column({
       </Toolbar.Content>
     </Toolbar>
   );
+
   if (bar.search === undefined) return barred;
+
   return (
     <Toolbar
       modifiers={[
@@ -252,6 +256,7 @@ export function SplitView({
   onSidebarShownChange,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
+
   return (
     <NavigationSplitView
       columnVisibility={sidebarShown ? "all" : hidden}

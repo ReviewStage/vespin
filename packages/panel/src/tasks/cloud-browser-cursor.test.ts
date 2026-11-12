@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
-import { BROWSER_LIVE_SERVER } from "@repo/features/browser-live-wire";
+import {
+  BROWSER_LIVE_SERVER,
+  type BrowserLiveServerMessage,
+} from "@repo/features/browser-live-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -71,13 +74,14 @@ async function settle(): Promise<void> {
 
 /** The pane of `tab`, its page painted at 1280 by 800, and a door to say more on its live view. */
 async function paneOf(tab: AgentBrowserTab): Promise<{
-  say: (message: object) => Promise<void>;
+  say: (message: BrowserLiveServerMessage) => Promise<void>;
   redraw: (next: AgentBrowserTab) => Promise<void>;
 }> {
   let listener: BrowserLiveListener | undefined;
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: () => undefined, close: () => undefined };
     },
   });
@@ -85,6 +89,7 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const pane = (shown: AgentBrowserTab) =>
     withQueryClient(
       createElement(CloudBrowserPane, {
@@ -94,18 +99,22 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
         memberName: () => undefined,
       }),
     );
+
   act(() => root.render(pane(tab)));
   await settle();
-  const say = async (message: object) => {
+
+  const say = async (message: BrowserLiveServerMessage) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
+
   await say({
     type: BROWSER_LIVE_SERVER.FRAME,
     data: "/9j/AA==",
     pageWidth: 1280,
     pageHeight: 800,
   });
+
   return {
     say,
     redraw: async (next) => {
@@ -175,6 +184,7 @@ test.each(["1ms", "0s"])(
   "where the motion tokens stand at %s the agent's pointer is held still: it neither rocks, glides, nor ripples",
   async (duration) => {
     document.documentElement.style.setProperty("--ui-duration-fast", duration);
+
     try {
       await paneOf(CLICKED);
       const drawn = pointer();

@@ -45,6 +45,7 @@ test("a turn that ran out of time says Failed and why, never Abandoned", () => {
       models: [],
     }),
   );
+
   assert.match(html, /Failed/u);
   assert.match(html, /Ran out of time\./u);
   assert.doesNotMatch(html, /Abandoned/u);
