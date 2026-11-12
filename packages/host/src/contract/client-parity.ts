@@ -15,16 +15,21 @@
  * task's status set, pin, read mark, rename, and delete, a task moved into a section from its menu or
  * dragged into one on an iPad, its repository changed, moved to another of
  * the account's workspaces by its owner, its parent, sub-tasks,
- * and blocks added, changed, and taken away, and a task's
+ * and blocks added, changed, and taken away, the task followed or
+ * unfollowed and the account's machines switch on it set, and a task's
  * description, pages, and comment threads followed, and read again where
  * they could not be, with a thread started
- * on one block of the description and a reply on a thread; an agent's page,
+ * on one block of the description and a reply on a thread, and a task
+ * its link names by number that the list does not hold, found and opened
+ * from its own read; an agent's page,
  * one the task list doesn't hold read by its id, and Archive reading it
  * afresh before it asks: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
- * its transcript carried cut read whole as its call opens, a cloud agent's
+ * its transcript carried cut read whole as its call opens, the run of an
+ * automation that started it followed for the card its transcript opens on,
+ * read again where it could not be, a cloud agent's
  * listening ports listed and shared by a public link, opened in Safari or
  * no longer shared, its repository's run actions run and stopped in its
  * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
@@ -119,9 +124,6 @@ const WEB = {
 /** The iOS app's gaps, each named for the pull request or wave that would close it, or the reason none will. */
 const IOS = {
   ADMIN: byDesign("iOS v1 opens the admin dashboard in Safari"),
-  AGENT_ORIGIN: notYet(
-    "iOS's agent page doesn't yet show the automation run that started an agent: its prompt, the issue it was about, and who ran it",
-  ),
   AGENT_TAB_DOT: byDesign(
     "An agent's unseen dot marks the desktop's and the web's tab strip, which the phone has none of; a failed run reaches the phone as a push, and a running one as its Live Activity",
   ),
@@ -309,8 +311,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENT_TAB_DOT),
   [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENT_TAB_DOT),
   [PORT_ACT_KIND.AGENTS_PAGE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: panel(IOS.AGENT_ORIGIN),
-  [PORT_ACT_KIND.AGENTS_ORIGIN_RETRY]: panel(IOS.AGENT_ORIGIN),
+  [PORT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_ORIGIN_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHANGES]: panel(IOS.DIFF),
@@ -413,9 +415,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.DESCRIPTION_EDIT),
-  [PORT_ACT_KIND.TASKS_FOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_UNFOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: panel(IOS.TASKS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
@@ -433,11 +435,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.CODE_COLOR),
-  [PORT_ACT_KIND.TASKS_FIND]: panel(
-    notYet(
-      "iOS opens a task link by its number from the tasks it holds; one outside them is Task not found",
-    ),
-  ),
+  [PORT_ACT_KIND.TASKS_FIND]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_RESTORE]: EVERYWHERE,

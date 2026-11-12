@@ -56,7 +56,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { PageHeader } from "./page-header.js";
+import { type PageFollowing, PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -131,14 +131,19 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
+  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  readonly following?: PageFollowing | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, and who
- * created it. Its path stands in the bar above.
+ * heading, its status, priority and assignee as small chips, who follows
+ * it as a chip that opens them, and who created it. Its path stands in the
+ * bar above.
  */
-export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHeadProps) {
+export function TaskHead(props: TaskHeadProps) {
+  const { name, status, priority, assignee, createdBy, following } = props;
+
   return (
     <VStack
       alignment="leading"
@@ -154,6 +159,7 @@ export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHe
         status={status}
         priority={priority}
         assignee={assignee}
+        following={following}
         summary={createdBy}
       />
     </VStack>

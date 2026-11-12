@@ -22,6 +22,7 @@
 import type { AGENT_CALL_FAILURE, AgentAgentAnswer } from "@repo/features/agent-view";
 import type { SendTrace } from "@repo/features/sentry-tracing";
 import { FAILURE_CONDITION, FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
+import { type Unreached, unreachedAs } from "@repo/features/unreached";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import {
   type ActPortCallContext,
@@ -37,6 +38,8 @@ import type { ShownFailure } from "./failure-report.js";
 import { fixtureClient, loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
 import { showToast } from "./toast.js";
 import { appStateIn } from "./use-app-state.js";
+
+export { type Unreached, unreachedAs };
 
 /**
  * What each kind takes and answers, keyed by the kind. Note that a kind's own
@@ -263,25 +266,8 @@ export function firstNotKept(answers: readonly Kept[]): NotKept | undefined {
   return answers.find((answer): answer is NotKept => !answer.kept);
 }
 
-/**
- * An answer a caller settled an act that never answered into: the failure
- * its words draw, with the error beneath, which a shown failure reports. It
- * is the window's own and never crosses the act port, so it holds the error
- * itself, where an answer the host sends holds the facts of one
- * (`@repo/features/failure-facts`).
- */
-export interface Unreached<Failure extends string> {
-  readonly failure: Failure;
-  readonly cause: unknown;
-}
-
 /** An agent's act as the window hears it: the host's answer, or one that never arrived. */
 export type AgentActAnswer = AgentAgentAnswer | Unreached<typeof AGENT_CALL_FAILURE.UNANSWERED>;
-
-/** Settles an act that never answered into the failure given, with the error beneath. */
-export function unreachedAs<const Failure extends string>(failure: Failure) {
-  return (cause: unknown): Unreached<Failure> => ({ failure, cause });
-}
 
 /**
  * An act whose answer a caller outside React reads: a read an atom holds

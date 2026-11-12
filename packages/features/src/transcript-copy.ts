@@ -1,3 +1,4 @@
+import { MESSAGE_ROLE } from "@repo/wire";
 import {
   AGENT_PART,
   type AgentPart,
@@ -6,9 +7,13 @@ import {
   messageWords,
   placedMessages,
   turnStretches,
-} from "@repo/features/agent-parts";
-import type { Replay } from "@repo/features/agent-replay";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+} from "./agent-parts.js";
+import type { Replay } from "./agent-replay.js";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentMessagesAnswerView,
+  type AgentMessagesParams,
+} from "./agent-view.js";
 import {
   AGENT_BOUNDS,
   AGENT_BRIEF,
@@ -17,12 +22,35 @@ import {
   type AgentTranscriptMessage,
   agentMessageWords,
   applyMessagesPage,
-} from "@repo/features/agent-wire";
-import { threadLineTitle, threadLineWords } from "@repo/features/inbox-wire";
-import { fencedBlock } from "@repo/features/markdown-fence";
-import { cardTitle, plainWords } from "@repo/features/plain-words";
-import { blockSays, bodyWords, TOOL_BLOCK, type ToolBlock } from "@repo/features/tool-call-block";
-import { delegationView, toolCallView } from "@repo/features/tool-call-model";
+} from "./agent-wire.js";
+import { threadLineTitle, threadLineWords } from "./inbox-wire.js";
+import { fencedBlock } from "./markdown-fence.js";
+import { cardTitle, plainWords } from "./plain-words.js";
+import {
+  leftOutLine,
+  replayCount,
+  replayOpening,
+  replayVerb,
+  stepLine,
+  summaryLine,
+} from "./replay-card-model.js";
+import { blockSays, bodyWords, TOOL_BLOCK, type ToolBlock } from "./tool-call-block.js";
+import { delegationView, toolCallView } from "./tool-call-model.js";
+import {
+  agentMessageOf,
+  COMMENT_LINE_LEAD,
+  commentLineOf,
+  commentLineSubject,
+  commentLineWords,
+  githubLineOf,
+  githubLineWords,
+  SLACK_LINE_LEAD,
+  SLACK_LINE_SUBJECT,
+  slackLineOf,
+  THREAD_LINE_DID,
+  threadLineOf,
+  workerLines,
+} from "./transcript-lines.js";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -32,35 +60,8 @@ import {
   isCommandKind,
   TURN_ROW,
   type TurnRow,
-} from "@repo/features/turn-rows";
-import { MESSAGE_ROLE } from "@repo/wire";
-import { unreachedAs } from "../act.js";
-import {
-  agentMessageOf,
-  commentLineOf,
-  commentLineWords,
-  githubLineOf,
-  githubLineWords,
-  slackLineOf,
-  threadLineOf,
-  workerLines,
-} from "./agent-model.js";
-import {
-  COMMENT_LINE_LEAD,
-  commentLineSubject,
-  SLACK_LINE_LEAD,
-  SLACK_LINE_SUBJECT,
-  THREAD_LINE_DID,
-} from "./line-cards.js";
-import {
-  leftOutLine,
-  replayCount,
-  replayOpening,
-  replayVerb,
-  stepLine,
-  summaryLine,
-} from "./replay-card-model.js";
-import type { TranscriptReader } from "./use-agent-transcript.js";
+} from "./turn-rows.js";
+import { unreachedAs } from "./unreached.js";
 
 /**
  * transcript-copy.ts -- a coding agent's or a subagent's transcript as the markdown its tab's menu copies: concise, or whole.
@@ -654,6 +655,9 @@ export function transcriptMarkdown(transcript: CopiedTranscript, copy: Transcrip
     ...turns,
   ].join("\n\n")}\n`;
 }
+
+/** How one read is asked at once: the agent, the cursor to read past, and the worker's call where it is a worker's, answered as the view hears it. Copy transcript reads this way. */
+export type TranscriptReader = (params: AgentMessagesParams) => Promise<AgentMessagesAnswerView>;
 
 /** A transcript that could not be read whole: the answer or error the read that failed came to, which a shown failure reports. */
 export interface TranscriptUnread {

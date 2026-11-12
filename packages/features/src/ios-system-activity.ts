@@ -297,5 +297,5 @@ export function iosContinuedRouteOf(continued: ContinuedActivity): string | unde
       ? iosPullRequestRoute(place.agentId, pullRequest)
       : undefined;
 
-  return iosAppRouteOf(place);
+  return iosAppRouteOf(place, read.workspace);
 }

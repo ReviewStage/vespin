@@ -1,4 +1,4 @@
-// member-pictures.ts -- the sign-in picture of each member of the workspace the phone works in, by their id, which every face the app draws a person with reads.
+// member-pictures.ts -- the sign-in picture and name of each member of the workspace the phone works in, by their id, which every face the app draws a person with reads.
 
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -14,6 +14,11 @@ import { useLiveFollow } from "./host/live-follow.js";
 
 /** A member's picture by their id; none for someone the app holds no picture of. */
 export type PictureOf = (userId: string | undefined) => string | undefined;
+
+/** A member's name and picture by their id; none for someone the app holds no member row of. */
+export type MemberOf = (
+  userId: string,
+) => { readonly name: string; readonly picture: string | undefined } | undefined;
 
 /** The workspace the phone works in, which its members are read for. */
 function useChosenWorkspaceId(): string | undefined {
@@ -35,16 +40,9 @@ export function useMemberPicturesFollow(): void {
   );
 }
 
-/**
- * Each person's sign-in picture by their id, as the panel's faces draw
- * them: the members of the workspace the phone works in, and the signed-in
- * account's own, which stands even before its members are read. Note that a
- * person with no picture, or one the list has yet to hold, gets none, and
- * their face draws their letters, as it does while a picture loads.
- */
-export function useMemberPictures(): PictureOf {
+/** The members of the workspace the phone works in, as the follow `useMemberPicturesFollow` holds reads them. */
+function useMembers() {
   const workspaceId = useChosenWorkspaceId();
-  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
 
   const { data: members } = useQuery({
     ...appStateQuery,
@@ -56,6 +54,39 @@ export function useMemberPictures(): PictureOf {
       [workspaceId],
     ),
   });
+
+  return members;
+}
+
+/**
+ * Each member's name and picture by their id, of the workspace the phone
+ * works in, as a follower's face is drawn; none for someone the list has yet
+ * to hold, or who left it.
+ */
+export function useMemberFaces(): MemberOf {
+  const members = useMembers();
+
+  return useMemo(() => {
+    const byId = new Map((members ?? []).map((member) => [member.userId, member]));
+
+    return (userId) => {
+      const member = byId.get(userId);
+
+      return member === undefined ? undefined : { name: member.name, picture: member.pictureUrl };
+    };
+  }, [members]);
+}
+
+/**
+ * Each person's sign-in picture by their id, as the panel's faces draw
+ * them: the members of the workspace the phone works in, and the signed-in
+ * account's own, which stands even before its members are read. Note that a
+ * person with no picture, or one the list has yet to hold, gets none, and
+ * their face draws their letters, as it does while a picture loads.
+ */
+export function useMemberPictures(): PictureOf {
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const members = useMembers();
 
   const readerId = account === undefined ? undefined : signedInAccountId(account);
 

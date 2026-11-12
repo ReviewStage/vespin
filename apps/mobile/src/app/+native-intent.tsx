@@ -44,7 +44,11 @@ export function redirectSystemPath({
     const read = readShownLink(path);
 
     if (read === undefined && !WEB_ADDRESS.test(path)) return path;
-    const route = read !== undefined && "workspace" in read ? iosAppRouteOf(read.place) : undefined;
+
+    const route =
+      read !== undefined && "workspace" in read
+        ? iosAppRouteOf(read.place, read.workspace)
+        : undefined;
 
     if (route !== undefined) return route;
     openURL(path).catch((cause: unknown) => console.error("The link did not open.", cause));

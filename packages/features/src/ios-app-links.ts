@@ -26,6 +26,7 @@ import {
   readLink,
   readShownLink,
   samePullRequest,
+  taskNumberOf,
 } from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
@@ -93,14 +94,29 @@ function addressPath(address: string): string {
   return (address.split(/[?#]/u)[0] ?? "").replace(/\/$/u, "");
 }
 
+/** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
+export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+
+/** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
+function taskRoute(planId: string, workspace: string | undefined): string {
+  const route = `${IOS_ROUTE.TASKS}/${encodeURIComponent(planId)}`;
+  const numbered = taskNumberOf({ kind: LINK_DESTINATION.TASK, planId }) !== undefined;
+
+  return numbered && workspace !== undefined
+    ? `${route}?${new URLSearchParams({ [IOS_TASK_WORKSPACE_PARAM]: workspace })}`
+    : route;
+}
+
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
  * web. A task is routed as the link names it, by id or by number, for the
- * task's screen to find.
+ * task's screen to find; a number carries `workspace`, the workspace the
+ * link names it under, since a number counts within one workspace and the
+ * screen finds a task the phone doesn't hold by both (`TASKS_FIND`).
  */
-export function iosAppRouteOf(place: IosRoutedPlace): string;
-export function iosAppRouteOf(place: LinkDestination): string | undefined;
-export function iosAppRouteOf(place: LinkDestination): string | undefined {
+export function iosAppRouteOf(place: IosRoutedPlace, workspace?: string): string;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined {
   switch (place.kind) {
     case LINK_DESTINATION.INBOX:
       return IOS_ROUTE.INBOX;
@@ -109,7 +125,7 @@ export function iosAppRouteOf(place: LinkDestination): string | undefined {
     case LINK_DESTINATION.BOARD:
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
-      return `${IOS_ROUTE.TASKS}/${encodeURIComponent(place.planId)}`;
+      return taskRoute(place.planId, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
     default:
@@ -171,7 +187,7 @@ export function iosAppRouteOfAddress(
 ): string | undefined {
   const read = readLink(address);
 
-  if (read !== undefined) return iosAppRouteOf(read.place);
+  if (read !== undefined) return iosAppRouteOf(read.place, read.workspace);
   const named = pullRequestAddressOf(address);
 
   if (named === undefined) return undefined;

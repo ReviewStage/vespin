@@ -61,6 +61,7 @@ import {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -81,6 +82,7 @@ import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-appr
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
@@ -165,6 +167,19 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
+}
+
+/** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
+function useAutomationAddress(
+  automationId: string | undefined,
+  workspaceId: string | undefined,
+): string | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined || automationId === undefined) return undefined;
+
+  return linkOf({ kind: LINK_DESTINATION.AUTOMATION, automationId }, step);
 }
 
 /** The change a card's Merge sends, by what the pull request offers: merged at once by the first method the repository allows, or queued once ready where it merges through a queue; none where it offers neither. */
@@ -392,6 +407,30 @@ export function AgentScreen() {
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
   const whole = useWholeParts(id);
+  const automated = agent?.automationId !== undefined || agent?.automationName !== undefined;
+  const run = useAgentOrigin(id, automated);
+  const automationAddress = useAutomationAddress(agent?.automationId, agent?.workspaceId);
+
+  // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
+  const origin = useMemo(
+    () =>
+      !automated || transcript?.before !== undefined
+        ? undefined
+        : transcriptOriginOf({
+            automationId: agent?.automationId,
+            automationName: agent?.automationName,
+            automationAddress,
+            run,
+          }),
+    [
+      automated,
+      transcript?.before,
+      agent?.automationId,
+      agent?.automationName,
+      automationAddress,
+      run,
+    ],
+  );
 
   const items = useMemo(
     () =>
@@ -402,8 +441,9 @@ export function AgentScreen() {
         now: Date.now(),
         pullRequests,
         wholePart: whole.read,
+        origin,
       }),
-    [messages, status, readerId, toggles, pullRequests, whole.read],
+    [messages, status, readerId, toggles, pullRequests, whole.read, origin],
   );
 
   // A call opened on an answer its page carried cut reads it whole.

@@ -1,21 +1,15 @@
-import {
-  AGENT_PART,
-  type AgentPart,
-  agentParts,
-  isTaskCall,
-  isTodos,
-} from "@repo/features/agent-parts";
-import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "@repo/features/agent-tools";
+import { isRecord, isWireString, type WireValue } from "@repo/wire";
+import { AGENT_PART, type AgentPart, agentParts, isTaskCall, isTodos } from "./agent-parts.js";
+import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "./agent-tools.js";
 import {
   AGENT_TODO_STATUS,
   type AgentTodoStatus,
   type AgentTodos,
   type AgentTranscriptMessage,
-} from "@repo/features/agent-wire";
-import type { DrawnCall } from "@repo/features/native-tool-calls";
-import { TOOL_STATE } from "@repo/features/tool-call-block";
-import { todosView } from "@repo/features/tool-call-model";
-import { isRecord, isWireString, type WireValue } from "@repo/wire";
+} from "./agent-wire.js";
+import type { DrawnCall } from "./native-tool-calls.js";
+import { TOOL_STATE } from "./tool-call-block.js";
+import { todosView } from "./tool-call-model.js";
 
 /**
  * agent-todos.ts -- the agent's to-do lists as its tab reads them: the list each call carries, the newest standing, and the one docked while it is worked.

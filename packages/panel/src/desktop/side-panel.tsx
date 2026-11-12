@@ -19,6 +19,12 @@ import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
+import {
+  agentTranscript,
+  readWholeTranscript,
+  TRANSCRIPT_COPY,
+  type TranscriptCopy,
+} from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -167,12 +173,6 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import {
-  agentTranscript,
-  readWholeTranscript,
-  TRANSCRIPT_COPY,
-  type TranscriptCopy,
-} from "../tasks/transcript-copy.js";
 import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { OnLeavingHere, PullRequestsOnGitHub } from "../tasks/use-open-link.js";
