@@ -52,7 +52,9 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
+import type { HostLine } from "@repo/features/host-live";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -1017,6 +1019,24 @@ const MEMORIES: readonly MemorySummary[] = [
   },
 ];
 
+/** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
+const HOSTS: readonly HostLine[] = [
+  {
+    id: "7a1c9e3b-2f4d-4c6a-8b0e-5d7f9a1c3e52",
+    name: "Ada's MacBook Pro",
+    platform: DEVICE_PLATFORM.DARWIN,
+    model: "MacBook Pro (M4 Pro, 2024)",
+    calledIn: true,
+  },
+  {
+    id: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14",
+    name: "build-box",
+    platform: DEVICE_PLATFORM.LINUX,
+    calledIn: true,
+    away: true,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1622,6 +1642,11 @@ export function inboxAppState(
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
+    [LIVE_READ.HOSTS]: {
+      [ADA.userId]: {
+        rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
+      },
+    },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },

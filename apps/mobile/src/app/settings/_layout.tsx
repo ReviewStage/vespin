@@ -39,6 +39,7 @@ export default function SettingsLayout() {
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
       />
       <Stack.Screen name="agents" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS] }} />
+      <Stack.Screen name="machines" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS] }} />
       <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
       <Stack.Screen name="feedback" options={{ title: FEEDBACK_WORDS.TITLE }} />
     </Stack>

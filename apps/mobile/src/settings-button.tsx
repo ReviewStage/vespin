@@ -16,6 +16,7 @@ export const SETTINGS_ROUTE = {
   MAIN: "/settings",
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
+  MACHINES: "/settings/machines",
   MEMORY: "/settings/memory",
   /** Send feedback, as Settings' About and the iPad's Help menu open it. */
   FEEDBACK: "/settings/feedback",

@@ -26,6 +26,8 @@
     "./credential-redaction": "./src/credential-redaction.js",
     "./device-platform": "./src/device-platform.js",
     "./host-live": "./src/host-live.js",
+    "./machine-name": "./src/machine-name.js",
+    "./machines-settings-words": "./src/machines-settings-words.js",
     "./memory-live": "./src/memory-live.js",
     "./memory-settings-words": "./src/memory-settings-words.js",
     "./member-mcp-tool": "./src/member-mcp-tool.js",
