@@ -467,8 +467,10 @@ the drive may remain. A sandbox's snapshots otherwise expire and are removed
 seven days after they were last used. The workspace's drive of every
 repository it connects is kept for the workspace's agents until the workspace
 is deleted. A repository's default-branch drive made before workspace drives
-is no longer read, and is deleted with its workspace as before. A repository snapshot made before default-branch drives expires
-thirty days after its last use. When you delete your account:
+is no longer read; deleting its workspace asks Vercel to delete it where one of
+the workspace's agents still names its repository, and where none does, or the
+delete fails or does not finish in time, it may remain. A repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, your sounds, integration records, your phones' push
@@ -484,8 +486,8 @@ thirty days after its last use. When you delete your account:
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding
   their checkouts, the workspace's drive of every repository it connects, and
-  any repository's default-branch drive made before it, and to stop their
-  scheduled automations;
+  the default-branch drive made before it of each repository one of their
+  agents still names, and to stop their scheduled automations;
   where that fails or does not finish in time, the workspace is deleted anyway
   and a drive may remain. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those
