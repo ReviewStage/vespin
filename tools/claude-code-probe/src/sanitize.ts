@@ -143,7 +143,7 @@ export function fixtureLeaks(text: string, secrets: readonly string[]): readonly
   }
 
   if (CREDENTIAL_PATTERNS.some((pattern) => new RegExp(pattern.source).test(text))) {
-    leaks.push("a credential pattern");
+    leaks.push("a credential shape");
   }
 
   if (new RegExp(EMAIL_PATTERN.source).test(text)) leaks.push("an email");
