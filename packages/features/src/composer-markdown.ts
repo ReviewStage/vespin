@@ -98,7 +98,6 @@ const WHITESPACE = /\s/u;
 const PUNCTUATION = /[\p{P}\p{S}]/u;
 const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/u;
 const LEADING_SPACE = /^\s*/u;
-const TRAILING_SPACE = /\s*$/u;
 const TICK_RUNS = /`+/gu;
 
 /** A character words wearing a mark escape, which would otherwise close it, open another, or escape the delimiter after it. */
@@ -598,7 +597,8 @@ export function writeInline(pieces: readonly InlinePiece[]): WriteInlineResult {
       return;
     }
 
-    const trail = TRAILING_SPACE.exec(piece.text)?.[0].length ?? 0;
+    // Note that `trimEnd` drops what `\s` matches, read in one pass where a trailing `\s*$` would retry from every space.
+    const trail = piece.text.length - piece.text.trimEnd().length;
     write(piece.text.slice(0, lead), index);
 
     for (const mark of marks) {
