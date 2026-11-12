@@ -407,9 +407,10 @@ export function AgentScreen() {
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
   const whole = useWholeParts(id);
-  const automated = agent?.automationId !== undefined || agent?.automationName !== undefined;
+  // Note that an agent the list doesn't hold still opens on its run's card, from its own read.
+  const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
   const run = useAgentOrigin(id, automated);
-  const automationAddress = useAutomationAddress(agent?.automationId, agent?.workspaceId);
+  const automationAddress = useAutomationAddress(shown?.automationId, shown?.workspaceId);
 
   // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
   const origin = useMemo(
@@ -417,16 +418,16 @@ export function AgentScreen() {
       !automated || transcript?.before !== undefined
         ? undefined
         : transcriptOriginOf({
-            automationId: agent?.automationId,
-            automationName: agent?.automationName,
+            automationId: shown?.automationId,
+            automationName: shown?.automationName,
             automationAddress,
             run,
           }),
     [
       automated,
       transcript?.before,
-      agent?.automationId,
-      agent?.automationName,
+      shown?.automationId,
+      shown?.automationName,
       automationAddress,
       run,
     ],
