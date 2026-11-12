@@ -34,6 +34,9 @@ import {
 const NOW = new Date("2026-11-10T12:00:00Z");
 const LATER = new Date("2026-11-10T12:05:00Z");
 
+/** Past the longest a function of the service runs, so a press claimed at `NOW` and never landed is gone. */
+const LAPSED = new Date("2026-11-10T12:16:00Z");
+
 const START = {
   kind: REPLY_BUTTON_ACTION.START,
   prompt: "Send the invite email through the mail provider.",
@@ -121,6 +124,32 @@ it.layer(getTestDB())("a reply button", (it) => {
           pressedBy: owner,
           reachedAgentId: reached,
           landedAt: NOW,
+        });
+      }),
+  );
+
+  it.effect(
+    "is pressed by another member once a press claimed long ago never landed nor was released, and by its own presser no more",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const teammate = yield* openAccount;
+        const workspace = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspace, teammate);
+        const agentId = yield* openAgentOnOwnTask(owner, workspace);
+        const reached = yield* openAgentOnOwnTask(owner, workspace);
+        const buttonId = yield* makeReplyButton(agentId, "Wire up the invite email", START, NOW);
+
+        // The owner's press is cut off after it claimed, so it is neither settled nor released.
+        assert.ok((yield* claimReplyButtonPress(buttonId, owner, NOW)) !== undefined);
+        assert.equal(yield* claimReplyButtonPress(buttonId, teammate, LATER), undefined);
+        assert.ok((yield* claimReplyButtonPress(buttonId, teammate, LAPSED)) !== undefined);
+        assert.equal(yield* claimReplyButtonPress(buttonId, owner, LAPSED), undefined);
+        yield* settleReplyButtonPress(buttonId, teammate, reached, LAPSED);
+        assert.deepEqual(yield* pressOf(owner, buttonId), {
+          pressedBy: teammate,
+          reachedAgentId: reached,
+          landedAt: LAPSED,
         });
       }),
   );
