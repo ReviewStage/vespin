@@ -1,5 +1,5 @@
 /**
- * notifications.ts -- what the app does with the service's pushes once they are on the phone: the reply typed in place their category offers, a tap or an action opening its thread, and what is cleared on a sign-out.
+ * notifications.ts -- what the app does with the service's pushes once they are on the phone: the reply typed in place their category offers, a tap opening its thread, and what is cleared on a sign-out.
  *
  * Each alert names its category (`PUSH_CATEGORY`, `@repo/features/inbox-push-wire`):
  * any post offers a reply typed in place, registered here once a launch; a
@@ -9,11 +9,15 @@
  * run's agent, in whatever state the app stood, a cold launch included, since
  * iOS keeps the response that launched the app (`useLastNotificationResponse`).
  *
- * Note that an action does not answer in the background: `expo-notifications`
- * runs JavaScript for a notification's action only on Android, so on the
- * iPhone each action opens the app on its thread, which sends the option
- * pressed or the words typed as though they were pressed there
- * (`pressFromNotification`), drawn, refused, and buzzed as any send is. A
+ * An action, a decide's button or the reply typed in place, opens nothing:
+ * it is answered in the background by the app's own notification-answer
+ * module (`modules/notification-answer/`), in Swift, which iOS hands it to
+ * whether or not the app was running, and which asks for the phone's unlock
+ * first. So a response here that is not a tap is let go. Where that send
+ * did not go, the module posts a notice of its own (`PUSH_KIND.UNSENT`)
+ * carrying the press, whose tap opens the thread and sends it there as
+ * though it were pressed on it (`pressFromNotification`), drawn, refused,
+ * and buzzed as any send is, under the key the module sent under. A
  * response that lands while no account is signed in waits for one.
  *
  * The badge is the member's Inbox count as each push carries it, which iOS
@@ -29,6 +33,7 @@ import {
 } from "@repo/features/inbox-push-wire";
 import {
   clearLastNotificationResponse,
+  DEFAULT_ACTION_IDENTIFIER,
   dismissAllNotificationsAsync,
   type NotificationAction,
   setBadgeCountAsync,
@@ -40,13 +45,13 @@ import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { pressFromNotification } from "./inbox/use-thread-answer.js";
 
-/** The reply typed in place that any post's alert offers, opening the app on its thread to send it. */
+/** The reply typed in place that any post's alert offers, sent in the background by the notification-answer module once the phone is unlocked. */
 const REPLY_ACTIONS: NotificationAction[] = [
   {
     identifier: INBOX_PUSH_ACTION.REPLY,
     buttonTitle: "Reply",
     textInput: { submitButtonTitle: "Send", placeholder: "Reply" },
-    options: { opensAppToForeground: true },
+    options: { opensAppToForeground: false, isAuthenticationRequired: true },
   },
 ];
 
@@ -63,9 +68,9 @@ setNotificationHandler({
 
 /**
  * The app's side of its notifications, mounted once over the screens: the
- * reply's category registered, and each tap or action, the one that
- * launched the app among them, opening its route once an account is signed
- * in, with what an action sends held for the thread's box.
+ * reply's category registered, and each tap, the one that launched the app
+ * among them, opening its route once an account is signed in, with what an
+ * unsent notice carries held for the thread's box.
  */
 export function useInboxNotifications(signedIn: boolean): void {
   const router = useRouter();
@@ -80,9 +85,11 @@ export function useInboxNotifications(signedIn: boolean): void {
     // Note that the response is let go first, so a later render never opens it twice.
     clearLastNotificationResponse();
 
+    // An action is the notification-answer module's, which iOS hands it to beside this.
+    if (response.actionIdentifier !== DEFAULT_ACTION_IDENTIFIER) return;
+
     const opened = inboxPushResponseOf(inboxPushOf(response.notification.request.content.data), {
       actionId: response.actionIdentifier,
-      ...(response.userText === undefined ? undefined : { text: response.userText }),
     });
 
     if (opened === undefined) return;

@@ -98,6 +98,36 @@ describe("inboxPushResponseOf", () => {
       response: { route: "/tasks/task-5" },
     },
     {
+      name: "an unsent option's notice opens its thread and sends the option under its key",
+      payload: {
+        kind: "unsent",
+        itemId: "item-6",
+        clientKey: "key-6",
+        messageId: "message-6",
+        option: "Redis",
+      },
+      action: TAP,
+      response: {
+        route: "/inbox/item-6",
+        press: {
+          kind: "choose",
+          itemId: "item-6",
+          messageId: "message-6",
+          option: "Redis",
+          clientKey: "key-6",
+        },
+      },
+    },
+    {
+      name: "an unsent reply's notice opens its thread and sends the words under its key",
+      payload: { kind: "unsent", itemId: "item-7", clientKey: "key-7", text: "Ship it." },
+      action: TAP,
+      response: {
+        route: "/inbox/item-7",
+        press: { kind: "reply", itemId: "item-7", text: "Ship it.", clientKey: "key-7" },
+      },
+    },
+    {
       name: "a settled thread's background push opens nothing",
       payload: { aps: { "content-available": 1, badge: 0 }, kind: "settled", itemId: "item-1" },
       action: TAP,

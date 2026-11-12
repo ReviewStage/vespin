@@ -11,7 +11,11 @@
  * reply typed in place comes back under `INBOX_PUSH_ACTION.REPLY`. The
  * app's share extension posts one notification of its own, a local one
  * naming the task it started (`PUSH_KIND.SHARE_STARTED`), which a tap opens
- * the same way.
+ * the same way; and the app's notification handler posts one for an answer
+ * it could not send in the background (`PUSH_KIND.UNSENT`), carrying the
+ * press and the key it went under, whose tap opens the thread and sends it
+ * there under the same key, so an answer the service took after all is
+ * taken once.
  */
 
 import { Schema as EffectSchema, flow, Option } from "effect";
@@ -30,6 +34,8 @@ export const PUSH_KIND = {
   SETTLED: "settled",
   /** A task the share sheet started, posted on the phone itself rather than pushed. */
   SHARE_STARTED: "share-started",
+  /** An answer a notification's action could not send in the background, posted on the phone itself; a tap sends it from the thread. */
+  UNSENT: "unsent",
 } as const;
 
 /** The actions the app offers on an alert, as its `aps.category` names them; the app registers each. */
@@ -100,17 +106,28 @@ const shareStartedPushSchema = EffectSchema.Struct({
   agentId: EffectSchema.optionalKey(idSchema),
 });
 
+/** The notification handler's notice of an answer it did not send: the thread, the key the send went under, and the press, a decide's option on the ask it answers or the words typed. */
+const unsentPushSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(PUSH_KIND.UNSENT),
+  itemId: idSchema,
+  clientKey: idSchema,
+  messageId: EffectSchema.optionalKey(idSchema),
+  option: EffectSchema.optionalKey(EffectSchema.String),
+  text: EffectSchema.optionalKey(EffectSchema.String),
+});
+
 /** What a push carries beside `aps`, by its kind. */
 const inboxPushSchema = EffectSchema.Union([
   threadPushSchema,
   runFailedPushSchema,
   settledPushSchema,
   shareStartedPushSchema,
+  unsentPushSchema,
 ]);
 
 export type InboxPush = typeof inboxPushSchema.Type;
 
-/** What the app sends on the thread it opens: an option pressed, or words typed in place. */
+/** What the app sends on the thread it opens: an option pressed, or words typed in place; under the key an unsent notice names, where it does. */
 export type InboxPushPress =
   | {
       readonly kind: typeof INBOX_PUSH_PRESS.CHOOSE;
@@ -118,11 +135,13 @@ export type InboxPushPress =
       /** The ask the option answers, which must still be the thread's open one. */
       readonly messageId: string;
       readonly option: string;
+      readonly clientKey?: string;
     }
   | {
       readonly kind: typeof INBOX_PUSH_PRESS.REPLY;
       readonly itemId: string;
       readonly text: string;
+      readonly clientKey?: string;
     };
 
 /** Where a tap or an action on a push takes the app, and what it sends there, if anything. */
@@ -176,13 +195,31 @@ function pressOf(
     : { kind: INBOX_PUSH_PRESS.CHOOSE, itemId: push.itemId, messageId: push.messageId, option };
 }
 
+/** What an unsent notice's tap sends on the thread, under the key the handler's send went under: the option on its ask, or the words; nothing where it names neither. */
+function unsentPressOf(
+  push: Extract<InboxPush, { readonly kind: typeof PUSH_KIND.UNSENT }>,
+): InboxPushPress | undefined {
+  const { itemId, clientKey, messageId, option, text } = push;
+
+  if (messageId !== undefined && option !== undefined) {
+    return { kind: INBOX_PUSH_PRESS.CHOOSE, itemId, messageId, option, clientKey };
+  }
+
+  const words = text?.trim() ?? "";
+
+  return words === ""
+    ? undefined
+    : { kind: INBOX_PUSH_PRESS.REPLY, itemId, text: words, clientKey };
+}
+
 /**
  * Where a tap or an action on a notification takes the app, and what it
  * sends there: a thread's push opens the thread, with its option or its
  * words where an action pressed one; a failed run opens its agent; a task
- * the share sheet started opens its agent, or the task where none started.
- * None for no push, a payload that is not the service's, or a settled thread's
- * background push, which nobody taps.
+ * the share sheet started opens its agent, or the task where none started;
+ * an unsent notice opens its thread with the press it carries, under its
+ * key. None for no push, a payload that is not the service's, or a settled
+ * thread's background push, which nobody taps.
  */
 export function inboxPushResponseOf(
   push: InboxPush | undefined,
@@ -196,7 +233,9 @@ export function inboxPushResponseOf(
   const press =
     push.kind === PUSH_KIND.RUN_FAILED || push.kind === PUSH_KIND.SHARE_STARTED
       ? undefined
-      : pressOf(push, action);
+      : push.kind === PUSH_KIND.UNSENT
+        ? unsentPressOf(push)
+        : pressOf(push, action);
 
   return press === undefined ? { route } : { route, press };
 }

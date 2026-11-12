@@ -13,10 +13,12 @@
  * screens rather than in a screen's state, so folding or unfolding the
  * iPhone Duo, which draws the thread on another screen, keeps both.
  *
- * A notification's action, a decide's option or a reply typed in place,
- * opens the app on its thread and is held here (`pressFromNotification`)
- * until the thread's box stands, which sends it once as though it were
- * pressed there, so it is drawn, refused, and buzzed as any send is. An
+ * A notification's press the phone could not send in the background, a
+ * decide's option or a reply typed in place, opens the app on its thread and
+ * is held here (`pressFromNotification`) until the thread's box stands,
+ * which sends it once as though it were pressed there, so it is drawn,
+ * refused, and buzzed as any send is, under the key the notice names where
+ * it names one, so an answer the service took after all is taken once. An
  * option whose ask is no longer the thread's open one is let go unsent.
  */
 
@@ -264,8 +266,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     });
   };
 
-  const send = (pressed?: InboxDraft) => {
-    const sending = pressed ?? draft;
+  const sendUnder = (sending: InboxDraft, key: string) => {
     const unreadable = unreadableNumber(thread, sending);
 
     if (unreadable !== undefined) {
@@ -288,7 +289,6 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       return;
     }
 
-    const key = randomUUID();
     const revision = awaitsNod(item) ? item.revision : undefined;
     hold(itemId, (was) => ({
       draft: EMPTY_INBOX_DRAFT,
@@ -320,6 +320,8 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       },
     );
   };
+
+  const send = (pressed?: InboxDraft) => sendUnder(pressed ?? draft, randomUUID());
 
   const resolve = () => {
     const key = randomUUID();
@@ -355,7 +357,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     hold(itemId, ({ pressed: _taken, ...was }) => was);
     const sending = pressedDraft(thread, pressed);
 
-    if (sending !== undefined) send(sending);
+    if (sending !== undefined) sendUnder(sending, pressed.clientKey ?? randomUUID());
   }, [pressed]);
 
   return {
