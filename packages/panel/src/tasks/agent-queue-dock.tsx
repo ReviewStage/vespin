@@ -132,7 +132,8 @@ export function AgentQueueDock({
   onMove: (from: number, to: number) => void;
   /** Steers a queued message into the turn under way or as the next; none while the agent's first launch boots, which takes no line until its machine is up. */
   onSteer: ((message: QueuedMessage) => void) | undefined;
-  onEdit: (message: QueuedMessage) => void;
+  /** Opens a queued message in the box to be written again; none while the box holds what its words must not join, such as a suggestion's draft. */
+  onEdit: ((message: QueuedMessage) => void) | undefined;
   /** Deletes the message once the dialog's Delete is pressed, answering how that went. */
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
   onResume: () => void;
@@ -244,12 +245,14 @@ export function AgentQueueDock({
                           {QUEUE_WORDS.STEER}
                         </Button>
                       )}
-                      <IconButton
-                        size={BUTTON_SIZE.COMPACT}
-                        label={QUEUE_WORDS.EDIT}
-                        icon={<GLYPH.RENAME />}
-                        onClick={() => onEdit(message)}
-                      />
+                      {onEdit === undefined ? null : (
+                        <IconButton
+                          size={BUTTON_SIZE.COMPACT}
+                          label={QUEUE_WORDS.EDIT}
+                          icon={<GLYPH.RENAME />}
+                          onClick={() => onEdit(message)}
+                        />
+                      )}
                       <IconButton
                         variant={BUTTON_VARIANT.DANGER_QUIET}
                         size={BUTTON_SIZE.COMPACT}

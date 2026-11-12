@@ -508,6 +508,8 @@ export interface TranscriptOrigin {
   readonly lead?: TranscriptLead | undefined;
   readonly text?: string | undefined;
   readonly body?: string | undefined;
+  /** The line whose files the card draws as chips, as a sent line draws its own; none where the card draws none. */
+  readonly files?: AgentTranscriptMessage | undefined;
 }
 
 /** The task an agent's description is the description of, as its card's sender line names it: its name, its status, whose mark it wears, and the card its sidebar row hangs. */
@@ -1317,6 +1319,7 @@ function PlanCard({
   sender,
   sentAt,
   body,
+  files,
   messageId,
   taskId,
 }: {
@@ -1332,6 +1335,8 @@ function PlanCard({
   sentAt?: number | undefined;
   /** A webhook call's body, which rode in with an automation's prompt. */
   body?: string | undefined;
+  /** The line whose files the card draws as chips over it (`TranscriptOrigin`); none where it draws none. */
+  files?: AgentTranscriptMessage | undefined;
   /** The task the agent works on, whose description's pictures the card draws; none where it works on none. */
   taskId?: string | undefined;
 }): ReactNode {
@@ -1344,6 +1349,7 @@ function PlanCard({
 
   return (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
+      {files === undefined ? null : <MessageFileChips message={files} />}
       <Plan data-origin-description="" aria-label={lead.label}>
         <PlanHeader>
           <PlanIcon>
@@ -1461,6 +1467,8 @@ function suggestionOrigin(
     lead: SUGGESTION_LEAD_CARD,
     sender: <SuggestionSender suggestedBy={suggestedBy} starter={starter} />,
     text: suggestionWords(messageWords(first)),
+    // Note that the files the member sent from the suggestion's draft are drawn on its card, which stands in their line's place.
+    files: first,
   };
 }
 
@@ -1847,6 +1855,7 @@ export function AgentMessage({
         sender={origin?.sender}
         sentAt={message.sentAt}
         body={origin?.body}
+        files={origin?.files}
         messageId={message.id}
         taskId={taskId}
       />
@@ -3558,7 +3567,8 @@ function AgentTabView({
                 ? undefined
                 : (message) => queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
             }
-            onEdit={queueEditing.edit}
+            // Note that a box filled in from a suggestion opens no queued message, whose words would go out through the suggestion.
+            onEdit={composer.suggestion === undefined ? queueEditing.edit : undefined}
             onCancelEdit={queueEditing.cancelRow}
             onDelete={queue.remove}
             onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
