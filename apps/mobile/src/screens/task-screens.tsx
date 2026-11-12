@@ -13,6 +13,7 @@ import {
   linkOf,
   readLink,
   taskLinkStep,
+  taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -1624,6 +1625,14 @@ export function TasksListScreen() {
   );
 }
 
+/** Whether a route names its task by number in the workspace its link names, which the task's screen finds before the split view is handed it. */
+function numberedIn(id: string, workspace: string | undefined): boolean {
+  return (
+    workspace !== undefined &&
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: id }) !== undefined
+  );
+}
+
 /**
  * The Tasks tab's pushed screen: one task's Overview, named by the route's
  * `id`, its path small in the bar and its ⋯ beside it, read as it opens. A
@@ -1666,8 +1675,9 @@ export function TaskScreen() {
           moveDoor,
         });
 
-  // Note that a number is handed to the split view only once found, as the task's id, since the split view's selection names no workspace.
-  const handed = useHandToSplit(SPLIT_TAB.TASKS, found.seeking ? undefined : (found.taskId ?? id));
+  // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
+  const handing = numberedIn(id, workspace) ? found.taskId : id;
+  const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 

@@ -34,11 +34,13 @@ const NOT_FOUND: FoundTask = { taskId: undefined, seeking: false };
 
 const SEEKING: FoundTask = { taskId: undefined, seeking: true };
 
-/** Whether a task's own description read hasn't answered yet, by its id. */
+/**
+ * Whether a task's own description read hasn't answered with it or with its
+ * absence, by its id. Note that a read that failed is still sought, since the
+ * host reads it again, so a passing failure never says Task not found.
+ */
 function documentUnread(state: AppStateSnapshot, taskId: string): boolean {
-  const held = state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId];
-
-  return held?.rows === undefined && held?.failed !== true;
+  return state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows === undefined;
 }
 
 /**

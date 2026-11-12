@@ -579,6 +579,14 @@ function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
+/**
+ * The tasks the list has held this session, by their ids. Note that one that
+ * leaves the list was deleted or moved out of the member's reach, so its
+ * description, which the host keeps after a delete, is never drawn in its
+ * place; only a task the list never held stands on its own read.
+ */
+const listedOnce = new Set<string>();
+
 /** The id a link's word names a task by, or none where it names one by its number. */
 function idNamed(named: string | undefined): string | undefined {
   if (named === undefined) return undefined;
@@ -626,8 +634,18 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
           },
   });
 
+  useEffect(() => {
+    if (listedTask !== undefined) listedOnce.add(listedTask.id);
+  }, [listedTask]);
+
   const read = held?.document;
-  const task = listedTask ?? (read !== undefined && "task" in read ? read.task : undefined);
+
+  const unlistedTask =
+    taskId !== undefined && !listedOnce.has(taskId) && read !== undefined && "task" in read
+      ? read.task
+      : undefined;
+
+  const task = listedTask ?? unlistedTask;
   // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
   const placing = useTaskPlacing(task?.workspaceId);
 
