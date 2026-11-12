@@ -19,6 +19,7 @@ import {
   INVITATION_WORDS,
   LEAVE_WORDS,
   MEMBER_WORDS,
+  PHOTO_WORDS,
   TRANSFER_WORDS,
   transferQuestionTitle,
   WORKSPACE_READ_FAILED,
@@ -151,12 +152,6 @@ import {
  * are being read their loading lines hold the page back (`SettingsLine`),
  * and a read that failed says so with Retry.
  */
-
-/** The photo's removal, which its tile offers and the confirm asks. */
-const PHOTO_WORDS = {
-  DELETE: "Delete photo",
-  DELETE_BODY: "The workspace is marked by its first letter instead.",
-} as const;
 
 const INVITE_LINK_COPIED = "Invite link copied";
 
@@ -1835,12 +1830,12 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
         open
         confirm={remove}
         question={{
-          title: `Delete ${workspace.name}'s photo?`,
+          title: PHOTO_WORDS.DELETE_QUESTION(workspace.name),
           replayUnmasked: true,
           titleReplayMasked: true,
           body: PHOTO_WORDS.DELETE_BODY,
           verb: PHOTO_WORDS.DELETE,
-          running: "Deleting",
+          running: PHOTO_WORDS.DELETE_RUNNING,
           loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
       />

@@ -216,6 +216,16 @@ attached. A view handed a modifier the build does not register draws as it
 would without it. No Maestro flow can drag or hover, so these are checked by
 hand on an iPad with a trackpad.
 
+## The photo scaler
+
+A workspace's photo is picked in the system's photo picker, cropped there to
+a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
+within the service's bound by the app's own native module, autolinked from
+`modules/photo-scale/`, through ImageIO as the share extension scales a
+shared picture, so a HEIC from the library is read and no metadata goes with
+it (`src/workspace-photo.ts`). A build without the module says the photo
+could not be read rather than sending one at full size.
+
 ## The share extension
 
 Vespin stands in the system's share sheet for text, a web link and up to
