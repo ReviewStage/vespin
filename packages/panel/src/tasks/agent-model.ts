@@ -133,7 +133,6 @@ import {
   USER_MESSAGE_METADATA,
   type UserMessageMetadata,
 } from "@repo/wire";
-import { sentLineId } from "@repo/wire/host-ids";
 import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 
@@ -2232,29 +2231,6 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
     role: MESSAGE_ROLE.USER,
     parts: [{ type: AGENT_PART.TEXT, text: line.text }, ...files],
     sentAt: line.sentAt,
-  };
-}
-
-/**
- * The words an agent New task started on, as its tab draws them before the
- * service has made it: the developer's words as they went, under the id
- * their start's key names, which that tab draws as its queue's row.
- */
-export function openingLineOf(words: {
-  readonly key: string;
-  readonly prompt: string;
-  readonly attachments: readonly AgentAttachment[];
-  /** When Start was pressed; now where unsaid. */
-  readonly sentAt?: number | undefined;
-}): SentLine {
-  return {
-    id: sentLineId(words.key),
-    clientKey: words.key,
-    text: words.prompt.trim(),
-    attachments: words.attachments,
-    steers: false,
-    sentAt: words.sentAt ?? Date.now(),
-    state: SENT_LINE_STATE.PENDING,
   };
 }
 
