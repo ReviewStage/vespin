@@ -19,6 +19,7 @@ import { BLOCK_MENU_EXAMPLE } from "./examples/block-menu";
 import { BREADCRUMBS_EXAMPLE } from "./examples/breadcrumbs";
 import { BUTTONS_EXAMPLE } from "./examples/buttons";
 import { CALENDAR_EXAMPLE } from "./examples/calendar";
+import { CALL_CONTROLS_EXAMPLE } from "./examples/call-controls";
 import { CAPTION_FIELDS_EXAMPLE } from "./examples/caption-fields";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
@@ -189,6 +190,7 @@ export const EXAMPLES: readonly Example[] = [
   BUTTONS_EXAMPLE,
   READABLE_CONTROLS_EXAMPLE,
   CALENDAR_EXAMPLE,
+  CALL_CONTROLS_EXAMPLE,
   LENGTH_COUNTERS_EXAMPLE,
   CARDS_EXAMPLE,
   SOCIAL_SIGN_IN_EXAMPLE,

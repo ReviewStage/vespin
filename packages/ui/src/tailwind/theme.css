@@ -949,7 +949,13 @@
      shadow rather than ringed by a dark edge. */
   --shadow-composer:
     0 1px 2px var(--ui-color-shadow-soft), 0 12px 32px -16px var(--ui-color-shadow);
-  /* A caption's small glyph. */
+  /* A call's bar (`components/call/`), as tall as its two lines; and a
+     caption's small glyph. */
+  --spacing-call-row: calc(
+    var(--ui-type-section-leading) +
+    var(--ui-space-2) +
+    var(--ui-type-caption-leading)
+  );
   --spacing-icon-12: var(--ui-icon-12);
 
   /* The page patterns (`components/layout/`, `settings-*`,
