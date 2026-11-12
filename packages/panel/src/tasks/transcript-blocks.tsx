@@ -854,7 +854,7 @@ export interface GitHubPictureSize {
 }
 
 /** A size attribute as the drawn tree hands it, a number or its words, read as pixels; none where it is no positive number, as a percentage is not. */
-function pixelsOf(value: unknown): number | undefined {
+function pixelsOf(value: string | number | undefined): number | undefined {
   const pixels = Predicate.isNumber(value) ? value : Number(value);
 
   return Number.isFinite(pixels) && pixels > 0 ? pixels : undefined;

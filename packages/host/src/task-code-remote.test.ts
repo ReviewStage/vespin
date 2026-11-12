@@ -3,6 +3,7 @@ import { type ChildProcess, fork } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { it } from "@effect/vitest";
+import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
 import { highlightSnippet } from "./task-code.js";
 import {
@@ -32,7 +33,8 @@ function forkChild(
 ): TaskCodeProcess {
   const child = fork(CHILD, { execArgv: ["--import", "tsx"], stdio: "inherit" });
   forked(child);
-  child.on("message", (message) => listeners.onMessage(message));
+  // SAFETY: the child sends structured-clone values, the wire boundary shape.
+  child.on("message", (message) => listeners.onMessage(message as WireBoundaryInput));
   child.on("exit", () => listeners.onExit());
 
   return {

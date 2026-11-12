@@ -154,9 +154,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
           });
         } else void host.close();
       },
-      (error: unknown) => {
-        console.error("The app's host could not start.", error);
-        reportHostFailure(error);
+      (cause: unknown) => {
+        console.error("The app's host could not start.", cause);
+        reportHostFailure(cause);
 
         if (live) setStanding({ failed: true });
       },

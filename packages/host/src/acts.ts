@@ -52,8 +52,8 @@ export const ACCOUNT_DELETE_UNCONFIRMED_REFUSAL =
  * that it failed; anything else, such as a service that did not answer,
  * says to try again.
  */
-export function accountDeleteRefusalWords(error: unknown): string {
-  const said = error instanceof Error ? error.message : undefined;
+export function accountDeleteRefusalWords(cause: unknown): string {
+  const said = cause instanceof Error ? cause.message : undefined;
 
   if (said === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL) {
     return "The account could not be deleted. Sign out and back in, then delete it again.";

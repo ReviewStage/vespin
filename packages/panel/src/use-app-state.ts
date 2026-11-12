@@ -172,8 +172,8 @@ export function followAppState(client: QueryClient): AppStateFollowing {
         (shown) => {
           if (following) client.setQueryData(appStateQuery.queryKey, shown);
         },
-        (error: unknown) => {
-          console.error("A fixture run's document could not be staged.", error);
+        (cause: unknown) => {
+          console.error("A fixture run's document could not be staged.", cause);
         },
       )
       .then(() => {

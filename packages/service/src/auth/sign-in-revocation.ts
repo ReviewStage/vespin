@@ -168,8 +168,8 @@ const revokeAtGoogle = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redac
 });
 
 /** What a defect is logged as: its kind alone, since a thrown value's words or fields may quote whatever it was handed. */
-function defectKind(defect: unknown): string {
-  return Predicate.isObjectOrArray(defect) ? defect.constructor.name : valueKind(defect);
+function defectKind(cause: unknown): string {
+  return Predicate.isObjectOrArray(cause) ? cause.constructor.name : valueKind(cause);
 }
 
 /**

@@ -112,7 +112,7 @@ interface ContextOptions {
 interface PlaywrightPage {
   goto(url: string): Promise<void>;
   waitForSelector(selector: string): Promise<void>;
-  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<void>;
+  waitForFunction(script: string, arg: undefined, options?: { timeout: number }): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
   on(event: "pageerror", listener: (value: never) => void): void;

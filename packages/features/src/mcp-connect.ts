@@ -8,7 +8,7 @@
  * (`shellLine`).
  */
 
-import { Predicate } from "effect";
+import { Predicate, type Schema } from "effect";
 import { PRODUCT_NAME } from "./product-name.js";
 import { shellQuoted } from "./shell-quote.js";
 
@@ -92,8 +92,8 @@ export const CURSOR_CONFIG_PATH = [".cursor", "mcp.json"] as const;
  * server kept as it stood; none where what stands there is no config this
  * could add to, which is left for the person rather than overwritten.
  */
-export function cursorConfigWithServer(config: unknown, serverUrl: string) {
-  const existing = config ?? {};
+export function cursorConfigWithServer(config: Schema.Json | undefined, serverUrl: string) {
+  const existing: unknown = config ?? {};
 
   if (!Predicate.isObject(existing)) return undefined;
   const servers = existing.mcpServers ?? {};

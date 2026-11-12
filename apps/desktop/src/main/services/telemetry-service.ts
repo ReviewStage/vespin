@@ -113,13 +113,14 @@ const SPAN_STATUS_ERROR = 2;
 /** The span attributes main's tracer passes on, by their prefix; every other, a stack trace's among them, stays behind. */
 const KEPT_ATTRIBUTE_PREFIXES = ["agent.", "mirror."] as const;
 
-/** An attribute's value as Sentry keeps one: a string, a number, or a boolean. */
-function keptValue(key: string, value: unknown): string | number | boolean | undefined {
-  if (!KEPT_ATTRIBUTE_PREFIXES.some((prefix) => key.startsWith(prefix))) return undefined;
+/** Whether main's tracer passes an attribute on, by its key's prefix. */
+function isKeptKey(key: string): boolean {
+  return KEPT_ATTRIBUTE_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
 
-  return Predicate.isString(value) || Predicate.isNumber(value) || Predicate.isBoolean(value)
-    ? value
-    : undefined;
+/** Whether an attribute's value is one Sentry keeps: a string, a number, or a boolean. */
+function isKeptValue(value: unknown): value is string | number | boolean {
+  return Predicate.isString(value) || Predicate.isNumber(value) || Predicate.isBoolean(value);
 }
 
 /** One of Effect's spans as one of main's Sentry spans. */
@@ -161,11 +162,11 @@ class MainSentrySpan implements Tracer.Span {
     this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
   }
 
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Effect's Tracer.Span contract hands an attribute's value as unknown
   attribute(key: string, value: unknown): void {
     this.attributes.set(key, value);
-    const kept = keptValue(key, value);
 
-    if (kept !== undefined) this.sentry.setAttribute(key, kept);
+    if (isKeptKey(key) && isKeptValue(value)) this.sentry.setAttribute(key, value);
   }
 
   event(): void {}

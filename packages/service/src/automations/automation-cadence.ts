@@ -135,8 +135,8 @@ const RECORDED_ONLY: AutomationCadenceShape = {
 };
 
 /** The API's code for a failure, where it was one of the API's own. */
-function codeOf(failure: unknown): string | undefined {
-  return failure instanceof SchedulesApiError ? failure.code : undefined;
+function codeOf(cause: unknown): string | undefined {
+  return cause instanceof SchedulesApiError ? cause.code : undefined;
 }
 
 /** One call to Vercel, its failure carried with the API's code. */

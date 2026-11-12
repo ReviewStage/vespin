@@ -72,7 +72,7 @@ export function cutInput(input: Readonly<ToolInput>): Record<string, WireBoundar
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, cut(value)]));
 }
 
-function cut(value: unknown): WireBoundaryInput {
+function cut<Value>(value: Value): WireBoundaryInput {
   if (Predicate.isString(value)) {
     return value.length > APPROVAL_INPUT.TEXT_MAX
       ? `${value.slice(0, APPROVAL_INPUT.TEXT_MAX)}…`

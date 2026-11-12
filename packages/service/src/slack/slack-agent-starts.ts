@@ -489,10 +489,10 @@ function plainReply(text: string): SlackMessageContent {
 }
 
 /** A refusal in the words a reply says it with: one fixed slug, never anything a caller wrote. */
-function refusalReply(what: string, failure: unknown): SlackMessageContent {
+function refusalReply(what: string, cause: unknown): SlackMessageContent {
   const slug =
-    Predicate.isObjectOrArray(failure) && "error" in failure
-      ? String(failure.error)
+    Predicate.isObjectOrArray(cause) && "error" in cause
+      ? String(cause.error)
       : "model_refused";
 
   // A plan's reached limit is said in its own words, not as a refusal's code.

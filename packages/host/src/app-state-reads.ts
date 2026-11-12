@@ -427,7 +427,7 @@ function isPlainObject<T>(value: T): value is T & ReadonlyRecord<string, unknown
  * stopping at the first identical object. A node with any part kept from
  * `held` is still a copy, so a write's unchanged parts keep their identity.
  */
-export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
+export function shareAppState<T>(held: T, next: T, depth = 0): T {
   if (held === next) return next;
 
   if (depth > SHARE_DEPTH) return next;

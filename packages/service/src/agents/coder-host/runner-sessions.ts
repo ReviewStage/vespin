@@ -603,8 +603,13 @@ function runnerContent(
   return { content, files };
 }
 
+/** What a file or image part of a message carries, as the AI SDK types it. */
+type PartData =
+  | Extract<UserContent[number], { readonly type: "file" }>["data"]
+  | Extract<UserContent[number], { readonly type: "image" }>["image"];
+
 /** A file part's data as base64: a `data:` URL's payload, a string as it stands, or bytes encoded; nothing for a URL elsewhere. */
-function base64Of(data: unknown): string | undefined {
+function base64Of(data: PartData): string | undefined {
   if (data instanceof Uint8Array) return Buffer.from(data).toString("base64");
 
   if (data instanceof ArrayBuffer) return Buffer.from(data).toString("base64");

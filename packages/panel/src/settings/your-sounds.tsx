@@ -117,12 +117,12 @@ const SOUND_ACTS = [
 ] as const;
 
 /** Says that the service refused an act on one of the account's own sounds, in the app's own words, never the sound's name. */
-function toastRefused(words: string, answer: unknown): void {
+function toastRefused(words: string, cause: unknown): void {
   showToast({
     words,
     replayUnmasked: true,
     tone: STATUS_TONE.DANGER,
-    failure: { surface: FAILURE_SURFACE.SOUND_CLIP_WRITE, cause: answer },
+    failure: { surface: FAILURE_SURFACE.SOUND_CLIP_WRITE, cause },
   });
 }
 

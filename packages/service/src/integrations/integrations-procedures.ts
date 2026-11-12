@@ -103,7 +103,8 @@ import {
   integrationProviderFromWire,
   mintIntegrationConnectionName,
 } from "@repo/features/integration-wire";
-import { Duration, Effect, Option, Redacted, Result } from "effect";
+import { type WireValue, WireValueSchema } from "@repo/wire";
+import { Duration, Effect, Option, Redacted, Result, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
@@ -385,7 +386,7 @@ const ACCOUNT_NAME_TOOL_TIMEOUT = Duration.seconds(4);
 const apiAccountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   url: string,
   token: Redacted.Redacted,
-): Effect.fn.Return<unknown, unknown, HttpClient.HttpClient> {
+): Effect.fn.Return<WireValue, unknown, HttpClient.HttpClient> {
   const client = HttpClient.filterStatusOk(yield* HttpClient.HttpClient);
 
   return yield* client
@@ -397,6 +398,7 @@ const apiAccountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
     )
     .pipe(
       Effect.flatMap((response) => response.json),
+      Effect.flatMap(Schema.decodeUnknownEffect(WireValueSchema)),
       Effect.scoped,
       Effect.timeout(ACCOUNT_NAME_TIMEOUT),
     );

@@ -125,7 +125,7 @@ const PLAN_NOT_INCLUDED = "To use Codex with your ChatGPT plan, upgrade";
 const HTTP_UNAUTHORIZED = 401;
 
 const readEnvelope = Schema.decodeUnknownOption(
-  Schema.Struct({ method: Schema.String, params: Schema.Unknown }),
+  Schema.Struct({ method: Schema.String, params: WireValueSchema }),
 );
 
 const readThreadOf = Schema.decodeUnknownOption(Schema.Struct({ threadId: Schema.String }));
@@ -136,7 +136,7 @@ const readThreadStarted = Schema.decodeUnknownOption(
   }),
 );
 
-const readItemOf = Schema.decodeUnknownOption(Schema.Struct({ item: Schema.Unknown }));
+const readItemOf = Schema.decodeUnknownOption(Schema.Struct({ item: WireValueSchema }));
 
 const readItemKind = Schema.decodeUnknownOption(
   Schema.Struct({ type: Schema.String, id: Schema.String }),
@@ -144,8 +144,8 @@ const readItemKind = Schema.decodeUnknownOption(
 
 /** The item a notification carries, whole, with its type and id. */
 function itemOf(
-  params: unknown,
-): Option.Option<{ readonly type: string; readonly id: string; readonly whole: unknown }> {
+  params: WireValue,
+): Option.Option<{ readonly type: string; readonly id: string; readonly whole: WireValue }> {
   return Option.flatMap(readItemOf(params), ({ item }) =>
     Option.map(readItemKind(item), ({ type, id }) => ({ type, id, whole: item })),
   );
@@ -253,7 +253,7 @@ const readTurnCompleted = Schema.decodeUnknownOption(
         Schema.NullOr(
           Schema.Struct({
             message: Schema.String,
-            codexErrorInfo: Schema.optionalKey(Schema.NullOr(Schema.Unknown)),
+            codexErrorInfo: Schema.optionalKey(Schema.NullOr(WireValueSchema)),
             additionalDetails: Schema.optionalKey(Schema.NullOr(Schema.String)),
           }),
         ),
@@ -332,7 +332,7 @@ function storedMcpCall(call: typeof McpToolCallSchema.Type, args: WireValue): St
 }
 
 /** A call to an MCP server, stored as `storedMcpCall` names it. */
-function mcpCall(item: unknown): Option.Option<Answered> {
+function mcpCall(item: WireValue): Option.Option<Answered> {
   return Option.map(readMcpToolCall(item), (call) => {
     const workspaceTool = WORKSPACE_MCP_SERVER_NAMES.has(call.server);
     const args = call.arguments ?? {};
@@ -356,7 +356,7 @@ function mcpCall(item: unknown): Option.Option<Answered> {
 }
 
 /** An item that does Codex's work, as the call it stands for; nothing for any other item. */
-function callOf(type: string, item: unknown): Option.Option<Answered> {
+function callOf(type: string, item: WireValue): Option.Option<Answered> {
   switch (type) {
     case ITEM.COMMAND:
       return Option.map(readCommand(item), (command) => {
@@ -463,7 +463,7 @@ const SPAWN_AGENT = "spawnAgent";
  * run on after the call answers; none for any other collab call, or one
  * that did not do its work.
  */
-function spawnedThreads(type: string, whole: unknown): readonly string[] {
+function spawnedThreads(type: string, whole: WireValue): readonly string[] {
   if (type !== ITEM.SUBAGENT) return [];
 
   return Option.match(readSubagent(whole), {
@@ -505,7 +505,7 @@ function running(call: Call, threads: readonly string[]): readonly NativeMoment[
  * notice where the plan's usage limit stopped it, rather than OpenAI's
  * error.
  */
-function childTurnMoments(threadId: string, params: unknown): readonly NativeMoment[] {
+function childTurnMoments(threadId: string, params: WireValue): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
 
   if (Option.isNone(read)) return [];
@@ -527,7 +527,7 @@ function childTurnMoments(threadId: string, params: unknown): readonly NativeMom
   ];
 }
 
-function itemStartedMoments(params: unknown): readonly NativeMoment[] {
+function itemStartedMoments(params: WireValue): readonly NativeMoment[] {
   const item = itemOf(params);
 
   if (Option.isNone(item)) return [];
@@ -551,7 +551,7 @@ function itemStartedMoments(params: unknown): readonly NativeMoment[] {
  * which the projection passes over where the item's start already did,
  * because a call can complete with no start reported.
  */
-function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
+function itemCompletedMoments(params: WireValue): readonly NativeMoment[] {
   const item = itemOf(params);
 
   if (Option.isNone(item)) return [];
@@ -591,7 +591,7 @@ function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** The turn's plan set again: a todo list call, started and settled at once, under the event's own number. */
-function planMoments(params: unknown, sequence: number): readonly NativeMoment[] {
+function planMoments(params: WireValue, sequence: number): readonly NativeMoment[] {
   return Option.match(readPlan(params), {
     onSome: ({ explanation, plan }): readonly NativeMoment[] => {
       const input = { explanation: explanation ?? null, plan };
@@ -614,7 +614,7 @@ function planMoments(params: unknown, sequence: number): readonly NativeMoment[]
  * within the input and the reasoning within the output, as the record
  * counts them.
  */
-function usageMoments(params: unknown): readonly NativeMoment[] {
+function usageMoments(params: WireValue): readonly NativeMoment[] {
   return Option.match(readTokenUsage(params), {
     onSome: ({ tokenUsage: { total, last } }): readonly NativeMoment[] => [
       ...(last === undefined
@@ -646,7 +646,7 @@ function usageMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** The HTTP status one kind of a `codexErrorInfo` object carries, such as `httpConnectionFailed`'s 401. */
-function httpStatusOf(value: unknown): number | undefined {
+function httpStatusOf(value: UnparsedWireValue): number | undefined {
   return Predicate.isObject(value) &&
     "httpStatusCode" in value &&
     Predicate.isNumber(value.httpStatusCode)
@@ -661,7 +661,7 @@ function httpStatusOf(value: unknown): number | undefined {
  * OpenAI refused, an expired one among them, as a connection that failed
  * with a 401 rather than as `unauthorized`.
  */
-function planStatusOfInfo(info: unknown): PlanStatus | undefined {
+function planStatusOfInfo(info: WireValue | undefined): PlanStatus | undefined {
   const kind = codexErrorKind(info);
 
   if (kind === undefined) return undefined;
@@ -699,7 +699,7 @@ function planStatusOfInfo(info: unknown): PlanStatus | undefined {
 }
 
 /** Codex's own word for why a turn failed: `usageLimitExceeded`, or `httpConnectionFailed 401`. */
-function errorInfoWords(info: unknown): readonly string[] {
+function errorInfoWords(info: WireValue | undefined): readonly string[] {
   if (Predicate.isString(info)) return [info];
 
   if (!Predicate.isObject(info)) return [];
@@ -717,7 +717,7 @@ function errorInfoWords(info: unknown): readonly string[] {
  * limit, an account not eligible, and a sign-in not accepted alike. The
  * failure's whole message is the launch's end's to say.
  */
-function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
+function turnCompletedMoments(params: WireValue): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
 
   if (Option.isNone(read) || read.value.turn.status !== TURN_FAILED) {
@@ -778,7 +778,7 @@ function windowUsage(
  * know, so one that names no reached limit lifts nothing: the turn's end
  * clears the limit instead.
  */
-function rateLimitMoments(params: unknown): readonly NativeMoment[] {
+function rateLimitMoments(params: WireValue): readonly NativeMoment[] {
   const read = readRateLimits(params);
 
   if (Option.isNone(read)) return [];
@@ -815,7 +815,7 @@ function rateLimitMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** Whether a notification is of a thread other than the session's: a subagent's, which its call stands for. */
-function elsewhere(params: unknown, held: NativeHeld): boolean {
+function elsewhere(params: WireValue, held: NativeHeld): boolean {
   if (held.session === undefined) return false;
 
   return Option.match(readThreadOf(params), {
@@ -824,7 +824,7 @@ function elsewhere(params: unknown, held: NativeHeld): boolean {
   });
 }
 
-function threadStartedMoments(params: unknown): readonly NativeMoment[] {
+function threadStartedMoments(params: WireValue): readonly NativeMoment[] {
   return Option.match(readThreadStarted(params), {
     onSome: ({ thread }): readonly NativeMoment[] =>
       thread.parentThreadId === null ? [{ kind: NATIVE_MOMENT.SESSION, sessionId: thread.id }] : [],

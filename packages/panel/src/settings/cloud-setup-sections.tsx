@@ -157,8 +157,8 @@ const SCRIPT_LANGUAGE = "bash";
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
-function rejected(error: unknown): ActionResult {
-  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+function rejected(cause: unknown): ActionResult {
+  return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(cause) };
 }
 
 /** Whether two names are one repository, as GitHub's names ignore case. */

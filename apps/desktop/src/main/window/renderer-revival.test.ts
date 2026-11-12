@@ -18,7 +18,7 @@ import { STAND_IN_DISPLAY } from "./stand-in-display";
 
 const windows: FakeBrowserWindow[] = [];
 
-type Sheets = { answers: number[]; shownOn: unknown[] };
+type Sheets = { answers: number[]; shownOn: FakeBrowserWindow[] };
 
 /** The answers the next sheets give, by button, and the windows each was shown on. */
 const sheets: Sheets = { answers: [], shownOn: [] };
@@ -79,7 +79,7 @@ const SYSTEM: PanelSystem = {
     },
   },
   dialog: {
-    showMessageBox: (window: unknown) => {
+    showMessageBox: (window: FakeBrowserWindow) => {
       sheets.shownOn.push(window);
 
       return Promise.resolve({ response: sheets.answers.shift() ?? 0, checkboxChecked: false });

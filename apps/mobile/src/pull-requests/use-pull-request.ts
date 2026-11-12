@@ -60,7 +60,7 @@ export interface PullRequestParts {
 }
 
 /** Says on the console an ask the host refused, which the screen draws without. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 

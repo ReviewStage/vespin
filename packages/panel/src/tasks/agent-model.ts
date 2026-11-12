@@ -589,10 +589,10 @@ export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLim
 }
 
 /** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
-export function refusedAtLimit(refusal: unknown): boolean {
+export function refusedAtLimit(cause: unknown): boolean {
   return (
-    Predicate.hasProperty(refusal, "failure") &&
-    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+    Predicate.hasProperty(cause, "failure") &&
+    cause.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
   );
 }
 

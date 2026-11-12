@@ -81,11 +81,11 @@ export const apnsHttp2Transport: Layer.Layer<ApnsTransport> = Layer.effect(
           resume(Effect.succeed({ status, body: Buffer.concat(chunks).toString("utf8") })),
         );
         // A session failing mid-flight surfaces on its streams as well, so the stream's error is the one place a send fails from.
-        stream.on("error", (error: unknown) =>
+        stream.on("error", (cause: unknown) =>
           resume(
             Effect.fail(
               new ApnsTransportFailure({
-                errorName: error instanceof Error ? error.name : undefined,
+                errorName: cause instanceof Error ? cause.name : undefined,
               }),
             ),
           ),

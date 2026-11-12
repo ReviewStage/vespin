@@ -291,6 +291,6 @@ export function useKeystrokeSpans(name: KeystrokeSpanName): (box: Element | null
 }
 
 /** The size of a value as the JSON it would be sent as; a transcript's span uses it to measure what it held. */
-export function jsonBytes(value: unknown): number {
+export function jsonBytes<Value>(value: Value): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }

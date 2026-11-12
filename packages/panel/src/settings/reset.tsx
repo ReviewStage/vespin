@@ -168,7 +168,7 @@ const resetWrite = (
         result.status === ACTION_RESULT_STATUS.ACCEPTED
           ? RESET_KEPT
           : { kept: false, cause: result, note: REDO_REFUSED_NOTE },
-      (error: unknown): ResetAnswer => ({ kept: false, cause: error, note: REDO_REFUSED_NOTE }),
+      (cause: unknown): ResetAnswer => ({ kept: false, cause: cause, note: REDO_REFUSED_NOTE }),
     );
   },
   undo: (_send, { changed, writes }, settings) =>
@@ -269,11 +269,11 @@ function ResetPageButton({
 
   // Note that a reset that never answered is said as a refused one is, since the control has no row to say it under.
   const run = (asked: SettingsResetScope) => {
-    void reset(asked).catch((error: unknown) =>
+    void reset(asked).catch((cause: unknown) =>
       toast({
-        words: actFailureWords(error),
+        words: actFailureWords(cause),
         tone: STATUS_TONE.DANGER,
-        failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: error },
+        failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: cause },
       }),
     );
   };

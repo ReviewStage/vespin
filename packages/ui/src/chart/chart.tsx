@@ -326,7 +326,7 @@ function ChartTooltipContent({
  * are parsed: their shapes are recharts' own, carrying no contract this
  * repository could import, so the narrowing has to happen here at runtime.
  */
-function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key: string) {
+function getPayloadConfigFromPayload<Payload>(config: ChartConfig, payload: Payload, key: string) {
   if (!Predicate.isObject(payload)) {
     return undefined;
   }

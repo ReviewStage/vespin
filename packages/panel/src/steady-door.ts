@@ -84,9 +84,9 @@ function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => voi
   return { handed, steady: door.call, door, within: undefined };
 }
 
-function keptPlace(
+function keptPlace<Handed>(
   kept: KeptPlace | undefined,
-  handed: unknown,
+  handed: Handed,
   doorName: boolean,
   isDoor: (key: string) => boolean = (key) => DOOR_NAME.test(key),
 ): KeptPlace {
@@ -100,7 +100,9 @@ function keptPlace(
   if (Array.isArray(handed)) {
     const within = new Map<number, KeptPlace>();
 
-    const steady = handed.map((item: unknown, index) => {
+    const items: readonly unknown[] = handed;
+
+    const steady = items.map((item, index) => {
       const place = keptPlace(kept?.within?.get(index), item, false, isDoor);
       within.set(index, place);
 

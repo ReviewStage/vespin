@@ -111,7 +111,7 @@ function indexWithin(length: number, index: number): number | undefined {
 // `sidebar-collections.ts`, among many).
 if (!Predicate.isFunction(Array.prototype.toSorted)) {
   const copying = {
-    toSorted(compare?: (a: unknown, b: unknown) => number) {
+    toSorted<Item>(this: readonly Item[], compare?: (a: Item, b: Item) => number) {
       return [...this].sort(compare);
     },
     toReversed() {
@@ -125,7 +125,7 @@ if (!Predicate.isFunction(Array.prototype.toSorted)) {
 
       return copy;
     },
-    with(index: number, value: unknown) {
+    with<Item>(this: readonly Item[], index: number, value: Item) {
       const at = indexWithin(this.length, index);
 
       if (at === undefined) throw new RangeError(`Invalid index : ${index}`);

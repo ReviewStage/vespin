@@ -8,7 +8,7 @@
  * anywhere.
  */
 
-import { ProcedureContract } from "@orpc/contract";
+import { ProcedureContract, type RouterContract } from "@orpc/contract";
 import { getOpenAPIMeta } from "@orpc/openapi";
 import { HTTP_METHOD, type HttpMethod } from "@repo/wire";
 import { Predicate } from "effect";
@@ -30,7 +30,7 @@ function isHttpMethod(method: string): method is HttpMethod {
 }
 
 /** Every procedure of the contract that names a route, walked once. */
-function routesOf(node: unknown, at: readonly string[]): HostedRoute[] {
+function routesOf(node: RouterContract, at: readonly string[]): HostedRoute[] {
   if (node instanceof ProcedureContract) {
     const { method, path } = getOpenAPIMeta(node) ?? {};
 

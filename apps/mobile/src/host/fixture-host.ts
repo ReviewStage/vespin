@@ -252,32 +252,27 @@ export function fixtureActs(
 
       if (!Predicate.isString(kind) || !Predicate.isFunction(sent)) return sent;
 
-      return (payload: unknown, ...rest: unknown[]) => {
+      // Note that each function under a kind takes that kind's payload.
+      return (payload: PortActPayload<PortActKind>, ...rest: unknown[]) => {
         // SAFETY: the port is keyed by act kind.
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
 
         if (refused !== undefined) return Promise.resolve(refused());
-        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
-        const asked = payload as PortActPayload<PortActKind>;
         // SAFETY: the port is keyed by act kind.
-        const older = olderRead(state, profile, kind as PortActKind, asked);
+        const older = olderRead(state, profile, kind as PortActKind, payload);
 
         if (older !== undefined) return Promise.resolve(older);
 
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
-        const staged = inboxActAnswer(
-          profile,
-          kind as PortActKind,
-          payload as PortActPayload<PortActKind>,
-        );
+        const staged = inboxActAnswer(profile, kind as PortActKind, payload);
 
         if (staged === undefined) return sent.call(target, payload, ...rest);
         // SAFETY: as above.
-        keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        keepMove(state, kind as PortActKind, payload);
         // SAFETY: as above.
-        keepReminder(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        keepReminder(state, kind as PortActKind, payload);
         // SAFETY: as above.
-        keepChoice(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        keepChoice(state, kind as PortActKind, payload);
 
         return Promise.resolve(staged.answer);
       };

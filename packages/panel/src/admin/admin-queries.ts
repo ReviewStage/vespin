@@ -29,7 +29,7 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Predicate } from "effect";
+import { Option, Schema } from "effect";
 import { QUERY_ROOT } from "../query-keys.js";
 import { showToast } from "../toast.js";
 import type { AdminReads } from "./admin-doors.js";
@@ -132,10 +132,8 @@ interface FavoritePress {
   readonly favorite: boolean;
 }
 
-/** Whether a mutation's variables are a press of the star of account `id`. */
-function pressOf(variables: unknown, id: string): boolean {
-  return Predicate.isObjectOrArray(variables) && "id" in variables && variables.id === id;
-}
+/** A mutation's variables, read as a press of an account's star. */
+const readPress = Schema.decodeUnknownOption(Schema.Struct({ id: Schema.String }));
 
 /**
  * The star's write: the press draws at once in every roster held (the
@@ -180,7 +178,8 @@ export function useFavoriteMutation(reads: AdminReads) {
       // Note that this press is still counted while its onError runs.
       const newer = queryClient.isMutating({
         mutationKey,
-        predicate: (mutation) => pressOf(mutation.state.variables, press.id),
+        predicate: (mutation) =>
+          Option.exists(readPress(mutation.state.variables), (read) => read.id === press.id),
       });
 
       if (newer <= 1) draw({ ...press, favorite: !press.favorite });

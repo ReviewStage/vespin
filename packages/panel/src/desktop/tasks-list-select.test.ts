@@ -185,7 +185,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   let restand: ((view: TasksView) => void) | undefined;
 
   /** A status the service keeps, written down. */
-  const keepStanding = (payload: unknown) => {
+  const keepStanding = <Payload>(payload: Payload) => {
     const standing = Option.getOrUndefined(readStanding(payload));
 
     if (standing !== undefined) asked.push([standing.taskId, standing.status]);

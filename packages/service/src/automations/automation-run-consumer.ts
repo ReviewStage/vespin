@@ -25,6 +25,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { failureKind } from "@repo/runtime/effect";
+import type { WireValue } from "@repo/wire";
 import { Clock, type Context, Effect, Option, Schema } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import type { StartServices } from "../agents/coder-host/start.js";
@@ -68,7 +69,7 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
   "web/consumeAutomationRunMessage",
 )(function* (
   sessionsFor: SessionsForAccount,
-  message: unknown,
+  message: WireValue,
 ): Effect.fn.Return<void, unknown, StartServices> {
   const now = yield* Clock.currentTimeMillis;
   const delivered = yield* Effect.option(decodeDelivered(message));

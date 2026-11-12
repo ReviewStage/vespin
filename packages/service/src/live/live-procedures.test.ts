@@ -777,7 +777,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         );
         const path = "/api/live/task-comments";
 
-        const threadsOf = (body: unknown) => {
+        const threadsOf = <Body>(body: Body) => {
           const answer = Schema.decodeUnknownSync(TASK_COMMENTS_READ.answer)(body);
           assert.equal(answer.url, LIVE_POLL_URL);
 

@@ -1,4 +1,4 @@
-import { LEGACY_APP_WORD } from "@repo/wire";
+import { LEGACY_APP_WORD, type WireBoundaryInput } from "@repo/wire";
 import { Schema as EffectSchema, Option } from "effect";
 import { INBOX_IMAGE_TYPE } from "./inbox-wire.js";
 import { WEBM_TYPE } from "./video-signature.js";
@@ -114,7 +114,7 @@ const readKeptImageMetadata = EffectSchema.decodeUnknownOption(keptImageMetadata
 
 /** What an image file part's provider metadata names of its picture, under today's key or the legacy one; none where it names none. */
 export function keptImageMetadataOf(
-  providerMetadata: unknown,
+  providerMetadata: WireBoundaryInput,
 ): typeof keptImageSchema.Type | undefined {
   const read = Option.getOrUndefined(readKeptImageMetadata(providerMetadata));
 
@@ -124,7 +124,7 @@ export function keptImageMetadataOf(
 }
 
 /** The id of the picture an image file part's provider metadata names it kept as; none where it names none. */
-export function keptPictureIdOf(providerMetadata: unknown): string | undefined {
+export function keptPictureIdOf(providerMetadata: WireBoundaryInput): string | undefined {
   const kept = keptImageMetadataOf(providerMetadata);
 
   return kept !== undefined && "attachmentId" in kept ? kept.attachmentId : undefined;

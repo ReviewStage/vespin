@@ -102,8 +102,8 @@ function staysSealed(request: WebViewNavigation): boolean {
   if (request.url === HANDED_IN) return true;
 
   if (request.navigationType === "click" && /^https?:\/\//u.test(request.url)) {
-    Linking.openURL(request.url).catch((error: unknown) =>
-      console.error("The page's link did not open.", error),
+    Linking.openURL(request.url).catch((cause: unknown) =>
+      console.error("The page's link did not open.", cause),
     );
   }
 

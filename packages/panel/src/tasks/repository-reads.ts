@@ -63,8 +63,8 @@ function landedSource(answer: TasksPageSourceAnswer) {
 }
 
 /** The answer a failed read stands for, as a surface draws it: the refusal its error carries, else that it was not answered. */
-export function refusedAnswer(error: unknown): RefusedAnswer {
-  return error instanceof ReadRefused ? error.answer : { failure: TASK_CALL_FAILURE.UNANSWERED };
+export function refusedAnswer(cause: unknown): RefusedAnswer {
+  return cause instanceof ReadRefused ? cause.answer : { failure: TASK_CALL_FAILURE.UNANSWERED };
 }
 
 /** The ids a place reads by, each an element of the key: the task, else the workspace and the repository; none for no place. */

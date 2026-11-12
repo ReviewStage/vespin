@@ -504,7 +504,7 @@ export type TurnRow<B> =
  * arrays cost no depth, so a group's blocks inside a row are read as a
  * lone block is.
  */
-export function sameShape(a: unknown, b: unknown, depth: number): boolean {
+export function sameShape<Value>(a: Value, b: Value, depth: number): boolean {
   if (Object.is(a, b)) return true;
 
   if (Array.isArray(a) || Array.isArray(b)) {

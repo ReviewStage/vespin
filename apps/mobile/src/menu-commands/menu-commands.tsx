@@ -376,8 +376,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
       case MENU_COMMAND.FEEDBACK:
-        openURL(CONTACT_MAILTO).catch((error: unknown) =>
-          console.error("The feedback mail did not open.", error),
+        openURL(CONTACT_MAILTO).catch((cause: unknown) =>
+          console.error("The feedback mail did not open.", cause),
         );
 
         return;

@@ -40,7 +40,7 @@ const SEALED_PAGE_CONTENT_SECURITY_POLICY = [
 const DEVICE_VIEWPORT = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
 
 /** A value as JSON a script element may hold, its `<` written as an escape so no `</script>` in it ends the element. */
-function scriptJson(value: unknown): string {
+function scriptJson(value: ReturnType<typeof pageThemeMessage>): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 

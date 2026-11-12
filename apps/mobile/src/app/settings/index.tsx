@@ -90,8 +90,8 @@ function buildWords(): string {
 
 /** Opens one of our public pages, the changelog or the docs, in the app's own Safari sheet, tinted copper, so the member stays in Settings. */
 function openInSheet(address: string, tint: string): void {
-  openBrowserAsync(address, { controlsColor: tint }).catch((error: unknown) =>
-    console.error("The page did not open.", error),
+  openBrowserAsync(address, { controlsColor: tint }).catch((cause: unknown) =>
+    console.error("The page did not open.", cause),
   );
 }
 

@@ -56,8 +56,8 @@ import { WholeFile, type WholeFileHandle, type WholeFileNote } from "./whole-fil
 const FIRST_LINE = { firstLine: 1, lastLine: 1 } as const;
 
 /** The read a failed query stands for: the refusal the service answered, or a read that never arrived. */
-function failedRead(error: unknown): FileRead {
-  return error instanceof ReadRefused ? notRead(error.answer) : { kind: FILE_READ.FAILED };
+function failedRead(cause: unknown): FileRead {
+  return cause instanceof ReadRefused ? notRead(cause.answer) : { kind: FILE_READ.FAILED };
 }
 
 /** The read a refusal or a failure stands for, from an answer that carried no file. */

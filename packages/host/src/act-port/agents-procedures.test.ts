@@ -208,15 +208,17 @@ function windowPort(
   const asked: unknown[] = [];
   const noted: string[] = [];
 
-  const handler = (name: keyof NotedActs) => (input: unknown) =>
-    Effect.suspend(() => {
-      asked.push([name, input]);
+  const handler =
+    (name: keyof NotedActs) =>
+    <Input>(input: Input) =>
+      Effect.suspend(() => {
+        asked.push([name, input]);
 
-      const answer =
-        options.answers?.[name] ?? options.fallback ?? (() => Effect.succeed(UNANSWERED));
+        const answer =
+          options.answers?.[name] ?? options.fallback ?? (() => Effect.succeed(UNANSWERED));
 
-      return answer();
-    });
+        return answer();
+      });
 
   // SAFETY: each handler answers what its test hands it, which the procedure checks against the act's output schema; none is a row write a pool draws.
   const acts = Object.fromEntries(NOTED_ACTS.map((name) => [name, handler(name)])) as NotedActs;

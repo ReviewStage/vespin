@@ -140,10 +140,11 @@ const readBounded = (path: string, bound: number) =>
   }).pipe(Effect.orElseSucceed(() => null));
 
 /** A read asked: the bytes of the file it names, inside the agent's own places; no bytes for anything else. */
-const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
+const answeredRead = (
+  layout: DeviceAgentLayout,
+  read: Option.Option<typeof deviceAgentReadArgsSchema.Type>,
+) =>
   Effect.gen(function* () {
-    const read = decodeReadArgs(args);
-
     const answer = (bytes: Uint8Array | null): DeviceAgentAnswer => ({
       kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
       bytes,
@@ -171,15 +172,17 @@ const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
  * the runner is not stopped for it, because a diff writes nothing to the
  * worktree, only an index copy and the diff beside the git dir.
  */
-const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args: unknown) =>
+const answeredDiff = (
+  layout: DeviceAgentLayout,
+  box: LocalAgentRequestBox,
+  range: Option.Option<typeof deviceAgentDiffArgsSchema.Type>,
+) =>
   Effect.gen(function* () {
     const failed: DeviceAgentAnswer = {
       kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
       exit: 1,
       diff: "",
     };
-
-    const range = decodeDiffArgs(args);
 
     if (Option.isNone(range)) return failed;
 
@@ -234,5 +237,5 @@ export const answeredLocalAgentRequest = (
   FileSystem.FileSystem | ChildProcessSpawner.ChildProcessSpawner
 > =>
   request.kind === DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT
-    ? answeredDiff(layout, box, request.args)
-    : answeredRead(layout, request.args);
+    ? answeredDiff(layout, box, decodeDiffArgs(request.args))
+    : answeredRead(layout, decodeReadArgs(request.args));

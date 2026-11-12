@@ -86,10 +86,10 @@ function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
 
       return keyRead;
     },
-    (error: unknown) => {
+    (cause: unknown) => {
       // Note that a refusal is not kept, so the next screen to ask reads again.
       tokenRead = undefined;
-      console.error("The phone's push token could not be read.", error);
+      console.error("The phone's push token could not be read.", cause);
 
       return undefined;
     },
@@ -168,9 +168,9 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
         // Note that a register the service did not take is asked again by the next screen that reads.
         if ("failure" in answer) registration = undefined;
       },
-      (error: unknown) => {
+      (cause: unknown) => {
         registration = undefined;
-        console.error("The phone was not registered for notifications.", error);
+        console.error("The phone was not registered for notifications.", cause);
       },
     );
 
@@ -220,7 +220,7 @@ export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Pro
 
     return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
       () => undefined,
-      (error: unknown) => console.error("The phone was not unregistered.", error),
+      (cause: unknown) => console.error("The phone was not unregistered.", cause),
     );
   });
 
@@ -267,7 +267,7 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDe
           confirmed.current = "failure" in answer ? undefined : answer.notify;
           setStanding("failure" in answer ? undefined : answer);
         },
-        (error: unknown) => console.error("The phone's notifications could not be read.", error),
+        (cause: unknown) => console.error("The phone's notifications could not be read.", cause),
       );
 
     return () => {

@@ -1026,8 +1026,8 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
     const { opening } = editing;
     void saving
       .mutateAsync({ text: words, replaces: editing.replaces?.id })
-      .then(saveAnswered, (error: unknown): ActionResult => {
-        return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+      .then(saveAnswered, (cause: unknown): ActionResult => {
+        return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(cause) };
       })
       .then((result) => {
         const refusal = refusalNote(result);

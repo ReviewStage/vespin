@@ -14,7 +14,7 @@
  * the same way.
  */
 
-import { Schema as EffectSchema, Option } from "effect";
+import { Schema as EffectSchema, flow, Option } from "effect";
 import { iosAgentRoute, iosAppRouteOf } from "./ios-app-links.js";
 import { LINK_DESTINATION } from "./link-grammar.js";
 
@@ -141,11 +141,7 @@ export interface InboxPushAction {
 const decodePush = EffectSchema.decodeUnknownOption(inboxPushSchema);
 
 /** The push a notification's payload carries, or none where it is not one of the service's. */
-export function inboxPushOf(payload: unknown): InboxPush | undefined {
-  const read = decodePush(payload);
-
-  return Option.isSome(read) ? read.value : undefined;
-}
+export const inboxPushOf = flow(decodePush, Option.getOrUndefined);
 
 /** The route a push opens on. */
 function routeOf(
@@ -185,15 +181,13 @@ function pressOf(
  * sends there: a thread's push opens the thread, with its option or its
  * words where an action pressed one; a failed run opens its agent; a task
  * the share sheet started opens its agent, or the task where none started.
- * None for a payload that is not the service's or a settled thread's
+ * None for no push, a payload that is not the service's, or a settled thread's
  * background push, which nobody taps.
  */
 export function inboxPushResponseOf(
-  payload: unknown,
+  push: InboxPush | undefined,
   action: InboxPushAction,
 ): InboxPushResponse | undefined {
-  const push = inboxPushOf(payload);
-
   if (push === undefined || push.kind === PUSH_KIND.SETTLED) return undefined;
   const route = routeOf(push);
 

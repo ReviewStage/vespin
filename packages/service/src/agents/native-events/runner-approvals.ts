@@ -115,7 +115,7 @@ function cutText(text: string, max: number): string {
 }
 
 /** A value of a call's input cut as the runner cuts it, and no deeper than the bound. */
-function cutValue(value: unknown, depth: number): WireBoundaryInput {
+function cutValue<Value>(value: Value, depth: number): WireBoundaryInput {
   if (Predicate.isString(value)) return cutText(value, APPROVAL_INPUT.TEXT_MAX);
 
   if (!Predicate.isObjectOrArray(value)) {

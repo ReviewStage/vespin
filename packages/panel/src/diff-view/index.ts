@@ -583,7 +583,7 @@ function optionsOf(props: DiffViewProps): FileDiffOptions<string, undefined> {
     hunkSeparators: props.excerpt === true ? "simple" : "line-info-basic",
     disableFileHeader: true,
     // Each line drawn anew is marked with its indent, which a wrapped line's later rows hang by; lines that scroll sideways hang by none.
-    onPostRender: (node: HTMLElement, _instance: unknown, phase: PostRenderPhase) => {
+    onPostRender: (node: HTMLElement, _instance, phase: PostRenderPhase) => {
       if (phase !== "unmount" && node.shadowRoot !== null && props.look.wrap)
         markLineIndents(node.shadowRoot);
     },
@@ -1364,8 +1364,7 @@ function wholeFileOptions(
     itemMetrics: { lineHeight: lineHeightOf(drawn) },
     layout: { paddingTop: WHOLE_FILE_EDGE, paddingBottom: WHOLE_FILE_EDGE, gap: 0 },
     renderAnnotation: (note: { metadata: string }) => latest().renderAnnotation(note.metadata),
-    onPostRender: (node: HTMLElement, _instance: unknown, phase: PostRenderPhase) =>
-      dress(node, phase),
+    onPostRender: (node: HTMLElement, _instance, phase: PostRenderPhase) => dress(node, phase),
   };
 }
 

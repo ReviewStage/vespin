@@ -300,8 +300,8 @@ function placeOf(workspaceId: string | undefined, { repository, relation }: Task
 
 /** A start the host refused or never answered, said as the panel's note says it. */
 function unanswered(what: string) {
-  return (error: unknown) => {
-    console.error(`${what} did not go.`, error);
+  return (cause: unknown) => {
+    console.error(`${what} did not go.`, cause);
 
     return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
   };

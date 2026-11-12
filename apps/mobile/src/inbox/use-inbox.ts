@@ -244,7 +244,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
@@ -345,8 +345,8 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
       acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId: id, unread: false }).catch(
         refused("The mark"),
       );
-    dismissThreadNotifications(id).catch((error: unknown) =>
-      console.error("The thread's notifications were not removed.", error),
+    dismissThreadNotifications(id).catch((cause: unknown) =>
+      console.error("The thread's notifications were not removed.", cause),
     );
   }, [id]);
 }
@@ -391,9 +391,9 @@ export function useThreadMedia(
       ids.add(each.attachmentId);
 
       // A read that fails is forgotten, so the thread's next change asks for it again.
-      const forget = (error: unknown) => {
+      const forget = (cause: unknown) => {
         if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
-        refused("Reading a thread's file")(error);
+        refused("Reading a thread's file")(cause);
       };
 
       // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.

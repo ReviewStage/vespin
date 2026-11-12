@@ -29,7 +29,7 @@ export function redirectSystemPath({
     const route = "workspace" in read ? iosAppRouteOf(read.place) : undefined;
 
     if (route !== undefined) return route;
-    openURL(path).catch((error: unknown) => console.error("The link did not open.", error));
+    openURL(path).catch((cause: unknown) => console.error("The link did not open.", cause));
 
     return initial ? HOME : null;
   } catch (error) {

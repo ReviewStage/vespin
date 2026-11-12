@@ -80,12 +80,11 @@ const services = Layer.mergeAll(
 );
 
 /** How a run that did not succeed ends, and what it says on the way out. */
-function ended(failure: unknown): Effect.Effect<CliExit> {
-  if (failure instanceof CommandFailed)
-    return Effect.as(Console.error(failure.message), failure.exit);
+function ended(cause: unknown): Effect.Effect<CliExit> {
+  if (cause instanceof CommandFailed) return Effect.as(Console.error(cause.message), cause.exit);
 
-  if (CliError.isCliError(failure)) return Effect.succeed(CLI_EXIT.USAGE);
-  const kind = failure instanceof Error ? failure.name : valueKind(failure);
+  if (CliError.isCliError(cause)) return Effect.succeed(CLI_EXIT.USAGE);
+  const kind = cause instanceof Error ? cause.name : valueKind(cause);
 
   return Effect.as(
     Console.error(`${PRODUCT_NAME} CLI failed unexpectedly (${kind}).`),

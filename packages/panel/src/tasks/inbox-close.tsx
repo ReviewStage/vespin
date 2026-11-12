@@ -155,7 +155,7 @@ export function untakenSettles(
   words: UntakenWords,
   surface: FailureSurface,
 ): TakeBackUndoRefusal<Settles> | undefined {
-  const missed = (_: unknown, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+  const missed = <Item,>(_: Item, at: number) => answers[at] === TOOK_BACK.UNREACHED;
 
   if (answers.some((answer) => answer === TOOK_BACK.UNREACHED)) {
     return {

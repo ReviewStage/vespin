@@ -6,6 +6,7 @@ import { MIGRATIONS_FOLDER, runWebMigrations } from "@repo/database/core/migrato
 import { joinWorkspace, openWorkspace, unmigratedPgliteSqlClient } from "@repo/database/testing";
 import { INBOX_MESSAGE_AUTHOR } from "@repo/features/inbox-wire";
 import { readInboxAttachment, readInboxItem } from "@repo/service/inbox/inbox-store";
+import type { WireValue } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
@@ -78,8 +79,8 @@ it.effect(
         const item = (
           key: string,
           status: string,
-          blocks: unknown,
-          response: unknown,
+          blocks: WireValue,
+          response: WireValue,
           rest: {
             readonly answer?: unknown;
             readonly closedReason?: string;

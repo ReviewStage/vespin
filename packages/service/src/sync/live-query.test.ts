@@ -114,7 +114,7 @@ interface Scan extends PlannedNode {
 const SUBQUERY_ROOT: ReadonlySet<unknown> = new Set(["SubPlan", "InitPlan"]);
 
 /** Every node under the explained plan, each once, the roots marked. */
-function nodesOf(explained: unknown, root = false): readonly PlannedNode[] {
+function nodesOf<Explained>(explained: Explained, root = false): readonly PlannedNode[] {
   if (Array.isArray(explained)) return explained.flatMap((each) => nodesOf(each, root));
 
   if (!Predicate.isObjectOrArray(explained)) return [];

@@ -149,17 +149,6 @@ interface Bounds {
 
 type BoundKey = keyof Bounds;
 
-type BoundReader = (payload: unknown) => Option.Option<Bounds>;
-
-const boundReader = <A>(
-  payload: Schema.Codec<A, unknown>,
-  bounds: (payload: A) => Bounds,
-): BoundReader => {
-  const read = Schema.decodeUnknownOption(payload);
-
-  return (annotation) => Option.map(read(annotation), bounds);
-};
-
 const INTEGER: Bounds = { integer: true };
 
 /**
@@ -187,22 +176,22 @@ const EFFECT_CHECK = {
  * gathered under `minLength`/`maxLength` whatever it was declared over and
  * written out as `minItems`/`maxItems` once the node's kind is known.
  */
-const BOUND_READERS = new Map<string, BoundReader>([
+const BOUND_READERS = new Map<string, (payload: Schema.Json | undefined) => Option.Option<Bounds>>([
   [
     EFFECT_CHECK.MIN_LENGTH,
-    boundReader(Schema.Struct({ minLength: Schema.Number }), (payload) => payload),
+    Schema.decodeUnknownOption(Schema.Struct({ minLength: Schema.Number })),
   ],
   [
     EFFECT_CHECK.MAX_LENGTH,
-    boundReader(Schema.Struct({ maxLength: Schema.Number }), (payload) => payload),
+    Schema.decodeUnknownOption(Schema.Struct({ maxLength: Schema.Number })),
   ],
   [
     EFFECT_CHECK.GREATER_THAN_OR_EQUAL_TO,
-    boundReader(Schema.Struct({ minimum: Schema.Number }), (payload) => payload),
+    Schema.decodeUnknownOption(Schema.Struct({ minimum: Schema.Number })),
   ],
   [
     EFFECT_CHECK.LESS_THAN_OR_EQUAL_TO,
-    boundReader(Schema.Struct({ maximum: Schema.Number }), (payload) => payload),
+    Schema.decodeUnknownOption(Schema.Struct({ maximum: Schema.Number })),
   ],
   [EFFECT_CHECK.INT, () => Option.some(INTEGER)],
 ]);
@@ -769,19 +758,16 @@ export function declareReader<Value>(
   read: (value: UnparsedWireValue) => SchemaRead<Value>,
   node: JsonSchemaNode,
 ): Schema.Codec<Value, UnparsedWireValue> {
-  const declaration = Schema.declareConstructor<Value, UnparsedWireValue>()(
-    [],
-    () => (input: unknown) => {
-      // SAFETY: a decode is handed the value `readEither` took as an `UnparsedWireValue`, erased to
-      // `unknown` by Effect's own decode signature; the reader is the boundary's own defensive parser.
-      const value = input as UnparsedWireValue;
-      const result = read(value);
+  const declaration = Schema.declareConstructor<Value, UnparsedWireValue>()([], () => (input) => {
+    // SAFETY: a decode is handed the value `readEither` took as an `UnparsedWireValue`, erased to
+    // `unknown` by Effect's own decode signature; the reader is the boundary's own defensive parser.
+    const value = input as UnparsedWireValue;
+    const result = read(value);
 
-      return result.ok
-        ? Effect.succeed(result.value)
-        : Effect.fail(refusalIssue(result.refusal, result.path, value));
-    },
-  );
+    return result.ok
+      ? Effect.succeed(result.value)
+      : Effect.fail(refusalIssue(result.refusal, result.path, value));
+  });
 
   return verbatimJsonSchema(declaration, node);
 }
@@ -802,7 +788,7 @@ const REFUSAL_AST = {
 function refusalIssue(
   refusal: SchemaRefusal,
   path: SchemaPath,
-  actual: unknown,
+  actual: UnparsedWireValue,
 ): SchemaIssue.Issue {
   const issue = new SchemaIssue.InvalidType(REFUSAL_AST[refusal], actual);
 

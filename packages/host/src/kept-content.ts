@@ -154,7 +154,7 @@ export interface KeptContent {
 }
 
 /** How many characters the strings of an answer come to, which is what it weighs, so nothing is encoded again to weigh it. */
-function charactersOf(value: unknown): number {
+function charactersOf<Value>(value: Value): number {
   if (Predicate.isString(value)) return value.length;
 
   if (!Predicate.isObjectOrArray(value)) return 0;

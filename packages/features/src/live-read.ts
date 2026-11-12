@@ -424,8 +424,15 @@ export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
     );
 }
 
+/** A field a row is ordered by: text or a number, or null. */
+type OrderedField = string | number | null;
+
 /** Two rows' order by one field: nulls last ascending, first descending, as Postgres orders them. */
-function comparedBy(a: unknown, b: unknown, order: Order): number {
+function comparedBy(
+  a: OrderedField | undefined,
+  b: OrderedField | undefined,
+  order: Order,
+): number {
   if (a === b) return 0;
   const before = order === ORDER.ASC ? -1 : 1;
 
@@ -443,13 +450,13 @@ export function orderedLiveRows<Part extends AnyLiveRows>(
   rows: readonly LiveRowOf<Part>[],
 ): readonly LiveRowOf<Part>[] {
   return rows.toSorted((a, b) => {
-    // Note that a part's row is a struct, whose ordered fields its declaration names.
+    // SAFETY: a part's row is a struct, whose ordered fields its declaration names, each text, a number, or null.
+    const left = a as Readonly<Record<string, OrderedField>>;
+    // SAFETY: as above.
+    const right = b as Readonly<Record<string, OrderedField>>;
+
     for (const [field, order] of part.order) {
-      const compared = comparedBy(
-        Predicate.isObject(a) ? a[field] : undefined,
-        Predicate.isObject(b) ? b[field] : undefined,
-        order,
-      );
+      const compared = comparedBy(left[field], right[field], order);
 
       if (compared !== 0) return compared;
     }

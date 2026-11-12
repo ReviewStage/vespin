@@ -1167,7 +1167,7 @@ type ItemsAnswer = Exclude<
 >;
 
 /** A row's text field `name`; none where it carries none. */
-function textOf(row: unknown, name: string): string | undefined {
+function textOf<Row>(row: Row, name: string): string | undefined {
   const value =
     Predicate.isObjectOrArray(row) && Predicate.hasProperty(row, name) ? row[name] : undefined;
 
@@ -1175,7 +1175,7 @@ function textOf(row: unknown, name: string): string | undefined {
 }
 
 /** The id a row of the account's items names its item by: its own, or the item its message is on. */
-function itemIdOf(row: unknown): string | undefined {
+function itemIdOf<Row>(row: Row): string | undefined {
   return textOf(row, "itemId") ?? textOf(row, "id");
 }
 

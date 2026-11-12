@@ -15,7 +15,7 @@ import {
  * stands for.
  */
 export interface WireGuard<Value> {
-  (value: unknown): boolean;
+  <Input>(value: Input): boolean;
   readonly wireType?: Value;
 }
 

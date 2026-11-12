@@ -442,7 +442,10 @@ function mount(
     ...fakeActPortCalls(),
     // SAFETY: each kind is answered by its own procedure's answer, the dispatch on the kind the one erasure.
     ...(Object.fromEntries(
-      SENT_ON_MUTATIONS.map((kind) => [kind, (payload: unknown) => portAnswer(kind, payload)]),
+      SENT_ON_MUTATIONS.map((kind) => [
+        kind,
+        <Payload>(payload: Payload) => portAnswer(kind, payload),
+      ]),
     ) as Partial<FakeActPort>),
     // The one told payload the tests read, parsed as the boundary would, and answered as an asked one is.
     [ACT_KIND.AGENTS_SHOWN]: (payload) => {
@@ -1701,7 +1704,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
   const LISTED = "3f2e1d0c-9b8a-4f7e-8d6c-5b4a39281706";
   let answerSlow: () => void = () => undefined;
 
-  const read = (agentId: unknown) => ({
+  const read = (agentId: string) => ({
     agent: {
       ...RUNNING_AGENT,
       id: String(agentId),

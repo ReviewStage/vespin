@@ -41,7 +41,7 @@ import { systemActivityModule } from "./system-activity-module.js";
 const NONE: readonly never[] = [];
 
 /** Says on the console what the system did not take; the next change tries again. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not reach the system.`, error);
 }
 

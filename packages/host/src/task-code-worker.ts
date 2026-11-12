@@ -8,6 +8,7 @@
  * colored is answered plain, so the asking side always hears back.
  */
 import { catchAllButInterrupt } from "@repo/runtime/effect";
+import type { WireBoundaryInput } from "@repo/wire";
 import { Effect, Option, Queue, Schema } from "effect";
 import { highlightSnippet } from "./task-code.js";
 import {
@@ -19,8 +20,8 @@ import {
 
 /** The port the coloring process is asked over: what it is sent, and where it answers. */
 export interface TaskCodeParentPort {
-  readonly onMessage: (listener: (message: unknown) => void) => void;
-  readonly postMessage: (message: unknown) => void;
+  readonly onMessage: (listener: (message: WireBoundaryInput) => void) => void;
+  readonly postMessage: (message: typeof taskCodeAnswerSchema.Encoded) => void;
 }
 
 /** One block colored and answered, plain where coloring it failed. */

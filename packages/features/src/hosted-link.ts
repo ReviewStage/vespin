@@ -545,8 +545,8 @@ export function hostedClient(options: HostedClientOptions): HostedClient {
     },
     interceptors: [
       async ({ next, path }) => {
-        const output = await next().catch((error: unknown) => {
-          throw declaredOnly(path, error);
+        const output = await next().catch((cause: unknown) => {
+          throw declaredOnly(path, cause);
         });
 
         const wire = outputWireSchema(path);
@@ -566,18 +566,18 @@ export function hostedClient(options: HostedClientOptions): HostedClient {
 }
 
 /** What a procedure's failure was, read off what oRPC or the link threw. */
-function hostedFailureOf(error: unknown): HostedFailure {
-  if (error instanceof HostedUnanswered) return error;
+function hostedFailureOf(cause: unknown): HostedFailure {
+  if (cause instanceof HostedUnanswered) return cause;
 
-  if (error instanceof ORPCError && error.cause instanceof HostedRefused) return error.cause;
+  if (cause instanceof ORPCError && cause.cause instanceof HostedRefused) return cause.cause;
 
-  if (error instanceof ORPCError && error.cause instanceof HostedUnanswered) return error.cause;
+  if (cause instanceof ORPCError && cause.cause instanceof HostedUnanswered) return cause.cause;
 
-  if (error instanceof MalformedResponseError) {
-    return new HostedUnanswered({ status: error.response.status, errorName: error.name });
+  if (cause instanceof MalformedResponseError) {
+    return new HostedUnanswered({ status: cause.response.status, errorName: cause.name });
   }
 
-  return new HostedUnanswered(error instanceof Error ? { errorName: error.name } : {});
+  return new HostedUnanswered(cause instanceof Error ? { errorName: cause.name } : {});
 }
 
 /** A failure with the trace its call traveled under, which the service's log lines for it carry. */

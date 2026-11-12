@@ -82,14 +82,14 @@ defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {
 
   return dismissThreadNotifications(itemId).then(
     () => BackgroundNotificationTaskResult.NewData,
-    (failure: unknown) => {
-      console.error("The settled thread's notification was not removed.", failure);
+    (cause: unknown) => {
+      console.error("The settled thread's notification was not removed.", cause);
 
       return BackgroundNotificationTaskResult.Failed;
     },
   );
 });
 
-registerTaskAsync(SETTLED_PUSH_TASK).catch((error: unknown) =>
-  console.error("The settled push task was not registered.", error),
+registerTaskAsync(SETTLED_PUSH_TASK).catch((cause: unknown) =>
+  console.error("The settled push task was not registered.", cause),
 );

@@ -377,7 +377,7 @@ function isSliceLevel(value: WireBoundaryInput): value is SliceLevel {
 }
 
 /** What `held` holds at `at`, the key's path in its slice. */
-function readAt(held: unknown, at: readonly string[]): WireBoundaryInput {
+function readAt<Held>(held: Held, at: readonly string[]): WireBoundaryInput {
   return at.reduce<WireBoundaryInput>(
     (level, id) => (isSliceLevel(level) ? level[id] : undefined),
     // SAFETY: a slice the window is told is the document's data, as it crossed the port.

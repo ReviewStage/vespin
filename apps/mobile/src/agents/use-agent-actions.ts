@@ -107,8 +107,8 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
       setNote(undefined);
       setStringAsync(address)
         .then(() => buzz(BUZZ.SUCCESS))
-        .catch((error: unknown) => {
-          console.error(ACT_FAILED.COPY, error);
+        .catch((cause: unknown) => {
+          console.error(ACT_FAILED.COPY, cause);
           setNote(ACT_FAILED.COPY);
         });
     },

@@ -16,7 +16,7 @@
  */
 
 import { HTTP_METHOD } from "@repo/wire";
-import { Duration, Effect, Predicate } from "effect";
+import { Duration, Effect, Option, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   accountCall,
@@ -82,10 +82,8 @@ function parsedJson(text: string): { readonly json: unknown } | undefined {
   }
 }
 
-/** Whether a star write's answer says the star stands as asked: the route answers `{ favorite }`. */
-function favoriteLanded(json: unknown, favorite: boolean): boolean {
-  return Predicate.isObjectOrArray(json) && "favorite" in json && json.favorite === favorite;
-}
+/** A star write's answer: the route answers `{ favorite }`. */
+const readFavoriteAnswer = Schema.decodeUnknownOption(Schema.Struct({ favorite: Schema.Boolean }));
 
 export class HostedAdminClient {
   readonly #send: ReturnType<typeof sendInSession>;
@@ -160,7 +158,10 @@ export class HostedAdminClient {
       const text = yield* textWithin(answer.response, deadline);
       const body = text === undefined ? undefined : parsedJson(text);
 
-      return body !== undefined && favoriteLanded(body.json, favorite);
+      return (
+        body !== undefined &&
+        Option.exists(readFavoriteAnswer(body.json), (read) => read.favorite === favorite)
+      );
     });
   }
 }

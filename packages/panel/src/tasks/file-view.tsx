@@ -743,7 +743,7 @@ export function FileView({
     (path: string, recursive = false): Promise<TasksTreeAnswer> =>
       queryClient
         .fetchQuery(taskTreeQueryOptions(latestPlace.current, path, recursive))
-        .catch((error: unknown): TasksTreeAnswer => refusedAnswer(error)),
+        .catch((cause: unknown): TasksTreeAnswer => refusedAnswer(cause)),
     [queryClient],
   );
 
@@ -778,10 +778,10 @@ export function FileView({
               ...(commit === undefined ? undefined : { ref: commit }),
             }),
           )
-          .then(wholeTextOf, (error: unknown) =>
-            error instanceof ReadRefused
-              ? wholeTextOf(error.answer)
-              : { kind: WHOLE_TEXT.UNREAD, cause: error },
+          .then(wholeTextOf, (cause: unknown) =>
+            cause instanceof ReadRefused
+              ? wholeTextOf(cause.answer)
+              : { kind: WHOLE_TEXT.UNREAD, cause: cause },
           );
 
   const fileViewEnd = useFileViewEnd({

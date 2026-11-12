@@ -13,12 +13,14 @@
  * end so.
  */
 
+import type { WireBoundaryInput } from "@repo/wire";
+
 /** A listener on one end: a message's, handed the message as an event's data, or the close's. */
-type Listener = (event: { readonly data: unknown }) => void;
+type Listener = (event: { readonly data: WireBoundaryInput }) => void;
 
 /** One end of the channel, as oRPC's adapters hold a port and the app's root starts and closes it. */
 interface InProcessPort {
-  postMessage(data: unknown): void;
+  postMessage(data: WireBoundaryInput): void;
   addEventListener(type: "message" | "close", listener: Listener | (() => void)): void;
   start(): void;
   close(): void;

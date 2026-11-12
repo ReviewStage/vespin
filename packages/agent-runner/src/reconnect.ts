@@ -18,6 +18,7 @@
 
 import { connect } from "node:net";
 import { Context, Data, Duration, Effect, Layer, Predicate, Schedule } from "effect";
+import type { CodexErrorInfo } from "./codex-protocol/v2/index.js";
 import { CODEX_ERROR_INFO, codexErrorKind, RUNNER_RECONNECT } from "./protocol.js";
 
 /**
@@ -70,7 +71,7 @@ const CODEX_CONNECTION_KINDS: ReadonlySet<string> = new Set([
  * it, since a status is the provider's answer, a refused credential's 401
  * among them, which no probe mends.
  */
-export function codexConnectionLost(info: unknown): boolean {
+export function codexConnectionLost(info: CodexErrorInfo | null | undefined): boolean {
   const kind = codexErrorKind(info);
 
   if (kind === undefined || !CODEX_CONNECTION_KINDS.has(kind)) return false;

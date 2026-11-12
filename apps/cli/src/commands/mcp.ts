@@ -28,7 +28,7 @@ import {
   shellLine,
 } from "@repo/features/mcp-connect";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, type Schema } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { answer, CommandFailed, columns, confirmOrYes, note } from "../output.js";
@@ -126,7 +126,7 @@ const installInCursor = Effect.fnUntraced(function* (serverUrl: string) {
     : "";
 
   if (text === undefined) return yield* byHand;
-  let config: unknown;
+  let config: Schema.Json | undefined;
 
   try {
     config = text.trim() === "" ? undefined : JSON.parse(text);

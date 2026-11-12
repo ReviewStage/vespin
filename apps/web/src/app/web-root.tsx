@@ -76,9 +76,9 @@ function reloadTab(): void {
  * Hands a failure an error boundary caught to the tab's own error event, as
  * React does with one no boundary caught, so Sentry's SDK hears it there.
  */
-function reportCaught(thrown: unknown): void {
-  console.error("The tab's panel failed to render.", thrown);
-  reportError(thrown);
+function reportCaught(cause: unknown): void {
+  console.error("The tab's panel failed to render.", cause);
+  reportError(cause);
 }
 
 /**

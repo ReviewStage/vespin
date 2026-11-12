@@ -106,7 +106,12 @@ import {
 } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_CHANNEL, unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import {
+  MESSAGE_CHANNEL,
+  type UnparsedWireValue,
+  unparsedWire,
+  type WireBoundaryInput,
+} from "@repo/wire";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, desc, eq } from "drizzle-orm";
@@ -3120,7 +3125,7 @@ test("update_task adds and takes away a task's blocks, which read_task names on 
     const read = await call(AGENT_TOOL.READ_TASK, { taskId });
     assert.ok(isRecord(read.task), JSON.stringify(read));
 
-    const ids = (side: unknown) =>
+    const ids = (side: UnparsedWireValue) =>
       Array.isArray(side) ? side.map((each) => (isRecord(each) ? each.id : undefined)) : side;
 
     return { blockedBy: ids(read.task.blockedBy), blocks: ids(read.task.blocks) };

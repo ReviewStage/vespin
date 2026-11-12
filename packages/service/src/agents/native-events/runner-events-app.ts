@@ -40,7 +40,13 @@ import {
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
 import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox } from "@repo/sandbox";
-import { CARRY_ON_REASON, HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import {
+  CARRY_ON_REASON,
+  HTTP_METHOD,
+  type UnparsedWireValue,
+  type WireValue,
+  WireValueSchema,
+} from "@repo/wire";
 import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
   Cause,
@@ -958,7 +964,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
 }
 
 /** How many events a batch that would not decode says it holds, where it holds an array of them. */
-function eventCountOf(parsed: unknown): number | undefined {
+function eventCountOf(parsed: UnparsedWireValue): number | undefined {
   if (!Predicate.isObject(parsed) || !("events" in parsed)) return undefined;
 
   return Array.isArray(parsed.events) ? parsed.events.length : undefined;

@@ -19,8 +19,8 @@ import { useChosenInbox } from "../inbox/use-inbox.js";
 import { forgetInboxWidget, keepInboxWidget } from "./inbox-widget-file.js";
 
 /** Logs a write or a removal the device refused; the next change tries again. */
-function logRefusal(error: unknown): void {
-  console.error("The Inbox widget's snapshot was not kept.", error);
+function logRefusal(cause: unknown): void {
+  console.error("The Inbox widget's snapshot was not kept.", cause);
 }
 
 /** The Inbox widget's snapshot written while an account is signed in, and removed once it signs out. */

@@ -440,18 +440,18 @@ const CHAIN_BOUND = 5;
 /** The key a value's cause is read from, as `Error`'s `cause` names it. */
 const CAUSE_KEY = "cause";
 
-/** A property of `value` that is a string, or nothing. */
-function stringOf(value: unknown, key: string): string | undefined {
-  if (!Predicate.hasProperty(value, key)) return undefined;
-  const read = value[key];
+/** A property of `cause` that is a string, or nothing. */
+function stringOf(cause: unknown, key: string): string | undefined {
+  if (!Predicate.hasProperty(cause, key)) return undefined;
+  const read = cause[key];
 
   return Predicate.isString(read) ? read : undefined;
 }
 
-/** A property of `value` that is a number, or nothing. */
-function numberOf(value: unknown, key: string): number | undefined {
-  if (!Predicate.hasProperty(value, key)) return undefined;
-  const read = value[key];
+/** A property of `cause` that is a number, or nothing. */
+function numberOf(cause: unknown, key: string): number | undefined {
+  if (!Predicate.hasProperty(cause, key)) return undefined;
+  const read = cause[key];
 
   return Predicate.isNumber(read) ? read : undefined;
 }
@@ -469,8 +469,8 @@ function sendableText(text: string): string {
 }
 
 /** A string a cause holds under `key`, as it may be sent, or nothing. */
-function sendableOf(value: unknown, key: string): string | undefined {
-  const read = stringOf(value, key);
+function sendableOf(cause: unknown, key: string): string | undefined {
+  const read = stringOf(cause, key);
 
   return read === undefined ? undefined : sendableText(read);
 }
@@ -681,7 +681,7 @@ function readReport(report: ShownFailureReport) {
  * The ids a payload names under the keys `FailureAbout` reads, for an act
  * whose failure was shown with nothing else to say what it was about.
  */
-export function failureAboutOf(payload: unknown): FailureAbout {
+export function failureAboutOf<Payload>(payload: Payload): FailureAbout {
   return {
     workspaceId: stringOf(payload, "workspaceId"),
     taskId: stringOf(payload, "taskId"),

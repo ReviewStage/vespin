@@ -689,10 +689,10 @@ interface Built<Row, Value> {
 }
 
 /** `held` where it was built from `row` and `beside` and still holds at `now`, else what `build` builds now. */
-function rebuilt<Row, Value>(
+function rebuilt<Row, Value, Beside>(
   held: Built<Row, Value> | undefined,
   row: Row,
-  beside: unknown,
+  beside: Beside,
   now: number,
   build: () => { readonly value: Value; readonly until: number | undefined },
 ): Built<Row, Value> {

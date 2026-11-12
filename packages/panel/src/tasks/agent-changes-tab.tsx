@@ -1541,8 +1541,8 @@ function useFileTexts(
             "text" in answer
               ? { text: answer.text.text }
               : { refused: EXPANSION_REFUSAL.UNAVAILABLE },
-          (error: unknown) => {
-            const refused = refusedAnswer(error);
+          (cause: unknown) => {
+            const refused = refusedAnswer(cause);
 
             return {
               refused:

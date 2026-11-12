@@ -76,7 +76,7 @@ const WORKTREE_SCRIPT = "make-the-agents-repository";
 /** The runner's own start on the box, as the platform launches it. */
 const RUNNER = "/opt/vespin-host/node/bin/node";
 
-const json = (body: unknown) =>
+const json = <Body>(body: Body) =>
   new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },

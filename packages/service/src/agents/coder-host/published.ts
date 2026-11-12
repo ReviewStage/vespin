@@ -365,10 +365,10 @@ const linkedOnGitHub = (
   }).pipe(Effect.catch(linkedUnread));
 
 /** A read of the pull requests an agent linked before that failed, logged by its kind alone. */
-function linkedUnread(failure: unknown): Effect.Effect<readonly LinkedRead[]> {
+function linkedUnread(cause: unknown): Effect.Effect<readonly LinkedRead[]> {
   return Effect.as(
     Effect.logWarning(
-      `an agent's linked pull requests could not be read again: ${failureKind(failure)}`,
+      `an agent's linked pull requests could not be read again: ${failureKind(cause)}`,
     ),
     [],
   );
@@ -520,9 +520,9 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
   }).pipe(Effect.catch(extraUnread));
 
 /** A read of an extra repository's pull request that failed, logged by its kind alone. */
-function extraUnread(failure: unknown): Effect.Effect<void> {
+function extraUnread(cause: unknown): Effect.Effect<void> {
   return Effect.logWarning(
-    `an extra repository's pull request could not be read again: ${failureKind(failure)}`,
+    `an extra repository's pull request could not be read again: ${failureKind(cause)}`,
   );
 }
 

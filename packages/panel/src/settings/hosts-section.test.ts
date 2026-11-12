@@ -408,7 +408,7 @@ test("a Mac turned on whose host macOS holds for approval says so, and opens Log
 test("This Mac's switch turns it on at once, and off only once the question is answered", async () => {
   const sent: unknown[] = [];
 
-  const answered = async (input: unknown) => {
+  const answered = async <Input>(input: Input) => {
     sent.push(input);
 
     return { done: true as const };
@@ -443,7 +443,7 @@ test("This Mac's switch turns it on at once, and off only once the question is a
 test("turning This Mac off offers to keep its agents' folders, and keeps them where that is unchecked", async () => {
   const sent: unknown[] = [];
   await machinesWithThisMac([], { machineId: MACHINE_ID, enrolled: true, agentFolders: 3 }, [], {
-    [ACT_KIND.HOSTS_THIS_MAC_SET]: async (input: unknown) => {
+    [ACT_KIND.HOSTS_THIS_MAC_SET]: async <Input>(input: Input) => {
       sent.push(input);
 
       return { done: true as const };

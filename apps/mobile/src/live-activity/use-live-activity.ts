@@ -127,8 +127,8 @@ export function useLiveActivity(signedIn: boolean): void {
           token: start,
         }),
       )
-      .then(logRefusal, (error: unknown) =>
-        console.error("The Live Activity's push-to-start token was not sent.", error),
+      .then(logRefusal, (cause: unknown) =>
+        console.error("The Live Activity's push-to-start token was not sent.", cause),
       );
   }, [acts, phone, start]);
   useEffect(() => {
@@ -141,8 +141,8 @@ export function useLiveActivity(signedIn: boolean): void {
           token: activity,
         }),
       )
-      .then(logRefusal, (error: unknown) =>
-        console.error("The Live Activity's token was not sent.", error),
+      .then(logRefusal, (cause: unknown) =>
+        console.error("The Live Activity's token was not sent.", cause),
       );
   }, [acts, phone, activity]);
   // The ends sent and not yet answered, so a render while one is out never sends it twice.
@@ -187,8 +187,8 @@ export function useLiveActivity(signedIn: boolean): void {
           if ("failure" in answer) failed();
           else told(end);
         },
-        (error: unknown) => {
-          console.error("The Live Activity's end was not told.", error);
+        (cause: unknown) => {
+          console.error("The Live Activity's end was not told.", cause);
           telling.current.delete(end);
           failed();
         },
@@ -203,7 +203,7 @@ export function useLiveActivity(signedIn: boolean): void {
     if (wasSignedIn.current && !signedIn)
       liveActivityModule
         ?.endAll()
-        .catch((error: unknown) => console.error("The Live Activity was not ended.", error));
+        .catch((cause: unknown) => console.error("The Live Activity was not ended.", cause));
     wasSignedIn.current = signedIn;
   }, [signedIn]);
   useEffect(() => {
@@ -236,8 +236,8 @@ export function useLiveActivity(signedIn: boolean): void {
         )
       : liveActivityModule.endAll();
 
-    started.catch((error: unknown) =>
-      console.error("The fixture's Live Activity was not started or ended.", error),
+    started.catch((cause: unknown) =>
+      console.error("The fixture's Live Activity was not started or ended.", cause),
     );
   }, [fixture]);
 }
