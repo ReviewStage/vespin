@@ -366,6 +366,8 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   } = props;
 
   const [presented, setPresented] = useState(false);
+  // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
+  const [opened, setOpened] = useState(false);
   const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
 
   // Note that the act is taken off as it runs, so a second dismissal never runs it again.
@@ -386,7 +388,10 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       chosen={chosen}
       look={look}
       tileSize={tileSize}
-      onPress={() => setPresented(true)}
+      onPress={() => {
+        setOpened(true);
+        setPresented(true);
+      }}
     />
   );
 
@@ -420,7 +425,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
             onDisappear(gone),
           ]}
         >
-          <SwitcherList props={props} closed={closed} />
+          {opened || presented ? <SwitcherList props={props} closed={closed} /> : null}
         </Group>
       </Popover.Content>
     </Popover>
