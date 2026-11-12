@@ -7,7 +7,8 @@
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its reminders, its
- * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
+ * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
+ * it, and the Undo of either; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task dragged into a section on an iPad, and a
  * task's description, pages, and comment threads followed, with a reply on a
@@ -265,13 +266,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: panel(
-    notYet("iOS settles a notice by a reply; its Got it is not built"),
-  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: panel(
-    notYet("iOS resolves at once; its Undo of a resolve is not built"),
-  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,

@@ -26,7 +26,7 @@ import {
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
+import { markedNote, NOT_RESOLVED, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -54,7 +54,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
+import { refusedWords, SETTLE, useSendsDrawn, useSettleUndo } from "./use-thread-answer.js";
 
 /** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
@@ -257,7 +257,7 @@ export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
-  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused. */
+  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused, and offering Undo once it went. */
   readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
@@ -265,6 +265,7 @@ export function useInboxActs(): {
 } {
   const acts = useHostActs();
   const write = useWrite();
+  const settled = useSettleUndo();
 
   return useMemo(
     () => ({
@@ -310,7 +311,9 @@ export function useInboxActs(): {
             retry: (answer) => "failure" in answer,
             went: BUZZ.SUCCESS,
           },
-        );
+        ).then((went) => {
+          if (went) settled(item, clientKey, SETTLE.RESOLVE);
+        });
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;
@@ -326,7 +329,7 @@ export function useInboxActs(): {
       refreshTasks: () =>
         acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
     }),
-    [acts, write],
+    [acts, write, settled],
   );
 }
 

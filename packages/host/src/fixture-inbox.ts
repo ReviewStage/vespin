@@ -63,11 +63,18 @@ import {
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import {
+  acknowledgedNow,
+  closedNow,
+  INBOX_SENDING,
+  inboxSendingDrawn,
+  takenBackNow,
+} from "@repo/features/inbox-writes";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -1859,6 +1866,21 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { item: closedNow(held, ADA, Date.now()), taken: true };
+  },
+  // Note that a Got it and an Undo's take-back are taken as the service takes them, though nothing here moves, so the window draws its own.
+  [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: acknowledgedNow(held, ADA, Date.now()), taken: true };
+  },
+  [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { item: takenBackNow(held, Date.now()), outcome: INBOX_TAKE_BACK.TAKEN };
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
