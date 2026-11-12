@@ -79,7 +79,7 @@ export type SwitcherAccount = {
 /** What the account's row says under its name: where it goes. */
 const SETTINGS = "Settings";
 
-/** What opens the chosen workspace's settings, under its name: short, so a menu as narrow as the system's keeps it to one line, where the panel's "Workspace settings" wrapped. */
+/** What opens the chosen workspace's settings, under its name: short, so a menu as narrow as the system's keeps it to one line, where the panel's "Workspace settings" wrapped. Note that it is heard as the panel's words, so VoiceOver, which may not read the section's name, never takes it for the account's Settings. */
 const WORKSPACE_SETTINGS = "Settings…";
 
 /** The account's row's image. Note that a menu draws its rows' images as templates in one ink, so a photo would stand as a flat silhouette; the system's person stands in its place. */
@@ -265,6 +265,7 @@ export function WorkspaceSwitcherMenu({
             label={WORKSPACE_SETTINGS}
             systemImage="building.2"
             onPress={onWorkspaceSettings}
+            modifiers={[accessibilityLabel(WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS)]}
           />
         </Section>
       )}

@@ -44,7 +44,7 @@ onFlowComplete:
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: ".*, Settings"
-      - assertVisible: "Settings…"
+      - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: ipad-switcher-settings
       - tapOn:
           point: "75%, 90%"
@@ -62,7 +62,7 @@ onFlowComplete:
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: ".*, Settings"
-      - assertVisible: "Settings…"
+      - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: switcher-settings
       - tapOn:
           point: "50%, 90%"

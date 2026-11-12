@@ -27,7 +27,9 @@ appId: dev.vespin.ios
 - assertVisible: "Relay, 6 members"
 - assertVisible: "Ada Lovelace, Settings"
 - assertVisible: "New workspace"
-- assertVisible: "Settings…"
+# The workspace's Settings… is heard as "Workspace settings", the words
+# Maestro reads where the menu keeps its label, so either is found.
+- assertVisible: "Workspace settings|Settings…"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-menu
 # Relay holds no threads, so the Inbox empties once it is chosen, and Tasks
