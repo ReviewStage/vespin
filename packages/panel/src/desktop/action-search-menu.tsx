@@ -55,7 +55,7 @@ function actionRows(actions: readonly MenuAction[]): readonly MenuRow[] {
     icon: action.icon,
     detail: action.detail,
     // Note that the detail is matched too, as a person's email is beside their name.
-    ...(action.detail === undefined ? {} : { terms: [action.detail] }),
+    ...(action.detail !== undefined && { terms: [action.detail] }),
     card: action.card,
     replayMasked: action.replayMasked,
   }));

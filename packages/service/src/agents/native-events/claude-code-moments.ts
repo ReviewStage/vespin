@@ -727,7 +727,7 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: utilization * 100,
             ...window,
-            ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
+            ...(resetsAtMs !== undefined && { resetsAt: resetsAtMs }),
           } as const,
         ]),
     {

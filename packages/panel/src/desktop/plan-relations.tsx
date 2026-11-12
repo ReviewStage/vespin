@@ -261,18 +261,16 @@ function subTaskRows(
       rows.push({
         task: subTask,
         depth,
-        ...(under.length === 0
-          ? {}
-          : {
-              fold: {
-                open,
-                onOpenChange: (asked: boolean) => {
-                  if (asked !== open) onFold(subTask.id);
-                },
-                label: `${SUB_TASKS_OF} ${subTask.name}`,
-              },
-            }),
-        ...(menu === undefined ? {} : { menu }),
+        ...(under.length !== 0 && {
+          fold: {
+            open,
+            onOpenChange: (asked: boolean) => {
+              if (asked !== open) onFold(subTask.id);
+            },
+            label: `${SUB_TASKS_OF} ${subTask.name}`,
+          },
+        }),
+        ...(menu !== undefined && { menu }),
       });
 
       if (open) draw(subTask.id, depth + 1);

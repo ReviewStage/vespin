@@ -175,7 +175,7 @@ export function useLiveActivity(signedIn: boolean): void {
       acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
         deviceToken: phone.token,
         environment: phone.environment,
-        ...(end.token === undefined ? {} : { activityToken: end.token }),
+        ...(end.token !== undefined && { activityToken: end.token }),
       }).then(
         (answer) => {
           logRefusal(answer);

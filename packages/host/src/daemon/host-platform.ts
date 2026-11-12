@@ -82,7 +82,7 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     runnerBundle: `${options.installFolder}/${RUNNER_BUNDLE}`,
     runnerEnv: {
       [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST,
-      ...(options.user.uid === ROOT ? { [CLAUDE_CODE_SANDBOXED]: "1" } : {}),
+      ...(options.user.uid === ROOT && { [CLAUDE_CODE_SANDBOXED]: "1" }),
     },
     tempFolder: options.tempFolder,
     deviceName: options.os.deviceName(),

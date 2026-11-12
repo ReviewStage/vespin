@@ -681,7 +681,7 @@ const repositoryAgent = (
           method: sent.method,
           headers: sent.headers,
           body: sent.body,
-          ...(sent.signal === undefined ? {} : { signal: sent.signal }),
+          ...(sent.signal !== undefined && { signal: sent.signal }),
         });
       }
 

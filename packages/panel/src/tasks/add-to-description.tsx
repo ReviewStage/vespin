@@ -281,7 +281,7 @@ export function useAddToDescription(): ViewerAction | undefined {
             surface: FAILURE_SURFACE.DESCRIPTION_ADD,
             cause,
             about: { taskId },
-            ...(refused === undefined ? {} : { refused }),
+            ...(refused !== undefined && { refused }),
           },
         });
 

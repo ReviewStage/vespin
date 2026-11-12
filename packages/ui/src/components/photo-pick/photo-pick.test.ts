@@ -34,7 +34,7 @@ function Probe({ photo, onRemove }: { photo: string | undefined; onRemove?: () =
     unnamed: "Workspace",
     photo,
     picker,
-    ...(onRemove === undefined ? {} : { onRemove }),
+    ...(onRemove !== undefined && { onRemove }),
   });
 }
 
@@ -45,7 +45,7 @@ function render(photo: string | undefined, onRemove?: () => void): void {
   }
 
   act(() =>
-    root?.render(createElement(Probe, { photo, ...(onRemove === undefined ? {} : { onRemove }) })),
+    root?.render(createElement(Probe, { photo, ...(onRemove !== undefined && { onRemove }) })),
   );
 }
 

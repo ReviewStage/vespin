@@ -50,7 +50,7 @@ function summary(
     createdAt: 1,
     updatedAt: 1,
     repository,
-    ...(parent === undefined ? {} : { parentTaskId: parent }),
+    ...(parent !== undefined && { parentTaskId: parent }),
   };
 }
 

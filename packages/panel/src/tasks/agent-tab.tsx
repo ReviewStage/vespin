@@ -2071,9 +2071,8 @@ function AgentEndRow({
           (ended.failure === undefined ? undefined : TURN_FAILURE_CAUSE.get(ended.failure)) ??
           FAILURE_CONDITION.UNREAD,
         about,
-        ...(ended.failure !== undefined && REFUSED_TURN_FAILURES.has(ended.failure)
-          ? { refused: true }
-          : {}),
+        ...(ended.failure !== undefined &&
+          REFUSED_TURN_FAILURES.has(ended.failure) && { refused: true }),
       })
     : undefined;
 

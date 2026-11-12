@@ -151,7 +151,7 @@ async function mountView(
       me: DEAN,
       listRead: true,
       shown: drawing.shown ?? true,
-      ...(drawing.pendingTasks === undefined ? {} : { pendingTasks: drawing.pendingTasks }),
+      ...(drawing.pendingTasks !== undefined && { pendingTasks: drawing.pendingTasks }),
     });
 
     const frame = {

@@ -704,7 +704,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
 
     const drawing: MarkdownComponents = {
       ...COMPONENTS,
-      ...(inline === true ? { code: LINE_CODE } : {}),
+      ...(inline === true && { code: LINE_CODE }),
       a: ({ href, children, node }) => {
         const drawn =
           href === undefined || link === undefined

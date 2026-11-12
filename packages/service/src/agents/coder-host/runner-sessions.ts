@@ -1422,11 +1422,10 @@ export const runnerSessions = <
             harness: harness.runtime,
             path,
             turn_running: turnRunning,
-            ...(turnRunning || settledAt === null
-              ? {}
-              : {
-                  idle_seconds: Math.max(0, Math.round((handedAt - settledAt.getTime()) / 1_000)),
-                }),
+            ...(!turnRunning &&
+              settledAt !== null && {
+                idle_seconds: Math.max(0, Math.round((handedAt - settledAt.getTime()) / 1_000)),
+              }),
           },
         ),
       );

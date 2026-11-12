@@ -592,14 +592,14 @@ function attributesOf(
     [FAILURE_ATTRIBUTE.SURFACE]: report.surface,
     [FAILURE_ATTRIBUTE.KIND]: report.kind,
     [FAILURE_ATTRIBUTE.CODE]: code,
-    ...(report.act === undefined ? {} : { [FAILURE_ATTRIBUTE.ACT]: report.act }),
+    ...(report.act !== undefined && { [FAILURE_ATTRIBUTE.ACT]: report.act }),
     ...factAttributes(chain[0] ?? {}, ERROR_ATTRIBUTE),
-    ...(root === undefined ? {} : factAttributes(root, ROOT_ATTRIBUTE)),
-    ...(trace === undefined ? {} : { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
+    ...(root !== undefined && factAttributes(root, ROOT_ATTRIBUTE)),
+    ...(trace !== undefined && { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
     ...aboutAttributes(report.about),
     [FAILURE_ATTRIBUTE.ONLINE]: report.state.online,
     [FAILURE_ATTRIBUTE.ACCOUNT]: report.state.account,
-    ...(report.state.live === undefined ? {} : { [FAILURE_ATTRIBUTE.LIVE]: report.state.live }),
+    ...(report.state.live !== undefined && { [FAILURE_ATTRIBUTE.LIVE]: report.state.live }),
   } satisfies FailureAttributes;
 }
 
@@ -732,7 +732,7 @@ export function sendShownFailure(
       tags: {
         [FAILURE_ATTRIBUTE.SURFACE]: report.surface,
         [FAILURE_ATTRIBUTE.CODE]: code,
-        ...(trace === undefined ? {} : { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
+        ...(trace !== undefined && { [FAILURE_ATTRIBUTE.HOSTED_TRACE]: trace }),
         ...aboutAttributes(report.about),
       },
       contexts: { [SHOWN_FAILURE_CONTEXT]: attributes },

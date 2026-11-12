@@ -165,7 +165,7 @@ async function draw(task: Task, drawn: Drawn = {}): Promise<HTMLElement> {
 
   handState(experiments, {
     ...listed,
-    ...(drawn.account === undefined ? {} : { account: signedInAs(drawn.account).account }),
+    ...(drawn.account !== undefined && { account: signedInAs(drawn.account).account }),
   });
   handMembers(() => ({ rows: { members: MEMBERS, former: FORMER } }));
   const container = document.body.appendChild(document.createElement("div"));

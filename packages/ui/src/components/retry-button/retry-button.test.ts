@@ -44,7 +44,7 @@ function draw(label?: string) {
   act(() =>
     root?.render(
       createElement(RetryButton, {
-        ...(label === undefined ? {} : { label }),
+        ...(label !== undefined && { label }),
         onRetry: () => {
           presses += 1;
         },

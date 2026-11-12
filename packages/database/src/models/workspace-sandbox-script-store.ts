@@ -403,7 +403,7 @@ export const editRunActions = <E, R>(
             // Note that only the first action named default is, so a list naming two still saves one.
             isDefault: action.isDefault === true && !defaulted,
             now: stamped,
-            ...(keeps && action.id !== undefined ? { id: action.id } : {}),
+            ...(keeps && action.id !== undefined && { id: action.id }),
           });
           defaulted ||= action.isDefault === true;
         }

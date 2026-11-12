@@ -177,8 +177,8 @@ function installAsked(
   return {
     chosen: name === undefined || description === undefined ? [] : [name],
     request: {
-      ...(name === undefined ? {} : { name }),
-      ...(description === undefined ? {} : { description }),
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
     },
     missing: "Name the skill with --name and --description; its text declares none.",
   };

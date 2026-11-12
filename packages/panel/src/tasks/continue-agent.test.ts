@@ -256,7 +256,7 @@ async function drawnTab(input: {
   const drafted: { words: string; attachments: readonly AgentAttachment[] }[] = [];
 
   const continueAgent: AgentContinuer = (agentId, note, attachments, runsOn) => {
-    continued.push({ agentId, note, attachments, ...(runsOn === undefined ? {} : { runsOn }) });
+    continued.push({ agentId, note, attachments, ...(runsOn !== undefined && { runsOn }) });
 
     return input.answer?.() ?? Promise.resolve(undefined);
   };

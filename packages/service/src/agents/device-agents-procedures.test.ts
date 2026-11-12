@@ -107,12 +107,12 @@ function request(
   return new Request(url, {
     method: init.body === undefined && init.post === undefined ? "GET" : "POST",
     headers: {
-      ...(bearer === undefined ? {} : { authorization: `Bearer ${bearer}` }),
-      ...(init.version === undefined ? {} : { [HOST_WIRE.VERSION_HEADER]: init.version }),
-      ...(init.ip === undefined ? {} : { "x-real-ip": init.ip }),
-      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      ...(bearer !== undefined && { authorization: `Bearer ${bearer}` }),
+      ...(init.version !== undefined && { [HOST_WIRE.VERSION_HEADER]: init.version }),
+      ...(init.ip !== undefined && { "x-real-ip": init.ip }),
+      ...(init.body !== undefined && { "content-type": "application/json" }),
     },
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    ...(init.body !== undefined && { body: JSON.stringify(init.body) }),
   });
 }
 
@@ -210,7 +210,7 @@ const agentRunningOn = (userId: string, deviceId: string | null) =>
       descriptionSnapshot: "# Invitations\n",
       prompt: null,
       repository: null,
-      ...(deviceId === null ? {} : { machine: AGENT_MACHINE.DEVICE, deviceId }),
+      ...(deviceId !== null && { machine: AGENT_MACHINE.DEVICE, deviceId }),
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
 
@@ -252,7 +252,7 @@ function publishedRelease() {
 function startPairing(init: { readonly version?: string; readonly ip?: string } = {}) {
   return request(undefined, PATH.PAIRING_START, {
     version: init.version ?? HOST_VERSION.FLOOR,
-    ...(init.ip === undefined ? {} : { ip: init.ip }),
+    ...(init.ip !== undefined && { ip: init.ip }),
     body: { name: "fra-01", platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
   });
 }

@@ -228,7 +228,7 @@ export function placeAddress(
 ): PlaceAddress {
   const routed = router === undefined ? undefined : routedPressOf(router, link);
 
-  return { kind: ADDRESS.PLACE, link, routed, ...(href === undefined ? {} : { href }) };
+  return { kind: ADDRESS.PLACE, link, routed, ...(href !== undefined && { href }) };
 }
 
 /**

@@ -160,8 +160,8 @@ const emailInvitation = Effect.fn("web/emailWorkspaceInvitation")(function* (
     inviterLabel: inviter?.name.trim() || inviter?.email || INVITER_UNKNOWN,
     role: invitation.role,
     expiresAt: invitation.expiresAt,
-    ...(workspacePictureUrl === undefined ? {} : { workspacePictureUrl }),
-    ...(inviterPictureUrl === undefined ? {} : { inviterPictureUrl }),
+    ...(workspacePictureUrl !== undefined && { workspacePictureUrl }),
+    ...(inviterPictureUrl !== undefined && { inviterPictureUrl }),
   });
 });
 

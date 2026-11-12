@@ -103,7 +103,7 @@ export function appProcesses(input: {
     const named = electron.get(row.pid);
     answered.push({
       pid: row.pid,
-      ...(parent === undefined ? {} : { parent }),
+      ...(parent !== undefined && { parent }),
       ppid: row.parent,
       kind,
       name: named?.name ?? executableName(row.command),

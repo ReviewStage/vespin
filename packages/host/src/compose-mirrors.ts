@@ -249,7 +249,7 @@ function standingOf(mirror: Mirror): MirrorStanding {
   if (mirror.failed === undefined) return { kind: MIRROR_STANDING.WAITING };
   const { failure, code } = mirror.failed;
 
-  return { kind: MIRROR_STANDING.FAILED, failure, ...(code === undefined ? {} : { code }) };
+  return { kind: MIRROR_STANDING.FAILED, failure, ...(code !== undefined && { code }) };
 }
 
 /** A failure's step, why, and code as a span's attributes. */
@@ -257,7 +257,7 @@ function droppedAttributes(dropped: MirrorDropped): Record<string, string | numb
   return {
     [SPAN_ATTRIBUTE.STEP]: dropped.step,
     [SPAN_ATTRIBUTE.FAILURE]: dropped.failure,
-    ...(dropped.code === undefined ? {} : { [CODE_ATTRIBUTE[dropped.step]]: dropped.code }),
+    ...(dropped.code !== undefined && { [CODE_ATTRIBUTE[dropped.step]]: dropped.code }),
   };
 }
 

@@ -77,7 +77,7 @@ export function RelationKindPill<Kind extends string>({
       id: each,
       label: words[each],
       icon: icon(each),
-      ...(whyNot === undefined ? {} : { disabled: whyNot }),
+      ...(whyNot !== undefined && { disabled: whyNot }),
     };
   });
 

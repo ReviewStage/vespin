@@ -995,7 +995,7 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
       sendAct(ACT_KIND.MEMORIES_SAVE, {
         workspaceId,
         text: save.text,
-        ...(save.replaces === undefined ? {} : { replaces: save.replaces }),
+        ...(save.replaces !== undefined && { replaces: save.replaces }),
       }),
   });
 

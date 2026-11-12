@@ -813,7 +813,7 @@ export function mount({
     );
 
     const control = tasksControl({
-      ...(readerKnown ? { me: READER.userId } : {}),
+      ...(readerKnown && { me: READER.userId }),
       workspace: listedWorkspace,
       tasks: inListed,
       // The agents the task list followed live carries, none while it has carried none yet.

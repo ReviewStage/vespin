@@ -469,7 +469,7 @@ function InlineRefRoot({
     ...rest,
     className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
     "data-look": look,
-    ...(isolated ? { dir: "ltr" } : {}),
+    ...(isolated && { dir: "ltr" }),
   };
 
   const goneProps = gone ? { "data-gone": "true" } : {};

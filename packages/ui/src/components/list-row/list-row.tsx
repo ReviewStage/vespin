@@ -581,7 +581,7 @@ export function List({
         onPointerDown={onPointerDown}
         handle={handle}
         block={{
-          ...(joinsWalk ? {} : roving),
+          ...(!joinsWalk && roving),
           id,
           onKeyDown,
           ...selectionRoot(),

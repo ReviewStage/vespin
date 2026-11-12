@@ -230,7 +230,7 @@ function answering(
     pullRequest: {
       number: 42,
       generatable: runsOn !== null,
-      ...(runsOn === null ? {} : { runsOn }),
+      ...(runsOn !== null && { runsOn }),
       chapters,
     },
   };
@@ -404,7 +404,7 @@ function controlAnswering(answers: Answers): AgentsControl {
     chapters: chaptersHeld(
       answers.chapters ?? answering({ status: PULL_REQUEST_CHAPTERS_STATE.NONE }),
     ),
-    ...(answers.picked === undefined ? {} : { preferences: preferencesOn(answers.picked) }),
+    ...(answers.picked !== undefined && { preferences: preferencesOn(answers.picked) }),
   });
 
   moveChapters = (next) => deliverChapters(chaptersHeld(next));
@@ -464,7 +464,7 @@ function controlAnswering(answers: Answers): AgentsControl {
       return Promise.resolve({
         pullRequest: {
           url: PAGE,
-          ...(answers.filesHeadless === true ? {} : { headSha: head }),
+          ...(answers.filesHeadless !== true && { headSha: head }),
           truncated: false,
           files,
         },

@@ -119,9 +119,9 @@ export function startHighlighting(
       workerFactory: startWorker,
       poolSize: HIGHLIGHT_WORKERS,
       totalASTLRUCacheSize: HIGHLIGHT_CACHE_ENTRIES,
-      ...(preferredHighlighter() === HIGHLIGHTER.HIGHLIGHTS
-        ? { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
-        : {}),
+      ...(preferredHighlighter() === HIGHLIGHTER.HIGHLIGHTS && {
+        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+      }),
       // Note that a worker failing to start is no error of the window's, since the list then highlights on its own thread.
       onWorkerError: (event) => event.preventDefault(),
     },

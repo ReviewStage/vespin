@@ -49,7 +49,7 @@ function post(ask?: InboxMessage["ask"]): InboxMessage {
     author: INBOX_MESSAGE_AUTHOR.AGENT,
     text: "Where do we stand?",
     createdAt: 0,
-    ...(ask === undefined ? {} : { ask }),
+    ...(ask !== undefined && { ask }),
   };
 }
 

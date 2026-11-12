@@ -309,7 +309,7 @@ function ComposerPieces(props: ComposerProps) {
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...(addMenu === undefined && onAdd === undefined ? { leading: FIELD_LEADING } : {}),
+            ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
           }),
           accessibilityIdentifier("composer-field"),
         ]}

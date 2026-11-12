@@ -743,7 +743,7 @@ export function withProviderKeyLocked<A, E, R>(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
   };
 
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -787,7 +787,7 @@ export function removeProviderKey(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
   });
 }
 
@@ -810,7 +810,7 @@ export function setProviderKeyForAgents(
       provider,
       kind,
       forAgents,
-      ...(subscriptionId === undefined ? {} : { subscriptionId }),
+      ...(subscriptionId !== undefined && { subscriptionId }),
     }),
     (rows) => rows.length > 0,
   );
@@ -901,7 +901,7 @@ export function setPlanStatus(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
     status,
     limitResetsAt: status === PROVIDER_KEY_STATUS.LIMIT_REACHED ? (limitResetsAt ?? null) : null,
     savedBy,
@@ -929,7 +929,7 @@ export function setPlanUsage(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
     window,
     heardAt,
     savedBy,

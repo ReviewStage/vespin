@@ -523,7 +523,7 @@ export function useShowShellTab(
         // Note that a tab already open keeps its name, since its tab is found by it.
         title: found?.title ?? terminal.title,
         terminal: terminal.id,
-        ...(terminal.action === undefined ? {} : { action: terminal.action }),
+        ...(terminal.action !== undefined && { action: terminal.action }),
       };
 
       kept.set(

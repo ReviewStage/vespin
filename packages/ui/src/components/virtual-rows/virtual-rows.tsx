@@ -646,21 +646,19 @@ export function VirtualRows({
     "aria-label": label,
     onPointerDown,
     "data-row-drop-rows": dropRows,
-    ...(moves ? motionRows() : {}),
+    ...(moves && motionRows()),
     // Note that the row holding the keyboard is kept as it takes it and let go as it loses it, a row taking it from another being kept in its place.
-    ...(holdsFocus
-      ? {
-          onFocus: (event: FocusEvent<HTMLElement>) => {
-            focused.current =
-              rowHolding(block.current, event.target)?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ??
-              undefined;
-            wears?.onFocus?.(event);
-          },
-          onBlur: () => {
-            focused.current = undefined;
-          },
-        }
-      : {}),
+    ...(holdsFocus && {
+      onFocus: (event: FocusEvent<HTMLElement>) => {
+        focused.current =
+          rowHolding(block.current, event.target)?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ??
+          undefined;
+        wears?.onFocus?.(event);
+      },
+      onBlur: () => {
+        focused.current = undefined;
+      },
+    }),
   };
 
   if (listItems) {

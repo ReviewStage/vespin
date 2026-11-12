@@ -2246,9 +2246,9 @@ const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
     workspaceAsMember(workspace, {}, ({ userId }, workspaceId) =>
       Effect.map(workspaceMembersRead(userId, workspaceId), ({ members, former }) => ({
         members: membersAnswered(members),
-        ...(former === undefined
-          ? {}
-          : { former: former.map(({ userId: id, name }) => ({ userId: id, name })) }),
+        ...(former !== undefined && {
+          former: former.map(({ userId: id, name }) => ({ userId: id, name })),
+        }),
       })),
     ),
 });
@@ -2306,7 +2306,7 @@ const RENAME_WORKSPACE_TOOL = memberMcpTool({
         workspace: {
           id: renamed.id,
           name: renamed.name,
-          ...(renamed.slug === undefined ? {} : { slug: renamed.slug }),
+          ...(renamed.slug !== undefined && { slug: renamed.slug }),
         },
       })),
     ),
@@ -2743,7 +2743,7 @@ function memberBrowserTab(tab: AgentBrowserTab, userId: string) {
     title: tab.title,
     openedBy: tab.openedBy.kind,
     driver,
-    ...(tab.driver === null ? {} : { heldUntil: new Date(tab.driver.heldUntil).toISOString() }),
+    ...(tab.driver !== null && { heldUntil: new Date(tab.driver.heldUntil).toISOString() }),
   };
 }
 

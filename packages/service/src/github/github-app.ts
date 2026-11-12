@@ -1736,7 +1736,7 @@ function githubAppService(
         repositories: combinedRepositories(listed.flat()),
         installations: live.map((one) => ({
           installationId: one.id,
-          ...(one.accountLogin === undefined ? {} : { login: one.accountLogin }),
+          ...(one.accountLogin !== undefined && { login: one.accountLogin }),
           repositorySelection: one.repositorySelection,
         })),
       });

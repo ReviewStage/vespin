@@ -450,7 +450,7 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
 /** The window on Acme's Inbox, which the router stands, or on the task `onTask` stands, each task left recorded in `left`. */
 function inboxOrTask(onTask: boolean, left: string[]): Standing {
   return listedTab({
-    ...(onTask ? { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID } : {}),
+    ...(onTask && { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
     workspaces: [ACME],
     workspace: ACME,
     onLeaveTask: () => left.push(TASK_ID),

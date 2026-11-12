@@ -164,8 +164,8 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
 
   return hostedCall(procedure, input, {
     live: true,
-    ...(poll === undefined ? {} : { poll }),
-    ...(held ? { deadline: HOSTED_DEADLINE.HELD } : {}),
-    ...(as === undefined ? {} : { as }),
+    ...(poll !== undefined && { poll }),
+    ...(held && { deadline: HOSTED_DEADLINE.HELD }),
+    ...(as !== undefined && { as }),
   });
 }

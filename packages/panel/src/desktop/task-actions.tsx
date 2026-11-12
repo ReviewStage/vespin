@@ -582,9 +582,7 @@ function standingSubmenus(
           {
             ...assigned,
             // Note that a member's face draws their initial as words, so the glyph is masked with the name.
-            ...(assigned.icon === undefined
-              ? {}
-              : { icon: <ReplayMask>{assigned.icon}</ReplayMask> }),
+            ...(assigned.icon !== undefined && { icon: <ReplayMask>{assigned.icon}</ReplayMask> }),
             items: assigned.items.map((item, at) =>
               assignees[at]?.id === NO_ASSIGNEE
                 ? item

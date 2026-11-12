@@ -328,7 +328,7 @@ const CREATE_TASK_DESCRIPTION_FIELD = {
 function createTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return Schema.Struct({
     ...CREATE_TASK_FIELDS_BEFORE,
-    ...(on.descriptionsOn ? CREATE_TASK_DESCRIPTION_FIELD : {}),
+    ...(on.descriptionsOn && CREATE_TASK_DESCRIPTION_FIELD),
     ...CREATE_TASK_FIELDS_AFTER,
   });
 }

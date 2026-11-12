@@ -2023,7 +2023,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
           request(INBOX_ATTACHMENT, bearer, {
             id: item.id,
             attachment: file.attachmentId,
-            ...(accept === undefined ? {} : { accept }),
+            ...(accept !== undefined && { accept }),
           });
 
         const body = (served: Response) =>

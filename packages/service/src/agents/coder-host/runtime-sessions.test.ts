@@ -177,7 +177,7 @@ function recording(sessionPrefix: string) {
           return {
             outcome: SESSION_SEND_OUTCOME.FAILED,
             status: answers.status,
-            ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
+            ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
           } as const;
         }
 
@@ -207,7 +207,7 @@ function recording(sessionPrefix: string) {
           : {
               outcome: SESSION_SEND_OUTCOME.FAILED,
               status: answers.status,
-              ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
+              ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
             };
       }),
     send: (sessionId, message) =>
@@ -225,9 +225,9 @@ function recording(sessionPrefix: string) {
           : {
               outcome: SESSION_SEND_OUTCOME.FAILED,
               status: answers.status,
-              ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
-              ...(answers.planResetsAt === undefined ? {} : { planResetsAt: answers.planResetsAt }),
-              ...(answers.keyRefusal === undefined ? {} : { keyRefusal: answers.keyRefusal }),
+              ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
+              ...(answers.planResetsAt !== undefined && { planResetsAt: answers.planResetsAt }),
+              ...(answers.keyRefusal !== undefined && { keyRefusal: answers.keyRefusal }),
             };
       }),
     cancel: (sessionId, turnId) =>

@@ -358,8 +358,8 @@ export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undef
           cwd: fieldOf(cwd),
           running:
             action === "" ? foreground !== "" && !SHELLS.has(foreground) : exited === undefined,
-          ...(action === "" ? {} : { runAction: action }),
-          ...(exited === undefined ? {} : { exited }),
+          ...(action !== "" && { runAction: action }),
+          ...(exited !== undefined && { exited }),
         },
       },
     ];

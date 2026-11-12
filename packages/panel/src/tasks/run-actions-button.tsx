@@ -135,7 +135,7 @@ async function runAction(
 
   await queries.invalidateQueries({ queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId] });
   // The tab is held on the action, with the icon it wears as pressed, so it takes nothing typed and wears both.
-  const held = { id: action.id, ...(action.icon === undefined ? {} : { icon: action.icon }) };
+  const held = { id: action.id, ...(action.icon !== undefined && { icon: action.icon }) };
 
   if ("terminal" in answer) onShowShell?.({ ...answer.terminal, action: held });
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION, agentId, answer, WORDS.NOT_RUN);

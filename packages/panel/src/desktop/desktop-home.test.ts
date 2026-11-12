@@ -161,12 +161,10 @@ function mount(
         },
     inbox: {
       ...stateWith({}, {}).inbox,
-      ...(items.length === 0
-        ? {}
-        : {
-            waiting: [{ taskId: RETRIES.id, items: items.map(waitingOf) }],
-            tasks: [{ taskId: RETRIES.id, items: items.length, updatedAt: NOW }],
-          }),
+      ...(items.length !== 0 && {
+        waiting: [{ taskId: RETRIES.id, items: items.map(waitingOf) }],
+        tasks: [{ taskId: RETRIES.id, items: items.length, updatedAt: NOW }],
+      }),
     },
   });
 

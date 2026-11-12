@@ -543,7 +543,7 @@ function deviceMachineOver(
 
         const mark = Option.map(payload, (read) => ({
           firstSequence: read.firstSequence,
-          ...(read.fingerprint === undefined ? {} : { fingerprint: read.fingerprint }),
+          ...(read.fingerprint !== undefined && { fingerprint: read.fingerprint }),
         }));
 
         const live =
@@ -683,8 +683,8 @@ function deviceMachineOver(
             repository: agent.value.repository,
             startBranch: agent.value.startBranch,
             firstSequence: mark.firstSequence,
-            ...(mark.fingerprint === undefined ? {} : { fingerprint: mark.fingerprint }),
-            ...(commitsBy === undefined ? {} : { identity: commitsBy }),
+            ...(mark.fingerprint !== undefined && { fingerprint: mark.fingerprint }),
+            ...(commitsBy !== undefined && { identity: commitsBy }),
           };
 
           yield* queued(pin, {

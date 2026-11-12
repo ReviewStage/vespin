@@ -191,7 +191,7 @@ function asksSignIn(provider: IntegrationProvider, sentence: string): boolean {
 function refusedFor(connection: HandedConnection, sentence: string): ConnectionRefusal {
   return refused(sentence, {
     connection: connection.connectionName,
-    ...(asksSignIn(connection.provider, sentence) ? { requiresSignIn: true as const } : {}),
+    ...(asksSignIn(connection.provider, sentence) && { requiresSignIn: true as const }),
   });
 }
 

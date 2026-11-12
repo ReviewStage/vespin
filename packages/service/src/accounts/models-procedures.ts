@@ -57,7 +57,7 @@ export function modelsProcedures(seams: ModelsProcedureSeams) {
 
       return {
         models: yield* hostedStoreOrUnavailable(markedUnconnected(context.userId, offered)),
-        ...(macs.length > 0 ? { macs } : {}),
+        ...(macs.length > 0 && { macs }),
       };
     }),
   };

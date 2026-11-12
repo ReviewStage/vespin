@@ -147,17 +147,13 @@ export function GitHubOwnerRow({
         leading: <AccountMark login={login} />,
         label: login,
         description: line,
-        ...(repositories.length === 0
-          ? {}
-          : {
-              fold: {
-                body: (
-                  <RepositoryLines label={label} repositories={repositories} pictures={pictures} />
-                ),
-                label,
-                defaultOpen: false,
-              },
-            }),
+        ...(repositories.length !== 0 && {
+          fold: {
+            body: <RepositoryLines label={label} repositories={repositories} pictures={pictures} />,
+            label,
+            defaultOpen: false,
+          },
+        }),
       }}
     />
   );

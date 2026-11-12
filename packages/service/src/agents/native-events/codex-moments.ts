@@ -764,9 +764,9 @@ function windowUsage(
           {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: window.usedPercent,
-            ...(window.windowDurationMins == null ? {} : { windowMins: window.windowDurationMins }),
+            ...(window.windowDurationMins != null && { windowMins: window.windowDurationMins }),
             // Note that Codex counts a window's reset in seconds since the epoch.
-            ...(window.resetsAt == null ? {} : { resetsAt: window.resetsAt * 1000 }),
+            ...(window.resetsAt != null && { resetsAt: window.resetsAt * 1000 }),
           } as const,
         ],
   );

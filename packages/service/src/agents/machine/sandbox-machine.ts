@@ -534,8 +534,8 @@ function heldAtFirewall(credentials: readonly RunnerCredential[]): DeliveredCred
 function markOf(record: AgentRunnerRecord): RunnerMark {
   return {
     firstSequence: record.firstSequence,
-    ...(record.fingerprint === null ? {} : { fingerprint: record.fingerprint }),
-    ...(record.permissionMode === null ? {} : { permissionMode: record.permissionMode }),
+    ...(record.fingerprint !== null && { fingerprint: record.fingerprint }),
+    ...(record.permissionMode !== null && { permissionMode: record.permissionMode }),
     linesRead: true,
   };
 }

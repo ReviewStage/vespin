@@ -227,7 +227,7 @@ function listing(): RepositoriesRead | undefined {
     repositories: {
       installed: true,
       installationUrl: "https://github.com/apps/luke/installations/new",
-      ...(listedInstallations === undefined ? {} : { installations: listedInstallations }),
+      ...(listedInstallations !== undefined && { installations: listedInstallations }),
       ...(beforeAddable
         ? {
             repositories: [

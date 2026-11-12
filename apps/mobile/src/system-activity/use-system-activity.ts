@@ -65,7 +65,7 @@ export function useScreenActivity(
 
       if (module === null || title === undefined || webpageUrl === undefined) return undefined;
       module
-        .setCurrent({ title, webpageUrl, ...(pullRequest === undefined ? {} : { pullRequest }) })
+        .setCurrent({ title, webpageUrl, ...(pullRequest !== undefined && { pullRequest }) })
         .catch(refused("The screen's activity"));
 
       // Note that the activity is taken back by its page, so a screen going after the next one stood never takes back the next one's.

@@ -338,7 +338,7 @@ export class HostedDeviceAgentClient {
     const claimed = (named: string | undefined) =>
       hostedCall(
         this.#hosted.deviceAgents.claimLine,
-        { deviceId, id, ...(named === undefined ? {} : { claimToken: named }) },
+        { deviceId, id, ...(named !== undefined && { claimToken: named }) },
         { as: DEVICE_AGENT_RENAMES },
       );
 
@@ -381,8 +381,8 @@ export class HostedDeviceAgentClient {
     const input = {
       deviceId,
       id,
-      ...(exitCode === undefined ? {} : { exitCode }),
-      ...(unstarted === undefined ? {} : { unstarted }),
+      ...(exitCode !== undefined && { exitCode }),
+      ...(unstarted !== undefined && { unstarted }),
     };
 
     return Effect.map(

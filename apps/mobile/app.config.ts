@@ -295,7 +295,7 @@ const colorComponents = (hex: string) => ({
 // An asset catalog's color set of one of the brand's colors, light and dark.
 const colorSet = (role: keyof typeof BRAND_PALETTE.LIGHT) => {
   const entry = (hex: string, dark: boolean) => ({
-    ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+    ...(dark && { appearances: [{ appearance: "luminosity", value: "dark" }] }),
     color: { "color-space": "srgb", components: colorComponents(hex) },
     idiom: "universal",
   });
@@ -665,7 +665,7 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
 
         const contents = {
           images: appearances.map(({ file, dark }) => ({
-            ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+            ...(dark && { appearances: [{ appearance: "luminosity", value: "dark" }] }),
             filename: file,
             idiom: "universal",
           })),

@@ -143,7 +143,7 @@ export function fakeGitHub(
       method: init.method ?? "GET",
       headers: new Headers(init.headers),
       body: init.body === undefined ? "" : await new Response(init.body).text(),
-      ...(init.signal ? { signal: init.signal } : {}),
+      ...(init.signal && { signal: init.signal }),
     };
 
     sent.push(request);

@@ -20,7 +20,7 @@ function message(id: string, words: string, stamp?: string) {
     typed: true,
     media: [],
     drawn: [],
-    ...(stamp === undefined ? {} : { stamp: { tone: ANSWER_TONE.AHEAD, words: stamp } }),
+    ...(stamp !== undefined && { stamp: { tone: ANSWER_TONE.AHEAD, words: stamp } }),
   };
 }
 

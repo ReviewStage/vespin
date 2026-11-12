@@ -164,7 +164,7 @@ export function agentBrowserTabOf(line: AgentBrowserTabLine, now: number): Agent
     driver: driving,
     createdAt: line.createdAt,
     lastActedAt: line.lastActedAt,
-    ...(cursor === undefined ? {} : { cursor }),
+    ...(cursor !== undefined && { cursor }),
   };
 }
 

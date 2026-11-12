@@ -199,7 +199,7 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       const { subscriptionId, label } = request.payload;
 
       const named = <One extends { readonly id?: string }>(one: One) =>
-        one.id === subscriptionId ? { ...one, ...(label === null ? {} : { label }) } : one;
+        one.id === subscriptionId ? { ...one, ...(label !== null && { label }) } : one;
 
       held = { ...held, keys: held.keys.map(named), subscriptions: subscriptions.map(named) };
 
