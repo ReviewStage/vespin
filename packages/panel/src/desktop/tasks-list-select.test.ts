@@ -301,9 +301,11 @@ function commandClick(page: HTMLElement, key: string): void {
 
 /** The keys of the rows the List holds chosen, in the order drawn. */
 function chosen(page: HTMLElement): string[] {
-  return [...page.querySelectorAll<HTMLElement>(".tasks-list-group li")]
-    .filter((row) => row.querySelector('[data-card-press][data-selected="true"]') !== null)
-    .map((row) => row.querySelector("[data-task-key]")?.textContent ?? "");
+  return [...page.querySelectorAll<HTMLElement>(".tasks-list-group li")].flatMap((row) =>
+    row.querySelector('[data-card-press][data-selected="true"]') === null
+      ? []
+      : [row.querySelector("[data-task-key]")?.textContent ?? ""],
+  );
 }
 
 /** Presses the open menu's item named `name`. */

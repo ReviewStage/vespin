@@ -908,12 +908,11 @@ export function SettingsSearchField({
 
 /** The marks of `ranges` that fall in `from`..`to`, counted from `from`. */
 function rangesWithin(ranges: readonly MatchRange[], from: number, to: number): MatchRange[] {
-  return ranges
-    .filter((range) => range.end > from && range.start < to)
-    .map((range) => ({
-      start: Math.max(range.start, from) - from,
-      end: Math.min(range.end, to) - from,
-    }));
+  return ranges.flatMap((range) =>
+    range.end > from && range.start < to
+      ? [{ start: Math.max(range.start, from) - from, end: Math.min(range.end, to) - from }]
+      : [],
+  );
 }
 
 /** A result's name, its matches marked, and a person's words in it masked in a screen recording. */

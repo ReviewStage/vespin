@@ -133,12 +133,11 @@ function reviewsAnswering(
 
 /** The review mutations GitHub was sent, each as which (a new review, or a pending one submitted) and its variables. */
 function reviewMutations(calls: readonly GraphqlCall[]) {
-  return calls
-    .filter((call) => call.query.includes("mutation"))
-    .map((call) => [
-      call.query.includes("submitPullRequestReview") ? "submit" : "add",
-      call.variables,
-    ]);
+  return calls.flatMap((call) =>
+    call.query.includes("mutation")
+      ? [[call.query.includes("submitPullRequestReview") ? "submit" : "add", call.variables]]
+      : [],
+  );
 }
 
 /** A change to one of the pull request's review threads as the bearer given. */
@@ -1338,9 +1337,9 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         }
 
         const mutations = (calls: readonly GraphqlCall[]) =>
-          calls
-            .filter((call) => call.query.includes("mutation"))
-            .map((call) => [mutationName(call.query), call.variables]);
+          calls.flatMap((call) =>
+            call.query.includes("mutation") ? [[mutationName(call.query), call.variables]] : [],
+          );
 
         assert.deepEqual(mutations(fresh.calls), [
           [

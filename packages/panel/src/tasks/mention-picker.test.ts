@@ -225,8 +225,11 @@ async function mountedOnDescription(chosen: MentionNode[]) {
 const detailedRows = (page: HTMLElement) =>
   [...page.querySelectorAll('[role="option"]')].map((row) =>
     [".ui-combobox-option-label", ".ui-combobox-option-detail", ".ui-combobox-option-hint"]
-      .map((part) => row.querySelector(part)?.textContent)
-      .filter((words) => words !== undefined)
+      .flatMap((part) => {
+        const words = row.querySelector(part)?.textContent;
+
+        return words === undefined ? [] : [words];
+      })
       .join(" · "),
   );
 

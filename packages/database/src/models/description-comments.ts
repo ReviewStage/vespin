@@ -490,9 +490,11 @@ function filesOf(
   entryId: string,
   files: readonly FileRow[],
 ): { readonly files: readonly DescriptionCommentFile[] } | undefined {
-  const carried = files
-    .filter((file) => file.descriptionCommentId === entryId)
-    .map((file) => ({ attachmentId: file.id, name: file.name, mediaType: file.contentType }));
+  const carried = files.flatMap((file) =>
+    file.descriptionCommentId === entryId
+      ? [{ attachmentId: file.id, name: file.name, mediaType: file.contentType }]
+      : [],
+  );
 
   return carried.length === 0 ? undefined : { files: carried };
 }
@@ -523,9 +525,7 @@ function threadOf(
     ...page,
     section: row.section,
     status: row.status,
-    entries: entries
-      .filter((entry) => entry.threadId === row.id)
-      .map((entry) => entryOf(entry, files)),
+    entries: entries.flatMap((entry) => (entry.threadId === row.id ? [entryOf(entry, files)] : [])),
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
     revision: row.revision,

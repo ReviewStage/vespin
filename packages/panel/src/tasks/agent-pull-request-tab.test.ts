@@ -740,9 +740,9 @@ function readingChanges(tab: HTMLElement): boolean {
 
 /** What every skeleton on screen says it stands for, those of a hidden tab left out. */
 function waiting(tab: HTMLElement): string[] {
-  return [...tab.querySelectorAll('[aria-busy="true"]')]
-    .filter((each) => each.closest("[hidden]") === null)
-    .map((each) => each.textContent ?? "");
+  return [...tab.querySelectorAll('[aria-busy="true"]')].flatMap((each) =>
+    each.closest("[hidden]") === null ? [each.textContent ?? ""] : [],
+  );
 }
 
 /** The header's pill, in its seat after the title in its row's markup; none where the row holds none. */
@@ -1140,15 +1140,15 @@ test("the Checks tab lists the head's deployments over its checks: each environm
 
   await choose(tab, "Checks");
 
-  const headings = [...tab.querySelectorAll(".pull-request-heading")]
-    .filter((each) => each.closest("[hidden]") === null)
-    .map((each) => each.firstChild?.textContent);
+  const headings = [...tab.querySelectorAll(".pull-request-heading")].flatMap((each) =>
+    each.closest("[hidden]") === null ? [each.firstChild?.textContent] : [],
+  );
 
   assert.deepEqual(headings, ["Deployments", "Checks"], "the deployments stand over the checks");
   assert.deepEqual(
-    [...tab.querySelectorAll(".pull-request-heading")]
-      .filter((each) => each.closest("[hidden]") === null)
-      .map((each) => each.getAttribute("data-variant")),
+    [...tab.querySelectorAll(".pull-request-heading")].flatMap((each) =>
+      each.closest("[hidden]") === null ? [each.getAttribute("data-variant")] : [],
+    ),
     ["group", "group"],
     "a section's heading is set in the group role",
   );

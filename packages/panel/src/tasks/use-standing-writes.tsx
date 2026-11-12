@@ -153,9 +153,9 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     );
 
     return Promise.all(answers).then((changed) => {
-      const landed = changes
-        .filter((_, index) => changed[index]?.kept === true)
-        .map(({ taskId }) => taskId);
+      const landed = changes.flatMap(({ taskId }, index) =>
+        changed[index]?.kept === true ? [taskId] : [],
+      );
 
       return { landed, refused: changes.length - landed.length, cause: firstRefusal(changed) };
     });

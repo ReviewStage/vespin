@@ -1974,11 +1974,11 @@ function threadedWhole(block: HTMLElement): boolean {
   const own = ownRange(block);
 
   const marked = [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)]
-    .filter(
-      (mark) =>
-        own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null,
+    .flatMap((mark) =>
+      own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null
+        ? [mark.textContent]
+        : [],
     )
-    .map((mark) => mark.textContent)
     .join("");
 
   const words = own.toString().replace(/\s+/gu, "");

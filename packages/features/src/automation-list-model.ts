@@ -257,10 +257,11 @@ export function automationOwner(automation: AutomationSummary): AutomationScope 
 export function automationGroups(
   automations: readonly AutomationSummary[],
 ): readonly AutomationGroup[] {
-  return OWNER_ORDER.map((owner) => ({
-    owner,
-    automations: automations.filter((automation) => automationOwner(automation) === owner),
-  })).filter((group) => group.automations.length > 0);
+  return OWNER_ORDER.flatMap((owner) => {
+    const owned = automations.filter((automation) => automationOwner(automation) === owner);
+
+    return owned.length === 0 ? [] : [{ owner, automations: owned }];
+  });
 }
 
 /**
@@ -322,9 +323,11 @@ export function automationTriggerText(
       const picked = trigger.filters?.level ?? [];
       const levels = Object.values(SENTRY_LEVEL).filter((level) => picked.includes(level));
 
-      const kept = [trigger.filters?.project ?? [], trigger.filters?.environment ?? [], levels]
-        .filter((values) => values.length > 0)
-        .map((values) => ` · ${values.join(", ")}`);
+      const kept = [
+        trigger.filters?.project ?? [],
+        trigger.filters?.environment ?? [],
+        levels,
+      ].flatMap((values) => (values.length > 0 ? [` · ${values.join(", ")}`] : []));
 
       return `When ${provider.events[trigger.event].words} in ${provider.name}${kept.join("")}`;
     }

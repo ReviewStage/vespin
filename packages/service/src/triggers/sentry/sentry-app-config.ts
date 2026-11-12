@@ -81,9 +81,7 @@ export const sentryAppFromEnvironment: Layer.Layer<SentryApp, Config.ConfigError
         [SENTRY_APP_ENVIRONMENT.SLUG, slug],
         [SENTRY_APP_ENVIRONMENT.CLIENT_ID, clientId],
         [SENTRY_APP_ENVIRONMENT.CLIENT_SECRET, clientSecret],
-      ]
-        .filter(([, value]) => value === undefined)
-        .map(([name]) => String(name));
+      ].flatMap(([name, value]) => (value === undefined ? [String(name)] : []));
 
       return sentryAppService(
         slug !== undefined && clientId !== undefined && clientSecret !== undefined

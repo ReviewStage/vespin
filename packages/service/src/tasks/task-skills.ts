@@ -63,15 +63,17 @@ function mergedSkills(
   reserved: ReadonlySet<string>,
   installed: readonly InstalledSkill[],
 ): readonly TaskSkill[] {
-  const offered = installed
-    .filter((skill) => skill.userInvocable)
-    .map(
-      (skill): TaskSkill => ({
-        name: skill.name,
-        description: skill.description.slice(0, TASK_SKILL_BOUNDS.MAX_DESCRIPTION_CHARS),
-        source: SOURCE_OF_SCOPE[skill.scope],
-      }),
-    );
+  const offered = installed.flatMap((skill): TaskSkill[] =>
+    skill.userInvocable
+      ? [
+          {
+            name: skill.name,
+            description: skill.description.slice(0, TASK_SKILL_BOUNDS.MAX_DESCRIPTION_CHARS),
+            source: SOURCE_OF_SCOPE[skill.scope],
+          },
+        ]
+      : [],
+  );
 
   // Note that a repository skill the model alone loads is not offered, but still holds its name, as the session's merge does.
   const taken = new Set<string>(reserved);

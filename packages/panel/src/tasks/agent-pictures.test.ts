@@ -942,9 +942,11 @@ test.each([
     });
 
     assert.deepEqual(
-      [...container.querySelectorAll('[aria-label^="Open Picture"]')]
-        .filter((chip) => chip.closest('ul[aria-label="Attached files"]') === null)
-        .map((chip) => chip.getAttribute("aria-label")),
+      [...container.querySelectorAll('[aria-label^="Open Picture"]')].flatMap((chip) =>
+        chip.closest('ul[aria-label="Attached files"]') === null
+          ? [chip.getAttribute("aria-label")]
+          : [],
+      ),
       inWords,
     );
     assert.deepEqual(

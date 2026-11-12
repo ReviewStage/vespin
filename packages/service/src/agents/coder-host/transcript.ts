@@ -416,9 +416,9 @@ function senderOf(sent: LineSent): AgentSender {
 }
 
 function lineIdsAmong(records: readonly StoredMessageRecord[]): readonly string[] {
-  return records
-    .filter((record) => record.message.role === MESSAGE_ROLE.USER)
-    .map((record) => record.id);
+  return records.flatMap((record) =>
+    record.message.role === MESSAGE_ROLE.USER ? [record.id] : [],
+  );
 }
 
 /** What a page knows of the developer's lines among its rows, by row: what sent each where its row kept it, and where in a turn under way each arrived where one took it in. */

@@ -325,7 +325,7 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
         holdingNothing,
       );
       assert.deepEqual(
-        arrivals.filter(([method]) => method === "POST").map(([, at]) => at - start),
+        arrivals.flatMap(([method, at]) => (method === "POST" ? [at - start] : [])),
         [2000, 3000],
       );
     }),

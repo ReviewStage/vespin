@@ -265,7 +265,11 @@ const NOTE_HEADINGS: readonly (readonly [string, StartNoteHeading])[] = [
 
 /** Where the first of the needles stands in the text from `from`, in either namespace; -1 where none does. */
 function firstIndexOf(text: string, needles: readonly string[], from: number): number {
-  const found = needles.map((needle) => text.indexOf(needle, from)).filter((at) => at >= 0);
+  const found = needles.flatMap((needle) => {
+    const at = text.indexOf(needle, from);
+
+    return at >= 0 ? [at] : [];
+  });
 
   return found.length === 0 ? -1 : Math.min(...found);
 }

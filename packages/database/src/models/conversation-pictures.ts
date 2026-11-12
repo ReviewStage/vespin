@@ -217,9 +217,9 @@ export function keepConversationPictures(
     // Note that bytes the set names twice are kept once.
     const fresh = [
       ...new Map(
-        hashed
-          .filter((picture) => !held.has(picture.sha256))
-          .map((picture) => [picture.sha256, picture]),
+        hashed.flatMap((picture) =>
+          held.has(picture.sha256) ? [] : [[picture.sha256, picture] as const],
+        ),
       ).values(),
     ];
 
@@ -240,9 +240,7 @@ export function keepConversationPictures(
         yield* insertPictures({ userId: target.userId, conversationId, pictures: fresh, now }),
       );
 
-      const raced = fresh
-        .map((picture) => picture.sha256)
-        .filter((sha256) => !inserted.has(sha256));
+      const raced = fresh.flatMap(({ sha256 }) => (inserted.has(sha256) ? [] : [sha256]));
 
       const winners =
         raced.length === 0

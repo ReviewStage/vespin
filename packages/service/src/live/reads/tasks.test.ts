@@ -639,7 +639,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           const held = yield* heldListOf(owner, NOW);
 
           const marked = (plans: readonly { id: string; blocked?: true }[]) =>
-            plans.filter((plan) => plan.blocked === true).map((plan) => plan.id);
+            plans.flatMap((plan) => (plan.blocked === true ? [plan.id] : []));
 
           assert.deepEqual(marked(live.plans), marked(held.plans), "live as held");
 

@@ -677,9 +677,9 @@ const SUGGESTIONS: readonly {
 function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
   const experiments = useExperimentsIn(workspaceId);
 
-  return SUGGESTIONS.filter(
-    ({ experiment }) => experiment === undefined || experimentOn(experiments, experiment),
-  ).map(({ preset }) => preset);
+  return SUGGESTIONS.flatMap(({ experiment, preset }) =>
+    experiment === undefined || experimentOn(experiments, experiment) ? [preset] : [],
+  );
 }
 
 /**
@@ -698,10 +698,12 @@ function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Ele
   return (
     <div className="automation-suggestions mt-page-section-gap">
       <SuggestionCards title="Suggested">
-        {SUGGESTIONS.filter(({ preset }) => offered.includes(preset)).map(({ preset, glyph }) => {
+        {SUGGESTIONS.flatMap(({ preset, glyph }) => {
+          if (!offered.includes(preset)) return [];
+
           const filled = automationPreset(preset);
 
-          return (
+          return [
             <SuggestionCard
               key={preset}
               glyph={glyph}
@@ -709,8 +711,8 @@ function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Ele
               detail={filled.description}
               disabled={workspace === undefined}
               onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
-            />
-          );
+            />,
+          ];
         })}
       </SuggestionCards>
     </div>

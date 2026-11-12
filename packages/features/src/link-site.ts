@@ -169,7 +169,11 @@ function stepWords(step: string): string {
 
 /** A route's stops as its name: each stop that says something, joined. */
 function routeName(stops: readonly (string | null)[]): string | undefined {
-  const said = stops.map((stop) => spoken(stop ?? "")).filter((stop) => stop !== "");
+  const said = stops.flatMap((stop) => {
+    const words = spoken(stop ?? "");
+
+    return words === "" ? [] : [words];
+  });
 
   return said.length === 0 ? undefined : named(said.join(ROUTE_JOIN));
 }

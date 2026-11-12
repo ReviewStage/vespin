@@ -345,8 +345,10 @@ const MODELS: readonly CatalogModel[] = [
 
 /** Every connected staged server's tools, as the host holds them for the windows. */
 const STAGED_TOOLS: AppIntegrationTools = Object.fromEntries(
-  INTEGRATION_ACCOUNTS.filter((account) => account.status === INTEGRATION_STATUS.CONNECTED).map(
-    (account) => [account.connection, { rows: { tools: TOOLS } }],
+  INTEGRATION_ACCOUNTS.flatMap((account) =>
+    account.status === INTEGRATION_STATUS.CONNECTED
+      ? [[account.connection, { rows: { tools: TOOLS } }] as const]
+      : [],
   ),
 );
 

@@ -265,9 +265,12 @@ test("in the List, a group whose last task goes slides out where it stood, out o
   assert.equal(leaving?.hasAttribute("inert"), true, "out of reach while it goes");
   const out = motions.played.find((each) => each.element === leaving);
 
-  const standing = [...container.querySelectorAll<HTMLElement>(".tasks-list-group")]
-    .filter((group) => group !== leaving)
-    .map((group) => [...group.querySelectorAll("[data-task-key]")].map((key) => key.textContent));
+  const standing = [...container.querySelectorAll<HTMLElement>(".tasks-list-group")].flatMap(
+    (group) =>
+      group === leaving
+        ? []
+        : [[...group.querySelectorAll("[data-task-key]")].map((key) => key.textContent)],
+  );
 
   assert.deepEqual(standing, [["ACME-40", "ACME-39", "ACME-41"]], "the rows that stay hold");
 

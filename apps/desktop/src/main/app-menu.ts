@@ -478,13 +478,13 @@ function gated(
   named: (command: KeyedCommand) => string,
   offered: (command: AppCommand) => boolean,
 ): MenuItemConstructorOptions[] {
-  const kept = items
-    .filter((item) => !gatedOut(item, shown))
-    .map((item) =>
-      Array.isArray(item.submenu)
-        ? { ...item, submenu: gated(item.submenu, shown, named, offered) }
-        : dimmedItem(renamedItem(item, named), offered),
-    );
+  const kept = items.flatMap((item) => {
+    if (gatedOut(item, shown)) return [];
+
+    return Array.isArray(item.submenu)
+      ? [{ ...item, submenu: gated(item.submenu, shown, named, offered) }]
+      : [dimmedItem(renamedItem(item, named), offered)];
+  });
 
   return kept.filter((_item, at) => !strandedSeparator(kept, at));
 }

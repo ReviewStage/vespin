@@ -42,9 +42,9 @@ export function rowChanges<Row extends object, Key extends string>(
   held: ReadonlyMap<Key, Row>,
   next: ReadonlyMap<Key, Row>,
 ): RowChange<Row, Key>[] {
-  const gone = [...held.keys()]
-    .filter((key) => !next.has(key))
-    .map((key) => ({ type: "delete" as const, key }));
+  const gone = [...held.keys()].flatMap((key) =>
+    next.has(key) ? [] : [{ type: "delete" as const, key }],
+  );
 
   const moved = [...next].flatMap(([key, row]): RowChange<Row, Key>[] => {
     const was = held.get(key);

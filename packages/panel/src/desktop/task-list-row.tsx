@@ -265,8 +265,7 @@ export function TaskListRow({
     drawn(TASK_ROW_CELL.STATUS) && !unlisted ? TASK_STATUS_WORDS[statusOf(task)] : undefined,
     task.blocked === true ? BLOCKED_WORDS : undefined,
   ]
-    .filter((each) => each !== undefined)
-    .map((each) => `, ${each}`)
+    .flatMap((each) => (each === undefined ? [] : [`, ${each}`]))
     .join("");
 
   const row = (

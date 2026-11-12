@@ -35,8 +35,8 @@ function selectionEntry(act: SelectionAct): MenuEntry {
  * there is no act.
  */
 export function selectionMenu(acts: readonly SelectionAct[]): readonly (readonly MenuEntry[])[] {
-  const kept = acts.filter((act) => act.danger !== true).map(selectionEntry);
-  const lost = acts.filter((act) => act.danger === true).map(selectionEntry);
+  const kept = acts.flatMap((act) => (act.danger === true ? [] : [selectionEntry(act)]));
+  const lost = acts.flatMap((act) => (act.danger === true ? [selectionEntry(act)] : []));
 
   return [kept, lost].filter((group) => group.length > 0);
 }

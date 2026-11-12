@@ -153,7 +153,7 @@ function observations(overrides: Partial<ProbeObservations> = {}): ProbeObservat
 }
 
 function failing(conditions: readonly Condition[]): readonly string[] {
-  return conditions.filter((each) => !each.pass).map((each) => each.name);
+  return conditions.flatMap((each) => (each.pass ? [] : [each.name]));
 }
 
 describe("verdict", () => {

@@ -455,21 +455,23 @@ function ChoosingCards({
     createElement(
       "ul",
       runs ? selectionRun() : null,
-      names
-        .filter((name) => !undrawn.includes(name))
-        .map((name) =>
-          createElement(
-            "li",
-            { key: name },
-            createElement(CardPress, {
-              selectKey: name,
-              selectBox: SELECT_BOX_PLACE.GUTTER,
-              disabled: off.includes(name),
-              onPress: () => setOpened((held) => [...held, name]),
-              children: name,
-            }),
-          ),
-        ),
+      names.flatMap((name) =>
+        undrawn.includes(name)
+          ? []
+          : [
+              createElement(
+                "li",
+                { key: name },
+                createElement(CardPress, {
+                  selectKey: name,
+                  selectBox: SELECT_BOX_PLACE.GUTTER,
+                  disabled: off.includes(name),
+                  onPress: () => setOpened((held) => [...held, name]),
+                  children: name,
+                }),
+              ),
+            ],
+      ),
     );
 
   return createElement(

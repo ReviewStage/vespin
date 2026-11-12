@@ -83,12 +83,11 @@ test("each provider's button begins that provider's sign-in", () => {
 
 /** Every "Last used" badge drawn, with the button each describes. */
 function lastUsedBadges(container: HTMLElement) {
-  return [...container.querySelectorAll("span")]
-    .filter((each) => each.textContent === "Last used")
-    .map((badge) => ({
-      badge,
-      described: container.querySelector(`button[aria-describedby="${badge.id}"]`),
-    }));
+  return [...container.querySelectorAll("span")].flatMap((badge) =>
+    badge.textContent === "Last used"
+      ? [{ badge, described: container.querySelector(`button[aria-describedby="${badge.id}"]`) }]
+      : [],
+  );
 }
 
 test("the provider this Mac last signed in with wears the one Last used badge, outside its label", () => {

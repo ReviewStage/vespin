@@ -486,9 +486,9 @@ test("an empty workspace says only that it holds no tasks", async () => {
   const sidebar = await mountRead(ACME, []);
 
   // Note that the pinned section's own "Drag tasks here to pin them" is a line of the sidebar too.
-  const notes = [...sidebar.querySelectorAll(".ui-note-line")]
-    .map((note) => note.textContent)
-    .filter((note) => !note?.startsWith("Drag tasks here"));
+  const notes = [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
+    note?.startsWith("Drag tasks here") === true ? [] : [note],
+  );
 
   assert.deepEqual(notes, ["No tasks yet."]);
 });

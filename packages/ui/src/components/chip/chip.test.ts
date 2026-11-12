@@ -78,9 +78,9 @@ function chip(name: string): HTMLButtonElement {
 
 /** The names of the filters that say they stand pressed. */
 function pressed(): string[] {
-  return [...document.querySelectorAll("button")]
-    .filter((each) => each.getAttribute("aria-pressed") === "true")
-    .map((each) => each.textContent ?? "");
+  return [...document.querySelectorAll("button")].flatMap((each) =>
+    each.getAttribute("aria-pressed") === "true" ? [each.textContent ?? ""] : [],
+  );
 }
 
 test("a row of filter chips announces the first as pressed and the rest as not", () => {

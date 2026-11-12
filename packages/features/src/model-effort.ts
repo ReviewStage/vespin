@@ -50,8 +50,11 @@ export function effortFor(
   if (wanted === undefined) return efforts[0];
 
   const ranked = efforts
-    .map((effort) => ({ effort, rank: effortRank(effort) }))
-    .filter((each): each is { effort: string; rank: number } => each.rank !== undefined)
+    .flatMap((effort) => {
+      const rank = effortRank(effort);
+
+      return rank === undefined ? [] : [{ effort, rank }];
+    })
     .sort((a, b) => a.rank - b.rank);
 
   const below = ranked.filter((each) => each.rank < wanted).at(-1);

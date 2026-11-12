@@ -716,7 +716,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       acts,
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
-      startOrder: HOST_START_ORDER.filter(running).map((name) => concerns[name]),
+      startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
       /**
        * The launch's own arming: where the account's capabilities already
        * stand open, the launch opens the gate exactly as a sign-in does.

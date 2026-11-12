@@ -255,9 +255,9 @@ const frameEvent = (frameId: number) => ({
 });
 
 const acks = (commands: readonly FakeCdpCommand[]) =>
-  commands
-    .filter((command) => command.method === "Page.screencastFrameAck")
-    .map((command) => command.params.sessionId);
+  commands.flatMap((command) =>
+    command.method === "Page.screencastFrameAck" ? [command.params.sessionId] : [],
+  );
 
 const inputs = (commands: readonly FakeCdpCommand[]) =>
   commands.filter((command) => command.method.startsWith("Input."));

@@ -941,9 +941,11 @@ function pressOf(page: HTMLElement, key: string): HTMLElement {
 
 /** The keys of the rows Tab stops on, in the order drawn. */
 function tabStops(page: HTMLElement): string[] {
-  return [...page.querySelectorAll<HTMLElement>(".tasks-list-group li")]
-    .filter((row) => row.querySelector<HTMLElement>("[data-card-press]")?.tabIndex === 0)
-    .map((row) => row.querySelector("[data-task-key]")?.textContent ?? "");
+  return [...page.querySelectorAll<HTMLElement>(".tasks-list-group li")].flatMap((row) =>
+    row.querySelector<HTMLElement>("[data-card-press]")?.tabIndex === 0
+      ? [row.querySelector("[data-task-key]")?.textContent ?? ""]
+      : [],
+  );
 }
 
 /** The key of the row whose press holds the keyboard, if one does. */
@@ -1322,10 +1324,17 @@ async function pinsAfterRefusedDrop(pinned: readonly TaskSummary[], key: number)
 
   const positions = new Map(moved.map((move) => [move.id, move.position] as const));
 
-  const after = pinned
-    .filter((each) => each.pinnedAt !== undefined)
-    .map((each) => (each.number === key ? { ...each, pinnedAt: 100 } : each))
-    .map((each) => ({ ...each, pinPosition: positions.get(each.id) ?? each.pinPosition }));
+  const after = pinned.flatMap((each) =>
+    each.pinnedAt === undefined
+      ? []
+      : [
+          {
+            ...each,
+            pinnedAt: each.number === key ? 100 : each.pinnedAt,
+            pinPosition: positions.get(each.id) ?? each.pinPosition,
+          },
+        ],
+  );
 
   const order = inPinOrder(after, (each) => ({
     position: each.pinPosition,

@@ -589,8 +589,11 @@ function ranked<Item>(
   if (searchTokens(query).length === 0) return items.slice(0, limit);
 
   return items
-    .map((item) => ({ item, score: score(item) }))
-    .filter((each) => each.score > 0)
+    .flatMap((item) => {
+      const scored = score(item);
+
+      return scored > 0 ? [{ item, score: scored }] : [];
+    })
     .sort((first, second) => second.score - first.score)
     .slice(0, limit)
     .map((each) => each.item);
@@ -1385,25 +1388,27 @@ function actionRows(
   run: (command: AppCommand) => void,
   experiments: ExperimentChoices,
 ): readonly PaletteRow[] {
-  return commands
-    .filter(
-      (command) =>
-        LISTED_COMMANDS.includes(command) &&
-        command !== APP_COMMAND.COMMAND_PALETTE &&
-        command !== APP_COMMAND.COPY_LINK &&
-        appCommandOffered(command),
-    )
-    .map((command) => {
-      const label = actionLabel(command, experiments);
+  return commands.flatMap((command) => {
+    const listed =
+      LISTED_COMMANDS.includes(command) &&
+      command !== APP_COMMAND.COMMAND_PALETTE &&
+      command !== APP_COMMAND.COPY_LINK &&
+      appCommandOffered(command);
 
-      return {
+    if (!listed) return [];
+
+    const label = actionLabel(command, experiments);
+
+    return [
+      {
         icon: panelCommandOf(command)?.icon ?? null,
         label,
         command: isKeyedCommand(command) ? command : undefined,
         terms: [label],
         onChoose: () => run(command),
-      };
-    });
+      },
+    ];
+  });
 }
 
 /** The Inbox as the palette reads it: whether it stands, and the item chosen in it. */

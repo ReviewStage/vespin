@@ -215,9 +215,11 @@ function dest(definition: FunctionDefinition, route: string, query?: string): st
  */
 function passThroughPaths(definitions: readonly FunctionDefinition[]): readonly string[] {
   const own = [
-    ...definitions
-      .filter((definition) => !definition.dispatches && definition.queueTopic === undefined)
-      .map((definition) => functionPublicPath(definition)),
+    ...definitions.flatMap((definition) =>
+      !definition.dispatches && definition.queueTopic === undefined
+        ? [functionPublicPath(definition)]
+        : [],
+    ),
     ...HAND_WRITTEN_FUNCTIONS.map((fn) => fn.path),
   ];
 

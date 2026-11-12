@@ -190,9 +190,9 @@ test("a refused message that would pass a message's bound beside the box's newer
 
   assert.equal(now().composer.draft, `${long}\nOk`);
   assert.deepEqual(
-    [...document.querySelectorAll(`${STANDING_TOAST} button`)]
-      .map((button) => button.textContent)
-      .filter((label) => label === "Put back"),
+    [...document.querySelectorAll(`${STANDING_TOAST} button`)].flatMap(({ textContent: label }) =>
+      label === "Put back" ? [label] : [],
+    ),
     [],
     "no toast keeps the message once it is back",
   );

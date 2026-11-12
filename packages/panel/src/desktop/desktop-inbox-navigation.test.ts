@@ -685,9 +685,9 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
     "the bar names the item's task, not the title its thread is headed by under it",
   );
   assert.deepEqual(
-    [...page.querySelectorAll("h1")]
-      .filter((each) => each.closest("[hidden]") === null)
-      .map((each) => each.textContent),
+    [...page.querySelectorAll("h1")].flatMap((each) =>
+      each.closest("[hidden]") === null ? [each.textContent] : [],
+    ),
     ["Expire after 7 days?"],
     "the thread's title is the page's one top heading",
   );

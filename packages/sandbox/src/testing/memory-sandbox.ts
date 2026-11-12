@@ -355,8 +355,9 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         "",
         Effect.sync(() =>
           [...state.sandboxes.values()]
-            .filter((record) => record.tags[tag] === value)
-            .map((record): ListedSandbox => ({ ...listedOf(record), routes: undefined }))
+            .flatMap((record): ListedSandbox[] =>
+              record.tags[tag] === value ? [{ ...listedOf(record), routes: undefined }] : [],
+            )
             .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
         ),
       ),

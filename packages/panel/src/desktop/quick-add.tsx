@@ -328,9 +328,11 @@ export function rowQuickAddLine(
           <ReplayMask>{draft?.title ?? pending}</ReplayMask>
           {draft === undefined
             ? null
-            : DRAFT_CELLS.filter((property) => !properties.includes(property)).map((property) => (
-                <Fragment key={property}>{draftChip(draft, property)}</Fragment>
-              ))}
+            : DRAFT_CELLS.flatMap((property) =>
+                properties.includes(property)
+                  ? []
+                  : [<Fragment key={property}>{draftChip(draft, property)}</Fragment>],
+              )}
         </>
       }
       note={refused === undefined ? undefined : <ReplayMask>{refused}</ReplayMask>}

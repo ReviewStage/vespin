@@ -882,9 +882,13 @@ const placeholderOf = (within: Element) => {
 
 /** The boxes the first settings row in `within` is built of, in order, its words and blocks aside. */
 const rowBoxes = (within: Element) =>
-  [...(within.querySelector(".ui-settings-row")?.querySelectorAll("[class]") ?? [])]
-    .map((element) => element.getAttribute("class") ?? "")
-    .filter((name) => name.startsWith("ui-settings-row"));
+  [...(within.querySelector(".ui-settings-row")?.querySelectorAll("[class]") ?? [])].flatMap(
+    (element) => {
+      const name = element.getAttribute("class") ?? "";
+
+      return name.startsWith("ui-settings-row") ? [name] : [];
+    },
+  );
 
 /** The workspace's name, as the identity row's label says it. */
 const nameShown = (page: HTMLElement) => identity(page).querySelector('[id$="label"]')?.textContent;
@@ -1760,18 +1764,18 @@ const rowWords = (row: HTMLElement) => [
 
 /** What every row of the Integrations group says, in order. */
 const integrationRows = (page: HTMLElement) =>
-  [...githubGroup(page).querySelectorAll<HTMLElement>(ROWS)]
-    .filter((row) => row.closest("[hidden]") === null)
-    .map(rowWords);
+  [...githubGroup(page).querySelectorAll<HTMLElement>(ROWS)].flatMap((row) =>
+    row.closest("[hidden]") === null ? [rowWords(row)] : [],
+  );
 
 /** The chevrons folding an integration's own rows under its row. */
 const FOLD = { GITHUB: "GitHub accounts", SLACK_BOT: "Slack settings" } as const;
 
 /** The words of every button a row draws, bar the chevron folding its rows and its ⋯, which say none. */
 const rowButtons = (row: HTMLElement) =>
-  [...row.querySelectorAll("button")]
-    .map((each) => each.textContent)
-    .filter((words) => words !== "");
+  [...row.querySelectorAll("button")].flatMap(({ textContent: words }) =>
+    words === "" ? [] : [words],
+  );
 
 /** Opens the rows an integration's row folds under it, which start closed. */
 function unfold(page: HTMLElement, label: string): void {

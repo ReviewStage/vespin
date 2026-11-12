@@ -393,9 +393,9 @@ export function settleChanges(
   tasks: readonly Pick<TaskSummary, "id" | "status">[],
   status: TaskStatus,
 ): readonly StatusChange[] {
-  return tasks
-    .filter((task) => standingStatus(task) !== status)
-    .map((task) => ({ taskId: task.id, status }));
+  return tasks.flatMap((task) =>
+    standingStatus(task) === status ? [] : [{ taskId: task.id, status }],
+  );
 }
 
 /** Whether the task menu offers settling the task at a status: not where it already stands there. */

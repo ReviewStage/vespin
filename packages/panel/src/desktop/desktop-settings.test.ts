@@ -411,9 +411,9 @@ function foundUnder(page: HTMLElement, words: string): (string | null)[] {
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-  return [...page.querySelectorAll("nav section[aria-label]")]
-    .filter((group) => group.textContent?.includes(words))
-    .map((group) => group.getAttribute("aria-label"));
+  return [...page.querySelectorAll("nav section[aria-label]")].flatMap((group) =>
+    group.textContent?.includes(words) ? [group.getAttribute("aria-label")] : [],
+  );
 }
 
 test("the Settings search finds each moved option under its new page", () => {

@@ -251,7 +251,7 @@ function firstDriven(
 /** The tabs a member drives now, by the browser's own id for each. */
 function drivenTabs(rows: readonly AgentBrowserTabRow[], now: Date): ReadonlySet<string> {
   return new Set(
-    rows.filter((row) => browserTabDriver(row, now) !== null).map((row) => row.targetId),
+    rows.flatMap((row) => (browserTabDriver(row, now) === null ? [] : [row.targetId])),
   );
 }
 
@@ -270,9 +270,7 @@ function withOpeners(
   rows: readonly AgentBrowserTabRow[],
 ): readonly ShownTab[] {
   const memberOpened = new Set(
-    rows
-      .filter((row) => row.openedBy === AGENT_BROWSER_TAB_OPENER.MEMBER)
-      .map((row) => row.targetId),
+    rows.flatMap((row) => (row.openedBy === AGENT_BROWSER_TAB_OPENER.MEMBER ? [row.targetId] : [])),
   );
 
   return tabs.map((tab) =>

@@ -315,9 +315,11 @@ async function mount(
       assert.fail("the round Start agent button stands"),
     /** The card's buttons in order, as a reader meets them. */
     controls: () =>
-      [...(dialog()?.querySelectorAll("button") ?? [])]
-        .filter((each) => getComputedStyle(each).display !== "none")
-        .map((each) => each.getAttribute("aria-label") ?? each.textContent),
+      [...(dialog()?.querySelectorAll("button") ?? [])].flatMap((each) =>
+        getComputedStyle(each).display === "none"
+          ? []
+          : [each.getAttribute("aria-label") ?? each.textContent],
+      ),
   };
 }
 
@@ -597,7 +599,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
   assert.ok(focused, "the words keep the caret as the repository is chosen");
   assert.deepEqual(offered, ["rollout-store.ts"]);
   assert.deepEqual(
-    told.filter((each) => each.kind === ACT_KIND.TASKS_TREE).map((each) => each.payload),
+    told.flatMap((each) => (each.kind === ACT_KIND.TASKS_TREE ? [each.payload] : [])),
     [{ workspaceId: "workspace-acme", repository: "acme/web", path: "", recursive: true }],
   );
   assert.deepEqual(

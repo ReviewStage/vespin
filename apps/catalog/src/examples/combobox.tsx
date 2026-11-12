@@ -51,14 +51,18 @@ function Issues({ start }: { start: string }): React.JSX.Element {
   const [shut, setShut] = useState(false);
   const words = value.trim().toLowerCase();
 
-  const issues: ComboboxOption[] = ISSUES.filter(
-    (issue) => words !== "" && issue.title.toLowerCase().includes(words),
-  ).map((issue) => ({
-    id: issue.id,
-    label: issue.title,
-    icon: <ProviderMark provider={MARK_PROVIDER.LINEAR} />,
-    detail: `${issue.key} · ${issue.state}`,
-  }));
+  const issues: ComboboxOption[] = ISSUES.flatMap((issue) =>
+    words === "" || !issue.title.toLowerCase().includes(words)
+      ? []
+      : [
+          {
+            id: issue.id,
+            label: issue.title,
+            icon: <ProviderMark provider={MARK_PROVIDER.LINEAR} />,
+            detail: `${issue.key} · ${issue.state}`,
+          },
+        ],
+  );
 
   const typed: ComboboxOption = {
     id: "typed",

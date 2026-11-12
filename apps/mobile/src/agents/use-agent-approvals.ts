@@ -187,9 +187,9 @@ export function useAgentApprovals(
 
     // Note that a subagent's call is not among the transcript's rows, so the banner alone answers it.
     const byCall = new Map(
-      asks
-        .filter((ask) => ask.approval.subagentId === undefined)
-        .map((ask) => [ask.approval.toolUseId, ask] as const),
+      asks.flatMap((ask) =>
+        ask.approval.subagentId === undefined ? [[ask.approval.toolUseId, ask] as const] : [],
+      ),
     );
 
     return {

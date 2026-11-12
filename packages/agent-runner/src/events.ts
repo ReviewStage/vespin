@@ -141,7 +141,12 @@ function redacted(value: Json, secrets: readonly string[]): Json {
  * JSON, so no escape can hide a secret or be cut in half by its removal.
  */
 function batchText(batch: RunnerEventBatch, secrets: readonly Redacted.Redacted[]): string {
-  const values = secrets.map(Redacted.value).filter((value) => value !== "");
+  const values = secrets.flatMap((secret) => {
+    const value = Redacted.value(secret);
+
+    return value === "" ? [] : [value];
+  });
+
   // Note that the batch is JSON already, as the SDK parsed it from the CLI's stdout.
   const json: Json = JSON.parse(JSON.stringify(batch));
 

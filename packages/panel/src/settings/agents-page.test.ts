@@ -227,9 +227,11 @@ const fastSwitch = (page: HTMLElement) =>
 
 /** What the page announces now: its alerts and its error lines that say something. */
 const announced = (page: HTMLElement) =>
-  [...page.querySelectorAll('[role="alert"], [data-slot="field-error"]')]
-    .map((each) => each.textContent ?? "")
-    .filter((words) => words !== "");
+  [...page.querySelectorAll('[role="alert"], [data-slot="field-error"]')].flatMap((each) => {
+    const words = each.textContent ?? "";
+
+    return words === "" ? [] : [words];
+  });
 
 /** The settings row a name heads. */
 const rowOf = (page: HTMLElement, label: string) =>
@@ -243,9 +245,11 @@ const marksIn = (row: HTMLElement) =>
 
 /** What a row says under itself about its last write. */
 const errorsIn = (row: HTMLElement) =>
-  [...row.querySelectorAll('[role="alert"], [data-slot="field-error"]')]
-    .map((each) => each.textContent ?? "")
-    .filter((words) => words !== "");
+  [...row.querySelectorAll('[role="alert"], [data-slot="field-error"]')].flatMap((each) => {
+    const words = each.textContent ?? "";
+
+    return words === "" ? [] : [words];
+  });
 
 /** The defaults the page asked the service to keep, in order. */
 const written = () =>

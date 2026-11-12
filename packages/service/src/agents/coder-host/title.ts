@@ -356,8 +356,7 @@ function conversationExchange(
       },
       { speaker: SPEAKER.AGENT, words: excerptOf(answered?.message) },
     ]
-      .filter((line) => line.words.length > 0)
-      .map((line) => `${line.speaker}: ${line.words}`)
+      .flatMap((line) => (line.words.length > 0 ? [`${line.speaker}: ${line.words}`] : []))
       .join("\n\n");
 
     const firstWords = origin === null ? excerptOf((opened ?? said)?.message) : origin.prompt;

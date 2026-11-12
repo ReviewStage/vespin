@@ -613,8 +613,11 @@ function drawnWords(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent?.trim() ?? "";
 
   return [...node.childNodes]
-    .map(drawnWords)
-    .filter((words) => words !== "")
+    .flatMap((child) => {
+      const words = drawnWords(child);
+
+      return words === "" ? [] : [words];
+    })
     .join(" ");
 }
 

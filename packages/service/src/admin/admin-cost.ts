@@ -297,7 +297,7 @@ function mergedByAccount(
 }
 
 function pricedSum(rows: readonly PricedCostRow[], days: ReadonlySet<string>): number {
-  return sum(rows.filter((row) => days.has(row.day)).map((row) => row.usd ?? 0));
+  return sum(rows.flatMap((row) => (days.has(row.day) ? [row.usd ?? 0] : [])));
 }
 
 /**

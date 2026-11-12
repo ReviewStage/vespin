@@ -458,9 +458,9 @@ function writeDrafts(owner: Owner, drafts: readonly KeptDraft[]): readonly KeptD
     (entry) => entry.accountId !== owner || kept.some((draft) => storedAs(owner, draft, entry)),
   );
 
-  const written = kept
-    .filter((draft) => !standing.some((entry) => storedAs(owner, draft, entry)))
-    .map((draft) => entryOf(owner, draft));
+  const written = kept.flatMap((draft) =>
+    standing.some((entry) => storedAs(owner, draft, entry)) ? [] : [entryOf(owner, draft)],
+  );
 
   const entries = [...standing, ...written].slice(-MAX_KEPT);
   writeKept(STORAGE_KEY, storedDrafts, entries);
@@ -559,12 +559,11 @@ function readBeside(owner: Owner, held: readonly KeptDraft[]): readonly KeptDraf
 
   // Note that files storage has no word of stay as a draft of files alone, even where another
   // window let the words beside them go, because they live in this window and nowhere else.
-  const filesAlone = held
-    .filter(
-      (kept) =>
-        kept.attachments.length > 0 && !read.some((each) => Equal.equals(each.place, kept.place)),
-    )
-    .map((kept) => ({ ...EMPTY_DRAFT, place: kept.place, attachments: kept.attachments }));
+  const filesAlone = held.flatMap((kept) =>
+    kept.attachments.length > 0 && !read.some((each) => Equal.equals(each.place, kept.place))
+      ? [{ ...EMPTY_DRAFT, place: kept.place, attachments: kept.attachments }]
+      : [],
+  );
 
   return [...filesAlone, ...read];
 }
@@ -1203,15 +1202,22 @@ export interface InboxRowDraft extends Pick<Draft, "choices" | "values" | "steps
 
 /** Every inbox card's draft as its row reads it (`InboxRowDraft`). */
 function inboxRowDrafts(drafts: readonly KeptDraft[]): readonly InboxRowDraft[] {
-  return drafts.filter(isInbox).map((kept) => ({
-    itemId: kept.place.itemId,
-    revision: kept.revision,
-    words: kept.text !== "" || kept.attachments.length > 0 || (kept.dropped ?? []).length > 0,
-    choices: kept.choices,
-    values: kept.values,
-    steps: kept.steps,
-    press: kept.press,
-  }));
+  return drafts.flatMap((kept) =>
+    isInbox(kept)
+      ? [
+          {
+            itemId: kept.place.itemId,
+            revision: kept.revision,
+            words:
+              kept.text !== "" || kept.attachments.length > 0 || (kept.dropped ?? []).length > 0,
+            choices: kept.choices,
+            values: kept.values,
+            steps: kept.steps,
+            press: kept.press,
+          },
+        ]
+      : [],
+  );
 }
 
 /** No inbox card holds a draft. */
@@ -1271,9 +1277,9 @@ export interface InboxDraftStanding {
 
 /** Every inbox card's draft as it stands (`InboxDraftStanding`). */
 function inboxDraftStandings(drafts: readonly KeptDraft[]): readonly InboxDraftStanding[] {
-  return drafts
-    .filter(isInbox)
-    .map((kept) => ({ place: kept.place, revision: kept.revision, picks: holdsPicks(kept) }));
+  return drafts.flatMap((kept) =>
+    isInbox(kept) ? [{ place: kept.place, revision: kept.revision, picks: holdsPicks(kept) }] : [],
+  );
 }
 
 /**

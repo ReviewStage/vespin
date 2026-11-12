@@ -158,8 +158,9 @@ function chevronBefore(crumbs: readonly Crumb[], at: number): Widths | undefined
 
   const before = crumbs
     .slice(0, at)
-    .filter((each) => each.shown !== false)
-    .map((each) => SHOWN_WIDTHS[each.shownAt ?? BREADCRUMB_SHOWN.ALWAYS]);
+    .flatMap((each) =>
+      each.shown === false ? [] : [SHOWN_WIDTHS[each.shownAt ?? BREADCRUMB_SHOWN.ALWAYS]],
+    );
 
   const led = {
     wide: before.some((widths) => widths.wide),

@@ -145,8 +145,7 @@ function sentence(alert: Element | null): string | undefined {
   if (alert === null) return undefined;
 
   return [...alert.children]
-    .filter((part) => part.querySelector("button") === null)
-    .map((part) => part.textContent)
+    .flatMap((part) => (part.querySelector("button") === null ? [part.textContent] : []))
     .join("");
 }
 

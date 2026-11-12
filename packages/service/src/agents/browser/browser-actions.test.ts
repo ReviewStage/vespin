@@ -131,13 +131,13 @@ function cursorInto(sent: FakeCdpCommand[]) {
 
 /** The commands sent to pages and to the browser about them, without the listing a step reads along the way, and a script asked of a page by its method alone. */
 function pageCommands(sent: readonly FakeCdpCommand[]) {
-  return sent
-    .filter((command) => command.method !== "Target.getTargets")
-    .map(({ method, params, sessionId }) => {
-      if (method === "Runtime.evaluate") return { method, sessionId };
+  return sent.flatMap(({ method, params, sessionId }) => {
+    if (method === "Target.getTargets") return [];
 
-      return sessionId === undefined ? { method, params } : { method, params, sessionId };
-    });
+    if (method === "Runtime.evaluate") return [{ method, sessionId }];
+
+    return [sessionId === undefined ? { method, params } : { method, params, sessionId }];
+  });
 }
 
 function failureOf(step: BrowserAgentStep | undefined): string | undefined {

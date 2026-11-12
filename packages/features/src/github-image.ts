@@ -141,7 +141,7 @@ function decodedSegment(segment: string): string | undefined {
 
 /** The repository's file `<owner>/<name>/<ref>/<path>` names, where its path ends in an image's extension. */
 function fileOf(segments: readonly string[]): GitHubFileImage | undefined {
-  const decoded = segments.map(decodedSegment).filter((segment) => segment !== undefined);
+  const decoded = segments.flatMap((segment) => decodedSegment(segment) ?? []);
 
   if (decoded.length !== segments.length || decoded.length < 4) return undefined;
   const [owner = "", name = "", ref = "", ...path] = decoded;

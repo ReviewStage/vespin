@@ -106,9 +106,11 @@ export interface ModelPick {
 
 /** The models a picker offers, each once at standard speed, its fast versions folded under it as the panel's menu folds them, named as the panel names them (`modelLabel`). */
 export function modelOptions(catalog: readonly CatalogModel[]): readonly PickOption[] {
-  return catalog
-    .filter((model) => modelSpeedOf(model.id) === MODEL_SPEED.STANDARD)
-    .map((model) => ({ id: model.id, label: modelLabel(model.id, catalog) }));
+  return catalog.flatMap((model) =>
+    modelSpeedOf(model.id) === MODEL_SPEED.STANDARD
+      ? [{ id: model.id, label: modelLabel(model.id, catalog) }]
+      : [],
+  );
 }
 
 /** The efforts a picker offers for the model, as the catalog lists them; none before a model is known. */

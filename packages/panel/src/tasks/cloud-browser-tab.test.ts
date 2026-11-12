@@ -442,7 +442,7 @@ test("off a Mac, while the member drives, a Ctrl chord the window has a command 
   window.removeEventListener("keydown", hear);
 
   assert.deepEqual(
-    sent.filter((message) => message.type === BROWSER_LIVE_CLIENT.KEY).map(({ key }) => key),
+    sent.flatMap((message) => (message.type === BROWSER_LIVE_CLIENT.KEY ? [message.key] : [])),
     ["b"],
   );
   assert.deepEqual(heard, [], "the window's keymap yields the press, so the sidebar stays put");
@@ -936,9 +936,11 @@ test("on a phone a Browser tab's bar keeps its address alone, the task's header'
 
   assert.ok(addressField(), "the address stands as the page's own field");
   assert.deepEqual(
-    [...document.querySelectorAll(".cloud-browser-bar button")]
-      .map((button) => button.getAttribute("aria-label"))
-      .filter((label) => label === "Back" || label === "Forward" || label === "Reload"),
+    [...document.querySelectorAll(".cloud-browser-bar button")].flatMap((button) => {
+      const label = button.getAttribute("aria-label");
+
+      return label === "Back" || label === "Forward" || label === "Reload" ? [label] : [];
+    }),
     [],
   );
   assert.deepEqual(handed.labels(), ["Back", "Forward", "Reload"]);

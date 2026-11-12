@@ -361,7 +361,7 @@ test("no two rows on different pages wear the same label", () => {
   }
 
   assert.deepEqual(
-    [...pagesOf].filter(([, pages]) => pages.size > 1).map(([label]) => label),
+    [...pagesOf].flatMap(([label, pages]) => (pages.size > 1 ? [label] : [])),
     [],
   );
 });

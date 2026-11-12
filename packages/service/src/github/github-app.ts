@@ -2481,9 +2481,7 @@ export const githubAppFromEnvironment: Layer.Layer<
         [GITHUB_APP_ENVIRONMENT.CLIENT_SECRET, values.clientSecret],
         [GITHUB_APP_ENVIRONMENT.PRIVATE_KEY, values.privateKey],
         [AUTH_SECRET_ENVIRONMENT.SESSION_SECRET, values.sessionSecret],
-      ]
-        .filter(([, value]) => value === undefined)
-        .map(([name]) => String(name));
+      ].flatMap(([name, value]) => (value === undefined ? [String(name)] : []));
 
       const settings =
         values.appId !== undefined &&

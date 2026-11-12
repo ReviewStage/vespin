@@ -136,9 +136,9 @@ export function placeWrites(
   const positions = pinPositionsForMove([moving, ...order], 0, at, entryPlace);
   const first = placeWrite(taskId, sectionId, positions.get(moving));
 
-  const rest = [...positions]
-    .filter(([entry]) => entry !== moving)
-    .map(([entry, position]) => placeWrite(entry.taskId, sectionId, position));
+  const rest = [...positions].flatMap(([entry, position]) =>
+    entry === moving ? [] : [placeWrite(entry.taskId, sectionId, position)],
+  );
 
   return [first, ...rest];
 }
