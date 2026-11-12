@@ -76,18 +76,25 @@ export function replyButtonLinkOf(link: ReplyButtonLink): string {
     BUTTON_STEP.BUTTON,
     link.buttonId,
   ];
+
   return [LINK_ORIGIN, ...steps.map(encodedStep)].join("/");
 }
 
 /** The button a link names, on our home by the web's scheme or the desktop's; nothing for any other address. */
 export function readReplyButtonLink(target: string): ReplyButtonLink | undefined {
   const url = parsedUrl(target);
+
   if (url === undefined || !isLinkHome(url)) return undefined;
   const steps = url.pathname.replace(/\/$/u, "").split("/").slice(1).map(decodedStep);
   const [workspace, agentStep, agentId, buttonStep, buttonId, ...rest] = steps;
+
   if (workspace === undefined || workspace === "" || rest.length > 0) return undefined;
+
   if (agentStep !== BUTTON_STEP.AGENT || buttonStep !== BUTTON_STEP.BUTTON) return undefined;
+
   if (agentId === undefined || !LINK_ID.test(agentId)) return undefined;
+
   if (buttonId === undefined || !LINK_ID.test(buttonId)) return undefined;
+
   return { workspace, agentId, buttonId };
 }

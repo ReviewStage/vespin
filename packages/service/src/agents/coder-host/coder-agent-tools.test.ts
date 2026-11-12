@@ -3357,12 +3357,13 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
   ] as const) {
     const made = await call(AGENT_TOOL.ADD_SUGGESTION, { label, ...asked }, label);
     assert.equal(made.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(made));
-    assert.ok(typeof made.link === "string");
-    const link = readReplyButtonLink(made.link);
+    const link = readReplyButtonLink(String(made.link));
     assert.equal(link?.agentId, agents.caller.id);
+
     const kept = Option.getOrThrow(
       await database.run(readReplyButton(owner, link?.buttonId ?? "")),
     );
+
     assert.deepEqual(
       { label: kept.label, action: kept.action },
       {
@@ -3374,6 +3375,7 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
       },
     );
   }
+
   assert.deepEqual(
     await call(
       AGENT_TOOL.ADD_SUGGESTION,

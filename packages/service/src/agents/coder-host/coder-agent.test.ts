@@ -627,12 +627,14 @@ test("with Suggestions off the instructions say nothing of add_suggestion; with 
     TASK_LINK,
     standingFor("Acme/Relay"),
   );
+
   const on = coderInstructions(
     "Acme/Relay",
     AGENT_BRIEF.PROMPT,
     TASK_LINK,
     standingFor("Acme/Relay", { replyButtons: true }),
   );
+
   assert.ok(!off.includes(AGENT_TOOL.ADD_SUGGESTION));
   const start = on.indexOf("## Suggestions in your reply\n\n");
   const end = on.indexOf("## What your messages are", start);

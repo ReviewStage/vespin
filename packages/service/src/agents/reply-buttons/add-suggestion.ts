@@ -141,12 +141,15 @@ export const ADD_SUGGESTION_TOOL = {
 /** What a suggestion sets off, as the button keeps it, from what the agent asked; the start's choice already checked. */
 function actionOf(asked: Asked): ReplyButtonAction | undefined {
   const { start, send } = asked;
+
   if (start !== undefined && send === undefined) {
     return { kind: REPLY_BUTTON_ACTION.START, ...start };
   }
+
   if (send !== undefined && start === undefined) {
     return { kind: REPLY_BUTTON_ACTION.SEND, agentId: send.agentId, text: send.text };
   }
+
   return undefined;
 }
 
@@ -156,8 +159,10 @@ const startChoiceRefusal = (userId: string, action: ReplyButtonAction) =>
     if (action.kind !== REPLY_BUTTON_ACTION.START || action.model === undefined) return undefined;
     const choice = { model: action.model, effort: action.effort ?? "" };
     const accepted = yield* acceptedAgentChoice(userId, choice).pipe(Effect.result);
+
     if (Result.isSuccess(accepted)) return undefined;
     const refusal = accepted.failure;
+
     return refusal instanceof ModelChoiceRefused
       ? choiceRefusal(choice, refusal.offered, "Not added")
       : ADD_SUGGESTION_REFUSAL.MODELS_UNREAD;
@@ -170,6 +175,7 @@ export function runAddSuggestion(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readAsked(input);
   const action = Result.isSuccess(asked) ? actionOf(asked.success) : undefined;
+
   // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
   if (
     !Result.isSuccess(asked) ||
@@ -179,27 +185,38 @@ export function runAddSuggestion(
   ) {
     return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.UNREADABLE));
   }
+
   const agent = callerAgent(call.caller);
+
   if (agent === undefined)
     return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.NOT_AGENT));
+
   if (action.kind === REPLY_BUTTON_ACTION.SEND && action.agentId === agent.id) {
     return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.SELF));
   }
+
   const userId = callerUserId(call.caller);
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(ADD_SUGGESTION_REFUSAL.NO_AGENT);
+
       if (action.kind === REPLY_BUTTON_ACTION.SEND) {
         const found = yield* workspaceAgent(userId, workspace.value, action.agentId, agent.id);
+
         if (Option.isNone(found)) return agentToolRejected(ADD_SUGGESTION_REFUSAL.NO_AGENT);
       }
+
       const refused = yield* startChoiceRefusal(userId, action);
+
       if (refused !== undefined) return agentToolRejected(refused);
       const now = yield* DateTime.nowAsDate;
       const label = asked.success.label;
       const buttonId = yield* makeReplyButton(agent.id, label, action, now);
       const step = yield* workspaceStepOf(userId, workspace.value);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         button: { id: buttonId, label },
