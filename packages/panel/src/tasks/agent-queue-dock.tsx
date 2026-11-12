@@ -251,6 +251,7 @@ export function AgentQueueDock({
                         onClick={() => onEdit(message)}
                       />
                       <IconButton
+                        variant={BUTTON_VARIANT.DANGER_QUIET}
                         size={BUTTON_SIZE.COMPACT}
                         label={QUEUE_WORDS.DELETE}
                         icon={<GLYPH.DELETE />}

@@ -86,7 +86,6 @@ import {
   ShieldIcon,
   UserIcon,
   UserRoundIcon,
-  XIcon,
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -153,8 +152,8 @@ import {
 
 /** The photo's removal, which its tile offers and the confirm asks. */
 const PHOTO_WORDS = {
-  REMOVE: "Remove photo",
-  REMOVE_BODY: "The photo is deleted, and the workspace is marked by its first letter instead.",
+  DELETE: "Delete photo",
+  DELETE_BODY: "The workspace is marked by its first letter instead.",
 } as const;
 
 const INVITE_LINK_COPIED = "Invite link copied";
@@ -439,7 +438,6 @@ function MemberRow({
     ? [
         {
           label: MEMBER_WORDS.REMOVE,
-          icon: <GLYPH.REMOVE />,
           danger: true,
           onSelect: remove.ask,
         },
@@ -1030,7 +1028,6 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
           actions={[
             {
               label: INVITATION_WORDS.CANCEL,
-              icon: <XIcon />,
               danger: true,
               onSelect: () => {
                 setCanceling(one);
@@ -1301,7 +1298,6 @@ function ManagedSentry({
           ? "Disconnect"
           : `Disconnect ${installation.account}`,
       replayMasked: installation.account !== undefined && sentry.installations.length > 1,
-      icon: <GLYPH.DISCONNECT />,
       danger: true,
       onSelect: () => {
         setLeaving(installation);
@@ -1451,7 +1447,6 @@ function ManagedSlackBot({
           [
             {
               label: "Disconnect",
-              icon: <GLYPH.DISCONNECT />,
               danger: true,
               onSelect: () => disconnect.ask(),
             },
@@ -1846,13 +1841,13 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
         open
         confirm={remove}
         question={{
-          title: `Remove ${workspace.name}'s photo?`,
+          title: `Delete ${workspace.name}'s photo?`,
           replayUnmasked: true,
           titleReplayMasked: true,
-          body: PHOTO_WORDS.REMOVE_BODY,
-          verb: PHOTO_WORDS.REMOVE,
-          running: "Removing",
-          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+          body: PHOTO_WORDS.DELETE_BODY,
+          verb: PHOTO_WORDS.DELETE,
+          running: "Deleting",
+          loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
       />
       {slugging.dialog}

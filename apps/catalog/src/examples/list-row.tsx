@@ -548,7 +548,7 @@ function ListRows(): React.JSX.Element {
               current={LIST_ROW_CURRENT.ITEM}
               onPress={() => undefined}
               actionsAt={LIST_ROW_ACTIONS.HOVER}
-              actions={<IconButton icon={<TrashIcon />} label="Archive Ship the release" />}
+              actions={<IconButton icon={<GLYPH.ARCHIVE />} label="Archive Ship the release" />}
             />
             <ListRow
               title="Draw the sidebar with the shared rows"
@@ -559,7 +559,7 @@ function ListRows(): React.JSX.Element {
               menuOpen
               actions={
                 <IconButton
-                  icon={<TrashIcon />}
+                  icon={<GLYPH.ARCHIVE />}
                   label="Archive Draw the sidebar with the shared rows"
                 />
               }

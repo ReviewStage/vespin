@@ -706,11 +706,11 @@ test("an API key added from Add opens a masked field under the header, sent once
     assert.ok(spy.mock.calls.every((call) => !JSON.stringify(call).includes(KEY)));
   }
 
-  await choose(row(), name, "Remove key");
+  await choose(row(), name, "Delete key");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), []);
-  assert.match(question().textContent ?? "", /Remove your Anthropic API key\?/u);
-  assert.equal(actLook("Remove key"), "danger");
-  await press(question(), "Remove key");
+  assert.match(question().textContent ?? "", /Delete your Anthropic API key\?/u);
+  assert.equal(actLook("Delete key"), "danger");
+  await press(question(), "Delete key");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
     { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, subscriptionId: "key-anthropic-1" },
   ]);

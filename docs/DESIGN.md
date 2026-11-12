@@ -319,7 +319,7 @@ What follows from this everywhere else:
 - One wording per idea across the whole product. A confirmation, a sign-in
   failure, or a bound refused must not be phrased three ways in three files.
 - A confirm's act repeats its title's verb and noun: *Delete comment*,
-  *Discard review*, *Permanently delete task*, *Remove skill*, *Disconnect
+  *Discard review*, *Permanently delete task*, *Remove machine*, *Disconnect
   Sentry*, so the button reads right on its own, as the one thing the eye
   lands on. Where the noun is a person's or a thing's own name, the act names
   its kind instead and stays short: *Remove member*, not *Remove Ada
@@ -327,6 +327,14 @@ What follows from this everywhere else:
   named as it is, since its name is already short and is its kind. A verb
   that is already a whole phrase stays as it is (*Leave Acme*, *Transfer
   ownership*).
+- An act that takes something away says what happens to it. *Delete*: it is
+  gone, the trash glyph beside it. *Discard*: your own unsent work is gone, the
+  same glyph. *Remove*: it comes off this list and still stands elsewhere (a
+  member, a machine, a channel). *Disconnect*: a link to another app ends and
+  nothing of it is deleted. Remove and Disconnect wear no glyph, since none
+  says "off this list" as the trash says "gone". It is red exactly when it asks
+  first, and asks first unless it can be undone and reaches no one else, when
+  it acts at once with Undo. It never ends in "…", which promises more to type.
 - A bound the developer hit is stated plainly: "That message is empty or too
   long." A poetic restatement of the same bound tells them nothing they can
   act on.

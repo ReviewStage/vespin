@@ -381,7 +381,6 @@ function ClientRow({
             : [
                 {
                   label: PAGE_LINE.DISCONNECT,
-                  icon: <GLYPH.DISCONNECT />,
                   danger: true,
                   onSelect: confirm.ask,
                 },
