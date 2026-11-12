@@ -4,6 +4,7 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
+import { machineName } from "@repo/features/machine-name";
 import { sandboxMemoryGb } from "@repo/features/sandbox-size";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -29,7 +30,7 @@ import {
 import { GLYPH } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
-import { machineName, useThisMac } from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
 import type { PlaceMove } from "./move-agent.js";

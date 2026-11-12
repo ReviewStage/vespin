@@ -499,6 +499,8 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 const NOTE_REMOVE = { SYMBOL: "trash", ROLE: "destructive" } as const;
 
 type NoteRowProps = {
+  /** The glyph before the words, an SF Symbol in the muted ink, such as a machine's kind. */
+  readonly symbol?: SfSymbol | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** A quiet line under them, such as who kept it and when. */
@@ -510,23 +512,20 @@ type NoteRowProps = {
 };
 
 /**
- * A note of Settings, such as a memory: its words whole in the ink, then a
+ * A note of Settings, such as a memory or a machine: its glyph where it has
+ * one, its words whole in the ink, then a
  * quiet line of whose they are, and, where the reader may, the act that
  * takes it away behind a swipe from the trailing edge, as Notes' rows carry
  * Delete, and in the menu a long press opens. Note that a full swipe never
  * runs it, since it asks first. VoiceOver hears the row as one element, its
  * words then its line, and offers the act among its actions.
  */
-export function NoteRow({ words, line, badge, remove }: NoteRowProps) {
+export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
   const colors = useColors();
   const said = badge === undefined ? line : `${badge} · ${line}`;
 
-  const drawn = (
-    <VStack
-      alignment="leading"
-      spacing={SPACE.TIGHT}
-      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
-    >
+  const lines = (
+    <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{words}</Text>
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
@@ -534,6 +533,19 @@ export function NoteRow({ words, line, badge, remove }: NoteRowProps) {
         {said}
       </Text>
     </VStack>
+  );
+
+  const drawn = (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+    >
+      {symbol === undefined ? null : (
+        <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+      )}
+      {lines}
+      <Spacer />
+    </HStack>
   );
 
   const placed = [
