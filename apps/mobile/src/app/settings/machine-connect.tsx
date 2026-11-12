@@ -41,6 +41,17 @@ import { SETTINGS_ROUTE } from "../../settings-button.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
+/**
+ * The page's bar where no answer is out: titled for the pairing, with Back
+ * and its swipe given back. Note that a screen's options outlive the part
+ * that set them, so the question's held Back must be let go by name.
+ */
+const SETTLED_OPTIONS = {
+  title: HOST_CONNECT_WORDS.TITLE,
+  headerBackVisible: true,
+  gestureEnabled: true,
+} as const;
+
 /** The key the pairing's read is held under, by its code. */
 const HOST_PAIRING_QUERY = "host-pairing";
 
@@ -132,7 +143,7 @@ function Refused({ refusal }: { readonly refusal: HostPairingFailed }) {
 
   return (
     <>
-      <Stack.Screen options={{ title: HOST_CONNECT_WORDS.TITLE }} />
+      <Stack.Screen options={SETTLED_OPTIONS} />
       <Screen>
         <EmptyState
           title={words.title}
@@ -230,7 +241,7 @@ function Pairing({ code }: { readonly code: string }) {
     case STANDING.DENIED:
       return (
         <>
-          <Stack.Screen options={{ title: HOST_CONNECT_WORDS.TITLE }} />
+          <Stack.Screen options={SETTLED_OPTIONS} />
           <Screen>
             <EmptyState
               title={hostDeniedTitle(now.box)}
@@ -245,7 +256,7 @@ function Pairing({ code }: { readonly code: string }) {
     default:
       return (
         <>
-          <Stack.Screen options={{ title: HOST_CONNECT_WORDS.TITLE }} />
+          <Stack.Screen options={SETTLED_OPTIONS} />
           <Screen>
             {now.kind === STANDING.UNREAD ? (
               <EmptyState
