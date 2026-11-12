@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { listAgentBrowserTabs } from "@repo/database/models/agent-browser-tabs";
 import { createAgent, recordAgentRunnerToken } from "@repo/database/models/agent-store";
 import {
@@ -692,7 +693,9 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
-        yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.TURN_END);
+        yield* writeAccountPreferences(agent.userId, {
+          experiments: { [EXPERIMENT.TURN_END]: true },
+        });
         yield* descriptionsOn(agent.userId);
         const client = yield* connected(fetch, agent.bearer);
 

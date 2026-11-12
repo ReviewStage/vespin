@@ -9,13 +9,15 @@
  * (`@repo/features/checkout-diff`), through the agent's machine
  * (`../machine/agent-machines.ts`), and read into the files the Changes view
  * draws. Nothing is stored: the files are read afresh on each ask. The read
- * stands behind the workspace's experiment, as the row that asks it does,
+ * stands behind the asking account's Turn changes experiment, as the row
+ * that asks it does,
  * and is refused where no snapshot of the turn stands any more, as after
  * the sandbox that held it was released, where the agent runs on a Mac that
  * is away or removed, and where the Mac's host takes no such ask.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import type { Agent } from "@repo/database/models/agent-store";
 import { readTurnCheckoutRange } from "@repo/database/models/conversation-rewind";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
@@ -32,18 +34,18 @@ import {
 } from "../../http/http-effect.js";
 import { CHECKOUT_DIFF_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
-import { experimentOnIn } from "../workspace-experiment-on.js";
 import { refusedByMachine } from "./rewind.js";
 
 /**
  * The files the turn the developer's line named opened changed, as above.
- * Refused as malformed while the agent's workspace has the experiment off,
- * since no window asks it then; refused by name where no snapshot of the
+ * Refused as malformed while the account asking has the experiment off,
+ * since no window of theirs asks it then; refused by name where no snapshot of the
  * turn stands, on the row or on the machine; refused as a line to an away
  * or removed Mac is; and unavailable where the machine diffs none, or the
  * diff failed.
  */
 export const turnChangesOf = /* @__PURE__ */ Effect.fn("web/turnChangesOf")(function* (
+  account: string,
   agent: Agent,
   messageId: string,
 ): Effect.fn.Return<
@@ -51,7 +53,7 @@ export const turnChangesOf = /* @__PURE__ */ Effect.fn("web/turnChangesOf")(func
   HostedRefusal,
   DatabaseServices | HttpClient.HttpClient | Sandbox
 > {
-  if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.REWIND_FILES))) {
+  if (!(yield* hostedStoreOrUnavailable(accountExperimentOn(account, EXPERIMENT.TURN_CHANGES)))) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
 

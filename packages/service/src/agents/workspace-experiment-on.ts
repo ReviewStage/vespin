@@ -1,5 +1,5 @@
 /**
- * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions, Memory, and Done and follow-ups an agent or a member's call is offered, handed, and told.
+ * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told, read beside the agent's starter's choice of Done and follow-ups.
  *
  * Every gate of a workspace experiment asks here, for the workspace the work
  * stands in: an agent's own (`agent.organizationId`), a task's
@@ -13,6 +13,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
@@ -56,10 +57,11 @@ export function experimentOnSinceIn(
 }
 
 /**
- * The workspace's experiments as an agent's tools, their words, and its
- * instructions are built by: each of Task descriptions and Memory on
- * or off. An agent is told nothing of one that is off, so every word that
- * names one is chosen by this.
+ * The experiments an agent's tools, their words, and its instructions are
+ * built by: its workspace's Task descriptions and Memory, and Done and
+ * follow-ups as the account that started the agent chose it, on or off. An
+ * agent is told nothing of one that is off, so every word that names one is
+ * chosen by this.
  */
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
@@ -67,37 +69,50 @@ export interface ExperimentsOn {
   readonly turnEndOn: boolean;
 }
 
-/** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
+/** Every experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   memoryOn: true,
   turnEndOn: true,
 };
 
-/** Every workspace experiment off. */
+/** Every experiment off. */
 export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
   memoryOn: false,
   turnEndOn: false,
 };
 
+/** The agent an agent's experiments are read for: its workspace, and the account that started it. */
+export interface ExperimentsOf {
+  readonly organizationId: string;
+  readonly userId: string;
+}
+
 /**
- * The workspace's experiments, read in one statement; none where they cannot
- * be read, logged for the operator. For a caller that must tell a failed
- * read from a workspace with every experiment off, as a restart does.
+ * The agent's experiments, its workspace's read in one statement beside its
+ * starter's account; none where they cannot be read, logged for the
+ * operator. For a caller that must tell a failed read from every
+ * experiment off, as a restart does.
  */
 export function experimentsReadIn(
-  workspaceId: string,
+  agent: ExperimentsOf,
 ): Effect.Effect<Option.Option<ExperimentsOn>, never, DatabaseServices> {
-  return workspaceExperimentsOf(workspaceId).pipe(
-    Effect.map((standings) => {
+  return Effect.all(
+    [
+      workspaceExperimentsOf(agent.organizationId),
+      accountExperimentOn(agent.userId, EXPERIMENT.TURN_END),
+    ],
+    { concurrency: "unbounded" },
+  ).pipe(
+    Effect.map(([standings, turnEndOn]) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
 
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
-        turnEndOn: on(EXPERIMENT.TURN_END),
+        turnEndOn,
       });
     }),
     Effect.tapError(logStoreFailure),
@@ -105,12 +120,12 @@ export function experimentsReadIn(
   );
 }
 
-/** The workspace's experiments, read in one statement; where they cannot be read, every one is off, logged for the operator. */
+/** The agent's experiments, as above; where they cannot be read, every one is off, logged for the operator. */
 export function experimentsOnIn(
-  workspaceId: string,
+  agent: ExperimentsOf,
 ): Effect.Effect<ExperimentsOn, never, DatabaseServices> {
   return Effect.map(
-    experimentsReadIn(workspaceId),
+    experimentsReadIn(agent),
     Option.getOrElse(() => NO_EXPERIMENT_ON),
   );
 }
