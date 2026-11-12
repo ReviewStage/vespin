@@ -10,6 +10,7 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { sizeLabel } from "@repo/features/attachment-model";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -47,7 +48,7 @@ import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import { cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedVideo } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -55,11 +56,14 @@ import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
 
-/** What a thread's videos are named under among the app's caches. */
+/** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
 
 /** The defaults key the Inbox's scope is kept under, as the panel keeps its window's. */
 const INBOX_SCOPE_KEY = "inboxScope";
+
+/** No file of a thread read yet. */
+const NOTHING_READ: ThreadMediaRead = { sources: new Map(), sizes: new Map() };
 
 /** No holder read yet. */
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
@@ -351,13 +355,43 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   }, [id]);
 }
 
+/** A thread's files as read: what each is drawn from, and how big each is, in words, by its attachment. */
+interface ThreadMediaRead {
+  readonly sources: ReadonlyMap<string, string>;
+  readonly sizes: ReadonlyMap<string, string>;
+}
+
+/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's or another file's address under the app's caches. */
+function sourceOf(
+  each: InboxMessageMedia,
+  read: { readonly contentType: string; readonly base64: string },
+): Promise<string> {
+  switch (each.kind) {
+    case INBOX_MEDIA.VIDEO:
+      return cachedVideo(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
+    case INBOX_MEDIA.FILE:
+      return cachedFile(
+        INBOX_MEDIA_PREFIX,
+        each.attachmentId,
+        each.name,
+        each.mediaType,
+        read.base64,
+      );
+    case INBOX_MEDIA.PICTURE:
+      return Promise.resolve(`data:${read.contentType};base64,${read.base64}`);
+  }
+}
+
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, and a video, asked for as its MP4 copy, as a
+ * picture as a `data:` address, a video, asked for as its MP4 copy, as a
  * file of the app's caches, since the system's player reads a file, which an
- * older recording with no copy answers as a WebM the player cannot play; one still on its way, or that
- * could not be read, is absent. Note that each file is asked for once while
+ * older recording with no copy answers as a WebM the player cannot play, and
+ * any other file, such as a PDF, as a file of the app's caches under its own
+ * name, which its viewer and the share sheet read; with each one's size in
+ * words, which a file's chip says. One still on its way, or that could not
+ * be read, is absent. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
  * them, and each read carries the whole file; one whose read failed is asked
@@ -366,9 +400,9 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
-): ReadonlyMap<string, string> {
+): ThreadMediaRead {
   const acts = useHostActs();
-  const [sources, setSources] = useState<ReadonlyMap<string, string>>(new Map());
+  const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
 
   // The thread the files were asked for, and the attachments asked for on it.
   const asked = useRef<{ readonly itemId: string | undefined; readonly ids: Set<string> }>({
@@ -381,7 +415,7 @@ export function useThreadMedia(
 
     if (asked.current.itemId !== itemId) {
       asked.current = { itemId, ids: new Set() };
-      setSources(new Map());
+      setRead(NOTHING_READ);
     }
 
     const { ids } = asked.current;
@@ -403,28 +437,23 @@ export function useThreadMedia(
         attachmentId: each.attachmentId,
         ...playable,
       })
-        .then(async (read) => {
+        .then(async (answer) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
 
-          if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
-
-          const source =
-            each.kind === INBOX_MEDIA.VIDEO
-              ? await cachedVideo(
-                  INBOX_MEDIA_PREFIX,
-                  each.attachmentId,
-                  read.contentType,
-                  read.base64,
-                )
-              : `data:${read.contentType};base64,${read.base64}`;
+          if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
+          const source = await sourceOf(each, answer);
 
           if (asked.current.itemId !== itemId) return;
-          setSources((held) => new Map(held).set(each.attachmentId, source));
+          const size = sizeLabel(answer.base64);
+          setRead((held) => ({
+            sources: new Map(held.sources).set(each.attachmentId, source),
+            sizes: new Map(held.sizes).set(each.attachmentId, size),
+          }));
         })
         .catch(forget);
     }
   }, [acts, itemId, media]);
 
-  return sources;
+  return read;
 }
