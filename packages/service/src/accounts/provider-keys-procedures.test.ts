@@ -384,7 +384,7 @@ const DEVICE_SECRETS = [
  * beside them.
  */
 function fakeDeviceAuth() {
-  const state = { codePollStatus: HTTP_STATUS.FORBIDDEN as number };
+  const state: { codePollStatus: number } = { codePollStatus: HTTP_STATUS.FORBIDDEN };
 
   const auth = (request: RecordedRequest): Response => {
     if (request.url === CODEX_DEVICE_OAUTH.USER_CODE_URL) {

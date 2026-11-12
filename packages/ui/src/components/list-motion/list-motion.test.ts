@@ -62,8 +62,8 @@ beforeEach(() => {
     value(this: Element, keyframes: Keyframe[], timing: KeyframeAnimationOptions) {
       let canceled = false;
 
-      const motion = {
-        onfinish: null as (() => void) | null,
+      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+        onfinish: null,
         cancel: () => {
           canceled = true;
         },

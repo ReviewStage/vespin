@@ -446,7 +446,8 @@ test("a comment's time reads as a thread's does, a few letters, with the full mo
   const time = container.querySelector<HTMLElement>(".ui-comment-time time");
   assert.equal(time?.textContent, "3h");
 
-  restOn(time as HTMLElement);
+  assert.ok(time !== null);
+  restOn(time);
 
   assert.match(
     document.querySelector('[role="tooltip"]')?.textContent ?? "",
@@ -817,6 +818,7 @@ test("a line's count stands centered on the first line its words stand on, thoug
   Element.prototype.getClientRects = function (this: Element) {
     const marked = this.classList.contains("description-comment-mark");
 
+    // SAFETY: the marks read their rects by index and length alone, as a DOMRectList is read.
     return (marked ? [new DOMRect(40, 100, 300, 20), new DOMRect(0, 122, 200, 20)] : []) as never;
   };
 
@@ -964,7 +966,7 @@ test("a reply pasted past the comment's cap is cut to the room left and the card
 
   const { container } = drawn(
     "page",
-    [THREADS[0] as DescriptionCommentThread],
+    [THREADS[0] ?? assert.fail("no thread")],
     () => true,
     PLAN,
     undefined,

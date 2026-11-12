@@ -86,6 +86,7 @@ function testShell(): Parameters<typeof sessionReplay>[0] {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
+    // SAFETY: the replay calls only `init` and the recorder's own members, which the stand-in has.
     importClient: () => Promise.resolve(client.posthog as unknown as PostHog),
   };
 }
@@ -105,6 +106,7 @@ test("the recorder is handed a text masking that shows only the words under the 
   });
   await vi.waitFor(() => assert.ok(client.calls.some(([name]) => name === "init")));
 
+  // SAFETY: `init` is handed the client's options second, as PostHog's own signature takes them.
   const options = client.calls.find(([name]) => name === "init")?.[2] as {
     session_recording: { maskTextFn: (text: string, element?: HTMLElement | null) => string };
   };

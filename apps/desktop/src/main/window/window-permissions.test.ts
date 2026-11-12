@@ -15,6 +15,8 @@ type RequestHandler = Parameters<Session["setPermissionRequestHandler"]>[0];
 
 // SAFETY: the pages are only identities the handlers compare, which nothing here reads further.
 const own = {} as WebContents;
+
+// SAFETY: the pages are only identities the handlers compare, which nothing here reads further.
 const foreign = {} as WebContents;
 
 /** A session as Electron's holds its handlers, granted to `own` alone. */
@@ -57,6 +59,7 @@ function grantedSession() {
     permission: Parameters<NonNullable<CheckHandler>>[1],
     mediaType?: "audio" | "video",
   ): boolean =>
+    // SAFETY: the handlers read only whether the frame is the main one and its media type.
     check?.(webContents, permission, "app://desktop/panel", {
       isMainFrame: true,
       ...(mediaType === undefined ? undefined : { mediaType }),

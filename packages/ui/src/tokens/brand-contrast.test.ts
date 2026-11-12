@@ -22,25 +22,21 @@ const CURRENT_ROW_INK = 0.14;
 function channels(hex: string): [number, number, number] {
   const value = Number.parseInt(hex.slice(1), 16);
 
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => channel / 255) as [
-    number,
-    number,
-    number,
-  ];
+  return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
 }
 
 /** Relative luminance, as WCAG 2.2 defines it. */
 function luminance(hex: string): number {
-  const [r, g, b] = channels(hex).map((c) =>
-    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
-  ) as [number, number, number];
+  const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const [r, g, b] = channels(hex);
 
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
 /** The contrast ratio of two colors, as WCAG 2.2 defines it. */
 function contrast(a: string, b: string): number {
-  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  const light = Math.max(luminance(a), luminance(b));
+  const dark = Math.min(luminance(a), luminance(b));
 
   return (light + 0.05) / (dark + 0.05);
 }

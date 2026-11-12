@@ -22,6 +22,7 @@ const AT = Date.UTC(2026, 9, 25, 12);
 const at = (minutes: number) => new Date(AT + minutes * 60_000);
 
 const MINUTES = (...minutes: [number, ...number[]]) =>
+  // SAFETY: a map keeps its tuple's length, and the tuple holds at least one.
   minutes.map((count) => count * 60_000) as [number, ...number[]];
 
 /** A minute, then two, then four for every strike after. */

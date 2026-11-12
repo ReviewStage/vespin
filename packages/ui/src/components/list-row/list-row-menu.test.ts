@@ -144,7 +144,8 @@ function key(target: HTMLElement, name: string, shiftKey = false): void {
 
 /** Closes the open menu by Escape, on whatever holds the focus. */
 function pressEscape(): void {
-  key((document.activeElement as HTMLElement | null) ?? document.body, "Escape");
+  const focused = document.activeElement;
+  key(focused instanceof HTMLElement ? focused : document.body, "Escape");
 }
 
 const SAME_MENU = { label: "Task actions", items: ["Rename", "Archive", "Delete"] };

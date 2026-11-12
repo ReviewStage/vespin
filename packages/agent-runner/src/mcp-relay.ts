@@ -136,7 +136,7 @@ export const openMcpRelay = Effect.fn("agent-runner/openMcpRelay")(function* (
     },
   };
 
-  // Note that the SDK calls the instance's `connect` and nothing else of it
+  // SAFETY: the SDK calls the instance's `connect` and nothing else of it
   // (0.3.304's `connectSdkMcpServer`), so a relay stands in for an McpServer.
   const instance = server as SdkServer;
 

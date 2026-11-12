@@ -516,7 +516,11 @@ function recordMotions() {
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[]) {
-      const motion = { onfinish: null as (() => void) | null, cancel: () => undefined };
+      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+        onfinish: null,
+        cancel: () => undefined,
+      };
+
       played.push({ element: this, keyframes, finish: () => motion.onfinish?.() });
 
       return motion;

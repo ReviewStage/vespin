@@ -188,6 +188,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
   const said = "Pushed the fix; the checks run again.";
   const summary = "- Fixed the failing check\n- Pushed to #214";
 
+  // SAFETY: the message carries the fields `lastSaid` reads, as the transcript stores them.
   const ended = (state: "output-available" | "output-error"): StoredUIMessage =>
     ({
       id: "message-1",
@@ -211,6 +212,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
   // A turn that ended before the call answered keeps it as available, with no answer that took it.
   const unanswered = ended("output-available");
   const [text, call] = unanswered.parts;
+  // SAFETY: the message carries the fields `lastSaid` reads, as the transcript stores them.
   assert.equal(
     lastSaid({
       ...unanswered,
@@ -220,6 +222,7 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
   );
   // A later call refused stands for the turn over an earlier one taken.
   const refused = ended("output-error").parts[1];
+  // SAFETY: the message carries the fields `lastSaid` reads, as the transcript stores them.
   assert.equal(
     lastSaid({
       ...unanswered,

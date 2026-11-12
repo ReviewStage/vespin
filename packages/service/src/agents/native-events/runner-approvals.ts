@@ -118,8 +118,10 @@ function cutText(text: string, max: number): string {
 function cutValue(value: unknown, depth: number): WireBoundaryInput {
   if (typeof value === "string") return cutText(value, APPROVAL_INPUT.TEXT_MAX);
 
-  // SAFETY: a call's input arrives as JSON, so what is no string and no record or list is a JSON scalar, which `readInput` checks.
-  if (value === null || typeof value !== "object") return value as WireBoundaryInput;
+  if (value === null || typeof value !== "object") {
+    // SAFETY: a call's input arrives as JSON, so what is no string and no record or list is a JSON scalar, which `readInput` checks.
+    return value as WireBoundaryInput;
+  }
 
   if (depth >= MAX_INPUT_DEPTH) return null;
 

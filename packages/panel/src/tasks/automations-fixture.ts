@@ -343,8 +343,11 @@ function laidOver<Read extends keyof AppAutomationReads>(
   const kept = LAID_OVER[read];
   const laid = kept.get(held);
 
-  // SAFETY: what is kept for `held` is `held` with its own staged reads laid over it.
-  if (laid !== undefined) return laid as AppAutomationReads[Read];
+  if (laid !== undefined) {
+    // SAFETY: what is kept for `held` is `held` with its own staged reads laid over it.
+    return laid as AppAutomationReads[Read];
+  }
+
   const next = { ...held, ...staged };
   kept.set(held, next);
 

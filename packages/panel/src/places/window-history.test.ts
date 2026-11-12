@@ -1429,6 +1429,7 @@ test("a version history opened over another task is counted once, as the history
   window.openVersions(ACME.slug, "task-b");
   window.stand(onTask("task-b"));
 
+  // SAFETY: each counted event is its name and its properties, a surface among them.
   const histories = counted.filter(
     (event) => (event as [string, { surface: string }])[1].surface === "version_history",
   );

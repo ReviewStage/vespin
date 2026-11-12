@@ -321,20 +321,24 @@ function historyActAnswer(
   payload: PortActPayload<PortActKind>,
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   if (kind === ACT_KIND.TASKS_REVISIONS) {
+    // SAFETY: the guard above names this payload's kind.
     const page = payload as PortActPayload<typeof ACT_KIND.TASKS_REVISIONS>;
 
     if (page.taskId !== FIXTURE_TASK_ID) return undefined;
 
+    // SAFETY: a page of revisions is what this kind answers.
     return { answer: historyPage(page.before) as PortActResult<PortActKind> };
   }
 
   if (kind !== ACT_KIND.TASKS_REVISION) return undefined;
+  // SAFETY: the guard above names this payload's kind.
   const { taskId, seq } = payload as PortActPayload<typeof ACT_KIND.TASKS_REVISION>;
 
   if (taskId !== FIXTURE_TASK_ID) return undefined;
   const at = FIXTURE_HISTORY.findIndex(({ line }) => line.seq === seq);
 
   if (at === -1) {
+    // SAFETY: an unanswered failure is what this kind answers for a revision it does not hold.
     return { answer: { failure: TASK_CALL_FAILURE.UNANSWERED } as PortActResult<PortActKind> };
   }
 
@@ -344,6 +348,7 @@ function historyActAnswer(
     previous: FIXTURE_HISTORY[at + 1]?.document ?? null,
   };
 
+  // SAFETY: a revision is what this kind answers.
   return { answer: { revision } as PortActResult<PortActKind> };
 }
 

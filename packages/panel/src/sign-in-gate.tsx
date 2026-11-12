@@ -21,6 +21,7 @@ import { useAnnounceShown } from "./use-announce-shown.js";
  * object for good, because a report is matched by its cause's identity and a
  * new object on every draw would report the same failure again.
  */
+// SAFETY: the entries are one per SIGN_IN_FAILURE value, each under its own code.
 const SIGN_IN_FAILURE_ANSWERS = Object.fromEntries(
   Object.values(SIGN_IN_FAILURE).map((failure) => [failure, { failure }]),
 ) as Record<SignInFailure, { readonly failure: SignInFailure }>;

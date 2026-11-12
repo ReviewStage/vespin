@@ -84,6 +84,7 @@ function sha256(bytes: Uint8Array): string {
 
 /** This workspace package's version, which the bundle was built to say and the release is tagged with. */
 function version(): string {
+  // SAFETY: this is the workspace's own package.json, which carries the version the release is tagged with.
   const manifest = JSON.parse(readFileSync(join(APP, "package.json"), "utf8")) as {
     version: string;
   };
@@ -102,6 +103,7 @@ function shippedBundle(): string {
  * own words where its folder carries them, in name order.
  */
 function thirdPartyNotices(): string {
+  // SAFETY: esbuild's metafile keys every bundled file under `inputs`.
   const meta = JSON.parse(readFileSync(join(DIST, "meta.json"), "utf8")) as {
     inputs: Record<string, unknown>;
   };
@@ -122,6 +124,7 @@ function thirdPartyNotices(): string {
   const sections = [...folders.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, folder]) => {
+      // SAFETY: an installed package's package.json carries its version, and its license where it names one.
       const manifest = JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as {
         version: string;
         license?: string;

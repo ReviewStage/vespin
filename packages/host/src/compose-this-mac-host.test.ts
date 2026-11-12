@@ -173,8 +173,10 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
         hostedServiceBaseUrl: SERVICE,
         createId: () => MINTED_ID,
         emit: (kind, payload) => {
-          // SAFETY: what the composer tells on this event is the windows' This Mac, built as `AppThisMacHosts`.
-          if (kind === GATEWAY_EVENT.THIS_MAC_HOST_CHANGED) told = payload as AppThisMacHosts;
+          if (kind === GATEWAY_EVENT.THIS_MAC_HOST_CHANGED) {
+            // SAFETY: what the composer tells on this event is the windows' This Mac, built as `AppThisMacHosts`.
+            told = payload as AppThisMacHosts;
+          }
         },
         runMode: { sendsNetwork: true },
       },

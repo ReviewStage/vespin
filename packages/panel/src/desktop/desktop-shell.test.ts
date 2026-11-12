@@ -1003,6 +1003,7 @@ test("on a phone the places bar stands over the Tasks page though the task left 
 
 /** What a reader hears an item named: its words, less what is drawn for the eye alone. */
 function spokenName(item: HTMLElement): string {
+  // SAFETY: a deep clone of an element is an element of the same kind.
   const heard = item.cloneNode(true) as HTMLElement;
 
   for (const unheard of heard.querySelectorAll('[aria-hidden="true"]')) unheard.remove();

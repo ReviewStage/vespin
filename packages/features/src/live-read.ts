@@ -352,8 +352,9 @@ export function liveRead<
 
   if (spec.mode === LIVE_MODE.CURSOR && spec.heldOn !== undefined)
     throw new Error(`the live read ${spec.name} follows a cursor, so it is held on every part`);
-  // SAFETY: an absent `beside` and `refuses` are the empty records their defaults name.
+  // SAFETY: an absent `beside` is the empty record its default names.
   const beside = (spec.beside ?? {}) as Beside;
+  // SAFETY: an absent `refuses` is the empty record its default names.
   const own = (spec.refuses ?? {}) as Refuses;
   const query: Readonly<Record<string, Schema.Top | undefined>> = spec.query ?? {};
 
@@ -381,11 +382,13 @@ export function liveRead<
     input: Schema.Struct({ ...params, ...MODE_FIELDS[spec.mode] }) as unknown as Schema.Struct<
       InputFields<Params, Mode, Query>
     >,
+    // SAFETY: the fields are those `AnswerFields` names, built from the same records.
     answer: Schema.Struct({
       url: Schema.String,
       queries: Schema.Struct(queries),
       ...beside,
     }) as unknown as Schema.Struct<AnswerFields<Parts, Beside>>,
+    // SAFETY: the fields are those `RowsFields` names, one per declared part.
     rows: Schema.Struct(
       mapped<string, AnyLiveRows, Schema.Top>(spec.parts, (rows) =>
         partField(rows, rowsReading(rows.row)),
@@ -400,20 +403,23 @@ export function liveRead<
  * flipped (`packages/service/src/orpc/base.ts`), and the refusals it names.
  */
 export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
-  return (
-    declaredProcedure
-      .errors(read.errors as Read["errors"])
-      .meta(openapi({ method: HTTP_METHOD.GET, path: read.path }))
+  return declaredProcedure
+    .errors(
+      // SAFETY: the read's errors are the refusal map `liveRead` built for this read.
+      read.errors as Read["errors"],
+    )
+    .meta(openapi({ method: HTTP_METHOD.GET, path: read.path }))
+    .input(
       // SAFETY: a query's fields decode with no services, so it is the codec from its `Encoded` to its `Type`.
-      .input(read.input as unknown as Schema.Codec<Read["input"]["Type"], Read["input"]["Encoded"]>)
-      .output(
-        // SAFETY: an answer's fields decode with no services, so its flip is the codec from its `Type` to its `Encoded`.
-        Schema.flip(read.answer) as unknown as Schema.Codec<
-          Read["answer"]["Encoded"],
-          Read["answer"]["Type"]
-        >,
-      )
-  );
+      read.input as unknown as Schema.Codec<Read["input"]["Type"], Read["input"]["Encoded"]>,
+    )
+    .output(
+      // SAFETY: an answer's fields decode with no services, so its flip is the codec from its `Type` to its `Encoded`.
+      Schema.flip(read.answer) as unknown as Schema.Codec<
+        Read["answer"]["Encoded"],
+        Read["answer"]["Type"]
+      >,
+    );
 }
 
 /** Two rows' order by one field: nulls last ascending, first descending, as Postgres orders them. */
@@ -437,6 +443,7 @@ export function orderedLiveRows<Part extends AnyLiveRows>(
   return rows.toSorted((a, b) => {
     // SAFETY: a part's row is a struct, whose ordered fields its declaration names.
     const left = a as Readonly<Record<string, unknown>>;
+    // SAFETY: a part's row is a struct, whose ordered fields its declaration names.
     const right = b as Readonly<Record<string, unknown>>;
 
     for (const [field, order] of part.order) {

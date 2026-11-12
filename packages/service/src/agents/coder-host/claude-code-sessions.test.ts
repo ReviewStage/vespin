@@ -139,6 +139,9 @@ import {
   type FakeSandbox,
   launchBearer,
   launchLines,
+  launchRead,
+  readClaudeCodeConfig,
+  readInputLine,
   runnerSandboxApi,
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
@@ -467,8 +470,8 @@ const developerContent = (line: InputLine | undefined) =>
 
 /** Each message line of the launch as its text blocks, the turn's own words first. */
 const textsOf = (command: Parameters<typeof launchLines>[0]) =>
-  Effect.map(launchLines(command), (lines) =>
-    (lines as InputLine[]).flatMap((each) =>
+  Effect.map(launchRead(command, readClaudeCodeConfig), ({ lines }) =>
+    lines.flatMap((each) =>
       each.type === INPUT_LINE.MESSAGE
         ? [each.content.map((block) => (block.type === "text" ? block.text : ""))]
         : [],
@@ -478,7 +481,7 @@ const textsOf = (command: Parameters<typeof launchLines>[0]) =>
 /** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
 const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
   Effect.gen(function* () {
-    const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+    const { config } = yield* launchRead(command, readClaudeCodeConfig);
     assert.ok(command?.agentId !== undefined);
 
     const read = yield* runnerLinesPast(userId, command.agentId, {
@@ -487,7 +490,7 @@ const handedLines = (userId: string, command: Parameters<typeof launchLines>[0])
       limit: 50,
     });
 
-    return read.map((line) => JSON.parse(line.text) as InputLine);
+    return read.map((line) => readInputLine(JSON.parse(line.text)));
   });
 
 /** A turn of the agent's under way, as the events route queues and starts one, by the id a Stop names it by. */
@@ -837,6 +840,7 @@ interface SentRule {
 
 /** The swaps on Anthropic's API in the last policy sent to the sandbox session given: the header each matches, the value it matches at, and what it sets there. */
 const anthropicSwaps = (api: ReturnType<typeof runnerSandboxApi>, session: string | undefined) => {
+  // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
   const sent = api.policies.filter((each) => each.session === session).at(-1)?.policy as
     | { readonly allow?: Readonly<Record<string, readonly SentRule[]>> }
     | undefined;
@@ -941,7 +945,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const record = Option.getOrThrow(yield* readAgentRunnerRecord(userId, opened.sessionId));
         assert.equal(record.fingerprint, "780f5f77680c20a5ad5b4c255021deb7");
 
-        const [config, first] = (yield* launchLines(command)) as [ClaudeCodeConfig, InputLine];
+        const {
+          config,
+          lines: [first],
+        } = yield* launchRead(command, readClaudeCodeConfig);
+
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CLAUDE_CODE,
           cwd: "/workspace/repository",
@@ -992,7 +1000,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
         });
-        assert.ok(first.type === INPUT_LINE.MESSAGE);
+        assert.ok(first?.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
         assert.deepEqual(developerContent(first), [{ type: "text", text: "Fix the invitations." }]);
 
@@ -1182,7 +1190,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           readyingScript(api),
           /mv \/tmp\/agent-installed-skills \/opt\/agent\/installed-skills && chown -R root:root \/opt\/agent\/installed-skills && chmod -R u=rwX,go=rX/u,
         );
-        const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(command, readClaudeCodeConfig);
         assert.equal(config.installedSkills, "/opt/agent/installed-skills");
 
         // An account with no installed skills uploads none, and the launch installs nothing.
@@ -1478,7 +1486,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(visible.includes(API_KEY), false);
         // The key pays for this agent's writes, so its half keeps the cache for an hour and the other keeps the CLI's five minutes.
-        const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(command, readClaudeCodeConfig);
         assert.equal(config.promptCacheHour, true);
 
         const sent = yield* sessions.send(opened.sessionId, message(agent, "Also the emails."));
@@ -1501,9 +1509,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const outsideOpened = yield* deliveredOpen(sessions, yield* writtenLine(outside, "Go."));
         assert.equal(outsideOpened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
-        const [outsideConfig] = (yield* launchLines(api.commands[1] ?? assert.fail())) as [
-          ClaudeCodeConfig,
-        ];
+        const { config: outsideConfig } = yield* launchRead(
+          api.commands[1] ?? assert.fail(),
+          readClaudeCodeConfig,
+        );
 
         assert.equal(outsideConfig.promptCacheHour, undefined);
 
@@ -1800,7 +1809,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(written.get(firstPath), pdf);
         assert.equal(written.get(laterPath), pdf);
 
-        const messages = ((yield* launchLines(api.commands[0])) as InputLine[]).filter(
+        const messages = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.filter(
           (each) => each.type === INPUT_LINE.MESSAGE,
         );
 
@@ -1905,8 +1914,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       });
       assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.ACCEPTED);
       assert.equal(api.commands.length, 1);
-      const [model, line, stop] = ((yield* launchLines(api.commands[0])) as InputLine[]).slice(2);
+
+      const [model, line, stop] = (yield* launchRead(
+        api.commands[0],
+        readClaudeCodeConfig,
+      )).lines.slice(1);
       // The agent's model and effort as they stand, ahead of the message, so a change since the launch holds.
+
       assert.deepEqual(model, {
         type: INPUT_LINE.MODEL,
         model: "claude-sonnet-5-5",
@@ -1943,10 +1957,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
         yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
 
-        const [compact, effort] = (yield* launchLines(api.commands[0]))
+        const [compact, effort] = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines
           .filter(
             (line): line is Extract<InputLine, { type: "message" }> =>
-              (line as InputLine).type === INPUT_LINE.MESSAGE,
+              line.type === INPUT_LINE.MESSAGE,
           )
           .slice(1);
 
@@ -2033,11 +2047,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual([answered, elsewhere], [RUNNER_ANSWER.WRITTEN, RUNNER_ANSWER.NOT_LIVE]);
         assert.equal(api.commands.length, 1);
 
-        const [config, , written] = (yield* launchLines(api.commands[0])) as [
-          ClaudeCodeConfig,
-          InputLine,
-          InputLine,
-        ];
+        const {
+          config,
+          lines: [, written],
+        } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
 
         assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(written, line);
@@ -2113,7 +2126,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
       assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN);
       assert.ok(
-        ((yield* launchLines(api.commands[0])) as InputLine[]).every(
+        (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.every(
           (line) => line.type !== INPUT_LINE.STOP,
         ),
       );
@@ -2166,7 +2179,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.commands.length, 2);
         const relaunch = api.commands[1];
         assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.firstSequence, 42);
@@ -2246,7 +2259,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 1);
         const relaunch = api.commands[1];
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.resume, undefined);
         const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
@@ -2304,7 +2317,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.deepEqual((yield* handedLines(userId, api.commands[1])).map(developerContent), [
           [{ type: "text", text: "Now the emails." }],
@@ -2377,7 +2390,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
         assert.equal(api.sandboxes.length, 1);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, undefined);
         const [line] = yield* handedLines(userId, api.commands[1]);
         const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
@@ -2430,7 +2443,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(failed, TURN_HANDOVER.FAILED);
         assert.equal(next.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const relaunch = api.commands.at(-1);
-        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
         assert.equal(config.resume, undefined);
         const [line] = yield* handedLines(userId, relaunch);
         assert.deepEqual(developerContent(line), [{ type: "text", text: "And the invitations." }]);
@@ -2472,7 +2485,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
       }),
   );
@@ -2764,7 +2777,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         ]);
         const handOn = launchBearer(api, api.commands[1], SERVICE_HOST);
         assert.ok(handOn !== undefined && handOn !== firstBearer);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.firstSequence, 9);
 
@@ -2775,7 +2788,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         });
 
         assert.deepEqual(
-          read.map((line) => developerContent(JSON.parse(line.text) as InputLine)),
+          read.map((line) => developerContent(readInputLine(JSON.parse(line.text)))),
           [[{ type: "text", text: "Now the emails." }]],
         );
       }),
@@ -2818,7 +2831,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.warm, true);
         yield* sessions.warm(opened.sessionId, agent.conversationId);
@@ -2843,7 +2856,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           limit: 10,
         });
 
-        const lines = read.map((line) => JSON.parse(line.text) as InputLine);
+        const lines = read.map((line) => readInputLine(JSON.parse(line.text)));
         assert.deepEqual(
           lines.filter((line) => line.type === INPUT_LINE.WARM),
           [{ type: INPUT_LINE.WARM }],
@@ -2912,7 +2925,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(haltedWith, { type: INPUT_LINE.STOP, launch: 0 });
         assert.notEqual(api.commands[0]?.exitCode, null);
         assert.equal(api.commands.length, 2);
-        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, api.commands[1]);
         assert.equal(config.resume, CLI_SESSION);
         assert.equal(config.rewindBefore, "dropped-line");
@@ -3044,7 +3057,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [expired.image, undefined]);
           const relaunch = api.commands[1];
           assert.equal(relaunch?.sandboxSessionId, fresh.currentSessionId);
-          const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+          const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
           const [line] = yield* handedLines(userId, relaunch);
           assert.equal(config.resume, stored ? CLI_SESSION : undefined);
           assert.ok(line?.type === INPUT_LINE.MESSAGE);
@@ -3589,7 +3602,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.deepEqual(
           read.map((line) => {
-            const parsed = JSON.parse(line.text) as InputLine;
+            const parsed = readInputLine(JSON.parse(line.text));
 
             return parsed.type === INPUT_LINE.MESSAGE ? parsed.content.at(-1) : parsed;
           }),
@@ -3796,7 +3809,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         const second = api.commands[1];
         assert.ok(second !== undefined);
-        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(second, readClaudeCodeConfig);
         assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
         assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
       }),
@@ -3921,7 +3934,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 3);
         assert.notEqual(api.commands[1]?.exitCode, null);
-        const [config] = (yield* launchLines(api.commands[2])) as [ClaudeCodeConfig];
+        const { config } = yield* launchRead(api.commands[2], readClaudeCodeConfig);
         const [line] = yield* handedLines(userId, api.commands[2]);
         assert.equal(config.harness, RUNNER_HARNESS.CLAUDE_CODE);
         assert.equal(line?.type, INPUT_LINE.MESSAGE);
@@ -3953,7 +3966,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
       assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
       assert.equal(api.commands.length, 1);
-      const last = ((yield* launchLines(api.commands[0])) as InputLine[]).at(-1);
+      const last = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.at(-1);
       assert.ok(last?.type === INPUT_LINE.MESSAGE);
       assert.deepEqual(developerContent(last), [{ type: "text", text: "Now the emails." }]);
     }),
@@ -4401,6 +4414,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(beforeClaim.length, 1);
 
+        // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
         const firstWrite = beforeClaim[0]?.policy as
           | { readonly allow?: Readonly<Record<string, unknown>> }
           | undefined;
@@ -4663,7 +4677,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(continued, "Go on."));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const [config] = (yield* launchLines(api.commands[0])) as [ClaudeCodeConfig, InputLine];
+        const { config } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
         assert.deepEqual(
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
@@ -4682,10 +4696,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
-        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
-          ClaudeCodeConfig,
-          InputLine,
-        ];
+        const { config: freshConfig } = yield* launchRead(fresh.commands[0], readClaudeCodeConfig);
 
         assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),

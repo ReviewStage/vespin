@@ -180,9 +180,11 @@ export function useVirtualFind(input: {
   latestRows.current = input.rows;
 
   const [find] = useState(() => {
+    const matches: RowMatch[] = [];
+
     const state = {
       query: "",
-      matches: [] as RowMatch[],
+      matches,
       at: -1,
       // Whether the details are searched, and how many matches they hold where they are not.
       details: true,
@@ -195,6 +197,7 @@ export function useVirtualFind(input: {
       // Each row's count as it was last drawn under the query.
       drawn: new Map<string, number>(),
       listeners: new Set<(tally: FindTally) => void>(),
+      // SAFETY: nothing is watched before the first search, which keeps the stop it is handed here.
       unwatch: undefined as (() => void) | undefined,
     };
 

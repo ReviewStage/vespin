@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import assert from "node:assert/strict";
 import { MOTION_DELAY_MS } from "@repo/brand";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -727,7 +728,8 @@ test("an item that opens a panel opens it beside the standing menu with its fiel
 
   pressFocused();
   expect(searching()).toBe(true);
-  const field = document.activeElement as HTMLInputElement;
+  const field = document.activeElement;
+  assert.ok(field instanceof HTMLInputElement);
   field.value = "lin";
   key("ArrowLeft");
   expect(serversPanel()).not.toBeNull();

@@ -86,6 +86,7 @@ function stagedPatch(held: AppStateSnapshot, staged: AppStateSnapshot): StorePat
   // SAFETY: the keys of a snapshot are its slices beside the window's facts and the version, which are the store's own to keep and are left out here.
   const names = Object.keys(staged) as (keyof AppStateSnapshot)[];
 
+  // SAFETY: each entry carries a slice's own name with the staged value of that slice.
   return Object.fromEntries(
     names
       .filter((name) => name !== "window" && name !== "version" && staged[name] !== held[name])
@@ -253,6 +254,7 @@ export function fixtureActs(
         if (refused !== undefined) return Promise.resolve(refused());
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const asked = payload as PortActPayload<PortActKind>;
+        // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, asked);
 
         if (older !== undefined) return Promise.resolve(older);

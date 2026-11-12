@@ -81,6 +81,7 @@ function insetIn(
 function themeNow(room: PageRoom): PageTheme {
   const drawn = getComputedStyle(document.documentElement);
 
+  // SAFETY: ROLE_OF is a literal keyed by every PageThemeVariable, and by nothing else.
   const variables = Object.fromEntries(
     Object.entries(ROLE_OF).map(([variable, role]) => [
       variable,

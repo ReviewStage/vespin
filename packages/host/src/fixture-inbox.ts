@@ -1631,15 +1631,16 @@ export function agentChangeOf(
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): { readonly agentId: string; readonly change: AgentChange } | undefined {
-  // SAFETY: each payload below is the kind's, which its guard names.
   switch (kind) {
     case ACT_KIND.AGENTS_CHOOSE: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
 
       return { agentId, change: { model, effort } };
     }
 
     case ACT_KIND.AGENTS_PERMISSION_MODE: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, permissionMode } = payload as PortActPayload<
         typeof ACT_KIND.AGENTS_PERMISSION_MODE
       >;
@@ -1648,6 +1649,7 @@ export function agentChangeOf(
     }
 
     case ACT_KIND.AGENTS_SERVERS: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, disabledServers } = payload as PortActPayload<
         typeof ACT_KIND.AGENTS_SERVERS
       >;
@@ -1656,12 +1658,14 @@ export function agentChangeOf(
     }
 
     case ACT_KIND.AGENTS_RENAME: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, title } = payload as PortActPayload<typeof ACT_KIND.AGENTS_RENAME>;
 
       return { agentId, change: { title } };
     }
 
     case ACT_KIND.AGENTS_PIN: {
+      // SAFETY: the payload is the one its case's kind declares.
       const { agentId, pinned } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PIN>;
 
       return { agentId, change: { pinned } };

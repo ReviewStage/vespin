@@ -181,12 +181,16 @@ function scrubAuthUrl(value: string): string {
  * capture result's `Date` timestamp) are each a leaf, left whole.
  */
 export function sanitizeAnalyticsUrls<Value>(value: Value): Value {
-  if (typeof value === "string") return scrubAuthUrl(value) as Value;
+  if (typeof value === "string") {
+    // SAFETY: a string Value is a string, and scrubbing an address answers a string.
+    return scrubAuthUrl(value) as Value;
+  }
 
   if (value !== null && typeof value === "object") {
     const proto = Object.getPrototypeOf(value);
 
     if (proto === Object.prototype || proto === null) {
+      // SAFETY: a plain record keeps its keys, each value sanitized to its own type.
       return Object.fromEntries(
         Object.entries(value).map(([key, inner]) => [key, sanitizeAnalyticsUrls(inner)]),
       ) as Value;

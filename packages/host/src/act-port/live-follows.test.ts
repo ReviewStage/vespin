@@ -428,8 +428,10 @@ it.effect(
       for (const each of FOLLOWS) {
         const asked = () => requests.filter((request) => request.pathname === each.path).length;
         const slice = () => told.filter((changed) => changed.read === each.slice).at(-1)?.held;
+        // SAFETY: each follow's key is the one its follow takes.
         const one = yield* Effect.promise(() => port.as(PANEL)[each.follow](each.key as never));
 
+        // SAFETY: each follow's key is the one its follow takes.
         const two = yield* Effect.promise(() =>
           port.as(SECOND_PANEL)[each.follow](each.key as never),
         );
@@ -444,6 +446,7 @@ it.effect(
         );
 
         if ("retry" in each) {
+          // SAFETY: each follow's key is the one its follow takes.
           yield* Effect.promise(() => port.as(PANEL)[each.retry](each.key as never));
           yield* Effect.promise(() => until(() => asked() === 2));
           assert.equal(asked(), 2, `${each.follow}: Try again asks once more`);

@@ -35,10 +35,12 @@ async function mask(): Promise<Mask> {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
+    // SAFETY: the replay calls only `init` and the recorder's own members, which the stand-in has.
     importClient: () => Promise.resolve(client as unknown as PostHog),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
 
+  // SAFETY: `init` is handed the client's options second, as PostHog's own signature takes them.
   const options = client.init.mock.calls[0]?.[1] as {
     session_recording: { maskAttributeFn: Mask };
   };

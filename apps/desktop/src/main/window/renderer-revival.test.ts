@@ -18,7 +18,7 @@ import { PanelManager, type PanelSystem } from "./panel-manager";
 const windows: FakeBrowserWindow[] = [];
 
 /** The answers the next sheets give, by button, and the windows each was shown on. */
-const sheets = { answers: [] as number[], shownOn: [] as unknown[] };
+const sheets: { answers: number[]; shownOn: unknown[] } = { answers: [], shownOn: [] };
 
 /** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
 const quit = { goes: true, asked: false, tearingDown: false };
@@ -59,6 +59,7 @@ class FakeBrowserWindow extends EventEmitter {
 const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
 
 /** Electron as the panel meets it: these windows, one display, a quit, and sheets answered from `sheets`. */
+// SAFETY: the panel reaches only these members of Electron, each stood in for here.
 const SYSTEM = {
   BrowserWindow: FakeBrowserWindow,
   app: {

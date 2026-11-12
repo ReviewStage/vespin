@@ -42,5 +42,5 @@ export function leadingCommand(text: string): LeadingCommand | undefined {
 
 /** Whether a name is one of the box's own commands, as typed. */
 export function isSlashCommand(name: string): name is SlashCommand {
-  return (Object.values(SLASH_COMMAND) as readonly string[]).includes(name);
+  return Object.values(SLASH_COMMAND).some((command) => command === name);
 }

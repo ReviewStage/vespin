@@ -224,6 +224,7 @@ function held(container: HTMLElement) {
 }
 
 test("a picture and a PDF dropped on the agent's box are held as their chips in the words, and say nothing", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("dropped.png"), pdf("spec.pdf")]);
@@ -247,6 +248,7 @@ test("two files of one name, and one whose name holds brackets, each stand in th
 });
 
 test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
@@ -398,6 +400,7 @@ test("pictures past the bytes a message carries together leave the last out of t
   const size = Math.floor(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES / 2.5);
   assert.ok(size <= AGENT_BOUNDS.MAX_IMAGE_BYTES);
 
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("one.png", size), png("two.png", size), png("three.png", size)]);

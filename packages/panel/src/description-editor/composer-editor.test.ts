@@ -849,6 +849,7 @@ test("words selected past the box's scroller are measured by the lines it shows,
   vi.spyOn(field, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 600, 500, 200));
   const hidden = new DOMRect(20, 400, 300, 20);
   const shown = new DOMRect(120, 700, 200, 20);
+  // SAFETY: the editor reads the rects by index and length alone, as an array has them.
   vi.spyOn(Range.prototype, "getClientRects").mockReturnValue(
     Object.assign([hidden, shown], { item: () => null }) as unknown as DOMRectList,
   );

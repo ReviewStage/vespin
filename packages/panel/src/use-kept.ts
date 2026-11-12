@@ -66,7 +66,7 @@ export function useKept<A>(
   const drawn = useRef(value);
   useEffect(() => {
     const held = (next: unknown) => {
-      // Note that what a holder is told was kept through this key's own schema, so it is this key's type.
+      // SAFETY: what a holder is told was kept through this key's own schema, so it is this key's type.
       const kept = next as A;
       drawn.current = kept;
       setValue(kept);

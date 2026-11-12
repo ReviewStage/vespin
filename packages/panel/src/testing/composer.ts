@@ -50,6 +50,7 @@ export function installEditorLayout(): void {
 
 /** The box's editor inside the container, or the container where it is the editor: the element the words are typed into. */
 export function composerEditor(container: ParentNode): TiptapEditorHTMLElement {
+  // SAFETY: only Tiptap's editor root carries the editor's class.
   const element =
     container instanceof Element && container.matches(EDITOR_CLASS)
       ? (container as TiptapEditorHTMLElement)

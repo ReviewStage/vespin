@@ -453,8 +453,12 @@ test("a server switched off from the + menu's MCP servers is handed to the agent
     "every server stands on as the card opens",
   );
   act(() => slack.click());
-  await card.press("Escape", document.activeElement as HTMLElement);
-  await card.press("Escape", document.activeElement as HTMLElement);
+  const field = document.activeElement;
+  assert.ok(field instanceof HTMLElement);
+  await card.press("Escape", field);
+  const next = document.activeElement;
+  assert.ok(next instanceof HTMLElement);
+  await card.press("Escape", next);
   card.type("Post the release notes");
   await card.key("Enter");
   await settle();

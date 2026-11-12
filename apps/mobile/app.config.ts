@@ -330,9 +330,11 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
   ]);
 
   return withXcodeProject(written, (modConfig) => {
+    // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
       modConfig.modResults.pbxXCBuildConfigurationSection() as Record<string, unknown>,
     )) {
+      // SAFETY: each build configuration is an object whose `buildSettings`, where present, map names to values.
       const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
 
       if (build?.PRODUCT_NAME)
@@ -420,6 +422,7 @@ const plistXml = (value: PlistValue, depth: number): string => {
   if (Array.isArray(value))
     return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
 
+  // SAFETY: the branches above take every PlistValue but a dictionary.
   return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
 };
 
@@ -571,9 +574,11 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         if (!project.hasFile(source)) project.addSourceFile(source, { target }, group);
     }
 
+    // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
       project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
     )) {
+      // SAFETY: each build configuration is an object whose `buildSettings`, where present, map names to values.
       const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
 
       if (build?.PRODUCT_NAME !== `"${extension.TARGET}"`) continue;

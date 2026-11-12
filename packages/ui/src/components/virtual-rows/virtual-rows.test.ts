@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement, createRef, type RefObject, useLayoutEffect, useRef } from "react";
+import { act, createElement, createRef, useLayoutEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import {
@@ -308,7 +308,10 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
   );
   shown = true;
   act(() => {
-    for (const hear of heard) hear([], {} as ResizeObserver);
+    for (const hear of heard) {
+      // SAFETY: the rows read no member of the observer that called them.
+      hear([], {} as ResizeObserver);
+    }
   });
   assert.equal(top, 49_400);
 });
@@ -325,7 +328,7 @@ test("a list's runs answer every row's key, those left undrawn among them, in th
     const keys = keysOf(name);
 
     return createElement(VirtualRows, {
-      scroller: scroller as RefObject<HTMLElement | null>,
+      scroller,
       keys,
       estimate: 100,
       anchor: VIRTUAL_ROWS_ANCHOR.START,

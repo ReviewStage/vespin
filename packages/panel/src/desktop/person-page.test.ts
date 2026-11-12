@@ -473,6 +473,7 @@ function sections(page: HTMLElement): Record<string, string[]> {
 
 /** What an element says to a reader: its words without its marks, which are hidden from one. */
 function said(element: Element): string {
+  // SAFETY: a deep clone of an element is an element.
   const copy = element.cloneNode(true) as Element;
 
   for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();

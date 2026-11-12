@@ -73,7 +73,8 @@ test("a labeled switch writes its name beside it, and a press on the words turns
   const control = switchNamed(page, "Auto-merge");
   const words = page.querySelector("label")?.lastElementChild ?? assert.fail("no words");
   assert.equal(words.textContent, "Auto-merge");
-  act(() => (words as HTMLElement).click());
+  assert.ok(words instanceof HTMLElement);
+  act(() => words.click());
   assert.equal(control.getAttribute("aria-checked"), "true");
 });
 

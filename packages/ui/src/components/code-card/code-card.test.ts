@@ -140,7 +140,7 @@ test("the lines the host colored are cut where the block is", () => {
 
   draw(createElement(CodeCard, { title: "typescript", code, lines, copy: noCopy }));
   expect(shownLines()).toEqual(code.split("\n").slice(0, 40));
-  const keyword = document.querySelector("pre span") as HTMLElement | null;
+  const keyword = document.querySelector("pre span");
   expect(keyword?.textContent).toBe("const");
 });
 

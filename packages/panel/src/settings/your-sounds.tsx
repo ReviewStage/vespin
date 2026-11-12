@@ -143,6 +143,7 @@ function slotOf(field: AppSettingField): SoundClipSlot | undefined {
 
 /** The heading a sound is listed under in its menu: Yours, Simple, or Playful. */
 function sectionOf(token: string): string | undefined {
+  // SAFETY: a token that names no sound reads undefined, which the line below answers.
   const group = COMPLETION_SOUND_GROUP_OF[token as CompletionSound];
 
   return group === undefined ? undefined : COMPLETION_SOUND_GROUP_LABEL[group];

@@ -1222,6 +1222,7 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => service.issues[place.workspaceId]?.[place.repository]?.get(number)),
     openBrowserTab: () => Effect.succeed({ failure: BROWSER_TAB_OPEN_FAILURE.UNANSWERED }),
     // A declared live read answers as its follow asks it: first, or polled past `after`; the sidebar as the service holds it, a poll not counted among the reads; the record of a task with none is not found, every other read unanswered.
+    // SAFETY: the stand-in answers each declared read in the shape its declaration names.
     liveRead: ((
       read: { readonly name: string },
       params: {
@@ -1600,6 +1601,7 @@ export function subject(
         return Effect.orDie(handler(params));
       }
 
+      // SAFETY: a method name either side answers is one of the Gateway's.
       const handler =
         tasks.methods[name as GatewayMethod] ?? workspaces.methods[name as GatewayMethod];
 

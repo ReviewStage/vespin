@@ -87,6 +87,7 @@ test("an inert item is inert", () => {
 
 /** What a reader hears an item named: its words, less what is drawn for the eye alone. */
 function spokenName(button: HTMLButtonElement): string {
+  // SAFETY: a deep clone of a button is a button.
   const heard = button.cloneNode(true) as HTMLElement;
 
   for (const unheard of heard.querySelectorAll("[aria-hidden='true']")) unheard.remove();

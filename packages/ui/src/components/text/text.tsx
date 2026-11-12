@@ -139,7 +139,7 @@ export function Text({
   return (
     <Element
       {...attributes}
-      // Note that every element a role may stand in is a plain HTMLElement to a ref's reader, so the union's one element type is named here.
+      // SAFETY: every element a role may stand in is a plain HTMLElement to a ref's reader, so the union's one element type is named here.
       ref={ref as Ref<HTMLDivElement> | undefined}
       className={cn(TEXT_BASE, roleClass(variant), truncateClass(truncate), className)}
       data-variant={variant}

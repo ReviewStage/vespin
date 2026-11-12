@@ -45,6 +45,7 @@ const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
  * is stood in for, because it is the operating system's door and answers
  * nothing outside an Electron process.
  */
+// SAFETY: the panel reaches only these members of Electron, each stood in for here.
 const SYSTEM = {
   BrowserWindow: FakeBrowserWindow,
   app: {},

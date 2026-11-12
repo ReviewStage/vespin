@@ -283,6 +283,7 @@ it.effect(
       service.workspacesFail = true;
       // Note that the list is read through the same client call as every other live read, which answers nothing here but the list.
       const { liveRead } = service;
+      // SAFETY: the stand-in answers the list read as the client does and hands every other read on unchanged.
       service.liveRead = ((read, params, poll) =>
         read.name === TASK_LIST_READ.name
           ? liveRead(read, params, poll)
@@ -2336,6 +2337,7 @@ it.effect(
       service.pageLives[INVITES] = pages;
       const { liveRead } = service;
       let seals = 0;
+      // SAFETY: the stand-in counts the pages read and hands every read on unchanged.
       service.liveRead = ((...asked: Parameters<TasksClient["liveRead"]>) =>
         Effect.suspend(() => {
           if (asked[0].name === TASK_PAGES_READ.name) seals += 1;
@@ -2496,6 +2498,7 @@ it.effect(
       const status = () => {
         const [, held] = pushed.findLast(([kind]) => kind === LIVE_READ.DESCRIPTION_COMMENTS) ?? [];
 
+        // SAFETY: the description comments slice is told whole, as the host holds it.
         const rows = (held as AppDescriptionComments | undefined)?.[COMMENT_SUBJECT.DESCRIPTION][
           INVITES
         ]?.rows;

@@ -34,6 +34,7 @@ async function devtools() {
     });
   });
   server.on("request", (request, response) => {
+    // SAFETY: a listening TCP server answers its bound address as AddressInfo, never a pipe path.
     const { port } = server.address() as AddressInfo;
 
     if (request.url !== "/json/version") return response.writeHead(404).end();

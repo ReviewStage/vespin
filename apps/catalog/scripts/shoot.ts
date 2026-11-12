@@ -135,11 +135,13 @@ function loadPlaywright(): Playwright {
   const require = createRequire(import.meta.url);
 
   try {
+    // SAFETY: the playwright package's main export is the module `Playwright` names.
     return require("playwright") as Playwright;
   } catch {
     const root = spawnSync("npm", ["root", "-g"], { encoding: "utf8" }).stdout.trim();
 
     try {
+      // SAFETY: the global playwright package's main export is the module `Playwright` names.
       return require(path.join(root, "playwright")) as Playwright;
     } catch {
       throw new Error(

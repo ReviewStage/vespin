@@ -165,6 +165,7 @@ function scrollHeading(container: Element, away: boolean): void {
 
   if (seen === undefined) throw new Error("the heading is not watched");
   const top = 100;
+  // SAFETY: the column reads only the root's top and the heading's bottom.
   act(() =>
     seen([
       {

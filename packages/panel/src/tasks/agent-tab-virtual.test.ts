@@ -300,6 +300,7 @@ test("⌘F finds words in a row the log has not drawn, scrolls the log to it, an
   assert.equal(findTally(), "1 of 1");
   assert.ok(writes.length > 0, "the log is scrolled");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -349,6 +350,7 @@ test("a running turn of a thousand parts draws only the pieces near its view, an
 
   assert.equal(findTally(), "1 of 1");
   assert.ok(writes.length > 0, "the log is scrolled");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -457,6 +459,7 @@ test("⌘F leaves a closed call's answer far up the log out until asked, then co
   await act(settled);
   assert.equal(findTally(), "1 of 1");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -581,6 +584,7 @@ test("⌘F finds a word on a long fence's 55th line, past its cut, and opens the
   await act(settled);
 
   assert.equal(findTally(), "1 of 1");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");

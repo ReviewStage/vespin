@@ -162,7 +162,8 @@ test("a sub-task's own stand under it once its fold opens, and a task with no re
 });
 
 test("New sub-task's + on a folded group opens it on a draft, whose Return adds a sub-task of the open task and opens the next", async () => {
-  const sent = { changes: [], removed: [], started: [] as unknown[] };
+  const started: unknown[] = [];
+  const sent = { changes: [], removed: [], started };
   const container = draw([summary("t-2", 2, DOCUMENT_TASK.id)], {}, sent);
   const draft = () => container.querySelector<HTMLInputElement>("[data-quick-add] input");
   act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded='true']")?.click());

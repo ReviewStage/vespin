@@ -47,7 +47,7 @@ import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
+import { APP_COMMAND, commandForKey } from "@repo/settings/shortcuts";
 import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
@@ -468,7 +468,7 @@ export function TabSwitcher({
     if (!answers) return undefined;
 
     const down = (event: KeyboardEvent) => {
-      const command = commandForKey(SWITCH_COMMANDS as readonly KeyedCommand[], event);
+      const command = commandForKey(SWITCH_COMMANDS, event);
 
       if (command === APP_COMMAND.NEXT_RECENT_TAB || command === APP_COMMAND.PREVIOUS_RECENT_TAB) {
         // A dialog or ⌘K's palette over the window keeps its keys, so nothing moves behind it.

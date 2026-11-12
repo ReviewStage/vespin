@@ -168,7 +168,8 @@ function press(init: KeyboardEventInit): void {
 
 /** `words` typed into the field, as an input event hands them. */
 function type(words: string): void {
-  const field = keys() as HTMLInputElement;
+  const field = keys();
+  assert.ok(field instanceof HTMLInputElement);
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setter?.call(field, words);

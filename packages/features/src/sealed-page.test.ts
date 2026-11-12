@@ -4,6 +4,7 @@ import { sealedPageDocument } from "./sealed-page.js";
 
 const THEME: PageTheme = {
   scheme: PAGE_THEME_SCHEME.LIGHT,
+  // SAFETY: nothing under test reads a variable of the theme.
   variables: {} as PageTheme["variables"],
   inset: "16px",
   narrowInset: "16px",

@@ -88,6 +88,7 @@ async function paintOffscreen(page: string): Promise<NativeImage> {
     window.webContents.invalidate();
     let painted = 0;
 
+    // SAFETY: Electron emits `paint` with the event, the dirty rectangle, and the frame's image.
     for await (const [, , image] of frames as AsyncIterable<[unknown, unknown, NativeImage]>) {
       if (!image.isEmpty()) return image;
       painted += 1;

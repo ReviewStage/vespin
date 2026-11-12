@@ -58,8 +58,10 @@ import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import {
   type FakeCommand,
   launchBearer,
-  linesOf,
+  readInputLine,
+  readRunnerConfig,
   runnerSandboxApi,
+  stdinRead,
 } from "../../testing/runner-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -347,7 +349,7 @@ const sandboxLaunch = (
   command: FakeCommand,
 ) =>
   Effect.gen(function* () {
-    const [config] = linesOf(command) as [RunnerConfig];
+    const { config } = stdinRead(command, readRunnerConfig);
     const bearer = launchBearer(api, command, SERVICE_HOST);
     assert.ok(bearer !== undefined && command.agentId !== undefined);
 
@@ -357,7 +359,7 @@ const sandboxLaunch = (
       limit: 50,
     });
 
-    const lines = read.map((row) => JSON.parse(row.text) as InputLine);
+    const lines = read.map((row) => readInputLine(JSON.parse(row.text)));
 
     const launched: Launched = {
       bearer,
@@ -382,10 +384,13 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
     assert.ok("secrets" in claimed);
     const secrets = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
 
-    const [config, ...lines] = secrets.stdin
+    const [first, ...rest] = secrets.stdin
       .trimEnd()
       .split("\n")
-      .map((line): WireValue => JSON.parse(line)) as [RunnerConfig, ...InputLine[]];
+      .map((line): WireValue => JSON.parse(line));
+
+    const config = readRunnerConfig(first);
+    const lines = rest.map(readInputLine);
 
     const launched: Launched = {
       bearer: secrets.env[RUNNER_ENV.BEARER] ?? "",
@@ -517,7 +522,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
             const into = writtenTo.get(line.id) ?? claimed.length - 1;
             writtenTo.set(line.id, into);
             const lines = String(line.payload.text).trimEnd().split("\n");
-            after[into]?.push(...lines.flatMap((each) => wordsOf(JSON.parse(each) as InputLine)));
+            after[into]?.push(...lines.flatMap((each) => wordsOf(readInputLine(JSON.parse(each)))));
           }
 
           return claimed.map((launch, index) => ({
@@ -545,7 +550,7 @@ const reaching = (userId: string, sessions: Sessions) =>
 /** The events route over the test's store, its limited turns handed on to the harnesses given, as a fetch answering its status; past its answer where `after` keeps that work for the case to run. */
 const eventsRoute = (
   reached: Layer.Layer<NativeAgentSessions>,
-  after: Layer.Layer<AfterResponse> = Layer.empty as Layer.Layer<AfterResponse>,
+  after: Layer.Layer<AfterResponse> | Layer.Layer<never> = Layer.empty,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -602,29 +607,41 @@ const writtenLine = (agent: Agent, text: string) =>
     };
   });
 
+/** A case of the fallback: its harness, where it runs, the fallback it is past, and who its relaunch runs on. */
+interface FallbackCase {
+  readonly name: string;
+  readonly harness: keyof typeof HARNESS;
+  readonly onMac: boolean;
+  readonly fallback: Fallback;
+  readonly payer: AgentPayer;
+}
+
 /**
  * Each harness on each machine, past each fallback, and who its relaunch
  * must run on: in the cloud, past each fallback; on a Mac, which runs on
  * its own login whatever the account saved, only at the reset.
  */
-const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap((harness) => [
-  ...Object.values(FALLBACK).map((fallback) => ({
-    name: `${harness} in the cloud, ${fallback}`,
-    harness,
-    onMac: false,
-    fallback,
-    payer: (fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
-      ? AGENT_PAYER.API_KEY
-      : HARNESS[harness].planPayer) as AgentPayer,
-  })),
-  {
-    name: `${harness} on a Mac, ${FALLBACK.NONE}`,
-    harness,
-    onMac: true,
-    fallback: FALLBACK.NONE,
-    payer: AGENT_PAYER.MAC_SIGN_IN as AgentPayer,
-  },
-]);
+const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap(
+  (harness): FallbackCase[] => [
+    ...Object.values(FALLBACK).map((fallback) => ({
+      name: `${harness} in the cloud, ${fallback}`,
+      harness,
+      onMac: false,
+      fallback,
+      payer:
+        fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
+          ? AGENT_PAYER.API_KEY
+          : HARNESS[harness].planPayer,
+    })),
+    {
+      name: `${harness} on a Mac, ${FALLBACK.NONE}`,
+      harness,
+      onMac: true,
+      fallback: FALLBACK.NONE,
+      payer: AGENT_PAYER.MAC_SIGN_IN,
+    },
+  ],
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();

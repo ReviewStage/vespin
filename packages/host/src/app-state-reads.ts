@@ -426,7 +426,7 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
  * `held` is still a copy, so a write's unchanged parts keep their identity.
  */
 export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
-  if (held === next) return held as T;
+  if (held === next) return next;
 
   if (depth > SHARE_DEPTH) return next;
   const array = isPlainArray(held) && isPlainArray(next);
@@ -434,9 +434,12 @@ export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
   if (!array && !(isPlainObject(held) && isPlainObject(next))) return next;
   // SAFETY: both are plain arrays or plain objects, each read by its own keys.
   const before = held as Readonly<Record<PropertyKey, unknown>>;
+  // SAFETY: both are plain arrays or plain objects, each read by its own keys.
   const after = next as Readonly<Record<PropertyKey, unknown>>;
+  // SAFETY: where `array` holds, both are plain arrays.
   const heldSize = array ? (held as readonly unknown[]).length : Object.keys(before).length;
   const nextKeys = array ? undefined : Object.keys(after);
+  // SAFETY: `nextKeys` is absent only where `array` holds, so `next` is a plain array.
   const nextSize = nextKeys?.length ?? (next as readonly unknown[]).length;
   const parts: unknown[] = [];
   let keptHeld = 0;
@@ -460,7 +463,10 @@ export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
     if (shared === nextItem) keptNext++;
   }
 
-  if (keptHeld === heldSize && nextSize === heldSize) return held as T;
+  if (keptHeld === heldSize && nextSize === heldSize) {
+    // SAFETY: every part of `held` was kept as the same part of `next`, and they are as many, so `held` is `next` in another node.
+    return held as T;
+  }
 
   if (keptNext === nextSize) return next;
 

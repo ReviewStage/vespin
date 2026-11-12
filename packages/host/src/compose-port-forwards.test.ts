@@ -328,6 +328,7 @@ it.effect(
         { type: TUNNEL_FRAME.OPEN, channel: 0 },
         { type: TUNNEL_FRAME.DATA, channel: 0, data: "GET / HTTP/1.1" },
       ]);
+      // SAFETY: the last thing told is the agent's forwards, as the composer builds them.
       const [forwarded] = (told() as { ports: unknown[] }).ports;
       assert.deepEqual(forwarded, {
         port: 3000,
@@ -388,6 +389,7 @@ it.effect("two turn-ons that interleave leave one agent's ports forwarded", () =
     yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
     yield* settle;
 
+    // SAFETY: the last thing told names the agent it was told for.
     const { agentId } = told() as { agentId: string };
     assert.deepEqual([...listeners.keys()], [agentId === OTHER_AGENT_ID ? 4000 : 5000]);
   }),

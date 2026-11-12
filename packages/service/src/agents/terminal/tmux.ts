@@ -305,6 +305,7 @@ export function killTerminal(terminalId: string): CommandAsk {
 function signalOf(printed: string): number | undefined {
   if (/^\d+$/.test(printed)) return Number(printed);
 
+  // SAFETY: a name the platform's table lacks reads undefined, which the type here says.
   const named: number | undefined = (signals as Record<string, number | undefined>)[
     `SIG${printed}`
   ];

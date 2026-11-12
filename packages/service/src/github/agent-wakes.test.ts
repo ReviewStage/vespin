@@ -1327,9 +1327,11 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
 
+        const statuses: object[] = [];
+
         const held = {
           checkRuns: [checkRun(1, "lint", "success", MADE_AT)],
-          statuses: [] as object[],
+          statuses,
         };
 
         const github = githubHoldingChecks(held);

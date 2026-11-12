@@ -394,7 +394,7 @@ export function Breadcrumbs({
 
   const hiddenRows: MenuAction[] = hidden.map((crumb) => ({
     label: crumb.label,
-    ...(isValidElement(crumb.glyph) && { icon: crumb.glyph as React.JSX.Element }),
+    ...(isValidElement(crumb.glyph) && { icon: crumb.glyph }),
     disabled: crumb.onPress === undefined,
     onSelect: () => {
       if (opener !== undefined) crumb.onPress?.(opener);

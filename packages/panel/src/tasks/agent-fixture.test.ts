@@ -78,6 +78,7 @@ function answered<Kind extends PortActKind>(
   kind: Kind,
   payload: PortActPayload<Kind>,
 ): PortActResult<Kind> {
+  // SAFETY: the payload is the one its kind declares, which the fixture reads by that kind.
   const staged = agentActAnswer(profile, kind, payload as PortActPayload<PortActKind>);
   assert.ok(staged, `${profile} answers ${kind}`);
 

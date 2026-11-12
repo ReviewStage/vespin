@@ -59,6 +59,7 @@ export function layTitle(layout: TitleLayout): { restore: () => void } {
     return 0;
   };
 
+  // SAFETY: a laid title is measured once, so an observer that never fires stands in for jsdom's missing one.
   globalThis.ResizeObserver = StillObserver as unknown as typeof ResizeObserver;
   document.documentElement.style.setProperty("--ui-title-floor", `${layout.floor}px`);
 

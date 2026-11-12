@@ -98,6 +98,7 @@ it.each<{
   );
 
   for (const [provider, status] of Object.entries(drawn)) {
+    // SAFETY: `drawn` is keyed by providers alone.
     assert.equal(answer.integrations[provider as IntegrationProvider], status, provider);
   }
 

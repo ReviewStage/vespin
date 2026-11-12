@@ -369,6 +369,7 @@ it.effect(
         vi.stubGlobal("WebSocket", RelaySocket);
         const posted: { message: WireBoundaryInput; origin: string; ports: MessagePort[] }[] = [];
         // jsdom's postMessage carries no port, so the page's own post is read where it is made.
+        // SAFETY: the stand-in takes postMessage's window form, the one the page calls.
         vi.spyOn(window, "postMessage").mockImplementation(
           ((message: WireBoundaryInput, origin: string, transfer: MessagePort[] = []) =>
             void posted.push({ message, origin, ports: transfer })) as typeof window.postMessage,

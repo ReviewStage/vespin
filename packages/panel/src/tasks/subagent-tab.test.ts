@@ -253,6 +253,8 @@ test("a worker opened by its link whose own first row has no words still draws i
 
 test("a worker's tab whose earlier messages could not be read says so over its log, and Retry reads them again", async () => {
   const asked: unknown[] = [];
+
+  // SAFETY: the tab sends only this kind here, and its answer is the kind's refusal.
   fakeActPort({
     [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: (payload: unknown) => {
       asked.push(payload);

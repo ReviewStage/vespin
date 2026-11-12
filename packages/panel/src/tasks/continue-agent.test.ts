@@ -458,6 +458,7 @@ const SIGN_IN_REFUSED = {
   status: AGENT_STATUS.FAILED,
   failure: AGENT_FAILURE.OTHER,
   launch: AGENT_LAUNCH.PREPARING,
+  // SAFETY: the reason widened to its type, as an agent's summary carries it.
   launchUnstarted: DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN as DeviceLaunchUnstarted,
   source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
 } as const;
