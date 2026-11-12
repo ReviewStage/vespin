@@ -9,6 +9,14 @@ import {
 import { fenceAfter } from "@repo/features/description-document";
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import {
+  cutReply,
+  MESSAGE_BLOCK,
+  messageBlocks,
+  messageText,
+  QUOTE_GAP,
+  quoteOf,
+} from "@repo/features/reply-quote";
+import {
   insideCode,
   leadingCommandToken,
   mentionAt,
@@ -18,14 +26,6 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
-import {
-  cutReply,
-  MESSAGE_BLOCK,
-  messageBlocks,
-  messageText,
-  QUOTE_GAP,
-  quoteOf,
-} from "@repo/ui/reply-quote";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
 import {
   chainCommands,

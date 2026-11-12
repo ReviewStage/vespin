@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { AGENT_TODO_STATUS, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import { dockedTodos, newestTodos, taskTodos } from "./agent-todos.js";
+import { AGENT_TODO_STATUS, type AgentTranscriptMessage } from "./agent-wire.js";
 
 /**
  * agent-todos.test.ts -- a coding agent on Claude Code keeps its to-dos one

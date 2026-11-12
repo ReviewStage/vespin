@@ -19,6 +19,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
@@ -53,6 +54,7 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { briefAgent, replayOpening } from "@repo/features/replay-card-model";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -80,6 +82,24 @@ import {
   toolTarget,
   type WorkerJobs,
 } from "@repo/features/tool-call-model";
+import {
+  DRAWN_WORDS,
+  type DrawnWords,
+  drawnMessageWords,
+  drawnRowsWords,
+} from "@repo/features/transcript-copy";
+import {
+  agentMessageOf,
+  carryOnLineOf,
+  commentLineOf,
+  commentLineWords,
+  githubLineOf,
+  isWakeupLine,
+  slackLineOf,
+  threadLineOf,
+  wakeupDelayOf,
+  workerLines,
+} from "@repo/features/transcript-lines";
 import { turnLinesOf } from "@repo/features/turn-files";
 import {
   CALL_KIND,
@@ -205,14 +225,10 @@ import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./a
 import { useForwardToast } from "./agent-forward.js";
 import {
   agentLines,
-  agentMessageOf,
   agentName,
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
-  carryOnLineOf,
-  commentLineOf,
-  commentLineWords,
   continuedByIds,
   continuedByTitles,
   dockedPullRequests,
@@ -223,8 +239,6 @@ import {
   endLineParts,
   endLineReason,
   finishedReplyLead,
-  githubLineOf,
-  isWakeupLine,
   lastTurnEnding,
   lineSender,
   macOwnerOf,
@@ -233,18 +247,14 @@ import {
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
-  slackLineOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
   tabTurnOf,
   teammateStarter,
-  threadLineOf,
   transcriptRowKey,
   usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
-  wakeupDelayOf,
-  workerLines,
   workerStatusOf,
   workerToolState,
   workerWorkingPhase,
@@ -264,7 +274,6 @@ import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
-import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import {
@@ -296,7 +305,6 @@ import {
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
-import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
@@ -320,12 +328,6 @@ import {
   type TranscriptToolProps,
   TranscriptWords,
 } from "./transcript-blocks.js";
-import {
-  DRAWN_WORDS,
-  type DrawnWords,
-  drawnMessageWords,
-  drawnRowsWords,
-} from "./transcript-copy.js";
 import { TurnFilesOn, TurnFilesRow } from "./turn-files.js";
 import { keptPieces, PIECE_ROWS, pieceKey, type TurnPiece, turnPieces } from "./turn-pieces.js";
 import {

@@ -1,6 +1,7 @@
 import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
+import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { ANNOUNCE, type CrumbMenu, InlineEdit, moreLabel, useMenu } from "@repo/ui";
@@ -12,7 +13,6 @@ import { renameWrite } from "../rename-write.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
-import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";

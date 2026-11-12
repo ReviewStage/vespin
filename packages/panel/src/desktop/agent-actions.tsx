@@ -6,6 +6,12 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
+import {
+  agentTranscript,
+  readWholeTranscript,
+  TRANSCRIPT_COPY,
+  type TranscriptCopy,
+} from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
@@ -29,12 +35,6 @@ import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import type { HeldAction } from "../tasks/terminal-held.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
-import {
-  agentTranscript,
-  readWholeTranscript,
-  TRANSCRIPT_COPY,
-  type TranscriptCopy,
-} from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";

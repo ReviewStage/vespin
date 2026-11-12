@@ -1,5 +1,11 @@
 import type { AgentStatus, AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  type CopiedTranscript,
+  type TranscriptCopy,
+  type TranscriptUnread,
+  transcriptMarkdown,
+} from "@repo/features/transcript-copy";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
   IconButton,
@@ -28,12 +34,6 @@ import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useCopyToast } from "../copy-feedback.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import type { HeldTranscript } from "../tasks/agent-tab-card.js";
-import {
-  type CopiedTranscript,
-  type TranscriptCopy,
-  type TranscriptUnread,
-  transcriptMarkdown,
-} from "../tasks/transcript-copy.js";
 import { useToast } from "../toast.js";
 import { actingCommand, type MenuAction, type MenuEnds, type MenuEntry } from "./action-menu.js";
 import { type AgentMenuDoors, agentMenuGroups } from "./agent-actions.js";
