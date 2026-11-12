@@ -923,6 +923,37 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
   assert.equal(pane.querySelector('.agent-composer [role="alert"]'), null);
 });
 
+test("an answer no reply came back for, whose window reloaded before its thread held it, still lets its words go once the thread holds a message under its key", async () => {
+  const before = mount({ chosen: ON_THRESHOLD });
+  await settle();
+  const { answer, sent } = gatedAnswers();
+  answerWithNote(before.page, "Use 90%");
+  await settle();
+  await act(async () => answer({ failure: AGENT_CALL_FAILURE.UNANSWERED }));
+  await settle();
+  assert.equal(composerEditor(itemPane(before.page)).textContent, "Use 90%");
+  act(() => world.root?.unmount());
+  world.root = undefined;
+
+  // The service wrote the answer and handed it on all the same, which the reloaded window reads.
+  const clientKey = sent[0]?.clientKey ?? assert.fail("the answer went under a key");
+  const [reply, ...rest] = THRESHOLD_ANSWERED.thread ?? [];
+  const answered = rest.at(-1) ?? assert.fail("the answered item ends with its answer");
+
+  const landed: InboxItem = {
+    ...THRESHOLD_ANSWERED,
+    thread: [...(reply === undefined ? [] : [reply]), { ...answered, clientKey }],
+  };
+
+  world.inboxes.set(BILLING.id, [landed, RETRY]);
+  const { page } = mount({ chosen: ON_THRESHOLD });
+  await settle();
+  const pane = itemPane(page);
+  await vi.waitFor(() =>
+    assert.equal(composerEditor(pane).textContent, "", "the words that went back are let go"),
+  );
+});
+
 test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and a toast says so", async () => {
   const notice: InboxItem = { ...noticeOf(THRESHOLD), startedBy: TEAMMATE };
   world.inboxes.set(BILLING.id, [notice, RETRY]);

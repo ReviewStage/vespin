@@ -287,6 +287,7 @@ const storedDrafts = Schema.fromJsonString(
       dropped: Schema.optionalKey(Schema.Array(Schema.String)),
       revision: Schema.optionalKey(Schema.Number),
       element: Schema.optionalKey(pageElementSchema),
+      unheard: Schema.optionalKey(Schema.Struct({ key: Schema.String, text: Schema.String })),
     }),
   ),
 );
@@ -310,6 +311,14 @@ export interface Draft {
   readonly revision?: number | undefined;
   /** The element of a page a thread being started there is on, so the page pins the draft where it was started; none on the page as a whole (`description-comments.tsx`). */
   readonly element?: DraftPageElement | undefined;
+  /** An inbox reply no answer came back for, whose words went back into the box: the key it went under and its words, so a read holding its message under that key lets them go, in this window or one opened later (`use-task-inbox.ts`). */
+  readonly unheard?: DraftUnheard | undefined;
+}
+
+/** A send whose words went back into its box with no answer heard: the key it went under, and the words it sent. */
+export interface DraftUnheard {
+  readonly key: string;
+  readonly text: string;
 }
 
 /** One place's draft. */
@@ -371,7 +380,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
       const read = placeOf(storedPlace);
 
       if (read === undefined) return [];
-      const { steps, press, dropped, element } = rest;
+      const { steps, press, dropped, element, unheard } = rest;
       const revision = rest.revision ?? read.revision;
 
       return [
@@ -386,6 +395,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
           ...(dropped === undefined ? undefined : { dropped }),
           ...(revision === undefined ? undefined : { revision }),
           ...(element === undefined ? undefined : { element }),
+          ...(unheard === undefined ? undefined : { unheard }),
         },
       ];
     })
@@ -409,14 +419,26 @@ function storedAs(owner: Owner, kept: KeptDraft, entry: StoredDraft): boolean {
     entry.press === kept.press &&
     Equal.equals(entry.dropped ?? [], kept.dropped ?? []) &&
     entry.revision === kept.revision &&
-    Equal.equals(entry.element, kept.element)
+    Equal.equals(entry.element, kept.element) &&
+    Equal.equals(entry.unheard, kept.unheard)
   );
 }
 
 /** A draft as storage keeps it, a card's picks only where it holds some. */
 function entryOf(
   owner: Owner,
-  { place, text, choices, values, steps = [], press, dropped = [], revision, element }: KeptDraft,
+  {
+    place,
+    text,
+    choices,
+    values,
+    steps = [],
+    press,
+    dropped = [],
+    revision,
+    element,
+    unheard,
+  }: KeptDraft,
 ): StoredDraft {
   return {
     accountId: owner,
@@ -429,6 +451,7 @@ function entryOf(
     ...(dropped.length === 0 ? undefined : { dropped }),
     ...(revision === undefined ? undefined : { revision }),
     ...(element === undefined ? undefined : { element }),
+    ...(unheard === undefined ? undefined : { unheard }),
   };
 }
 
@@ -1290,6 +1313,30 @@ function inboxDraftStandings(drafts: readonly KeptDraft[]): readonly InboxDraftS
 export function useInboxDraftStandings(): readonly InboxDraftStanding[] {
   // Note that it is compared by its contents, so a word typed in a box tells no reader of these.
   return useSelector(draftsStore, inboxDraftStandings, { compare: Equal.equals });
+}
+
+/** An inbox card's draft holding words a send no answer came back for put back: its place and the key the send went under. */
+export interface InboxUnheardDraft {
+  readonly place: InboxPlace;
+  readonly key: string;
+}
+
+/** Every inbox card's draft holding words an unheard send put back (`Draft`'s `unheard`). */
+function inboxUnheardDrafts(drafts: readonly KeptDraft[]): readonly InboxUnheardDraft[] {
+  return drafts.flatMap((kept) =>
+    isInbox(kept) && kept.unheard !== undefined
+      ? [{ place: kept.place, key: kept.unheard.key }]
+      : [],
+  );
+}
+
+/**
+ * Every inbox card's draft holding words an unheard send put back, for a
+ * read that lets them go once it holds the send's message. Note that it is
+ * compared by its contents, so a word typed in a box tells no reader of it.
+ */
+export function useInboxUnheardDrafts(): readonly InboxUnheardDraft[] {
+  return useSelector(draftsStore, inboxUnheardDrafts, { compare: Equal.equals });
 }
 
 /** Whether an item's row marks a draft, as `useInboxItemDrafted` says it of its draft as a list read it (`useInboxRowDrafts`). */

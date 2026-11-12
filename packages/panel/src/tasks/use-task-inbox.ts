@@ -31,6 +31,7 @@ import {
   useDraftWriter,
   useInboxDraftStandings,
   useInboxDrafts,
+  useInboxUnheardDrafts,
   withoutPicks,
 } from "../composer-drafts.js";
 import { holderInboxQuery, holderInboxRetryMutation, inboxItemsQuery } from "../live-reads.js";
@@ -94,7 +95,9 @@ import { type HeldUpdate, joinedAhead } from "./refused-send.js";
  * have reached the agent all the same, so its words go back and the card
  * says so only until the thread holds it, when it is taken as sent: its
  * note goes, and so do its words, where the box still holds just them as
- * they went back.
+ * they went back. The words go back marked with the send's key, kept with
+ * the draft, so a window reloaded or opened again before the thread held
+ * it still lets them go once it does, rather than keeping words sent.
  *
  * A notice's nod, Got it, goes the same way under a key minted for the
  * revision it nods to, so a nod sent again after a lost reply is taken
@@ -246,12 +249,11 @@ function notTakenNote(item: InboxItem): string {
   }
 }
 
-/** A reply no answer came back for, which may have landed all the same: the key it went under, the task it was sent on, where its words went back and as what, and what its card says of it. */
+/** A reply no answer came back for, which may have landed all the same: the key it went under, the task it was sent on, where its words went back, and what its card says of it. */
 interface UnheardReply {
   readonly key: string;
   readonly taskId: string | undefined;
   readonly place: InboxPlace;
-  readonly unsent: Draft;
   readonly note: InboxNote;
 }
 
@@ -376,15 +378,22 @@ function carriedBack(first: Draft, behind: readonly Draft[]): Draft {
 }
 
 /**
- * Whether a box holds just the words and files a reply gave back to it, so
- * letting go of them takes nothing written since. Note that its picks are
- * not compared, and are kept where they still stand, because the drafts
- * let go of those made on an item that has changed since, as the reply
- * landing changes it, and one made since on an ask still open is the
- * reader's own.
+ * A box once the unheard send whose words went back into it under `key` is
+ * found landed: its words and files let go where it still holds just the
+ * words that went back, so nothing written since is taken, and the mark let
+ * go either way. Note that its picks are kept where they still stand,
+ * because the drafts let go of those made on an item that has changed since,
+ * as the reply landing changes it, and one made since on an ask still open
+ * is the reader's own.
  */
-function holdsOnly(now: Draft, went: Draft): boolean {
-  return now.text === went.text && Equal.equals(now.attachments, went.attachments);
+function landedFrom(now: Draft, key: string): Draft {
+  const { unheard } = now;
+
+  if (unheard?.key !== key) return now;
+
+  return now.text === unheard.text
+    ? { ...now, text: "", attachments: [], unheard: undefined }
+    : { ...now, unheard: undefined };
 }
 
 /** Whether a card holds nothing at all: no words, files, picks, fields, steps, or press. */
@@ -602,18 +611,16 @@ export function useHeldTaskInbox(input: {
       return next;
     });
 
+    // Note that the words that went back are let go by the drafts' own mark (`useUnheardRepliesLetGo`), which outlasts this holder.
     for (const reply of landed) {
       const { itemId } = reply.place;
       onDropNote(itemId, reply.note);
-      writer.update(reply.place, (now) =>
-        holdsOnly(now, reply.unsent) ? { ...now, text: "", attachments: [] } : now,
-      );
 
       if (attempts.current.get(itemId)?.key === reply.key) attempts.current.delete(itemId);
     }
 
     latest.current.onRetryList();
-  }, [held, unheard, onDropNote, writer]);
+  }, [held, unheard, onDropNote]);
 
   // Note that a nod is keyed by the revision it nods to, so a press again after a lost reply is
   // taken once, and a nod to the notice posted over since goes under a key of its own.
@@ -746,21 +753,26 @@ export function useHeldTaskInbox(input: {
           const standing = queued.current.get(item.id) ?? [];
           const behind = standing.slice(standing.findIndex(ours) + 1);
           requeue(item.id, (was) => was.filter((each) => !ours(each) && !behind.includes(each)));
-          writer.update(place, (now) =>
-            withRefused(
+          const unanswered = answer.failure === AGENT_CALL_FAILURE.UNANSWERED;
+
+          // Note that words a send no answer came back for went back under its key, kept with the draft, so a read holding its message lets them go even once this window is gone (`useUnheardRepliesLetGo`).
+          writer.update(place, (now) => {
+            const back = withRefused(
               now,
               carriedBack(
                 went,
                 behind.map((each) => each.went),
               ),
-            ),
-          );
+            );
+
+            return unanswered ? { ...back, unheard: { key, text: went.text } } : back;
+          });
           attempts.current.set(item.id, { key, words });
           const said = refused(item.id, answer.failure);
 
           // Note that a send no answer came back for may have landed all the same, so it is kept until the thread says.
-          if (answer.failure === AGENT_CALL_FAILURE.UNANSWERED) {
-            const kept: UnheardReply = { key, taskId: askedOn, place, unsent: went, note: said };
+          if (unanswered) {
+            const kept: UnheardReply = { key, taskId: askedOn, place, note: said };
             setUnheard((standing) => new Map(standing).set(item.id, kept));
           }
 
@@ -821,6 +833,28 @@ export function useHeldTaskInbox(input: {
     onMessage,
     images,
   };
+}
+
+/**
+ * Lets go of the words a send no answer came back for put back in its box
+ * (`Draft`'s `unheard`) once a read of its item holds the message under the
+ * send's key, as `landedFrom` lets them go. Note that the mark is the
+ * draft's own, kept in storage beside its words, rather than the sending
+ * holder's, so a window reloaded or opened again since, which never heard
+ * the send, still lets go of words that reached the agent; `held` is every
+ * task's items the window reads, by task.
+ */
+export function useUnheardRepliesLetGo(held: ReadonlyMap<string, readonly InboxItem[]>): void {
+  const marked = useInboxUnheardDrafts();
+  const { update } = useDraftWriter();
+  useEffect(() => {
+    for (const { place, key } of marked) {
+      const items = place.planId === null ? undefined : held.get(place.planId);
+      const item = items?.find((each) => each.id === place.itemId);
+
+      if (item !== undefined && holdsSent(item, key)) update(place, (now) => landedFrom(now, key));
+    }
+  }, [marked, held, update]);
 }
 
 /** Whose read a held read's cards' drafts are kept under: the task's. */

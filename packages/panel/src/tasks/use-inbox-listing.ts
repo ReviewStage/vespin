@@ -27,7 +27,7 @@ import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import { useInboxWaitingTasks, useListedInbox } from "./use-inbox-slices.js";
-import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
+import { useHeldTaskInbox, useInboxDraftsLetGo, useUnheardRepliesLetGo } from "./use-task-inbox.js";
 import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -254,6 +254,9 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     () => (liveId === undefined ? readItems : new Map(readItems).set(liveId, liveItems)),
     [readItems, liveId, liveItems],
   );
+
+  // Note that words an unheard send put back go once any task's read holds its message, whichever item is chosen.
+  useUnheardRepliesLetGo(held);
 
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
   const everyTask = tasks.tasks;
