@@ -93,6 +93,7 @@ const favorite = (method: typeof HTTP_METHOD.PUT | typeof HTTP_METHOD.DELETE) =>
     .input(favoriteInputSchema);
 
 export const adminContract = {
+  catalog: read(ADMIN_ROUTE_PATH.CATALOG).input(EffectSchema.Struct({})),
   cost: read(ADMIN_ROUTE_PATH.COST).input(windowedQuerySchema),
   day: read(ADMIN_ROUTE_PATH.DAY).input(dayQuerySchema),
   favorite: favorite(HTTP_METHOD.PUT),
