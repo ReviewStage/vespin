@@ -2,6 +2,7 @@
  * claude-goals.test.ts -- which of Claude Code's transcript entries the store's appends hold as a settled goal, and that every entry still reaches the store.
  */
 
+import type { SessionStore } from "@anthropic-ai/claude-agent-sdk";
 import { GOAL_EVENT } from "@repo/wire/ui-messages";
 import { MutableRef } from "effect";
 import { describe, expect, it } from "vitest";
@@ -67,5 +68,20 @@ describe("goalWatchedStore", () => {
       },
     ]);
     expect(appended).toEqual([...entries, met]);
+  });
+
+  it("holds nothing of a batch the store refused, which the SDK sends again", async () => {
+    const held = MutableRef.make<readonly RunnerGoal[]>([]);
+    const store = goalWatchedStore<Pick<SessionStore, "append">>(
+      {
+        append: async () => {
+          throw new Error("The transcript store answered 503");
+        },
+      },
+      held,
+    );
+    const met = goalStatus({ met: true, reason: "All pass." });
+    await expect(store.append({ projectKey: "p", sessionId: "s" }, [met])).rejects.toThrow();
+    expect(MutableRef.get(held)).toEqual([]);
   });
 });

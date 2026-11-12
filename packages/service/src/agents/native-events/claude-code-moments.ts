@@ -218,7 +218,9 @@ const GOAL_COMMAND = {
  * prompt the goal's condition, so a line of this shape is the checker's
  * verdict that the goal is not met yet; a project's own blocking Stop hook
  * writes the same shape, which the transcript tells apart by its condition
- * being no goal set (`agent-goal-model.ts`).
+ * being no goal set (`agent-goal-model.ts`). The line is split at the first
+ * `]: `, since nothing here knows the goal; a condition holding those words is
+ * split inside it, and joined again against the goal it is of there.
  */
 const STOP_HOOK_FEEDBACK = /^Stop hook feedback:\n\[([\s\S]*?)\]: ([\s\S]*)$/;
 

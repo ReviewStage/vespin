@@ -67,12 +67,12 @@ export function goalWatchedStore<Store extends Pick<SessionStore, "append">>(
 ): Store {
   return {
     ...store,
+    // Note that the goals are held once the append went through, because the SDK retries a batch the store refused, which would hold them again.
     append: async (key, entries) => {
-      if (key.subpath === undefined) {
-        const settled = entries.flatMap((entry) => settledGoal(entry) ?? []);
-        if (settled.length > 0) MutableRef.update(held, (was) => [...was, ...settled]);
-      }
       await store.append(key, entries);
+      if (key.subpath !== undefined) return;
+      const settled = entries.flatMap((entry) => settledGoal(entry) ?? []);
+      if (settled.length > 0) MutableRef.update(held, (was) => [...was, ...settled]);
     },
   };
 }

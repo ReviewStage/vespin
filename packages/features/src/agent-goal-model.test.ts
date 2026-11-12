@@ -6,7 +6,7 @@ import { MESSAGE_ROLE } from "@repo/wire";
 import { GOAL_EVENT, GOAL_PART, type GoalNotice } from "@repo/wire/ui-messages";
 import { describe, expect, it } from "vitest";
 import { AGENT_GOAL_STATE, agentGoal } from "./agent-goal-model.js";
-import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
 
 const CONDITION = "every billing test passes";
 
@@ -63,6 +63,21 @@ describe("agentGoal", () => {
     });
   });
 
+  it("reads a verdict whose condition holds the words that part it from its reason as the goal's", () => {
+    const condition = "lint says [ok]: nothing to fix";
+    const goal = agentGoal([
+      turn("t1", [
+        notice(GOAL_EVENT.SET, { condition }),
+        // The service split the CLI's feedback at its first "]: ", inside the condition.
+        notice(GOAL_EVENT.NOT_MET, {
+          condition: "lint says [ok",
+          reason: "nothing to fix]: 2 warnings.",
+        }),
+      ]),
+    ]);
+    expect(goal).toMatchObject({ condition, turns: 2, reason: "2 warnings." });
+  });
+
   it("stands settled until the developer writes again, and stands nowhere once cleared", () => {
     const met = [
       turn("t1", [
@@ -76,6 +91,12 @@ describe("agentGoal", () => {
       reason: "All pass.",
     });
     expect(agentGoal([...met, line("l2")])).toBeUndefined();
+    // A wakeup the app sent is no line of the developer's, and leaves the goal's end standing.
+    expect(
+      agentGoal([...met, { ...line("w"), sentBy: { kind: AGENT_SENDER.APP, name: "Vespin" } }]),
+    ).toMatchObject({
+      state: AGENT_GOAL_STATE.MET,
+    });
 
     const cleared = [
       turn("t1", [notice(GOAL_EVENT.SET)]),

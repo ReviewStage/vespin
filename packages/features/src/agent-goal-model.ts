@@ -14,7 +14,7 @@
 import { MESSAGE_ROLE } from "@repo/wire";
 import { GOAL_EVENT, type GoalNotice } from "@repo/wire/ui-messages";
 import { AGENT_PART, agentPart } from "./agent-parts.js";
-import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
 
 /** Where a goal stands. */
 export const AGENT_GOAL_STATE = {
@@ -70,6 +70,32 @@ function settledState(event: GoalNotice["event"]): AgentGoalState | undefined {
   }
 }
 
+/** The words that part a Stop hook's prompt from its reason in Claude Code's feedback (`claude-code-moments.ts`), which the service split at the first of them. */
+const FEEDBACK_SPLIT = "]: ";
+
+/**
+ * The notice as a move of the goal whose condition is given, or none where
+ * it is another's. Note that a verdict of a condition holding the words that
+ * part it from its reason was split inside the condition, since the service
+ * reads no goal; its condition and reason are joined again and split after
+ * the goal's own.
+ */
+function ofGoal(notice: GoalNotice, condition: string): GoalNotice | undefined {
+  if (notice.condition === condition) return notice;
+  if (notice.event !== GOAL_EVENT.NOT_MET || notice.reason === null) return undefined;
+  const said = `${notice.condition}${FEEDBACK_SPLIT}${notice.reason}`;
+  const head = `${condition}${FEEDBACK_SPLIT}`;
+  return said.startsWith(head)
+    ? { ...notice, condition, reason: said.slice(head.length) }
+    : undefined;
+}
+
+/** Whether a line is the developer's own, rather than one the app, an automation, or GitHub sent, as a wakeup or a check's word is. */
+function developersLine(message: AgentTranscriptMessage): boolean {
+  const kind = message.sentBy?.kind;
+  return kind === undefined || kind === AGENT_SENDER.MEMBER || kind === AGENT_SENDER.FORMER;
+}
+
 /** The goal after one more of its notices, in `message`; none where the notice cleared it. */
 function moved(
   goal: AgentGoal | undefined,
@@ -93,13 +119,15 @@ function moved(
       ...counted,
     };
   }
-  // A move of no goal set, or of another than the one standing, is a project's own hook or a goal long gone.
-  if (goal === undefined || notice.condition !== goal.condition) return goal;
-  if (notice.event === GOAL_EVENT.CLEARED) return undefined;
+  if (goal === undefined) return goal;
+  const own = ofGoal(notice, goal.condition);
+  // A move of another goal than the one standing is a project's own hook or a goal long gone.
+  if (own === undefined) return goal;
+  if (own.event === GOAL_EVENT.CLEARED) return undefined;
   const at = { ...goal, ...counted, messageId: message.id };
-  switch (notice.event) {
+  switch (own.event) {
     case GOAL_EVENT.NOT_MET:
-      return { ...at, turns: notice.turns ?? goal.turns + 1, reason: notice.reason };
+      return { ...at, turns: own.turns ?? goal.turns + 1, reason: own.reason };
     case GOAL_EVENT.PAUSED:
       return { ...at, state: AGENT_GOAL_STATE.PAUSED };
     case GOAL_EVENT.RESUMED:
@@ -107,9 +135,9 @@ function moved(
     default:
       return {
         ...at,
-        state: settledState(notice.event) ?? goal.state,
-        turns: notice.turns ?? goal.turns,
-        reason: notice.reason ?? goal.reason,
+        state: settledState(own.event) ?? goal.state,
+        turns: own.turns ?? goal.turns,
+        reason: own.reason ?? goal.reason,
       };
   }
 }
@@ -120,7 +148,7 @@ export function agentGoal(messages: readonly AgentTranscriptMessage[]): AgentGoa
   for (const message of messages) {
     // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
     if (message.role === MESSAGE_ROLE.USER) {
-      if (goal !== undefined && goalSettled(goal)) goal = undefined;
+      if (goal !== undefined && goalSettled(goal) && developersLine(message)) goal = undefined;
       continue;
     }
     for (const stored of message.parts) {

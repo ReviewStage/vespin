@@ -3633,7 +3633,7 @@ function AgentTabView({
           messages={lines}
           working={standing.working}
           onBringIn={(messageId) => bringIn?.current?.(messageId, () => undefined)}
-          onClear={controlsQueue ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
+          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
           // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
           onResume={undefined}
         />
