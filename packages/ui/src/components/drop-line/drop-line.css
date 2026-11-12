@@ -1,0 +1,15 @@
+/* drop-line.css -- the line where carried files would land (`drop-line.tsx`), in the focus ring's ink and width, over the window. */
+
+@layer components {
+  .ui-drop-line {
+    position: fixed;
+    z-index: var(--ui-z-menu);
+    top: calc(var(--ui-drop-line-top) - var(--ui-focus-ring-width) / 2);
+    left: var(--ui-drop-line-left);
+    width: var(--ui-drop-line-width);
+    height: var(--ui-focus-ring-width);
+    border-radius: var(--ui-focus-ring-width);
+    background: var(--ui-color-focus-ring);
+    pointer-events: none;
+  }
+}

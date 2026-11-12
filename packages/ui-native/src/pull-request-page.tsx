@@ -28,12 +28,13 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { type ReactElement, useEffect, useState } from "react";
 import { FieldChip } from "./button.js";
 import type { MarkLook } from "./glyph.js";
+import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
-import { pullRequestLook } from "./pull-request-look.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
@@ -98,7 +99,7 @@ export function PullRequestHead({
   sentence,
 }: PullRequestHeadProps) {
   const colors = useColors();
-  const look = pullRequestLook(state, queued);
+  const look = PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued })];
 
   return (
     <VStack

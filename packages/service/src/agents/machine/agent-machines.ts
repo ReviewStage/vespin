@@ -72,9 +72,9 @@ function routedMachine(cloud: AgentMachineService, mac: DeviceMachineService): A
     deliverCredentials: (agent, credentials) =>
       of(agent.machine).deliverCredentials(agent, credentials),
     open: (ask, use) => of(ask.agent.machine).open(ask, use),
-    resume: (found, agent) => of(found.machine).resume(found, agent),
-    checkOutMissing: (place, target, agent) =>
-      of(place.machine).checkOutMissing(place, target, agent),
+    resume: (found, agent, setup) => of(found.machine).resume(found, agent, setup),
+    checkOutMissing: (place, target, agent, setup) =>
+      of(place.machine).checkOutMissing(place, target, agent, setup),
     launchRunner: (place, launch) => of(place.machine).launchRunner(place, launch),
   };
 }

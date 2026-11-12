@@ -248,6 +248,11 @@ function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources
   return held.sources.get(node) ?? reprinted(manager, node) + BLOCK_GAP;
 }
 
+/** Whether two sources written one against the other still read as two blocks, as a heading over its paragraph does and two paragraphs do not. */
+function readsApart(manager: MarkdownManager, source: string, next: string): boolean {
+  return manager.instance.lexer(source + next).filter((token) => token.type !== "space").length > 1;
+}
+
 /**
  * The document as the editor holds it now: each block that is still the node
  * it opened as written as its source, each other block re-printed, the
@@ -297,8 +302,18 @@ export function documentMarkdown(
       return;
     }
 
-    // Note that the text's last block kept its source without the blank line after it, which a block laid in after it needs.
-    out += /\n[^\S\n]*\n$/u.test(block) ? block : block.trimEnd() + BLOCK_GAP;
+    // Note that a kept block written against the block after it, as a line
+    // over its list, stays so where the two still read apart; the text's last
+    // block kept its source without the line break after it, which a block
+    // laid in after it needs, since without it the next block's first line
+    // runs on in its own.
+    const asWritten =
+      /\n[^\S\n]*\n$/u.test(block) ||
+      (held.sources.has(node) &&
+        block.endsWith("\n") &&
+        readsApart(manager, block, blocks[index + 1] ?? ""));
+
+    out += asWritten ? block : block.trimEnd() + BLOCK_GAP;
   });
 
   return out;

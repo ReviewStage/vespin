@@ -16,7 +16,7 @@ import {
   isWorkspaceExperiment,
   type WorkspaceExperiment,
 } from "@repo/settings";
-import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { EXPERIMENT_ANCHOR } from "@repo/settings/settings-anchors";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -32,7 +32,6 @@ import {
   useConfirmDialog,
   useMinute,
 } from "@repo/ui";
-import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { FlaskConicalIcon } from "lucide-react";
@@ -44,6 +43,7 @@ import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenFeedback } from "../open-feedback.js";
 import { actionRefused, refusalToast, rowWrite } from "./row-write.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
@@ -92,11 +92,11 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
-  [EXPERIMENT.REWIND_FILES]: {
+  [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
-      `Offers everyone in ${workspace} a choice, on Rewind and Edit, to put the agent's files back to how they stood before that message.`,
+      `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,
     off: (workspace: string) =>
-      `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
+      `Stops agents in ${workspace} from making suggestions, draws the ones already in replies as plain links, and stops any from being sent.`,
   },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
@@ -115,12 +115,6 @@ const FLIP_WORDS = {
       `Lets agents in ${workspace} keep settled facts about how your team works and recall them in later work, reviewed in Settings › Memory.`,
     off: (workspace: string) =>
       `Stops agents in ${workspace} from keeping or recalling memories, and hides Settings › Memory for everyone.`,
-  },
-  [EXPERIMENT.TURN_END]: {
-    on: (workspace: string) =>
-      `Has agents in ${workspace} end each turn with a short summary, and shows over each agent's box what it needs from you, or that it's done, with follow-ups to send.`,
-    off: (workspace: string) =>
-      `Stops agents in ${workspace} from ending turns with a summary and follow-ups, and puts the Inbox row back over each agent's box.`,
   },
 } as const satisfies Record<
   WorkspaceExperiment,
@@ -342,13 +336,7 @@ export function ExperimentalPage({
       {workspace === undefined || workspaceEntries.length === 0 ? null : (
         <MemberDirectory workspace={workspace} readerId={readerId}>
           <SettingsSection
-            anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_WORKSPACE}
-            title={
-              <>
-                {WORDS.WORKSPACE_TITLE}
-                <ReplayMask>{workspace.name}</ReplayMask>
-              </>
-            }
+            {...settingsSectionHead(SECTION.EXPERIMENTS_WORKSPACE, { workspace })}
             caption={WORDS.WORKSPACE_CAPTION}
           >
             {workspaceEntries.map((entry) => (
@@ -358,10 +346,7 @@ export function ExperimentalPage({
         </MemberDirectory>
       )}
       {accountEntries.length === 0 ? null : (
-        <SettingsSection
-          anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT}
-          title={WORDS.ACCOUNT_TITLE}
-        >
+        <SettingsSection {...settingsSectionHead(SECTION.EXPERIMENTS_ACCOUNT)}>
           {accountEntries.map((entry) => (
             <AccountExperimentRow
               key={entry.key}

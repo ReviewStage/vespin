@@ -114,6 +114,7 @@ const DECLARED_TABLES = [
   "queued_message",
   "rate_limit",
   "repository_pin",
+  "reply_button",
   "runner_line",
   "sandbox_firewall",
   "sandbox_terminal_lease",

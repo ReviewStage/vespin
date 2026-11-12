@@ -235,7 +235,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         : Effect.fail(new SandboxGone({ call })),
     );
 
-  /** The drive a create opens with: a base drive made where none stands, or the sandbox's own, mounted again where it stands, else forked from an origin that must, or none where the ask forks none. */
+  /** The drive a create opens with, and whether it is the sandbox's own as it stood: a base drive made where none stands, or the sandbox's own, mounted again where it stands, else forked from an origin that must, or made empty where the ask names its own. */
   const driveFor = (name: string, asked: SandboxDrive) =>
     Effect.suspend(() => {
       if ("fill" in asked) {
@@ -243,21 +243,27 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           state.drives.set(asked.fill, { name: asked.fill, forkedFrom: undefined });
         }
 
-        return Effect.succeed({ name: asked.fill, at: asked.at });
+        return Effect.succeed({ drive: { name: asked.fill, at: asked.at }, kept: false });
       }
 
       const own = ownDriveName(name);
 
-      if (state.drives.has(own)) return Effect.succeed({ name: own, at: asked.at });
+      if (state.drives.has(own))
+        return Effect.succeed({ drive: { name: own, at: asked.at }, kept: true });
 
-      if ("own" in asked) return Effect.succeed(undefined);
+      if ("own" in asked) {
+        state.drives.set(own, { name: own, forkedFrom: undefined });
+
+        return Effect.succeed({ drive: { name: own, at: asked.at }, kept: false });
+      }
+
       const origin = "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy);
 
       if (!state.drives.has(origin))
         return Effect.fail(new SandboxGone({ call: SANDBOX_CALL.CREATE }));
       state.drives.set(own, { name: own, forkedFrom: origin });
 
-      return Effect.succeed({ name: own, at: asked.at });
+      return Effect.succeed({ drive: { name: own, at: asked.at }, kept: false });
     });
 
   const opened = (ask: SandboxCreate & { readonly user?: SandboxUser }) =>
@@ -266,7 +272,8 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         return yield* new SnapshotGone({ call: SANDBOX_CALL.CREATE });
       }
 
-      const drive = ask.drive === undefined ? undefined : yield* driveFor(ask.name, ask.drive);
+      const mounted = ask.drive === undefined ? undefined : yield* driveFor(ask.name, ask.drive);
+      const drive = mounted?.drive;
 
       const record: MemorySandboxRecord = {
         name: ask.name,
@@ -286,7 +293,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
 
       state.sandboxes.set(ask.name, record);
 
-      return record;
+      return { record, driveKept: mounted?.kept === true };
     });
 
   const resumed = (record: MemorySandboxRecord) =>
@@ -377,6 +384,12 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.sync(() => state.drives.has(name)),
       ),
+    ownDriveStands: (sandboxName) =>
+      scripted(
+        SANDBOX_CALL.DRIVE,
+        sandboxName,
+        Effect.sync(() => state.drives.has(ownDriveName(sandboxName))),
+      ),
     resume: (name) =>
       scripted(
         SANDBOX_CALL.GET,
@@ -397,7 +410,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           (): Effect.Effect<OpenedSandbox, SandboxError> =>
             state.sandboxes.has(ask.name)
               ? Effect.fail(new SandboxNameTaken({ call: SANDBOX_CALL.CREATE }))
-              : Effect.map(opened(ask), listedOf),
+              : Effect.map(opened(ask), ({ record }) => listedOf(record)),
         ),
       ),
     getOrCreate: (ask, onCreate) =>
@@ -407,17 +420,28 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         Effect.gen(function* () {
           const standing = state.sandboxes.get(ask.name);
 
-          if (standing !== undefined) {
+          // A stopped sandbox whose own drive stands is made anew on that drive rather than resumed, where the ask names its own.
+          const replaced =
+            standing !== undefined &&
+            ask.drive !== undefined &&
+            "own" in ask.drive &&
+            standing.status === SANDBOX_STATUS.STOPPED &&
+            state.drives.has(ownDriveName(ask.name));
+
+          if (standing !== undefined && !replaced) {
             const woken = yield* Effect.result(resumed(standing));
 
             if (Result.isSuccess(woken)) return listedOf(woken.success);
+          }
 
-            // Note that a resume fails only with `SnapshotGone`, so a failed one is a sandbox to make anew.
+          // Note that a resume fails only with `SnapshotGone`, so a failed one is a sandbox to make anew.
+          if (standing !== undefined) {
             state.sandboxes.delete(ask.name);
             state.deleted.push(ask.name);
           }
 
-          const created = listedOf(yield* opened(ask));
+          const { record, driveKept } = yield* opened(ask);
+          const created = { ...listedOf(record), driveKept };
 
           if (onCreate !== undefined) {
             yield* Effect.tryPromise({

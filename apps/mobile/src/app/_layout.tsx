@@ -1,4 +1,4 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, and an agent's model sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
@@ -97,6 +97,14 @@ function GuardedScreens() {
           <Stack.Screen
             name="agent-model"
             options={{ presentation: sheetPresentation, title: "Options" }}
+          />
+          <Stack.Screen
+            name="agent-ports"
+            options={{ presentation: sheetPresentation, title: "Ports" }}
+          />
+          <Stack.Screen
+            name="task-relation"
+            options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
           <Stack.Screen
             name="new-workspace"

@@ -1,6 +1,7 @@
 // markdown-model.ts -- a message's Markdown read into what the iOS app draws: blocks, and runs of words, links, and chips, each link read as the panel reads it.
 
 import { dateChipText } from "@repo/features/date-mention";
+import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
   type EntityKind,
   entityOfDestination,
@@ -14,6 +15,7 @@ import { LINK_CHIP, linkChipOf, MENTION_KIND } from "@repo/features/mention-link
 import { placeChipLook } from "@repo/features/place-chip-model";
 import { Match } from "effect";
 import type {
+  Code,
   Definition,
   ImageReference,
   LinkReference,
@@ -46,6 +48,7 @@ export const MARKDOWN_BLOCK = {
   QUOTE: "quote",
   TABLE: "table",
   CODE: "code",
+  DRAFT: "draft",
   RULE: "rule",
   PICTURE: "picture",
 } as const;
@@ -142,6 +145,8 @@ export type MarkdownBlock =
       readonly rows: readonly (readonly (readonly MarkdownRun[])[])[];
     }
   | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
+  /** Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or ```draft, read as the panel's draft card reads them. */
+  | { readonly kind: typeof MARKDOWN_BLOCK.DRAFT; readonly draft: Draft }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
   | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
 
@@ -408,6 +413,15 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
+/** A fence: a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
+function codeBlock(node: Code): MarkdownBlock {
+  const kind = draftKindOf(node.lang ?? "");
+
+  if (kind === undefined) return { kind: MARKDOWN_BLOCK.CODE, text: node.value };
+
+  return { kind: MARKDOWN_BLOCK.DRAFT, draft: readDraft(kind, node.value) };
+}
+
 function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
   switch (node.type) {
     case "heading":
@@ -427,7 +441,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "table":
       return [tableBlock(node, reader)];
     case "code":
-      return [{ kind: MARKDOWN_BLOCK.CODE, text: node.value }];
+      return [codeBlock(node)];
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":

@@ -70,6 +70,37 @@ export const SIGNING_MODE = {
   DEVELOPER_ID: "developer-id",
 };
 
+// The Apple teams whose Developer ID a release may carry. Every release
+// through 0.32.0 was signed by a personal team; the app moves to Stage
+// Incorporated's, which the iOS app is signed by, so that Handoff and the
+// company's ownership of the certificate follow. Both stay here until the
+// switch release has shipped and no installed build still updates from the
+// retiring team (`.github/RELEASE.md`, "Moving to another signing team").
+export const MAC_SIGNING_TEAM_ID = Object.freeze({
+  RETIRING: "FZ47TN3469",
+  STAGE: "7V5AN2FMDV",
+});
+
+/**
+ * The designated requirement the app bundle is signed with, in place of the
+ * one codesign would write, which names the signing team alone. Squirrel.Mac
+ * installs an update only where the new bundle satisfies the installed
+ * app's designated requirement, so a build signed by one team would refuse
+ * every update signed by another; this one accepts a Developer ID from any
+ * team in `teamIds`, and is otherwise codesign's own: the app's identifier,
+ * Apple's anchor, and the Developer ID certificate extensions. Only the app
+ * bundle is signed with it (`electron-builder-hooks.mjs`): nested code is
+ * sealed under a requirement naming its own identifier, so the app's would
+ * fail every nested check.
+ */
+export function macAppDesignatedRequirement(teamIds) {
+  const anyTeam = teamIds
+    .map((teamId) => `certificate leaf[subject.OU] = "${teamId}"`)
+    .join(" or ");
+
+  return `designated => identifier "${APP_ID}" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and (${anyTeam})`;
+}
+
 export function swiftCompilerArguments(source, output, frameworks = ["AppKit"]) {
   return [
     "swiftc",

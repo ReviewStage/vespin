@@ -26,16 +26,17 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
+import { RowFrame, RowHead, type RowSubmenu, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import {
   AgentTile,
@@ -56,9 +57,6 @@ const LINE_PART = "· ";
 
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
-
-/** What an agent's line says of its state, as the panel's agent mark is heard. */
-const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
 
 /** How a press-through row's words read: the attention ink for what waits on you, or the body's ink for a place or an act, as the panel's quiet New agent and New sub-task stand. */
 export const LINK_ROW_TONE = {
@@ -177,6 +175,8 @@ type AgentRowProps = {
     | {
         readonly number: number;
         readonly state: PullRequestState;
+        /** Whether GitHub's merge queue holds it, which its glyph says as the panel's does. */
+        readonly queued?: true | undefined;
         readonly onPress: () => void;
       }
     | undefined;
@@ -193,7 +193,7 @@ function PullRequestLink({
   readonly pullRequest: NonNullable<AgentRowProps["pullRequest"]>;
 }) {
   const colors = useColors();
-  const look = PULL_REQUEST_LOOK[pullRequest.state];
+  const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 
   return (
     <SwiftUIButton
@@ -201,7 +201,7 @@ function PullRequestLink({
       modifiers={[
         buttonStyle("borderless"),
         hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-        accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
+        accessibilityValue(pullRequestMarkLabel(pullRequest)),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
@@ -234,7 +234,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
           foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
         ]}
       >
-        {working ? AGENT_STATE_WORDS.WORKING : AGENT_STATE_WORDS.FAILED}
+        {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
       </Text>
     </HStack>
   );
@@ -290,18 +290,32 @@ type RelationRowProps = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks". */
+  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked. */
   readonly relation: string;
+  /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
+  readonly faded?: boolean | undefined;
+  /** What a swipe from the trailing edge reveals, such as Remove relation. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** Menus its long press menu holds, such as Change relation. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
 };
 
-/** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
-export function RelationRow({ id, name, status, relation }: RelationRowProps) {
+/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, its swipe and long press holding what changes that. */
+export function RelationRow({
+  id,
+  name,
+  status,
+  relation,
+  faded = false,
+  trailingActions,
+  menuSubmenus,
+}: RelationRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
     <RowHead
       unread={false}
-      faded={false}
+      faded={faded}
       lead={
         status === undefined ? (
           <ToneGlyph glyph="doc.text" tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
@@ -310,7 +324,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
         )
       }
       title={name}
-      ink={colors.TEXT_BODY}
+      ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={<EndWords words={relation} />}
     />
   );
@@ -319,6 +333,8 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
     <RowFrame
       id={id}
       row={row}
+      trailingActions={trailingActions}
+      menuSubmenus={menuSubmenus}
       heard={{
         label: name,
         value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
@@ -358,7 +374,13 @@ export function LinkRow({
     <SwiftUIButton
       onPress={onPress}
       {...(disabled ? { disabled: true } : {})}
-      modifiers={[...rowPlacement(colors), buttonStyle("borderless"), accessibilityLabel(label)]}
+      modifiers={[
+        ...rowPlacement(colors),
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        // Note that the detail is heard after the label, since the label stands for the whole row.
+        ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+      ]}
     >
       <RowHead
         unread={false}

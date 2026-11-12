@@ -12,6 +12,22 @@ import {
   type InstalledSkillScope,
 } from "@repo/features/installed-skill-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  candidateFacts,
+  type DetectedLine,
+  initialTicks,
+  installLabel,
+  installRequest,
+  installScopes,
+  previewLine,
+  previewRetries,
+  SKILL_LINE_TONE,
+  searchesSkills,
+  shownSkills,
+  type TextFill,
+  textFill,
+} from "@repo/features/skill-install-model";
+import { failureLine, SKILLS_LINE } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -33,7 +49,6 @@ import {
   SCROLL_SIZE,
   ScrollArea,
   SearchField,
-  STATUS_TONE,
   Stack,
   TEXT_ELEMENT,
   TEXT_FIELD_FONT,
@@ -55,22 +70,6 @@ import { rendererPause } from "../renderer-runtime.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { replayMaskedError } from "./marks.js";
-import {
-  candidateFacts,
-  type DetectedLine,
-  failureLine,
-  initialTicks,
-  installLabel,
-  installRequest,
-  installScopes,
-  previewLine,
-  previewRetries,
-  SKILLS_LINE,
-  searchesSkills,
-  shownSkills,
-  type TextFill,
-  textFill,
-} from "./skills-model.js";
 
 /**
  * add-skill-dialog.tsx -- Settings › Skills' Add skill: one box that takes a GitHub repository, a link to one of its folders, an `npx skills add` line, or a skill's text, then what it would install, and Install.
@@ -89,8 +88,8 @@ const PREVIEW_PAUSE_MS = 400;
 
 /** How the line under the box is drawn: a problem in the attention tint, or plain while it waits. */
 const LINE_STATE = {
-  [STATUS_TONE.ATTENTION]: "attention",
-  [STATUS_TONE.NEUTRAL]: "plain",
+  [SKILL_LINE_TONE.ATTENTION]: "attention",
+  [SKILL_LINE_TONE.NEUTRAL]: "plain",
 } as const satisfies Record<DetectedLine["tone"], string>;
 
 /** What pasted text comes to, asked once typing pauses and again on Retry: answered at once on a failure, never tried again on its own. */
@@ -116,7 +115,7 @@ function previewView(
 /** A line in its tone's tint, announced as it lands and as it changes: an alert where it needs a hand. */
 function DetectedText({ line }: { line: DetectedLine }): React.JSX.Element {
   useAnnounceShown(
-    line.tone === STATUS_TONE.ATTENTION ? ANNOUNCE.ALERT : ANNOUNCE.POLITE,
+    line.tone === SKILL_LINE_TONE.ATTENTION ? ANNOUNCE.ALERT : ANNOUNCE.POLITE,
     line.text,
   );
 
@@ -354,7 +353,7 @@ export function AddSkillDialog({
             variant={BUTTON_VARIANT.PRIMARY}
             disabled={request === undefined}
             busy={installing}
-            busyLabel="Installing"
+            busyLabel={SKILLS_LINE.INSTALLING}
             onClick={install}
           >
             {/* Note that a lone skill's Install names it, so only Install and a count show. */}
@@ -381,7 +380,7 @@ export function AddSkillDialog({
               ref={box}
               autoFocus
               busy={installing}
-              placeholder="npx skills add vercel-labs/agent-skills --skill frontend-design"
+              placeholder={SKILLS_LINE.PASTE_PLACEHOLDER}
               onChange={(next) => {
                 setText(next);
                 adding.clear();
@@ -411,7 +410,7 @@ export function AddSkillDialog({
       </Stack>
       {preview === undefined || line !== undefined ? null : (
         <ScrollArea size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
-          <Stack gap={GAP.CONTROL} inset={INSET.RING} aria-label="Skills to install">
+          <Stack gap={GAP.CONTROL} inset={INSET.RING} aria-label={SKILLS_LINE.TO_INSTALL}>
             {preview.kind === SKILL_PASTE_KIND.TEXT ? (
               <TextFields fill={fill} disabled={installing} onFill={setFill} />
             ) : shown.length === 0 ? (

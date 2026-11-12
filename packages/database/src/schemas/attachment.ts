@@ -1,4 +1,8 @@
-import { AGENT_BOUNDS, type AgentAttachmentType } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
+  type AgentAttachmentType,
+} from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
@@ -35,6 +39,10 @@ import { task } from "./task.js";
 /** Whether a row's bytes are a WebM an agent recorded, which an inbox message or a plan holds to a video's bound rather than a picture's. */
 const isWebm = (table: { readonly contentType: AnyPgColumn }) =>
   sql`${table.contentType} = ${literal(CONVERSATION_MEDIA_TYPE.WEBM)}`;
+
+/** Whether a row's bytes are a PDF, which a plan holds to a PDF's bound rather than a picture's. */
+const isPdf = (table: { readonly contentType: AnyPgColumn }) =>
+  sql`${table.contentType} = ${literal(AGENT_ATTACHMENT_TYPE.PDF)}`;
 
 /** The columns that each name an owner of their own kind; a row names one of them, or none but its task. */
 const ownerColumns = (table: {
@@ -74,8 +82,9 @@ export const ownedByTaskAlone = (table: {
  * its bytes arrive. Every other owner's row names no conversation, so the
  * key, unique over both columns, holds it to nothing.
  *
- * A plan's picture is owned by its task directly: it names its task and no
- * other owner (`ownedByTaskAlone`). Its uploader stays its account until the
+ * A plan's picture, or a PDF its text names as it names a picture, is owned
+ * by its task directly: it names its task and no other owner
+ * (`ownedByTaskAlone`). Its uploader stays its account until the
  * account is gone.
  *
  * A plan comment's file is owned by its comment, and goes with it, its
@@ -168,10 +177,10 @@ export const attachment = pgTable(
       "attachment_one_owner",
       sql`(num_nonnulls(${sql.join(ownerColumns(table), sql`, `)}) = 1 or ${ownedByTaskAlone(table)}) and (${table.inboxMessageId} is null or ${table.inboxItemId} is not null)`,
     ),
-    // Each owner holds its bytes to its own bound, as the table it kept before did; a plan's recording to a video's.
+    // Each owner holds its bytes to its own bound, as the table it kept before did; a plan's recording to a video's, and its PDF to a PDF's.
     check(
       "attachment_bytes_bound",
-      sql`(${table.conversationId} is null or octet_length(${table.bytes}) <= ${bound(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)}) and (not ${ownedByTaskAlone(table)} or octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_BYTES)} or (${isWebm(table)} and octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_VIDEO_BYTES)}))`,
+      sql`(${table.conversationId} is null or octet_length(${table.bytes}) <= ${bound(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)}) and (not ${ownedByTaskAlone(table)} or octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_BYTES)} or (${isWebm(table)} and octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_VIDEO_BYTES)}) or (${isPdf(table)} and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)}))`,
     ),
     // A plan comment's file names its task and workspace, has a name and a place among the comment's files, and is held to a file's bound.
     check(

@@ -10,7 +10,6 @@ import {
   ADMIN_RELIABILITY_WINDOWS,
   type AdminMetricsWindow,
 } from "@repo/features/admin-wire";
-import { AGENT_FAILURE, type AgentFailure } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON, type AutomationRunReason } from "@repo/features/automation-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -47,6 +46,7 @@ import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-tab
 import { useAdminDoors } from "../admin-doors.js";
 import { adminReliabilityQuery, useAdminSignOut } from "../admin-queries.js";
 import { adminReadView } from "../admin-read-view.js";
+import { AGENT_FAILURES_SERIES, agentFailureRows, retiredLast } from "../charts/agent-failures.js";
 import {
   BreakdownChart,
   BreakdownChartSkeleton,
@@ -95,28 +95,6 @@ const SKELETON_STATUS_WIDTH = "64px";
 
 const SKELETON_PROVIDER_WIDTH = "192px";
 
-/** A coding agent's failure class, as the breakdown names it. */
-const AGENT_FAILURE_LABEL = {
-  [AGENT_FAILURE.MODEL]: "Model call",
-  [AGENT_FAILURE.SANDBOX]: "Sandbox or checkout",
-  [AGENT_FAILURE.GITHUB]: "GitHub",
-  [AGENT_FAILURE.ABANDONED]: "Abandoned by the sweep",
-  [AGENT_FAILURE.PROVIDER_KEY]: "Account's own API key",
-  [AGENT_FAILURE.MACHINE_SIGN_IN]: "Machine not signed in",
-  [AGENT_FAILURE.NOT_STARTED]: "Never started",
-  [AGENT_FAILURE.FAST_ON_OWN_KEY]: "Fast on own key",
-  [AGENT_FAILURE.FAST_NOT_ENABLED]: "Fast not enabled",
-  [AGENT_FAILURE.CONTEXT_OVERFLOW]: "Context too long",
-  [AGENT_FAILURE.SESSION_ENDED]: "Session ended",
-  [AGENT_FAILURE.RUNNER_LOST]: "Runner lost",
-  [AGENT_FAILURE.NO_PROGRESS]: "No progress",
-  [AGENT_FAILURE.LINE_UNTAKEN]: "Never picked up",
-  [AGENT_FAILURE.PLAN_LIMIT]: "Plan limit, never relaunched",
-  [AGENT_FAILURE.REFUSAL]: "Model refused",
-  [AGENT_FAILURE.CONNECTION_LOST]: "Provider connection lost, never back",
-  [AGENT_FAILURE.OTHER]: "Other",
-} as const satisfies Record<AgentFailure, string>;
-
 /** An automation run's skip or failure reason, as the breakdown names it. */
 const AUTOMATION_REASON_LABEL = {
   [AUTOMATION_RUN_REASON.CONCURRENCY]: "Agents still at work",
@@ -139,40 +117,11 @@ const AUTOMATION_REASON_LABEL = {
 
 const NO_REASON_LABEL = "No reason recorded";
 
-/** The failure classes no agent fails with now, which only older rows still hold. */
-const RETIRED_AGENT_FAILURES: readonly AgentFailure[] = [AGENT_FAILURE.FAST_ON_OWN_KEY];
-
 /** The automation reasons no run is given now, which only older rows still hold. */
 const RETIRED_AUTOMATION_REASONS: readonly AutomationRunReason[] = [
   AUTOMATION_RUN_REASON.NO_REPOSITORY,
   AUTOMATION_RUN_REASON.GITHUB_SIGN_IN,
   AUTOMATION_RUN_REASON.AGENT_GONE,
-];
-
-/**
- * A breakdown's rows with the retired ones moved under every live one, each
- * marked retired, the answer's order otherwise kept.
- */
-function retiredLast<Row>(
-  rows: readonly Row[],
-  retired: (row: Row) => boolean,
-  toBreakdown: (row: Row) => BreakdownRow,
-): BreakdownRow[] {
-  const live = rows.flatMap((row) => (retired(row) ? [] : [toBreakdown(row)]));
-
-  const old = rows.flatMap((row) => {
-    if (!retired(row)) return [];
-
-    const breakdown = toBreakdown(row);
-
-    return [{ ...breakdown, label: retiredTitle(breakdown.label) }];
-  });
-
-  return [...live, ...old];
-}
-
-const AGENT_FAILURES_SERIES: readonly BreakdownSeries[] = [
-  { key: "count", label: "Failed runs", color: "var(--ui-color-danger)" },
 ];
 
 const AUTOMATION_REASONS_SERIES: readonly BreakdownSeries[] = [
@@ -320,12 +269,7 @@ const BREAKDOWNS: readonly Breakdown[] = [
   {
     title: "Agent failures by class",
     series: AGENT_FAILURES_SERIES,
-    rows: (reliability) =>
-      retiredLast(
-        reliability.agentFailures,
-        (row) => RETIRED_AGENT_FAILURES.includes(row.failure),
-        (row) => ({ label: AGENT_FAILURE_LABEL[row.failure], counts: { count: row.count } }),
-      ),
+    rows: (reliability) => agentFailureRows(reliability.agentFailures),
     empty: "No agent run failed in this window.",
   },
   {

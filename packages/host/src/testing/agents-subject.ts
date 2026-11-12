@@ -828,6 +828,7 @@ function fakeService() {
           commands: [{ id: ADDED_COMMAND_ID, prefix, agentId: null, addedAt: NOW }],
         }),
       ),
+    editAllowedCommand: () => Effect.succeed({ commands: [] }),
     removeAllowedCommand: () => Effect.succeed({ commands: [] }),
 
     forgetMemory: (forget) =>

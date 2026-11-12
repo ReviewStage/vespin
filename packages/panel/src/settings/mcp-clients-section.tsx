@@ -62,6 +62,7 @@ import { useOpenLink } from "../tasks/use-open-link.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * mcp-clients-section.tsx -- Settings › our MCP & CLI's MCP section: the outside agents the account let in, each revoked from its row, and how to connect one.
@@ -102,7 +103,6 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION = {
-  TITLE: "MCP",
   CAPTION: `Use ${PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.`,
 } as const;
 
@@ -288,35 +288,29 @@ function ClientLine({ client }: { client: McpClient }): React.JSX.Element {
   );
 }
 
-/** One agent the account allowed: its line and its ⋯ holding Disconnect, or, once revoked, how long what it holds lasts. */
-function ClientRow({
-  client,
-  revoked,
-  arrived,
-  onRevoked,
-}: {
-  client: McpClient;
-  revoked: boolean;
-  /** Whether it was allowed while the page showed, which lights its row once. */
-  arrived: boolean;
-  onRevoked: (client: McpClient) => void;
-}): React.JSX.Element {
+/**
+ * Revoking one client the account allowed, asked first: the refusal its row
+ * goes on saying, in `refusedWords`, and the question, which stands only
+ * while the client is not yet `revoked`. `onRevoked` hears once the service
+ * took it.
+ */
+export function useMcpClientRevoke(
+  clientId: string,
+  refusedWords: string,
+  onRevoked: () => void,
+  revoked: boolean,
+) {
   const { mutateAsync: sendMcpClientsRevoke, ...revoking } = useMutation(
     actMutation(ACT_KIND.MCP_CLIENTS_REVOKE),
   );
 
-  const name = clientName(client);
   const [rejection, setRejection] = useState<string | undefined>(undefined);
-
-  const refused: ActionResult = {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: `Revoking ${name} didn't finish. Try again.`,
-  };
+  const refused: ActionResult = { status: ACTION_RESULT_STATUS.REJECTED, reason: refusedWords };
 
   const revoke = (): Promise<ActionResult> => {
     setRejection(undefined);
 
-    return sendMcpClientsRevoke({ clientId: client.clientId }).then(
+    return sendMcpClientsRevoke({ clientId }).then(
       (answer): ActionResult => {
         if ("failure" in answer) {
           setRejection(refused.reason);
@@ -324,7 +318,7 @@ function ClientRow({
           return refused;
         }
 
-        onRevoked(client);
+        onRevoked();
 
         return { status: ACTION_RESULT_STATUS.ACCEPTED };
       },
@@ -347,6 +341,31 @@ function ClientRow({
     { subject: !revoked, surfaceOpen: true },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.MCP_CLIENT_REVOKE),
+  );
+
+  return { rejection, confirm };
+}
+
+/** One agent the account allowed: its line and its ⋯ holding Disconnect, or, once revoked, how long what it holds lasts. */
+function ClientRow({
+  client,
+  revoked,
+  arrived,
+  onRevoked,
+}: {
+  client: McpClient;
+  revoked: boolean;
+  /** Whether it was allowed while the page showed, which lights its row once. */
+  arrived: boolean;
+  onRevoked: (client: McpClient) => void;
+}): React.JSX.Element {
+  const name = clientName(client);
+
+  const { rejection, confirm } = useMcpClientRevoke(
+    client.clientId,
+    `Revoking ${name} didn't finish. Try again.`,
+    () => onRevoked(client),
+    revoked,
   );
 
   // Note that an agent that gave no name is called by the app's own words, which show in a screen recording.
@@ -548,11 +567,7 @@ export function McpSection(): React.JSX.Element {
     known !== undefined && !known.has(client.clientId) && !revoked.has(client.clientId);
 
   return (
-    <SettingsSection
-      title={SECTION.TITLE}
-      caption={SECTION.CAPTION}
-      anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}
-    >
+    <SettingsSection {...settingsSectionHead(SECTION_HEAD.MCP_CLIENTS)} caption={SECTION.CAPTION}>
       {rows === undefined ? (
         <ReadFailed
           line={PAGE_LINE.READ_FAILED}

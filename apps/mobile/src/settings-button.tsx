@@ -16,10 +16,18 @@ export const SETTINGS_ROUTE = {
   MAIN: "/settings",
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
+  INTEGRATIONS: "/settings/integrations",
   MACHINES: "/settings/machines",
   MEMORY: "/settings/memory",
+  /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
+  MEMORY_EDIT: "/settings/memory-edit",
   /** Send feedback, as Settings' About and the iPad's Help menu open it. */
   FEEDBACK: "/settings/feedback",
+  SKILLS: "/settings/skills",
+  /** One skill's file, by the `skill` and `name` it is pushed with. */
+  SKILL: "/settings/skill",
+  /** Add skill's paste. */
+  SKILL_ADD: "/settings/skill-add",
   /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;

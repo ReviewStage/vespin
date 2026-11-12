@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
 import {
-  isVideoPicture,
-  PICTURE_MEDIA_TYPE,
-  type Picture,
-  pictureMediaTypeSchema,
-} from "@repo/features/picture-wire";
+  DESCRIPTION_ATTACHMENT_BOUNDS,
+  type DescriptionFile,
+  descriptionFileTypeSchema,
+} from "@repo/features/description-attachment-wire";
+import { PICTURE_MEDIA_TYPE } from "@repo/features/picture-wire";
 import {
   MP4_TYPE,
   PLAYABLE_VIDEO_TYPE,
@@ -22,9 +21,9 @@ import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
 
 /**
- * description-attachments.ts -- a description's pictures: keep one and read one.
+ * description-attachments.ts -- a description's pictures and files: keep one and read one.
  *
- * A picture, or a video an agent recorded, is kept under the plan row's own
+ * A picture, a video an agent recorded, or a PDF is kept under the plan row's own
  * lock, so the counts it is held to, every picture's and every video's,
  * cannot be crossed by a second upload. Every read names the account beside the
  * plan and gates on its membership of the plan's workspace, so a member
@@ -87,7 +86,7 @@ const insertPicture = SqlSchema.void({
     taskId: Schema.String,
     organizationId: Schema.String,
     userId: Schema.String,
-    contentType: pictureMediaTypeSchema,
+    contentType: descriptionFileTypeSchema,
     byteCount: Schema.Number,
     bytes: Schema.Uint8Array,
     mp4Bytes: Schema.NullOr(Schema.Uint8Array),
@@ -126,25 +125,27 @@ function pictureQuery(
 
 const findPicture = SqlSchema.findOneOption({
   Request: PictureAskSchema,
-  Result: Schema.Struct({ contentType: pictureMediaTypeSchema, bytes: Schema.Uint8Array }),
+  Result: Schema.Struct({ contentType: descriptionFileTypeSchema, bytes: Schema.Uint8Array }),
   execute: (ask) => pictureQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
 });
 
 const findServedPicture = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...PictureAskSchema.fields, playable: playableVideoTypeSchema }),
   Result: Schema.Struct({
-    contentType: Schema.Union([pictureMediaTypeSchema, Schema.Literal(MP4_TYPE)]),
+    contentType: Schema.Union([descriptionFileTypeSchema, Schema.Literal(MP4_TYPE)]),
     bytes: Schema.Uint8Array,
   }),
   execute: ({ playable, ...ask }) => pictureQuery(ask, playable),
 });
 
-/** A picture or video to keep on the description, a recording with the MP4 its sandbox made of it, which no count weighs. */
-export type DescriptionAttachmentToKeep = Picture & { readonly mp4Bytes?: Uint8Array | undefined };
+/** A picture, video, or PDF to keep on the description, a recording with the MP4 its sandbox made of it, which no count weighs. */
+export type DescriptionAttachmentToKeep = DescriptionFile & {
+  readonly mp4Bytes?: Uint8Array | undefined;
+};
 
 /**
- * Keeps one picture or video on the description, uploaded by the account, under a
- * new id; refused where the description already holds its bound of pictures, or a
+ * Keeps one picture, video, or PDF on the description, uploaded by the account, under a
+ * new id, a PDF counted among its pictures; refused where the description already holds its bound of pictures, or a
  * video where it holds its bound of videos, and nothing where the account
  * reaches no such plan.
  */
@@ -170,7 +171,7 @@ export function keepDescriptionAttachment(
         }
 
         if (
-          isVideoPicture(picture) &&
+          picture.contentType === PICTURE_MEDIA_TYPE.WEBM &&
           videos >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION
         ) {
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS } as const;
@@ -195,12 +196,12 @@ export function keepDescriptionAttachment(
   );
 }
 
-/** One picture or video of the description, its type and bytes; nothing where the account reaches no such plan or the description no such picture. */
+/** One picture, video, or PDF of the description, its type and bytes; nothing where the account reaches no such plan or the description no such file. */
 export function readDescriptionAttachment(
   userId: string,
   taskId: string,
   attachmentId: string,
-): TaskStoreEffect<Option.Option<Picture>> {
+): TaskStoreEffect<Option.Option<DescriptionFile>> {
   return findPicture({ userId, taskId, attachmentId });
 }
 

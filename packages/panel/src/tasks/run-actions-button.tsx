@@ -1,6 +1,13 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  primaryRunAction,
+  RUN_ACTION_WORDS,
+  repositoryRunActions,
+  runActionMenuLabel,
+  runActionPressWords,
+  sandboxStopped,
+} from "@repo/features/run-actions-model";
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
-import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import {
   RUN_ACTION_PLACE,
   type RunAction,
@@ -62,19 +69,13 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * with the action it was started for, while the agent is shown.
  */
 
-/** What the button says, in the app's own words. */
+/** What the button says, in the app's own words, beyond the run actions' own (`RUN_ACTION_WORDS`). */
 const WORDS = {
-  MENU: "Run actions",
-  SUBMENU: "Run",
+  ...RUN_ACTION_WORDS,
   EDIT: "Edit run actions…",
-  RUNNING: "Running",
   DEFAULT: "Default",
-  RUN: (label: string) => `Run ${label}`,
-  STOP: (label: string) => `Stop ${label}`,
   IN: (words: string, agent: string) => `${words} in ${agent}`,
   STARTING: "Starting",
-  NOT_RUN: "That action did not run.",
-  NOT_STOPPED: "That action did not stop.",
 } as const;
 
 /** The keys the button offers on the agent shown, which its menu prints. */
@@ -102,11 +103,7 @@ function useRepositoryRunActions(agentId: string, reached: boolean) {
   const asks = on && reached && repository !== null && place !== undefined;
   const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
 
-  const actions = asks
-    ? (setup?.runActions?.find(
-        (each) => each.repository.toLowerCase() === (repository ?? "").toLowerCase(),
-      )?.actions ?? [])
-    : [];
+  const actions = asks ? repositoryRunActions(setup?.runActions, repository) : [];
 
   return { place, actions, read: setup !== undefined };
 }
@@ -359,7 +356,7 @@ export function useRunActions(
     ),
   );
 
-  const stopped = listed !== undefined && listed.sandbox !== SANDBOX_STATE.RUNNING;
+  const stopped = sandboxStopped(listed);
 
   const press = (action: RunAction, runs: boolean): Promise<void> => {
     if (local) {
@@ -396,7 +393,7 @@ export function useRunActions(
   return {
     agentId,
     actions: listedActions,
-    primary: listedActions.find((each) => each.action.isDefault === true) ?? listedActions[0],
+    primary: primaryRunAction(listedActions),
     busy,
     keyed: desktop && shown,
     subject: shortcutSubject(SHORTCUT_SUBJECT.AGENT, agentId),
@@ -406,7 +403,7 @@ export function useRunActions(
 
 /** An action's words: its name, or Stop and its name while it runs. */
 function actionLabel({ action, runs }: OfferedAction): string {
-  return runs ? WORDS.STOP(action.label) : action.label;
+  return runActionMenuLabel(action, runs);
 }
 
 /** An action's glyph, its own icon whether or not it runs, so a reader keeps track of which action a Stop ends. */
@@ -462,7 +459,7 @@ export function runPaletteRows(offer: RunOffer | undefined): readonly RunPalette
 
   return offer.actions.map((offered) => ({
     id: offered.action.id,
-    label: offered.runs ? WORDS.STOP(offered.action.label) : WORDS.RUN(offered.action.label),
+    label: runActionPressWords(offered.action, offered.runs),
     detail: offered.action.command,
     icon: actionGlyph(offered),
     keyed: offered === offer.primary && offer.keyed,
@@ -488,7 +485,7 @@ export function RunActionsButton({
   const first = offer.primary;
   useShortcutTarget(offer.keyed ? offer.subject : undefined, RUN_KEYS);
   useAppCommand(APP_COMMAND.RUN_ACTION, offer.keyed && !offer.busy ? first.onPress : undefined);
-  const said = first.runs ? WORDS.STOP(first.action.label) : WORDS.RUN(first.action.label);
+  const said = runActionPressWords(first.action, first.runs);
 
   return (
     <>

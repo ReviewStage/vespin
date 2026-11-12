@@ -2,10 +2,10 @@
  * turn-files.tsx -- the files a turn changed, drawn under its words: how many and the lines added and removed, then each file's chip with its own counts, which opens the turn's changes standing on the file, or the file as any file chip does where no such tab opens from here.
  *
  * The row stands in the turn's foot, over its Worked for line
- * (`agent-tab.tsx`'s `TurnFoot`), only while the task's workspace has
- * Rewind restores files on, the experiment a turn's files are offered back
- * under, which the tab reads once and hands every turn with the line that
- * opened it (`TurnFilesOn`): off, no turn draws it. A chip opens the turn's
+ * (`agent-tab.tsx`'s `TurnFoot`), only while the reader has Turn changes
+ * on, an experiment of their own account, which the tab reads once and
+ * hands every turn with the line that opened it (`TurnFilesOn`): off, no
+ * turn draws it, and so no Turn changes tab opens from one. A chip opens the turn's
  * Changes tab standing on the file, the diff of the turn's checkouts read
  * on the agent's machine (`agent-changes-tab.tsx`'s `TurnChangesTab`). What it lists is read from the turn's own
  * edits (`@repo/features/turn-files`), nothing from the checkout, so it

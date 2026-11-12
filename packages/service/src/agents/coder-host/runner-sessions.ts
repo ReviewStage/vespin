@@ -786,6 +786,12 @@ function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
   );
 }
 
+/** The agent's workspace's cloud setup scripts as `sandboxSetupOf` reads them, bound to the caller's services, for a relaunch whose place may be made anew. */
+const cloudSetupOf = (agent: Agent, machine: AgentMachineKind) =>
+  Effect.map(Effect.context<DatabaseServices | HostedEnvironment>(), (services) =>
+    Effect.provideContext(sandboxSetupOf(agent, machine), services),
+  );
+
 /** How a message reached its runner, as the handoff counts it. */
 type HandoffPath = (typeof SERVER_HANDOFF_PATH)[keyof typeof SERVER_HANDOFF_PATH];
 
@@ -1528,10 +1534,7 @@ export const runnerSessions = <
         };
 
         const [opened, experiments] = yield* Effect.all(
-          [
-            coderTurnMessage(admitted, agent, turn, handed, now),
-            experimentsOnIn(agent.organizationId),
-          ],
+          [coderTurnMessage(admitted, agent, turn, handed, now), experimentsOnIn(agent)],
           { concurrency: "unbounded" },
         );
 
@@ -1613,7 +1616,7 @@ export const runnerSessions = <
 
         if (opened === undefined) return false;
         // Note that a read that failed is no change, since restarting on it would open a session with every experiment off.
-        const read = yield* experimentsReadIn(agent.organizationId);
+        const read = yield* experimentsReadIn(agent);
 
         if (Option.isNone(read)) return false;
         const standing = read.value;
@@ -1621,7 +1624,8 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
-          (opened.turnEndOn ?? false) !== standing.turnEndOn
+          (opened.turnEndOn ?? false) !== standing.turnEndOn ||
+          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn
         );
       });
 
@@ -1893,7 +1897,11 @@ export const runnerSessions = <
             placed.pipe(
               Effect.tap((place) => Deferred.succeed(created, place.created)),
               // Note that the agent's own checkout is cloned here where the place holds none, as a launch whose checkout failed leaves it.
-              Effect.tap((place) => machine.checkOutMissing(place.place, target, agent)),
+              Effect.tap((place) =>
+                Effect.flatMap(cloudSetupOf(agent, kind), (setup) =>
+                  machine.checkOutMissing(place.place, target, agent, setup),
+                ),
+              ),
             ),
             Effect.exit(
               Effect.flatMap(harness.launch(agent, layout), (credential) =>
@@ -2222,7 +2230,7 @@ export const runnerSessions = <
         yield* relaunched(
           agent,
           sessionId,
-          machine.resume(standing, agent),
+          machine.resume(standing, agent, yield* cloudSetupOf(agent, standing.machine)),
           standing.machine,
           wasUp,
           layout,
@@ -2432,7 +2440,7 @@ export const runnerSessions = <
         const resumed = yield* relaunched(
           agent,
           sessionId,
-          machine.resume(found.value, agent),
+          machine.resume(found.value, agent, yield* cloudSetupOf(agent, found.value.machine)),
           found.value.machine,
           wasUp,
           layout,

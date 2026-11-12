@@ -256,7 +256,7 @@ export interface QueueEditing {
  * Escape, or Save with the box emptied lets it go as it was, and a message
  * the queue would not mark, already on its way, closes the edit. The mark
  * has no time to it: an edit left standing, its window closed, stays until
- * any of the member's windows cancels it from its row. Its files come into the box beside its words, read whole through the
+ * any window that may change the queue cancels it from its row. Its files come into the box beside its words, read whole through the
  * agent's pictures as its row reads them (`readQueuedFiles`), where they are
  * taken off or joined as any message's are, and Save and Steer send the
  * box's files with its words; neither goes while they are still read, and an

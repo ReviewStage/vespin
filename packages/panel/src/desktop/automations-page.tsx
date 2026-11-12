@@ -12,10 +12,7 @@ import {
   type AutomationPresetName,
   automationPreset,
 } from "@repo/features/automation-presets";
-import {
-  AUTOMATION_CALL_FAILURE,
-  type AutomationCallFailure,
-} from "@repo/features/automation-view";
+import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_SCOPE,
   type AutomationScope,
@@ -68,7 +65,6 @@ import {
   Toolbar,
   type ToolbarProps,
   Tooltip,
-  useConfirmDialog,
   useLeaving,
   useMinute,
   VisuallyHidden,
@@ -76,7 +72,6 @@ import {
 import { ACTOR_KIND, actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BotIcon, PlusIcon, ZapIcon } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
@@ -86,9 +81,8 @@ import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor
 import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { useConfirmAct } from "../confirm-act.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
-import { confirmFailure, unreadShown } from "../failure-report.js";
+import { unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
@@ -131,14 +125,15 @@ import {
   automationDeleteQuestion,
   automationNarrowLine,
   automationNextText,
+  automationOwnerFor,
   automationOwnerName,
   READING_AUTOMATIONS,
 } from "./automation-words.js";
 import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { useWorkspaceRuns, type WorkspaceRunsRead } from "./use-automation-runs.js";
 import {
-  AUTOMATION_DELETE_MUTATION,
   type AutomationWriteAnswer,
+  useAutomationDeletion,
   useAutomations,
 } from "./use-automations.js";
 
@@ -171,20 +166,6 @@ const ROW_THING = "Automation";
 
 /** What the list is called, and a phone's way back from an automation's page names it. */
 const AUTOMATIONS = "Automations";
-
-/** Why a row's Delete did not land, as its question goes on saying until it is tried again or let go. */
-const DELETE_REFUSAL_WORDS = {
-  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_FOUND]: "This automation, or its workspace, is gone.",
-  [AUTOMATION_CALL_FAILURE.NO_REPOSITORY]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]:
-    "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.INVALID]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_PERMITTED]:
-    "Only its creator, or the workspace's owners and admins, can delete it.",
-} as const satisfies Record<AutomationCallFailure, string>;
-
-const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /** What the list's acts are called, on their buttons and a phone's ⋯ alike. */
 const NEW_AUTOMATION = "New automation";
@@ -271,7 +252,7 @@ function MakerCell({
   const name = actorName(maker);
 
   return (
-    <Tooltip label={`${name} · ${automationOwnerName(owner, workspace?.name, mine)}`}>
+    <Tooltip label={`${name}, ${automationOwnerFor(owner, workspace?.name, mine)}`}>
       <AutomationOwnerFrame
         owner={owner}
         mark={<ActorMark actor={maker} size={ACTOR_SIZE.INLINE} />}
@@ -538,7 +519,6 @@ function useRowDeletion(
   groups: readonly AutomationGroup[],
   onDeleted: (automationId: string) => void,
 ) {
-  const removing = useMutation(AUTOMATION_DELETE_MUTATION);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
 
   const asked =
@@ -547,26 +527,7 @@ function useRowDeletion(
       ? asking
       : undefined;
 
-  const confirmAct = useConfirmAct(removing, {
-    send: () => {
-      if (asked === undefined) return Promise.resolve();
-
-      return removing.mutateAsync(asked.id).then((answer) => {
-        if (!("failure" in answer)) onDeleted(asked.id);
-      });
-    },
-    answered: (answer): ActionResult =>
-      "failure" in answer
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: DELETE_REFUSAL_WORDS[answer.failure] }
-        : ACCEPTED,
-  });
-
-  const confirm = useConfirmDialog(
-    { subject: asked !== undefined, surfaceOpen: true },
-    confirmAct,
-    confirmFailure(FAILURE_SURFACE.AUTOMATION_DELETE, { automationId: asked?.id }),
-  );
-
+  const confirm = useAutomationDeletion(asked?.id, onDeleted);
   const { ask: askConfirm } = confirm;
 
   const ask = useCallback(

@@ -39,8 +39,16 @@ export default function SettingsLayout() {
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
       />
       <Stack.Screen name="agents" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS] }} />
+      <Stack.Screen
+        name="integrations"
+        options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS] }}
+      />
       <Stack.Screen name="machines" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS] }} />
+      <Stack.Screen name="skills" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS] }} />
+      <Stack.Screen name="skill" />
+      <Stack.Screen name="skill-add" />
       <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
+      <Stack.Screen name="memory-edit" />
       <Stack.Screen name="feedback" options={{ title: FEEDBACK_WORDS.TITLE }} />
     </Stack>
   );

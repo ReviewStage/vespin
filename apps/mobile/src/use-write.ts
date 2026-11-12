@@ -51,6 +51,8 @@ interface WriteSaying<Answer> {
   readonly subject?: WriteSubject | undefined;
   /** The buzz a write that went plays; none for one that goes quietly, such as a read mark. */
   readonly went?: Buzz | undefined;
+  /** What runs once the write went, whether on its first send or a Try again, such as the notice that offers its Undo. */
+  readonly done?: (() => void) | undefined;
   /**
    * Says the refusal in place, beside what the write came from, rather than
    * in the notice, such as a send whose words go back into its field; it is
@@ -74,6 +76,9 @@ export const WRITE_SUBJECT = {
   TASK_PIN: "task-pin",
   TASK_READ: "task-read",
   TASK_NAME: "task-name",
+  TASK_REPOSITORY: "task-repository",
+  TASK_PARENT: "task-parent",
+  TASK_SECTION: "task-section",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
@@ -219,6 +224,7 @@ export function useWrite(): Write {
             if (words !== undefined) return failed(words, false, retry);
 
             if (saying.went !== undefined) buzz(saying.went);
+            saying.done?.();
 
             return true;
           },

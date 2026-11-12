@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, and a note such as a memory.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   ContextMenu,
@@ -33,6 +33,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, Button } from "./button.js";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -52,6 +53,9 @@ export const PUSH_ROW_GOES = {
 } as const satisfies Record<string, SfSymbol>;
 
 export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
+
+/** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
+const GLYPH_SIZE = 15;
 
 /** The size of the mark at a `PushRow`'s end, as small as iOS draws its chevron. */
 const GOES_MARK_SIZE = 13;
@@ -421,13 +425,17 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
   );
 }
 
-/** One thing a member's menu does to them. */
-export interface MemberRowAct {
+/** One thing a row's menu does, such as a member's Remove from workspace or a port's Share. */
+export interface MenuRowAct {
   readonly label: string;
-  /** Whether it takes them out of something, such as Remove from workspace, which the system draws red. */
+  readonly symbol?: SfSymbol | undefined;
+  /** Whether it takes something away, such as Remove from workspace, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
 }
+
+/** One thing a member's menu does to them. */
+export type MemberRowAct = MenuRowAct;
 
 type MemberRowProps = {
   readonly name: string;
@@ -483,14 +491,79 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
         ...spokenValue(email, role),
       ]}
     >
-      {acts.map((act) => (
-        <SwiftUIButton
-          key={act.label}
-          label={act.label}
-          role={act.destructive === true ? "destructive" : "default"}
-          onPress={act.onPress}
-        />
-      ))}
+      <RowActs acts={acts} />
+    </Menu>
+  );
+}
+
+/** A row menu's acts, each the system's button, red where it takes something away. */
+function RowActs({ acts }: { readonly acts: readonly MenuRowAct[] }) {
+  return acts.map((act) => (
+    <SwiftUIButton
+      key={act.label}
+      label={act.label}
+      {...(act.symbol === undefined ? {} : { systemImage: act.symbol })}
+      role={act.destructive === true ? "destructive" : "default"}
+      onPress={act.onPress}
+    />
+  ));
+}
+
+type MenuRowProps = {
+  readonly label: string;
+  /** The glyph leading it, in the muted ink. */
+  readonly symbol: SfSymbol;
+  /** The line under its name in the muted ink, such as what serves a port; none for none. */
+  readonly detail?: string | undefined;
+  /** What stands at its end in the muted ink, such as Sharing; none for none. */
+  readonly value?: string | undefined;
+  /** What a press offers; a row with none takes no press. */
+  readonly acts: readonly MenuRowAct[];
+};
+
+/**
+ * A thing a sheet lists, such as one of an agent's ports: its glyph, its
+ * name with a line under it, and a value at its end, each but the name in
+ * the muted ink. Where it offers anything, a press opens the system's menu
+ * of what it offers, as `MemberRow`'s does; VoiceOver hears it by its name,
+ * then its line and its value.
+ */
+export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
+  const colors = useColors();
+  const glyphSize = useScaledSize(GLYPH_SIZE);
+
+  const face = (
+    <HStack spacing={SPACE.ROW}>
+      <Image systemName={symbol} size={glyphSize} color={colors.TEXT_MUTED} />
+      <VStack alignment="leading" spacing={1}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+        {detail === undefined ? null : (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {detail}
+          </Text>
+        )}
+      </VStack>
+      <Spacer />
+      {value === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
+      )}
+    </HStack>
+  );
+
+  const heard = [accessibilityLabel(label), ...spokenValue(detail, value)];
+
+  if (acts.length === 0) {
+    return <VStack modifiers={[listRowBackground(colors.SURFACE), ...heard]}>{face}</VStack>;
+  }
+
+  return (
+    <Menu label={face} modifiers={[listRowBackground(colors.SURFACE), ...heard]}>
+      <RowActs acts={acts} />
     </Menu>
   );
 }
@@ -498,35 +571,66 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 /** The act that takes a note away, as the system draws one: its glyph, and its role, in red. */
 const NOTE_REMOVE = { SYMBOL: "trash", ROLE: "destructive" } as const;
 
+/** The glyph of the act that opens a note's words to be changed, as Notes' Edit draws it. */
+const NOTE_EDIT_SYMBOL = "pencil";
+
+/** One act of a note's: its words and what a press does. */
+type NoteAct = { readonly label: string; readonly onPress: () => void };
+
 type NoteRowProps = {
   /** The glyph before the words, an SF Symbol in the muted ink, such as a machine's kind. */
   readonly symbol?: SfSymbol | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
+  /** What it is, under its words in the body's ink, such as a skill's description. */
+  readonly detail?: string | undefined;
   /** A quiet line under them, such as who kept it and when. */
   readonly line: string;
   /** A word beside the line, such as New, in the muted ink. */
   readonly badge?: string | undefined;
+  /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
+  /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
+  readonly edit?: NoteAct | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
-  readonly remove?: { readonly label: string; readonly onPress: () => void } | undefined;
+  readonly remove?: NoteAct | undefined;
 };
 
 /**
- * A note of Settings, such as a memory or a machine: its glyph where it has
- * one, its words whole in the ink, then a
- * quiet line of whose they are, and, where the reader may, the act that
- * takes it away behind a swipe from the trailing edge, as Notes' rows carry
- * Delete, and in the menu a long press opens. Note that a full swipe never
- * runs it, since it asks first. VoiceOver hears the row as one element, its
- * words then its line, and offers the act among its actions.
+ * A note of Settings, such as a memory, a machine, or a skill: its glyph
+ * where it has one, its words whole in the ink, what it is under them where
+ * it says, and the chevron where a press opens it, then a
+ * quiet line of whose they are. Where the reader may, a press that goes
+ * nowhere else opens its words to be changed, as a note in Notes opens, and
+ * the act that takes it away stands behind a swipe from the trailing edge,
+ * as Notes' rows carry Delete; a long press opens a menu of both, Edit
+ * first. Note that a full swipe never runs Delete, since it asks first.
+ * VoiceOver hears the row as one element, its words then its line, and
+ * offers its acts among its actions.
  */
-export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
+export function NoteRow({
+  symbol,
+  words,
+  detail,
+  line,
+  badge,
+  onPress,
+  edit,
+  remove,
+}: NoteRowProps) {
   const colors = useColors();
   const said = badge === undefined ? line : `${badge} · ${line}`;
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{words}</Text>
+      {detail === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+        >
+          {detail}
+        </Text>
+      )}
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >
@@ -535,7 +639,7 @@ export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
     </VStack>
   );
 
-  const drawn = (
+  const content = (
     <HStack
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
@@ -545,35 +649,170 @@ export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
       )}
       {lines}
       <Spacer />
+      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
+
+  // Note that a row a press takes somewhere, or opens to be changed, is the system's plain button, its words keeping their own ink, as `PressedRow` draws one.
+  const pressed = onPress ?? edit?.onPress;
+
+  const drawn =
+    pressed === undefined ? (
+      content
+    ) : (
+      <SwiftUIButton onPress={pressed} modifiers={[buttonStyle("plain")]}>
+        {content}
+      </SwiftUIButton>
+    );
 
   const placed = [
     listRowBackground(colors.SURFACE),
     accessibilityElement("combine"),
     accessibilityLabel(words),
-    accessibilityValue(said),
+    accessibilityValue(detail === undefined ? said : `${detail}, ${said}`),
   ];
 
-  if (remove === undefined) return <HStack modifiers={placed}>{drawn}</HStack>;
+  if (edit === undefined && remove === undefined) {
+    return <HStack modifiers={placed}>{drawn}</HStack>;
+  }
 
-  const act = (
-    <SwiftUIButton
-      label={remove.label}
-      systemImage={NOTE_REMOVE.SYMBOL}
-      role={NOTE_REMOVE.ROLE}
-      onPress={remove.onPress}
-    />
+  const removeAct =
+    remove === undefined ? undefined : (
+      <SwiftUIButton
+        label={remove.label}
+        systemImage={NOTE_REMOVE.SYMBOL}
+        role={NOTE_REMOVE.ROLE}
+        onPress={remove.onPress}
+      />
+    );
+
+  const menu = (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {edit === undefined ? null : (
+          <SwiftUIButton label={edit.label} systemImage={NOTE_EDIT_SYMBOL} onPress={edit.onPress} />
+        )}
+        {removeAct}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
+    </ContextMenu>
   );
+
+  if (removeAct === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
 
   return (
     <SwipeActions modifiers={placed}>
-      <ContextMenu>
-        <ContextMenu.Items>{act}</ContextMenu.Items>
-        <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-      </ContextMenu>
+      {menu}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
-        {act}
+        {removeAct}
+      </SwipeActions.Actions>
+    </SwipeActions>
+  );
+}
+
+/** A line under a connection's name: its words, and whether they say something went wrong, drawn in danger's ink. */
+export interface ConnectionLine {
+  readonly text: string;
+  readonly problem?: boolean | undefined;
+}
+
+type ConnectionRowProps = {
+  /** The connection's name, such as "Notion · Acme". */
+  readonly name: string;
+  /** Its lines under the name: where it stands, what it is for, or why it did not go. */
+  readonly lines: readonly ConnectionLine[];
+  /** The one act it offers at its end, such as Connect or Cancel, as a bordered button; none where it offers none there. */
+  readonly act?:
+    | {
+        readonly label: string;
+        /** Whether it takes no press now, such as while the last one is out. */
+        readonly disabled?: boolean | undefined;
+        readonly onPress: () => void;
+      }
+    | undefined;
+  /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
+  readonly menu?: readonly MemberRowAct[] | undefined;
+};
+
+/**
+ * A connection of the account's, such as an integration or an app given
+ * access: its name in the ink, its lines in the muted ink or a problem's in
+ * danger's, and its one act at its end as the system's bordered button, in
+ * the ink as a quiet act stands; the rest in the menu a long press opens, and
+ * a destructive one, such as Disconnect, behind a swipe too, which a full
+ * swipe never runs, since it asks first.
+ */
+export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProps) {
+  const colors = useColors();
+  const said = lines.map((line) => line.text).join(", ");
+
+  const drawn = (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+    >
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+        {lines.map((line) => (
+          <Text
+            key={line.text}
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(line.problem === true ? colors.DANGER_TEXT : colors.TEXT_MUTED),
+            ]}
+          >
+            {line.text}
+          </Text>
+        ))}
+      </VStack>
+      <Spacer />
+      {act === undefined ? null : (
+        <Button
+          label={act.label}
+          look={BUTTON_LOOK.BORDERED}
+          disabled={act.disabled}
+          onPress={act.onPress}
+        />
+      )}
+    </HStack>
+  );
+
+  const placed = [listRowBackground(colors.SURFACE), ...spokenValue(said)];
+
+  if (menu.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
+
+  const items = menu.map((each) => (
+    <SwiftUIButton
+      key={each.label}
+      label={each.label}
+      role={each.destructive === true ? "destructive" : "default"}
+      onPress={each.onPress}
+    />
+  ));
+
+  const swiped = menu.filter((each) => each.destructive === true);
+
+  const held = (
+    <ContextMenu>
+      <ContextMenu.Items>{items}</ContextMenu.Items>
+      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
+    </ContextMenu>
+  );
+
+  if (swiped.length === 0) return <HStack modifiers={placed}>{held}</HStack>;
+
+  return (
+    <SwipeActions modifiers={placed}>
+      {held}
+      <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
+        {swiped.map((each) => (
+          <SwiftUIButton
+            key={each.label}
+            label={each.label}
+            role={NOTE_REMOVE.ROLE}
+            onPress={each.onPress}
+          />
+        ))}
       </SwipeActions.Actions>
     </SwipeActions>
   );

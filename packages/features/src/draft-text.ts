@@ -2,8 +2,9 @@
  * draft-text.ts -- the words an agent writes to be sent elsewhere, read from their fence: a Slack message's marks and links, an email's subject, and each as the HTML and plain text a copy puts on the clipboard.
  *
  * An agent puts what the developer will send elsewhere in a fence named for
- * where it goes, and the window draws it as it will look there
- * (`DraftCard`):
+ * where it goes, and the window draws it as it will look there (the
+ * panel's `DraftCard`, and the iOS app's in `@repo/ui-native`), each in the
+ * words `DRAFT_WORDS` gives:
  *
  * - ```slack, a Slack message in Slack's own mrkdwn: `*bold*`, `_italic_`,
  *   `~strike~`, `` `code` ``, and `<https://…|label>` or `<https://…>`
@@ -30,6 +31,20 @@ export const DRAFT_KIND = {
 } as const;
 
 export type DraftKind = (typeof DRAFT_KIND)[keyof typeof DRAFT_KIND];
+
+/** What a draft's card says: what each draft is, the word its subject's row leads with, and what each Copy copies ("Copy message", "Copy subject"). */
+export const DRAFT_WORDS = {
+  TITLE: {
+    [DRAFT_KIND.SLACK]: "Slack message",
+    [DRAFT_KIND.EMAIL]: "Email",
+    [DRAFT_KIND.DRAFT]: "Draft",
+  } as const satisfies Record<DraftKind, string>,
+  SUBJECT: "Subject",
+  COPY_WHAT: {
+    BODY: "message",
+    SUBJECT: "subject",
+  },
+} as const;
 
 /** How a run of a Slack message is marked. */
 export const DRAFT_MARK = {

@@ -1,16 +1,17 @@
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
+import {
+  PULL_REQUEST_MARK_QUEUED,
+  type PullRequestMarkState,
+  pullRequestMarkState,
+} from "@repo/features/pull-request-model";
 import {
   TASK_AGENTS_STATUS,
   type TaskAgentsStatus,
   taskAgentsStatus,
 } from "@repo/features/task-agents-model";
 import type { TaskAgentsSummary, TaskPullRequestLine } from "@repo/features/task-wire";
-import {
-  PULL_REQUEST_GLYPH,
-  PULL_REQUEST_MARK_QUEUED,
-  type PullRequestMarkState,
-  pullRequestMarkState,
-} from "../../marks/pull-request-glyph.js";
+import { PULL_REQUEST_GLYPH } from "../../marks/pull-request-glyph.js";
 import { FailedMark } from "../row-mark/row-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 
@@ -88,7 +89,12 @@ function AgentsStatusMark({
       );
     case TASK_AGENTS_STATUS.WORKING:
       return (
-        <span className={seat} data-task-agents={status.kind} role="img" aria-label="Working">
+        <span
+          className={seat}
+          data-task-agents={status.kind}
+          role="img"
+          aria-label={GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]}
+        >
           <WorkingMark />
         </span>
       );

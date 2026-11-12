@@ -385,8 +385,13 @@ function queryOptions(
 
   if (config.effort !== undefined) options.effort = config.effort;
 
-  // Note that a headless CLI runs fast mode only where its flag settings opt in.
-  if (config.fast === true) options.settings = { fastMode: true };
+  // Note that the CLI's own file memory is off, because the workspace's memory keeps what an agent
+  // learns, and a cloud sandbox made again from the image keeps nothing of its home folder; and that
+  // a headless CLI runs fast mode only where its flag settings opt in.
+  options.settings = {
+    autoMemoryEnabled: false,
+    ...(config.fast === true ? { fastMode: true } : undefined),
+  };
 
   if (from.resume !== undefined) options.resume = from.resume;
 

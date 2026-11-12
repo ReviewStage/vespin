@@ -236,6 +236,7 @@ export function SettingsRow({
   labelsControl = false,
   controls = SETTINGS_ROW_CONTROLS.DROP,
   landed = false,
+  editing = false,
   children,
   end,
   below,
@@ -260,6 +261,8 @@ export function SettingsRow({
   controls?: SettingsRowControls | undefined;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean | undefined;
+  /** Whether its words are being typed in place (`TEXT_FIELD_SIZE.INLINE`), which rings the whole row in the accent, as an unsaved script's editor is edged, until its Save or Cancel. */
+  editing?: boolean | undefined;
   /** The row's controls, handed the row's ids to name and describe them by; they drop below the words where they would leave them less than a legible stretch. */
   children?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row ends in at any width, on its name's line after its controls: its ⋯, a fold's chevron, a dismiss. */
@@ -322,8 +325,9 @@ export function SettingsRow({
 
   return (
     <div
-      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"
+      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
       data-invalid={failed}
+      data-editing={editing || undefined}
       data-density={density}
       data-indent={indent}
       data-labels-control={labelsControl}

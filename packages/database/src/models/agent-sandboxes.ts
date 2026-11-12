@@ -315,18 +315,20 @@ export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffe
 
 /**
  * The agent's sandbox recorded LIVE and used at `at`, where its row was
- * written before the cutoff or stood RELEASED. Where the open `created`
- * the sandbox, under a name whose earlier sandbox was released, discarded,
- * or lapsed, the snapshots the agent's turns hold are forgotten first, since
- * they stood on the disk that is gone.
+ * written before the cutoff or stood RELEASED. Where the open created the
+ * sandbox on a `fresh` checkout, under a name whose earlier sandbox was
+ * released, discarded, or lapsed, the snapshots the agent's turns hold are
+ * forgotten first, since they stood on the disk that is gone. Note that a
+ * sandbox created on the agent's own drive as it stood is not fresh, because
+ * the checkout those snapshots' refs live in is on that drive.
  */
 export function recordAgentSandboxOpen(
   agentId: string,
   use: AgentSandboxUse,
-  created = false,
+  fresh = false,
 ): SandboxUseEffect<void> {
   return Effect.andThen(
-    created ? forgetTurnSnapshotsOfAgent(agentId) : Effect.void,
+    fresh ? forgetTurnSnapshotsOfAgent(agentId) : Effect.void,
     upsertOpen({ ...use, agentId }),
   );
 }

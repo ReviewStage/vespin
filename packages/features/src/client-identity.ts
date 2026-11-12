@@ -48,10 +48,13 @@ const CLIENT_SEPARATOR = "/";
 /** A version as a build names it, bounded, since the service writes it into its lines: a release version, a build number, or a development build's word. */
 const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/u;
 
+/** The word a build that names no version of its own, a web tab served by a development server, names itself by, since a header naming none would not read. */
+const UNVERSIONED_BUILD = "development";
+
 /** The two headers a build sends on every hosted call, as a record a request or a socket's address carries. */
 export function clientHeaders(identity: ClientIdentity) {
   return {
-    [CLIENT_HEADER.CLIENT]: `${identity.platform}${CLIENT_SEPARATOR}${identity.version}`,
+    [CLIENT_HEADER.CLIENT]: `${identity.platform}${CLIENT_SEPARATOR}${identity.version || UNVERSIONED_BUILD}`,
     [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
   } satisfies Readonly<Record<string, string>>;
 }

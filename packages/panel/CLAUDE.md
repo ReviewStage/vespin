@@ -110,11 +110,27 @@ the same change.
 
 A feature still behind Settings › Experimental is gated by its key in
 `@repo/settings`'s `EXPERIMENT`, the one registry the page, the store, and the
-counting read; the account's choice is the service's, carried to every window
-on the settings snapshot.
+counting read. Each entry of `EXPERIMENTS` names its `scope`, by the rule
+written on `EXPERIMENT_SCOPE`:
 
-- A surface asks with `useExperiment(EXPERIMENT.X)`, or `experimentOnNow` in a
-  callback, never by reading the document itself.
+- **Workspace** when turning it on makes or changes something the members
+  share or the admins keep: a shared store (Memory), a shared document (Task
+  descriptions), the workspace's own settings (Run actions). Its admins
+  choose it for everyone, carried on the workspace's entry in the account's
+  workspaces, and a surface asks with `useWorkspaceExperiment(workspaceId,
+  EXPERIMENT.X)` for the workspace it is about.
+- **Account** when it changes only what one member sees, or what the agents
+  that member starts do, and what it leaves behind reads well to a teammate
+  with it off (Skills, Turn changes, Rewind restores files, Done and
+  follow-ups). Each member chooses it, carried on the settings snapshot, and a
+  surface asks with `selectExperiment(EXPERIMENT.X)` over `appStateQuery`.
+  The service gates the agent's own behavior by the account that started it
+  (`agent.userId`), and a member's request by the member asking.
+- Choose the account where both could serve, so one member can try a
+  feature without turning it on for everyone.
+
+- A surface asks through the read its scope names above, never by reading
+  the document itself.
 - A list gates an entry by a tag on its declaration (`AppShortcut.experiment`)
   and filters it where the list is built, never by a check at a call site, so
   the menu bar, the Keyboard shortcuts page, and the settings search agree.

@@ -1,5 +1,5 @@
 /**
- * picture-files.ts -- which picked, pasted, or dropped files are pictures, a HEIC photo among them however the system typed it.
+ * picture-files.ts -- which picked, pasted, or dropped files are pictures, a HEIC photo among them however the system typed it, and which a description keeps beside them, a PDF.
  *
  * Every place a picture is taken in tells one by `isPictureFile`, the
  * message box, feedback, and the description's editor alike, so a photo
@@ -34,4 +34,22 @@ export function imageFiles(list: ArrayLike<File> | null | undefined): File[] {
   if (!list) return [];
 
   return Array.from(list).filter(isPictureFile);
+}
+
+/** The type a PDF is given. */
+const PDF_TYPE = "application/pdf";
+
+/** A PDF's name, for a system that gave it no type. */
+const PDF_NAME = /\.pdf$/iu;
+
+/** Whether a file is a PDF, by its type or, where it has none, its name. */
+export function isPdfUpload(file: { readonly type: string; readonly name: string }): boolean {
+  return file.type === PDF_TYPE || (file.type === "" && PDF_NAME.test(file.name));
+}
+
+/** The files a description keeps among whatever was picked, pasted, or dropped: its pictures and its PDFs, in their given order. */
+export function descriptionFiles(list: ArrayLike<File> | null | undefined): File[] {
+  if (!list) return [];
+
+  return Array.from(list).filter((file) => isPictureFile(file) || isPdfUpload(file));
 }

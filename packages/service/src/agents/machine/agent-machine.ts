@@ -429,11 +429,14 @@ export interface AgentMachineService {
   readonly firewall: MachineFirewall;
   /**
    * The agent's found place run again, where it is not, and where it runs
-   * now: made anew on the machine's own terms where its disk is lost.
+   * now: made anew on the machine's own terms where its disk is lost, the
+   * workspace's cloud setup scripts run in it where it was made anew on a
+   * checkout it kept (`setup`).
    */
   readonly resume: (
     found: FoundPlace,
     agent: Agent,
+    setup?: Effect.Effect<SandboxSetup | undefined>,
   ) => Effect.Effect<
     ResumedPlace,
     SandboxError | CheckoutRefused | AgentImageMissing,
@@ -452,13 +455,15 @@ export interface AgentMachineService {
   ) => Effect.Effect<void, SandboxError | LaunchRefused>;
   /**
    * The agent's own checkout cloned before a relaunch where the running
-   * place holds none. Nothing on a machine that clones nothing for a
+   * place holds none, the workspace's cloud setup scripts run after that
+   * clone (`setup`). Nothing on a machine that clones nothing for a
    * launch, a device's, nor for an agent with no repository.
    */
   readonly checkOutMissing: (
     place: MachinePlace,
     target: ConversationTarget,
     agent: Agent,
+    setup?: Effect.Effect<SandboxSetup | undefined>,
   ) => Effect.Effect<void, CheckoutRefused | SandboxError, CheckoutServices>;
   /** The runner launched in the place once `started` is done, recorded, and handed its first lines once `ready` is; ended again where they were not taken, or where `ready` failed. */
   readonly launchRunner: <A, E, R, EL, RL, ES = never, RS = never>(

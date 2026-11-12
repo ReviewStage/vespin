@@ -42,7 +42,9 @@ import { Tooltip } from "../tooltip/hint.js";
  * beat, fades, so a file seen going up is seen landing; one drawn up already
  * stands still.
  *
- * A file that is here hangs its card while the pointer rests on the chip: its
+ * A file that is here hangs its card while the pointer rests on the chip, unless
+ * its caller asks for none (`ATTACHMENT_CHIP_HOVER.NONE`), as a PDF standing
+ * among a description's words does, whose card would cover them: its
  * glyph, its whole name, and what more the chip says of it, as every other
  * chip hangs its kind's card, and under them the head of a text file's words
  * where the caller hands them (`peek`), faded at the card's foot. A file not
@@ -67,6 +69,15 @@ export const ATTACHMENT_CHIP_STATE = {
 
 export type AttachmentChipState =
   (typeof ATTACHMENT_CHIP_STATE)[keyof typeof ATTACHMENT_CHIP_STATE];
+
+/** What a chip hangs while the pointer rests on it: its file's card, or nothing, where it stands among words the card would cover and its face already says all the card would. */
+export const ATTACHMENT_CHIP_HOVER = {
+  CARD: "card",
+  NONE: "none",
+} as const;
+
+export type AttachmentChipHover =
+  (typeof ATTACHMENT_CHIP_HOVER)[keyof typeof ATTACHMENT_CHIP_HOVER];
 
 /**
  * The chip: as tall as a thumbnail, at most its longest, in a hairline that
@@ -238,6 +249,7 @@ export function AttachmentChip({
   failure,
   motionKey,
   peek,
+  hover = ATTACHMENT_CHIP_HOVER.CARD,
 }: {
   /** The file's name, which names the chip, its open, and its way off. */
   name: string;
@@ -263,6 +275,8 @@ export function AttachmentChip({
   motionKey?: string | undefined;
   /** The head of a text file's words, which its card shows under its name; none for a file with no words to show. */
   peek?: string | undefined;
+  /** What it hangs on hover: its card, as every list of files does, or nothing. */
+  hover?: AttachmentChipHover;
 }): React.JSX.Element {
   const ready = state === ATTACHMENT_CHIP_STATE.READY;
   const uploading = state === ATTACHMENT_CHIP_STATE.UPLOADING;
@@ -300,46 +314,52 @@ export function AttachmentChip({
     </HoverCard>
   ) : undefined;
 
-  return (
+  const chip = (
+    <li
+      className={CHIP}
+      data-image={thumbnail ? "true" : undefined}
+      data-picture={picture ? "true" : undefined}
+      data-removable={onRemove === undefined ? undefined : "true"}
+      {...(motionKey === undefined ? {} : motionKeyAttribute(motionKey))}
+      data-state={state}
+    >
+      {onOpen === undefined || !ready ? (
+        <span className={FACE}>{face}</span>
+      ) : (
+        <button
+          type="button"
+          className={`${FACE} ${FACE_PRESS}`}
+          aria-label={`Open ${name}`}
+          onClick={pulseOnPress(onOpen)}
+        >
+          {face}
+        </button>
+      )}
+      {uploading ? <UploadMeter name={name} progress={progress} /> : null}
+      {landed ? (
+        <span className={LANDED} aria-hidden="true">
+          <CheckIcon />
+        </span>
+      ) : null}
+      {onRemove === undefined ? null : (
+        <button
+          type="button"
+          className={REMOVE}
+          aria-label={`Remove ${name}`}
+          disabled={removeDisabled === true}
+          onClick={pulseOnPress(onRemove)}
+        >
+          <RemoveIcon />
+        </button>
+      )}
+    </li>
+  );
+
+  return hover === ATTACHMENT_CHIP_HOVER.NONE ? (
+    chip
+  ) : (
     <Tooltip label={name} card={card}>
-      <li
-        className={CHIP}
-        data-image={thumbnail ? "true" : undefined}
-        data-picture={picture ? "true" : undefined}
-        data-removable={onRemove === undefined ? undefined : "true"}
-        {...(motionKey === undefined ? {} : motionKeyAttribute(motionKey))}
-        data-state={state}
-      >
-        {onOpen === undefined || !ready ? (
-          <span className={FACE}>{face}</span>
-        ) : (
-          <button
-            type="button"
-            className={`${FACE} ${FACE_PRESS}`}
-            aria-label={`Open ${name}`}
-            onClick={pulseOnPress(onOpen)}
-          >
-            {face}
-          </button>
-        )}
-        {uploading ? <UploadMeter name={name} progress={progress} /> : null}
-        {landed ? (
-          <span className={LANDED} aria-hidden="true">
-            <CheckIcon />
-          </span>
-        ) : null}
-        {onRemove === undefined ? null : (
-          <button
-            type="button"
-            className={REMOVE}
-            aria-label={`Remove ${name}`}
-            disabled={removeDisabled === true}
-            onClick={pulseOnPress(onRemove)}
-          >
-            <RemoveIcon />
-          </button>
-        )}
-      </li>
+      {chip}
     </Tooltip>
   );
 }

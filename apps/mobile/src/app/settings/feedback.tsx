@@ -108,12 +108,13 @@ export default function FeedbackScreen() {
   const out = useRef(false);
   // Whether the page still stands, since a note discarded while its send was out leaves a send that must not take the screen now in front back with it.
   const standing = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
       standing.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   // How many notes went, by which the field is drawn afresh once the words it held were sent.
   const [sends, setSends] = useState(0);
   const feedbackPictures = useAttachedPictures(setNote, undefined, FEEDBACK_PICTURES);
@@ -233,7 +234,11 @@ export default function FeedbackScreen() {
         act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
-        onAct={kept.discard}
+        onAct={() => {
+          // Note that the page stands no longer from the discard itself, since it stays mounted through its exit, and a send landing then must not go back from the screen in front.
+          standing.current = false;
+          kept.discard();
+        }}
         onDismiss={kept.stay}
       />
       <Screen>

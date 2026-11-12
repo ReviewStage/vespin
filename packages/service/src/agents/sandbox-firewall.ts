@@ -120,11 +120,14 @@ export interface FirewallSession extends FirewallOwner {
 /**
  * What a write carries of its writer's own, gathered as it writes: the
  * agent's repository credential, minted afresh, and a clone's or a fetch's
- * read token for that run alone; each left out where it is not to stand.
+ * read token for that run alone, or several, one for each repository a
+ * workspace drive's batch syncs, each scoped to its own repository's path;
+ * each left out where it is not to stand.
  */
 export interface FirewallSources {
   readonly github?: RepositoryCredential | undefined;
   readonly clone?: RepositoryCredential | undefined;
+  readonly clones?: readonly RepositoryCredential[] | undefined;
 }
 
 /** A launch's swaps, by the credential each holds. */
@@ -368,6 +371,7 @@ export function composePolicy(sources: FirewallSources, swaps: LaunchSwaps): Net
   const entries = [
     ...(sources.github === undefined ? [] : [githubEntry(sources.github)]),
     ...(sources.clone === undefined ? [] : [cloneEntry(sources.clone)]),
+    ...(sources.clones ?? []).map(cloneEntry),
     ...SWAP_ORDER.flatMap((kind) => {
       const entry = swaps.get(kind);
 

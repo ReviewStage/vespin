@@ -39,9 +39,9 @@ import { readTaskWorkspace } from "@repo/database/models/task-store";
 import {
   DESCRIPTION_ATTACHMENT_REFUSAL,
   DESCRIPTION_ATTACHMENT_STATUS,
+  descriptionFileOfDataUrl,
 } from "@repo/features/description-attachment-wire";
 import { pageVersionNumberSchema, taskPageOwner } from "@repo/features/page-wire";
-import { pictureOfDataUrl } from "@repo/features/picture-wire";
 import {
   type TaskFileRequest,
   type TaskTreeRequest,
@@ -157,7 +157,7 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
     }),
     keepPicture: taskFiles.keepPicture.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
-      const picture = pictureOfDataUrl(input.body.picture);
+      const picture = descriptionFileOfDataUrl(input.body.picture);
 
       if (picture === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 

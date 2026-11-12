@@ -1919,20 +1919,20 @@ it.effect(
 );
 
 it.effect(
-  "starts the CLI with its own fast mode opted in where the config asks for it, and off otherwise",
+  "starts the CLI with its file memory off, and its own fast mode opted in where the config asks for it and off otherwise",
   () =>
     Effect.gen(function* () {
       const fast = yield* launch(SHORT_TURN, fakeService());
       yield* fast.write({ ...CONFIG, fast: true });
       yield* fast.write(FIRST_MESSAGE);
       yield* Fiber.join(fast.run);
-      assert.deepEqual(fast.cli.options?.settings, { fastMode: true });
+      assert.deepEqual(fast.cli.options?.settings, { autoMemoryEnabled: false, fastMode: true });
 
       const standard = yield* launch(SHORT_TURN, fakeService());
       yield* standard.write(CONFIG);
       yield* standard.write(FIRST_MESSAGE);
       yield* Fiber.join(standard.run);
-      assert.equal(standard.cli.options?.settings, undefined);
+      assert.deepEqual(standard.cli.options?.settings, { autoMemoryEnabled: false });
     }),
 );
 

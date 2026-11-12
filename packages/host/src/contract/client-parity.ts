@@ -8,19 +8,25 @@
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its reminders, its
  * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
- * it, and the Undo of either; the Tasks
+ * it, and the Undo of either, a new thread started with a thread's agent,
+ * and a thread its link names that the feed does not hold, found where it
+ * stands and read from its task's own inbox; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task moved into a section from its menu or
- * dragged into one on an iPad, its repository changed, and a task's
+ * dragged into one on an iPad, its repository changed, its parent, sub-tasks,
+ * and blocks added, changed, and taken away, and a task's
  * description, pages, and comment threads followed, with a reply on a
  * thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, a part of
- * its transcript carried cut read whole as its call opens, and the agent
- * renamed, pinned, archived, and deleted; New agent on a task and
- * New task, a sub-task or a related task among it, or one filed for later
- * with no agent, with the models and the repositories they pick among followed;
+ * its transcript carried cut read whole as its call opens, a cloud agent's
+ * listening ports listed and shared by a public link, opened in Safari or
+ * no longer shared, its repository's run actions run and stopped in its
+ * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
+ * on a task and New task, a sub-task or a related task among it, or one
+ * filed for later with no agent, with the models and the repositories they
+ * pick among followed, and read again where they could not be;
  * Settings' Account page: Share usage data, support access, and the
  * account's deletion; Settings' Send feedback, its words and pictures
  * sent as the panel's form sends them; a workspace made from the switcher, which New
@@ -83,6 +89,9 @@ const WEB = {
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
+  HANDOFF: byDesign(
+    "A browser tab cannot advertise a Handoff activity; Safari hands off its own page",
+  ),
   LIVE_VIEW: byDesign(
     "The tab opens a Browser tab's live view socket itself (web-browser-live.ts)",
   ),
@@ -108,14 +117,11 @@ const IOS = {
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
-  COMPOSER: notYet(
-    "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
-  ),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
-  COPY_RICH: notYet(
-    "iOS draws no draft card yet; a message's long press copies its Markdown as plain words",
+  COPY_RICH: byDesign(
+    "iOS copies a draft card's message to the system's pasteboard itself, as rich text and plain words (expo-clipboard)",
   ),
   PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
   SAVE_FILE: byDesign(
@@ -134,7 +140,11 @@ const IOS = {
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
+  INTEGRATION_EXTRAS: notYet(
+    "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
+  ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
+  HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -145,7 +155,6 @@ const IOS = {
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   UPDATER: byDesign("The App Store updates the app"),
-  WAVE_5: notYet("Starting an agent from a thread is iOS wave 5"),
 } as const;
 
 /** A phone's own push registration, which a desktop or a browser tab has no APNs token for. */
@@ -202,9 +211,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MEMORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.MEMORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.MEMORIES_FORGET]: EVERYWHERE,
-  [PORT_ACT_KIND.MEMORIES_SAVE]: panel(
-    notYet("iOS's Memory page reads, searches, and deletes; it adds and edits none yet"),
-  ),
+  [PORT_ACT_KIND.MEMORIES_SAVE]: EVERYWHERE,
   [PORT_ACT_KIND.SOUND_READ]: panel(IOS.SOUNDS),
   [PORT_ACT_KIND.SOUND_ADD]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
@@ -221,7 +228,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.LIVE_ACTIVITY_ENDED]: PHONE_ONLY,
 
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
@@ -256,13 +263,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
-  [PORT_ACT_KIND.AGENTS_WARM]: panel(IOS.COMPOSER),
-  [PORT_ACT_KIND.AGENTS_PORTS]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PORT_SHARED]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PORT_SHARE]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PORT_UNSHARE]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_RUN_ACTION]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PORT_SHARED]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PORT_SHARE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PORT_UNSHARE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_RUN_ACTION]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DELETE]: EVERYWHERE,
@@ -280,17 +287,17 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: EVERYWHERE,
 
-  [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
+  [PORT_ACT_KIND.AGENTS_INBOX_START]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: panel(notYet("iOS v1 opens no Inbox item by its link")),
+  [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,
@@ -312,21 +319,21 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
-  [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.INTEGRATIONS_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_CONNECT]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_CANCEL]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_DISCONNECT]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.INTEGRATIONS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_CONNECT]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_CANCEL]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_DISCONNECT]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: panel(IOS.INTEGRATION_EXTRAS),
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: panel(IOS.INTEGRATION_EXTRAS),
+  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: panel(IOS.INTEGRATION_EXTRAS),
   [PORT_ACT_KIND.MCP_CLIENTS_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: panel(IOS.SETTINGS),
@@ -366,12 +373,12 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_PARENT]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_BLOCK]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.TASKS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
@@ -389,10 +396,14 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_FIND]: panel(notYet("iOS v1's Search tab is a placeholder")),
-  [PORT_ACT_KIND.TASKS_REVISIONS]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_REVISION]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_RESTORE]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_FIND]: panel(
+    notYet(
+      "iOS opens a task link by its number from the tasks it holds; one outside them is Task not found",
+    ),
+  ),
+  [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_RESTORE]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PAGE_SOURCE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PAGE_HTML]: {
     desktop: PANEL_PAGE_FRAME,
@@ -402,8 +413,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
@@ -444,6 +455,7 @@ export const CLIENT_PARITY = {
     notYet("iOS v1 has no editor to hold unsaved work"),
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
+  [PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,

@@ -13,7 +13,8 @@ import { INLINE_REF_FIT } from "../inline-ref/inline-ref-fit.js";
  * mention does. A picture wears its thumbnail in the glyph's place and,
  * while the pointer rests on it, hangs a card of the picture at a preview's
  * size under its name; a picture whose bytes are not here, still read or not
- * kept, wears a picture's glyph and hangs its name alone. Any other file
+ * kept, wears a picture's glyph in a box the thumbnail's size, so the pill
+ * keeps its width as the bytes land, and hangs its name alone. Any other file
  * wears its type's glyph, which the caller draws as its file tree does. A
  * press opens it, as its caller opens files. In a row that is itself a
  * press and hangs its own card, it is an inert pill that hangs nothing
@@ -24,6 +25,10 @@ import { INLINE_REF_FIT } from "../inline-ref/inline-ref-fit.js";
 
 /** The thumbnail on the line: the picture cropped to a square a hair taller than the words' glyphs. */
 const THUMB = "ui-attachment-ref-thumb size-attachment-ref-thumb rounded-ui-6 object-cover";
+
+/** A picture's glyph while its bytes are not here, centered in the thumbnail's box, so the thumbnail takes its place without moving the name. */
+const THUMB_WAITING =
+  "ui-attachment-ref-thumb-waiting inline-flex size-attachment-ref-thumb items-center justify-center [&>svg]:size-[1em]";
 
 /** The preview the card hangs, at the picture's own shape inside a preview's bound. */
 const PREVIEW =
@@ -65,7 +70,11 @@ export function AttachmentRef({
       label={name}
       glyph={
         image === undefined ? (
-          (glyph ?? <ImageIcon />)
+          (glyph ?? (
+            <span className={THUMB_WAITING}>
+              <ImageIcon />
+            </span>
+          ))
         ) : (
           <img className={THUMB} src={image} alt="" />
         )

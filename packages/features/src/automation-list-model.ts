@@ -22,6 +22,7 @@ import {
   type PullRequestMoment,
 } from "./automation-wire.js";
 import { readerZone } from "./date-mention.js";
+import { GLYPH_STATE, GLYPH_STATE_WORDS, STOPPED_WORDS } from "./glyph-state.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { titlesNothing } from "./task-wire.js";
 import { clockText } from "./time-format.js";
@@ -77,6 +78,9 @@ const RUN_REASON_WORDS = {
   [AUTOMATION_RUN_REASON.AGENT_REPLACED]:
     "Started a fresh agent: the one its runs went to was gone or archived.",
 } as const satisfies Record<AutomationRunReason, string>;
+
+/** How a trigger kept to its repository's default branch says it, whatever the branch is called. */
+const DEFAULT_BRANCH_WORDS = "the default branch";
 
 /** Each GitHub event as a trigger's sentence says what happens, after "When". */
 const GITHUB_EVENT_WORDS = {
@@ -140,13 +144,13 @@ function agentLine(
     : standing;
 }
 
-/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. */
+/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. Working, Failed, and Stopped are the agent's glyph's own words (`glyph-state.ts`). */
 export const AGENT_STATUS_WORDS = {
   [AGENT_STATUS.STARTING]: "Starting…",
-  [AGENT_STATUS.RUNNING]: "Working",
+  [AGENT_STATUS.RUNNING]: GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
   [AGENT_STATUS.COMPLETED]: "Finished",
-  [AGENT_STATUS.FAILED]: "Failed",
-  [AGENT_STATUS.CANCELED]: "Stopped",
+  [AGENT_STATUS.FAILED]: GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
+  [AGENT_STATUS.CANCELED]: STOPPED_WORDS,
 } as const satisfies Record<AgentStatus, string>;
 
 /** The order the owners' groups stand in: the workspace's first, as the ones every member shares. */
@@ -284,7 +288,7 @@ export function automationGroups(
 /**
  * A trigger as one sentence, as a row and the editor say what fires it: a
  * schedule in words, a GitHub event with the repositories it is heard in and
- * the labels and branches it keeps to, a webhook's call, and an
+ * the labels and branches it keeps to, the default branch named first, a webhook's call, and an
  * integration's event with the provider it comes from.
  */
 export function automationTriggerText(
@@ -327,7 +331,12 @@ export function automationTriggerText(
       const also = included.length === 0 ? "" : `, ${andList(included)} included`;
       const where = repositories.length === 0 ? "" : ` in ${orList(repositories)}`;
       const labels = trigger.labels ?? [];
-      const branches = trigger.branches ?? [];
+
+      const branches = [
+        ...(trigger.defaultBranch === true ? [DEFAULT_BRANCH_WORDS] : []),
+        ...(trigger.branches ?? []),
+      ];
+
       const labeled = labels.length === 0 ? "" : ` labeled ${orList(labels)}`;
       const on = branches.length === 0 ? "" : ` on ${orList(branches)}`;
 
@@ -342,11 +351,15 @@ export function automationTriggerText(
       const picked = trigger.filters?.level ?? [];
       const levels = Object.values(SENTRY_LEVEL).filter((level) => picked.includes(level));
 
+      const projects = trigger.filters?.project ?? [];
+      const environments = trigger.filters?.environment ?? [];
+
+      // Note that each filter is said as words after a comma, never set apart by a dot.
       const kept = [
-        trigger.filters?.project ?? [],
-        trigger.filters?.environment ?? [],
-        levels,
-      ].flatMap((values) => (values.length > 0 ? [` · ${values.join(", ")}`] : []));
+        projects.length === 0 ? undefined : `for ${orList(projects)}`,
+        environments.length === 0 ? undefined : `in ${orList(environments)}`,
+        levels.length === 0 ? undefined : `at ${orList(levels)} level`,
+      ].flatMap((part) => (part === undefined ? [] : [`, ${part}`]));
 
       return `When ${provider.events[trigger.event].words} in ${provider.name}${kept.join("")}`;
     }
@@ -453,6 +466,11 @@ export function automationRunPlace(
   };
 }
 
+/** Words closed as a sentence, so another can follow them: a period where they end on none. */
+function sentenceOf(words: string): string {
+  return /[.…!?]$/u.test(words) ? words : `${words}.`;
+}
+
 /** A run's line: why it did not start, where it did not, else where its agent stands and what its start noted, or that it waits to start. */
 export function automationRunLine(
   run: AutomationRunSummary,
@@ -462,7 +480,9 @@ export function automationRunLine(
   if (run.status === AUTOMATION_RUN_STATUS.STARTED) {
     const standing = run.agent === null ? "Its agent is gone" : agentLine(run.agent, keyHolder);
 
-    return run.reason === null ? standing : `${standing} · ${RUN_REASON_WORDS[run.reason]}`;
+    return run.reason === null
+      ? standing
+      : `${sentenceOf(standing)} ${RUN_REASON_WORDS[run.reason]}`;
   }
 
   if (run.reason !== null) return RUN_REASON_WORDS[run.reason];

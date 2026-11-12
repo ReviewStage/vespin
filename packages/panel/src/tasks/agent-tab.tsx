@@ -24,6 +24,7 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
+  AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -60,7 +61,6 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -188,9 +188,8 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
+import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -914,18 +913,6 @@ function TodosDock({
 
 /** Every task's pull requests the window's task list carries. */
 const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
-
-/** The workspace the agent works in, as the list names it on the agent or on its task; none before the list lands. */
-function workspaceOfAgent(
-  view: TasksView,
-  agentId: string,
-  taskId: string | null,
-): string | undefined {
-  return (
-    view.taskAgents?.find((listed) => listed.id === agentId)?.workspaceId ??
-    view.tasks.find((task) => task.id === taskId)?.workspaceId
-  );
-}
 
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
@@ -3137,8 +3124,11 @@ function AgentTabView({
   const pictures = useAgentPictureDoor(agent.id);
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
-  // Only the agent's starter may change its queue, as the service holds (`controlsAgent`); a teammate reads it.
-  const controlsQueue = starter === undefined;
+  const startedByReader = starter === undefined;
+  // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
+  // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
+  // window cannot see, so a teammate's change to its queue is refused and said in a toast, as a message of theirs is.
+  const controlsQueue = startedByReader || agent.machine !== AGENT_MACHINE.DEVICE;
 
   // A rewind writes in the box, so it is offered only while the box takes words.
   const boxOpen =
@@ -3153,15 +3143,17 @@ function AgentTabView({
   const pending = composer.sent.length > 0;
   const going = useKept(composer.going, sameSet);
 
-  // The files go back only while the agent's workspace has the experiment on.
-  const selectWorkspace = useCallback(
-    (state: AppStateSnapshot) => workspaceOfAgent(selectListedTasks(state), agent.id, agent.planId),
-    [agent.id, agent.planId],
-  );
+  // The files go back only while the reader has Rewind restores files on, and a turn draws its files only while they have Turn changes on.
+  const restores =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
 
-  const workspaceId = useQuery({ ...appStateQuery, select: selectWorkspace }).data;
-  const restores = useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES);
-  const turnLines = useMemo(() => (restores ? turnLinesOf(kept) : undefined), [restores, kept]);
+  const turnChanges =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_CHANGES) }).data === true;
+
+  const turnLines = useMemo(
+    () => (turnChanges ? turnLinesOf(kept) : undefined),
+    [turnChanges, kept],
+  );
 
   const points = useKept(
     useMemo(
@@ -3394,7 +3386,7 @@ function AgentTabView({
                               bootLine === undefined ? undefined : (
                                 <AgentBootLine
                                   line={bootLine}
-                                  retry={controlsQueue ? agent.id : undefined}
+                                  retry={startedByReader ? agent.id : undefined}
                                 />
                               )
                             }

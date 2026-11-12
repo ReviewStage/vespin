@@ -77,6 +77,15 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
+import {
+  type InstalledSkillCandidate,
+  type InstalledSkillPreview,
+  type InstalledSkillSummary,
+  SKILL_PASTE_KIND,
+  UNSUPPORTED_PREVIEW,
+} from "@repo/features/installed-skill-route-wire";
+import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
+import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -85,7 +94,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -96,6 +105,8 @@ import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import {
+  DESCRIPTION_ACTOR,
+  type DescriptionRevisionsAnswer,
   TASK_PRIORITY,
   TASK_SKILL_SOURCE,
   TASK_STATUS,
@@ -977,6 +988,24 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/** The id a memory the fixture is asked to keep anew is kept under. */
+export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
+
+/** A memory as the fixture keeps one: by Ada, a correction keeping its memory's id, its time and its recalls, and a new one under its own id. */
+function savedMemory(text: string, corrected: MemorySummary | undefined): MemorySummary {
+  return {
+    id: corrected?.id ?? NEW_MEMORY_ID,
+    text,
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: corrected?.createdAt ?? LANDED,
+    updatedAt: LANDED,
+    source: null,
+    recalls30d: corrected?.recalls30d ?? 0,
+    lastRecalledAt: corrected?.lastRecalledAt ?? null,
+  };
+}
+
 /**
  * The fixture workspace's memories, as Settings › Memory lists them: one an
  * agent of the account kept and agents recall often, one Grace kept this
@@ -1036,6 +1065,149 @@ const HOSTS: readonly HostLine[] = [
     away: true,
   },
 ];
+
+/** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
+const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
+  {
+    name: "frontend-design",
+    description: "Lay out a screen from the team's design tokens.",
+    path: "skills/frontend-design",
+    bytes: 2_048,
+    selected: true,
+    fileCount: 2,
+    problems: [],
+  },
+  {
+    name: "changelog",
+    description: "Write a changelog entry from the commits since the last tag.",
+    path: "skills/changelog",
+    bytes: 1_536,
+    selected: false,
+    fileCount: 1,
+    problems: [],
+  },
+];
+
+/** The repository a fixture run's Add skill reads. */
+const SKILL_SOURCE_PREVIEW: InstalledSkillPreview = {
+  kind: SKILL_PASTE_KIND.SOURCE,
+  owner: "acme",
+  repo: "agent-skills",
+  ref: "main",
+  sha: "7a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4",
+  skills: SOURCE_SKILLS,
+  missing: [],
+};
+
+/** A frontmatter line's value, such as a pasted skill's `name:`. */
+function frontmatterValue(text: string, key: string): string | undefined {
+  const line = text.split("\n").find((each) => each.startsWith(`${key}:`));
+
+  return line?.slice(key.length + 1).trim();
+}
+
+/** What a fixture run's Add skill reads a paste as: a skill's text where it opens on frontmatter, a GitHub source where it names one, and nothing we install from otherwise. */
+function skillPreviewOf(text: string): InstalledSkillPreview {
+  const pasted = text.trim();
+
+  if (!pasted.startsWith("---")) {
+    return /github\.com|^npx skills add |^[\w.-]+\/[\w.-]+$/.test(pasted)
+      ? SKILL_SOURCE_PREVIEW
+      : UNSUPPORTED_PREVIEW;
+  }
+
+  // Note that a key the frontmatter leaves out reads as empty, as the page fills an absent one.
+  return {
+    kind: SKILL_PASTE_KIND.TEXT,
+    name: frontmatterValue(pasted, "name") ?? "",
+    description: frontmatterValue(pasted, "description") ?? "",
+    bytes: pasted.length,
+    problems: [],
+  };
+}
+
+/** A skill a fixture run's Add skill installed, as the service answers it: the account's own, by Ada. */
+function installedSkill(name: string, description: string): InstalledSkillSummary {
+  return {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e59",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name,
+    description,
+    userInvocable: true,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED,
+    updatedAt: LANDED,
+  };
+}
+
+/** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
+const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "release-notes",
+    description: "Write a release's notes from the pull requests merged since the last tag.",
+    userInvocable: true,
+    source: {
+      type: INSTALLED_SKILL_SOURCE.GITHUB,
+      owner: "ada",
+      repo: "skills",
+      path: "release-notes",
+      ref: "main",
+      sha: "3f9c2e1a7b4d6e8f0a1b2c3d4e5f6a7b8c9d0e1f",
+    },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 9 * DAY,
+    updatedAt: LANDED - 9 * DAY,
+  },
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "pr-style",
+    description: "Title and describe a pull request the way this team does.",
+    userInvocable: false,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 3 * DAY,
+    updatedAt: LANDED - 3 * DAY,
+  },
+];
+
+/** What Open reads of each fixture skill, by its id: its SKILL.md, and the files beside it. */
+const INSTALLED_SKILL_FILES: ReadonlyMap<
+  string,
+  {
+    readonly skillFile: string;
+    readonly files: readonly { readonly path: string; readonly bytes: number }[];
+  }
+> = new Map([
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    {
+      skillFile:
+        "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
+      files: [
+        { path: "SKILL.md", bytes: 214 },
+        { path: "template.md", bytes: 1_204 },
+      ],
+    },
+  ],
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    {
+      skillFile:
+        "---\nname: pr-style\ndescription: Title and describe a pull request the way this team does.\n---\n\n# Pull request style\n\nTitle it as a Conventional Commit, and say what changed and why.\n",
+      files: [{ path: "SKILL.md", bytes: 196 }],
+    },
+  ],
+]);
 
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
@@ -1225,6 +1397,54 @@ function invitesDocument(listed: TaskSummary): Task {
     blockedBy: [LISTED.ALERTS],
     blocks: [],
   };
+}
+
+/**
+ * The reference journey's description history, newest first, as its
+ * version history lists it: its agent's last revision, which is the
+ * description as it stands, Ada's before it, and the description before
+ * its history began.
+ */
+const INVITES_HISTORY: DescriptionRevisionsAnswer = {
+  revisions: [
+    {
+      seq: 3,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: "Build the invite flow",
+        agentId: AGENT.INVITES,
+        at: LANDED - HOUR,
+        duringCall: false,
+      },
+      agentId: AGENT.INVITES,
+      startedAt: LANDED - 2 * HOUR,
+      changes: 4,
+    },
+    {
+      seq: 2,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.DEVELOPER,
+        by: { userId: ADA.userId, name: ADA.name },
+        at: LANDED - DAY,
+        duringCall: false,
+      },
+      startedAt: LANDED - DAY - HOUR,
+      changes: 2,
+    },
+    {
+      seq: 1,
+      lastEdit: { actor: DESCRIPTION_ACTOR.EARLIER, at: LANDED - 3 * DAY, duringCall: false },
+      startedAt: LANDED - 3 * DAY,
+      changes: 0,
+    },
+  ],
+};
+
+/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+function invitesVersionBody(seq: number): string {
+  const newest = INVITES_HISTORY.revisions[0]?.seq;
+
+  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -1641,12 +1861,21 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
-    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
+    // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
+    [LIVE_READ.MEMORIES]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
+      [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.INSTALLED_SKILLS]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },
+      [TEAM_WORKSPACE.id]: { rows: INSTALLED_SKILLS },
+    },
     [LIVE_READ.HOSTS]: {
       [ADA.userId]: {
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
       },
     },
+    [LIVE_READ.HISTORY]: { ...state[LIVE_READ.HISTORY], [TASK.INVITES]: { rows: INVITES_HISTORY } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
@@ -1695,6 +1924,48 @@ export function inboxRemindersAppState(
   return {
     ...state,
     [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+  };
+}
+
+/** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
+export type SavedMemoryWords = ReadonlyMap<string, string>;
+
+/**
+ * The fixture workspace's memories with the words a run saved: a
+ * correction over its own row, as the host draws one the moment it is sent,
+ * and a new memory at the head, as the memories' live read carries one in
+ * soon after it is kept. The document handed in where none was saved. Note
+ * that a run keeps one new memory, since every new one is answered under the
+ * same id.
+ */
+export function savedMemoriesAppState(
+  state: AppStateSnapshot,
+  words: SavedMemoryWords,
+): AppStateSnapshot {
+  const held = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const rows = held?.rows;
+
+  if (words.size === 0 || held === undefined || rows === undefined) return state;
+
+  const corrected = rows.map((memory) => {
+    const text = words.get(memory.id);
+
+    return text === undefined ? memory : { ...memory, text, updatedAt: LANDED };
+  });
+
+  const added = words.get(NEW_MEMORY_ID);
+
+  const saved =
+    added === undefined || rows.some((memory) => memory.id === NEW_MEMORY_ID)
+      ? corrected
+      : [savedMemory(added, undefined), ...corrected];
+
+  return {
+    ...state,
+    [LIVE_READ.MEMORIES]: {
+      ...state[LIVE_READ.MEMORIES],
+      [FIXTURE_IDS.WORKSPACE]: { ...held, rows: saved },
+    },
   };
 }
 
@@ -1872,6 +2143,26 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
+  [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
+  [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({
+    skills:
+      request.skills === undefined
+        ? [installedSkill(request.name ?? "", request.description ?? "")]
+        : request.skills.map((name) =>
+            installedSkill(
+              name,
+              SOURCE_SKILLS.find((each) => each.name === name)?.description ?? "",
+            ),
+          ),
+  }),
+  [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
+    const read = INSTALLED_SKILL_FILES.get(skillId);
+
+    return read === undefined
+      ? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND }
+      : { id: skillId, skillFile: read.skillFile, files: [...read.files] };
+  },
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
 
@@ -1911,8 +2202,22 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
+  [ACT_KIND.TASKS_REVISION]: ({ seq }) => ({
+    revision: { seq, document: { body: invitesVersionBody(seq), assumptions: [] }, previous: null },
+  }),
+  [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
   [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
+  // Note that a memory's words are kept as the service keeps them, by Ada, a correction keeping its memory's id, though nothing here moves; the mobile fixture lays the saved words over the list itself (`savedMemoriesAppState`).
+  [ACT_KIND.MEMORIES_SAVE]: ({ text, replaces }) => {
+    const corrected = MEMORIES.find((memory) => memory.id === replaces);
+
+    return {
+      outcome: corrected === undefined ? MEMORY_SAVED.KEPT : MEMORY_SAVED.CORRECTED,
+      memory: savedMemory(text, corrected),
+    };
+  },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
@@ -1955,6 +2260,13 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
+  [ACT_KIND.AGENTS_PORTS]: () => ({
+    running: true,
+    ports: [3000, 5173],
+    labels: [{ port: 5173, label: "vite" }],
+  }),
+  [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
   // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);

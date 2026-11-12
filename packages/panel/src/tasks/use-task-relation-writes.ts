@@ -8,6 +8,7 @@
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
+import { relationRefusedNote } from "@repo/features/task-relation-model";
 import {
   TASK_BLOCK_CHANGE,
   TASK_BLOCK_RELATION,
@@ -18,11 +19,7 @@ import {
 import { repositoryChangeFailureNote } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
-  type ParentCallFailure,
-  type RelationCallFailure,
-  TASK_BLOCK_FAILURE,
   TASK_CALL_FAILURE,
-  TASK_PARENT_FAILURE,
   type TasksBlockAnswer,
   type TasksChangeRelationAnswer,
   type TasksSetParentAnswer,
@@ -45,20 +42,6 @@ import {
 } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
 
-/** What the toast says when the service kept no change to a task's blocks, which stand as they were. */
-const BLOCK_REFUSED_NOTE = "That relation could not be changed. Try again.";
-
-/** What the toast says when a block would close a cycle, the other task already waiting on this one. */
-const BLOCK_CYCLE_NOTE = "That task already waits on this one, so it can't block it too.";
-
-/** What the toast says when a parent would put the task under itself, the other task already a sub-task of it. */
-const PARENT_CYCLE_NOTE =
-  "That task is already a sub-task of this one, so it can't be its parent too.";
-
-/** What the toast says when a parent works in another repository, which a sub-task always shares. */
-const PARENT_REPOSITORY_NOTE =
-  "A sub-task works in its parent's repository, so the two must share one.";
-
 /** What the toast says once a task's parent is removed, offering Undo. */
 const PARENT_REMOVED_NOTE = "Parent removed";
 
@@ -67,20 +50,6 @@ const BLOCK_REMOVED_NOTE = "Relation removed";
 
 /** A task's act that never answered, settled as unanswered with the error beneath. */
 const taskUnreached = unreachedAs(TASK_CALL_FAILURE.UNANSWERED);
-
-/** What a relation's refusal says: its own reason where the service named one, and a plain refusal otherwise. */
-function relationRefusedNote(failure: RelationCallFailure | ParentCallFailure): string {
-  switch (failure) {
-    case TASK_BLOCK_FAILURE.CYCLE:
-      return BLOCK_CYCLE_NOTE;
-    case TASK_PARENT_FAILURE.CYCLE:
-      return PARENT_CYCLE_NOTE;
-    case TASK_PARENT_FAILURE.REPOSITORY_DIFFERS:
-      return PARENT_REPOSITORY_NOTE;
-    default:
-      return BLOCK_REFUSED_NOTE;
-  }
-}
 
 /** A relation write's answer as the window hears it: the service's, or one that never arrived. */
 type RelationAnswer =

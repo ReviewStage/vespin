@@ -18,6 +18,7 @@
  * lists the document holds (`spotlightChanges`), each change sent alone.
  */
 
+import { Schema as EffectSchema } from "effect";
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
 import {
@@ -25,8 +26,11 @@ import {
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  type ReadLink,
   readLink,
+  taskLinkStep,
 } from "./link-grammar.js";
+import { LINK_ORIGIN } from "./link-home.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -146,6 +150,67 @@ export function pullRequestActivity(
     webpageUrl: linkOf(place, step),
     pullRequest: pullRequest.number,
   };
+}
+
+/** Whether `url` is a page of ours a link names, on the home host over HTTPS, which is all Handoff may offer from a window. */
+function isOurPage(url: string): boolean {
+  return url.startsWith(`${LINK_ORIGIN}/`) && readLink(url) !== undefined;
+}
+
+/** What a desktop window advertises for Handoff: the vespin.dev page it shows, as a browser would, and never another site's. */
+export const handoffActivitySchema = EffectSchema.Struct({
+  webpageUrl: EffectSchema.String.check(EffectSchema.makeFilter(isOurPage)),
+});
+
+export type HandoffActivity = typeof handoffActivitySchema.Type;
+
+/** What the window holds that a link names only by its number: its tasks and their workspaces. */
+export interface HandoffReads {
+  readonly tasks: readonly Pick<TaskSummary, "id" | "number" | "workspaceId">[];
+  readonly workspaces: readonly Workspace[];
+}
+
+/**
+ * The page a desktop window hands off while `link` is what it shows, as a
+ * browser hands off its page: the iPhone app claims vespin.dev for Handoff
+ * and opens the page where it would open a link to it
+ * (`iosContinuedRouteOf`), so only a place the app draws a screen for is
+ * handed off. Note that it carries no `userInfo`, since iOS empties it on a
+ * browsing activity, so a pull request is handed off as its agent, whose
+ * page shows it, rather than as its Changes, which the app leaves to the
+ * web. A task is named by its id, as the phone's own activity names it,
+ * since a number is its workspace's alone, so one the window holds no row
+ * for hands off nothing rather than a number the phone could find in
+ * another workspace.
+ */
+export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffActivity | undefined {
+  const { place, workspace } = link;
+
+  switch (place.kind) {
+    case LINK_DESTINATION.INBOX_ITEM:
+    case LINK_DESTINATION.AGENT:
+      return { webpageUrl: linkOf(place, workspace) };
+    case LINK_DESTINATION.CHANGES: {
+      const agent: LinkDestination = { ...place, kind: LINK_DESTINATION.AGENT };
+
+      return { webpageUrl: linkOf(agent, workspace) };
+    }
+
+    case LINK_DESTINATION.TASK: {
+      const task = reads.tasks.find(
+        (each) =>
+          taskLinkStep(each) === place.planId &&
+          linkWorkspaceStep(each.workspaceId, reads.workspaces) === workspace,
+      );
+
+      if (task === undefined) return undefined;
+
+      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace) };
+    }
+
+    default:
+      return undefined;
+  }
 }
 
 /**

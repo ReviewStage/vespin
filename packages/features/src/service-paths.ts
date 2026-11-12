@@ -7,6 +7,8 @@
 
 export const HOSTED_SERVICE_PATH = {
   EVENTS: "/api/events",
+  /** A feedback submission, forwarded as email to the founders (POST); it takes no credential. */
+  FEEDBACK: "/api/feedback",
   /**
    * Store and read account preferences (GET, PUT). Only settings named by
    * `@repo/settings` as cross-device preferences belong here.
