@@ -507,6 +507,14 @@ export const TASKS_ACT_KIND = {
   TASKS_SET_PARENT: "tasks.setParent",
   /** One relation of a task moved to another kind on the service, in one call; answers the task's relations as they then stand, or why they are unchanged. */
   TASKS_CHANGE_RELATION: "tasks.changeRelation",
+  /** The account follows a task on the service, its machines off; answers the task's followers as they then stand, or why they are unchanged. */
+  TASKS_FOLLOW: "tasks.follow",
+  /** The account stops following a task on the service, which its assignee may not; answers as a follow does. */
+  TASKS_UNFOLLOW: "tasks.unfollow",
+  /** The account's own switch on a task it follows, whether the task's agents may use its machines, set on the service; answers as a follow does. */
+  TASKS_SET_FOLLOWER_MACHINES: "tasks.setFollowerMachines",
+  /** Another member of the task's workspace added as a follower on the service, their machines off; answers as a follow does. */
+  TASKS_ADD_FOLLOWER: "tasks.addFollower",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -1133,6 +1141,10 @@ export const PORT_ACT_USE = {
   TASKS_BLOCK: ACT_USE.WRITE,
   TASKS_SET_PARENT: ACT_USE.WRITE,
   TASKS_CHANGE_RELATION: ACT_USE.WRITE,
+  TASKS_FOLLOW: ACT_USE.WRITE,
+  TASKS_UNFOLLOW: ACT_USE.WRITE,
+  TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
+  TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,
