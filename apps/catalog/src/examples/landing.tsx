@@ -102,6 +102,11 @@ function Landing(): React.JSX.Element {
           />
         }
       />
+      <LandingSection
+        title="Start agents from Slack or your terminal."
+        lead={`Mention @${PRODUCT_NAME} in a thread, or run the vespin CLI.`}
+        scene={LANDING_SCENE.STARTS}
+      />
       <LandingMore
         title="And much more."
         items={[
