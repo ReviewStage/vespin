@@ -1199,7 +1199,7 @@ function PlanRow({
             )}
           </>
         }
-        controls={SETTINGS_ROW_CONTROLS.BESIDE}
+        controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
         end={() => (
           <CredentialMenu
             thing={name}
@@ -1301,7 +1301,7 @@ function KeyRow({
         description={
           <State ok={keyStanding(apiKey.status)}>{keyLineWords(provider, apiKey)}</State>
         }
-        controls={SETTINGS_ROW_CONTROLS.BESIDE}
+        controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
         end={() => (
           <CredentialMenu
             thing={name}
@@ -1414,7 +1414,7 @@ function HarnessCredentials({
           </SettingsRowMark>
         }
         label={harness.name}
-        controls={SETTINGS_ROW_CONTROLS.BESIDE}
+        controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
         below={
           adding === STEPS.ADD
             ? () => (
