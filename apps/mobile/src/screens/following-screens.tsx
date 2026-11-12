@@ -72,7 +72,7 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
   if (reader === undefined) {
     return (
       <ListSection>
-        <ActionRow label={FOLLOWING_WORDS.FOLLOW} onPress={following.follow} />
+        <ActionRow label={FOLLOWING_WORDS.FOLLOW} symbol="eye" onPress={following.follow} />
       </ListSection>
     );
   }
@@ -86,6 +86,7 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
       />
       <ActionRow
         label={FOLLOWING_WORDS.UNFOLLOW}
+        symbol="eye.slash"
         disabled={reader.assignee}
         detail={reader.assignee ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined}
         onPress={following.unfollow}
@@ -101,7 +102,8 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
  * person's machines, which VoiceOver hears in the panel's card's sentence; a
  * row takes no press. Under it the reader's own Let agents here use my
  * machines switch and Unfollow, dimmed with why for the assignee; where the
- * reader doesn't follow, Follow alone.
+ * reader doesn't follow, Follow alone. Follow and Unfollow lead with the
+ * eye and the struck eye, as the panel's do.
  */
 export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   const colors = useColors();

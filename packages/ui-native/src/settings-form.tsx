@@ -421,14 +421,20 @@ export function ActionRow({
         accessibilityValue(detail),
       ]}
     >
-      <VStack alignment="leading" spacing={1}>
-        <Text>{label}</Text>
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {detail}
-        </Text>
-      </VStack>
+      <HStack spacing={SPACE.ROW}>
+        {symbol === undefined ? null : <Image systemName={symbol} />}
+        <VStack alignment="leading" spacing={1}>
+          <Text>{label}</Text>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {detail}
+          </Text>
+        </VStack>
+      </HStack>
     </SwiftUIButton>
   );
 }
