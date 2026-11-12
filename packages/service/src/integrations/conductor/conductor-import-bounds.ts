@@ -38,8 +38,17 @@ export const CONDUCTOR_IMPORTS = {
   PUBLISH_CONCURRENCY: 10,
   /** How many repositories a check asks GitHub about at once. */
   READ_CONCURRENCY: 4,
-  /** How many of a workspace's chats have their first page read at once for its description. */
-  FIRST_PAGE_CONCURRENCY: 2,
+  /** How many of a workspace's chats are read at once for its description. */
+  CHAT_READ_CONCURRENCY: 2,
+  /**
+   * How long a workspace's delivery reads its chats' whole transcripts for
+   * the branch and pull request they name, most of `MAX_DURATION_SECONDS`:
+   * the longest chat seen (8,622 messages) took about 30 seconds to walk. A
+   * chat not read by then is described from its first page alone.
+   */
+  TRANSCRIPT_READ_BUDGET: Duration.seconds(180),
+  /** The first wait before a transcript read Conductor answered as rate limited is asked again, doubling each time within the budget. */
+  RATE_LIMITED_BACKOFF: Duration.seconds(2),
   /** How long a run's key is kept at most, whatever is still queued. */
   KEY_LIFETIME: Duration.days(1),
 } as const;
