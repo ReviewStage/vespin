@@ -99,6 +99,7 @@
     "vespin/row-behavior-in-row": "error",
     "vespin/sandbox-delete-in-one-place": "error",
     "vespin/settings-row-end": "error",
+    "vespin/settings-section-declared": "error",
     "vespin/skeleton-through-components": "error"
   },
   "overrides": [

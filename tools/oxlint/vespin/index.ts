@@ -30,6 +30,7 @@ import { retiredRule } from "./rules/retired.ts";
 import { rowBehaviorInRowRule } from "./rules/row-behavior-in-row.ts";
 import { sandboxDeleteInOnePlaceRule } from "./rules/sandbox-delete-in-one-place.ts";
 import { settingsRowEndRule } from "./rules/settings-row-end.ts";
+import { settingsSectionDeclaredRule } from "./rules/settings-section-declared.ts";
 import { skeletonThroughComponentsRule } from "./rules/skeleton-through-components.ts";
 
 /**
@@ -74,6 +75,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "row-behavior-in-row": rowBehaviorInRowRule,
     "sandbox-delete-in-one-place": sandboxDeleteInOnePlaceRule,
     "settings-row-end": settingsRowEndRule,
+    "settings-section-declared": settingsSectionDeclaredRule,
     "skeleton-through-components": skeletonThroughComponentsRule,
   },
 });
