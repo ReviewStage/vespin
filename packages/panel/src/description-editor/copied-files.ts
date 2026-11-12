@@ -6,9 +6,8 @@ import type { CopiedFile } from "./contract.js";
  *
  * A copy of the message box's words writes each file's chip into the
  * clipboard's HTML with the file in it, a picture as an image any editor
- * pastes as one, as Notion's, Linear's, and Google Docs' copies do, so a
- * chip pasted into another box comes with its file rather than as the words
- * of its marker. Only a data address is read back: nothing pasted is ever
+ * that takes HTML pastes as one, so a chip pasted into another box comes
+ * with its file rather than as the words of its marker. Only a data address is read back: nothing pasted is ever
  * fetched.
  */
 
