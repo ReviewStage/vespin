@@ -32,6 +32,7 @@
     "./integration-settings-words": "./src/integration-settings-words.js",
     "./memory-live": "./src/memory-live.js",
     "./skills-settings-words": "./src/skills-settings-words.js",
+    "./task-move-model": "./src/task-move-model.js",
     "./trailing-newlines": "./src/trailing-newlines.js",
     "./skill-install-model": "./src/skill-install-model.js",
     "./memory-settings-words": "./src/memory-settings-words.js",

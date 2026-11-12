@@ -23,6 +23,7 @@ import {
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
+import { TASK_MOVE_WORDS } from "@repo/features/task-move-model";
 import {
   CHANGE_RELATION,
   REMOVE_PARENT,
@@ -131,6 +132,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
+import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
@@ -783,6 +785,8 @@ interface TaskMenuDoors {
   /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
   readonly history: ((task: TaskSummary) => void) | undefined;
   readonly openRelation: OpenRelation;
+  /** Move to workspace's door for a task, none where the reader may not move it (`useMoveTaskDoor`). */
+  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -808,6 +812,13 @@ function historyActions(
  * which asks first; then its Status, each status checked where it stands,
  * Task relation, Move to section, and its repository.
  */
+/** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
+function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
+  return open === undefined
+    ? []
+    : [{ label: TASK_MOVE_WORDS.TITLE, symbol: "folder", onPress: open }];
+}
+
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
 
@@ -827,6 +838,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         symbol: "plus.square.on.square",
         onPress: () => doors.newSubTask(task),
       },
+      ...moveActions(doors.moveDoor(task)),
       ...removeParentActs(task, overview.relations).map((action) => ({
         label: action.label,
         symbol: action.symbol,
@@ -1476,6 +1488,7 @@ function TasksSplitScreen({
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1529,6 +1542,7 @@ function TasksSplitScreen({
                     newSubTask,
                     history,
                     openRelation,
+                    moveDoor,
                   }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
@@ -1576,6 +1590,7 @@ export function TaskScreen() {
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
@@ -1584,7 +1599,13 @@ export function TaskScreen() {
   const menu =
     overview === undefined
       ? undefined
-      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history, openRelation });
+      : taskMenu(overview, {
+          askDelete: deletion.askDelete,
+          newSubTask,
+          history,
+          openRelation,
+          moveDoor,
+        });
 
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
