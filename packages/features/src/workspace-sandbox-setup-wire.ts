@@ -7,7 +7,7 @@ import { workspaceIdSchema } from "./task-wire.js";
 /**
  * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup and archive scripts, and each repository's run actions.
  *
- * As Conductor Cloud keeps them, in the workspace's settings: the install
+ * Kept together, in the workspace's settings: the install
  * script runs once per build of each of the workspace's repositories' base
  * snapshots, a repository's setup script runs once in each new agent
  * sandbox of it, after its checkout, and its archive script once in each

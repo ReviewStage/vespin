@@ -106,8 +106,8 @@ model and its transcript. Agents on your Mac are never handed them.
 ### Integrations and connected apps
 
 If you connect an integration (such as Linear, Notion, Sentry, Slack, Gmail,
-Google Calendar, Google Drive, Granola, Mercury, Mintlify, Neon, PostHog,
-Resend, Stripe, Supabase, Vercel, Y Combinator, or Executor), Vercel Connect stores its token
+Google Calendar, Google Drive, Granola, Mercury, Neon, PostHog, Resend, Stripe,
+Supabase, Vercel, Y Combinator, or Executor), Vercel Connect stores its token
 for your account, encrypted, and we keep the connection's state and a display
 name. While connected, your agents can read and change whatever your grant at
 that service allows, without asking you first, and everything the service
@@ -216,12 +216,13 @@ host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
 your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
-the next time you open the app), and reports of a screen that could not be
-drawn. It uses Sentry's default data collection, so reports may include error
+the next time you open the app, a crash as the app starts, before its first
+screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
-account by its id only. The app sends no performance traces, screenshots, or
+account by its id only, or not at all for a crash before you are signed in
+again at launch. The app sends no performance traces, screenshots, or
 recordings of the screen.
 
 ### Feedback
@@ -439,12 +440,14 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
 new cloud agent forks. A copy of a workspace repository's default branch, with
 its dependencies installed, may also remain on a drive of its own made before
-workspace drives, which nothing reads or writes any more.
+workspace drives, which nothing reads or writes any more. A sandbox's own
+disk is discarded when it stops, so only its drive outlives it; a sandbox made
+before that changed keeps a snapshot of its disk instead.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -463,8 +466,9 @@ pages, inbox items, and pictures, and its agents' transcripts. Deleting an
 agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
-the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. The workspace's drive of every
+the drive may remain. A sandbox keeps no snapshot; the snapshots of one made
+before that changed otherwise expire and are removed seven days after they
+were last used. The workspace's drive of every
 repository it connects is kept for the workspace's agents until the workspace
 is deleted. A repository's default-branch drive made before workspace drives
 is no longer read; deleting its workspace asks Vercel to delete it where one of
@@ -480,8 +484,9 @@ made before default-branch drives expires thirty days after its last use. When y
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their
   checkouts; where that fails or does not finish in time, your account is
-  deleted anyway and a drive may remain. Their snapshots otherwise expire and
-  are removed seven days after they were last used.
+  deleted anyway and a drive may remain. The snapshots of a sandbox made
+  before sandboxes stopped keeping them otherwise expire and are removed seven
+  days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding

@@ -18,6 +18,7 @@ export const CALL_SYMBOL = {
   [CALL_KIND.LOAD_SKILL]: "book",
   [CALL_KIND.LOOK_AT_PICTURE]: "photo",
   [CALL_KIND.LOOK_AT_THREAD_PICTURE]: "photo",
+  [CALL_KIND.READ_DESCRIPTION_PDF]: "doc.text",
   [CALL_KIND.EDIT_DESCRIPTION]: "square.and.pencil",
   [CALL_KIND.TODOS]: "checklist",
   [CALL_KIND.INBOX_POST]: "tray",

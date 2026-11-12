@@ -13,7 +13,7 @@ import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, test } from "vitest";
+import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { readExperiments } from "../testing/app-state.js";
@@ -36,8 +36,9 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
  * a video of another description pasted in is kept on this one as it is, waiting
  * as a quiet box rather than a picture its bytes cannot draw; and Insert
  * image is offered while the text is edited, and only then; and
- * a selected picture's tools are each still named in a narrow column.
- * Synthetic description and pictures.
+ * a selected picture's tools are each still named in a narrow column; and
+ * a drag over the text of files it keeps none of is refused, where one
+ * carrying a picture among them is taken. Synthetic description and pictures.
  */
 
 const TASK_ID = "4b1c2d3e-5f6a-4b7c-8d9e-0f1a2b3c4d5e";
@@ -95,6 +96,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   saved.length = 0;
   keeping = undefined;
@@ -404,4 +407,43 @@ test("Enlarge on a selected picture hands the focus back to the text, the pictur
     container.querySelector(".editor-picture-drawn")?.getAttribute("data-selected"),
     "true",
   );
+});
+
+test("a drag over the text of files it keeps none of is refused, and one carrying a picture among them is taken", () => {
+  // Note that jsdom lays nothing out, so each block stands in one box, which the drag lands on.
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 20));
+
+  const container = drawn(
+    createElement(DescriptionBody, {
+      task: TASK,
+      edit: descriptionEditMutation(TASK.id, () => Promise.resolve({ saved: true })),
+      sectionLinks: SECTION_LINKS,
+    }),
+  );
+
+  const section =
+    container.querySelector('[role="group"][aria-label="Approach"]') ??
+    assert.fail("the section stands");
+
+  const dragOver = (types: readonly string[]) => {
+    const transfer = {
+      types: ["Files"],
+      items: types.map((type) => ({ kind: "file", type })),
+      files: [],
+      dropEffect: "copy",
+    };
+
+    const event = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperties(event, {
+      dataTransfer: { value: transfer },
+      clientX: { value: 10 },
+      clientY: { value: 10 },
+    });
+    act(() => section.dispatchEvent(event));
+
+    return { held: event.defaultPrevented, effect: transfer.dropEffect };
+  };
+
+  assert.deepEqual(dragOver(["application/zip"]), { held: true, effect: "none" });
+  assert.deepEqual(dragOver(["application/zip", "image/png"]), { held: true, effect: "copy" });
 });

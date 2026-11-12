@@ -48,6 +48,7 @@ import {
   MAXIMUM_START_BODY_BYTES,
 } from "../agent-wire.js";
 import { modelChoiceSchema } from "../models-wire.js";
+import { replyButtonSentSchema, replyButtonViewSchema } from "../reply-button-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import {
@@ -59,6 +60,7 @@ import {
 } from "../terminal-wire.js";
 import { workspaceToolsAnswerSchema } from "../workspace-tools-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
+import { MESSAGE_REFUSALS } from "./messages.js";
 
 /** A change names a model, an effort, and a window, a title, an archive, or a pin, at most, so a body past this is no change. */
 const CHOICE_BODY_BYTES = 4_096;
@@ -181,6 +183,15 @@ const TERMINALS_PATH = `${AGENT_PATH}/terminals` as const;
 /** The statuses a Start answers: the agent it made, or the one a retry under the same key already made. */
 export const AGENT_START_STATUS = { CREATED: 201, STARTED_BEFORE: 200 } as const;
 
+/** One button in an agent's reply a path names, read as ids by the handler. */
+const buttonParams = EffectSchema.Struct({
+  id: EffectSchema.String,
+  button: EffectSchema.String,
+});
+
+/** What a press refuses: a button not found, which a workspace with Reply buttons off answers too, and whatever the start or the send it runs refuses. */
+const PRESS_REFUSALS = [...new Set([...START_REFUSALS, ...MESSAGE_REFUSALS])];
+
 /** The task or the agent a path names, read as an id by the handler. */
 const idParams = EffectSchema.Struct({ id: EffectSchema.String });
 
@@ -290,6 +301,24 @@ export const agentsContract = {
     )
     .input(exactBodyInput(idParams, agentStartRequestSchema))
     .output(EffectSchema.flip(startAnswerSchema)),
+  /** One button in the agent's reply as the window draws it, where its workspace has Reply buttons on. */
+  readButton: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/buttons/{button}` }))
+    .input(buttonParams)
+    .output(EffectSchema.flip(replyButtonViewSchema)),
+  /** One suggestion in the agent's reply sent from its draft, as the member asking: run once, and answered as it then stands, the first send's answer to every send after it. */
+  pressButton: declaredProcedure
+    .errors(refuses(...PRESS_REFUSALS))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${AGENT_PATH}/buttons/{button}/press`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(buttonParams, replyButtonSentSchema))
+    .output(EffectSchema.flip(replyButtonViewSchema)),
   /** One agent as its own page. */
   read: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))

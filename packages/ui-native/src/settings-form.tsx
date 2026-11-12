@@ -342,16 +342,48 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
   );
 }
 
+/**
+ * A code to hold against another screen, such as the one a machine shows
+ * while it pairs: in the monospaced face at a heading's size, VoiceOver
+ * hearing it letter by letter so each can be checked.
+ */
+export function CodeRow({ code, testId }: { readonly code: string; readonly testId?: string }) {
+  const colors = useColors();
+  const spelled = [...code].filter((letter) => letter !== "-").join(" ");
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, design: "monospaced", weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        listRowBackground(colors.SURFACE),
+        accessibilityLabel(spelled),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
+    >
+      {code}
+    </Text>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: SfSymbol | undefined;
   /** Whether the act ends something, such as Sign out, which the system draws red. */
   readonly destructive?: boolean | undefined;
+  /** Whether it takes no press, such as while another act on the page is out. */
+  readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
 };
 
 /** A row a person presses to act, in the accent, or the system's red where it ends something. */
-export function ActionRow({ label, symbol, destructive = false, onPress }: ActionRowProps) {
+export function ActionRow({
+  label,
+  symbol,
+  destructive = false,
+  disabled: off = false,
+  onPress,
+}: ActionRowProps) {
   const colors = useColors();
 
   return (
@@ -360,7 +392,7 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
       {...(symbol === undefined ? {} : { systemImage: symbol })}
       role={destructive ? "destructive" : "default"}
       onPress={onPress}
-      modifiers={[listRowBackground(colors.SURFACE)]}
+      modifiers={[listRowBackground(colors.SURFACE), disabled(off)]}
     />
   );
 }
@@ -411,6 +443,82 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
             <Spacer />
             {option.id === picked ? (
+              <Image
+                systemName={PICKED_MARK}
+                size={markSize}
+                color={colors.ACCENT}
+                modifiers={[font({ size: markSize, weight: "semibold" })]}
+              />
+            ) : null}
+          </HStack>
+        </SwiftUIButton>
+      ))}
+    </>
+  );
+}
+
+/** A workspace a `WorkspacePickRows` picks among: how its tile draws it, the line under its name, and whether it may be picked. */
+export type WorkspacePickOption = {
+  readonly workspace: SwitcherWorkspace;
+  /** Who shares it, or why it cannot be picked. */
+  readonly line: string | undefined;
+  readonly disabled: boolean;
+};
+
+type WorkspacePickRowsProps = {
+  readonly options: readonly WorkspacePickOption[];
+  readonly picked: string | undefined;
+  readonly onPick: (id: string) => void;
+};
+
+/**
+ * A choice among workspaces, as `PickRows` draws a choice: each a row with
+ * its tile, its name, and its line under it, the picked one checked in
+ * copper; one that may not be picked stands dimmed, its line saying why, as
+ * the panel's Move to workspace lists one whose GitHub cannot reach the
+ * task's repository.
+ */
+export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
+  const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+
+  return (
+    <>
+      {options.map(({ workspace, line, disabled: off }) => (
+        <SwiftUIButton
+          key={workspace.id}
+          onPress={() => onPick(workspace.id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(workspace.name),
+            ...(line === undefined ? [] : [accessibilityValue(line)]),
+            ...(workspace.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            disabled(off),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+          >
+            <WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE - 8} />
+            <VStack alignment="leading" spacing={1}>
+              <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
+                {workspace.name}
+              </Text>
+              {line === undefined ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line}
+                </Text>
+              )}
+            </VStack>
+            <Spacer />
+            {workspace.id === picked ? (
               <Image
                 systemName={PICKED_MARK}
                 size={markSize}

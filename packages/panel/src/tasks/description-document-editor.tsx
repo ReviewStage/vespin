@@ -33,7 +33,7 @@ import {
   type PlacedPicture,
   type PlacedWords,
 } from "../description-editor/contract.js";
-import { descriptionFiles } from "../picture-files.js";
+import { descriptionFiles, offersDescriptionFiles } from "../picture-files.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { UNIT_ATTRIBUTED_CLASS } from "./description-unit-look.js";
 import { useEditorPictures } from "./editor-pictures.js";
@@ -691,17 +691,19 @@ function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined 
  * The text as a place to drop files, drawn or open in the editor: a drag
  * of files anywhere over the column below the hairline parting the head
  * from the text, its gaps between blocks and its margins included, is the
- * text's, so the window never opens a file and the system shows a copy,
- * and it lands before the first line, or below the line it stands on or the
+ * text's, so the window never opens a file, and the system shows a copy
+ * where it carries one the text keeps (`offersDescriptionFiles`). It lands before the
+ * first line, or below the line it stands on or the
  * line above the gap it stands in, as deep in its lists as the pointer
  * stands across (`fileDropSpot`), which the line answered marks while the
  * files are carried. A drop puts the caret on that line's words, opening the
  * editor there while it is closed (`dropPlacement`), and the editor lays
  * its pictures in where the line marked (`PictureLanding`). Note that the drag is taken before the
  * editor's own handling, so the editor's text caret for a drop never draws
- * beside the line, and that while an editor opened is still loading the
- * drag is taken but refused, no line drawn, since nothing could lay its
- * files in yet. None while `editable` is false.
+ * beside the line. A drag is taken but refused, no line drawn and no copy
+ * shown, where it carries no file the text keeps, or while an editor opened
+ * is still loading, since nothing could lay its files in yet. None while
+ * `editable` is false.
  */
 function useFileDrop({
   body,
@@ -742,18 +744,22 @@ function useFileDrop({
       return fileDropSpot(textLines(text, within), event.clientX, event.clientY);
     };
 
+    // Whether a drag over the text is refused: no line, and no copy, though it is still held so the window never opens its files.
+    const refused = (event: DragEvent) =>
+      loading() || !offersDescriptionFiles(event.dataTransfer?.items ?? []);
+
     const over = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
       const spot = spotOf(event);
-      const held = loading();
-      const at = held ? undefined : spot?.line;
+      const refuse = refused(event);
+      const at = refuse ? undefined : spot?.line;
       setLine((was) => (sameLine(was, at) ? was : at));
 
       if (spot === undefined) return;
       event.preventDefault();
       event.stopPropagation();
 
-      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = held ? "none" : "copy";
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = refuse ? "none" : "copy";
     };
 
     const left = (event: DragEvent) => {

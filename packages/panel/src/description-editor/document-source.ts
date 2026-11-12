@@ -42,9 +42,13 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
 /**
  * A GitHub alert's marker as TipTap's Markdown re-prints a quote opening on
  * one, its brackets escaped as any words' are (`> \[!NOTE\]`), which GitHub
- * no longer draws as an alert.
+ * no longer draws as an alert; on any line, since a quote in a list item is
+ * re-printed indented.
  */
-const ESCAPED_ALERT = /^(>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+
+/** A line opening or closing a code fence, past the quote and list markers holding it: its run of backticks or tildes, and what follows it. */
+const FENCE_LINE = /^[\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*(`{3,}|~{3,})(.*)$/u;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -208,11 +212,49 @@ function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
 }
 
-/** A block re-printed, a quote opening on a GitHub alert's marker keeping it unescaped, so it stays an alert. */
+/**
+ * A block re-printed, a quote opening on a GitHub alert's marker keeping it
+ * unescaped, so it stays an alert, and with no blank line before it. Note that
+ * TipTap's own opens a table on one (ueberdosis/tiptap#8719), so an edited
+ * table gained a blank line over it.
+ */
 function reprinted(manager: MarkdownManager, node: PmNode): string {
-  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] }).trimEnd();
+  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] });
 
-  return node.type.name === "blockquote" ? markdown.replace(ESCAPED_ALERT, "$1[!$2]") : markdown;
+  return alertsUnescaped(markdown.replace(/^\n+/u, "").trimEnd());
+}
+
+/**
+ * Re-printed Markdown with each alert's marker unescaped. Note that a line
+ * inside a code fence, at any depth, is left as written, because TipTap
+ * writes code raw, so a backslash there is the code's own.
+ */
+function alertsUnescaped(markdown: string): string {
+  let fence: string | undefined;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const [, run, rest = ""] = FENCE_LINE.exec(line) ?? [];
+
+      if (fence === undefined) {
+        fence = run;
+
+        return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
+      }
+
+      // Note that a fence closes on a run as long or longer of its own mark, with nothing after it.
+      const closes =
+        run !== undefined &&
+        run[0] === fence[0] &&
+        run.length >= fence.length &&
+        rest.trim() === "";
+
+      if (closes) fence = undefined;
+
+      return line;
+    })
+    .join("\n");
 }
 
 /** Whether a block holds a picture still waiting on its upload, at any depth. */
@@ -248,9 +290,19 @@ function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources
   return held.sources.get(node) ?? reprinted(manager, node) + BLOCK_GAP;
 }
 
-/** Whether two sources written one against the other still read as two blocks, as a heading over its paragraph does and two paragraphs do not. */
+/**
+ * Whether two sources written one against the other still read as the two
+ * blocks they were, as a heading over its paragraph does and two paragraphs
+ * do not: more than one block, the first ending where `source` does. Note
+ * that a block can still read as two after it took the next's first lines,
+ * as a paragraph takes an indented code block's up to its blank line.
+ */
 function readsApart(manager: MarkdownManager, source: string, next: string): boolean {
-  return manager.instance.lexer(source + next).filter((token) => token.type !== "space").length > 1;
+  const [first, ...rest] = manager.instance
+    .lexer(source + next)
+    .filter((token) => token.type !== "space");
+
+  return rest.length > 0 && first?.raw.trimEnd() === source.trimEnd();
 }
 
 /**

@@ -8,15 +8,19 @@
  * (`TASKS_COMMENT_ACT` with `reply`), under a key minted for its words, so
  * one sent again after a lost answer is taken once; the host draws it over
  * the thread at once and takes it back where the service refused it.
- * Starting a thread needs words of the description chosen, which the app's
- * read-only description has no selection for, so it is left to the desktop
- * and the web.
+ * A thread is started on one whole block of the description
+ * (`DESCRIPTION_COMMENT_SCOPE.BLOCK`), as a long press on it offers, since
+ * the app's read-only description has no selection of words; its span is
+ * read from the shared parse (`@repo/features/description-blocks`).
  */
 
+import type { DescriptionBlock } from "@repo/features/description-blocks";
+import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
   type DescriptionCommentThread,
@@ -28,7 +32,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -40,9 +44,6 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
-
-/** What a reply that did not land says under the field, as the panel's thread says it. */
-const NOT_POSTED = "The comment could not be posted.";
 
 /**
  * A task's description threads, followed while `taskId` is named, the
@@ -160,8 +161,8 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
             action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
           }),
         {
-          refused: (answer) => ("thread" in answer ? undefined : NOT_POSTED),
-          unanswered: NOT_POSTED,
+          refused: (answer) => ("thread" in answer ? undefined : COMMENT_NOTE.NOT_POSTED),
+          unanswered: COMMENT_NOTE.NOT_POSTED,
           inPlace: (said) => {
             // Note that words typed while it was out stay, after the reply given back, so neither is lost.
             setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
@@ -184,4 +185,126 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       note,
     };
   }, [acts, write, taskId, threadId, words, sent, sending, note]);
+}
+
+/** The open threads standing on each block of a description, by the block's start, the oldest started first. */
+export function threadsOnBlocks(
+  threads: readonly DescriptionCommentThread[],
+  blocks: readonly DescriptionBlock[],
+): ReadonlyMap<number, readonly DescriptionCommentThread[]> {
+  const on = new Map<number, DescriptionCommentThread[]>();
+
+  for (const thread of threads.filter(threadOpen)) {
+    const { anchor } = thread;
+
+    if (anchor === undefined) continue;
+    const block = blocks.find((each) => anchor.from >= each.from && anchor.from < each.to);
+
+    if (block === undefined) continue;
+    on.set(block.from, [...(on.get(block.from) ?? []), thread]);
+  }
+
+  return on;
+}
+
+/** A new thread's field on a block: its words, whether they may go, what a send that did not land said, and the send, which answers the thread's id once it is posted. */
+export interface CommentStart {
+  readonly words: string;
+  readonly onWords: (words: string) => void;
+  readonly sendable: boolean;
+  readonly send: () => Promise<string | undefined>;
+  readonly note: string | undefined;
+}
+
+/** A start sent and not yet answered as posted: its words, the key it went under, and the thread's id it named. */
+interface SentStart extends SentReply {
+  readonly threadId: string;
+}
+
+/**
+ * A new thread on one block of a task's description, as the panel's block
+ * comment starts one (`TASKS_COMMENT_START`): its first comment's words, the
+ * block's quote and span, and the description's text the span is measured
+ * in, which the service carries over to the text as it stands. It goes
+ * under an id minted here, so the host draws the thread at once, and a key
+ * kept for as long as the words stand, so the same words sent again after a
+ * lost answer start one thread; a refusal keeps the words with why.
+ */
+export function useCommentStart(
+  taskId: string,
+  text: string,
+  block: DescriptionBlock | undefined,
+): CommentStart {
+  const acts = useHostActs();
+  const write = useWrite();
+  const [words, setWords] = useState("");
+  const [sent, setSent] = useState<SentStart | undefined>(undefined);
+  const [sending, setSending] = useState(false);
+  const [note, setNote] = useState<string | undefined>(undefined);
+  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
+  const inFlight = useRef(false);
+  const quote = block?.quote;
+
+  return useMemo(() => {
+    const send = async (): Promise<string | undefined> => {
+      const kept = words.trim();
+
+      if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
+        return undefined;
+      }
+
+      inFlight.current = true;
+      const again = sent?.words === kept ? sent : undefined;
+      const key = again?.key ?? randomUUID();
+      const threadId = again?.threadId ?? randomUUID();
+      setSent({ words: kept, key, threadId });
+      setSending(true);
+      setNote(undefined);
+
+      const went = await write(
+        () =>
+          acts[ACT_KIND.TASKS_COMMENT_START]({
+            planId: taskId,
+            start: {
+              id: threadId,
+              clientKey: key,
+              scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
+              quote,
+              anchor: { from: block.from, to: block.to },
+              text,
+              words: kept,
+              attachments: [],
+            },
+          }),
+        {
+          refused: (answer) =>
+            "thread" in answer
+              ? undefined
+              : "refused" in answer
+                ? commentRefusalNote(answer.refused)
+                : COMMENT_NOTE.NOT_POSTED,
+          unanswered: COMMENT_NOTE.NOT_POSTED,
+          inPlace: setNote,
+          went: BUZZ.SUCCESS,
+        },
+      ).finally(() => {
+        inFlight.current = false;
+        setSending(false);
+      });
+
+      if (!went) return undefined;
+      setSent(undefined);
+      setWords("");
+
+      return threadId;
+    };
+
+    return {
+      words,
+      onWords: setWords,
+      sendable: words.trim() !== "" && !sending && quote !== undefined,
+      send,
+      note,
+    };
+  }, [acts, write, taskId, text, block, quote, words, sent, sending, note]);
 }

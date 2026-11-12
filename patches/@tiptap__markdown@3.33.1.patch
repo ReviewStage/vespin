@@ -1,7 +1,16 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6f3600b5f409e5b0439cafbbdb9edf08a68673f0..e64fee287fed6f88e2f1f963f231ae26c9880c61 100644
+index 6f3600b5f409e5b0439cafbbdb9edf08a68673f0..bc27832835201f3473143a2072a7bb47d2bb1c88 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
+@@ -379,7 +379,7 @@ var MarkdownManager = class {
+ 		this.schemaParseDomTagsCache = null;
+ 		this.inlineNodeTypesCache = null;
+ 		this.lastParseResult = null;
+-		this.markedInstance = (_options$marked = options === null || options === void 0 ? void 0 : options.marked) !== null && _options$marked !== void 0 ? _options$marked : marked.marked;
++		this.markedInstance = (_options$marked = options === null || options === void 0 ? void 0 : options.marked) !== null && _options$marked !== void 0 ? _options$marked : new marked.Marked();
+ 		this.indentStyle = (_options$indentation$ = options === null || options === void 0 || (_options$indentation = options.indentation) === null || _options$indentation === void 0 ? void 0 : _options$indentation.style) !== null && _options$indentation$ !== void 0 ? _options$indentation$ : "space";
+ 		this.indentSize = (_options$indentation$2 = options === null || options === void 0 || (_options$indentation2 = options.indentation) === null || _options$indentation2 === void 0 ? void 0 : _options$indentation2.size) !== null && _options$indentation$2 !== void 0 ? _options$indentation$2 : 2;
+ 		this.baseExtensions = (options === null || options === void 0 ? void 0 : options.extensions) || [];
 @@ -1163,6 +1163,31 @@ var MarkdownManager = class {
  				let currentMarks = new Map((node.marks || []).map((mark) => [mark.type, mark]));
  				let marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);
@@ -45,9 +54,25 @@ index 6f3600b5f409e5b0439cafbbdb9edf08a68673f0..e64fee287fed6f88e2f1f963f231ae26
  				if (marksToCloseAtEnd.length > 0) {
  					const trailingMatch = textContent.match(/(\s+)$/);
 diff --git a/dist/index.js b/dist/index.js
-index 8ba62a7921c6ba5fbfd9544d6e0aa56d13c02d2f..3e58ecfc246a225cdddbb04b2b8b1f17ad6a3bae 100644
+index 8ba62a7921c6ba5fbfd9544d6e0aa56d13c02d2f..1983a9a796a141b4e5a1c6deb863dff2fd018552 100644
 --- a/dist/index.js
 +++ b/dist/index.js
+@@ -1,5 +1,5 @@
+ import { Extension, attrsEqual, callOrReturn, commands, decodeHtmlEntities, encodeHtmlEntities, flattenExtensions, generateJSON, getExtensionField, getSchema, marksEqual, sortExtensions } from "@tiptap/core";
+-import { marked } from "marked";
++import { Marked } from "marked";
+ //#region src/utils.ts
+ /**
+ * Matches a run of two or more consecutive line breaks (a blank line) at the
+@@ -378,7 +378,7 @@ var MarkdownManager = class {
+ 		this.schemaParseDomTagsCache = null;
+ 		this.inlineNodeTypesCache = null;
+ 		this.lastParseResult = null;
+-		this.markedInstance = (_options$marked = options === null || options === void 0 ? void 0 : options.marked) !== null && _options$marked !== void 0 ? _options$marked : marked;
++		this.markedInstance = (_options$marked = options === null || options === void 0 ? void 0 : options.marked) !== null && _options$marked !== void 0 ? _options$marked : new Marked();
+ 		this.indentStyle = (_options$indentation$ = options === null || options === void 0 || (_options$indentation = options.indentation) === null || _options$indentation === void 0 ? void 0 : _options$indentation.style) !== null && _options$indentation$ !== void 0 ? _options$indentation$ : "space";
+ 		this.indentSize = (_options$indentation$2 = options === null || options === void 0 || (_options$indentation2 = options.indentation) === null || _options$indentation2 === void 0 ? void 0 : _options$indentation2.size) !== null && _options$indentation$2 !== void 0 ? _options$indentation$2 : 2;
+ 		this.baseExtensions = (options === null || options === void 0 ? void 0 : options.extensions) || [];
 @@ -1162,6 +1162,31 @@ var MarkdownManager = class {
  				let currentMarks = new Map((node.marks || []).map((mark) => [mark.type, mark]));
  				let marksToOpen = this.getMarksToOpenForSerialization(activeMarks, currentMarks, nextNode);

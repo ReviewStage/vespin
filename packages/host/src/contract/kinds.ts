@@ -41,6 +41,8 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of a ChatGPT plan's rate-limit reset credits spent from Settings or a limit notice's Use reset, under the press's key. */
+  PROVIDER_KEYS_USE_RESET_CREDIT: "providerKeys.useResetCredit",
   /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
   SUBSCRIPTION_RENAME: "providerKeys.rename",
   /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
@@ -256,6 +258,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
+  AGENTS_REPLY_BUTTON: "agents.replyButton",
+  /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
+  AGENTS_REPLY_BUTTON_PRESS: "agents.replyButtonPress",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -950,6 +956,7 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  PROVIDER_KEYS_USE_RESET_CREDIT: ACT_USE.WRITE,
   SUBSCRIPTION_RENAME: ACT_USE.WRITE,
   SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
@@ -1015,6 +1022,8 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
+  AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,

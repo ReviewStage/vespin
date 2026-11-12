@@ -162,6 +162,7 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  CodeRow,
   type ConnectionLine,
   ConnectionRow,
   MemberRow,
@@ -177,6 +178,8 @@ export {
   SettingsForm,
   ToggleRow,
   ValueRow,
+  type WorkspacePickOption,
+  WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
 

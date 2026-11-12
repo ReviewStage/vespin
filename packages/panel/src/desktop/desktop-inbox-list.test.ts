@@ -881,6 +881,63 @@ test("on Needs you, a focused row whose item is answered on another Mac leaves t
   );
 });
 
+test("a focused row whose task is pinned on another Mac keeps the keyboard as it moves under Pinned", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const { page } = mount();
+  await settle();
+  rowNamed(page, "Expire after 7 days?").focus();
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+  assert.ok(
+    page.querySelector(".inbox-tasks .ui-group-header-head")?.textContent?.startsWith("Pinned"),
+    "the row's task heads the list under Pinned",
+  );
+  assert.ok(
+    document.activeElement === rowNamed(page, "Expire after 7 days?"),
+    "the keyboard stays on the row",
+  );
+});
+
+test("a run folded under its heading draws none of its rows, and opens again once a link chooses one of its items, though not while that item stays chosen, and again once the choice was let go", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const { page } = mount();
+  await settle();
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+
+  const heading = [
+    ...page.querySelectorAll<HTMLElement>(".inbox-tasks .ui-group-header-head"),
+  ].find((head) => head.textContent?.startsWith("Everything else") === true);
+
+  const fold = heading?.querySelector<HTMLElement>("button") ?? heading;
+  assert.ok(fold, "Everything else is headed");
+  const open = () => fold.getAttribute("aria-expanded");
+  act(() => fold.click());
+  await settle();
+  assert.deepEqual(listed(page), ["*Expire after 7 days?"], "folded, its rows are drawn nowhere");
+  act(() => world.chooseFromOutside({ ...ON_THRESHOLD, opened: true }));
+  await settle();
+  assert.ok(
+    listed(page).some((row) => row.includes("Alert at 80%?")),
+    "the link opened the run",
+  );
+
+  act(() => fold.click());
+  await settle();
+  assert.equal(
+    open(),
+    "false",
+    "folded again by hand while its item stays chosen, it stays folded",
+  );
+
+  layOut(page, 800);
+  act(() => backToList(page).click());
+  await settle();
+  act(() => world.chooseFromOutside({ ...ON_THRESHOLD, opened: true }));
+  await settle();
+  assert.equal(open(), "true", "the same item linked again once let go opens its run again");
+});
+
 test("on a phone, a focused row whose item is answered elsewhere leaves the keyboard on the head's ⋯, which holds View options there", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
   const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
@@ -1302,7 +1359,7 @@ test("a mark the service refuses is let go, and the dot stands as the reads hold
   assert.equal(unreadOf(page, "How is a failed email retried?"), false);
 });
 
-test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as read marks every unread item of the listed workspace read and clears the dots alone, what needs you still saying so; with nothing unread ⌘K offers it no more", async () => {
+test("the view's menu offers Show, Addressed to, and Pinned tasks first alone, and ⌘K's Mark all as read marks every unread item of the listed workspace read and clears the dots alone, what needs you still saying so; with nothing unread ⌘K offers it no more", async () => {
   world.listedWorkspace = ACME;
   // Note that the unread answered item is a teammate's, so the item standing chosen is the one that needs you, and nothing is read before the mark.
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, unread: true, startedBy: TEAMMATE }]);
@@ -1312,7 +1369,16 @@ test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as
   const options = page.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
   assert.ok(options, "the head offers the view's menu");
   act(() => options.click());
-  assert.deepEqual(menuWords(), ["Questions", "Open", "All", "Reminders", "—", "Addressed to"]);
+  assert.deepEqual(menuWords(), [
+    "Questions",
+    "Open",
+    "All",
+    "Reminders",
+    "—",
+    "Addressed to",
+    "—",
+    "Pinned tasks first",
+  ]);
   act(() => options.click());
   act(() => {
     runAppCommand(APP_COMMAND.MARK_INBOX_READ);

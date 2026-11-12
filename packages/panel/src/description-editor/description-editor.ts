@@ -162,14 +162,56 @@ function withWordsLine(item: JSONContent): JSONContent {
 /** A numbered item's first line as GFM reads one: up to nine digits, then `.` or `)`. */
 const NUMBERED_ITEM = /^[^\S\n]*\d{1,9}[.)](?:\s|$)/u;
 
-/** TipTap's ordered list tokenizer, taking a list that opens on a number alone. */
+/** A line TipTap's ordered list reads as an item: a number, a roman numeral, or one or two letters, then `.` or `)`. */
+const TIPTAP_ITEM = /^\s*(?:\d+|[ivxlcdmIVXLCDM]+|[a-zA-Z]{1,2})[.)]\s+/u;
+
+/** How far a line is indented. */
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
+/**
+ * A list's source up to the first line after its first, at the list's own
+ * indent, that TipTap would read as an item on a marker other than a number,
+ * which GFM reads as words, so the list ends before it (`Mr. Smith asked`
+ * after the list). Note that a line indented under an item is the item's own
+ * words, and that the source is only ever cut, so the list's source and the
+ * words' after it still join back into the text exactly.
+ */
+function numberedRun(src: string): string {
+  const lines = src.split("\n");
+  const indent = indentOf(lines[0] ?? "");
+
+  const cut = lines.findIndex((line, at) => at > 0 && indentOf(line) <= indent && lettered(line));
+
+  return cut === -1 ? src : `${lines.slice(0, cut).join("\n")}\n`;
+}
+
+/** Whether TipTap would read a line as an item on a marker other than a number. */
+function lettered(line: string): boolean {
+  return TIPTAP_ITEM.test(line) && !NUMBERED_ITEM.test(line);
+}
+
+/**
+ * TipTap's ordered list tokenizer, taking a list that opens on a number alone
+ * and holds numbered items alone. Note that a list holding a lettered line
+ * indented under an item is left to `marked`'s own list, which reads that
+ * line as the item's words, as GFM does, where TipTap's would make it a
+ * nested item and drop its first word.
+ */
 function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokenizer {
   if (tokenizer === undefined) throw new Error("TipTap's ordered list reads no Markdown");
 
   return {
     ...tokenizer,
-    tokenize: (src, tokens, lexer) =>
-      NUMBERED_ITEM.test(src) ? tokenizer.tokenize(src, tokens, lexer) : undefined,
+    tokenize: (src, tokens, lexer) => {
+      if (!NUMBERED_ITEM.test(src)) return undefined;
+      const run = numberedRun(src);
+
+      return run.split("\n").slice(1).some(lettered)
+        ? undefined
+        : tokenizer.tokenize(run, tokens, lexer);
+    },
   };
 }
 
@@ -183,10 +225,11 @@ function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokeniz
  * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
  * once a TipTap carrying that fix is installed.
  *
- * It opens only on a number, as GFM and the read view do. Note that TipTap's
- * own also reads one or two letters or a roman numeral as an item's marker,
- * so a paragraph opening `Mr. Smith asked` opened as a numbered item, and an
- * edit saved it as `1. Smith asked`. This is TipTap's own fix waiting
+ * It opens only on a number, and holds only numbered items, as GFM and the
+ * read view do. Note that TipTap's own also reads one or two letters or a
+ * roman numeral as an item's marker, so a paragraph opening `Mr. Smith asked`,
+ * alone or after a numbered list, opened as a numbered item, and an edit saved
+ * it as `1. Smith asked`. This is TipTap's own fix waiting
  * upstream (ueberdosis/tiptap#8395), so it goes once a TipTap carrying that
  * fix is installed.
  */

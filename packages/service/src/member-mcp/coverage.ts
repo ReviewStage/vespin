@@ -278,6 +278,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
+    useResetCredit: SECRET,
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
@@ -312,6 +313,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
     clear: NOT_YET_BUILT,
+    // A button in an agent's reply is drawn and pressed in its transcript; a member's agent starts or messages one with its own tools.
+    readButton: SCREEN_ONLY,
+    pressButton: SCREEN_ONLY,
   },
   dictation: { transcribe: SCREEN_ONLY },
   events: { record: INTERNAL },

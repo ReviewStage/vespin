@@ -10,8 +10,9 @@
  * as one idle for `SANDBOX_IDLE` is, runs nothing, since it is kept.
  *
  * The script is a courtesy the archive never waits on and never fails on: a
- * sandbox already gone, or one that cannot be resumed (its snapshot gone, or
- * a resume past `ARCHIVE_SCRIPT.RESUME_TIMEOUT`), skips it, and one that runs
+ * sandbox already gone, or one that cannot be resumed (one stopped on a drive
+ * of its own, which kept no disk to resume, its snapshot gone, or a resume
+ * past `ARCHIVE_SCRIPT.RESUME_TIMEOUT`), skips it, and one that runs
  * past `ARCHIVE_SCRIPT.RUN_TIMEOUT` is ended; each is said in a log line, and
  * the archive stands. What the script prints goes to the sandbox's setup log
  * (`REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG`), which the agent's Terminal
@@ -55,6 +56,9 @@ export const ARCHIVE_SCRIPT = {
   /** How often a script still running is asked again for its exit, where the provider ended a wait before it did. */
   EXIT_POLL: Duration.seconds(1),
 } as const;
+
+/** Why no run stands for the script: no sandbox, one stopped on its own drive with no disk kept, or a skip already logged. */
+const ARCHIVE_SKIP = { GONE: "gone", KEPT_NO_DISK: "kept-no-disk", LOGGED: "logged" } as const;
 
 /** Where the script is written in the sandbox, as its default user, for the run to read. */
 const ARCHIVE_FILE = "/tmp/vespin-setup/archive.sh";
@@ -141,16 +145,19 @@ export const archiveScriptOf = (
     ),
   );
 
-/** The run the session's newest sandbox is up in, resumed from its snapshot where it stopped; none where no sandbox carries the session's tag. */
+/** The run the session's newest sandbox is up in, resumed from its snapshot where it stopped; else why there is none (`ARCHIVE_SKIP`). */
 const runningOf = (api: SandboxService, sessionId: string) =>
   Effect.gen(function* () {
     const [newest] = yield* api.listTagged(SESSION_TAG, sessionId);
 
-    if (newest === undefined) return undefined;
+    if (newest === undefined) return ARCHIVE_SKIP.GONE;
 
     if (UP_STATUSES.has(newest.status) && newest.running !== undefined) {
       return { name: newest.name, running: newest.running } satisfies SandboxRunning;
     }
+
+    // Note that a sandbox stopped on a drive of its own kept no disk, so it has nothing to resume, and making it again needs the agents' image, which an archive is not handed.
+    if (yield* api.ownDriveStands(newest.name)) return ARCHIVE_SKIP.KEPT_NO_DISK;
 
     const resumed = yield* api
       .resume(newest.name)
@@ -161,7 +168,7 @@ const runningOf = (api: SandboxService, sessionId: string) =>
         "An archived agent's sandbox did not resume in time, so its archive script was skipped",
       );
 
-      return undefined;
+      return ARCHIVE_SKIP.LOGGED;
     }
 
     return { name: resumed.value.name, running: resumed.value.running } satisfies SandboxRunning;
@@ -194,13 +201,23 @@ export const archiveScriptRun = (
   Effect.gen(function* () {
     const place = yield* runningOf(api, sessionId);
 
-    if (place === undefined) {
+    if (place === ARCHIVE_SKIP.GONE) {
       yield* Effect.logInfo(
         "An archived agent's sandbox was already gone, so its archive script was skipped",
       );
 
       return undefined;
     }
+
+    if (place === ARCHIVE_SKIP.KEPT_NO_DISK) {
+      yield* Effect.logWarning(
+        "An archived agent's sandbox had stopped on its own drive, keeping no disk to resume, so its archive script was skipped",
+      );
+
+      return undefined;
+    }
+
+    if (place === ARCHIVE_SKIP.LOGGED) return undefined;
 
     yield* api.writeFiles(place, [
       { path: ARCHIVE_FILE, contents: new TextEncoder().encode(archive.script), mode: 0o644 },

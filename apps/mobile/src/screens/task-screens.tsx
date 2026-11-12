@@ -2,6 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
@@ -22,6 +23,7 @@ import {
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
+import { TASK_MOVE_WORDS } from "@repo/features/task-move-model";
 import {
   CHANGE_RELATION,
   REMOVE_PARENT,
@@ -51,7 +53,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { readingWords, VERB } from "@repo/features/words";
+import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -103,7 +105,13 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { threadComments, threadOpen, useTaskComments } from "../tasks/use-comments.js";
+import {
+  threadComments,
+  threadOpen,
+  threadsOnBlocks,
+  useTaskComments,
+} from "../tasks/use-comments.js";
+import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -125,6 +133,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
+import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
@@ -777,6 +786,8 @@ interface TaskMenuDoors {
   /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
   readonly history: ((task: TaskSummary) => void) | undefined;
   readonly openRelation: OpenRelation;
+  /** Move to workspace's door for a task, none where the reader may not move it (`useMoveTaskDoor`). */
+  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -795,12 +806,20 @@ function historyActions(
   ];
 }
 
+/** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
+function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
+  return open === undefined
+    ? []
+    : [{ label: TASK_MOVE_WORDS.TITLE, symbol: "folder", onPress: open }];
+}
+
 /**
  * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Remove
- * parent where it has one, Open in browser, and Permanently delete, red,
- * which asks first; then its Status, each status checked where it stands,
- * Task relation, Move to section, and its repository.
+ * history where the workspace's descriptions stand on, New sub-task, Move
+ * to workspace where the reader may move it, Remove parent where it has
+ * one, Open in browser, and Permanently delete, red, which asks first; then
+ * its Status, each status checked where it stands, Task relation, Move to
+ * section, and its repository.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -821,6 +840,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         symbol: "plus.square.on.square",
         onPress: () => doors.newSubTask(task),
       },
+      ...moveActions(doors.moveDoor(task)),
       ...removeParentActs(task, overview.relations).map((action) => ({
         label: action.label,
         symbol: action.symbol,
@@ -1227,6 +1247,104 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** What a long press on a block of the description offers, and how its count of open comments is heard. */
+const COMMENT_WORDS = {
+  COMMENT: "Comment",
+  heard: (count: number) => countWords(count, TERM.COMMENT),
+} as const;
+
+/**
+ * The description, read-only, as one row per block (a paragraph, a heading,
+ * a list, a picture, a rule), so a long press on a block that holds words
+ * lifts it over the system's menu with Comment, which opens a new thread on
+ * that block, as a document's block offers one; where open threads stand on
+ * a block, their count stands at its trailing edge and opens the oldest. A
+ * description read as no block stands whole, with nothing to comment on.
+ */
+function OverviewDescription({
+  overview,
+  body,
+}: {
+  readonly overview: TaskOverview;
+  readonly body: string;
+}) {
+  const router = useRouter();
+  const openLink = useOpenLink();
+  const { task } = overview;
+  const threads = useTaskComments(task.id);
+  const blocks = useMemo(() => descriptionBlocks(body), [body]);
+  const onBlocks = threadsOnBlocks(threads, blocks);
+  const { pictureSource, videoAt } = useDescriptionPictures(body);
+
+  const openThread = (threadId: string) =>
+    router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
+
+  if (blocks.length === 0) {
+    return (
+      <ListSection title={WORDS.DESCRIPTION}>
+        <WordsRow
+          words={body}
+          repository={task.repository}
+          onOpenLink={openLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+        />
+      </ListSection>
+    );
+  }
+
+  return (
+    <ListSection title={WORDS.DESCRIPTION}>
+      {blocks.map((block, index) => {
+        const standing = onBlocks.get(block.from) ?? [];
+        const oldest = standing[0];
+
+        return (
+          <WordsRow
+            key={`${block.from}`}
+            words={block.drawn}
+            repository={task.repository}
+            onOpenLink={openLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
+            last={index === blocks.length - 1}
+            menuActions={
+              block.quote === undefined
+                ? undefined
+                : [
+                    {
+                      label: COMMENT_WORDS.COMMENT,
+                      symbol: "text.bubble",
+                      tone: ROW_ACTION_TONE.NEUTRAL,
+                      onPress: () =>
+                        router.push({
+                          pathname: "/tasks/comments/new",
+                          params: {
+                            task: task.id,
+                            from: `${block.from}`,
+                            to: `${block.to}`,
+                            quote: block.quote,
+                          },
+                        }),
+                    },
+                  ]
+            }
+            comments={
+              oldest === undefined
+                ? undefined
+                : {
+                    count: standing.length,
+                    heard: COMMENT_WORDS.heard(standing.length),
+                    onOpen: () => openThread(oldest.id),
+                  }
+            }
+          />
+        );
+      })}
+    </ListSection>
+  );
+}
+
 /**
  * The description's comment threads that still stand open, as the panel's
  * comments list holds them, the oldest started first: each its first
@@ -1278,7 +1396,6 @@ function OverviewPage({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
-  const openLink = useOpenLink();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1305,13 +1422,7 @@ function OverviewPage({
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
       {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
-        <ListSection title={WORDS.DESCRIPTION}>
-          <WordsRow
-            words={document.document.body}
-            repository={task.repository}
-            onOpenLink={openLink}
-          />
-        </ListSection>
+        <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1388,6 +1499,7 @@ function TasksSplitScreen({
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1441,6 +1553,7 @@ function TasksSplitScreen({
                     newSubTask,
                     history,
                     openRelation,
+                    moveDoor,
                   }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
@@ -1488,6 +1601,7 @@ export function TaskScreen() {
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
@@ -1496,7 +1610,13 @@ export function TaskScreen() {
   const menu =
     overview === undefined
       ? undefined
-      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history, openRelation });
+      : taskMenu(overview, {
+          askDelete: deletion.askDelete,
+          newSubTask,
+          history,
+          openRelation,
+          moveDoor,
+        });
 
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);

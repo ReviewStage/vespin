@@ -1108,29 +1108,29 @@ test("the tile stands still while an upload is under way, so the upload cannot p
   assert.equal(photoTile(page)?.disabled, true);
 });
 
-test("Remove photo, offered on the tile only where a photo is set, asks first and then sends no photo", async () => {
+test("Delete photo, offered on the tile only where a photo is set, asks first and then sends no photo", async () => {
   const bare = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const bareTile = photoTile(bare.page)?.getAttribute("aria-label");
   const bareMenu = tileMenu(bare.page).map((each) => each.textContent);
 
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN, photoVersion: "v1" });
   const offered = tileMenu(page);
-  const remove = offered.find((each) => each.textContent === "Remove photo");
+  const remove = offered.find((each) => each.textContent === "Delete photo");
   act(() => remove?.click());
   await settle();
   assert.deepEqual(photos(), []);
   // The confirm repeats the menu's verb and says in one line what goes, with no ellipsis.
   assert.match(
     dialog().textContent ?? "",
-    /The photo is deleted, and the workspace is marked by its first letter instead\./u,
+    /The workspace is marked by its first letter instead\./u,
   );
   assert.equal((dialog().textContent ?? "").includes("…"), false);
-  await confirm("Remove photo");
+  await confirm("Delete photo");
 
   assert.deepEqual([bareTile, bareMenu], ["Add photo", []]);
   assert.deepEqual(
     offered.map((each) => each.textContent),
-    ["Replace photo", "Remove photo"],
+    ["Replace photo", "Delete photo"],
   );
   assert.deepEqual(photos(), [{ workspaceId: ACME.id, photo: null }]);
 });
@@ -2505,7 +2505,7 @@ test("Canceling an invitation asks first, in the accent rather than red, and sen
   assert.deepEqual(invitationRows(page), []);
 });
 
-test("each pending invitation's Cancel invitation stands in a group named by its address, so a reader hears which one it cancels", async () => {
+test("each pending invitation's ⋯ is named by its address, so a reader hears which one Cancel invitation cancels", async () => {
   invitations = ["sam", "ada"].map((name) => ({
     id: `inv-${name}`,
     email: `${name}@example.com`,
@@ -2516,14 +2516,14 @@ test("each pending invitation's Cancel invitation stands in a group named by its
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
 
   const named = [
-    ...page.querySelectorAll<HTMLButtonElement>('button[aria-label="Cancel invitation"]'),
-  ].map((cancel) => {
-    const group = cancel.closest('[role="group"]');
+    ...page.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="menu"]'),
+  ].flatMap((each) => {
+    const label = each.getAttribute("aria-label") ?? "";
 
-    return document.getElementById(group?.getAttribute("aria-labelledby") ?? "")?.textContent;
+    return label.includes("@example.com") ? [label] : [];
   });
 
-  assert.deepEqual(named, ["sam@example.com", "ada@example.com"]);
+  assert.deepEqual(named, ["sam@example.com actions", "ada@example.com actions"]);
 });
 
 test("Invite pressed again while one is on its way sends one invitation", async () => {

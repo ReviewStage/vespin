@@ -34,6 +34,7 @@ import {
 } from "../../http/http-effect.js";
 import { CHECKOUT_DIFF_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { refusedByMachine } from "./rewind.js";
 
 /**
@@ -51,7 +52,7 @@ export const turnChangesOf = /* @__PURE__ */ Effect.fn("web/turnChangesOf")(func
 ): Effect.fn.Return<
   AgentTurnChangesAnswer,
   HostedRefusal,
-  DatabaseServices | HttpClient.HttpClient | Sandbox
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
 > {
   if (!(yield* hostedStoreOrUnavailable(accountExperimentOn(account, EXPERIMENT.TURN_CHANGES)))) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);

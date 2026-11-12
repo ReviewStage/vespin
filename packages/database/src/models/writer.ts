@@ -32,6 +32,7 @@ import {
   type SlackLineMetadata,
   type StartLineMetadata,
   type StoredMessageMetadata,
+  type SuggestionLineMetadata,
   type ThreadLineMetadata,
   TURN_ORIGIN,
   TURN_STATUS,
@@ -438,7 +439,8 @@ export type AwaitingLineMetadata =
   | AppLineMetadata
   | CarryOnLineMetadata
   | AutomationLineMetadata
-  | SlackLineMetadata;
+  | SlackLineMetadata
+  | SuggestionLineMetadata;
 
 /** An awaiting line naming no channel is the developer's typed ask. */
 const TYPED_LINE_METADATA: TypedAskMetadata = {

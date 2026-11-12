@@ -65,6 +65,8 @@ export const MESSAGE_CHANNEL = {
   SLACK: "slack",
   /** A line the service sent to carry a turn on after it was cut off, saying why (`CARRY_ON_REASON`). */
   CARRY_ON: "carry_on",
+  /** A member's words sent from another agent's suggestion in its reply, which they may have edited (`@repo/features/reply-button-wire`). */
+  SUGGESTION: "suggestion",
 } as const;
 
 /**
@@ -329,14 +331,38 @@ const COMMENT_LINE_METADATA = EffectSchema.Struct({
 export type CommentLineMetadata = EffectSchema.Schema.Type<typeof COMMENT_LINE_METADATA>;
 
 /**
+ * The suggestion a line came from: the agent whose reply held it, by its id
+ * and its name as it stood, which stands for it once the reader no longer
+ * reaches it, and the button it was sent from. The member who sent it is the
+ * row's sender, as for any line of theirs.
+ */
+const SUGGESTED_BY = EffectSchema.Struct({
+  agent_id: identifier,
+  name: EffectSchema.String,
+  button_id: identifier,
+});
+
+export type SuggestedBy = EffectSchema.Schema.Type<typeof SUGGESTED_BY>;
+
+/** A suggestion line is a member's words sent to a running agent from another agent's suggestion. */
+const SUGGESTION_LINE_METADATA = EffectSchema.Struct({
+  channel: EffectSchema.Literal(MESSAGE_CHANNEL.SUGGESTION),
+  suggested_by: SUGGESTED_BY,
+});
+
+export type SuggestionLineMetadata = EffectSchema.Schema.Type<typeof SUGGESTION_LINE_METADATA>;
+
+/**
  * A start line is the first line a Start wrote a new agent: what it was
  * handed, and, for a continue or a fork, the agent it takes over from, which
- * no other brief names. Who started it is the row's sender.
+ * no other brief names, or the suggestion its brief was sent from. Who
+ * started it is the row's sender.
  */
 const START_LINE_STRUCT = EffectSchema.Struct({
   channel: EffectSchema.Literal(MESSAGE_CHANNEL.START),
   brief: EffectSchema.Literals(Object.values(START_LINE_BRIEF)),
   source_agent_id: EffectSchema.optional(identifier),
+  suggested_by: EffectSchema.optional(SUGGESTED_BY),
 });
 
 export type StartLineMetadata = EffectSchema.Schema.Type<typeof START_LINE_STRUCT>;
@@ -497,6 +523,7 @@ export type UserMessageMetadata =
   | CarryOnLineMetadata
   | AutomationLineMetadata
   | SlackLineMetadata
+  | SuggestionLineMetadata
   | ObservationMetadata;
 
 /** What a user row says about itself. */
@@ -512,6 +539,7 @@ export const USER_MESSAGE_METADATA = EffectSchema.Union([
   CARRY_ON_LINE_METADATA,
   AUTOMATION_LINE_METADATA,
   SLACK_LINE_METADATA,
+  SUGGESTION_LINE_METADATA,
   OBSERVATION_METADATA,
 ]).annotate(wireRefusal(SCHEMA_REFUSAL.MALFORMED));
 

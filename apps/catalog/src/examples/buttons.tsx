@@ -125,7 +125,7 @@ function Buttons(): React.JSX.Element {
             Invite
           </Button>
           <Button variant={BUTTON_VARIANT.DANGER_OUTLINE} icon={<TrashIcon />}>
-            Remove
+            Delete
           </Button>
         </Inline>
       </CatalogSection>

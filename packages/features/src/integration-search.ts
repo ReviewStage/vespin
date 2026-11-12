@@ -27,7 +27,6 @@ const INTEGRATION_KEYWORDS = {
   [INTEGRATION_PROVIDER.GRANOLA]: "meetings notes transcripts calls",
   [INTEGRATION_PROVIDER.LINEAR]: "issues tracker",
   [INTEGRATION_PROVIDER.MERCURY]: "bank banking accounts transactions payments finance",
-  [INTEGRATION_PROVIDER.MINTLIFY]: "docs documentation pages navigation publish site",
   [INTEGRATION_PROVIDER.NEON]: "postgres database sql branches",
   [INTEGRATION_PROVIDER.NOTION]: "pages docs wiki databases notes",
   [INTEGRATION_PROVIDER.POSTHOG]: "analytics events feature flags experiments insights",

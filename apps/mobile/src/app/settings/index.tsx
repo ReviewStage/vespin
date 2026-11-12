@@ -1,10 +1,11 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, Integrations, Machines, and the workspace's Memory and Skills, About with Send feedback, and the pages still kept on vespin.dev.
+// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, Integrations, MCP, Machines, and the workspace's Memory and Skills, About with Send feedback, and the pages still kept on vespin.dev.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_HOME, LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
+import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PUSH_NOTIFY_CHOICES,
@@ -76,7 +77,6 @@ const NOTIFICATION_STEP = {
  */
 const WEB_PAGES = [
   SETTINGS_VIEW.ENVIRONMENT,
-  SETTINGS_VIEW.MCP,
   SETTINGS_VIEW.EXPERIMENTAL,
 ] as const satisfies readonly SettingsView[];
 
@@ -191,6 +191,12 @@ export default function SettingsScreen() {
               symbol="puzzlepiece.extension"
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
+            />
+            <PushRow
+              label={MCP_CLIENTS_WORDS.TITLE}
+              symbol="app.connected.to.app.below.fill"
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.MCP)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}

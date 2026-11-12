@@ -149,6 +149,34 @@ it.effect(
     }),
 );
 
+it.effect(
+  "an archive script is skipped, nothing resumed, where the session's sandbox stopped on a drive of its own and so kept no disk",
+  () =>
+    Effect.gen(function* () {
+      const sandbox = memorySandbox();
+
+      const ran = yield* Effect.gen(function* () {
+        const opened = yield* sandbox.service.getOrCreate({
+          name: "agent-sandbox",
+          from: { image: "agents" },
+          drive: { own: true, at: "/workspace" },
+          tags: { sessionId: SESSION },
+          env: {},
+        });
+
+        yield* sandbox.service.stop(opened);
+
+        return yield* (yield* SessionSandboxes).archiveFor(SESSION, {
+          script: "docker compose down",
+          environment: {},
+        });
+      }).pipe(Effect.provide(sessionSandboxesLayer), Effect.provide(sandbox.layer));
+
+      assert.equal(ran, undefined);
+      assert.deepEqual([sandbox.state.resumed, sandbox.state.commands], [[], []]);
+    }),
+);
+
 it.effect("an archive script that runs past its bound is ended", () =>
   Effect.gen(function* () {
     const { sandbox, archived } = archiving(null);
