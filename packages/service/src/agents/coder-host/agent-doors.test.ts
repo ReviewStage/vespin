@@ -33,10 +33,13 @@ import {
   DESCRIPTION_COMMENT_STATUS,
 } from "@repo/features/description-comment-wire";
 import { descriptionSections } from "@repo/features/description-document";
+import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect, Option } from "effect";
 import { ACTION_RESULT_STATUS, unparsedWire } from "../../core.js";
+import { postInboxMessage, readInboxItem, taskInboxItems } from "../../inbox/inbox-store.js";
 import { COMMENT_TOOL_REFUSAL } from "../../tasks/comment-tools.js";
 import {
   PICTURE_LOOK_REFUSAL,
@@ -47,6 +50,7 @@ import { openGithubUser } from "../../testing/github-app-fake.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { runAgentComment, runAgentEditDescription, runAgentLookAtPicture } from "./agent-doors.js";
 import { DESCRIPTION_EDIT_REFUSAL } from "./description-edit.js";
+import { postToInbox } from "./inbox.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
 
 /**
@@ -314,7 +318,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
   );
 
   it.effect(
-    "an agent looks at a picture of another task's description of its workspace, and one of a task of another workspace its member is also in is refused",
+    "an agent looks at a picture of another task's description of its workspace, and one of a task of another workspace its member is also in is refused, as is any where its workspace has Task descriptions off",
     () =>
       Effect.gen(function* () {
         const { userId, admitted } = yield* openAgent();
@@ -327,19 +331,83 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           contentType: PICTURE_TYPE.PNG,
           bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 2]),
         };
-        const look = (taskId: string) =>
+        const look = (taskId: string, descriptionsOn = true) =>
           Effect.gen(function* () {
             const kept = yield* keepDescriptionAttachment(userId, taskId, picture);
             assert.equal(kept.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
             if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT) return assert.fail("no picture");
             const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");
-            return yield* runAgentLookAtPicture(admitted, unparsedWire({ address }));
+            return yield* runAgentLookAtPicture(
+              admitted,
+              unparsedWire({ address }),
+              descriptionsOn,
+            );
           });
 
         const onSibling = yield* look(sibling.id);
         const outside = yield* look(elsewhere.id);
+        const descriptionsOff = yield* look(sibling.id, false);
 
         assert.equal(onSibling.status, PICTURE_LOOK_STATUS.LOOKED);
+        assert.deepEqual(outside, pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
+        assert.deepEqual(descriptionsOff, pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
+      }),
+  );
+
+  it.effect(
+    "an agent looks at a picture a member put on a thread of its workspace, and one on a thread of another workspace its member is also in is refused",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, admitted } = yield* openAgent();
+        const elsewhere = yield* createTask(userId, {
+          name: "Side project",
+          organizationId: yield* openWorkspace(userId),
+        });
+        const outsider = yield* agentOn(userId, elsewhere.id);
+        const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 2]);
+        const look = (on: Agent) =>
+          Effect.gen(function* () {
+            const poster = {
+              userId,
+              taskId: on.taskId,
+              agentId: on.id,
+              organizationId: on.organizationId,
+            };
+            yield* postToInbox(
+              poster,
+              unparsedWire({ key: "mockup", title: "Which mockup?", body: "Have a look." }),
+              noSandbox,
+            );
+            const [item] = yield* taskInboxItems(userId, on.taskId);
+            assert.ok(item);
+            yield* postInboxMessage(userId, item.id, {
+              text: "This one.",
+              clientKey: randomUUID(),
+              files: [
+                {
+                  name: "mockup.png",
+                  mediaType: PICTURE_TYPE.PNG,
+                  data: Buffer.from(png).toString("base64"),
+                },
+              ],
+            });
+            const read = Option.getOrThrow(yield* readInboxItem(userId, item.id)).item;
+            const attachmentId = read.thread?.flatMap((message) => message.files ?? [])[0]
+              ?.attachmentId;
+            assert.ok(attachmentId);
+            const place = { kind: LINK_DESTINATION.INBOX_ITEM, planId: on.taskId, itemId: item.id };
+            const address = inboxAttachmentAddress(place, attachmentId, "acme");
+            return yield* runAgentLookAtPicture(admitted, unparsedWire({ address }), true);
+          });
+
+        const inWorkspace = yield* look(agent);
+        const outside = yield* look(outsider);
+
+        assert.deepEqual(inWorkspace, {
+          status: PICTURE_LOOK_STATUS.LOOKED,
+          mediaType: PICTURE_TYPE.PNG,
+          image: Buffer.from(png).toString("base64"),
+        });
         assert.deepEqual(outside, pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
       }),
   );

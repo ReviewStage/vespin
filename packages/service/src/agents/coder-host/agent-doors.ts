@@ -20,12 +20,14 @@ import {
 import { readTaskHeader } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
+import type { InboxAttachmentRef } from "@repo/features/inbox-attachment-link";
 import { PAGE_SHOWER } from "@repo/features/page-wire";
 import { Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import type { UnparsedWireValue, WireRecord } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { type InboxStoreEffect, readInboxItemHome } from "../../inbox/inbox-store.js";
 import {
   COMMENT_TOOL_REFUSAL,
   type CommentToolName,
@@ -36,10 +38,12 @@ import {
 import { runShowPage, SHOW_PAGE_REFUSAL, showPageRejected } from "../../tasks/page-tool.js";
 import {
   lookedTaskOf,
+  lookedThreadPictureOf,
   PICTURE_LOOK_REFUSAL,
   type PictureLookResult,
   pictureNotLooked,
   runLookAtPicture,
+  runLookAtThreadPicture,
 } from "../../tasks/picture-look.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { CODER, CODER_REFUSAL } from "./bounds.js";
@@ -137,16 +141,39 @@ export function runAgentEditDescription(
   );
 }
 
-/** Runs one `look_at_picture` call: one of the pictures of the description its address names, in the agent's workspace, read as the member whose turn this is. */
+/**
+ * A look at a thread's picture as the agent: one of a thread of its own
+ * workspace that its starter may read, as `read_thread` reads the thread;
+ * refused for a thread of another workspace, as for none.
+ */
+function lookInThread(
+  agent: Pick<Agent, "userId" | "organizationId">,
+  named: InboxAttachmentRef,
+): InboxStoreEffect<PictureLookResult> {
+  return Effect.gen(function* () {
+    const home = yield* readInboxItemHome(agent.userId, named.itemId);
+    if (Option.isNone(home) || home.value.workspaceId !== agent.organizationId) {
+      return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
+    }
+    return yield* runLookAtThreadPicture(agent.userId, named);
+  });
+}
+
+/** Runs one `look_at_picture` call: one of the pictures of the description its address names, in the agent's workspace, read as the member whose turn this is, or of a thread's message there, read as the agent reads the thread. */
 export function runAgentLookAtPicture(
   admitted: AdmittedConversation,
   input: UnparsedWireValue,
+  descriptionsOn: boolean,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
     if (Result.isFailure(found)) return pictureNotLooked(found.failure);
+    const inThread = lookedThreadPictureOf(input);
+    if (inThread !== undefined) return yield* lookInThread(found.success, inThread);
     const taskId = lookedTaskOf(input);
     if (taskId === undefined) return pictureNotLooked(PICTURE_LOOK_REFUSAL.UNREADABLE);
+    // A description's picture is none an agent is told of where its workspace has Task descriptions off.
+    if (!descriptionsOn) return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
     if (Option.isNone(yield* agentTaskOf(admitted, found.success, taskId))) {
       return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
     }
