@@ -50,7 +50,7 @@ import {
   turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -108,6 +108,7 @@ import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
@@ -474,7 +475,8 @@ function DescriptionDocument({
         tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
-  const turnEndOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.TURN_END);
+  const turnEndOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
 
   const comments = useDescriptionComments(

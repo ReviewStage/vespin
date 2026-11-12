@@ -620,7 +620,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     turnChanges: signedIn.turnChanges.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.id);
 
-      return yield* turnChangesOf(agent, input.messageId);
+      return yield* turnChangesOf(context.userId, agent, input.messageId);
     }),
     /**
      * The agent's changes: the files of the pull request its kept published
