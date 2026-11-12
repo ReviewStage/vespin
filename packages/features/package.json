@@ -92,6 +92,7 @@
     "./ios-system-activity": "./src/ios-system-activity.js",
     "./unreached": "./src/unreached.js",
     "./video-signature": "./src/video-signature.js",
+    "./voice-delegation": "./src/voice-delegation.js",
     "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-tree": "./src/markdown-tree.js",
     "./media-signature": "./src/media-signature.js",
