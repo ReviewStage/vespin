@@ -12,6 +12,7 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
+  conductorImportCancelRequestSchema,
   conductorImportCheckAnswerSchema,
   conductorImportProgressAnswerSchema,
   conductorImportProgressRequestSchema,
@@ -24,6 +25,9 @@ import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** A check or a run carries a workspace id and a key. */
 const KEY_BODY_BYTES = 4_096;
+
+/** A cancel carries a workspace id and a run id. */
+const CANCEL_BODY_BYTES = 2_048;
 
 export const conductorImportContract = {
   check: declaredProcedure
@@ -42,5 +46,11 @@ export const conductorImportContract = {
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.CONDUCTOR_IMPORT_PROGRESS }))
     .input(conductorImportProgressRequestSchema)
+    .output(EffectSchema.flip(conductorImportProgressAnswerSchema)),
+  cancel: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(CANCEL_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.CONDUCTOR_IMPORT_CANCEL }))
+    .input(exactInput(conductorImportCancelRequestSchema))
     .output(EffectSchema.flip(conductorImportProgressAnswerSchema)),
 };

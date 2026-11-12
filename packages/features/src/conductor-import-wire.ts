@@ -33,6 +33,8 @@ export const CONDUCTOR_IMPORT_STATUS = {
   SKIPPED: "skipped",
   /** Not imported, with why. */
   FAILED: "failed",
+  /** Still queued when its member canceled the run; a later run imports it. */
+  CANCELED: "canceled",
 } as const;
 
 export type ConductorImportStatus =
@@ -82,6 +84,14 @@ export const conductorImportRequestSchema = EffectSchema.Struct({
 });
 
 export type ConductorImportRequest = typeof conductorImportRequestSchema.Type;
+
+/** A run of the caller's in the workspace to cancel. */
+export const conductorImportCancelRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  runId: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(64)),
+});
+
+export type ConductorImportCancelRequest = typeof conductorImportCancelRequestSchema.Type;
 
 /** The workspace whose newest run of the caller's the progress reads. */
 export const conductorImportProgressRequestSchema = EffectSchema.Struct({
@@ -136,8 +146,10 @@ export const conductorImportProgressAnswerSchema = EffectSchema.Struct({
     EffectSchema.Struct({
       runId: EffectSchema.String,
       startedAt: EffectSchema.Number,
-      /** Whether nothing of it is queued any more. */
+      /** Whether nothing of it is queued any more, as once it is canceled. */
       ended: EffectSchema.Boolean,
+      /** Whether its member canceled it. */
+      canceled: EffectSchema.Boolean,
       items: EffectSchema.Array(conductorImportItemSchema),
     }),
   ),

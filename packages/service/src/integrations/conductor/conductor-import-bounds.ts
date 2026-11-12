@@ -18,16 +18,28 @@ export const CONDUCTOR_IMPORTS = {
   MAX_DURATION_SECONDS: 300,
   /** How long a message is kept, and how long Queues drops a publish under the same key: a run's key lives a day at most. */
   RETENTION: Duration.days(1),
-  /** How many times a workspace or a chat is delivered before a failure that may pass, such as Conductor not answering, settles it failed. */
-  MAX_DELIVERIES: 5,
-  /** How long a delivery that failed waits before it comes again. */
+  /** How many times a workspace or a chat may fail in a way that may pass, such as Conductor not answering, before it settles failed. */
+  MAX_ATTEMPTS: 5,
+  /** How long a delivery that failed waits before it comes again, times how many times it has failed. */
   FAILED_AGAIN: Duration.seconds(30),
+  /**
+   * How many of a run's workspaces and chats talk to Conductor at once. A
+   * run queues every workspace in one go, thousands for a large team, and
+   * Conductor answers a flood with failures, so the rest wait their turn.
+   */
+  LEASES_PER_RUN: 4,
+  /** How long a delivery holds its lease: past the consumer's own bound, so one cut off lets go of it after. */
+  LEASE_FOR: Duration.seconds(330),
+  /** The least a delivery that found the run's leases all held waits before it comes again; a random wait up to as long again is added, so they spread out. */
+  BUSY_AGAIN: Duration.seconds(20),
   /** How long a publish is waited on before it is given up and said in the log; a send answers in milliseconds. */
   PUBLISH_WAIT: Duration.seconds(5),
   /** How many messages a run or a workspace publishes at once. */
   PUBLISH_CONCURRENCY: 10,
-  /** How many of a workspace's chats have their first page read at once for its description. */
+  /** How many repositories a check asks GitHub about at once. */
   READ_CONCURRENCY: 4,
+  /** How many of a workspace's chats have their first page read at once for its description. */
+  FIRST_PAGE_CONCURRENCY: 2,
   /** How long a run's key is kept at most, whatever is still queued. */
   KEY_LIFETIME: Duration.days(1),
 } as const;

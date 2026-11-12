@@ -32,14 +32,19 @@ import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   beginConductorImportRun,
+  CONDUCTOR_IMPORT_LEASE,
   type ConductorImportQueued,
   type ConductorImportRunRow,
+  cancelConductorImportItem,
+  cancelConductorImportRun,
   clearEndedConductorImportKey,
+  leaseConductorImportItem,
   queueConductorImportItems,
   readConductorImportRun,
   readConductorImports,
   readNewestConductorImportRun,
   recordConductorImport,
+  releaseConductorImportItem,
   settleConductorImportItem,
   workspaceMembersNamed,
 } from "@repo/database/models/conductor-import-store";
@@ -70,6 +75,7 @@ import {
   Effect,
   Layer,
   Option,
+  Random,
   type Redacted,
   Result,
   Schema,
@@ -82,7 +88,7 @@ import type { HostedEnvironment } from "../../environment.js";
 import { SERVER_TASK_SOURCE } from "../../events/server-events.js";
 import { GitHubApp } from "../../github/github-app.js";
 import { workspaceRepository } from "../../github/workspace-repository.js";
-import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { hostedKeyRing } from "../../orpc/base.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
 import {
@@ -160,6 +166,8 @@ type Settled =
 /** A failure of a delivery that may pass if delivered again, with what it settles as once the deliveries run out. */
 interface Passing {
   readonly passing: ConductorImportFailure;
+  /** Why Conductor failed the read, where it was Conductor: its reason and the status it answered, never its words. */
+  readonly read?: { readonly reason: string; readonly status: number | undefined };
 }
 
 /** The queue as one runtime has it: Vercel's on production and on a Preview, this process's anywhere else. */
@@ -225,7 +233,10 @@ function readFailure(failure: ConductorReadFailed): Settled | Passing {
         status: CONDUCTOR_IMPORT_STATUS.FAILED,
         failure: CONDUCTOR_IMPORT_FAILURE.CONDUCTOR_REFUSED,
       }
-    : { passing: CONDUCTOR_IMPORT_FAILURE.CONDUCTOR_UNAVAILABLE };
+    : {
+        passing: CONDUCTOR_IMPORT_FAILURE.CONDUCTOR_UNAVAILABLE,
+        read: { reason: failure.reason, status: failure.status },
+      };
 }
 
 const failed = (failure: ConductorImportFailure): Settled => ({
@@ -293,7 +304,7 @@ const describedChats = (key: Redacted.Redacted<string>, chats: readonly ChatMess
           };
         },
       ),
-    { concurrency: CONDUCTOR_IMPORTS.READ_CONCURRENCY },
+    { concurrency: CONDUCTOR_IMPORTS.FIRST_PAGE_CONCURRENCY },
   );
 
 /** The publishes of a run or a workspace, a few at once; a publish that failed is said in the log and its item left queued. */
@@ -490,16 +501,35 @@ const consumeChat = Effect.fnUntraced(function* (
   return { status: CONDUCTOR_IMPORT_STATUS.IMPORTED } as const;
 });
 
+/** What a delivery's failure that may pass says in the log: what failed, and what Conductor answered where it was Conductor, never its words or the key. */
+function passingWords(kind: string, ended: Passing, attempts: number): string {
+  const answered =
+    ended.read === undefined
+      ? ""
+      : ` (Conductor ${ended.read.reason}, ${
+          ended.read.status === undefined
+            ? "no status: a timeout or a dropped connection"
+            : `status ${ended.read.status}`
+        })`;
+
+  return `a Conductor import's ${kind} failed ${attempts} of ${CONDUCTOR_IMPORTS.MAX_ATTEMPTS} times: ${ended.passing}${answered}`;
+}
+
+/** How long a delivery that found every lease of its run held waits: `BUSY_AGAIN` and a random part up to as long again. */
+const busyAgain = Effect.map(Random.next, (draw) =>
+  Duration.millis(Duration.toMillis(CONDUCTOR_IMPORTS.BUSY_AGAIN) * (1 + draw)),
+);
+
 /**
- * One delivery acted on: its run read and its key opened, its workspace or
- * chat imported, and its item settled; a failure that may pass is
- * delivered again until the last delivery, which settles it failed. A
- * message whose run is gone is dropped.
+ * One delivery acted on: its run read and its key opened, its item leased
+ * as one of the few of the run that talk to Conductor at once, its
+ * workspace or chat imported, and its item settled. A delivery that finds
+ * every lease held comes again after a while, at no cost to its attempts;
+ * a failure that may pass lets the lease go and comes again later each
+ * time, until `MAX_ATTEMPTS` settles it failed. A message whose run is gone
+ * or canceled, or whose item settled, is dropped.
  */
-export const consumeImportMessage = Effect.fnUntraced(function* (
-  wire: WireValue,
-  deliveryCount: number,
-) {
+export const consumeImportMessage = Effect.fnUntraced(function* (wire: WireValue) {
   const decoded = yield* Effect.option(decodeMessage(wire));
 
   if (Option.isNone(decoded)) {
@@ -512,50 +542,104 @@ export const consumeImportMessage = Effect.fnUntraced(function* (
   const run = yield* readConductorImportRun(message.runId);
 
   if (Option.isNone(run)) return QUEUE_ACKNOWLEDGED;
+  const runId = run.value.id;
 
   const conductorId =
     message.kind === CONDUCTOR_IMPORT_KIND.WORKSPACE ? message.workspace.id : message.chat.id;
 
+  const now = yield* DateTime.nowAsDate;
+
+  // A canceled run's deliveries drain doing nothing, an item a delivery in flight queued since marked canceled.
+  if (run.value.canceledAt !== null) {
+    yield* cancelConductorImportItem(runId, conductorId, now);
+
+    return QUEUE_ACKNOWLEDGED;
+  }
+
   const key = yield* openedKey(run.value);
 
-  const ended: Settled | Passing = Option.isNone(key)
-    ? failed(CONDUCTOR_IMPORT_FAILURE.RUN_EXPIRED)
-    : message.kind === CONDUCTOR_IMPORT_KIND.WORKSPACE
-      ? yield* consumeWorkspace(run.value, key.value, message)
-      : yield* consumeChat(run.value, key.value, message);
+  if (Option.isNone(key)) {
+    const expired = {
+      status: CONDUCTOR_IMPORT_STATUS.FAILED,
+      failure: CONDUCTOR_IMPORT_FAILURE.RUN_EXPIRED,
+    };
+    yield* settleConductorImportItem(runId, conductorId, expired, now);
 
-  const lastDelivery = deliveryCount >= CONDUCTOR_IMPORTS.MAX_DELIVERIES;
+    return QUEUE_ACKNOWLEDGED;
+  }
 
-  if ("passing" in ended && !lastDelivery) {
-    yield* Effect.logWarning(
-      `a Conductor import's ${message.kind} will come again: ${ended.passing}`,
-    );
+  const until = new Date(now.getTime() + Duration.toMillis(CONDUCTOR_IMPORTS.LEASE_FOR));
 
-    return { acknowledged: false, again: CONDUCTOR_IMPORTS.FAILED_AGAIN } satisfies QueueAnswer;
+  const lease = yield* leaseConductorImportItem(
+    runId,
+    conductorId,
+    now,
+    until,
+    CONDUCTOR_IMPORTS.LEASES_PER_RUN,
+  );
+
+  if (lease === CONDUCTOR_IMPORT_LEASE.SETTLED) return QUEUE_ACKNOWLEDGED;
+
+  if (lease === CONDUCTOR_IMPORT_LEASE.BUSY) {
+    return { acknowledged: false, again: yield* busyAgain } satisfies QueueAnswer;
+  }
+
+  // Note that a store failure or a defect lets the lease go, so the delivery that comes again is not held out by its own.
+  const ended: Settled | Passing = yield* (
+    message.kind === CONDUCTOR_IMPORT_KIND.WORKSPACE
+      ? consumeWorkspace(run.value, key.value, message)
+      : consumeChat(run.value, key.value, message)
+  ).pipe(
+    Effect.onError(() => Effect.ignore(releaseConductorImportItem(runId, conductorId, false))),
+  );
+
+  const settledAt = yield* DateTime.nowAsDate;
+
+  if ("passing" in ended) {
+    const attempts = yield* releaseConductorImportItem(runId, conductorId, true);
+    yield* Effect.logWarning(passingWords(message.kind, ended, attempts));
+
+    if (attempts < CONDUCTOR_IMPORTS.MAX_ATTEMPTS) {
+      const again = Duration.times(CONDUCTOR_IMPORTS.FAILED_AGAIN, attempts);
+
+      return { acknowledged: false, again } satisfies QueueAnswer;
+    }
   }
 
   const settled = "passing" in ended ? failed(ended.passing) : ended;
-  const now = yield* DateTime.nowAsDate;
 
   yield* settleConductorImportItem(
-    run.value.id,
+    runId,
     conductorId,
     { status: settled.status, failure: "failure" in settled ? settled.failure : null },
-    now,
+    settledAt,
   );
 
   return QUEUE_ACKNOWLEDGED;
 });
 
-/** The publisher's services as a delivery of its own runs on them: outside any transaction the publish ran inside. */
+/**
+ * Off Vercel: each message delivered in this process on a fiber of its
+ * own, over the publisher's services, and delivered again after the wait
+ * it asks for until it is acknowledged, as the queue would; a failure is
+ * said in the log and ends it.
+ */
 const inProcessQueue: ConductorImportQueueService = {
   publish: (message) =>
     Effect.gen(function* () {
       const services = yield* Effect.context<ConductorImportServices>();
 
-      // Note that a delivery here is its last, so a failure that may pass settles at once rather than waiting on a retry no queue makes.
+      const delivered = Effect.gen(function* () {
+        for (;;) {
+          const answer = yield* consumeImportMessage(encodeMessage(message));
+
+          if (answer.acknowledged) return;
+          yield* Effect.sleep(answer.again);
+        }
+      });
+
       yield* Effect.forkDetach(
-        consumeImportMessage(encodeMessage(message), CONDUCTOR_IMPORTS.MAX_DELIVERIES).pipe(
+        delivered.pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(`a Conductor import's delivery failed in place: ${causeKind(cause)}`),
           ),
@@ -613,11 +697,11 @@ export const conductorImportQueueFromEnvironment = Layer.effect(
   ),
 );
 
-/** The workspaces the key sees, or why Conductor refused it. */
+/** The workspaces the key sees, each once by its Conductor id however many pages listed it, or why Conductor refused the key. */
 const keyWorkspaces = (key: Redacted.Redacted<string>) =>
   Effect.map(Effect.result(listConductorWorkspaces(key)), (listed) =>
     Result.isSuccess(listed)
-      ? Result.succeed(listed.success)
+      ? Result.succeed([...new Map(listed.success.map((each) => [each.id, each])).values()])
       : Result.fail(refusalOf(listed.failure)),
   );
 
@@ -762,10 +846,37 @@ export const conductorImportProgress = Effect.fnUntraced(function* (
     run: {
       runId: run.id,
       startedAt: run.startedAt.getTime(),
-      ended: items.every((item) => item.status !== CONDUCTOR_IMPORT_STATUS.QUEUED),
+      ended:
+        run.canceledAt !== null ||
+        items.every((item) => item.status !== CONDUCTOR_IMPORT_STATUS.QUEUED),
+      canceled: run.canceledAt !== null,
       items,
     },
   } satisfies ConductorImportProgressAnswer;
+});
+
+/**
+ * The member's run in their workspace canceled: its key deleted at once,
+ * and every workspace and chat still queued marked canceled, so what is on
+ * the queue drains doing nothing. What it imported stands, and a later run
+ * imports the rest. Answers the member's newest run as it then stands; a
+ * run that is not theirs, or not in that workspace, is not found.
+ */
+export const cancelConductorImport = Effect.fnUntraced(function* (
+  userId: string,
+  workspaceId: string,
+  runId: string,
+) {
+  const workspace = yield* answeredWorkspace(userId, workspaceId);
+  const now = yield* DateTime.nowAsDate;
+
+  const canceled = yield* hostedStoreOrUnavailable(
+    cancelConductorImportRun(userId, workspace.id, runId, now),
+  );
+
+  if (!canceled) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+  return yield* conductorImportProgress(userId, workspace.id);
 });
 
 /**
@@ -776,5 +887,9 @@ export const conductorImportProgress = Effect.fnUntraced(function* (
 export function conductorImportsHandler(
   services: Context.Context<ConductorImportServices>,
 ): (request: Request) => Promise<Response> {
-  return queueConsumer(services, consumeImportMessage, CONDUCTOR_IMPORTS.FAILED_AGAIN);
+  return queueConsumer(
+    services,
+    (message) => consumeImportMessage(message),
+    CONDUCTOR_IMPORTS.FAILED_AGAIN,
+  );
 }

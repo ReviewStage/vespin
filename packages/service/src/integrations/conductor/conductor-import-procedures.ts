@@ -1,7 +1,7 @@
 /**
  * conductor-import-procedures.ts -- an import from Conductor as the settings form calls it: check a key, run the import, and read the run's progress.
  *
- * Every procedure resolves the caller (`accountMiddleware`, on the resource
+ * A member may cancel only a run of their own. Every procedure resolves the caller (`accountMiddleware`, on the resource
  * so it runs before an input is read) and runs the one operation behind it
  * (`conductor-import.ts`), which answers a workspace the caller is not in as
  * not found. The key is made a `Redacted` the moment it is read, and the run
@@ -13,6 +13,7 @@ import { Redacted } from "effect";
 import type { UserIdResolver } from "../../http/http-effect.js";
 import { accountMiddleware, hosted, keyRingMiddleware } from "../../orpc/base.js";
 import {
+  cancelConductorImport,
   checkConductorImport,
   conductorImportProgress,
   runConductorImport,
@@ -38,6 +39,10 @@ export function conductorImportProcedures(seams: ConductorImportProcedureSeams) 
 
     progress: signedIn.progress.effect(function* ({ input, context: { userId } }) {
       return yield* conductorImportProgress(userId, input.workspaceId);
+    }),
+
+    cancel: signedIn.cancel.effect(function* ({ input, context: { userId } }) {
+      return yield* cancelConductorImport(userId, input.workspaceId, input.runId);
     }),
   };
 }

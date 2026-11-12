@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { readConductorImportRun } from "@repo/database/models/conductor-import-store";
 import { readTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -29,6 +30,8 @@ import {
 import {
   ConductorImportQueue,
   type ConductorImportQueueService,
+  type ConductorImportServices,
+  cancelConductorImport,
   checkConductorImport,
   conductorImportProgress,
   consumeImportMessage,
@@ -96,7 +99,8 @@ const MESSAGES = [
 
 /** A fake Conductor answering each path with one page of what it lists. */
 const CONDUCTOR = new Map<string, JsonValue>([
-  ["/v0/workspaces", { data: [WORKSPACE], hasMore: false }],
+  // Note that the workspace is listed twice, as a page that shifted under the walk would list it.
+  ["/v0/workspaces", { data: [WORKSPACE, WORKSPACE], hasMore: false }],
   ["/v0/workspaces/cw-1/sessions", { data: [CHAT], hasMore: false }],
   ["/v0/sessions/cc-1/messages", { data: MESSAGES, hasMore: false }],
 ]);
@@ -123,8 +127,13 @@ const SERVICES = Layer.mergeAll(
   ]),
 );
 
-/** A run, with every message it and its deliveries publish delivered in turn, as the queue would deliver them. */
-const runDelivered = (userId: string, workspaceId: string) =>
+/** A run, with every message it and its deliveries publish delivered in turn, as the queue would deliver them, after what `before` does with the run. */
+const runDelivered = (
+  userId: string,
+  workspaceId: string,
+  before: (runId: string) => Effect.Effect<unknown, unknown, ConductorImportServices> = () =>
+    Effect.void,
+) =>
   Effect.gen(function* () {
     const published: WireValue[] = [];
 
@@ -135,8 +144,10 @@ const runDelivered = (userId: string, workspaceId: string) =>
     const delivered = Effect.provideService(ConductorImportQueue, queue);
     const answer = yield* delivered(runConductorImport(userId, workspaceId, KEY));
 
+    if ("runId" in answer) yield* before(answer.runId);
+
     for (let next = published.shift(); next !== undefined; next = published.shift()) {
-      yield* delivered(consumeImportMessage(next, 1));
+      yield* delivered(consumeImportMessage(next));
     }
 
     return answer;
@@ -156,6 +167,7 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
 
         const first = yield* runDelivered(userId, workspaceId);
         assert.ok("runId" in first);
+        assert.equal(first.workspaces, 1);
         const firstRun = (yield* conductorImportProgress(userId, workspaceId)).run;
 
         assert.deepEqual(
@@ -262,5 +274,45 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
         );
       }).pipe(Effect.provide(fake.layer));
     },
+  );
+
+  it.effect(
+    "a run canceled before its deliveries come deletes its key at once, and its queued workspace comes over as nothing",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const userId = `user-${randomUUID()}`;
+        yield* db
+          .insert(user)
+          .values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+        const workspaceId = yield* openWorkspace(userId);
+
+        const answer = yield* runDelivered(userId, workspaceId, (runId) =>
+          Effect.gen(function* () {
+            yield* cancelConductorImport(userId, workspaceId, runId);
+            const run = Option.getOrThrow(yield* readConductorImportRun(runId));
+            assert.equal(run.sealedKey, null);
+          }),
+        );
+
+        assert.ok("runId" in answer);
+        const run = (yield* conductorImportProgress(userId, workspaceId)).run;
+
+        assert.deepEqual(
+          { canceled: run?.canceled, ended: run?.ended },
+          { canceled: true, ended: true },
+        );
+        assert.deepEqual(
+          run?.items.map((item) => [item.conductorId, item.status]),
+          [["cw-1", CONDUCTOR_IMPORT_STATUS.CANCELED]],
+        );
+
+        const agents = yield* db
+          .select({ id: agentTable.id })
+          .from(agentTable)
+          .where(eq(agentTable.userId, userId));
+
+        assert.equal(agents.length, 0);
+      }),
   );
 });

@@ -3,7 +3,7 @@ import type {
   ConductorImportKind,
   ConductorImportStatus,
 } from "@repo/features/conductor-import-wire";
-import { index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { organization, user } from "./auth.js";
@@ -23,8 +23,10 @@ import { task } from "./task.js";
  * account and the run) only while the run has work queued: its last item
  * settled clears the key, and the sweep clears one past `keyExpiresAt`, a
  * day after the run began. `conductor_import_item` is where each workspace
- * and chat of the run stands, for the form to read; both leave with the
- * run, which the sweep deletes a week after it began.
+ * and chat of the run stands, for the form to read, and which of them a
+ * delivery holds while it talks to Conductor, so a run asks only a few
+ * things of Conductor at once; both leave with the run, which the sweep
+ * deletes a week after it began.
  */
 export const conductorImport = pgTable(
   "conductor_import",
@@ -62,6 +64,8 @@ export const conductorImportRun = pgTable(
     /** The Conductor key as the service sealed it; null once the run ended or its day ran out. */
     sealedKey: text("sealed_key"),
     startedAt: timestamptz("started_at").notNull(),
+    /** When its member canceled it, which cleared its key and every item still queued; null while it stands. */
+    canceledAt: timestamptz("canceled_at"),
     /** When the sweep clears the key whatever is still queued. */
     keyExpiresAt: timestamptz("key_expires_at").notNull(),
   },
@@ -85,6 +89,10 @@ export const conductorImportItem = pgTable(
     name: text("name"),
     status: text("status").$type<ConductorImportStatus>().notNull(),
     failure: text("failure").$type<ConductorImportFailure>(),
+    /** Until when a delivery holds it while talking to Conductor; null while none does. A run holds a few at once. */
+    leasedUntil: timestamptz("leased_until"),
+    /** How many of its deliveries Conductor or the store failed in a way that may pass; it settles failed at the bound. */
+    attempts: integer("attempts").notNull().default(0),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.runId, table.conductorId] })],

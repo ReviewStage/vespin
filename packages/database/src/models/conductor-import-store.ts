@@ -17,7 +17,7 @@ import {
 } from "@repo/features/conductor-import-wire";
 import { and, desc, eq, inArray, isNotNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { member, user } from "../schemas/auth.js";
 import {
@@ -51,6 +51,7 @@ const RunSchema = Schema.Struct({
   userId: Schema.String,
   sealedKey: Schema.NullOr(Schema.String),
   startedAt: InstantColumnSchema,
+  canceledAt: Schema.NullOr(InstantColumnSchema),
 });
 
 /** A run as its row holds it: whose it is, in which workspace, and its key sealed while it has work queued. */
@@ -137,6 +138,7 @@ const RUN_COLUMNS = {
   userId: conductorImportRun.userId,
   sealedKey: conductorImportRun.sealedKey,
   startedAt: conductorImportRun.startedAt,
+  canceledAt: conductorImportRun.canceledAt,
 };
 
 const findRun = SqlSchema.findAll({
@@ -238,7 +240,7 @@ const updateItem = SqlSchema.void({
     Database.use((db) =>
       db
         .update(conductorImportItem)
-        .set({ status, failure, updatedAt: now })
+        .set({ status, failure, leasedUntil: null, updatedAt: now })
         .where(
           and(
             eq(conductorImportItem.runId, runId),
@@ -319,6 +321,136 @@ const findMembersNamed = SqlSchema.findAll({
             eq(member.organizationId, organizationId),
             ne(user.name, ""),
             sql`lower(btrim(${user.name})) = lower(btrim(${name}))`,
+          ),
+        ),
+    ),
+});
+
+/** The run's row locked, so two deliveries of one run take its leases one after the other. */
+const lockRun = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (runId) =>
+    Database.use((db) =>
+      db
+        .select({ id: conductorImportRun.id })
+        .from(conductorImportRun)
+        .where(eq(conductorImportRun.id, runId))
+        .for("update"),
+    ),
+});
+
+const LeaseStandingSchema = Schema.Struct({
+  status: StatusSchema,
+  held: Schema.Boolean,
+  othersHeld: Schema.Number,
+});
+
+/** The item's status and whether a delivery holds it, and how many of the run's other items a delivery holds, as of `now`. */
+const findLeaseStanding = SqlSchema.findAll({
+  Request: Schema.Struct({ runId: Schema.String, conductorId: Schema.String, now: Schema.Date }),
+  Result: LeaseStandingSchema,
+  execute: ({ runId, conductorId, now }) =>
+    Database.use((db) =>
+      db
+        .select({
+          status: conductorImportItem.status,
+          held: sql<boolean>`coalesce(${conductorImportItem.leasedUntil} > ${now}, false)`,
+          othersHeld: sql<number>`(select count(*)::int from ${conductorImportItem} as "other" where "other"."run_id" = ${runId} and "other"."conductor_id" <> ${conductorId} and "other"."leased_until" > ${now})`,
+        })
+        .from(conductorImportItem)
+        .where(
+          and(
+            eq(conductorImportItem.runId, runId),
+            eq(conductorImportItem.conductorId, conductorId),
+          ),
+        ),
+    ),
+});
+
+const setLease = SqlSchema.void({
+  Request: Schema.Struct({
+    runId: Schema.String,
+    conductorId: Schema.String,
+    until: Schema.NullOr(Schema.Date),
+    failed: Schema.Boolean,
+  }),
+  execute: ({ runId, conductorId, until, failed }) =>
+    Database.use((db) =>
+      db
+        .update(conductorImportItem)
+        .set({
+          leasedUntil: until,
+          ...(failed ? { attempts: sql`${conductorImportItem.attempts} + 1` } : undefined),
+        })
+        .where(
+          and(
+            eq(conductorImportItem.runId, runId),
+            eq(conductorImportItem.conductorId, conductorId),
+          ),
+        ),
+    ),
+});
+
+const findAttempts = SqlSchema.findAll({
+  Request: Schema.Struct({ runId: Schema.String, conductorId: Schema.String }),
+  Result: Schema.Struct({ attempts: Schema.Number }),
+  execute: ({ runId, conductorId }) =>
+    Database.use((db) =>
+      db
+        .select({ attempts: conductorImportItem.attempts })
+        .from(conductorImportItem)
+        .where(
+          and(
+            eq(conductorImportItem.runId, runId),
+            eq(conductorImportItem.conductorId, conductorId),
+          ),
+        ),
+    ),
+});
+
+const cancelRun = SqlSchema.findAll({
+  Request: Schema.Struct({
+    runId: Schema.String,
+    userId: Schema.String,
+    organizationId: Schema.String,
+    now: Schema.Date,
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ runId, userId, organizationId, now }) =>
+    Database.use((db) =>
+      db
+        .update(conductorImportRun)
+        .set({ canceledAt: now, sealedKey: null })
+        .where(
+          and(
+            eq(conductorImportRun.id, runId),
+            eq(conductorImportRun.userId, userId),
+            eq(conductorImportRun.organizationId, organizationId),
+          ),
+        )
+        .returning({ id: conductorImportRun.id }),
+    ),
+});
+
+const cancelQueued = SqlSchema.void({
+  Request: Schema.Struct({
+    runId: Schema.String,
+    conductorId: Schema.optionalKey(Schema.String),
+    now: Schema.Date,
+  }),
+  execute: ({ runId, conductorId, now }) =>
+    Database.use((db) =>
+      db
+        .update(conductorImportItem)
+        .set({ status: CONDUCTOR_IMPORT_STATUS.CANCELED, leasedUntil: null, updatedAt: now })
+        .where(
+          and(
+            eq(conductorImportItem.runId, runId),
+            eq(conductorImportItem.status, CONDUCTOR_IMPORT_STATUS.QUEUED),
+            conductorId === undefined
+              ? undefined
+              : eq(conductorImportItem.conductorId, conductorId),
           ),
         ),
     ),
@@ -448,4 +580,98 @@ export function workspaceMembersNamed(
   return Effect.map(findMembersNamed({ organizationId, name }), (rows) =>
     rows.map((row) => row.userId),
   );
+}
+
+/** What a delivery's ask for its item's lease answered. */
+export const CONDUCTOR_IMPORT_LEASE = {
+  /** The delivery holds the item until the instant it asked for. */
+  HELD: "held",
+  /** The run holds as many as it may at once, or another delivery holds this one: come again later. */
+  BUSY: "busy",
+  /** The item settled already, or is gone: nothing is left to do. */
+  SETTLED: "settled",
+} as const;
+
+export type ConductorImportLease =
+  (typeof CONDUCTOR_IMPORT_LEASE)[keyof typeof CONDUCTOR_IMPORT_LEASE];
+
+/**
+ * The item leased to a delivery until `until`, where it is still queued,
+ * no delivery holds it, and the run holds fewer than `most` of its others,
+ * so a run asks only so much of Conductor at once. Taken under the run's
+ * row lock, so two deliveries of one run never both take its last lease.
+ */
+export function leaseConductorImportItem(
+  runId: string,
+  conductorId: string,
+  now: Date,
+  until: Date,
+  most: number,
+): ImportEffect<ConductorImportLease> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* lockRun(runId);
+        const [standing] = yield* findLeaseStanding({ runId, conductorId, now });
+
+        if (standing === undefined || standing.status !== CONDUCTOR_IMPORT_STATUS.QUEUED) {
+          return CONDUCTOR_IMPORT_LEASE.SETTLED;
+        }
+
+        if (standing.held || standing.othersHeld >= most) return CONDUCTOR_IMPORT_LEASE.BUSY;
+        yield* setLease({ runId, conductorId, until, failed: false });
+
+        return CONDUCTOR_IMPORT_LEASE.HELD;
+      }),
+    ),
+  );
+}
+
+/** The item's lease let go, still queued, counting a failed attempt where `failed` says so, answering how many it has failed. */
+export function releaseConductorImportItem(
+  runId: string,
+  conductorId: string,
+  failed: boolean,
+): ImportEffect<number> {
+  return Effect.gen(function* () {
+    yield* setLease({ runId, conductorId, until: null, failed });
+    const [row] = yield* findAttempts({ runId, conductorId });
+
+    return row?.attempts ?? 0;
+  });
+}
+
+/**
+ * The member's run in the workspace canceled: its key cleared at once and
+ * every item still queued marked canceled, so a delivery still on the queue
+ * finds nothing to do; what it imported stands. Answers whether the member
+ * holds such a run.
+ */
+export function cancelConductorImportRun(
+  userId: string,
+  organizationId: string,
+  runId: string,
+  now: Date,
+): ImportEffect<boolean> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const canceled = yield* cancelRun({ runId, userId, organizationId, now });
+
+        if (canceled.length === 0) return false;
+        yield* cancelQueued({ runId, now });
+
+        return true;
+      }),
+    ),
+  );
+}
+
+/** One item of a canceled run that a delivery in flight queued since, marked canceled where it is still queued. */
+export function cancelConductorImportItem(
+  runId: string,
+  conductorId: string,
+  now: Date,
+): ImportEffect<void> {
+  return cancelQueued({ runId, conductorId, now });
 }

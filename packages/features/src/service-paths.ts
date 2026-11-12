@@ -446,6 +446,8 @@ export const HOSTED_SERVICE_PATH = {
   CONDUCTOR_IMPORT_RUN: "/api/workspaces/conductor-import/run",
   /** The caller's newest import from Conductor in a workspace, with where each workspace and chat stands (GET). */
   CONDUCTOR_IMPORT_PROGRESS: "/api/workspaces/conductor-import/progress",
+  /** The caller's own run of an import from Conductor canceled (POST): its key deleted, what is still queued marked canceled, answering the newest run as `progress` does. */
+  CONDUCTOR_IMPORT_CANCEL: "/api/workspaces/conductor-import/cancel",
   /** A workspace's shared environment variables: their names to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the names as they then stand (`workspace-environment-wire.ts`). */
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */

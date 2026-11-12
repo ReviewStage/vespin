@@ -12,11 +12,14 @@ import { user } from "../../schemas/auth.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import {
   beginConductorImportRun,
+  CONDUCTOR_IMPORT_LEASE,
+  leaseConductorImportItem,
   queueConductorImportItems,
   readConductorImportRun,
   readConductorImports,
   readNewestConductorImportRun,
   recordConductorImport,
+  releaseConductorImportItem,
   settleConductorImportItem,
   sweepConductorImportRuns,
 } from "../conductor-import-store.js";
@@ -149,5 +152,42 @@ it.layer(getTestDB())("the Conductor import store", (it) => {
       yield* sweepConductorImportRuns(DAY_LATER, DAY_LATER);
       assert.ok(Option.isNone(yield* readConductorImportRun(runId)));
     }),
+  );
+
+  it.effect(
+    "a run leases no more items at once than it may, and one lease let go is taken by the next",
+    () =>
+      Effect.gen(function* () {
+        const { userId, workspace } = yield* openAccount;
+        const runId = yield* begin(workspace, userId);
+        const ids = ["ws-1", "ws-2", "ws-3"];
+
+        yield* queueConductorImportItems(
+          runId,
+          ids.map((conductorId) => ({
+            conductorId,
+            kind: CONDUCTOR_IMPORT_KIND.WORKSPACE,
+            workspaceConductorId: conductorId,
+            name: null,
+          })),
+          AT,
+        );
+
+        const lease = (conductorId: string) =>
+          leaseConductorImportItem(runId, conductorId, AT, DAY_LATER, 2);
+
+        assert.deepEqual(
+          [yield* lease("ws-1"), yield* lease("ws-2"), yield* lease("ws-3"), yield* lease("ws-1")],
+          [
+            CONDUCTOR_IMPORT_LEASE.HELD,
+            CONDUCTOR_IMPORT_LEASE.HELD,
+            CONDUCTOR_IMPORT_LEASE.BUSY,
+            CONDUCTOR_IMPORT_LEASE.BUSY,
+          ],
+        );
+
+        assert.equal(yield* releaseConductorImportItem(runId, "ws-1", true), 1);
+        assert.equal(yield* lease("ws-3"), CONDUCTOR_IMPORT_LEASE.HELD);
+      }),
   );
 });
