@@ -24,8 +24,12 @@ import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { MERGE_QUEUE_ENTRY_STATE } from "@repo/features/merge-queue-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect } from "effect";
-import { HOSTED_REFUSAL } from "../http/http-effect.js";
-import { githubReaching, openGithubUser } from "../testing/github-app-fake.js";
+import { HOSTED_REFUSAL, upstreamRefused } from "../http/http-effect.js";
+import {
+  githubReaching,
+  openGithubUser,
+  type RepositoryScript,
+} from "../testing/github-app-fake.js";
 import { readWorkspaceMergeQueue } from "./merge-queue.js";
 
 const RELAY = "acme/relay";
@@ -72,12 +76,15 @@ function relayQueue(sent: { readonly url: string; readonly method: string }): Re
 }
 
 /** A member with the experiment on, in a workspace whose installation of this id reaches `acme/relay`, with a task there whose agent opened pull request 42. */
-const openQueuedWorkspace = Effect.fnUntraced(function* (installationId: number) {
+const openQueuedWorkspace = Effect.fnUntraced(function* (
+  installationId: number,
+  script: RepositoryScript = relayQueue,
+) {
   const github = githubReaching(
     [{ id: installationId, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
     undefined,
     {},
-    relayQueue,
+    script,
   );
 
   const member = yield* openGithubUser();
@@ -115,6 +122,25 @@ const openQueuedWorkspace = Effect.fnUntraced(function* (installationId: number)
 
   return { github, member, workspace, task };
 });
+
+/** GitHub refusing `acme/relay`'s queue to the App's token: its alias null, as a repository with no queue answers, and an error saying why. */
+function relayQueueRefused(sent: {
+  readonly url: string;
+  readonly method: string;
+}): Response | undefined {
+  if (new URL(sent.url).pathname !== "/graphql" || sent.method !== "POST") return undefined;
+
+  return Response.json({
+    data: { r0: { mergeQueue: null } },
+    errors: [
+      {
+        type: "FORBIDDEN",
+        path: ["r0", "mergeQueue"],
+        message: "Resource not accessible by integration",
+      },
+    ],
+  });
+}
 
 it.layer(getTestDB())("a workspace's merge queues", (it) => {
   it.effect("join a queued pull request to the task whose agent opened it", () =>
@@ -168,6 +194,19 @@ it.layer(getTestDB())("a workspace's merge queues", (it) => {
 
       assert.deepEqual(refused, HOSTED_REFUSAL.NOT_FOUND);
       assert.equal(github.sent.length, 0);
+    }),
+  );
+
+  it.effect("fail as GitHub's refusal where it refuses a queue, never as no queue", () =>
+    Effect.gen(function* () {
+      const { github, member, workspace } = yield* openQueuedWorkspace(7813, relayQueueRefused);
+
+      const refused = yield* readWorkspaceMergeQueue(member, workspace).pipe(
+        Effect.provide(github.layer),
+        Effect.flip,
+      );
+
+      assert.deepEqual(refused, upstreamRefused(403));
     }),
   );
 });

@@ -3,8 +3,9 @@
  *
  * The read's query names the workspace; its output is the wire schema
  * flipped. It refuses a workspace the account is not a member of as not
- * found, and an account with the Merge queue experiment off as not
- * permitted (`packages/service/src/github/merge-queue.ts`).
+ * found, an account with the Merge queue experiment off as not
+ * permitted, and GitHub refusing a queue to the App's token as an upstream
+ * error (`packages/service/src/github/merge-queue.ts`).
  */
 
 import { openapi } from "@orpc/openapi";
@@ -17,7 +18,13 @@ import { declaredProcedure, refuses } from "./base.js";
 
 export const workspaceMergeQueueContract = {
   read: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.UPSTREAM_ERROR,
+      ),
+    )
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.WORKSPACE_MERGE_QUEUE }))
     .input(mergeQueueRequestSchema)
     .output(EffectSchema.flip(mergeQueueAnswerSchema)),

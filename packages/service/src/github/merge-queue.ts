@@ -36,8 +36,16 @@ import {
   HOSTED_REFUSAL,
   type HostedRefusal,
   hostedStoreOrUnavailable,
+  upstreamRefused,
 } from "../http/http-effect.js";
-import { GitHubApp, type GitHubUnavailable, githubPost, readBody, send } from "./github-app.js";
+import {
+  GITHUB_HTTP_STATUS,
+  GitHubApp,
+  type GitHubUnavailable,
+  githubPost,
+  readBody,
+  send,
+} from "./github-app.js";
 import { githubReadOrRefusal } from "./github-refusal.js";
 import type { WorkspaceRepositoriesServices } from "./workspace-repositories.js";
 
@@ -84,7 +92,23 @@ const QueuesAnswerSchema = Schema.Struct({
       ),
     ),
   ),
+  errors: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ type: Schema.optionalKey(Schema.String) })),
+  ),
 });
+
+/**
+ * GitHub's word for an alias whose repository it could not resolve, which
+ * a rename, a transfer, or a delete since the task named it leaves; any
+ * other error is GitHub refusing the read.
+ */
+const GITHUB_NOT_FOUND = "NOT_FOUND";
+
+/** The queues one request read, and whether GitHub refused any of what it asked. */
+interface QueuesRead {
+  readonly queues: readonly MergeQueueRepository[];
+  readonly refused: boolean;
+}
 
 type QueueEntryRead = typeof QueueEntrySchema.Type;
 
@@ -141,18 +165,23 @@ function entryOf(read: QueueEntryRead | null) {
   ];
 }
 
-/** The queues of the repositories given, read on one token in one request, each repository that has one in the order given. */
+/**
+ * The queues of the repositories given, read on one token in one request,
+ * each repository that has one in the order given, and whether GitHub
+ * refused any of it. Note that a refusal answers its alias null as a
+ * repository with no queue does, so only its error tells the two apart.
+ */
 const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
   token: Redacted.Redacted,
   repositories: readonly GitHubRepository[],
-): Effect.fn.Return<MergeQueueRepository[], GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.fn.Return<QueuesRead, GitHubUnavailable, HttpClient.HttpClient> {
   const answer = yield* Effect.scoped(
     Effect.flatMap(send(githubPost("/graphql", token, queuesRequest(repositories))), (response) =>
       readBody(response, QueuesAnswerSchema),
     ),
   );
 
-  return repositories.flatMap((repository, index) => {
+  const queues = repositories.flatMap((repository, index) => {
     const queue = answer.data?.[aliasAt(index)]?.mergeQueue;
 
     if (queue === null || queue === undefined) return [];
@@ -165,6 +194,11 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
       },
     ];
   });
+
+  return {
+    queues,
+    refused: (answer.errors ?? []).some((error) => error.type !== GITHUB_NOT_FOUND),
+  };
 });
 
 /**
@@ -172,7 +206,9 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
  * workspace's tasks work in, each named with the task an agent of one of
  * them opened it for. A workspace the account is not a member of is not
  * found; an account with the Merge queue experiment off is not permitted;
- * a GitHub or a store the service could not reach is unavailable.
+ * GitHub refusing a queue to the App's token is an upstream error, never
+ * an empty answer that reads as no queue; a GitHub or a store the service
+ * could not reach is unavailable.
  */
 export const readWorkspaceMergeQueue = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -193,17 +229,23 @@ export const readWorkspaceMergeQueue = /* @__PURE__ */ Effect.fnUntraced(functio
   if (named.length === 0) return { repositories: [] };
   const app = yield* GitHubApp;
 
-  const queues = yield* githubReadOrRefusal(
+  const reads = yield* githubReadOrRefusal(
     Effect.flatMap(app.repositoriesPullRequestTokens(workspaceId, named), (tokens) =>
       Effect.forEach(tokens, (held) => readQueues(held.token, held.repositories)),
     ),
   );
 
+  if (reads.some((read) => read.refused)) {
+    yield* Effect.logWarning("GitHub refused a merge queue read to the App's token");
+
+    return yield* Effect.fail(upstreamRefused(GITHUB_HTTP_STATUS.FORBIDDEN));
+  }
+
   // Note that the queues keep the order the repositories were named in, the most recently changed first.
   const order = new Map(named.map((fullName, index) => [fullName.toLowerCase(), index]));
 
-  const repositories = queues
-    .flat()
+  const repositories = reads
+    .flatMap((read) => read.queues)
     .sort(
       (a, b) =>
         (order.get(a.repository.toLowerCase()) ?? 0) - (order.get(b.repository.toLowerCase()) ?? 0),

@@ -15,7 +15,8 @@ import { workspaceIdSchema } from "./task-wire.js";
  * queue, or one the workspace's GitHub installation does not reach, is left
  * out, so an empty list is a workspace with nothing queued. The read stands
  * behind the account's Merge queue experiment, and is refused as not
- * permitted while it is off.
+ * permitted while it is off. GitHub refusing a queue to the App's token is
+ * refused as an upstream error, never answered as no queue.
  */
 
 export const MERGE_QUEUE_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
