@@ -1,0 +1,29 @@
+# agent-ports.yaml -- a cloud agent's Ports sheet, opened from its page's ⋯ menu: its sandbox's listening ports, what serves one beside it, and a port's press offering Share while none is shared.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, opened on its invitations agent's
+# page, whose sandbox the fixture says listens on :3000 and :5173, the second
+# served by Vite, and shares neither (`@repo/host/fixture-inbox`); nothing
+# reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Add a way to resend an invite that expired."
+- tapOn: "More"
+- tapOn: "Ports"
+- assertVisible: ":3000"
+- assertVisible: ":5173"
+- assertVisible: "vite"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-ports
+# A port's press opens the system's menu of what it offers: Share, while no
+# port is shared.
+- tapOn: ":3000"
+- assertVisible: "Share"
+- takeScreenshot: agent-ports-menu

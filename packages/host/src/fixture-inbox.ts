@@ -2010,6 +2010,13 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
+  [ACT_KIND.AGENTS_PORTS]: () => ({
+    running: true,
+    ports: [3000, 5173],
+    labels: [{ port: 5173, label: "vite" }],
+  }),
+  [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
   // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);
