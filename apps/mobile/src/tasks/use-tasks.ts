@@ -313,10 +313,11 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
           : placeWrites(sectionOrder(state, sectionId), taskId, sectionId, 0, Date.now());
 
       if (first === undefined) return;
-      // Note that Try again sends the move as it was asked, which a newer move of the same task makes do nothing.
+      // Note that Try again is offered only where the move writes this task alone, because a batch that also places its neighbors would put back one the member has since moved.
+      const alone = rest.every((each) => "taskId" in each && each.taskId === taskId);
       void write(() => acts[ACT_KIND.TASKS_WRITE_SECTION]({ writes: [first, ...rest] }), {
         refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
-        retry: true,
+        retry: alone,
         subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
         went: BUZZ.SUCCESS,
       });
