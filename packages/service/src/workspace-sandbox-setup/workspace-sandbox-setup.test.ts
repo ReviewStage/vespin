@@ -118,28 +118,39 @@ it.layer(getTestDB())("an edit of one run action", (it) => {
     }),
   );
 
-  it.effect("adds an action at the place named, moves one, and removes one", () =>
-    Effect.gen(function* () {
-      const { owner, workspaceId, idAt } = yield* openWithActions(["Dev", "Test"]);
-      const edit = { workspaceId, repository: RELAY };
-      yield* editRunAction(owner, workspaceId, {
-        ...edit,
-        label: "Lint",
-        command: "pnpm lint",
-        position: 0,
-      });
-      yield* editRunAction(owner, workspaceId, { ...edit, actionId: idAt(1), position: 0 });
-      const edited = yield* editRunAction(owner, workspaceId, {
-        ...edit,
-        actionId: idAt(0),
-        remove: true,
-      });
+  it.effect(
+    "adds an action at the place named, answering its new id, moves one, and removes one",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId, idAt } = yield* openWithActions(["Dev", "Test"]);
+        const edit = { workspaceId, repository: RELAY };
+        const added = yield* editRunAction(owner, workspaceId, {
+          ...edit,
+          label: "Lint",
+          command: "pnpm lint",
+          position: 0,
+        });
+        yield* editRunAction(owner, workspaceId, { ...edit, actionId: idAt(1), position: 0 });
+        const edited = yield* editRunAction(owner, workspaceId, {
+          ...edit,
+          actionId: idAt(0),
+          remove: true,
+        });
 
-      assert.deepEqual(
-        actionsOf(edited).map(({ label }) => label),
-        ["Test", "Lint"],
-      );
-    }),
+        assert.deepEqual(
+          actionsOf(added).map(({ id, label }) => [id === added.actionId, label]),
+          [
+            [true, "Lint"],
+            [false, "Dev"],
+            [false, "Test"],
+          ],
+        );
+        assert.deepEqual(
+          actionsOf(edited).map(({ label }) => label),
+          ["Test", "Lint"],
+        );
+        assert.equal(edited.actionId, undefined);
+      }),
   );
 
   it.effect(

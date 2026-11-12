@@ -257,7 +257,8 @@ const deleteRunActions = SqlSchema.void({
     Database.use((db) => db.delete(runAction).where(namedRunActions(organizationId, repository))),
 });
 
-const insertRunAction = SqlSchema.void({
+const insertRunAction = SqlSchema.findAll({
+  Result: Schema.Struct({ id: Schema.String }),
   Request: Schema.Struct({
     ...RunActionsKeySchema.fields,
     id: Schema.optionalKey(Schema.String),
@@ -269,7 +270,12 @@ const insertRunAction = SqlSchema.void({
     now: Schema.Date,
   }),
   execute: ({ now, ...row }) =>
-    Database.use((db) => db.insert(runAction).values({ ...row, createdAt: now, updatedAt: now })),
+    Database.use((db) =>
+      db
+        .insert(runAction)
+        .values({ ...row, createdAt: now, updatedAt: now })
+        .returning({ id: runAction.id }),
+    ),
 });
 
 /** The workspace's install script, where one is saved. */
@@ -364,15 +370,16 @@ export function readRunActions(
  * the new one written in one transaction, so a reader sees one list or the
  * other, never a mix; and that it is held under the repository's lock, so
  * two edits of one repository land one after the other, the later editing
- * what the earlier wrote and stamped later than it. Where `edit` fails,
- * nothing is written.
+ * what the earlier wrote and stamped later than it. Answers each action's
+ * id in the list's order, a new one's as the store named it; where `edit`
+ * fails, nothing is written.
  */
 export const editRunActions = <E, R>(
   organizationId: string,
   repository: string,
   edit: (standing: readonly WorkspaceRunAction[]) => Effect.Effect<readonly RunActionWrite[], E, R>,
   now: Date,
-): Effect.Effect<void, StoreFailure | E, DatabaseServices | R> =>
+): Effect.Effect<readonly string[], StoreFailure | E, DatabaseServices | R> =>
   Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
@@ -387,9 +394,10 @@ export const editRunActions = <E, R>(
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
         let defaulted = false;
+        const ids: string[] = [];
         for (const [position, action] of actions.entries()) {
           const keeps = action.id !== undefined && keepable.delete(action.id);
-          yield* insertRunAction({
+          const inserted = yield* insertRunAction({
             organizationId,
             repository,
             position,
@@ -401,8 +409,10 @@ export const editRunActions = <E, R>(
             now: stamped,
             ...(keeps && action.id !== undefined ? { id: action.id } : {}),
           });
+          ids.push(...inserted.map((row) => row.id));
           defaulted ||= action.isDefault === true;
         }
+        return ids;
       }),
     ),
   );
@@ -414,5 +424,7 @@ export function setRunActions(
   actions: readonly RunActionWrite[],
   now: Date,
 ): ScriptEffect<void> {
-  return editRunActions(organizationId, repository, () => Effect.succeed(actions), now);
+  return Effect.asVoid(
+    editRunActions(organizationId, repository, () => Effect.succeed(actions), now),
+  );
 }

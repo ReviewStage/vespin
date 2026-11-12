@@ -145,7 +145,7 @@ const repositoryOf = Effect.fnUntraced(function* (
   return holding.repository;
 });
 
-/** One edit sent, answered with the repository's list as it then stands and the sentence that says what changed. */
+/** One edit sent, answered with the repository's list as it then stands and the sentence that says what changed; `-q` prints the id of the action added or changed, and nothing for a remove. */
 const sentEdit = Effect.fnUntraced(function* (
   edit: Omit<WorkspaceRunActionEdit, "workspaceId">,
   said: string,
@@ -160,7 +160,7 @@ const sentEdit = Effect.fnUntraced(function* (
   yield* answer({
     json: setup,
     lines: [said, "", ...runActionsLines(list === undefined ? [] : [list])],
-    ids: list?.actions.map((action) => action.id) ?? [],
+    ids: setup.actionId === undefined ? [] : [setup.actionId],
   });
 });
 
@@ -227,6 +227,11 @@ const addCommand = Command.make(
       command:
         "vespin setup actions add --repo acme/app --label Tests --command 'pnpm test' --emoji 🧪",
       description: "Another, with an emoji",
+    },
+    {
+      command:
+        "id=$(vespin setup actions add --repo acme/app --label Lint --command 'pnpm lint' -q)",
+      description: "Keep the new action's id",
     },
   ]),
 );

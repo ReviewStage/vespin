@@ -1,7 +1,8 @@
 /**
  * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup (`workspace-sandbox-setup-wire.ts`), as procedures: read it, put the install script, put a repository's setup or archive script, put a repository's run actions, edit one run action.
  *
- * Every output is the setup as it then stands, its wire schema flipped. A
+ * Every output is the setup as it then stands, its wire schema flipped, an
+ * edit's with the id of the action it added or changed. A
  * body refuses a key it does not name (`exactInput`); the read's query
  * does not.
  *
@@ -25,6 +26,7 @@ import {
   WORKSPACE_SANDBOX_SETUP_QUERY,
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
+  workspaceRunActionEditAnswerSchema,
   workspaceRunActionEditRequestSchema,
   workspaceRunActionsPutRequestSchema,
   workspaceSandboxSetupAnswerSchema,
@@ -102,5 +104,5 @@ export const workspaceSandboxSetupContract = {
       }),
     )
     .input(exactInput(workspaceRunActionEditRequestSchema))
-    .output(EffectSchema.flip(workspaceSandboxSetupAnswerSchema)),
+    .output(EffectSchema.flip(workspaceRunActionEditAnswerSchema)),
 };
