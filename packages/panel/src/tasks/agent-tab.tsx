@@ -17,6 +17,7 @@ import {
   placedMessages,
   type TurnStretch,
   turnStretches,
+  wholeCallOf,
 } from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
@@ -1141,20 +1142,15 @@ function CutToolCallView({
   const { callId } = part;
 
   const isCall = useCallback(
-    (read: WireValue) => {
-      const whole = agentPart(read);
-
-      return whole.kind === AGENT_PART.TOOL && whole.callId === callId;
-    },
+    (read: WireValue) => wholeCallOf(read, callId) !== undefined,
     [callId],
   );
 
   const read = useWholePart(cut, isCall);
 
   if ("body" in read) return <ToolCallView part={part} jobs={jobs} cut={read.body} />;
-  const whole = agentPart(read.part);
 
-  return <ToolCallView part={whole.kind === AGENT_PART.TOOL ? whole : part} jobs={jobs} />;
+  return <ToolCallView part={wholeCallOf(read.part, callId) ?? part} jobs={jobs} />;
 }
 
 /** Whether a part read is a thought, which a cut thought's whole read must be. */

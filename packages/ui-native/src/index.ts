@@ -220,6 +220,7 @@ export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
 
 export {
   NO_TOGGLES,
+  openCuts,
   shownMediaIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
