@@ -503,30 +503,42 @@ type NoteRowProps = {
   readonly symbol?: SfSymbol | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
+  /** What it is, under its words in the body's ink, such as a skill's description. */
+  readonly detail?: string | undefined;
   /** A quiet line under them, such as who kept it and when. */
   readonly line: string;
   /** A word beside the line, such as New, in the muted ink. */
   readonly badge?: string | undefined;
+  /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
   readonly remove?: { readonly label: string; readonly onPress: () => void } | undefined;
 };
 
 /**
- * A note of Settings, such as a memory or a machine: its glyph where it has
- * one, its words whole in the ink, then a
+ * A note of Settings, such as a memory, a machine, or a skill: its glyph
+ * where it has one, its words whole in the ink, what it is under them where
+ * it says, and the chevron where a press opens it, then a
  * quiet line of whose they are, and, where the reader may, the act that
  * takes it away behind a swipe from the trailing edge, as Notes' rows carry
  * Delete, and in the menu a long press opens. Note that a full swipe never
  * runs it, since it asks first. VoiceOver hears the row as one element, its
  * words then its line, and offers the act among its actions.
  */
-export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
+export function NoteRow({ symbol, words, detail, line, badge, onPress, remove }: NoteRowProps) {
   const colors = useColors();
   const said = badge === undefined ? line : `${badge} · ${line}`;
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{words}</Text>
+      {detail === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+        >
+          {detail}
+        </Text>
+      )}
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >
@@ -535,7 +547,7 @@ export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
     </VStack>
   );
 
-  const drawn = (
+  const content = (
     <HStack
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
@@ -545,14 +557,25 @@ export function NoteRow({ symbol, words, line, badge, remove }: NoteRowProps) {
       )}
       {lines}
       <Spacer />
+      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
+
+  // Note that a row a press takes somewhere is the system's plain button, its words keeping their own ink, as `PressedRow` draws one.
+  const drawn =
+    onPress === undefined ? (
+      content
+    ) : (
+      <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("plain")]}>
+        {content}
+      </SwiftUIButton>
+    );
 
   const placed = [
     listRowBackground(colors.SURFACE),
     accessibilityElement("combine"),
     accessibilityLabel(words),
-    accessibilityValue(said),
+    accessibilityValue(detail === undefined ? said : `${detail}, ${said}`),
   ];
 
   if (remove === undefined) return <HStack modifiers={placed}>{drawn}</HStack>;

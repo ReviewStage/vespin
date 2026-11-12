@@ -12,6 +12,7 @@ import {
   type InstalledSkillScope,
 } from "@repo/features/installed-skill-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { failureLine, SKILLS_LINE } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -58,14 +59,12 @@ import { replayMaskedError } from "./marks.js";
 import {
   candidateFacts,
   type DetectedLine,
-  failureLine,
   initialTicks,
   installLabel,
   installRequest,
   installScopes,
   previewLine,
   previewRetries,
-  SKILLS_LINE,
   searchesSkills,
   shownSkills,
   type TextFill,

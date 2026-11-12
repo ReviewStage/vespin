@@ -19,6 +19,7 @@ import {
   applyMessagesPage,
 } from "@repo/features/agent-wire";
 import { threadLineTitle, threadLineWords } from "@repo/features/inbox-wire";
+import { fencedBlock } from "@repo/features/markdown-fence";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { blockSays, bodyWords, TOOL_BLOCK, type ToolBlock } from "@repo/features/tool-call-block";
 import { delegationView, toolCallView } from "@repo/features/tool-call-model";
@@ -51,7 +52,6 @@ import {
   SLACK_LINE_SUBJECT,
   THREAD_LINE_DID,
 } from "./line-cards.js";
-import { fencedBlock } from "./markdown-fence.js";
 import {
   leftOutLine,
   replayCount,

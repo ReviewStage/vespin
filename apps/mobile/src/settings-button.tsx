@@ -20,6 +20,9 @@ export const SETTINGS_ROUTE = {
   MEMORY: "/settings/memory",
   /** Send feedback, as Settings' About and the iPad's Help menu open it. */
   FEEDBACK: "/settings/feedback",
+  SKILLS: "/settings/skills",
+  /** One skill's file, by the `skill` and `name` it is pushed with. */
+  SKILL: "/settings/skill",
   /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;

@@ -77,6 +77,9 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
+import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
+import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
+import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -1037,6 +1040,53 @@ const HOSTS: readonly HostLine[] = [
   },
 ];
 
+/** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
+const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "release-notes",
+    description: "Write a release's notes from the pull requests merged since the last tag.",
+    userInvocable: true,
+    source: {
+      type: INSTALLED_SKILL_SOURCE.GITHUB,
+      owner: "ada",
+      repo: "skills",
+      path: "release-notes",
+      ref: "main",
+      sha: "3f9c2e1a7b4d6e8f0a1b2c3d4e5f6a7b8c9d0e1f",
+    },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 9 * DAY,
+    updatedAt: LANDED - 9 * DAY,
+  },
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "pr-style",
+    description: "Title and describe a pull request the way this team does.",
+    userInvocable: false,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 3 * DAY,
+    updatedAt: LANDED - 3 * DAY,
+  },
+];
+
+/** What Open reads of a fixture skill: its SKILL.md, and the one file beside it. */
+const INSTALLED_SKILL_FILE = {
+  skillFile:
+    "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
+  files: [
+    { path: "SKILL.md", bytes: 214 },
+    { path: "template.md", bytes: 1_204 },
+  ],
+} as const;
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1642,6 +1692,7 @@ export function inboxAppState(
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
+    [LIVE_READ.INSTALLED_SKILLS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS } },
     [LIVE_READ.HOSTS]: {
       [ADA.userId]: {
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
@@ -1872,6 +1923,10 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) =>
+    INSTALLED_SKILLS.some((skill) => skill.id === skillId)
+      ? { id: skillId, ...INSTALLED_SKILL_FILE }
+      : { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
 
