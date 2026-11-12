@@ -375,28 +375,61 @@ type ActionRowProps = {
   readonly disabled?: boolean | undefined;
   /** What the row is heard as, where its words alone would be heard as another row's, such as a workspace's Settings… beside the account's; its words where none is given. */
   readonly heard?: string | undefined;
+  /** A line under its name in the muted ink, such as why it takes no press; none for none. */
+  readonly detail?: string | undefined;
   readonly onPress: () => void;
 };
 
-/** A row a person presses to act, in the accent, or the system's red where it ends something. */
+/**
+ * A row a person presses to act, in the accent, or the system's red where it
+ * ends something; dimmed where it takes no press, with a line under its
+ * name where one is given, such as why Unfollow is out for a task's
+ * assignee.
+ */
 export function ActionRow({
   label,
   symbol,
   destructive = false,
   disabled: off = false,
   heard = label,
+  detail,
   onPress,
 }: ActionRowProps) {
   const colors = useColors();
+  const role = destructive ? "destructive" : "default";
+
+  if (detail === undefined) {
+    return (
+      <SwiftUIButton
+        label={label}
+        {...(symbol === undefined ? {} : { systemImage: symbol })}
+        role={role}
+        onPress={onPress}
+        modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
+      />
+    );
+  }
 
   return (
     <SwiftUIButton
-      label={label}
-      {...(symbol === undefined ? {} : { systemImage: symbol })}
-      role={destructive ? "destructive" : "default"}
+      role={role}
       onPress={onPress}
-      modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
-    />
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        disabled(off),
+        accessibilityLabel(heard),
+        accessibilityValue(detail),
+      ]}
+    >
+      <VStack alignment="leading" spacing={1}>
+        <Text>{label}</Text>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {detail}
+        </Text>
+      </VStack>
+    </SwiftUIButton>
   );
 }
 
@@ -604,6 +637,49 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
     >
       <RowActs acts={acts} />
     </Menu>
+  );
+}
+
+type FollowerRowProps = {
+  /** Their name, or You for the reader. */
+  readonly name: string;
+  readonly picture?: string | undefined;
+  /** The muted word after their name, such as Assignee; none for none. */
+  readonly role?: string | undefined;
+  /** Whether the task's agents may use their machines, which a laptop at the row's end says. */
+  readonly machines: boolean;
+  /** What VoiceOver hears after their name and role: what agents may do on their machines. */
+  readonly heard: string;
+};
+
+/**
+ * One person following a task: their face, their name with a muted role
+ * after it, such as Assignee, and a laptop at the row's end where the task's
+ * agents may use their machines, nothing where they may not. It takes no
+ * press. VoiceOver hears it as one element, its name then its role and what
+ * agents may do there, since the laptop alone says that on screen.
+ */
+export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        accessibilityElement("ignore"),
+        accessibilityLabel(name),
+        ...spokenValue(role, heard),
+      ]}
+    >
+      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+      {role === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      )}
+      <Spacer />
+      {machines ? <Image systemName="laptopcomputer" color={colors.TEXT_MUTED} /> : null}
+    </HStack>
   );
 }
 

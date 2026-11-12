@@ -25,6 +25,7 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  FollowingChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -117,7 +118,7 @@ export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -165,6 +166,7 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FollowerRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
