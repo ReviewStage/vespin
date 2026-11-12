@@ -55,7 +55,6 @@ import {
   useConfirmDialog,
   useSecond,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -321,7 +320,6 @@ function HostRow({
       actions={[
         {
           label: MACHINES_WORDS.REMOVE,
-          icon: <GLYPH.REMOVE />,
           danger: true,
           disabled: locked,
           onSelect: onRemove,

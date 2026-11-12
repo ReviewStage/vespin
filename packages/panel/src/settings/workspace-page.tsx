@@ -86,7 +86,6 @@ import {
   ShieldIcon,
   UserIcon,
   UserRoundIcon,
-  XIcon,
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -439,7 +438,6 @@ function MemberRow({
     ? [
         {
           label: MEMBER_WORDS.REMOVE,
-          icon: <GLYPH.REMOVE />,
           danger: true,
           onSelect: remove.ask,
         },
@@ -1030,7 +1028,6 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
           actions={[
             {
               label: INVITATION_WORDS.CANCEL,
-              icon: <XIcon />,
               danger: true,
               onSelect: () => {
                 setCanceling(one);
@@ -1301,7 +1298,6 @@ function ManagedSentry({
           ? "Disconnect"
           : `Disconnect ${installation.account}`,
       replayMasked: installation.account !== undefined && sentry.installations.length > 1,
-      icon: <GLYPH.DISCONNECT />,
       danger: true,
       onSelect: () => {
         setLeaving(installation);
@@ -1451,7 +1447,6 @@ function ManagedSlackBot({
           [
             {
               label: "Disconnect",
-              icon: <GLYPH.DISCONNECT />,
               danger: true,
               onSelect: () => disconnect.ask(),
             },

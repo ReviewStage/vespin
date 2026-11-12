@@ -20,7 +20,7 @@ import {
   ProgressCount,
   Tooltip,
 } from "@repo/ui";
-import { GLYPH, LinkIcon, PlusIcon } from "@repo/ui/icons";
+import { LinkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
@@ -167,7 +167,7 @@ function relationMenu(kind: TaskRelationKind, doors: RelationDoors): readonly Me
     if (picked !== undefined) doors.onChange(picked);
   });
 
-  return [[change, { label: REMOVE_RELATION, icon: <GLYPH.CLOSE />, onSelect: doors.onRemove }]];
+  return [[change, { label: REMOVE_RELATION, onSelect: doors.onRemove }]];
 }
 
 /**

@@ -74,6 +74,7 @@ import {
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/use-inline-rename";
@@ -1314,7 +1315,14 @@ function KeyRow({
                 ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
-              [{ label: WORDS.DELETE_KEY, danger: true, onSelect: removal.ask }],
+              [
+                {
+                  label: WORDS.DELETE_KEY,
+                  icon: <GLYPH.DELETE />,
+                  danger: true,
+                  onSelect: removal.ask,
+                },
+              ],
             ]}
           />
         )}

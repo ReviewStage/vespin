@@ -2505,7 +2505,7 @@ test("Canceling an invitation asks first, in the accent rather than red, and sen
   assert.deepEqual(invitationRows(page), []);
 });
 
-test("each pending invitation's Cancel invitation stands in a group named by its address, so a reader hears which one it cancels", async () => {
+test("each pending invitation's ⋯ is named by its address, so a reader hears which one Cancel invitation cancels", async () => {
   invitations = ["sam", "ada"].map((name) => ({
     id: `inv-${name}`,
     email: `${name}@example.com`,
@@ -2516,14 +2516,14 @@ test("each pending invitation's Cancel invitation stands in a group named by its
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
 
   const named = [
-    ...page.querySelectorAll<HTMLButtonElement>('button[aria-label="Cancel invitation"]'),
-  ].map((cancel) => {
-    const group = cancel.closest('[role="group"]');
+    ...page.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="menu"]'),
+  ].flatMap((each) => {
+    const label = each.getAttribute("aria-label") ?? "";
 
-    return document.getElementById(group?.getAttribute("aria-labelledby") ?? "")?.textContent;
+    return label.includes("@example.com") ? [label] : [];
   });
 
-  assert.deepEqual(named, ["sam@example.com", "ada@example.com"]);
+  assert.deepEqual(named, ["sam@example.com actions", "ada@example.com actions"]);
 });
 
 test("Invite pressed again while one is on its way sends one invitation", async () => {

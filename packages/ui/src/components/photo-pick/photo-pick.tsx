@@ -113,7 +113,7 @@ export function PhotoPick({
             [
               {
                 label: PICK_WORDS.DELETE,
-                icon: <GLYPH.REMOVE />,
+                icon: <GLYPH.DELETE />,
                 danger: true,
                 onSelect: onRemove,
               },
