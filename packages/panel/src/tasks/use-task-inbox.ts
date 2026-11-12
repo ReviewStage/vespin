@@ -55,6 +55,7 @@ import { useInboxArrivals } from "./inbox-arrivals.js";
 import { type InboxBoardView, type InboxNote, inboxBoard } from "./inbox-model.js";
 import {
   filesLost,
+  UNHEARD_UNDELIVERED,
   type UndeliveredReply,
   undeliveredOn,
   undeliveredReplies,
@@ -234,6 +235,8 @@ export interface TaskInboxControl {
   readonly onRetryUndelivered: (item: InboxItem, key: string) => void;
   /** Takes a reply that did not go back into the item's box, ahead of what the box holds, its answer's picks with it, so the same words sent again go under its key. */
   readonly onEditUndelivered: (item: InboxItem, key: string) => void;
+  /** Keeps a new thread started from the item's box that did not go on the item's thread, marked Not delivered, saying `why`. */
+  readonly onUndeliveredStart: (item: InboxItem, start: UndeliveredStart, why: string) => void;
   /** Lets go of a reply that did not go. */
   readonly onDropUndelivered: (key: string) => void;
   /** Why a send did not go, or was not taken, by item, said on its card until the next send. */
@@ -315,6 +318,13 @@ interface QueuedReply {
   readonly shown: PendingInboxReply | undefined;
 }
 
+/** A new thread's first message as its start went: its words and files, and the key it went under. */
+export interface UndeliveredStart {
+  readonly text: string;
+  readonly attachments: readonly AgentAttachment[];
+  readonly clientKey: string;
+}
+
 /** What a reply sends: its words and files, the answer it carries, and the notice's revision it settles. */
 interface ReplySent {
   readonly text: string;
@@ -349,10 +359,6 @@ function queuedReply(itemId: string, sent: ReplySent, key: string): QueuedReply 
 
 /** Why a reply queued behind one that did not go did not go itself. */
 const BEHIND_UNDELIVERED = "Not sent, because the reply before it did not go.";
-
-/** Why a reply no answer came back for is marked, which may have reached the agent all the same. */
-const UNHEARD_UNDELIVERED =
-  "No answer came back, so this may not have reached the agent. Retry sends it only once.";
 
 /** A queued reply that did not go, on the task `taskId`, as its thread keeps it. */
 function undeliveredOf(reply: QueuedReply, taskId: string | null, why: string): UndeliveredReply {
@@ -701,7 +707,10 @@ export function useHeldTaskInbox(input: {
       if (item === undefined)
         return whole !== undefined && !whole.some((each) => each.id === reply.itemId);
 
-      return holdsSent(item, reply.key);
+      // Note that a thread started is an item of its own, so any of the task's items holding the key settles it.
+      return reply.startsThread === true
+        ? held.items.some((each) => holdsSent(each, reply.key))
+        : holdsSent(item, reply.key);
     });
 
     if (settled.length === 0) return;
@@ -879,11 +888,36 @@ export function useHeldTaskInbox(input: {
       if (reply === undefined) return;
       undeliveredReplies.set((now) => now.filter((each) => each.key !== key));
       note(item.id, undefined);
-      attempts.current.set(item.id, { key, words: sentWords(reply) });
+
+      // Note that a thread's start keeps its key apart from the item's replies, since a reply under it would be another message.
+      if (reply.startsThread !== true)
+        attempts.current.set(item.id, { key, words: sentWords(reply) });
       const went = draftOfUndelivered(item, reply);
       writer.update(draftPlace(item, draftsOn), (now) => withTakenBack(now, went));
     },
     [note, writer, draftsOn],
+  );
+
+  const onUndeliveredStart = useCallback(
+    (item: InboxItem, start: UndeliveredStart, why: string) => {
+      const { text, attachments, clientKey: key } = start;
+
+      undeliveredReplies.set((now) => [
+        ...now.filter((each) => each.key !== key),
+        {
+          key,
+          taskId: draftsOn,
+          itemId: item.id,
+          text,
+          attachments,
+          files: attachments.length,
+          at: Date.now(),
+          why,
+          startsThread: true,
+        },
+      ]);
+    },
+    [draftsOn],
   );
 
   const onDropUndelivered = useCallback((key: string) => {
@@ -924,6 +958,7 @@ export function useHeldTaskInbox(input: {
     undelivered,
     onRetryUndelivered,
     onEditUndelivered,
+    onUndeliveredStart,
     onDropUndelivered,
     notes,
     onDropNote,

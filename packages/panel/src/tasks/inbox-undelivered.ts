@@ -11,7 +11,10 @@
  * to the ask, and why it did not go are kept in the renderer's storage for
  * the account that sent them (`keptLines`), so a reload or a relaunch draws
  * them again; its files stay in the window that attached them, as a draft's
- * do.
+ * do. A new thread started from an item's box that did not go stands on that
+ * item's thread the same way, marked as a new thread, and a read of any of
+ * the task's items holding its key settles it, since the thread it started
+ * is an item of its own.
  */
 
 import type { AgentAttachment } from "@repo/features/agent-wire";
@@ -21,6 +24,10 @@ import { keptLines } from "../composer-drafts.js";
 
 /** Where the replies that did not go are kept in the renderer's storage. */
 const STORAGE_KEY = "app.inboxUndelivered";
+
+/** Why a send no answer came back for is marked, which may have reached the agent all the same. */
+export const UNHEARD_UNDELIVERED =
+  "No answer came back, so this may not have reached the agent. Retry sends it only once.";
 
 /** A reply that did not go, as its thread draws it and Retry sends it again. */
 export interface UndeliveredReply {
@@ -41,6 +48,8 @@ export interface UndeliveredReply {
   readonly at: number;
   /** Why it did not go, which heads its mark's menu. */
   readonly why: string;
+  /** Whether it was to start a new thread with the item's agent rather than reply on the item's own, which a read of any of the task's items holding its key settles. */
+  readonly startsThread?: true | undefined;
 }
 
 /** A reply that did not go as storage keeps it: all of it but its files. */
@@ -54,17 +63,19 @@ const keptSchema = Schema.Struct({
   revision: Schema.optionalKey(Schema.Number),
   at: Schema.Number,
   why: Schema.String,
+  startsThread: Schema.optionalKey(Schema.Literal(true)),
 });
 
 /** Every reply that did not go, the account signed in's alone, in the order they failed. */
 export const undeliveredReplies = keptLines<UndeliveredReply, typeof keptSchema.Type>({
   key: STORAGE_KEY,
   kept: keptSchema,
-  toKept: ({ attachments: _attached, files, answers, revision, ...rest }) => ({
+  toKept: ({ attachments: _attached, files, answers, revision, startsThread, ...rest }) => ({
     ...rest,
     ...(files === 0 ? undefined : { files }),
     ...(answers === undefined ? undefined : { answers }),
     ...(revision === undefined ? undefined : { revision }),
+    ...(startsThread === undefined ? undefined : { startsThread }),
   }),
   fromKept: ({ files, ...kept }) => ({ ...kept, files: files ?? 0, attachments: [] }),
   idOf: (kept) => kept.key,
