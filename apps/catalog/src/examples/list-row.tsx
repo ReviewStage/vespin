@@ -293,7 +293,7 @@ function ListRows(): React.JSX.Element {
             <ListRow
               leading={<GLYPH.GOAL />}
               title="The suite passes against the live Stripe account"
-              meta="Can't be met"
+              meta="Blocked"
               tone={STATUS_TONE.DANGER}
               onPress={() => undefined}
             />

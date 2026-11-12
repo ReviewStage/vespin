@@ -8,7 +8,7 @@
  * right-click offering Copy goal and Clear goal. A goal that wants the
  * developer says so on its own row, in its tone (`goalTone`): paused or out
  * of budget in the attention tone, a paused one's Resume standing on it, and
- * one that can't be met in the danger tone. The notices are what the goal
+ * a blocked one in the danger tone. The notices are what the goal
  * did, where it did it: its setting and each verdict of the checker as a
  * card a check's line is drawn as (`line-cards.tsx`), the checker's reason
  * in its fold, and a pause or a resume as a trail across the transcript, as
@@ -67,7 +67,7 @@ const NOTICE_WORDS = {
   [GOAL_EVENT.SET]: "Goal set",
   [GOAL_EVENT.NOT_MET]: "Goal not met yet",
   [GOAL_EVENT.MET]: "Goal met",
-  [GOAL_EVENT.IMPOSSIBLE]: "Goal can't be met",
+  [GOAL_EVENT.IMPOSSIBLE]: "Goal blocked",
   [GOAL_EVENT.PAUSED]: "Goal paused. The agent stops after this turn.",
   [GOAL_EVENT.RESUMED]: "Goal resumed.",
   [GOAL_EVENT.BUDGET_LIMITED]: "Goal stopped at its token budget",
@@ -124,7 +124,7 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
     case AGENT_GOAL_STATE.MET:
       return <span className="text-muted-foreground">{`Met · ${goal.turns} turns`}</span>;
     case AGENT_GOAL_STATE.IMPOSSIBLE:
-      return <span className="font-label text-danger">Can't be met</span>;
+      return <span className="font-label text-danger">Blocked</span>;
     case AGENT_GOAL_STATE.BUDGET_LIMITED:
       return (
         <span className="inline-flex items-center gap-tight-gap font-label text-attention">
