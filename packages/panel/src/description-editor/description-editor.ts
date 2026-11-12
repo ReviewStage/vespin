@@ -59,6 +59,7 @@ import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
   droppedPictures,
+  LIST_ITEMS,
   laidInPictures,
   pastedPictures,
   pictureNode,
@@ -789,13 +790,16 @@ export function mountDescriptionEditor(
   const onWords = placedOnWords(editor, placement);
   editor.view.dispatch(editor.state.tr.setSelection(onWords ?? placed(editor, placement)));
 
-  // Pictures dropped on the drawn text are laid in at the caret the drop opened the editor at, as a drop in the open editor is.
-  const dropped =
-    placement !== undefined && "pictures" in placement ? placement.pictures : undefined;
+  // Files dropped on the text are laid in at the caret the drop put, whether it opened the editor or moved its caret.
+  const laidInDropped = (at: DescriptionEditorPlacement | undefined) => {
+    const dropped = at !== undefined && "pictures" in at ? at : undefined;
 
-  if (dropped !== undefined && pictures !== undefined) {
-    laidInPictures(editor.view, dropped, pictures);
-  }
+    if (dropped?.pictures !== undefined && pictures !== undefined) {
+      laidInPictures(editor.view, dropped.pictures, pictures, undefined, dropped.landing);
+    }
+  };
+
+  laidInDropped(placement);
 
   // The text and caret as the editor opened on the words a click landed on,
   // which stand for those words only until either changes: a merged answer
@@ -835,6 +839,7 @@ export function mountDescriptionEditor(
       const selection = placedOnWords(editor, placement) ?? placed(editor, placement);
       editor.view.dispatch(editor.state.tr.setSelection(selection));
       editor.view.focus();
+      laidInDropped(placement);
     },
     wordsTop: () => {
       const { doc, selection } = editor.state;
@@ -885,9 +890,6 @@ export function mountDescriptionEditor(
     destroy: () => editor.destroy(),
   };
 }
-
-/** The nodes a list's bullets are, each commented on alone. */
-const LIST_ITEMS: ReadonlySet<string> = new Set(["listItem", "taskItem"]);
 
 /** The document's stretch from `from` to `to` as a thread started on it anchors it, in `text`, the Markdown the editor would hand over now; nothing where it holds no word the text keeps. */
 function editorSpan(

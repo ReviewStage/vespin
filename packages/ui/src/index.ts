@@ -126,6 +126,8 @@ export * from "./components/drawer-swipe/drawer-scrim.js";
 
 export * from "./components/drawer-swipe/use-drawer-swipe.js";
 
+export * from "./components/drop-line/drop-line.js";
+
 export * from "./components/drop-slot/drop-slot.js";
 
 export * from "./components/edit-actions/edit-actions.js";
