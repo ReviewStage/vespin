@@ -364,7 +364,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
   ]);
 });
 
-test("a turn that changed files names its first three by chip with their lines added and removed, and how many more, on its Worked for line while the reader has Turn changes on, and says nothing of them while it is off", async () => {
+test("a turn that changed files says how many and its lines added and removed, then names its first three by chip with their own, on its Worked for line while the reader has Turn changes on, and says nothing of them while it is off", async () => {
   const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
   const off = await drawnTab(false, edited);
   assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
@@ -389,19 +389,23 @@ test("a turn that changed files names its first three by chip with their lines a
   const [first] = chips;
   assert.ok(first);
   await act(async () => first.click());
-  const more = [...row.querySelectorAll("button")].find((each) => each.textContent === "+2 more");
-  assert.ok(more, row.textContent ?? "");
-  await act(async () => more.click());
+
+  const totals = [...row.querySelectorAll("button")].find(
+    (each) => each.textContent === "5 files+17 −2",
+  );
+
+  assert.ok(totals, row.textContent ?? "");
+  await act(async () => totals.click());
   assert.deepEqual(
     [on.turns, on.opened],
     [
       [
         [AGENT, "middle", "src/tile.css"],
-        [AGENT, "middle", "src/dark.css"],
+        [AGENT, "middle", "src/tile.css"],
       ],
       [],
     ],
-    "a chip opens the turn's changes on its file, and the more on the first file past the chips, by the line that opened the turn",
+    "a chip opens the turn's changes on its file, and the totals on its first, by the line that opened the turn",
   );
   assert.equal(
     on.message("reply-1").querySelector("[data-turn-files]"),
