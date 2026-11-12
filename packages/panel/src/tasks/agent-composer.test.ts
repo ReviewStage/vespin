@@ -111,12 +111,15 @@ function Box({
   messages = [],
   skills = reading,
   onClear,
+  startsGoal,
   model,
 }: {
   sender: MessageSender;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
+  /** Whether the box starts an agent whose first message may set its goal, as New task's does. */
+  startsGoal?: boolean;
   /** The model chip's control, which `/model` opens; none where the box draws no chip. */
   model?: AgentModelControl;
   /** The transcript as the tab reads it, which a sent line is read back from. */
@@ -139,6 +142,7 @@ function Box({
       composer,
       skills,
       onClear,
+      startsGoal,
       model,
     }),
     // What Continue would carry, as the tab hands it on.
@@ -152,6 +156,7 @@ async function mounted(
   options: {
     readonly skills?: SkillSource;
     readonly onClear?: () => Promise<boolean>;
+    readonly startsGoal?: boolean;
     readonly model?: AgentModelControl;
   } = {},
 ) {
@@ -589,6 +594,23 @@ test("a skill named as a command the box does not run, as /compact in New task's
   );
 
   assert.deepEqual(rows, ["Use to squash commits."]);
+});
+
+test("a box starting an agent, with no session yet, lists /goal beside /model but no command that needs a session", async () => {
+  const box = await mounted(undefined, {
+    model: MODEL,
+    startsGoal: true,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model", "/goal"]);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {

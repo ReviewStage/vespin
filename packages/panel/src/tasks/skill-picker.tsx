@@ -44,6 +44,7 @@ import {
   type CommandReach,
   CommandRef,
   commandOption,
+  GOAL_NAMES,
   matchingCommands,
   runsCommand,
 } from "./command-ref.js";
@@ -462,8 +463,13 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
-    // Note that only the commands acting on a session stand as chips, so a box with none sends `/compact` as the words it is.
-    commands: commands?.reach.session === true ? COMMAND_NAMES : NO_NAMES,
+    // Note that only the commands a box runs stand as chips, so a box with no session sends `/compact` as the words it is, while one starting an agent still takes `/goal`.
+    commands:
+      commands?.reach.session === true
+        ? COMMAND_NAMES
+        : commands?.reach.goal === true
+          ? GOAL_NAMES
+          : NO_NAMES,
     onTrigger: setTrigger,
     onKey,
     known,

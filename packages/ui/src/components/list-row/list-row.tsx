@@ -357,7 +357,7 @@ export type ListRowInk = (typeof LIST_ROW_INK)[keyof typeof LIST_ROW_INK];
  * it by.
  */
 const LIST_CLASS =
-  "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0 data-[variant=card]:overflow-hidden data-[variant=card]:rounded-control data-[variant=card]:border data-[variant=card]:border-border data-[variant=card]:bg-surface data-[variant=card]:shadow-card";
+  "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0 data-[variant=card]:overflow-hidden data-[variant=card]:rounded-control data-[variant=card]:border data-[variant=card]:border-border data-[variant=card]:has-[>li.ui-list-row[data-menu-open=true]:only-of-type]:border-border-menu-open data-[variant=card]:bg-surface data-[variant=card]:shadow-card";
 
 /** The row: a grid of five tracks, its parts centered on its middle, in the text's ink, in by a nest for each level it stands nested at. */
 const ROW_CLASS =

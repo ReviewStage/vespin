@@ -112,7 +112,8 @@ function goalTone(goal: AgentGoal): StatusTone | undefined {
 }
 
 /** The words a row's end stands in, its parts apart by the gap a pull request's row keeps between its state and its lines (`agent-published.tsx`). */
-const STANDING_CLASS = "inline-flex items-center gap-icon-gap whitespace-nowrap tabular-nums";
+const STANDING_CLASS =
+  "inline-flex items-center gap-icon-gap whitespace-nowrap align-top tabular-nums";
 
 /** A count of turns, as the row and its card say it: "1 turn", "3 turns". */
 function turnWords(turns: number): string {

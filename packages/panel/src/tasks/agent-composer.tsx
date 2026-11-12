@@ -347,6 +347,7 @@ export function AgentComposer({
   mode,
   approvalsWaiting = 0,
   onClear,
+  startsGoal = false,
   onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
@@ -424,8 +425,10 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
-  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone. */
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone, and `/goal` where they start an agent on their words (`startsGoal`). */
   onClear?: (() => Promise<boolean>) | undefined;
+  /** Whether the box, with no session yet, starts an agent whose first message may set its goal (`/goal`), as New task's and a draft agent's do; not one whose words are wrapped in a brief or a note before the agent reads them. */
+  startsGoal?: boolean | undefined;
   /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
@@ -467,8 +470,14 @@ export function AgentComposer({
   // Note that a box clearing its session holds, so a message sent at once never reaches the session it ends.
   const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session.
-  const reach = { model: model !== undefined, session: onClear !== undefined };
+
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message.
+  const reach = {
+    model: model !== undefined,
+    session: onClear !== undefined,
+    goal: onClear !== undefined || startsGoal,
+  };
+
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
@@ -487,7 +496,7 @@ export function AgentComposer({
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
     commands:
-      editingQueued || (!reach.model && !reach.session)
+      editingQueued || (!reach.model && !reach.session && !reach.goal)
         ? undefined
         : { reach, onRun: (name) => runCommand(name, true) },
     keywords,

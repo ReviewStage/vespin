@@ -84,7 +84,15 @@
     box-shadow: inset 0 0 0 1px var(--ui-color-border-menu-open);
   }
 
-  /* The open row is lifted as a card is, in the surface's fill with a
+  /* Note that a card's only row draws no ring of its own, because the card
+     takes the ring's ink on its own hairline instead (`list-row.tsx`'s
+     `LIST_CLASS`): a ring inside that hairline would stand as a second edge,
+     its corners off the card's. */
+  .ui-list[data-variant="card"] > li.ui-list-row[data-menu-open="true"]:only-of-type {
+    box-shadow: none;
+  }
+
+    /* The open row is lifted as a card is, in the surface's fill with a
      hairline and a soft shadow. */
   .ui-list-row[data-current="true"][data-current-look="sheet"] {
     background: var(--ui-color-surface);

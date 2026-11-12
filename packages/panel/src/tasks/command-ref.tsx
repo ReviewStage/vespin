@@ -71,18 +71,24 @@ export const SENT_COMMANDS: ReadonlySet<string> = new Set([
   SLASH_COMMAND.GOAL,
 ]);
 
+/** The command chips of a box with no session yet, which can still open its agent's first turn on a goal. */
+export const GOAL_NAMES: ReadonlySet<string> = new Set([SLASH_COMMAND.GOAL]);
+
 /** What the card says under a command's name. */
 const COMMAND_KIND = "Command";
 
-/** Which of the commands a box runs: `/model` where it stands beside a model chip, and the ones that act on a session where its agent has one to compact or clear. */
+/** Which of the commands a box runs: `/model` where it stands beside a model chip, the ones that act on a session where its agent has one to compact or clear, and `/goal` there or where the box starts an agent on its words. */
 export interface CommandReach {
   readonly model: boolean;
   readonly session: boolean;
+  readonly goal: boolean;
 }
 
-/** Whether a box runs a command, by name or by alias: `/model` beside its chip, the rest on a session. */
+/** Whether a box runs a command, by name or by alias: `/model` beside its chip, `/goal` where a goal may be set, the rest on a session. */
 export function runsCommand(name: SlashCommand, reach: CommandReach): boolean {
-  return name === SLASH_COMMAND.MODEL ? reach.model : reach.session;
+  if (name === SLASH_COMMAND.MODEL) return reach.model;
+
+  return name === SLASH_COMMAND.GOAL ? reach.goal : reach.session;
 }
 
 /** The listed commands the box reaches that the `/` word's query finds, by name or by alias. */
