@@ -58,6 +58,8 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   RETIRED: "retired",
   /** A member could use a tool for it, and none exists yet. */
   NOT_YET_BUILT: "not-yet-built",
+  /** Who follows a task, and whose machines its agents may use, is a member's own choice in the app: an agent reads followers and never adds, removes, or switches one. */
+  MEMBER_ONLY: "member-only",
 } as const;
 
 export type MemberMcpExclusionReason =
@@ -72,6 +74,7 @@ const {
   INTERNAL,
   RETIRED,
   NOT_YET_BUILT,
+  MEMBER_ONLY,
 } = MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
@@ -397,6 +400,12 @@ export const MEMBER_MCP_EXCLUSIONS = {
     skills: SCREEN_ONLY,
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
+  },
+  taskFollowers: {
+    follow: MEMBER_ONLY,
+    unfollow: MEMBER_ONLY,
+    setMachines: MEMBER_ONLY,
+    add: MEMBER_ONLY,
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },

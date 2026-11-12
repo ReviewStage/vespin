@@ -33,6 +33,7 @@ import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent } from "../agent-reach.js";
 import { claimNext, sendClaimed, sendQueued, wireQueue } from "./agent-queue.js";
 import { routedSessions } from "./runtime-sessions.js";
@@ -151,6 +152,9 @@ export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
 ) {
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
+
+  // A member who queues a message for one of the task's agents follows the task, as one who sends it does.
+  if (body.change === QUEUE_CHANGE.ADD) yield* followAsMessaged(userId, agent.taskId);
 
   const claimed = HANDS_ON.has(body.change)
     ? yield* claimNext(agent)

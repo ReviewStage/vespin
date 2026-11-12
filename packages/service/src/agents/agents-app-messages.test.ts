@@ -18,6 +18,7 @@ import { MENTIONED_HEADING } from "@repo/database/models/attached-file-parts";
 import { createAutomation } from "@repo/database/models/automation-store";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { sentLineStands } from "@repo/database/models/message-reads";
+import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { agentPin } from "@repo/database/schemas";
@@ -124,6 +125,7 @@ import {
   transcriptRow,
   userTexts,
 } from "../testing/agents-app-support.js";
+import { openGithubUser } from "../testing/github-app-fake.js";
 import { harnessFor } from "../testing/native-harness-fake.js";
 import { scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
 import { receivedMessage } from "./attached-files.js";
@@ -1020,6 +1022,40 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           lines: [SNAPSHOT, "Rename the subject line too."],
           status: AGENT_STATUS.RUNNING,
         });
+      }),
+  );
+
+  it.effect(
+    "a member who messages a teammate's agent follows its task with their machines on, and a member the message mentions does not follow it",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+        const mentioned = yield* openGithubUser();
+        yield* joinWorkspace(task.workspaceId, other);
+        yield* joinWorkspace(task.workspaceId, mentioned);
+        const mention = mentionMarkdown(
+          { kind: MENTION_KIND.PERSON, userId: mentioned },
+          "Charles",
+          {
+            workspace: "acme",
+            repository: null,
+          },
+        );
+
+        const sent = yield* ask(
+          messageAs(other, agent.id, { text: `Ask ${mention} first.`, clientKey: randomUUID() }),
+        );
+
+        assert.equal(sent.status, HOSTED_HTTP_STATUS.ACCEPTED, JSON.stringify(sent.body));
+        const followers = Option.getOrThrow(yield* listTaskFollowers(owner, task.id));
+
+        assert.deepEqual(
+          Object.fromEntries(followers.map((follower) => [follower.userId, follower.machines])),
+          { [owner]: true, [other]: true },
+        );
       }),
   );
 

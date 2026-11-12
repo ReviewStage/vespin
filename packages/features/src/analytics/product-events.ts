@@ -324,6 +324,7 @@ export const PRODUCT_EXPERIMENT = {
   RUN_ACTIONS: "run-actions",
   TURN_CHANGES: "turn-changes",
   REPLY_BUTTONS: "reply-buttons",
+  FOLLOWING: "following",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
