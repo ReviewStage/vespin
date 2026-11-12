@@ -90,10 +90,10 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.REPLY_BUTTONS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
-    name: "Reply buttons",
+    name: "Suggestions",
     detail:
-      "Agents put buttons in their replies that start a new agent, or message a running one, " +
-      "with a brief they wrote, when you press one.",
+      "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
+      "which you open filled in, edit, and send.",
     owner: "Dean",
     since: "2026-11-10",
   },

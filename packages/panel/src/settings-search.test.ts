@@ -207,7 +207,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
 
   const experiments = [
     "Turn changes",
-    "Reply buttons",
+    "Suggestions",
     "Rewind restores files",
     "Done and follow-ups",
     "Run actions",

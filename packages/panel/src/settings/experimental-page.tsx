@@ -94,9 +94,9 @@ const WORDS = {
 const FLIP_WORDS = {
   [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
-      `Lets agents in ${workspace} put buttons in their replies, each starting a new agent or messaging a running one with a brief the agent wrote, once someone presses it.`,
+      `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,
     off: (workspace: string) =>
-      `Stops agents in ${workspace} from adding buttons, draws the buttons already in replies as plain links, and stops any from being pressed.`,
+      `Stops agents in ${workspace} from making suggestions, draws the ones already in replies as plain links, and stops any from being sent.`,
   },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
