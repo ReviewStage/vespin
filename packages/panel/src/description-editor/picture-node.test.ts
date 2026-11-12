@@ -49,6 +49,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
   // Whether each picture drawn now is selected.
   const selected = new Map<number, boolean>();
   const onFinish = vi.fn();
+  const enlarged = vi.fn();
   // Each picture's doors, in the order the pictures were drawn.
   const doors: PictureNodeDoors[] = [];
 
@@ -66,7 +67,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
           drawn.set(key, next.upload);
           selected.set(key, isSelected);
         },
-        enlarge: () => undefined,
+        enlarge: enlarged,
         undraw: () => {
           drawn.delete(key);
           selected.delete(key);
@@ -93,7 +94,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
 
   handles.push(handle);
 
-  return { handle, taken, host, drawn, doors, selected, onFinish };
+  return { handle, taken, host, drawn, doors, selected, onFinish, enlarged };
 }
 
 /** A key pressed in the editor, answering whether something took it. */
@@ -409,6 +410,17 @@ test("the editor opened by a press that landed on a picture opens with that pict
   const { selected } = opened(markdown, { x: 300, y: 200, picture: { section: 0, occurrence: 1 } });
 
   assert.deepEqual([...selected.values()], [false, true]);
+});
+
+test("a double-click on a picture enlarges it, and one in its own controls, as its caption's words, does not", () => {
+  const { host, enlarged } = withPicture();
+  const picture = host.querySelector(".editor-picture") ?? assert.fail("the picture");
+  const control = picture.querySelector("button") ?? assert.fail("its control");
+
+  control.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  picture.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+
+  assert.equal(enlarged.mock.calls.length, 1);
 });
 
 test("a selected picture described anew, as its caption is typed, stays selected", () => {

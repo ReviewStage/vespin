@@ -59,6 +59,9 @@ const PICTURE_NODE = "image";
 /** What a picture laid in from a pasted screenshot is called until it is described. */
 const PASTED_ALT = "Screenshot";
 
+/** The panel's own controls inside a picture, which keep their events from the editor. */
+const PICTURE_CONTROLS = "button, input, textarea";
+
 /** The keys besides the arrows a selected picture takes. */
 const PICTURE_KEYS: ReadonlySet<string> = new Set(["Enter", "Backspace", "Delete"]);
 
@@ -339,6 +342,11 @@ function altOf(file: File): string {
   return stem === "" || stem === "image" ? PASTED_ALT : stem;
 }
 
+/** Whether an event lands on one of the panel's own controls inside a picture: a button, or a field such as its caption's. */
+function onControl(event: Event): boolean {
+  return event.target instanceof Element && event.target.closest(PICTURE_CONTROLS) !== null;
+}
+
 /**
  * The picture node: TipTap's image, inline, with the upload it waits on;
  * drawn into its own element by the panel where it can draw one, and as an
@@ -403,7 +411,11 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
           view.focus();
         };
 
-        const enlarged = () => drawing.enlarge();
+        // Note that a double-click in the picture's own controls, its caption's words among them, is theirs and enlarges nothing.
+        const enlarged = (event: MouseEvent) => {
+          if (!onControl(event)) drawing.enlarge();
+        };
+
         dom.addEventListener("keydown", escaped);
         dom.addEventListener("dblclick", enlarged);
 
@@ -425,9 +437,7 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
             drawing.redraw(pictureOf(current), false);
           },
           // Note that the panel's own controls inside the picture, its alt text's field among them, keep their events from the editor.
-          stopEvent: (event) =>
-            event.target instanceof Element &&
-            event.target.closest("button, input, textarea") !== null,
+          stopEvent: (event) => onControl(event),
           ignoreMutation: () => true,
           destroy: () => {
             dom.removeEventListener("keydown", escaped);
