@@ -480,8 +480,11 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
 
         const drive = workspaceDriveName(workspaceId);
 
-        const folders = filling.sandbox.state.commands.flatMap(
-          (command) => command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER] ?? [],
+        // A fill's sync lists its batch's repositories one a line, each led by its folder.
+        const folders = filling.sandbox.state.commands.flatMap((command) =>
+          (command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.SYNC_LIST] ?? "")
+            .split("\n")
+            .flatMap((line) => (line === "" ? [] : [line.split(" ")[0]])),
         );
 
         assert.deepEqual(answered, { status: 200, body: { read: 0 } });
