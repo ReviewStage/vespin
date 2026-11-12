@@ -1,5 +1,5 @@
 /**
- * mcp-clients-words.ts -- what Settings says of the apps the account allowed to use Vespin over MCP: their names, where each signs in from, and Disconnect, on the desktop, the web, and the iOS app alike.
+ * mcp-clients-words.ts -- what Settings says of the apps the account allowed to use the service over MCP: their names, where each signs in from, and Disconnect, on the desktop, the web, and the iOS app alike.
  */
 
 import { MCP_ACCESS_TOKEN_MINUTES, type McpClient } from "./mcp-client-wire.js";
