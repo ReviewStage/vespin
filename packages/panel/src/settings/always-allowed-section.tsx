@@ -297,10 +297,17 @@ function refusedWrite(answer: AllowedCommandsWriteAnswerView, otherwise: string)
  * Add command's card, and Edit command's, the same card filled in with the
  * command's words: one field, checked as a prefix before it is sent, and
  * Add or Save. `onLanded` hears the words the list now keeps, once the
- * service kept them.
+ * service kept them. Note that the card is about the account it was opened
+ * for (`accountId`), so a switch to another account puts it away with
+ * what was typed, because a Save then would keep the words on the other
+ * account's list.
  */
-function useCommandDialog(onLanded: (prefix: readonly string[]) => void) {
+function useCommandDialog(
+  accountId: string | undefined,
+  onLanded: (prefix: readonly string[]) => void,
+) {
   const writing = useMutation(actMutation(ACT_KIND.ALLOWED_COMMANDS_WRITE));
+  const [openedFor, setOpenedFor] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
   const [editing, setEditing] = useState<AllowedCommand | undefined>(undefined);
   const [problem, setProblem] = useState<ShownError | undefined>(undefined);
@@ -325,7 +332,7 @@ function useCommandDialog(onLanded: (prefix: readonly string[]) => void) {
   });
 
   const confirm = useConfirmDialog(
-    { subject: true, surfaceOpen: true },
+    { subject: accountId !== undefined && openedFor === accountId, surfaceOpen: true },
     act,
     confirmFailure(FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE),
   );
@@ -346,6 +353,7 @@ function useCommandDialog(onLanded: (prefix: readonly string[]) => void) {
   };
 
   const open = (command: AllowedCommand | undefined) => {
+    setOpenedFor(accountId);
     setEditing(command);
     // Note that an edit opens on the command's own words, without the `*` the list shows, since that is what the field takes.
     setTyped(command === undefined ? "" : command.prefix.join(" "));
@@ -463,7 +471,7 @@ export function AlwaysAllowedSection(): React.JSX.Element {
   const read = useQuery(allowedCommandsQuery(accountId));
   const retry = useMutation(allowedCommandsRetryMutation());
   const [landed, setLanded] = useState<readonly string[] | undefined>(undefined);
-  const command = useCommandDialog(setLanded);
+  const command = useCommandDialog(accountId, setLanded);
   const commands = read.data?.commands;
 
   return (
