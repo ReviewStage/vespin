@@ -262,7 +262,17 @@ function UploadingPicture({
         {url === undefined || isVideoDataUrl(url) ? (
           <span className={PICTURE_PENDING_CLASS} />
         ) : (
-          <img className={PICTURE_IMAGE_CLASS} src={url} alt={alt} draggable={false} />
+          <img
+            // Note that a failed picture stands at least the failure card's size, because the frame clips what the cover lays over it.
+            className={
+              failed === undefined && upload !== undefined
+                ? PICTURE_IMAGE_CLASS
+                : `${PICTURE_IMAGE_CLASS} min-h-picture-failed-h min-w-picture-failed-w`
+            }
+            src={url}
+            alt={alt}
+            draggable={false}
+          />
         )}
         {sending ? (
           <UploadCover

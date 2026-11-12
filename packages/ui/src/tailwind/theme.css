@@ -1192,6 +1192,9 @@
      the app is marked by. */
   --spacing-picture-most: 520px; /* off-scale: a screenful's worth */
   --spacing-picture-stand-in: 480px; /* off-scale: a picture's width before its bytes are read */
+  /* A picture whose upload failed is at least this size, so its failure's card (`UploadCover`) fits on it however small the picture. */
+  --spacing-picture-failed-w: 240px; /* off-scale: the failure's card's words and presses */
+  --spacing-picture-failed-h: 136px; /* off-scale: its glyph, two lines of why, and its presses */
   --aspect-screenshot: 16 / 10;
   --text-picture-caption: 0.9em;
   --text-picture-caption--line-height: 1.45;
