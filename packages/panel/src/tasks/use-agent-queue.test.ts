@@ -11,6 +11,7 @@ import {
 } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
+import { sentLineId } from "@repo/wire/host-ids";
 import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -34,7 +35,8 @@ import {
  * message box's part: a message the queue refused comes back into the box,
  * an edit the queue did not save stays open with its new words, an edit of
  * a message the queue would not hold closes, an edit
- * steered is one change of that message, and an edit takes the message's
+ * steered is one change of that message, a message steered stands in the
+ * transcript the moment it is pressed, and an edit takes the message's
  * files into the box, read as its row draws them, which Save sends back with
  * its words. A message queued with files names the ids the window keeps
  * their bytes under, which stand, and are kept under the service's ids once
@@ -228,6 +230,13 @@ test("an edit steered is one change of the message it edits, with its new words,
   await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
   act(() => now().composer.setDraft("Run tests and fix failures"));
   act(() => now().editing.steer());
+
+  // The edit closes on the press, its words drawn in the transcript at once as a line sent under the message's key.
+  assert.equal(now().editing.editing, undefined);
+  assert.deepEqual(
+    now().composer.sent.map((line) => [line.id, line.text]),
+    [[sentLineId("m1"), "Run tests and fix failures"]],
+  );
   await settle();
 
   assert.deepEqual(sent.at(-1), {
@@ -238,6 +247,19 @@ test("an edit steered is one change of the message it edits, with its new words,
   await answer({ queue: { messages: [], revision: 3 } });
   assert.equal(now().editing.editing, undefined);
   assert.equal(sent.filter((each) => each.change === QUEUE_CHANGE.ADD).length, 0);
+});
+
+test("a queued message steered from its row stands in the transcript at once under the key its row lands under, and goes on a refusal", async () => {
+  const diverted = { ...message("m1", "Run tests"), sendKey: "key-1" };
+  act(() => now().page({ messages: [diverted], revision: 1 }));
+  act(() => now().editing.steerRow(diverted));
+
+  assert.deepEqual(
+    now().composer.sent.map((line) => [line.id, line.text]),
+    [[sentLineId("key-1"), "Run tests"]],
+  );
+  await answer(refused);
+  assert.deepEqual(now().composer.sent, []);
 });
 
 test("an edit whose message left the queue, sent or deleted elsewhere, closes and keeps its words in the box", async () => {

@@ -70,6 +70,7 @@ function QueueingBox(): ReactNode {
     skills: undefined,
     queueing: {
       working: true,
+      booting: false,
       enterQueues: true,
       onQueue: queued,
       editing: false,
@@ -95,6 +96,7 @@ function RefusedEditBox(): ReactNode {
     skills: undefined,
     queueing: {
       working: true,
+      booting: false,
       enterQueues: true,
       onQueue: ignore,
       editing: true,

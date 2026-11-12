@@ -93,7 +93,7 @@ function withMessage(
   };
 }
 
-/** The queue as `change` leaves it, drawn before the service answers; a steer leaves it as it is, since the send is the service's to say. */
+/** The queue as `change` leaves it, drawn before the service answers; a steer takes its message out at once, as the service's claim of it does, and a refusal puts it back. */
 function drawnChange({ change, pictures, queuedBy }: QueueWrite): QueueChange {
   switch (change.change) {
     case QUEUE_CHANGE.ADD:
@@ -125,6 +125,7 @@ function drawnChange({ change, pictures, queuedBy }: QueueWrite): QueueChange {
           change.held ? { ...kept, editing: true } : kept,
         );
     case QUEUE_CHANGE.DELETE:
+    case QUEUE_CHANGE.STEER:
       return (queue) => ({
         ...queue,
         messages: queue.messages.filter((message) => message.id !== change.messageId),
@@ -141,8 +142,6 @@ function drawnChange({ change, pictures, queuedBy }: QueueWrite): QueueChange {
 
     case QUEUE_CHANGE.RESUME:
       return ({ paused: _paused, ...queue }) => queue;
-    case QUEUE_CHANGE.STEER:
-      return (queue) => queue;
   }
 }
 

@@ -282,6 +282,8 @@ interface ComposerAnswer {
 export interface ComposerQueueing {
   /** Whether a turn is under way or about to start, a line the box sent still on its way among them: what Queue is offered by. */
   readonly working: boolean;
+  /** Whether the agent's first launch boots its machine, which takes no line until it is up, so every send queues and nothing steers. */
+  readonly booting: boolean;
   /** Whether Enter queues while a turn runs, as Settings says (`agentEnter`); ⌘↩ does the other. */
   readonly enterQueues: boolean;
   /** Queues the box's message behind the turn. */
@@ -525,10 +527,13 @@ export function AgentComposer({
       : !answer.sendable;
 
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
+  const goes = !empty && !held && !files.reading && !editingQueued;
+  // Note that while the first launch boots a message goes one way, into the queue, since nothing steers a machine not yet up.
+  const boots = queueing?.booting === true;
   // While a turn runs and the box holds a message it may go two ways; holding ⌘ says on Send which a send takes.
-  const queues = queueing?.working && !empty && !held && !files.reading && !editingQueued;
+  const queues = !boots && queueing?.working === true && goes;
   const modifierHeld = useModifierHeld(queues || editingQueued);
-  const queuesNow = queues && queueing.enterQueues !== modifierHeld;
+  const queuesNow = (boots && goes) || (queues && queueing?.enterQueues !== modifierHeld);
   const sendNote = noteWhileOffline(composer.note, connected);
   const repositoryRemedy = useRepositoryRemedy();
 
@@ -741,7 +746,7 @@ export function AgentComposer({
 
   /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, or the message steered or queued. */
   const sendOtherWay = (pressQueues: boolean) => {
-    if (editingQueued) return sentBy(queueing.onSteer);
+    if (editingQueued) return sentBy(boots ? queueing.onSave : queueing.onSteer);
 
     if (pressQueues) return steer();
 
@@ -773,7 +778,7 @@ export function AgentComposer({
       ? { label: BUTTON.SAVE, icon: <GLYPH.DONE /> }
       : queuesNow
         ? { label: BUTTON.QUEUE, icon: <GLYPH.QUEUED /> }
-        : (queues || editingQueued) && modifierHeld
+        : (queues || (editingQueued && !boots)) && modifierHeld
           ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
           : undefined;
 

@@ -1053,6 +1053,7 @@ test("while the agent's turn is starting, its status not yet running, a box that
       composer,
       queueing: {
         working: true,
+        booting: false,
         enterQueues: true,
         onQueue: ignore,
         editing: false,
@@ -1076,6 +1077,57 @@ test("while the agent's turn is starting, its status not yet running, a box that
   assert.ok(container.querySelector('button[aria-label="Queue"]'), "Send reads Queue");
 });
 
+test("while the agent's first launch boots, a send queues whichever way Enter goes, so the message is never drawn as sent", async () => {
+  const done: string[] = [];
+
+  /** The box while the agent's machine boots, Enter steering, each way a message leaves recorded. */
+  function Booting(): ReactNode {
+    const composer = useAgentComposer({
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: (_agentId, text) => {
+        done.push(`sent ${text}`);
+
+        return new Promise(ignore);
+      },
+    });
+
+    return createElement(AgentComposer, {
+      ...QUIET_COMPOSER,
+      composer,
+      queueing: {
+        working: false,
+        booting: true,
+        enterQueues: false,
+        onQueue: () => done.push("queued"),
+        editing: false,
+        onSave: ignore,
+        onSteer: ignore,
+        onCancel: ignore,
+      },
+    });
+  }
+
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(Booting))));
+  await settle();
+  typeInComposer(container, "Then open the pull request.");
+  await settle();
+
+  const queue =
+    container.querySelector<HTMLButtonElement>('button[aria-label="Queue"]') ??
+    assert.fail("Send reads Queue");
+
+  act(() => queue.click());
+  await settle();
+
+  assert.deepEqual(done, ["queued"]);
+});
+
 test("while the agent's turn runs, a touch held on Send sends the other way: a box whose Enter steers queues", async () => {
   const done: string[] = [];
 
@@ -1097,6 +1149,7 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
       composer,
       queueing: {
         working: true,
+        booting: false,
         enterQueues: false,
         onQueue: () => done.push("queued"),
         editing: false,

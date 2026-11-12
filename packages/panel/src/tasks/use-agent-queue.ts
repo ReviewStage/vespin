@@ -221,6 +221,26 @@ function readQueuedFiles(
   ).then((read) => Option.getOrUndefined(Schema.decodeUnknownOption(agentAttachmentsSchema)(read)));
 }
 
+/** The files of a queued message whose bytes the window holds already, as its row drew them, which a steered line draws at once; its row brings the rest. */
+function heldFiles(
+  client: QueryClient,
+  message: QueuedMessage,
+  door: AgentPictureDoor,
+): readonly AgentAttachment[] {
+  const held = (message.files ?? []).flatMap(({ name, mediaType, id }) => {
+    const read = id === undefined ? undefined : pictureNow(client, door.owner, id);
+
+    if (read?.kind !== PICTURE_STATE.READY) return [];
+
+    return [{ name, mediaType, data: read.url.slice(read.url.indexOf(",") + 1) }];
+  });
+
+  return Option.getOrElse(
+    Schema.decodeUnknownOption(agentAttachmentsSchema)(held),
+    () => [] as const,
+  );
+}
+
 /** The box's words and files kept aside while it holds a queued message's words being edited. */
 interface Stashed {
   readonly id: string;
@@ -240,6 +260,8 @@ export interface QueueEditing {
   readonly save: () => void;
   /** The message sent now with the box's words, as one change of that message, and the box given back what it held. */
   readonly steer: () => void;
+  /** A queued message sent now as it stands, from its row. */
+  readonly steerRow: (message: QueuedMessage) => void;
   /** The edit given up, the message left as it was, and the box given back what it held. */
   readonly cancel: () => void;
   /** The edit of `message` given up from its row: this box's own, as `cancel`, or one another window left standing, its mark cleared. */
@@ -250,9 +272,12 @@ export interface QueueEditing {
  * The box's part in the queue. An edit moves the queued message's words into
  * the box, keeping what the box held aside, and marks the message as being
  * edited, which stops the hand-off at it; Save writes the words back in its
- * place, which the host draws in the message's row at once, and Steer sends
- * them now as that message, each closing the edit once the queue took it, so
- * a refusal leaves the words where they are, the box's own still kept aside. Cancel,
+ * place, which the host draws in the message's row at once, closing the edit
+ * once the queue took it, so a refusal leaves the words where they are, the
+ * box's own still kept aside. Steer sends them now as that message, drawn in
+ * the transcript at once as a sent line under the key its row lands under
+ * (`steerQueued`), so the edit closes on the press and a refusal puts the
+ * words back in the box, as a message the queue did not take does. Cancel,
  * Escape, or Save with the box emptied lets it go as it was, and a message
  * the queue would not mark, already on its way, closes the edit. The mark
  * has no time to it: an edit left standing, its window closed, stays until
@@ -268,9 +293,15 @@ export interface QueueEditing {
 export function useQueueEditing(
   composer: Pick<
     HeldComposer,
-    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled" | "updateHeld"
+    | "draft"
+    | "setDraft"
+    | "attachments"
+    | "setAttachments"
+    | "sendsSettled"
+    | "updateHeld"
+    | "steerQueued"
   >,
-  queue: Pick<AgentQueueControl, "change" | "listed">,
+  queue: Pick<AgentQueueControl, "change" | "listed" | "messages">,
   files: AgentPictureDoor,
 ): QueueEditing {
   const queryClient = useQueryClient();
@@ -295,6 +326,25 @@ export function useQueueEditing(
   // The message whose files are still being read into the box, by id, which no Save or Steer sends meanwhile.
   const reading = useRef<string | undefined>(undefined);
   const { change } = queue;
+
+  /**
+   * Words the queue did not take back into the box, ahead of what was written
+   * there meanwhile; under the id they went under where queueing them again
+   * as they went must not queue them twice.
+   */
+  const putBack = (went: Pick<Stashed, "text" | "attachments">, id: string | undefined) =>
+    putBackRefused({
+      went,
+      most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
+      update: (next) =>
+        composer.updateHeld((now) => {
+          const joined = next(now);
+
+          if (joined !== undefined && id !== undefined) refused.current = { text: went.text, id };
+
+          return joined;
+        }),
+    });
 
   const giveBack = (stash: Stashed) => {
     composer.setDraft(stash.text);
@@ -340,20 +390,7 @@ export function useQueueEditing(
         },
         composer.sendsSettled(),
       ).then((answer) => {
-        if (!("failure" in answer)) return;
-        // A message the queue did not take comes back into the box ahead of what was written there meanwhile.
-        putBackRefused({
-          went: { text, attachments },
-          most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-          update: (next) =>
-            composer.updateHeld((now) => {
-              const joined = next(now);
-
-              if (joined !== undefined) refused.current = { text, id };
-
-              return joined;
-            }),
-        });
+        if ("failure" in answer) putBack({ text, attachments }, id);
       });
     },
     edit: (message) => {
@@ -407,13 +444,32 @@ export function useQueueEditing(
       const { attachments } = composer;
 
       if (!hasWordsOrFiles(text, attachments)) return cancel();
-      closing(stashed, {
-        change: QUEUE_CHANGE.STEER,
-        messageId: stashed.id,
-        text,
-        ...(attachments.length === 0 ? undefined : { attachments }),
-      });
+      const { id } = stashed;
+      const sendKey = queue.messages.find((message) => message.id === id)?.sendKey;
+      // The edit closes at once, since its words stand in the transcript now; a refusal puts them back in the box.
+      giveBack(stashed);
+      composer.steerQueued({ clientKey: sendKey ?? id, text, attachments }, () =>
+        change({
+          change: QUEUE_CHANGE.STEER,
+          messageId: id,
+          text,
+          ...(attachments.length === 0 ? undefined : { attachments }),
+        }).then((answer) => {
+          if ("failure" in answer) putBack({ text, attachments }, undefined);
+
+          return answer;
+        }),
+      );
     },
+    steerRow: (message) =>
+      composer.steerQueued(
+        {
+          clientKey: message.sendKey ?? message.id,
+          text: message.text,
+          attachments: heldFiles(queryClient, message, files),
+        },
+        () => change({ change: QUEUE_CHANGE.STEER, messageId: message.id }),
+      ),
     cancel,
     cancelRow: (message) => {
       if (message.id === stashed?.id) return cancel();

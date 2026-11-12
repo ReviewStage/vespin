@@ -3466,11 +3466,7 @@ function AgentTabView({
             paused={queue.paused}
             editing={queueEditing.editing}
             onMove={queue.move}
-            onSteer={
-              booting
-                ? undefined
-                : (message) => queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
-            }
+            onSteer={booting ? undefined : queueEditing.steerRow}
             onEdit={queueEditing.edit}
             onCancelEdit={queueEditing.cancelRow}
             onDelete={queue.remove}
@@ -3510,6 +3506,7 @@ function AgentTabView({
                 ? undefined
                 : {
                     working: standing.working,
+                    booting,
                     enterQueues,
                     onQueue: queueEditing.queue,
                     editing: queueEditing.editing !== undefined,

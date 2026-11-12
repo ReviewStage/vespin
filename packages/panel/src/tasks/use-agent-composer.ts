@@ -1,6 +1,6 @@
 import type { RefusedCall } from "@repo/features/agent-refusal-words";
 import { newerTurn } from "@repo/features/agent-status";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type AgentQueueAnswerView } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
   type AgentPayer,
@@ -275,6 +275,15 @@ export interface HeldComposer extends AgentComposerControl {
   readonly sendsSettled: () => Promise<void>;
   /** Moves the box's words and files on together from what its draft holds as the change lands, as a refused send put back does (`refused-send.ts`). */
   readonly updateHeld: HeldUpdate;
+  /** Draws a queued message steered now as the newest line, under the key it goes under, until `steer` answers; a refusal lets the line go, the queue drawing the message again. */
+  readonly steerQueued: (line: QueuedLine, steer: () => Promise<AgentQueueAnswerView>) => void;
+}
+
+/** A queued message as a steer sends it: the key its row is written under, its words, and the files the window holds the bytes of. */
+export interface QueuedLine {
+  readonly clientKey: string;
+  readonly text: string;
+  readonly attachments: readonly AgentAttachment[];
 }
 
 export function useAgentComposer(input: {
@@ -524,6 +533,51 @@ export function useAgentComposer(input: {
     });
   };
 
+  /**
+   * Draws a queued message steered now as the newest line under its key, as
+   * a send's is, so it stands in the transcript the moment it is pressed
+   * rather than once the agent took it, and its row lands in its place. The
+   * queue's own door sends it, which says a refusal in a toast and draws the
+   * message back in the queue, so a refusal here only lets the line go.
+   */
+  const steerQueued = (queued: QueuedLine, steer: () => Promise<AgentQueueAnswerView>) => {
+    // Note that a closed box draws no new line, since its lines stand marked as not delivered, but the steer still goes.
+    if (held.closed !== undefined) {
+      void steer();
+
+      return;
+    }
+
+    const line: SentLine = {
+      id: sentLineId(queued.clientKey),
+      clientKey: queued.clientKey,
+      text: queued.text,
+      attachments: queued.attachments,
+      steers: input.running === true,
+      sentAt: Date.now(),
+      state: SENT_LINE_STATE.PENDING,
+    };
+
+    setHeld((was) => ({ ...was, sent: [...was.sent, line] }));
+    void steer().then((answer) => {
+      if (latest.current.agentId !== agentId) return;
+
+      if ("failure" in answer) {
+        ours((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== line.id) }));
+
+        return;
+      }
+
+      ours((was) => ({
+        ...was,
+        sent: heldSentLines(
+          was.sent.map((each) => (each.id === line.id ? { ...each, taken: true } : each)),
+          latest.current.messages,
+        ),
+      }));
+    });
+  };
+
   /** Sends the words and files as a new line under its key, as the developer's own. */
   const sendLine = (text: string, attachments: readonly AgentAttachment[], clientKey: string) => {
     const line: SentLine = {
@@ -746,5 +800,6 @@ export function useAgentComposer(input: {
     cut: held.cut,
     going: new Set(held.sent.filter((line) => line.taken !== true).map((line) => line.id)),
     sendsSettled: () => queue.settled(latest.current.agentId),
+    steerQueued,
   };
 }
