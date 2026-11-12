@@ -33,6 +33,7 @@ import { signOutSayingFailure } from "../settings/account-section.js";
 import { AgentConnectSection } from "../settings/agent-auth-section.js";
 import { DELETE_WORDS } from "../settings/workspace-page.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { useHoldToasts } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
@@ -169,9 +170,13 @@ const AUDIENCES: readonly ChoiceOption<SetupAudience>[] = [
 /**
  * Setup, step by step; `onFinish` lets the app in. Note that its words show
  * in a screen recording, because they are the app's own, but for a person's,
- * which each step masks where it draws them.
+ * which each step masks where it draws them. The window's toasts wait until
+ * it finishes, because on a phone they stand over each step's foot, and a
+ * connection whose sign-in lapsed is reconnected in place on its steps.
  */
 export function SetupSteps(props: SetupStepsProps): React.JSX.Element {
+  useHoldToasts();
+
   return (
     <ReplayUnmask>
       <SetupStep {...props} />
